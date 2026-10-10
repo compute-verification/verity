@@ -16,6 +16,7 @@ and one session of one slot holding the unit (`batch₁`, its slots routed in se
   beyond the kernel's evaluation. `menuComplete_nonvacuous`: `MenuComplete`'s hypotheses there, given the same.
 * `composition_nonvacuous`: `Composition`'s hypotheses at that instance, under a one-point law and a session that
   verifies at once, with an instance of F1's interface (`I₁`) whose break fires at no draw.
+* `zeroKnowledge_nonvacuous`: `ZeroKnowledge`'s hypotheses at that instance, `menu₀` and the one-unit draw.
 -/
 
 namespace FlockSampled
@@ -172,7 +173,8 @@ def L₁ : Law 1 := { Ω := Unit, draw := fun _ => Finset.univ }
 /-- Sessions that end at once. -/
 def session₁ : Finset (Fin 1) → Unit → Game Unit := fun _ _ => .ret ()
 
-/-- **An instance of F1's interface**: the sessions always verify, hold `h₁`, and break only away from the one draw. -/
+/-- **An instance of F1's interface**: the sessions always verify, hold `h₁`, and break only away from the one draw; no
+owed outputs, and one view. -/
 noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
   verifies := fun _ => true
   hid := fun _ _ _ => h₁
@@ -185,6 +187,13 @@ noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
       intro _ h
       exact h.2 h₁_proves
     · exact Or.inl hS
+  Out := Unit
+  out := fun _ => ()
+  View := Unit
+  real := fun _ _ _ => ()
+  sim := fun _ => ()
+  Close := fun _ a b => a = b
+  hides := fun _ _ _ _ _ _ => rfl
 
 /-- **`Composition`'s hypotheses hold together**: at the one registration, the one-point law, `session₁` and `I₁`, the
 records determine their contents, `X₁` is the trace committed, and the break of F1's interface fires at no draw of any
@@ -193,5 +202,11 @@ theorem composition_nonvacuous :
     C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧
       ∀ σ : Strategy (sampledAudit L₁ session₁ ()), ¬ ∃ ω, I₁.Break (L₁.draw ω) () (contOf σ ω) :=
   ⟨C₁_injective, C₁_committed, fun _ ⟨_, h⟩ => h rfl⟩
+
+/-- **`ZeroKnowledge`'s hypotheses hold together**: `h₁`'s one session is `menu₀`'s padded sessions for the one-unit
+draw, and it proves the statement there. -/
+theorem zeroKnowledge_nonvacuous :
+    h₁.β.view = menu₀.padded (Finset.univ : Finset (Fin 1)).card ∧ Proves Ty₁ C₁ Finset.univ h₁ :=
+  ⟨(rfl : h₁.β.view = menu₀.padded 1).trans (congrArg menu₀.padded (Finset.card_fin 1).symm), h₁_proves⟩
 
 end FlockSampled

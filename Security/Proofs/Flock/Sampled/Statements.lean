@@ -17,6 +17,8 @@ Skeletons, stated and not yet proved; `Proofs.Flock.Sampled.NonVacuity` shows ea
   slot binding breaks.
 * `Composition`: at each registration, with F1's conclusion (`Recursion`, an interface), the audit accepts with
   probability at most the law's escape over the committed trace's wrong units plus F1's error, or a run breaks.
+* `ZeroKnowledge`: with F1's zero knowledge (`Recursion.hides`), an honest audit's view is simulated from the reveal list
+  alone: the menu, the draw's size, the padded sessions and the owed outputs.
 -/
 
 namespace FlockSampled
@@ -92,5 +94,18 @@ def Composition : Prop :=
         SlotBreak (com R) X path₀ (I.hid (L.draw ω) R o)) ∨
       prob (fun x => Accepts M view I.verifies x.2 x.1) (sampledAudit L session R) σ ≤
         L.escape (wrong Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω)
+
+/-- **Zero knowledge at the reveal list.** With F1's conclusion for the sessions (`I`, its (ii) as `hides`): at every
+registration `R` and draw `S`, for every honest witness `h` (sessions at the menu's padded shapes for `|S|`, proving the
+statement at `S`), the auditor's view of the honest audit is close, in F1's sense, to the simulated one, which reads only
+the reveal list `reveal M S (I.out R)`: the menu (its shapes, nonzero bounds and type bounds), the draw (the auditor's own
+coins, so `k = |S|`), the padded sessions `M.padded |S|` and the owed outputs. It reads nothing of the batching, the
+slots' types, their values or the types' placement; and since the real view holds the registration's root, the trace's
+leaves hide each unit's type as well as its values (the type field salted and hidden with them). -/
+def ZeroKnowledge : Prop :=
+  ∀ {N : ℕ} {T V Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (Ty : Types T V) (com : Reg → Commit N T V)
+    (I : Recursion session Ty com) (M : Menu) (R : Reg) (S : Finset (Fin N)) (h : Hidden N T V),
+    h.β.view = M.padded S.card → Proves Ty (com R) S h →
+      I.Close (reveal M S (I.out R)) (I.real (reveal M S (I.out R)) R h) (I.sim (reveal M S (I.out R)))
 
 end FlockSampled

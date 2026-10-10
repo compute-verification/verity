@@ -29,8 +29,9 @@ slot is bound to its unit's committed record by its opening of the root.
 * `Commit`, `Commit.Injective`, `Commit.Committed`, `Commit.SlotOpens`, `recordPair`, `SlotBreak`: the trace commitment;
   the record's format; the trace it commits; the slots' openings; the SHA-512 inputs two openings at one position give;
   slot binding's break.
-* `Proves`, `Accepts`, `sampledAudit`, `Reaches`, `Recursion`: the statement the sessions prove; the auditor's verdict;
-  F2's audit at a registration; an outcome a run reaches; and F1's conclusion as F2 uses it, an interface.
+* `Proves`, `Accepts`, `sampledAudit`, `Reaches`, `Public`, `reveal`, `Recursion`: the statement the sessions prove; the
+  auditor's verdict; F2's audit at a registration; an outcome a run reaches; the reveal list and an honest audit's; and
+  F1's conclusion as F2 uses it, an interface, its soundness and its zero knowledge.
 -/
 
 namespace FlockSampled
@@ -247,11 +248,31 @@ def Reaches {O : Type} : (g : Game O) → Strategy g → O → Prop
   | .send _ k, τ, o => Reaches (k τ.1) τ.2 o
   | @Game.coin _ _ _ _ k, τ, o => ∃ c, Reaches (k c) (τ c) o
 
+/-- **The reveal list** at a draw, all F2's zero-knowledge simulator reads: the menu (its shapes, nonzero bounds and type
+bounds), the draw (the auditor's own coins, so `k = |S|`), the sessions' shapes in order, and the owed public outputs. -/
+structure Public (N : ℕ) (Out : Type) where
+  menu : Menu
+  draw : Finset (Fin N)
+  shapes : List Shape
+  out : Out
+
+/-- An honest audit's reveal list at the draw `S`: its sessions' shapes are the menu's padded sessions for `|S|`. -/
+def reveal {N : ℕ} {Out : Type} (M : Menu) (S : Finset (Fin N)) (out : Out) : Public N Out :=
+  ⟨M, S, M.padded S.card, out⟩
+
 /-- **F1's conclusion, as F2 uses it**: an interface, not F1's statement (`PublicAudit`, or `RecursiveAudit` at
-registered units). `verifies`: the sessions' verdict on an outcome; `hid`: what they hold hidden behind it, as the
-extractor recovers it (an analysis device). At every registration `R` and draw `S`, for every prover of the sessions: a
-break of its runs (`Break`: F1's forks, or a read commit string whose opening collides with the registered one's), or
-the sessions verify while the statement they prove fails with probability at most `ε`. -/
+registered units).
+
+(i), soundness: `verifies`, the sessions' verdict on an outcome; `hid`, what they hold hidden behind it, as the extractor
+recovers it (an analysis device). At every registration `R` and draw `S`, for every prover of the sessions: a break of
+its runs (`Break`: F1's forks, or a read commit string whose opening collides with the registered one's), or the sessions
+verify while the statement they prove fails with probability at most `ε`.
+
+(ii), zero knowledge (`RecursiveFirewallPrivate`, being restated at `hidingGap`; its form is F1's, not pinned here):
+`out R`, the owed outputs the registration names; `real x R h`, the auditor's view of the honest sessions at the reveal
+list `x`, on the registration `R` (its root among it) and the hidden `h`; `sim x`, the simulated view, reading `x` alone;
+`hides`, that the two are close (`Close`, F1's notion and gap) at every honest witness: the owed outputs `R`'s, the
+sessions at `x`'s shapes, proving the statement at `x`'s draw. -/
 structure Recursion {N : ℕ} {T V Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (Ty : Types T V)
     (com : Reg → Commit N T V) where
   verifies : O → Bool
@@ -260,5 +281,13 @@ structure Recursion {N : ℕ} {T V Reg O : Type} (session : Finset (Fin N) → R
   ε : (S : Finset (Fin N)) → (R : Reg) → Strategy (session S R) → ℝ≥0∞
   sound : ∀ S R (τ : Strategy (session S R)), Break S R τ ∨
     prob (fun o => verifies o = true ∧ ¬ Proves Ty (com R) S (hid S R o)) (session S R) τ ≤ ε S R τ
+  Out : Type
+  out : Reg → Out
+  View : Type
+  real : Public N Out → Reg → Hidden N T V → View
+  sim : Public N Out → View
+  Close : Public N Out → View → View → Prop
+  hides : ∀ (x : Public N Out) (R : Reg) (h : Hidden N T V), x.out = out R → x.shapes = h.β.view →
+    Proves Ty (com R) x.draw h → Close x (real x R h) (sim x)
 
 end FlockSampled
