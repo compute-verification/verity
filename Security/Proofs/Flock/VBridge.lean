@@ -63,6 +63,7 @@ import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.VBridge.Family.Rounds
 import Proofs.Flock.VBridge.Family.Lig
 import Proofs.Flock.VBridge.Family.Setup
+import Proofs.Flock.VBridge.Family.Names
 import Proofs.Flock.VBridge.Family.Opened
 import Proofs.Flock.VBridge.Family.Pub
 import Proofs.Flock.VBridge.Family.Registrants
