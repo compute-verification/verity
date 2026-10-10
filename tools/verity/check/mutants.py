@@ -26,8 +26,9 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-#: a `do` statement that only calls a check: an optional namespace path, then `check…` and its arguments
-CHECK = re.compile(r"^(?P<indent>[ \t]+)(?:[A-Z][\w']*\.)*check[\w']*(?:\s.*)?$")
+#: a `do` statement that only calls a check: an optional namespace path, then `check` or `checkX…` (not `checked`), and its
+#: arguments
+CHECK = re.compile(r"^(?P<indent>[ \t]+)(?:[A-Z][\w']*\.)*check(?:[A-Z][\w']*)?(?:\s.*)?$")
 
 
 @dataclass
