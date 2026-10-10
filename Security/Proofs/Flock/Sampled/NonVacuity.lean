@@ -1,4 +1,3 @@
-import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Sampled.Statements
 
 /-!
