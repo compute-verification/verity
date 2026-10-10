@@ -3,9 +3,10 @@ V*'s statements over one inner session, checked by the verifier against V*'s own
 package so that the verifier can read it): `VStar.statements` at the inner session's shape (`VStar/Stage.lean:48-58`: one
 statement per Ligerito level of `fast100(m)`, `rec-open/l<2^lanes>-h<d − cap>` over that level's `2 q` openings, then one
 per part of the rep's algebra, `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over the two reps). A circuit whose unit is one
-of V*'s is refused unless its META binds the verifier's own partition object and program, its unit's name is one of these
-statements' at the inner session's shape, its population is that statement's instance count, and the circuit file is
-byte for byte the one `vstar stage` writes for that statement under the file's bindings (`circuitFile`).
+of V*'s is refused unless the verifier names which of these statements the session is (`--rec-part J`) and its unit is that
+statement's, its population is that statement's instance count, the verifier's own bindings (`--rec-bindings F`) are its
+partition object's and program's, META binds exactly those, and the circuit file is byte for byte the one `vstar stage`
+writes for that statement under the verifier's bindings (`circuitFile`).
 
 The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the inner statement, as `InnerFold.lean` sets it
 up for V*'s native side, read once, since the inner circuit can be tens of GB; `verify --rec-inner F` reads the line it
@@ -13,6 +14,7 @@ printed.
 -/
 import Flock.HmRow
 import Flock.Registered
+import VStar.Cli
 import VStar.Compose
 import VStar.Stage
 
@@ -71,8 +73,11 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
 def isVStar (name : String) : Bool := name.startsWith "rec-open/" || name.startsWith "rec-residuals/"
 
 /-- A unit named `name` over a population of `n` instances is one of V*'s statements at the inner shape `i`: a part's name
-carries `i`'s `m`, `k_log` and claims, exactly one statement has the name, and `n` is its instance count. -/
-def check (i : Inner) (name : String) (n : Nat) : V VStar.Stmt := do
+carries `i`'s `m`, `k_log` and claims, exactly one statement has the name, and `n` is its instance count. With `part = some
+j`, it is statement `j` of `statements i` (`--rec-part J`: levels first, in level order, then the algebra's parts, in part
+order, as `rec_vstage.stage` stages `L<level>/` and `alg/p<j>/`), so a session the verifier holds for statement `j` is
+refused another statement's file. -/
+def check (i : Inner) (name : String) (n : Nat) (part : Option Nat := none) : V VStar.Stmt := do
   if let some (m, k, c, _) := RecResiduals.params name then
     if m != i.m || k != i.kLog || c != i.claims then
       throw s!"{name}: shape (m {m}, k_log {k}, claims {c}), the inner session's (m {i.m}, k_log {i.kLog}, claims {i.claims})"
@@ -82,6 +87,10 @@ def check (i : Inner) (name : String) (n : Nat) : V VStar.Stmt := do
     throw s!"{name}: not one of V*'s statements at the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): {ss.map (·.name)}"
   | [s] =>
     if n != s.instances then throw s!"{name}: instances {n}, statement says {s.instances}"
+    if let some j := part then
+      match ss[j]? with
+      | none => throw s!"{name}: the session is V*'s statement {j} (--rec-part), but V* has {ss.size} statements at the inner session's shape"
+      | some t => if t.name != name then throw s!"{name}: the session is V*'s statement {j} (--rec-part), {t.name}"
     pure s
   | ss => throw s!"{name}: {ss.length} of V*'s statements have this name"
 
@@ -102,7 +111,7 @@ def firstDiff? (a b : ByteArray) : Option (Nat × Nat) := Id.run do
     if a[k]! == 10 then line := line + 1
   if a.size == b.size then none else some (min a.size b.size, line)
 
-/-- The circuit file is V*'s for `s` under its own META bindings (`circuitFile`). -/
+/-- The circuit file is V*'s for `s` under the bindings `b`, the verifier's own (`circuitFile`). -/
 def checkFile (s : VStar.Stmt) (b : VStar.Bindings) (circuitB : ByteArray) : V Unit := do
   let f ← match circuitFile s b with
     | .ok f => pure f
@@ -126,37 +135,51 @@ def bindingsOf (c : Circuit) : V VStar.Bindings := do
   let some pd := (c.metaJ.getObjVal? "program_digests").toOption | throw s!"{name}: META names no program_digests"
   pure ⟨digest, program, pd⟩
 
-/-- A statement of V*'s binds the verifier's own partition object and program: META's partition digest is the object's
-(`HmRow.partitionDigest`), META's `program_sha512` and the object's `program` are the program's digest (the SHA-512 of
-its canonical descriptor without `annotations`, `TemplateQuery.Desc.parse`), and
-`program_digests` names one Definition, the template the object's query names. Its digest is not recomputed: that is
-core's codec's digest of the one-Definition program, which this verifier does not encode. -/
-def checkBindings (c : Circuit) (partition : Option Json) (program : Option ByteArray) : V VStar.Bindings := do
-  let name := c.unit.name
-  let (some obj, some prog) := (partition, program)
-    | throw s!"{name}: one of V*'s statements; pass the verifier's own partition object and program (--partition F, --program F)"
-  let b ← bindingsOf c
-  let (digest, sha, pd) := (b.partition, b.program, b.programDigests)
+/-- The verifier's own bindings of a statement of V*'s (`--rec-bindings F`): `vstar`'s `BINDINGS` object, `{"partition",
+"program", "program_digests"}` (`VStar.Cli.bindingsOf`), which the auditor computes from the verifier's partition object and
+program (`verity_flock.rec_bindings`), never from the prover's circuit file. -/
+def ownBindingsOfJson (j : Json) : Except String VStar.Bindings :=
+  (VStar.Cli.bindingsOf j).mapError (s!"rec-bindings: " ++ ·)
+
+/-- The verifier's own bindings `f` are its own partition object's and program's: `f`'s partition digest is the object's
+(`HmRow.partitionDigest`), `f`'s program and the object's `program` are the program's digest (the SHA-512 of its canonical
+descriptor without `annotations`, `TemplateQuery.Desc.parse`), and `f`'s `program_digests` names one Definition, the
+template the object's query names. Its digest is not recomputed: that is core's codec's digest of the one-Definition
+program, which this verifier does not encode; the auditor's `verity_flock.rec_bindings` computes it from the same files. -/
+def checkOwnBindings (name : String) (f : VStar.Bindings) (obj : Json) (prog : ByteArray) : V Unit := do
   let own := hexOf (← HmRow.partitionDigest obj)
-  if digest != own then throw s!"{name}: META partition digest {digest}, the verifier's partition object's {own}"
+  if f.partition != own then throw s!"{name}: the verifier's bindings' partition digest {f.partition}, its partition object's {own}"
   let ps := hexOf (← TemplateQuery.Desc.parse prog).sha512
-  if sha != ps then throw s!"{name}: META program_sha512 {sha}, the verifier's program's {ps}"
+  if f.program != ps then throw s!"{name}: the verifier's bindings' program {f.program}, its program's {ps}"
   let op := (obj.getObjValAs? String "program").toOption.getD ""
   if op != ps then throw s!"{name}: the partition object's program {op}, the verifier's program's {ps}"
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let t := ((q.getObjVal? "params").toOption.getD Json.null |>.getObjValAs? String "template").toOption.getD ""
-  match pd with
+  match f.programDigests with
   | .obj kvs =>
     match kvs.toArray.map (·.1) with
-    | #[k] => if k != t then throw s!"{name}: META program_digests names {k}, the partition's template {t}" else pure b
-    | ks => throw s!"{name}: META program_digests names {ks.size} Definitions, not the partition's template {t} alone"
-  | _ => throw s!"{name}: META program_digests is not an object"
+    | #[k] => if k != t then throw s!"{name}: the verifier's bindings' program_digests names {k}, the partition's template {t}"
+    | ks => throw s!"{name}: the verifier's bindings' program_digests names {ks.size} Definitions, not the partition's template {t} alone"
+  | _ => throw s!"{name}: the verifier's bindings' program_digests is not an object"
 
-/-- `check` on the unit of `c`, parsed from the circuit file `circuitB`, over `n` instances at the inner shape `i`, then
-`checkFile` on `circuitB` under its META bindings. -/
-def checkCircuit (i : Inner) (c : Circuit) (n : Nat) (circuitB : ByteArray) : V VStar.Stmt := do
-  let s ← check i c.unit.name n
-  checkFile s (← bindingsOf c) circuitB
+/-- **META binds the verifier's own bindings**: META's partition digest and `program_sha512` are `f`'s, and META's
+`program_digests` is `f`'s as a value, compared as RFC 8785 canonical JSON (`canon`), byte for byte. -/
+def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
+  let name := c.unit.name
+  let b ← bindingsOf c
+  if b.partition != f.partition then throw s!"{name}: META partition digest {b.partition}, the verifier's bindings' {f.partition}"
+  if b.program != f.program then throw s!"{name}: META program_sha512 {b.program}, the verifier's bindings' {f.program}"
+  let (mc, fc) := (← canon b.programDigests, ← canon f.programDigests)
+  if mc != fc then throw s!"{name}: META program_digests {mc}, the verifier's bindings' {fc}"
+
+/-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
+`check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, and `checkFile` on `circuitB` under
+`f`. -/
+def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
+    V VStar.Stmt := do
+  checkMeta c f
+  let s ← check i c.unit.name n (some part)
+  checkFile s f circuitB
   pure s
 
 /-- `m<k>`'s `k`. -/
@@ -192,19 +215,28 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
   if let some q := own.find? (!file.contains ·) then
     throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
 
-/-- `checkBindings` against the verifier's own partition object and program, then `checkCircuit` on a statement's
-circuit and population with its own inner shape `inner`, and `checkOwn` on the verifier's own registered reads; a
-statement of V*'s needs all three files, and with an inner shape, the statement must be V*'s. -/
+/-- With an inner shape, the statement must be V*'s: it needs the verifier's own partition object and program, which of
+V*'s statements the session is (`part`, `--rec-part J`) and the verifier's own bindings (`bindings`, `--rec-bindings F`);
+then `checkOwnBindings` of those bindings against the partition object and program, `checkCircuit` on the statement's
+circuit and population as statement `part` under those bindings, and `checkOwn` on the verifier's own registered reads. -/
 def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
-    (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) : V Unit :=
+    (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) (part : Option Nat := none)
+    (bindings : Option VStar.Bindings := none) : V Unit :=
+  let name := st.c.unit.name
   match inner with
   | some i => do
-    discard <| checkBindings st.c partition program
-    let s ← checkCircuit i st.c (population st) circuitB
+    let (some obj, some prog) := (partition, program)
+      | throw s!"{name}: one of V*'s statements; pass the verifier's own partition object and program (--partition F, --program F)"
+    let some j := part
+      | throw s!"{name}: one of V*'s statements; pass which of V*'s statements this session is (--rec-part J, its index in rec-statements' list)"
+    let some f := bindings
+      | throw s!"{name}: one of V*'s statements; pass the verifier's own bindings (--rec-bindings F, from verity_flock.rec_bindings)"
+    checkOwnBindings name f obj prog
+    let s ← checkCircuit i j st.c (population st) circuitB f
     if let some r := registered then checkOwn s r
   | none =>
-    if isVStar st.c.unit.name then
-      throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
+    if isVStar name then
+      throw s!"{name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
     else pure ()
 
 end RecVStar

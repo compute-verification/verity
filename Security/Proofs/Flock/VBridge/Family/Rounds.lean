@@ -245,7 +245,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 
@@ -274,7 +274,9 @@ def bc (cOf : Cm → List UInt8) (j : Fin F.stmts.size) (e : Cm) (_ : PosK (F.Vs
 
 theorem selRounds_sel : SelRounds F.sel := selRounds_selOf F.n₀ F.kc
 
-/-- **The verifier's reads files are V*'s**: at every history, the reads file the verifier reads for session `j`
+/-- Obligation: discharged by the verifier's check 7 (`cursor/rec-vstar-checks-741b`): the registered reads'
+message-round ports are the statement's.
+**The verifier's reads files are V*'s**: at every history, the reads file the verifier reads for session `j`
 (`ZkOuter.own`, `registeredInput`, `FlockVerify.lean:228-242`) has `own j`'s message-round ports (`SameMsg`). V*'s
 staging writes them (`rec_vstage.messages`, `rec_vstage.py:156-168`; `rec_residuals.write`, `rec_residuals.py:452-454`);
 no check of the verifier's compares a file's port names with the statement's. The check that establishes it: at
@@ -293,7 +295,7 @@ theorem skOf_zs (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coi
 (`vFullRead_of`). -/
 theorem vbridgeRead_of_rounds (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs) (hsh : F.HShape dg N k Rw GS)
-    (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw) (hsch : F.HSch)
+    (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw) (hsch : F.HSch)
     (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (cOf : Cm → List UInt8)
     (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg) (hSk : F.Sk = skOf F.Vs F.own F.sel)
     (hcmt : F.cmt = cmtOf F.Vs (F.bc cOf)) (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec)

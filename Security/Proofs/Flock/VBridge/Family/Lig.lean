@@ -14,13 +14,13 @@ array at the length `decodeProof` reads (Proof.lean:94-151) by construction, so 
   step), each its 64 digest bytes.
 * `ligOf ms l r`: rep `r`'s openings. Level `ℓ`'s opening `j` is copy 0 of unit `unO ℓ r j` of the level's session
   (`openCol`): its row the first `2^lanes` elements of its `row` columns (`rowsOf`'s), its `h`-th sibling the 64 bytes
-  from column `128 · 2^lanes + 512 h` (its `aux`, `RecOpen.sibForms`); its salt the inner openings message's
-  (`tableTape`'s last step). Rep `r`'s recursive caps are the caps among `ms` after the level-0 one, rep 0's first
-  (`tableTape`: rep 0's tape, then rep 1's), in level order (`ligMsgs`). The nonces are zero: the verifier absorbs them
+  from column `128 · 2^lanes + 512 h` (its `aux`, `RecOpen.sibForms`); no salts, the inner statement's leaves being
+  unsalted (`flock-leaf/sha512-unsalted`, Tags.lean:333-345). Rep `r`'s recursive caps are the caps among `ms` after
+  the level-0 one, rep 0's first (`tableTape`: rep 0's tape, then rep 1's), in level order (`ligMsgs`). The nonces are zero: the verifier absorbs them
   and checks nothing of them (Ligerito.lean:143, 146, `Transcript.pow`). The messages, the out-of-domain values and `yr`
   are empty: `proofOf` sets them from the rep's values.
-* `capShaped_capOf`, `ligShaped_ligOf`: the shapes at any setup on hm96-sha512 (`SetupRealizes`' scheme), and `hCapS_of`,
-  `hLigS_of` at the family: `vbridgeRead_assembled`'s `hcapS` and `hligS`. `capOf_of_capDig`: when the first cap message
+* `capShaped_capOf`, `ligShaped_ligOf`: the shapes at any setup on unsalted SHA-512 (`SetupRealizes`' scheme), and
+  `hCapS_of`, `hLigS_of` at the family: `vbridgeRead_assembled`'s `hcapS` and `hligS`. `capOf_of_capDig`: when the first cap message
   is `capDig a` for `2^cap` digests `a` (`Steps`' first step), `capOf` is `a`.
 * `setupH_regions_le`: `Stmt.setupH` refuses more than 1,024 regions (`checkInRange`, Statement.lean:114,
   HmRow.lean:1339), as `Stmt.setupHidden` does (`Hidden.Spec.inRange`), so `RegionsFit` holds at a statement with a
@@ -92,6 +92,21 @@ theorem TableSrc.regionsFit_of_setupH (s : TableSrc) {tags : Tags} {cf pf : Byte
     (hH : Stmt.setupH tags cf pf coins tables draw partition program = .ok stH)
     (hS : s.S.regions.length = stH.regions.size) : s.RegionsFit :=
   Family.regionsFit_of_setupH hH hS
+
+/-! ## The inner statement's path check -/
+
+/-- **A query opens at the inner statement's scheme** (`opens`, Merkle.lean:59-62) exactly when its row has the lane
+count, it has `d − c` siblings, its salt is empty, and SHA-512 of the row's bytes climbs to its cap entry: the climb
+`sound_climbRow` (Open.lean) computes from the row's bytes. -/
+theorem opens_plain {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array F128} {salt : ByteArray}
+    {sibs : List ByteArray} :
+    opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos row salt sibs = true ↔
+      row.size = lanes ∧ sibs.length = d - c ∧ salt.size = 0 ∧
+        climb (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (Sha512.hash (MerkleScheme.rowBytes row)) pos sibs =
+          cap.getD (pos >>> (d - c)) ByteArray.empty := by
+  unfold opens
+  simp only [Bool.and_eq_true, decide_eq_true_eq, and_assoc]
+  exact Iff.rfl
 
 /-! ## Arrays at their lengths -/
 
@@ -235,25 +250,16 @@ noncomputable def capEntry (ms : List (List (SMsg T))) (k e : ℕ) : ByteArray :
   | some c => (c e).1
   | none => ByteArray.empty
 
-/-- The inner openings message (`tableTape`'s last step): the last message of its type. -/
-noncomputable def opensIn (ms : List (List (SMsg T))) : Option (Opens 𝔽 Dig × Salts (List UInt8)) :=
-  (ms.flatten.filterMap (msgAs T (Opens 𝔽 Dig × Salts (List UInt8)))).getLast?
-
-/-- Rep `r`'s salt of level `ℓ`'s opening `j` in the inner openings message. -/
-noncomputable def saltIn (ms : List (List (SMsg T))) (r ℓ j : ℕ) : ByteArray :=
-  match opensIn T ms with
-  | some os => ⟨(os.2 r ℓ j).toArray⟩
-  | none => ByteArray.empty
-
 /-- **The level-0 cap** (`proofOf`'s `cap`): the `2^cap` entries of the first cap among the inner messages, each its
 64 bytes. -/
 noncomputable def capOf (sch : Flock.Schedule) (ms : List (List (SMsg T))) : Array ByteArray :=
   capArr 64 (sch.levels.getD 0 default).cap (capEntry T ms 0)
 
-/-- **`CapShaped`** at a setup on hm96-sha512. -/
-theorem capShaped_capOf {st : Setup} {sch : Flock.Schedule} (hms : st.merkle = MerkleScheme.hm96Sha512)
-    (ms : List (List (SMsg T))) : CapShaped st sch (capOf T sch ms) :=
-  capShaped_capArr (shapeOf_hm96 (n := 0) hms).1 _
+/-- **`CapShaped`** at a setup on the inner statement's unsalted SHA-512. -/
+theorem capShaped_capOf {st : Setup} {sch : Flock.Schedule}
+    (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (ms : List (List (SMsg T))) :
+    CapShaped st sch (capOf T sch ms) :=
+  capShaped_capArr (shapeOf_plain (n := 0) hms).1 _
 
 /-- **`capOf` is the cap the first cap message holds**: when that message is `capDig a` (`Steps`' first step) for `2^cap`
 digests `a`, `capOf` is `a`. -/
@@ -279,7 +285,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 
@@ -287,24 +293,31 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
 /-- **Rep `r`'s reads in V*'s layers `l` and the inner messages `ms`**: level `ℓ`'s opening `j` is copy 0 of unit
 `unO ℓ r j` of the level's session (`openCol`); its row the first `2^lanes` elements of its columns (`rowsOf`), its
-`h`-th sibling the 64 bytes of `aux` from column `128 · 2^lanes + 512 h` (`RecOpen.ports`, `RecOpen.sibForms`); its salt
-the inner openings message's; rep `r`'s `i`-th recursive cap the `(1 + r R + i)`-th cap among `ms`. -/
+`h`-th sibling the 64 bytes of `aux` from column `128 · 2^lanes + 512 h` (`RecOpen.ports`, `RecOpen.sibForms`); no salt
+(the inner statement's leaves are unsalted, and V* holds none); rep `r`'s `i`-th recursive cap the `(1 + r R + i)`-th cap
+among `ms`. -/
 noncomputable def ligRead (ms : List (List (SMsg T))) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
     LigRead where
   row ℓ j := elems (F.openCol l r ℓ j) 0 (2 ^ (sch.levels.getD ℓ default).lanes)
   sib ℓ j h := bytesAt (F.openCol l r ℓ j) (128 * 2 ^ (sch.levels.getD ℓ default).lanes + 512 * h) 64
-  salt ℓ j := saltIn T ms r.val ℓ j
+  salt _ _ := ByteArray.empty
   cap i e := capEntry T ms (1 + r.val * (sch.levels.size - 1) + i) e
 
-/-- **Rep `r`'s Ligerito openings** (`proofOf`'s `lig`), at hm96-sha512's 64-byte digests and 192-byte salts. -/
+/-- **Rep `r`'s Ligerito openings** (`proofOf`'s `lig`), at the inner statement's 64-byte digests, without salts. -/
 noncomputable def ligOf (ms : List (List (SMsg T))) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
     LigeritoProof :=
-  ligOfRead 64 (some 192) sch (F.ligRead ms l r)
+  ligOfRead 64 none sch (F.ligRead ms l r)
 
-/-- **`LigShaped`** at a setup on hm96-sha512. -/
-theorem ligShaped_ligOf {st : Setup} (hms : st.merkle = MerkleScheme.hm96Sha512) (ms : List (List (SMsg T)))
-    (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) : LigShaped st sch (F.ligOf ms l r) :=
-  ligShaped_ligOfRead (shapeOf_hm96 (n := 0) hms).1 (shapeOf_hm96 (n := 0) hms).2 _
+/-- **`LigShaped`** at a setup on the inner statement's unsalted SHA-512, whether it opens salts (`some 0`) or not:
+`saltsArr` gives none either way. -/
+theorem ligShaped_ligOf {st : Setup} (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
+    (ms : List (List (SMsg T))) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
+    LigShaped st sch (F.ligOf ms l r) := by
+  obtain ⟨hH, hsl⟩ := shapeOf_plain (sch := sch) (n := 0) hms
+  rcases hsl with hsl | hsl
+  · exact ligShaped_ligOfRead hH hsl _
+  · show LigShaped st sch (ligOfRead 64 (some 0) sch (F.ligRead ms l r))
+    exact ligShaped_ligOfRead hH hsl _
 
 variable (dg : ByteArray → ByteArray) (N k Rw : ℕ) (st : Reg → L.Ω → Setup)
 

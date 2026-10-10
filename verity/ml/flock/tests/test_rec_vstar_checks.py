@@ -6,7 +6,9 @@ against the inner session's, a name V* has no statement under. `verify` refuses 
 verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
 byte the one V* writes for its statement by the byte it differs at. V*'s parts are as many as the verifier's own groups, the
 inner shape's claims are two and two per region, and the verifier's registered reads hold exactly the statement's
-message-round ports. The honest sessions themselves are replayed on the pod: their statements are
+message-round ports. A session is the statement the verifier names (`--rec-part J`), and META binds the verifier's own
+bindings (`--rec-bindings F`, which `verity_flock.rec_bindings` computes from the partition object and program) exactly,
+`program_digests` by value. The honest sessions themselves are replayed on the pod: their statements are
 hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from pathlib import Path
 import pytest
 from test_rec_outer import BIN, staged  # noqa: F401
 from verity_flock import rec_algebra as A
+from verity_flock import rec_bindings as RB
 from verity_flock import rec_residuals as RR
 
 pytestmark = [pytest.mark.slow,
@@ -38,6 +41,17 @@ def _statements(inner: Path, *check: str) -> tuple[int, dict]:
     p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(inner), *check], capture_output=True, text=True)
     [line] = [json.loads(ln[9:]) for ln in p.stdout.splitlines() if ln.startswith("RECVSTAR ")]
     return p.returncode, line
+
+
+def _bindings(d: Path, path: Path) -> Path:
+    """The verifier's own bindings of the statement staged in ``d``, from its partition object and program."""
+    path.write_text(json.dumps(RB.bindings(json.loads((d / "partition.json").read_text()),
+                                           json.loads((d / "program.json").read_text()))))
+    return path
+
+
+def _meta(circuit: bytes) -> dict:
+    return json.loads(circuit.split(b"\n", 2)[1][5:])
 
 
 def _v_star(m: int, k: int, c: int) -> list[list]:
@@ -123,7 +137,8 @@ def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off
     assert p.returncode == 1 and v["why"] == (
         "setup: rec-open/l8-h1: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"), v
     inner = _inner(tmp_path / "inner.json", 25, 22, 8)
-    p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(inner)], capture_output=True, text=True)
+    own = ["--rec-part", "0", "--rec-bindings", str(_bindings(d, tmp_path / "bindings.json"))]
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(inner), *own], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.startswith(
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape (m 25, k_log 22, claims 8)"), p.stdout
 
@@ -136,7 +151,8 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
     d = staged[0]
     inner = _inner(tmp_path / "inner.json", 25, 22, 8)
     base = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
-            "--registered", str(d / "registered.json"), "--rec-inner", str(inner)]
+            "--registered", str(d / "registered.json"), "--rec-inner", str(inner), "--rec-part", "0",
+            "--rec-bindings", str(_bindings(d, tmp_path / "bindings.json"))]
     sess = tmp_path / "session"
     sess.mkdir()
     (sess / "session.json").write_text("{}")
@@ -207,22 +223,147 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
                                          f"the statement's: the statement has no port {m0} (0 message-round ports)"), line
 
 
-def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(tmp_path):
-    """`rec-open/l16-h1` (V*'s last level at m = 23, over 142 openings) as `compose` writes it, byte-equal to `vstar
-    rec-open` (`test_vstar_difftest`): the verifier passes it, and refuses it with a space added inside META, which parses
-    to the same bindings, by the byte the two files differ at."""
+@pytest.fixture(scope="module")
+def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
+    """`rec-open/l16-h1` (V*'s statement 2 at m = 23, its last level, over 142 openings) as `compose` writes it under its
+    population program's partition, and the verifier's own bindings of it, from that partition object and program."""
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity_flock import circuit as FC
+    from verity_flock import rec_open as R
     from verity_flock import rec_outer as O
 
+    tmp_path = tmp_path_factory.mktemp("l16-h1")
+    defn = R.definition(16, 1)
+    program = P.population_program(defn, 142)
+    part = P.partition(program, P.template_instance_query(defn))
+    honest = FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
+                        program=P.program_sha512(program)).encode()
+    (tmp_path / "partition.json").write_text(json.dumps(part))
+    (tmp_path / "program.json").write_bytes(canonical_json(encode_program(program)))
+    return honest, _bindings(tmp_path, tmp_path / "bindings.json")
+
+
+def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(l16_h1, tmp_path):
+    """`rec-open/l16-h1` as `compose` writes it, byte-equal to `vstar rec-open` (`test_vstar_difftest`): the verifier passes
+    it, and refuses it with a space added inside META, which parses to the same bindings, by the byte the two files differ
+    at."""
     assert _v_star(23, 22, 8)[2] == ["rec-open/l16-h1", 142]
     inner = _inner(tmp_path / "inner.json", 23, 22, 8)
-    honest = FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition="a" * 128, program="b" * 128).encode()
+    honest, own = l16_h1
+    flags = ["--instances", "142", "--rec-part", "2", "--rec-bindings", str(own)]
     (tmp_path / "honest.txt").write_bytes(honest)
-    rc, line = _statements(inner, "--circuit", str(tmp_path / "honest.txt"), "--instances", "142")
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "honest.txt"), *flags)
     assert rc == 0 and line["checked"] == ["rec-open/l16-h1", 142], line
     at = honest.index(b'META {"') + len(b"META {")
     (tmp_path / "spaced.txt").write_bytes(honest[:at] + b" " + honest[at:])
-    rc, line = _statements(inner, "--circuit", str(tmp_path / "spaced.txt"), "--instances", "142")
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "spaced.txt"), *flags)
     assert rc == 1 and line["error"] == (
         f"rec-open/l16-h1: the circuit file ({len(honest) + 1} bytes) is not V*'s ({len(honest)} bytes): they differ at "
         f"byte {at}, line 2"), line
+
+
+def test_the_verifiers_bindings_are_metas_of_v_stars_honest_statements(staged, l16_h1, tmp_path):  # noqa: F811
+    """`rec_bindings.bindings`, from the partition object and program alone, is exactly the three bindings of META that
+    V*'s honest statements carry: `rec_outer`'s staged level, and `rec-open/l16-h1` under its population program."""
+    d = staged[0]
+    keys = ("partition", "program", "program_digests")
+    m = _meta((d / "circuit.txt").read_bytes())
+    assert json.loads(_bindings(d, tmp_path / "staged.json").read_text()) == dict(zip(keys, (
+        m["partition"]["digest"], m["program_sha512"], m["program_digests"])))
+    honest, own = l16_h1
+    m = _meta(honest)
+    assert json.loads(own.read_text()) == dict(zip(keys, (m["partition"]["digest"], m["program_sha512"], m["program_digests"])))
+    assert list(m["program_digests"]) == ["RecOpen_v4{LANES=16,H=1}"]
+
+
+def test_a_session_is_the_statement_the_verifier_names(l16_h1, tmp_path):
+    """`rec-open/l16-h1` is V*'s statement 2 at m = 23: as session 2 it passes; as session 1 (another level's) or 0, it is
+    refused naming the statement the verifier holds the session for, and past V*'s last statement by the count; a circuit
+    checked with no `--rec-part` is refused naming the flag."""
+    inner = _inner(tmp_path / "inner.json", 23, 22, 8)
+    honest, own = l16_h1
+    (tmp_path / "honest.txt").write_bytes(honest)
+    ss = _v_star(23, 22, 8)
+    check = ["--circuit", str(tmp_path / "honest.txt"), "--instances", "142", "--rec-bindings", str(own)]
+    rc, line = _statements(inner, *check, "--rec-part", "2")
+    assert rc == 0 and line["checked"] == ["rec-open/l16-h1", 142], line
+    for j in (0, 1):
+        rc, line = _statements(inner, *check, "--rec-part", str(j))
+        assert rc == 1 and line["error"] == (
+            f"rec-open/l16-h1: the session is V*'s statement {j} (--rec-part), {ss[j][0]}"), (j, line)
+    rc, line = _statements(inner, *check, "--rec-part", str(len(ss)))
+    assert rc == 1 and line["error"] == (
+        f"rec-open/l16-h1: the session is V*'s statement {len(ss)} (--rec-part), but V* has {len(ss)} statements at the "
+        "inner session's shape"), line
+    rc, line = _statements(inner, *check)
+    assert rc == 1 and line["error"] == "rec-open/l16-h1: pass which of V*'s statements this circuit is for (--rec-part J)", line
+    rc, line = _statements(inner, "--unit", "rec-open/l16-h1", "--instances", "142", "--rec-part", "1")
+    assert rc == 1 and line["error"] == f"rec-open/l16-h1: the session is V*'s statement 1 (--rec-part), {ss[1][0]}", line
+
+
+def test_meta_binds_the_verifiers_own_program_digests_by_value(l16_h1, tmp_path):
+    """A `rec-open/l16-h1` file whose META `program_digests` names the template at another digest, otherwise V*'s file
+    under those bindings, is refused against the verifier's own bindings by the value; so is the honest file against
+    bindings of another digest, and a circuit checked without `--rec-bindings`, naming the flag."""
+    from verity.ml.circuits.codec import canonical_json
+
+    inner = _inner(tmp_path / "inner.json", 23, 22, 8)
+    honest, own = l16_h1
+    mine = json.loads(own.read_text())
+    ((tid, digest),) = mine["program_digests"].items()
+    other = ("0" if digest[0] != "0" else "1") + digest[1:]
+    tampered = honest.replace(digest.encode(), other.encode())
+    assert tampered.count(other.encode()) == 1 and len(tampered) == len(honest)
+    (tmp_path / "tampered.txt").write_bytes(tampered)
+    (tmp_path / "honest.txt").write_bytes(honest)
+    canon = lambda d: canonical_json({tid: d}).decode()
+    flags = ["--instances", "142", "--rec-part", "2"]
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "tampered.txt"), *flags, "--rec-bindings", str(own))
+    assert rc == 1 and line["error"] == (
+        f"rec-open/l16-h1: META program_digests {canon(other)}, the verifier's bindings' {canon(digest)}"), line
+    (tmp_path / "theirs.json").write_text(json.dumps({**mine, "program_digests": {tid: other}}))
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "tampered.txt"), *flags, "--rec-bindings",
+                           str(tmp_path / "theirs.json"))
+    assert rc == 0 and line["checked"] == ["rec-open/l16-h1", 142], line
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "honest.txt"), *flags, "--rec-bindings",
+                           str(tmp_path / "theirs.json"))
+    assert rc == 1 and line["error"] == (
+        f"rec-open/l16-h1: META program_digests {canon(digest)}, the verifier's bindings' {canon(other)}"), line
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "honest.txt"), *flags)
+    assert rc == 1 and line["error"] == "rec-open/l16-h1: pass the verifier's own bindings (--rec-bindings F)", line
+
+
+def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_verifiers_bindings(staged, tmp_path):  # noqa: F811
+    """`rec_outer`'s staged level through `statement` and `verify` with the verifier's inner shape, partition object and
+    program: without `--rec-part`, or without `--rec-bindings`, it is refused at setup naming the flag; with bindings whose
+    `program_digests` value is not META's, by that value."""
+    d = staged[0]
+    inner = _inner(tmp_path / "inner.json", 25, 22, 8)
+    own = _bindings(d, tmp_path / "bindings.json")
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-inner", str(inner)]
+    sess = tmp_path / "session"
+    sess.mkdir()
+    (sess / "session.json").write_text("{}")
+    why = {
+        "--rec-part": "rec-open/l8-h1: one of V*'s statements; pass which of V*'s statements this session is (--rec-part J, "
+                      "its index in rec-statements' list)",
+        "--rec-bindings": "rec-open/l8-h1: one of V*'s statements; pass the verifier's own bindings (--rec-bindings F, from "
+                          "verity_flock.rec_bindings)"}
+    for flags, missing in ((["--rec-bindings", str(own)], "--rec-part"), (["--rec-part", "0"], "--rec-bindings")):
+        p = subprocess.run([str(BIN), "verify", *files, *flags, "--session", str(sess)], capture_output=True, text=True)
+        [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+        assert p.returncode == 1 and v["why"] == f"setup: {why[missing]}", (missing, v)
+        p = subprocess.run([str(BIN), "statement", *files, *flags], capture_output=True, text=True)
+        assert p.returncode == 1 and p.stdout.strip() == f"setup: {why[missing]}", (missing, p.stdout)
+    mine = json.loads(own.read_text())
+    ((tid, digest),) = mine["program_digests"].items()
+    other = ("0" if digest[0] != "0" else "1") + digest[1:]
+    (tmp_path / "theirs.json").write_text(json.dumps({**mine, "program_digests": {tid: other}}))
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-part", "0", "--rec-bindings", str(tmp_path / "theirs.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == (
+        f'setup: rec-open/l8-h1: META program_digests {{"{tid}":"{digest}"}}, the verifier\'s bindings\' '
+        f'{{"{tid}":"{other}"}}'), p.stdout

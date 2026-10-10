@@ -14,8 +14,9 @@ they are taken from it once:
 
 * `coinsOf`: rep `r`'s rounds are the coin steps of the history's coins (`coinSteps`) after the link points and `r`
   reps' rounds, each read as the array of the size `verifierRows` takes there (`roundSizes`, `verifierRows_schedule`);
-* `coinFiles`: the table files of a source whose reps carry only those coins (`coinRep`), at the same setup, statement
-  and inner transcript as `filesOf`'s, so their extra claims are `filesOf`'s; `rep₀ := repOf coinFiles`.
+* `coinFiles`: the table files of a source whose reps carry only those coins (`coinRep`), at the same setup and
+  statement as `filesOf`'s and at the link points of the history's first coin (`ptsC`), so they read no message and
+  their extra claims are `filesOf`'s wherever the inner transcript's link points are those; `rep₀ := repOf coinFiles`.
 
 At a family whose `rep₀` is that, the joins between the lanes hold:
 
@@ -143,6 +144,17 @@ theorem coinsOf_sizes {nR : ℕ} (CT : Fin nR → Type) (sh : Shape) (cs : List 
     (coinsOf CT sh cs r).toList.map Array.size = roundSizes sh := by
   apply List.ext_getElem <;> simp [coinsOf, arrOf_size]
 
+/-- **The link points of the coins `cs`**: their first coin step (`coinSteps`), where it is one. -/
+noncomputable def ptsC {nR : ℕ} (CT : Fin nR → Type) (mPts : ℕ) (cs : List ((k : Fin nR) → CT k)) :
+    Fin 2 → Fin mPts → 𝔽 :=
+  @Classical.epsilon _ ⟨fun _ _ => 0⟩ fun P => (coinSteps CT 0 cs).head? = some ⟨Fin 2 → Fin mPts → 𝔽, P⟩
+
+theorem ptsC_eq {nR : ℕ} {CT : Fin nR → Type} {mPts : ℕ} {cs : List ((k : Fin nR) → CT k)} {P : Fin 2 → Fin mPts → 𝔽}
+    (h : (coinSteps CT 0 cs).head? = some ⟨Fin 2 → Fin mPts → 𝔽, P⟩) : ptsC CT mPts cs = P := by
+  have hs := @Classical.epsilon_spec _ (fun P => (coinSteps CT 0 cs).head? = some ⟨Fin 2 → Fin mPts → 𝔽, P⟩) ⟨P, h⟩
+  have e := Option.some.inj (hs.symm.trans h)
+  exact eq_of_heq (Sigma.mk.inj e).2
+
 /-- A rep that carries only its coins. -/
 def coinRep (rounds : Array (Array F128)) : RepData := ⟨#[], #[], fun _ _ => 0, rounds, #[]⟩
 
@@ -246,7 +258,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 
@@ -262,15 +274,16 @@ noncomputable def coinSrc (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
   ⟨spec, st R ω, sch, F.sh, (F.x R ω).toStatement regs, cap l, lig l,
     fun r => coinRep (coinsOf CT F.sh (t.map Prod.snd) r)⟩
 
-/-- **The coins' table files**: `coinSrc`'s, at the inner transcript of the messages `wmsg` and the history's coins.
-Their streams issue `coinsOf`, and their extra claims are `filesOf`'s at the same messages. -/
-noncomputable def coinFiles (wmsg : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (ℐ).Msg) (R : Reg) (ω : L.Ω)
-    (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) : TableFiles cls :=
-  (F.coinSrc spec st cap lig R ω t l).files T CT ((wmsg l).zip (t.map Prod.snd))
+/-- **The coins' table files**: `coinSrc`'s, at the link points of the history's first coin (`ptsC`). Their streams
+issue `coinsOf`; they read no message, so `rep₀ := repOf coinFiles` comes before the messages (`wmsg`) and the
+decoder that reads them. -/
+noncomputable def coinFiles (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
+    (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) : TableFiles cls :=
+  (F.coinSrc spec st cap lig R ω t l).filesAt cls (ptsC CT cls.mPts (t.map Prod.snd))
 
-theorem repOf_coinFiles_rounds (wmsg : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (ℐ).Msg) (R : Reg)
-    (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
-    (F.repOf (F.coinFiles spec st cap lig wmsg) R ω t l r).rounds = coinsOf CT F.sh (t.map Prod.snd) r := by
+theorem repOf_coinFiles_rounds (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
+    (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
+    (F.repOf (F.coinFiles spec st cap lig) R ω t l r).rounds = coinsOf CT F.sh (t.map Prod.snd) r := by
   show (streamRounds (coinsOf CT F.sh (t.map Prod.snd) (fin2 r.val)) _).map (·.coins) = _
   rw [streamRounds_coins, fin2_val]
 
@@ -288,30 +301,32 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
 /-- The verifier's shape counts the statement's claims: `2` and two per region. -/
 def ClaimsIs : Prop := ∀ R ω, F.sh.claims = 2 + 2 * ((F.x R ω).toStatement regs).regions.length
 
-/-- **V*'s shape counts the inner statement's claims** (the verifier's gap `vsh`, with `ShapeIs`): `vsh`'s claims are
+/-- Obligation: discharged by the verifier's ClaimsAt check (`verity/rec-inner/v1`'s `regions`,
+`cursor/rec-vstar-checks-741b`), with the setup's `regs.length = st.regions.size`.
+**V*'s shape counts the inner statement's claims** (the verifier's gap `vsh`, with `ShapeIs`): `vsh`'s claims are
 `2` and two per region of the inner session's `regs` (`rec_vstage.shape`'s claims). -/
 def ClaimsAt : Prop := F.vsh.claims = 2 + 2 * regs.length
 
 theorem claimsIs_of (h : F.ClaimsAt) : F.ClaimsIs := fun _ _ => (shape?_claims F.hsh).trans h
 
-theorem rep_rounds (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg)) (R : Reg) (ω : L.Ω)
+theorem rep_rounds (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
     (F.rep R ω t l r).rounds = coinsOf CT F.sh (t.map Prod.snd) r := by
   show (F.rep₀ R ω t l r).rounds = _
   rw [hrep]
-  exact F.repOf_coinFiles_rounds spec st cap lig F.wmsg R ω t l r
+  exact F.repOf_coinFiles_rounds spec st cap lig R ω t l r
 
-theorem rep_extras (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg)) (R : Reg) (ω : L.Ω)
+theorem rep_extras (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
-    (F.rep R ω t l r).extras = (F.coinFiles spec st cap lig F.wmsg R ω t l).extras := by
+    (F.rep R ω t l r).extras = (F.coinFiles spec st cap lig R ω t l).extras := by
   show (F.rep₀ R ω t l r).extras = _
   rw [hrep]
   rfl
 
-theorem rep_comb (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg)) (R : Reg) (ω : L.Ω)
+theorem rep_comb (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
-    (F.rep R ω t l r).comb = combOf F.sh (F.coinFiles spec st cap lig F.wmsg R ω t l) (F.rep R ω t l r).rounds := by
-  have e : (F.rep R ω t l r).rounds = roundsOf (F.coinFiles spec st cap lig F.wmsg R ω t l) r := by
+    (F.rep R ω t l r).comb = combOf F.sh (F.coinFiles spec st cap lig R ω t l) (F.rep R ω t l r).rounds := by
+  have e : (F.rep R ω t l r).rounds = roundsOf (F.coinFiles spec st cap lig R ω t l) r := by
     show (F.rep₀ R ω t l r).rounds = _
     rw [hrep]
     rfl
@@ -322,18 +337,20 @@ theorem rep_comb (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg)
 
 /-- **hf's `ExtrasAre`**: each rep's extra claims are the coins' files', which are the setup's at every well-formed
 link point arrays (`TableSrc.extra_points`). -/
-theorem extrasAre_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg))
+theorem extrasAre_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
-    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) :
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits)
+    (hpts : ptsOf (cls := cls) T CT ((F.wmsg l).zip (t.map Prod.snd)) = ptsC CT cls.mPts (t.map Prod.snd)) :
     (F.tableSrc spec st cap lig R ω t l).ExtrasAre T CT cls ((F.wmsg l).zip (t.map Prod.snd)) := by
   intro r P hP
   show (st R ω).extra P = .ok (F.rep R ω t l r).extras
   rw [F.rep_extras spec st cap lig hrep]
+  rw [hpts] at hP
   exact (F.coinSrc spec st cap lig R ω t l).extra_points (hset R ω) _ hP
 
 /-- **ha's `HFit`**: each rep's rounds have `verifierRows`' sizes (`coinsOf_sizes`), and its extra claims number the
 shape's (`ClaimsIs`, `TableSrc.extrasAt_size`), so `verifierRows` returns (`roundSizes_spec`). -/
-theorem hFit_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg)) {GS : Flock.RecAlgebra.GfS}
+theorem hFit_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
     (hcl : F.ClaimsIs) : F.HFit dg N k Rw := by
@@ -349,16 +366,16 @@ theorem hFit_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg))
 
 /-- **hf's `CombFolds`**: each rep's comb is `combOf` at its coins and the coins' files' extra claims (`rep_comb`), of
 `verifierRows`' sizes, so it is the lincheck's fold where that returns 64 elements (`combFolds_of`). -/
-theorem combFolds_at (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg))
+theorem combFolds_at (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hfold : ∀ R ω, FoldsOk (st R ω) F.sh) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
     (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) : CombFolds (st R ω) F.sh (F.rep R ω t l r) :=
-  combFolds_of (F.coinFiles spec st cap lig F.wmsg R ω t l) _ (F.rep_comb spec st cap lig hrep R ω t l r)
+  combFolds_of (F.coinFiles spec st cap lig R ω t l) _ (F.rep_comb spec st cap lig hrep R ω t l r)
     (F.rep_extras spec st cap lig hrep R ω t l r)
     (by rw [F.rep_rounds spec st cap lig hrep]; exact coinsOf_sizes CT F.sh _ r) (hfold R ω)
 
 /-- **hf's `Coins`**: each rep's rounds have `verifierRows`' sizes, and those have `verifyRep`'s counts
 (`CoinsAgree`). -/
-theorem coins_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg))
+theorem coins_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hco : ∀ R ω, CoinsAgree (st R ω) F.sh sch (2 * ((F.x R ω).toStatement regs).regions.length))
     (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) :
     (F.tableSrc spec st cap lig R ω t l).Coins := by
