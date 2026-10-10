@@ -128,8 +128,8 @@ theorem outerV_le_dep
     (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
-    (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : Reg₂ → ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hr : ∀ R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ)
+    {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : Reg₂ → ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
       (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
@@ -156,7 +156,8 @@ theorem zk_sessions_recursive_upto_off
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -226,7 +227,8 @@ theorem zk_sessions_recursive_read_off
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -275,7 +277,8 @@ theorem zk_sessions_recursive_fork_read_off
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : VBridgeOff (RegColl zs) zs dg N k Rw x wmsg)

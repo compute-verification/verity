@@ -56,7 +56,8 @@ theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.Oute
     (hp : HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
       (Flock.Zk.maskLogOf x.I.circuitFile) 1) x.I.circuitFile [] = .ok Q.c) (hn : (pubZ x.I).n = Q.nv) :
     Q.Loads x.I := by
-  have hZ := (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseH x.hTags.1)).1
+  have hZ : HmRow.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok (circZ x.I) :=
+    (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseH x.hTags.1)).1
   rw [parse_zkTags_vstar hT, htab, hp] at hZ
   exact ⟨(Except.ok.inj hZ).symm, hn⟩
 
