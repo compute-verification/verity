@@ -222,7 +222,7 @@ def innerCommits (tr : Json) (record : String) : V (Array (Array (Nat × ByteArr
       throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
     msgs := msgs.push (s, k, ← unhex cs[0]!)
   let names := (msgs.map (·.1)).toList.eraseDups
-  let some t := names.head?.map fun n => toString (n.dropRightWhile (· != '/')) | throw "rec inner transcript: no message round holds a commitment"
+  let some t := names.head?.map fun n => (n.dropEndWhile (· != '/')).toString | throw "rec inner transcript: no message round holds a commitment"
   if names.length != 2 || !names.contains s!"{t}rep0" || !names.contains s!"{t}rep1" then
     throw s!"rec inner transcript: its message rounds' streams {names} are not one table's rep0 and rep1"
   return #[0, 1].map fun x =>
