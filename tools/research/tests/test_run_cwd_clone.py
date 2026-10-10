@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from research import clone, remote
+from research import clone, gates, remote
 from research import runs as R
 from research.cli import _clone_imports, main
 from research.pythonpath import import_roots_dir, pythonpath
@@ -208,6 +208,12 @@ def test_untracked_files_count_whatever_status_shows(tmp_path, repo, capsys):
     assert "has uncommitted or untracked files" in capsys.readouterr().err and _clones(tmp_path) == []
     with pytest.raises(remote.Refused, match="has uncommitted changes"):
         remote.ship_source(["false"], str(tmp_path / "machine"), repo)
+
+
+def test_a_clone_merges_lean_audit_json_with_the_record_driver(tmp_path, repo):
+    """A clone's config starts empty, so a workload that merged in it merged a `lean-audit.json` line by line."""
+    clone.make(repo, tmp_path / "c")
+    assert _git(tmp_path / "c", "config", "merge.lean-audit.driver") == gates.RECORD_DRIVER["merge.lean-audit.driver"]
 
 
 def test_the_callers_git_dir_does_not_point_the_clone_at_the_source(tmp_path, repo, monkeypatch):

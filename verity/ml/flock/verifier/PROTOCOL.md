@@ -1224,7 +1224,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
   (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
-  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16`;
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16` (`rec_open` builds
+    `0 ≤ H ≤ 32`, reading the side bits above 16 from `dirs`' word 1 and giving `H = 0` one unread `aux` row; this verifier
+    refuses those heights until `Flock.RecOpen` does the same);
   - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
     verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
     allow;
