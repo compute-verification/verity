@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -69,15 +70,21 @@ def shape(forged, tmp_path_factory) -> Path:
     return f
 
 
-def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None) -> dict:
+def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
+         session: Path = SET / "outer-L3" / "session") -> subprocess.CompletedProcess:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
                                     str(SET / inner / "session")]
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
-                        str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec,
-                        "--session", str(SET / "outer-L3" / "session")], capture_output=True, text=True, check=False)
+                        str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec, *extra,
+                        "--session", str(session)], capture_output=True, text=True, check=False)
+    return p
+
+
+def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str) -> dict:
+    p = _run(level, public, registered, shape, inner, *extra)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
@@ -96,3 +103,73 @@ def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape):
     v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
                         "verifier's rec-coef row 0")
+
+
+def _stage(d: Path, **kw) -> dict:
+    return S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d,
+                   pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", **kw)
+
+
+def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
+    """`HDirCols`' check (`RecCoins.checkOpen`'s `dirs`): level 3 staged with rep 0's opening 0 `dirs` registered one bit
+    off, the opening's climb aside, is refused at that opening by the position the verifier's coins give."""
+    honest = S.R.dirs_words
+    first = []
+
+    def dirs_words(pos, H):
+        w = honest(pos, H)
+        if not first:
+            first.append(pos)
+            w = [w[0] ^ 1, *w[1:]]
+        return w
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(S.R, "dirs_words", dirs_words)
+        _stage(tmp_path, levels=[LEVEL], algebra=False)
+    out = tmp_path / f"L{LEVEL}"
+    v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest")
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's dirs row is not the "
+                        "verifier's rec-dirs row 0"), v["why"]
+
+
+@pytest.fixture(scope="module")
+def algebra(forged, tmp_path_factory) -> Path:
+    """V*'s algebra parts staged over the honest inner session: the first that reads the first message round, `rec-c0`."""
+    d = tmp_path_factory.mktemp("rec-alg")
+    _stage(d, levels=[], algebra=True, evaluate=False)
+    reads = lambda p: [x["value"] for x in json.loads((p / "registered.json").read_text())["ports"].values()]
+    return next(p for p in sorted((d / "alg").iterdir()) if "rec-c0" in reads(p))
+
+
+def _transcript(dst: Path, change) -> Path:
+    t = json.loads((SET / "inner-honest" / "public.json").read_text())
+    change([r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"].endswith("/rep0") and r.get("commits")][0])
+    dst.write_text(json.dumps(t))
+    return dst
+
+
+def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape, tmp_path):
+    """`HPubRows`' check (`RecVStar.checkPubRows`): an algebra part's `pub.bin` rows at its `rec-c<k>` reads are the
+    `c_k` the coin server recorded. The honest part passes setup with the inner transcript (its session is level 3's, so
+    the verdict is refused after setup), is refused without it, and is refused at a transcript whose rep 0 `c_0` is one bit
+    off, or whose coins there are not the inner session's."""
+    t = SET / "inner-honest" / "public.json"
+    v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t))
+    assert not v["why"].startswith("setup:"), v["why"]
+    unit = json.loads((algebra / "circuit.txt").read_text().split("\n", 2)[1][5:])["unit"]["name"]
+    v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest")
+    assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
+
+    def flip(r):
+        c = bytearray.fromhex(r["commits"][0])
+        c[0] ^= 1
+        r["commits"] = [c.hex()]
+
+    bad = _transcript(tmp_path / "c0.json", flip)
+    v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad))
+    (port,) = [k for k, x in json.loads((algebra / "registered.json").read_text())["ports"].items() if x["value"] == "rec-c0"]
+    assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not rep 0's c_0 \(inner round \d+\) "
+                        "of the inner transcript", v["why"]), v["why"]
+    bad = _transcript(tmp_path / "coins.json", lambda r: r.__setitem__("coins", ["00" * 16] * len(r["coins"])))
+    p = _run(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad))
+    assert p.returncode == 2 and "round" in p.stderr and "coins are not the inner session record's" in p.stderr, p.stderr

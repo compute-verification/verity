@@ -215,7 +215,7 @@ def innerCommits (tr : Json) (record : String) : V (Array (Array (Nat × ByteArr
     let (.ok s, .ok k) := (r.getObjValAs? String "stream", r.getObjValAs? Nat "k")
       | throw "rec inner transcript: a message round names no stream or round"
     if cs.size != 1 then throw s!"rec inner transcript: {s} round {k} holds {cs.size} commitments, not one"
-    let some srec := streams.find? ((·.getObjValAs? String "stream").toOption == some s)
+    let some srec := streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s
       | throw s!"rec inner transcript: {s} is no stream of the inner session's record"
     let rr := ((srec.getObjValAs? (Array Json) "rounds").toOption.getD #[])[k]?
     if (rr.map coinsOf) != some (coinsOf r) then
