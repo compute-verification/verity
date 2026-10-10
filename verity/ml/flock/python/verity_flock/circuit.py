@@ -87,6 +87,10 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
                "key": "default_key, a statement constant for every tree",
                "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
                              "a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22"}
+#: :data:`LEAF_SCHEME` as statements composed up to verity ``b3727bd9`` name it (``Flock/Tags.lean``'s ``leafSchemeHm96``,
+#: verified as ``verity/flock-circuit@b3727bd9``): a level restaged for a session recorded before then needs these words.
+LEAF_SCHEME_B3727BD9 = {**LEAF_SCHEME,
+                        "salt_source": "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored"}
 #: The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
 #: firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
 #: SHA-512 digest itself (``HashKind::Sha512``, the Lean verifier's ``MerkleScheme.sha512``) and an opening carries no salt.
