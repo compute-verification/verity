@@ -47,9 +47,12 @@ theorem session_coins_sound : SessionCoinsSound := by
 
 theorem session_coins_hm96 : SessionCoinsHm96 := by
   intro F K E _ _ _ _ _ _ _ _ _ mPts A hA hE ts j Blk Cs D _ _ _ dc R dig cs hcs H τ
-  refine (committed_le_hm96 hE _ (sessionZKC dc R A ts) (distinct_sessionZKC dc R A ts) dig cs hcs H τ).trans
+  refine (committed_le_hm96 hE
+    (fun _ (outs : List (Bool × Oracle F)) => acceptedZK ts outs ∧ ¬ (ts.get j).Committed A (outs.getD j dfltZK).2)
+    (fun _ => sessionZKC dc R A ts) (fun _ => distinct_sessionZKC dc R A ts) dig cs hcs H τ).trans
     (add_le_add ?_ (le_of_eq ?_))
-  · rw [value_erase (er_sessionZKC dc R A ts)]
+  · simp only [avg_const]
+    rw [value_erase (er_sessionZKC dc R A ts)]
     exact value_sessionZK_le A hA ts j
   · rw [card_sessIdx]
 
