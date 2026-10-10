@@ -73,3 +73,25 @@ def test_a_forgery_passes_only_when_lean_refuses_it(tmp_path, capsys):
     assert rc == 1 and out[-1] == "lean: 1/1 accepted, 0/1 forgeries refused: the step fails"
     _part(tmp_path, "forged-sum-L3", 2)
     assert _run(tmp_path, "L0", "forged-sum-L3", capsys=capsys)[0] == 1
+
+
+def _statement(d: Path, rc: int, line: str) -> None:
+    (d / "inner-statement.log").write_text(line + "\n")
+    (d / "time-inner-statement.txt").write_text(f"\tExit status: {rc}\n")
+
+
+def test_the_inner_statement_passes_only_with_its_units_derived_from_the_program(tmp_path, capsys):
+    """`flock-verify statement`'s line is the part's verdict: units derived from the verifier's program pass; units taken as
+    stated (no program) and a setup refusal (f05d's, a unit-class template) fail."""
+    def stmt(units: str, note: str) -> str:
+        return json.dumps({"statement_digest": "5b6f", "partition_check": {"rule": "verity/partition/v1", "units": units, "note": note}})
+
+    _statement(tmp_path, 0, stmt("derived", "units derived: Q_word v1 over the verifier's program"))
+    rc, out = _run(tmp_path, "inner-statement", capsys=capsys)
+    assert rc == 0 and out == ["lean inner-statement: exit 0, accepted true, why \"units derived: Q_word v1 over the verifier's program\"",
+                               "lean: 1/1 accepted"]
+    _statement(tmp_path, 0, stmt("as stated", "units as stated"))
+    assert _run(tmp_path, "inner-statement", capsys=capsys)[0] == 1
+    _statement(tmp_path, 1, "setup: partition: unit 0 is a unit of GemmCoordinate_v2{K=4096}, not of the circuit's template unit-class/731c")
+    rc, out = _run(tmp_path, "inner-statement", capsys=capsys)
+    assert rc == 1 and "exit 1, accepted false, why \"setup: partition: unit 0 is a unit of" in out[0] and out[0].endswith("<- FAILS")

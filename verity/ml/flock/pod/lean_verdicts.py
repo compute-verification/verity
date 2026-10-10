@@ -2,8 +2,9 @@
 flock-verify exit, as its ``/usr/bin/time -v`` record has it (``time-PART.txt``'s ``Exit status``), and the ``VERDICT``
 lines of its log (``PART.log``, one per session). An honest part passes when it exited 0 and has a VERDICT and every VERDICT
 accepts; a forgery (a part named ``forged-*``) when it exited 1, flock-verify's refusal, with a VERDICT and none accepting.
-A part that never ran has neither file and fails. One line per part, then the count; the exit is 0 only when there is a part
-and every part passes.
+``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from the verifier's program
+(``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has neither file and fails.
+One line per part, then the count; the exit is 0 only when there is a part and every part passes.
 
     python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
 """
@@ -32,6 +33,14 @@ def verdicts(log: Path) -> list[dict]:
                 out.append(json.JSONDecoder(strict=False).decode(line[8:]))
             except ValueError:
                 out.append({"accepted": None, "why": "a VERDICT line that is not JSON"})
+        elif line.startswith("{") and '"partition_check"' in line:
+            try:
+                pc = json.loads(line).get("partition_check") or {}
+                out.append({"accepted": pc.get("units") == "derived", "why": pc.get("note", "")})
+            except (ValueError, AttributeError):
+                out.append({"accepted": None, "why": "a statement line that is not JSON"})
+        elif line.startswith("setup: "):
+            out.append({"accepted": False, "why": line})
     return out
 
 

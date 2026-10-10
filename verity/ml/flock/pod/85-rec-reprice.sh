@@ -28,9 +28,11 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
 #                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s). The job
+#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
+#                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                a forgery's refused (lean_verdicts.py; the inner's is not checked)
+#                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py; the
+#                inner's session is not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -534,10 +536,12 @@ vstage)
     fi
   ) > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
   mkdir -p $O/vstage
-  # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program
-  python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt <<'EOF' || exit 1
+  # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program, and
+  # that program (STEP=lean's statement check reads both)
+  python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt $DD/stage/program.json <<'EOF' || exit 1
 import json, sys
 from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
 program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
@@ -548,9 +552,12 @@ with open(sys.argv[3]) as f:
     meta = json.loads(f.readline()[5:])
 assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
 open(sys.argv[2], "w").write(json.dumps(obj, sort_keys=True))
-print("partition", PO.digest(obj), "program", obj["program"])
+desc = encode_program(units.program)
+assert program_digest(desc) == obj["program"], "the program file is not the partition's program"
+open(sys.argv[4], "wb").write(canonical_json(desc))
+print("partition", PO.digest(obj), "program", obj["program"], "template", *meta["program_digests"])
 EOF
-  cp $DD/stage/partition.json $O/vstage/
+  cp $DD/stage/partition.json $DD/stage/program.json $O/vstage/
   V=$DD/v; rm -rf $V; mkdir -p $V
   /usr/bin/time -v -o $O/vstage/time-points.txt python3 -m verity_flock.rec_vstage points $INNER $DD/stage/circuit.txt \
     $DD/stage/pub-$N.bin > $V/points.json 2> $O/vstage/points.err || { tail -20 $O/vstage/points.err; exit 1; }
@@ -650,10 +657,19 @@ lean)
       --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
   fi
-  # fail closed: every statement vstage staged or oprove kept a session of, and ZK_LEAN's
+  # the inner statement with the verifier's partition object and program (the setup AcceptsPublic states): Lean derives its
+  # units from the program, each an activation of the circuit's template
+  if [ -f $DD/stage/circuit.txt ]; then
+    /usr/bin/time -v -o $O/lean/time-inner-statement.txt $LEAN_BIN statement --statement verity/flock-circuit+plain-leaves \
+      --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
+      --program $DD/stage/program.json --coins os > $O/lean/inner-statement.log 2> $O/lean/inner-statement.err
+    echo "inner-statement lean exit $?"
+  fi
+  # fail closed: every statement vstage staged or oprove kept a session of, ZK_LEAN's, and the inner statement's
   PARTS=$( { [ -d $DD/v ] && (cd $DD/v && find . -name inst.bin -printf '%h\n' | sed 's:^\./::; s:/:-:g')
     for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do basename $S; done; } | sort -uV | while read -r l; do want $l && echo $l; done)
   [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
+  [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
