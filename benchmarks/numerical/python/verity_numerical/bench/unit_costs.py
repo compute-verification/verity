@@ -2,7 +2,7 @@
 (``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit draws, and the unit's public
 work weight.
 
-    python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING]
+    python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
 
 **Gates and nonzeros.** A unit type's subcircuit is its census template bound at the census parameters
 (``bench.templates.subcircuit``), and its circuit is that Definition lowered whole, piece by piece, by C-Flock's generic
@@ -23,8 +23,11 @@ Every number says how it was obtained (``method``):
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
 - ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the law is read off builds at every V in
   :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
-- ``model`` (attention whose builds past the first key block are over ``--exact-nnz`` or do not fit one per-block excess):
-  the first block's affine fit only, evaluated at the stratum's T; not exact.
+- ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_law`): that
+  excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
+  the first block's fit alone. Not exact.
+
+``--reuse unit-costs.json`` re-derives the inventory from an earlier run's subcircuit results instead of building.
 - ``missing``: no piece for a primitive of the Definition (the reason names it), or ``excluded`` (embedding-row is a
   commitment opening, not proved by a proof backend), or ``not built`` (a structured reduction whose census size is over
   ``--exact-nnz``).
@@ -441,16 +444,12 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
     for key, j, T, job in block_jobs:
         checks.setdefault(key, {})[j] = (T, big[job])
     for key, by_j in checks.items():
-        r, fit = out[key], out[key]["_fit"]
+        r = out[key]
         if any("error" in c for _, c in by_j.values()):
             r.setdefault("notes", []).append(f"a build past the first key block failed: {[c.get('error') for _, c in by_j.values()]}")
             continue
-        resid = {j: {m: c[m] - at(fit, T)[m] for m in METRICS} for j, (T, c) in by_j.items()}
-        r["block_checks"] = {T: {"built": _plain(c), "over_first_block_fit": {m: _num(v) for m, v in resid[j].items()}}
-                             for j, (T, c) in by_j.items()}
-        if sorted(by_j) == list(BLOCK_CHECKS) and all(resid[j][m] == j * resid[1][m] for j in BLOCK_CHECKS for m in METRICS):
-            r["_block"] = resid[1]
-            r.update(method="affine", variable="T, NB", per_extra_block={m: _num(v) for m, v in resid[1].items()})
+        r["block_checks"] = {T: {"built": _plain(c)} for T, c in by_j.values()}
+        block_law(r)
     log("stage 2: done")
     for key, job in exact_jobs.items():
         r, c = out[key], big[job]
@@ -468,11 +467,51 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
     return out
 
 
+def block_law(r: dict[str, Any]) -> None:
+    """An attention head's cost past its first key block, from ``r["block_checks"]`` (builds at T = j BN + 16, j in
+    :data:`BLOCK_CHECKS`): each metric's excess over the first block's fit is ``lin j + curv j (j − 1) / 2``. A metric with
+    ``curv`` 0 is affine in the block count, checked on j = 0, 1, 2; when every metric is, the head is ``affine``. Otherwise
+    it stays a ``model``: the curvature is fitted through three points with none left to check it."""
+    BN, fit = int(r["params"]["BN"]), r["_fit"]
+    by_j = {(int(T) - 16) // BN: c["built"] for T, c in r["block_checks"].items()}
+    if sorted(by_j) != list(BLOCK_CHECKS):
+        return
+    resid = {j: {m: c[m] - at(fit, j * BN + 16)[m] for m in METRICS} for j, c in by_j.items()}
+    for T, c in r["block_checks"].items():
+        c["over_first_block_fit"] = {m: _num(v) for m, v in resid[(int(T) - 16) // BN].items()}
+    lin = resid[1]
+    curv = {m: resid[2][m] - 2 * lin[m] for m in METRICS}
+    r["_block"] = (lin, curv)
+    r.update(per_extra_block={m: _num(v) for m, v in lin.items()})
+    if any(curv.values()):
+        r["block_curvature"] = {m: _num(v) for m, v in curv.items() if v}
+        r.setdefault("notes", []).append(f"not affine in the block count for {sorted(m for m, v in curv.items() if v)}: the "
+                                         "excess over the first block is fitted with a curvature through j = 0, 1, 2, unchecked")
+    else:
+        r.update(method="affine", variable="T, NB")
+
+
+def reuse(path: str) -> dict[tuple, dict[str, Any]]:
+    """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and block laws re-derived."""
+    subs = {}
+    for s in json.loads(open(path).read())["subcircuits"]:
+        s = {k: v for k, v in s.items() if k not in ("per_extra_block", "block_curvature", "notes")}
+        if s["template"] == "attention-head" and "fit" in s:
+            s["method"] = "model"
+            s["_fit"] = {m: (Fraction(a), Fraction(b)) for m, (a, b) in s["fit"].items()}
+            if s.get("block_checks"):
+                block_law(s)
+        subs[_key(s["template"], s["params"])] = s
+    return subs
+
+
 def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jobs: int = 1,
-              attention_t: Sequence[int] = ATTENTION_T, log: Callable[[str], None] = print) -> dict[str, Any]:
+              attention_t: Sequence[int] = ATTENTION_T, log: Callable[[str], None] = print,
+              subs: dict[tuple, dict[str, Any]] | None = None) -> dict[str, Any]:
     K = sample_size()
     types = unit_types(workloads)
-    subs = subcircuit_costs(types, exact_nnz, n_jobs, attention_t, log)
+    if subs is None:
+        subs = subcircuit_costs(types, exact_nnz, n_jobs, attention_t, log)
     rows = []
     for w in workloads:
         mine = [t for t in types if t.workload == w["id"]]
@@ -482,11 +521,11 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
             s = subs[_key(t.template, t.params)]
             per_sub: dict[str, Any] | None = None
             if "_fit" in s:
-                extra = int(t.parameters["NB"]) - 1
-                blk = s.get("_block") or {m: 0 for m in METRICS}
+                e = int(t.parameters["NB"]) - 1
+                lin, curv = s.get("_block") or ({m: 0 for m in METRICS}, {m: 0 for m in METRICS})
 
                 def head(T: Fraction | int) -> dict[str, Fraction]:
-                    return {m: v + extra * blk[m] for m, v in at(s["_fit"], T).items()}
+                    return {m: v + e * lin[m] + Fraction(e * (e - 1), 2) * curv[m] for m, v in at(s["_fit"], T).items()}
                 per_sub = {m: float(v) for m, v in head(Fraction(t.T["mean"])).items()}
                 per_sub_range = {b: float(head(int(t.T[b]))["nnz_AB"] + head(int(t.T[b]))["ands"]) for b in ("min", "max")}
             elif "counts" in s:
@@ -541,7 +580,8 @@ def render(inv: Mapping[str, Any]) -> str:
              "Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
              "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
              "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
-             "the first key block only), – missing, x excluded, nb not built.", "",
+             "a key block; past the first block, the metrics not affine in the block count are fitted with an unchecked "
+             "curvature), – missing, x excluded, nb not built.", "",
              "nnz = nnz_AB + ANDs (C = I). q = the 1 − 2⁻⁴⁰ hypergeometric quantile of the sampled count. Ops and bytes are "
              "the census work model.", ""]
     for gran in ("vu", "subcircuit"):
@@ -568,7 +608,9 @@ def render(inv: Mapping[str, Any]) -> str:
         if s.get("points"):
             detail = f"{s.get('variable')} at {s['points']}" + (f"; exact check {s['exact_check']}" if s.get("exact_check") else "")
         if s.get("per_extra_block"):
-            detail += f"; checked at T = {list(s['block_checks'])}, per extra block {s['per_extra_block']}"
+            detail += f"; built at T = {list(s['block_checks'])}, per extra block {s['per_extra_block']}"
+            if s.get("block_curvature"):
+                detail += f", curvature {s['block_curvature']} (unchecked)"
         elif s.get("block_checks"):
             detail += f"; past the first block: {s['block_checks']}"
         if s.get("tables"):
@@ -584,11 +626,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--jobs", type=int, default=1, help="parallel builds (spawned processes)")
     ap.add_argument("--workload", action="append", default=[], help="only workloads whose id contains this (repeatable)")
     ap.add_argument("--attention-t", default=",".join(map(str, ATTENTION_T)), help="attention's key counts within the first block")
+    ap.add_argument("--reuse", help="an earlier run's unit-costs.json: take its subcircuit results instead of building")
     a = ap.parse_args(argv)
     from pathlib import Path
 
     workloads = [w for w in census.raw("workloads") if not a.workload or any(s in w["id"] for s in a.workload)]
-    inv = inventory(workloads, a.exact_nnz, a.jobs, tuple(int(x) for x in a.attention_t.split(",")), log=lambda m: print(m, flush=True))
+    inv = inventory(workloads, a.exact_nnz, a.jobs, tuple(int(x) for x in a.attention_t.split(",")), log=lambda m: print(m, flush=True),
+                    subs=reuse(a.reuse) if a.reuse else None)
+    if a.reuse:
+        inv["reused"] = a.reuse
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "unit-costs.json").write_text(json.dumps(inv, indent=1, default=str) + "\n")

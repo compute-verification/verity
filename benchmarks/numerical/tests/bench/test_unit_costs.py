@@ -55,6 +55,19 @@ def test_argmax_scan_law_predicts_a_later_band():
         U.argmax_scan_law(bent)
 
 
+def test_block_law_affine_or_curved():
+    fit = {m: (Fraction(3), Fraction(7)) for m in U.METRICS}
+    head = lambda T, extra: {m: 3 * T + 7 + extra for m in U.METRICS}  # noqa: E731
+    r = {"params": {"BN": 64}, "_fit": fit, "method": "model",
+         "block_checks": {80: {"built": head(80, 11)}, 144: {"built": head(144, 22)}}}
+    U.block_law(r)
+    assert r["method"] == "affine" and r["per_extra_block"]["ands"] == 11 and "block_curvature" not in r
+    r = {"params": {"BN": 64}, "_fit": fit, "method": "model",
+         "block_checks": {80: {"built": head(80, 11)}, 144: {"built": {**head(144, 22), "nnz_AB": 3 * 144 + 7 + 25}}}}
+    U.block_law(r)
+    assert r["method"] == "model" and r["block_curvature"] == {"nnz_AB": 3}
+
+
 def test_missing_piece_is_reported_not_guessed():
     job, c = U._build_job(U._key("gumbel-top-p-token-select", {"V": 64}))
     assert c["error"].startswith("NoPiece:")
