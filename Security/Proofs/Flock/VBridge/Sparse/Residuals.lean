@@ -14,7 +14,7 @@ slice, the rounds' slots are `r` and `r^k + r`, and the two dots are `ŵ(ζ_r)` 
 
 namespace FlockVBridge.Sparse
 
-open Flock Flock.RecAlgebra FlockSoundness.Refine
+open Flock Flock.RecAlgebra FlockSoundness.Refine FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -37,7 +37,7 @@ theorem sum_range_list {M : Type} [AddCommMonoid M] (f : ℕ → M) :
 /-! ## The residuals -/
 
 /-- A residual's value from its spec: its added terms plus its products. -/
-def specVal (w v : Array F128) (s : List (Term × Term) × List Term) : 𝔽 :=
+noncomputable def specVal (w v : Array F128) (s : List (Term × Term) × List Term) : 𝔽 :=
   (s.2.map fun t => fOf (termValue w v t)).sum +
     (s.1.map fun ab => fOf (termValue w v ab.1) * fOf (termValue w v ab.2)).sum
 

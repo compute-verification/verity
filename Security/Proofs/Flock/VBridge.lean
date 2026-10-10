@@ -74,6 +74,7 @@ import Proofs.Flock.VBridge.Family.AccRows
 import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.VBridge.Sparse.Defs
 import Proofs.Flock.VBridge.Sparse.Residuals
+import Proofs.Flock.VBridge.Sparse.Plays
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
