@@ -185,6 +185,38 @@ def test_h_adds_no_product_to_the_algebra(shape):
         assert RR.LEAVES * sum(len(r["mul"]) for r in H["res"]) == 2704 * 2187 == 5_913_648
 
 
+def _holo_s(S, p, c0):
+    """Lean's `Flock.RecAlgebra.holoS p c0`: S with h's 64 elements inserted into w at p, and comb slot c0 + l's operand
+    gaining w[p + l]."""
+    shift = lambda i: i if i < p else i + 64
+
+    def term(t):
+        if t[0] == "w":
+            return [["w", shift(t[1])]]
+        if t[0] == "wt":
+            return [["wt", shift(t[1]), t[2]]]
+        return [t, ["w", p + t[1] - c0]] if c0 <= t[1] < c0 + 64 else [t]
+
+    flat = lambda ts: [x for t in ts for x in term(t)]
+    return {"nw": S["nw"] + 64, "nv": S["nv"], "ops": [flat(op) for op in S["ops"]],
+            "res": [{"mul": r["mul"], "add": flat(r["add"])} for r in S["res"]]}
+
+
+@pytest.mark.parametrize("shape", [(25, 22, 8), (22, 10, 2), (35, 24, 8)], ids=str)
+def test_the_holo_structure_is_holoS_of_the_plain_one(shape):
+    """L4′'s Lean (`lincheck_of_residuals_holo`, `VBridge/Algebra/Holo.lean`) takes a holo shape's S to be `holoS p c0` of
+    the plain one, p being h's first w slot and c0 the comb's first v slot, with every ring switch's 128 w slots on one
+    side of p (`HoloOk`)."""
+    sh = A.Shape(*shape)
+    (S, _), (H, lay) = A.structure(sh), A.structure(dataclasses.replace(sh, holo=True))
+    p = lay.index[("h", 0)]
+    assert [lay.index[("h", l)] for l in range(64)] == list(range(p, p + 64))
+    assert p == 128 + 2 * (sh.m - 6) + 2 + 2 * (sh.k_log - 6) + 64
+    assert H == _holo_s(S, p, S["nv"] - 64)
+    wts = [t for op in S["ops"] for t in op if t[0] == "wt"] + [t for r in S["res"] for t in r["add"] if t[0] == "wt"]
+    assert wts and all(p <= t[1] or t[1] + 128 <= p for t in wts)
+
+
 def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     """`parts` cuts the algebra into statements of at most MAX_REGIONS regions and MAX_SLOTS sha512x3 slots that each read
     their residuals' row ports and v elements: each part's residuals are the whole's on the fixture's reps (zero on the
