@@ -129,7 +129,7 @@ theorem one_ok {sts : Array Flock.Stmt} {st : Flock.Stmt} (h : Flock.Witness.one
 /-- **The witness's inner check is `AcceptsStmt`.** -/
 theorem acceptsStmt_ok {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) : AcceptsStmt st := by
-  unfold Flock.Witness.acceptsStmt at h
+  unfold Flock.Witness.acceptsStmt Flock.Witness.acceptsStmtAt Flock.Witness.innerSetup at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨st', h2, h⟩ := bind_ok h
   obtain ⟨q, h3, h⟩ := bind_ok h
