@@ -1,20 +1,23 @@
 //! Zero-knowledge readiness for `verity/flock-circuit` (lane flock-circuit, M0): the masking hooks the prover API
 //! carries now, as no-ops, and the prover's own randomness.
 //!
-//! The prover is a deterministic function of (statement, witness, [`ProverSeed`], verifier coins): the seed is an explicit input,
-//! drawn from `getrandom` in a proving build and injectable only by a test harness (feature `seed-injection`), and no message byte
-//! depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on unseeded device state; the selftest
-//! `prover_is_deterministic` checks proofs and transcript byte for byte.
+//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it
+//! is used again, so no premise on a stream generator is left on any of them (Daniel, 9 Oct, decision 4). A test harness (feature
+//! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
+//! seed, verifier coins): no message byte depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on
+//! unseeded device state; the selftest `prover_is_deterministic` checks proofs and transcript byte for byte.
 //!
-//! [`ProverRng`] is the source of the masks and the Reed–Solomon padding: a fresh 256-bit seed per proof from the operating
-//! system (`getrandom`), expanded with ChaCha20 as independent streams addressed by `(purpose, index)` (`set_stream` /
-//! `set_word_pos`), so a device kernel can expand the same words later. It never reads the transcript, and the only constructor
-//! outside tests is [`ProverRng::from_os`]: no fixed or test seed is reachable in a production build.
+//! [`ProverRng`] is the source of the masks and the Reed–Solomon padding: the mask slot's words, the pads and their padding,
+//! τ's salt, and Ligerito level 0's padding coefficients and extra lanes. In a proving build each draw reads the OS afresh, in
+//! [`OS_PIECE`]-byte pieces on rayon's threads, whatever its `(purpose, index)`, so a value used twice is kept by its user: level
+//! 0's hiding for the table's session, each rep's pads in the rep's state, each block's mask words with the table's witness
+//! sources. Under an injected seed they are ChaCha20 streams of it, addressed by `(purpose, index)` (`set_stream` /
+//! `set_word_pos`). It never reads the transcript, and outside tests every constructor takes a [`ProverSeed`], which a proving
+//! build can only draw from the OS: no fixed or test seed is reachable in a production build.
 //!
-//! The Merkle leaf salts of `hm96-sha512/v1` are NOT drawn from it: [`LeafSalts`] reads every leaf's salt from the operating
-//! system (`getrandom`), tree by tree, so no premise on a stream generator is left on them (Daniel, 9 Oct, decision 4(a)). With
-//! an injected seed (a test harness only) they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible.
-//! The hm96 key is not prover randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
+//! The Merkle leaf salts of `hm96-sha512/v1` are [`LeafSalts`]'s: the OS's bytes too, read tree by tree (decision 4(a)). With an
+//! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. The hm96 key is not prover
+//! randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
 //! level, a permutation of the claim points, and the mask slot's fill. [`NoMask`] implements them as the identity, and
@@ -27,7 +30,8 @@ use rand_chacha::{
 };
 use serde_json::{Value, json};
 
-/// ChaCha20 stream numbers, one per purpose (`STREAM_SALT` only for an injected seed's salt tape).
+/// An injected seed's ChaCha20 stream numbers, one per purpose (`STREAM_SALT` for its salt tape); a proving build reads the OS
+/// for every purpose.
 pub const STREAM_MASK: u64 = 1;
 pub const STREAM_PAD: u64 = 2;
 pub const STREAM_SALT: u64 = 3;
@@ -35,16 +39,18 @@ pub const STREAM_SALT: u64 = 3;
 pub const STREAM_COIN_NONCE: u64 = 8;
 /// Bytes per `hm96-sha512/v1` leaf salt.
 pub const SALT_BYTES: usize = 192;
-/// A session of several tables gives each its own randomness (the public-circuit ZK proof's §2.2 and gap 1): table `j` reads
-/// stream `purpose` at ChaCha20 stream `purpose | j << TABLE_SHIFT`, and its salt trees are ids `j << TABLE_SHIFT` (level 0)
-/// and up, below the next table's. Table 0's addresses are a one-table session's.
+/// A session of several tables gives each its own randomness (the public-circuit ZK proof's §2.2 and gap 1): in a proving build
+/// every table's draws are reads of their own; under an injected seed table `j` reads stream `purpose` at ChaCha20 stream
+/// `purpose | j << TABLE_SHIFT`. Its salt trees are ids `j << TABLE_SHIFT` (level 0) and up, below the next table's. Table 0's
+/// addresses are a one-table session's.
 pub const TABLE_SHIFT: u32 = 32;
-/// Words per piece of [`ProverRng::f128s_lanes`]'s parallel draw. Even: an index addresses 32 bytes, two words, so every
-/// piece starts at a whole index.
+/// Words per piece of [`ProverRng::f128s_lanes`]'s parallel draw under an injected seed. Even: an index addresses 32 bytes,
+/// two words, so every piece starts at a whole index.
 const LANE_CHUNK: usize = 1 << 12;
 
-/// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
-/// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
+/// The prover's seed: an explicit input of every proof. A proving build can only draw it from the OS, and then expands nothing
+/// from it (every random value is read from the OS where it is drawn). A test harness (feature `seed-injection`, or unit tests)
+/// can inject one, which the prover expands with ChaCha20, so it is a function of (statement, witness, seed, verifier coins).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ProverSeed {
     seed: [u8; 32],
@@ -187,12 +193,21 @@ impl LeafSalts {
                     s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
                 }
             }),
-            None => b.par_chunks_mut(OS_PIECE).for_each(|p| {
-                getrandom::fill(p).expect("the OS random generator failed: refusing to commit without leaf salts")
-            }),
+            None => os_fill(&mut b),
         }
         b
     }
+}
+
+/// `out` read from the OS (`getrandom`), in [`OS_PIECE`]-byte pieces on rayon's threads.
+fn os_fill(out: &mut [u8]) {
+    use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+    out.par_chunks_mut(OS_PIECE)
+        .for_each(|p| getrandom::fill(p).expect("the OS random generator failed: refusing to prove without prover randomness"));
+}
+
+fn words(b: &[u8]) -> Vec<F128> {
+    b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect()
 }
 
 impl Drop for LeafSalts {
@@ -259,8 +274,12 @@ pub fn chacha20_block(key: &[u8; 32], counter: u64, nonce: u64) -> [u8; 64] {
     out
 }
 
+/// The prover's random words: in a proving build the OS's, read afresh by every draw (two draws at one address get different
+/// words); under an injected seed, ChaCha20 stream `purpose | table << TABLE_SHIFT` from word `8 index`, a function of the seed
+/// and the address alone.
 pub struct ProverRng {
-    rng: ChaCha20Rng,
+    /// an injected seed's generator; `None` in every proving build
+    rng: Option<ChaCha20Rng>,
     table: u64,
 }
 
@@ -269,11 +288,11 @@ impl ProverRng {
         Self::for_table(seed, 0)
     }
 
-    /// Table `table`'s randomness in a session of several tables: every stream at `purpose | table << TABLE_SHIFT` (table 0:
-    /// [`Self::from_seed`]'s).
+    /// Table `table`'s randomness in a session of several tables: under an injected seed every stream at
+    /// `purpose | table << TABLE_SHIFT` (table 0: [`Self::from_seed`]'s); in a proving build reads of the table's own.
     pub fn for_table(seed: ProverSeed, table: u64) -> Self {
         assert!(table < 1 << TABLE_SHIFT, "a table index below 2^{TABLE_SHIFT}");
-        ProverRng { rng: ChaCha20Rng::from_seed(seed.seed), table }
+        ProverRng { rng: seed.injected.then(|| ChaCha20Rng::from_seed(seed.seed)), table }
     }
 
     /// A fresh proof's randomness from the OS, never from the transcript.
@@ -281,31 +300,45 @@ impl ProverRng {
         Self::from_seed(ProverSeed::from_os())
     }
 
-    /// Bytes `[32 index, 32 index + out.len())` of stream `purpose` (independent of every other `(purpose, index)`, and of
-    /// every other table's).
+    /// `out.len()` bytes at `(purpose, index)`: in a proving build read from the OS on every call; under an injected seed bytes
+    /// `[32 index, 32 index + out.len())` of stream `purpose` (independent of every other `(purpose, index)`, and of every
+    /// other table's).
     pub fn fill_at(&mut self, purpose: u64, index: u64, out: &mut [u8]) {
         assert!(purpose < 1 << TABLE_SHIFT, "a stream purpose below 2^{TABLE_SHIFT} (the table takes the stream's high bits)");
-        self.rng.set_stream(purpose | self.table << TABLE_SHIFT);
-        self.rng.set_word_pos(8 * index as u128);
-        self.rng.fill_bytes(out);
+        match &mut self.rng {
+            Some(r) => {
+                r.set_stream(purpose | self.table << TABLE_SHIFT);
+                r.set_word_pos(8 * index as u128);
+                r.fill_bytes(out);
+            }
+            None => os_fill(out),
+        }
     }
 
     pub fn f128s(&mut self, purpose: u64, index: u64, n: usize) -> Vec<F128> {
         let mut b = vec![0u8; 16 * n];
         self.fill_at(purpose, index, &mut b);
-        b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect()
+        words(&b)
     }
 
-    /// `n` words of stream `purpose` for each of `lanes` lanes, lane `i` at index `i << 32` (`f128s(purpose, (i as u64) << 32, n)`),
-    /// drawn on rayon's threads in [`LANE_CHUNK`]-word pieces, each worker with its own copy of the generator: a word is a
-    /// function of the seed and its address alone, so the draw is the sequential one's word for word.
+    /// `n` words for each of `lanes` lanes, on rayon's threads: in a proving build each lane read from the OS; under an injected
+    /// seed lane `i` is stream `purpose` at index `i << 32` (`f128s(purpose, (i as u64) << 32, n)`), drawn in [`LANE_CHUNK`]-word
+    /// pieces, each worker with its own copy of the generator: a word is a function of the seed and its address alone, so the
+    /// draw is the sequential one's word for word.
     pub fn f128s_lanes(&self, purpose: u64, lanes: usize, n: usize) -> Vec<Vec<F128>> {
         use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator, ParallelSliceMut};
+        let Some(rng) = &self.rng else {
+            return (0..lanes).into_par_iter().map(|_| {
+                let mut b = vec![0u8; 16 * n];
+                os_fill(&mut b);
+                words(&b)
+            }).collect();
+        };
         let mut out: Vec<Vec<F128>> = (0..lanes).into_par_iter().map(|_| vec![F128::ZERO; n]).collect();
         out.par_iter_mut()
             .enumerate()
             .flat_map(|(i, lane)| lane.par_chunks_mut(LANE_CHUNK).enumerate().map(move |(c, w)| (((i as u64) << 32) + (c * LANE_CHUNK / 2) as u64, w)))
-            .for_each_init(|| ProverRng { rng: self.rng.clone(), table: self.table }, |r, (at, w)| w.copy_from_slice(&r.f128s(purpose, at, w.len())));
+            .for_each_init(|| ProverRng { rng: Some(rng.clone()), table: self.table }, |r, (at, w)| w.copy_from_slice(&r.f128s(purpose, at, w.len())));
         out
     }
 }
@@ -468,6 +501,21 @@ mod tests {
     #[test]
     fn two_os_seeds_differ() {
         assert_ne!(ProverRng::from_os().f128s(STREAM_MASK, 0, 2), ProverRng::from_os().f128s(STREAM_MASK, 0, 2));
+    }
+
+    /// A proving build's words are the OS's: two draws at one address, two tables of one seed at one address, and the lanes of
+    /// a draw spanning several `getrandom` pieces share no word.
+    #[test]
+    fn os_draws_are_read_afresh_at_every_address() {
+        let seed = ProverSeed::from_os();
+        let (mut r, mut t1) = (ProverRng::from_seed(seed), ProverRng::for_table(seed, 1));
+        let n = 2 * OS_PIECE / 16 + 3;
+        let mut seen = std::collections::BTreeSet::new();
+        let lanes = r.f128s_lanes(6, 3, n);
+        assert!(lanes.iter().all(|l| l.len() == n) && lanes.len() == 3);
+        for d in [r.f128s(STREAM_MASK, 5, n), r.f128s(STREAM_MASK, 5, n), t1.f128s(STREAM_MASK, 5, n)].iter().chain(&lanes).chain(&r.f128s_lanes(6, 3, n)) {
+            assert!(d.iter().all(|x| seen.insert((x.lo, x.hi))), "a word read twice");
+        }
     }
 
     /// Two proofs' masks share no bit beyond chance: the M1 draws of two OS seeds (the algebraic phase's pads and dot-product
