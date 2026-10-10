@@ -151,7 +151,8 @@ def RecursiveFirewallPrivate : Prop :=
       -- the registration: the private circuit's rows, and what the auditor sees of their leaves
       (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
       (honest : Out → Prog → Wit → Prop)
-      -- the honest worker's requests to the firewall, the messages they commit, and the schedule's transcript
+      -- the honest worker's requests to the firewall and the messages they commit, each reading the commit strings the
+      -- firewall sent before it (the inner coins live), and the schedule's transcript
       (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
       (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
       (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
