@@ -11,8 +11,8 @@ sends the auditor its view: the firewall (`Flock.Firewall.run`), which salts eve
 sends it with 192 bytes of its own and sends the auditor the salted commit strings, and V*'s outer sessions run by the
 honest prover's code (`OuterZK.proverExe`). The inner coins are live: the auditor draws each after the commit strings
 before it, so the worker's later messages and requests may read those strings. It takes no zero knowledge of V*'s
-sessions and no acceptance: its one premise is `hash-derived-key`, and what it takes of the code is named, each an
-obligation:
+sessions, no acceptance and no premise: its bound is at the hiding gap of hm96-sha512's pinned key
+(`hidingGap My saltHash`), and what it takes of the code is named, each an obligation:
 
 * `FirewallSends`: the honest worker's requests run through the firewall to the pinned schedule's transcript, its
   holes the salted commit strings of the messages in salt order (`firewallStrings`), and finish.
@@ -131,7 +131,7 @@ outputs `o`. The auditor's whole view (`fwRealPr`) is the registration's, what t
 at the pinned schedule `s`, on the honest worker's requests `reqs` and `nh` salts of 192 uniform bytes) and V*'s outer
 sessions `V`, run by the honest prover's code (`OuterZK.proverExe`, whatever a stopped run sends). The inner coins are
 live: the auditor draws each after the commit strings before it, and message `i` and the requests read those strings.
-The one premise is `hash-derived-key`; what it takes of the code, each an obligation:
+It takes no premise; what it takes of the code, each an obligation:
 
 * the honest worker's requests run through the firewall to the schedule's transcript `T` with the salted commit strings
   of the messages `msgs` in it, each reading the strings before it, and finish (`FirewallSends`);
@@ -142,11 +142,15 @@ The one premise is `hash-derived-key`; what it takes of the code, each an obliga
 Then for every honest witness `w` of every private circuit `P` of the class, and every private circuit `p₀` of it, the
 real view and the simulated one (`fwSimPr`: `p₀` registered, `T` on ideal commit strings, V*'s simulator), which reads
 only the class, the schedule's transcript and the owed outputs, give every event probabilities within
-$$2 n_r \cdot 2^{-193} + \varepsilon_V + n_h \cdot 2^{-193}$$
-both ways, `ε_V` V*'s sessions' error (`OuterZK.Sessions.err`). -/
+$$2 n_r \cdot \delta_{K^*} + \varepsilon_V(\delta_{K^*}) + n_h \cdot \delta_{K^*}$$
+both ways, `ε_V(δ)` V*'s sessions' error at `δ` (`OuterZK.Sessions.errAt`).
+
+`δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
+`ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
+Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
+that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512. -/
 def RecursiveFirewallPrivate : Prop :=
   ∀ {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp],
-    Flock.Premises.HashDerivedKeyHm96 →
     ∀ (s : Flock.Firewall.Schedule)
       -- the registration: the private circuit's rows, and what the auditor sees of their leaves
       (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
@@ -164,8 +168,12 @@ def RecursiveFirewallPrivate : Prop :=
       SessionsHonest honest msgs V → honest o P w →
       ∀ E : Rv × Ωa × (Array Flock.Firewall.Sent × Bool) × V.View → Prop,
         fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E ≤ fwSimPr rows pub T V pubS o p₀ E +
-            (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+            (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
+              V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +
+              nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
           fwSimPr rows pub T V pubS o p₀ E ≤ fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E +
-            (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))
+            (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
+              V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +
+              nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 end Flock.Guarantees

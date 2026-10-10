@@ -15,14 +15,15 @@ with the inner coins live: message `i` reads the commit strings before it, so T1
   operating system's bytes `b` are `commitBytes` of `firewallPairs` at the salts `saltOfBytes b`, one message at a time.
 * `FirewallZK.firewallPairs_adaptive`: the firewall's commit strings are T1's adaptive leaves (`ZK.adaptiveLeaves`).
 * `FirewallZK.recursiveZK_enc`: `recursiveZK_le` with the auditor reading the commitments through any encoding `H` of
-  their two halves (`encAt`, `encIdeal`), under `hash-derived-key`, T1 over the adaptive leaves
+  their two halves (`encAt`, `encIdeal`), at any hm96 hiding bound `δ`, T1 over the adaptive leaves
   (`ZK.ideal_leaves_adaptive`); `FirewallZK.private_enc`: `RecursiveCircuitPrivate`'s two ways there, with the
   registration's hiding.
 * `FirewallZK.fwRealPr_eq`: the firewall's real view is that at `H = commitBytes`, by `FirewallSends` at the OS's
   bytes, taken to salts (`ZkView.saltsEquiv`).
-* `RecursiveFirewallPrivate`: `private_enc` at `commitBytes`, V*'s sessions' zero knowledge (`OuterZK.vstar_outer_zk`
-  at `proverExe`, its tables passing `CoinedOK` by `SessionsCoined`) and the registration's hiding
-  (`regLeaves_hides`). The simulated view is `private_enc`'s by definition.
+* `RecursiveFirewallPrivate`: `private_enc` at `commitBytes`, V*'s sessions' zero knowledge
+  (`OuterZK.vstar_outer_zk` at `proverExe`, its tables passing `CoinedOK` by `SessionsCoined`) and the
+  registration's hiding (`regLeaves_hides`), each at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`). The
+  simulated view is `private_enc`'s by definition.
 -/
 
 namespace FlockSoundness.Discharge.ZkView
@@ -139,7 +140,7 @@ def encIdeal {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (u : Fin 
     Fin n → D :=
   fun i => H (OuterZK.idealStrs u i)
 
-/-- **`recursiveZK_le` through any encoding of the commitments**, under `hash-derived-key`: the outer session's
+/-- **`recursiveZK_le` through any encoding of the commitments**, at any hm96 hiding bound `δ`: the outer session's
 simulator at the commitments (`hOuter`), then T1 once per commitment over the adaptive leaves
 (`ZK.ideal_leaves_adaptive`: message `i` reads the commit strings before it). -/
 theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
@@ -150,13 +151,14 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
     (hOuter : ∀ a p y (E : V → Prop),
       prCoin (fun q : Ωo => E (view a (encAt H (msgs a p) y) p y q))
         ≤ prCoin (fun s : Ωs => E (sim a (encAt H (msgs a p) y) s)) + εo)
-    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (E : Ωa × (Fin nh → D) × V → Prop) :
+    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    (E : Ωa × (Fin nh → D) × V → Prop) :
     prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
           view w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.1.1.2 w.1.2 w.2))
       ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
           E (w.1.1, encIdeal H w.1.2, sim w.1.1 (encIdeal H w.1.2) w.2))
-        + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+        + εo + nh * δ := by
   -- the outer session, simulated at the commitments
   have h1 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
@@ -186,12 +188,12 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
   have h2 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2, sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2)) ≤
       prCoin (fun w : ((Ωa × Ωp) × Ωs) × (Fin nh → ZkView.Bits × ZkView.Salt) =>
-        E (w.1.1.1, encIdeal H w.2, sim w.1.1.1 (encIdeal H w.2) w.1.2)) + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+        E (w.1.1.1, encIdeal H w.2, sim w.1.1.1 (encIdeal H w.2) w.1.2)) + nh * δ := by
     refine (ZK.prCoin_congr_equiv (Flock.SecurityProofs.swapLast (Ωa × Ωp) (Fin nh → ZkView.Salt) Ωs)
       (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
           sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2))).symm.trans_le
-      (le_of_eq_of_le ?_ (ZK.ideal_leaves_adaptive ZkView.My ZkView.saltHash hKey
+      (le_of_eq_of_le ?_ (ZK.ideal_leaves_adaptive ZkView.My ZkView.saltHash hT1
         (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray) nh
         (fun (ω : (Ωa × Ωp) × Ωs) i l =>
           ZkView.bitsOf (Flock.Sha512.hash (msgs ω.1.1 ω.1.2 i fun j => Flock.Guarantees.commitBytes (l j))))
@@ -235,9 +237,9 @@ noncomputable def idealAt {D Out Rv Ωa Ωs V : Type} [Fintype Ωa] [Fintype Ωs
   prCoin fun z : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
     E (v, z.1.1, encIdeal H z.1.2, sim o v z.1.1 (encIdeal H z.1.2) z.2)
 
-/-- **`RecursiveCircuitPrivate` through any encoding of the commitments**: at each registration salt,
-`recursiveZK_enc` (and on the event's complement, the other way), then the registration's hiding as a test with values
-in `[0, 1]` (`Hides.avg_le`). -/
+/-- **`RecursiveCircuitPrivate` through any encoding of the commitments**, at any hm96 hiding bound `δ`: at each
+registration salt, `recursiveZK_enc` (and on the event's complement, the other way), then the registration's hiding as
+a test with values in `[0, 1]` (`Hides.avg_le`). -/
 theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa]
     [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
     (H : ZkView.Bits × ByteArray → D) (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (hreg : PrivateCircuit.Hides reg ε)
@@ -248,35 +250,35 @@ theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr]
     (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
       prCoin (fun q : Ωo => E (view P w r a (encAt H (msgs P w r a p) y) p y q))
         ≤ prCoin (fun s : Ωs => E (sim o (reg P r) a (encAt H (msgs P w r a p) y) s)) + εo)
-    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (p₀ : Prog) (o : Out) (P : Prog) (w : Wit)
-    (hw : honest o P w) (E : Rv × Ωa × (Fin nh → D) × V → Prop) :
+    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → D) × V → Prop) :
     avg (realAt H reg nh msgs view P w E) ≤
-        avg (fun r => idealAt H nh sim o E (reg p₀ r)) + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+        avg (fun r => idealAt H nh sim o E (reg p₀ r)) + (ε + εo + nh * δ) ∧
       avg (fun r => idealAt H nh sim o E (reg p₀ r)) ≤
-        avg (realAt H reg nh msgs view P w E) + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+        avg (realAt H reg nh msgs view P w E) + (ε + εo + nh * δ) := by
   have hstep : ∀ r, realAt H reg nh msgs view P w E r ≤
-        idealAt H nh sim o E (reg P r) + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
-      idealAt H nh sim o E (reg P r) ≤ realAt H reg nh msgs view P w E r + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+        idealAt H nh sim o E (reg P r) + (εo + nh * δ) ∧
+      idealAt H nh sim o E (reg P r) ≤ realAt H reg nh msgs view P w E r + (εo + nh * δ) :=
     fun r => by
-      have zk := fun E' => recursiveZK_enc H nh (msgs P w r) (view P w r) (sim o (reg P r)) (hOuter o P w hw r) hKey E'
+      have zk := fun E' => recursiveZK_enc H nh (msgs P w r) (view P w r) (sim o (reg P r)) (hOuter o P w hw r) hT1 E'
       refine ⟨(zk fun t => E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)), ?_⟩
       exact Flock.SecurityProofs.prCoin_flip _ _
         ((zk fun t => ¬ E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)))
   have hf1 : ∀ v, idealAt H nh sim o E v ≤ 1 := fun v => PrivateCircuit.prCoin_le_one' _
   constructor
   · calc avg (realAt H reg nh msgs view P w E)
-        ≤ avg (fun r => idealAt H nh sim o E (reg P r) + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))) :=
+        ≤ avg (fun r => idealAt H nh sim o E (reg P r) + (εo + nh * δ)) :=
           avg_mono fun r => (hstep r).1
-      _ = avg (fun r => idealAt H nh sim o E (reg P r)) + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+      _ = avg (fun r => idealAt H nh sim o E (reg P r)) + (εo + nh * δ) := by
           rw [avg_add, avg_const]
-      _ ≤ (avg (fun r => idealAt H nh sim o E (reg p₀ r)) + ε) + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+      _ ≤ (avg (fun r => idealAt H nh sim o E (reg p₀ r)) + ε) + (εo + nh * δ) :=
           add_le_add (hreg.avg_le P p₀ (idealAt H nh sim o E) hf1) le_rfl
-      _ = avg (fun r => idealAt H nh sim o E (reg p₀ r)) + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by ring
+      _ = avg (fun r => idealAt H nh sim o E (reg p₀ r)) + (ε + εo + nh * δ) := by ring
   · calc avg (fun r => idealAt H nh sim o E (reg p₀ r))
         ≤ avg (fun r => idealAt H nh sim o E (reg P r)) + ε := hreg.avg_le p₀ P (idealAt H nh sim o E) hf1
-      _ ≤ avg (fun r => realAt H reg nh msgs view P w E r + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))) + ε :=
+      _ ≤ avg (fun r => realAt H reg nh msgs view P w E r + (εo + nh * δ)) + ε :=
           add_le_add (avg_mono fun r => (hstep r).2) le_rfl
-      _ = avg (realAt H reg nh msgs view P w E) + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+      _ = avg (realAt H reg nh msgs view P w E) + (ε + εo + nh * δ) := by
           rw [avg_add, avg_const]; ring
 
 /-- **The firewall's real view is the commit strings' view**: under `FirewallSends`, what the firewall sends at the
@@ -325,8 +327,9 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- **(ii) at the firewall and V*'s code.** -/
 theorem RecursiveFirewallPrivate : Flock.Guarantees.RecursiveFirewallPrivate := by
-  intro Out Prog Wit Rv Ωa Ωp Pub _ _ _ _ hKey s nr rows pub honest nh reqs msgs T V pubS stopped p₀ o P w hF hpub hC
+  intro Out Prog Wit Rv Ωa Ωp Pub _ _ _ _ s nr rows pub honest nh reqs msgs T V pubS stopped p₀ o P w hF hpub hC
     hH hw E
+  have hT1 := CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash
   have : Nonempty Ωa := inferInstance
   have : Nonempty Ωp := inferInstance
   let x₀ : OuterZK.HCtx Prog Wit Ωa Ωp nr nh :=
@@ -337,13 +340,13 @@ theorem RecursiveFirewallPrivate : Flock.Guarantees.RecursiveFirewallPrivate := 
     ⟨⟨0, V.ns_pos j (V.pubOf x₀) (OuterZK.commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
   obtain ⟨LP, Vs, Reg', D, draw, y, hCeq⟩ := hC
   have hOuter := OuterZK.vstar_outer_zk rows pub honest msgs V pubS hpub
-    (OuterZK.tablesOK_of_sessions V LP Vs D draw y hCeq) (OuterZK.selfCheckSilent_exe stopped) hH hKey
+    (OuterZK.tablesOK_of_sessions V LP Vs D draw y hCeq) (OuterZK.selfCheckSilent_exe stopped) hH hT1
   have key := FirewallZK.private_enc Flock.Guarantees.commitBytes (Flock.Guarantees.regLeaves rows pub)
-    (regLeaves_hides rows pub hKey) honest nh msgs
+    (regLeaves_hides rows pub hT1) honest nh msgs
     (fun P w r a l p y q =>
       V.view (OuterZK.proverExe stopped) (P, w, r, a, (fun i => Flock.Hm96.Default512.treeLeaf (l i)), p, y) q)
     (fun o v a l s => V.sim (pubS o v a fun i => Flock.Hm96.Default512.treeLeaf (l i)) s)
-    hOuter hKey p₀ o P w hw (fun t => E (t.1, t.2.1, (T t.2.2.1, true), t.2.2.2))
+    hOuter hT1 p₀ o P w hw (fun t => E (t.1, t.2.1, (T t.2.2.1, true), t.2.2.2))
   rw [FirewallZK.fwRealPr_eq rows pub s reqs msgs T V (OuterZK.proverExe stopped) hF P w E]
   exact key
 

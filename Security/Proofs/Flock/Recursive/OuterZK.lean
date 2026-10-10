@@ -20,19 +20,20 @@ committed coins, which read the tape and what was public before the session).
   honest prover is `outExe`.
 * `selfCheckSilent_exe`: the prover's code (`proverExe`) meets the abort interface whatever a stopped run sends
   (`Table.not_stops` at `CoinedOK`'s inner relation, `OuterAbort`).
-* `table_close`: one table at its coins, in fixed randomness types (`coin_close`, which covers refused coins with
+* `table_close`: one table at its coins, in fixed randomness types (`coin_close_le`, which covers refused coins with
   `Table.table_abort_hm96`).
 * `Sessions.close`: the auditor's view of `R₂` and the sessions (`view`) and the simulator's (`sim`: ideal commit
-  strings for `R₂`, `simAll` at each table) are within `err = Σ_j 2·|LeafPos z_j|·2^-193 + n₂·2^-193`. The sessions
-  one by one at each of `R₂`'s salts (`ZK.prCoin_pi_close`), then `R₂`'s commit strings to ideal ones
-  (`ZK.ideal_leaves_swap`); the sessions read `R₂`'s salts only through their witnesses, which the simulator doesn't
-  read, so the second step follows the first.
+  strings for `R₂`, `simAll` at each table) are within `errAt δ = Σ_j 2·|LeafPos z_j|·δ + n₂·δ` at any hm96 hiding
+  bound `δ`. The sessions one by one at each of `R₂`'s salts (`ZK.prCoin_pi_close`), then `R₂`'s commit strings to
+  ideal ones (`ZK.ideal_leaves_swap`); the sessions read `R₂`'s salts only through their witnesses, which the
+  simulator doesn't read, so the second step follows the first.
 * `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at `verify --zk`'s table of the
   session's data at a draw it sets up (`coinedOf_setup`; every `--zk` setup avoids the mask slot,
   `FailClosed.DrawSetupZK.avoidsMask`).
-* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = err`, at the firewall's commitments
-  under live inner coins (`firewallCommits`); `Flock.SecurityProofs.RecursiveFirewallPrivate`
-  (`Proofs.Flock.Recursive.FirewallZK`) takes it at `proverExe`, with no hypothesis on the abort.
+* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = errAt δ`, at the firewall's
+  commitments under live inner coins (`firewallCommits`); `Flock.SecurityProofs.RecursiveFirewallPrivate`
+  (`Proofs.Flock.Recursive.FirewallZK`) takes it at `proverExe` and the pinned key's hiding gap, with no hypothesis on
+  the abort.
 
 Left to the instance at V*'s staging: that each session's table is `coinedOf` at its data and draw (with a
 `DrawSetupZK` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses (`Honest`, which
@@ -69,27 +70,29 @@ theorem selfCheckSilent_exe
   unfold proverExe
   exact ite_eq_right ((C.T c).tab.not_stops (hinner w hv (hreg c)) p.1)
 
-/-- **One table at its coins, in fixed randomness types** (`coin_close`): at any coin vector, through any encoding
+/-- **One table at its coins, in fixed randomness types** (`coin_close_le`): at any coin vector, through any encoding
 `enc` of the table's output and any equivalences `eR`, `eS` of `Fin NR` and `Fin NS` with the prover's and the
-simulator's randomness, the honest output and the simulator's are within `2·|LeafPos z|·2^-193`. -/
+simulator's randomness, the honest output and the simulator's are within `2·|LeafPos z|·δ`, at any hm96 hiding bound
+`δ`. -/
 theorem table_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (w w0 : Witness C.S.m) (hv : C.Valid w)
+    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    (w w0 : Witness C.S.m) (hv : C.Valid w)
     (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg) (c : CoinsZK C.Rest) {z : ZkView.Sizes} (hz : C.z = z)
     {Vw : Type} (enc : ∀ c' : CoinsZK C.Rest, OutAt C c' → Vw) {NR NS : ℕ} (eR : Fin NR ≃ RandAt C c)
     (eS : Fin NS ≃ SimAt C c) (E : Vw → Prop) :
     prCoin (fun ρ : Fin NR => E (enc c (outExe C c w (eR ρ).1 (eR ρ).2)))
       ≤ prCoin (fun σ : Fin NS => E (enc c (simAll C c w0 (eS σ).1 (eS σ).2)))
-        + 2 * Fintype.card (ZkView.LeafPos z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+        + 2 * Fintype.card (ZkView.LeafPos z) * δ := by
   subst hz
   calc prCoin (fun ρ : Fin NR => E (enc c (outExe C c w (eR ρ).1 (eR ρ).2)))
       = prCoin (fun p : RandAt C c => E (enc c (outExe C c w p.1 p.2))) :=
         ZK.prCoin_congr_equiv eR (fun p : RandAt C c => E (enc c (outExe C c w p.1 p.2)))
     _ ≤ prCoin (fun p : SimAt C c => E (enc c (simAll C c w0 p.1 p.2)))
-          + 2 * Fintype.card (ZkView.LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) :=
-        (coin_close C hC hKey w w0 hv hreg (fun c' v => E (enc c' v)) c).1
+          + 2 * Fintype.card (ZkView.LeafPos C.z) * δ :=
+        (coin_close_le C hC hT1 w w0 hv hreg (fun c' v => E (enc c' v)) c).1
     _ = prCoin (fun σ : Fin NS => E (enc c (simAll C c w0 (eS σ).1 (eS σ).2)))
-          + 2 * Fintype.card (ZkView.LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) :=
-        congrArg (· + 2 * (Fintype.card (ZkView.LeafPos C.z) : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ))
+          + 2 * Fintype.card (ZkView.LeafPos C.z) * δ :=
+        congrArg (· + 2 * (Fintype.card (ZkView.LeafPos C.z) : ℝ≥0∞) * δ)
           (ZK.prCoin_congr_equiv eS (fun p : SimAt C c => E (enc c (simAll C c w0 p.1 p.2)))).symm
 
 /-! ## V*'s sessions -/
@@ -111,15 +114,16 @@ theorem ns_pos (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteA
   exact Fintype.card_pos
 
 /-- **One session at the honest context and `R₂`'s salts** (`table_close` at its table and coins, the honest prover
-`outExe` by the abort interface). -/
-theorem session_close (hOK : V.TablesOK) (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
+`outExe` by the abort interface), at any hm96 hiding bound `δ`. -/
+theorem session_close (hOK : V.TablesOK)
+    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
     {prover : TableProver} (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x)
     (y₂ : Fin V.n₂ → ZkView.Salt) (j : Fin V.S) (E : V.Vw j → Prop) :
     prCoin (fun ρ : Fin (V.NR j) => E (V.realAt prover x y₂ j ρ))
       ≤ prCoin (fun σ : Fin (V.NS j) => E (V.simAt (V.pubOf x) (commitStrs (V.m₂ x) y₂) j σ))
-        + 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+        + 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * δ := by
   have h := table_close (V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)) (hOK j (V.pubOf x) (commitStrs (V.m₂ x) y₂))
-    hKey (V.wit j x y₂) (w0 _)
+    hT1 (V.wit j x y₂) (w0 _)
     (hx j y₂).1 (hx j y₂).2 (V.coin j (V.pubOf x) (commitStrs (V.m₂ x) y₂)) (V.hz j _ _)
     (V.enc j (V.pubOf x) (commitStrs (V.m₂ x) y₂)) (V.eR j (V.pubOf x) (commitStrs (V.m₂ x) y₂))
     (V.eS j (V.pubOf x) (commitStrs (V.m₂ x) y₂)) E
@@ -130,24 +134,25 @@ theorem session_close (hOK : V.TablesOK) (hKey : FlockSoundness.Assumptions.Zk.H
         (V.eR j (V.pubOf x) (commitStrs (V.m₂ x) y₂) ρ))))) h
 
 /-- **V*'s sessions are zero knowledge at an honest context**: the auditor's view of `R₂` and the sessions and the
-simulator's are within `err`. At each of `R₂`'s salts the sessions go to their simulators one by one
-(`ZK.prCoin_pi_close`, `session_close`); then nothing reads `R₂`'s salts but its commit strings, which go to ideal ones
-(`ZK.ideal_leaves_swap`, `hash-derived-key`). -/
-theorem close (hOK : V.TablesOK) (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) {prover : TableProver}
+simulator's are within `errAt δ`, at any hm96 hiding bound `δ`. At each of `R₂`'s salts the sessions go to their
+simulators one by one (`ZK.prCoin_pi_close`, `session_close`); then nothing reads `R₂`'s salts but its commit strings,
+which go to ideal ones (`ZK.ideal_leaves_swap`). -/
+theorem close (hOK : V.TablesOK)
+    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ) {prover : TableProver}
     (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x) (E : V.View → Prop) :
     prCoin (fun q : V.Ωo => E (V.view prover x q))
-      ≤ prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.err := by
+      ≤ prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.errAt δ := by
   have : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x) (commitStrs (V.m₂ x) fun _ => 0)⟩⟩
   have : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x) (commitStrs (V.m₂ x) fun _ => 0)⟩⟩
   have step : ∀ y₂ : Fin V.n₂ → ZkView.Salt,
       prCoin (fun ρ : (j : Fin V.S) → Fin (V.NR j) => E (V.view prover x (y₂, ρ)))
         ≤ prCoin (fun σ : (j : Fin V.S) → Fin (V.NS j) => E (V.simOut (V.pubOf x) σ (commitStrs (V.m₂ x) y₂)))
-          + V.errS := fun y₂ =>
+          + V.errSAt δ := fun y₂ =>
     ZK.prCoin_pi_close (Ω := fun j => Fin (V.NR j)) (Ω' := fun j => Fin (V.NS j)) (V := V.Vw)
       (fun j ρ => V.realAt prover x y₂ j ρ) (fun j σ => V.simAt (V.pubOf x) (commitStrs (V.m₂ x) y₂) j σ)
-      (fun j => 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ))
-      (fun j E' => V.session_close hOK hKey hP x hx y₂ j E') (fun v => E (commitStrs (V.m₂ x) y₂, v))
-  have swap := ZK.ideal_leaves_swap ZkView.My ZkView.saltHash hKey (fun p : ZkView.Bits × ByteArray => p) V.n₂
+      (fun j => 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * δ)
+      (fun j E' => V.session_close hOK hT1 hP x hx y₂ j E') (fun v => E (commitStrs (V.m₂ x) y₂, v))
+  have swap := ZK.ideal_leaves_swap ZkView.My ZkView.saltHash hT1 (fun p : ZkView.Bits × ByteArray => p) V.n₂
     (Ω := (j : Fin V.S) → Fin (V.NS j)) (fun _ i => ZkView.bitsOf (Sha512.hash (V.m₂ x i)))
     (fun σ l => E (V.simOut (V.pubOf x) σ l))
   calc prCoin (fun q : V.Ωo => E (V.view prover x q))
@@ -157,25 +162,25 @@ theorem close (hOK : V.TablesOK) (hKey : FlockSoundness.Assumptions.Zk.HashDeriv
           E (V.view prover x (y₂, ρ)))
     _ ≤ avg fun y₂ : Fin V.n₂ → ZkView.Salt =>
           prCoin (fun σ : (j : Fin V.S) → Fin (V.NS j) => E (V.simOut (V.pubOf x) σ (commitStrs (V.m₂ x) y₂)))
-            + V.errS := avg_mono step
+            + V.errSAt δ := avg_mono step
     _ = (avg fun y₂ : Fin V.n₂ → ZkView.Salt =>
           prCoin fun σ : (j : Fin V.S) → Fin (V.NS j) => E (V.simOut (V.pubOf x) σ (commitStrs (V.m₂ x) y₂)))
-            + V.errS := by rw [avg_add, avg_const]
+            + V.errSAt δ := by rw [avg_add, avg_const]
     _ = prCoin (fun p : (Fin V.n₂ → ZkView.Salt) × ((j : Fin V.S) → Fin (V.NS j)) =>
-          E (V.simOut (V.pubOf x) p.2 (commitStrs (V.m₂ x) p.1))) + V.errS :=
-        congrArg (· + V.errS) (ZK.prCoin_prod_split
+          E (V.simOut (V.pubOf x) p.2 (commitStrs (V.m₂ x) p.1))) + V.errSAt δ :=
+        congrArg (· + V.errSAt δ) (ZK.prCoin_prod_split
           (fun (y₂ : Fin V.n₂ → ZkView.Salt) (σ : (j : Fin V.S) → Fin (V.NS j)) =>
             E (V.simOut (V.pubOf x) σ (commitStrs (V.m₂ x) y₂)))).symm
     _ = prCoin (fun p : ((j : Fin V.S) → Fin (V.NS j)) × (Fin V.n₂ → ZkView.Salt) =>
-          E (V.simOut (V.pubOf x) p.1 (commitStrs (V.m₂ x) p.2))) + V.errS :=
-        congrArg (· + V.errS) (ZK.prCoin_congr_equiv
+          E (V.simOut (V.pubOf x) p.1 (commitStrs (V.m₂ x) p.2))) + V.errSAt δ :=
+        congrArg (· + V.errSAt δ) (ZK.prCoin_congr_equiv
           (Equiv.prodComm ((j : Fin V.S) → Fin (V.NS j)) (Fin V.n₂ → ZkView.Salt))
           (fun p : (Fin V.n₂ → ZkView.Salt) × ((j : Fin V.S) → Fin (V.NS j)) =>
             E (V.simOut (V.pubOf x) p.2 (commitStrs (V.m₂ x) p.1)))).symm
-    _ ≤ (prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.n₂ * (2 : ℝ≥0∞) ^ (-193 : ℤ)) + V.errS :=
+    _ ≤ (prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.n₂ * δ) + V.errSAt δ :=
         add_le_add swap le_rfl
-    _ = prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.err := by
-        rw [Sessions.err]
+    _ = prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.errAt δ := by
+        rw [Sessions.errAt]
         ring
 
 end Sessions
@@ -196,10 +201,11 @@ theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigPro
   exact (coinedOf_setup (Reg := Unit) P (D pc l j).I (D pc l j).dj (D pc l j).y₀ (D pc l j).ht
     (fun _ y' => FailClosed.DrawSetupZK.avoidsMask y') (draw j pc l) () (y j pc l)).2.2.2.2.2
 
-/-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = err`: the view `Sessions.view` at the honest context, the
-simulator `Sessions.sim` at the public context `pubS` reads (the owed outputs, the registration's view, the auditor's
-tape and the firewall's commitments), which is the honest context's (`hpub`). The honest witnesses (`hH`) and
-`hpub` are needed only at the firewall's own commitments (`hctxAt`, `firewallCommits`: the inner coins live). -/
+/-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = errAt δ` at any hm96 hiding bound `δ`: the view
+`Sessions.view` at the honest context, the simulator `Sessions.sim` at the public context `pubS` reads (the owed
+outputs, the registration's view, the auditor's tape and the firewall's commitments), which is the honest context's
+(`hpub`). The honest witnesses (`hH`) and `hpub` are needed only at the firewall's own commitments (`hctxAt`,
+`firewallCommits`: the inner coins live). -/
 theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
@@ -208,14 +214,14 @@ theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows 
       pubS o (Flock.Guarantees.regLeaves rows pub P r) a (Flock.Guarantees.firewallCommits (msgs P w r a p) y))
     (hOK : V.TablesOK) {prover : TableProver} (hP : SelfCheckSilent prover)
     (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
-    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
+    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ) :
     ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V.View → Prop),
       prCoin (fun q : V.Ωo => E (V.view prover
           (P, w, r, a, Flock.Guarantees.firewallCommits (msgs P w r a p) y, p, y) q))
         ≤ prCoin (fun s : V.Ωs => E (V.sim (pubS o (Flock.Guarantees.regLeaves rows pub P r) a
-            (Flock.Guarantees.firewallCommits (msgs P w r a p) y)) s)) + V.err := by
+            (Flock.Guarantees.firewallCommits (msgs P w r a p) y)) s)) + V.errAt δ := by
   intro o P w hw r a p y E
-  have h := V.close hOK hKey hP (hctxAt msgs P w r a p y) (hH o P w hw r a p y) E
+  have h := V.close hOK hT1 hP (hctxAt msgs P w r a p y) (hH o P w hw r a p y) E
   rw [hpub o P w hw r a p y] at h
   exact h
 
