@@ -172,7 +172,7 @@ def algebra(forged, tmp_path_factory) -> Path:
 
 def _transcript(dst: Path, change) -> Path:
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
-    change([r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"].endswith("/rep0") and r.get("commits")][0])
+    change(next(r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"].endswith("/rep0") and r.get("commits")))
     dst.write_text(json.dumps(t))
     return dst
 
@@ -186,7 +186,8 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
     v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
                 session=undrawn)
     assert not v["why"].startswith("setup:"), v["why"]
-    unit = json.loads((algebra / "circuit.txt").read_text().split("\n", 2)[1][5:])["unit"]["name"]
+    with (algebra / "circuit.txt").open() as f:
+        unit = f.readline().split()[1]
     v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", session=undrawn)
     assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
 
