@@ -4,9 +4,10 @@
 //! so its verdicts are the Lean verifier's.
 //!
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, so the Lean
-//! check's rules on those hold of every statement it sets up, as do its parse and its public file's load.
+//! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
+//! all have hidden outputs, so the circuit's check is `scopeOkH`.
 
-use crate::circuit::{port_cols, Composite, Instances, STATEMENT};
+use crate::circuit::{port_cols, Composite, Instances, Port, STATEMENT};
 use crate::ir_block::IrUnitNet;
 
 const WORD: usize = 128;
@@ -38,8 +39,20 @@ pub fn port_reads(net: &IrUnitNet) -> bool {
     (n..net.const_pos).all(|r| row(&net.a, r).iter().chain(row(&net.b, r)).all(|&x| x >= n || mask[x]))
 }
 
-/// `ProvedScope.scopeWhy` of a circuit outside `scopeOk`, `None` inside: the unit reads only its leaf group, returns the
-/// outputs, has at most `2^32` rows and reads only port bits among its inputs, and every row is a `sha512/row/v1` row.
+/// `ProvedScope.v1Ports`' row: a `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+fn v1_row(p: &Port) -> bool {
+    !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0
+}
+
+/// `ProvedScope.v2Row`: an unsegmented `sha512/row/v2` row of `16 · words` bits, its bytes filling its compressions' blocks
+/// and ending, with SHA-512's 17 bytes of padding, in its hm96 slot's block.
+fn v2_row(p: &Port) -> bool {
+    p.v2 && p.segs.is_none() && p.bits == 16 * p.words && WORD * p.comps <= 2 * p.words && 2 * p.words + 17 <= WORD * (p.comps + 1)
+}
+
+/// `ProvedScope.scopeWhy true` of a circuit outside `scopeOkH`, `None` inside: the unit reads only its leaf group, returns
+/// the outputs, has at most `2^32` rows and reads only port bits among its inputs, and every row is a `sha512/row/v1` row or
+/// every row a `v2_row`, one output port each.
 pub fn circuit_why(c: &Composite) -> Option<String> {
     let unit = c.unit();
     if unit.in_groups.len() != 1 {
@@ -50,8 +63,9 @@ pub fn circuit_why(c: &Composite) -> Option<String> {
         Some(format!("a unit of 2^{} rows", unit.unit_log))
     } else if !port_reads(unit) {
         Some("a unit row reading an input column that is not a port bit".into())
-    } else if !c.ports.iter().all(|p| !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0) {
-        Some("a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk".into())
+    } else if !c.ports.iter().all(v1_row) && !(c.ports.iter().all(v2_row) && c.out_row_ports.iter().all(|&k| k == 1)) {
+        Some("rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented \
+              sha512/row/v2 rows of 16 · words bits ending in their hm96 block, one output port each".into())
     } else {
         None
     }
@@ -78,14 +92,23 @@ pub fn lean_name(c: &Composite) -> String {
     format!("{base}{}", if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" })
 }
 
+/// The shared-row rule of `ProvedScope.check` (`sharedRowsOk`): a shared-row public file (`shared`) is a covered form only in
+/// a `--zk` session whose verifier holds its own registered reads (`registered`, `--registered F`). Every statement the
+/// live build sets up has hidden outputs.
+pub fn shared_rows_why(shared: bool, zk: bool, registered: bool) -> Option<&'static str> {
+    (shared && !(zk && registered)).then_some("a shared-row public file (header shared_rows)")
+}
+
 /// **`ProvedScope.check`** on a statement the live build set up: its circuit, its public file (`inst`), `--zk` and its tables.
+/// The Lean verifier holds its own `--registered F` exactly when the public header names registered reads: without it such
+/// a header is refused at setup, and with it a header naming none is (`Registered.check`).
 pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
     let typed = c.statement() == crate::typed::STATEMENT;
     if let Some(why) = statement_why(&lean_name(c), typed, zk, tables, !c.public_inputs.is_empty()) {
         return Err(refusal(&why));
     }
-    if inst.tables.is_some() {
-        return Err(refusal("a shared-row public file (header shared_rows)"));
+    if let Some(why) = shared_rows_why(inst.tables.is_some(), zk, inst.header.get("registered").is_some()) {
+        return Err(refusal(why));
     }
     circuit_why(c).map_or(Ok(()), |why| Err(refusal(&why)))
 }
@@ -120,6 +143,37 @@ mod tests {
         assert_eq!(statement_why("verity/flock-circuit", false, true, 2, true).unwrap(), "public input ports (--public-inputs)");
         assert_eq!(statement_why("verity/flock-circuit", false, true, 2, false), None);
         assert_eq!(statement_why("verity/flock-circuit", false, false, 1, false), None);
+    }
+
+    fn port(words: usize, comps: usize, bits: usize, v2: bool, segs: Option<Vec<(usize, usize)>>) -> Port {
+        Port { name: "x".into(), words, comps, bits, v2, segs }
+    }
+
+    #[test]
+    fn rows_in_scope_are_lean_v1_or_v2_rows() {
+        assert!(v1_row(&port(64, 1, 1024, false, None)));
+        assert!(!v1_row(&port(64, 0, 1024, false, None)));
+        assert!(!v1_row(&port(64, 1, 1024, true, None)));
+        // a v2 row of 64 or 100 words ends, padded, in its slot's block; at 120 its last 112 bytes leave no room for the padding
+        assert!(v2_row(&port(64, 1, 1024, true, None)));
+        assert!(v2_row(&port(100, 1, 1600, true, None)));
+        assert!(!v2_row(&port(120, 1, 1920, true, None)));
+        assert!(!v2_row(&port(32, 1, 512, true, None)));
+        assert!(!v2_row(&port(64, 1, 1000, true, None)));
+        assert!(!v2_row(&port(64, 1, 1024, true, Some(vec![(1024, 1)]))));
+        assert!(!v2_row(&port(64, 1, 1024, false, None)));
+    }
+
+    #[test]
+    fn a_shared_row_file_needs_zk_and_registered_reads() {
+        let refused = Some("a shared-row public file (header shared_rows)");
+        assert_eq!(shared_rows_why(true, true, true), None);
+        assert_eq!(shared_rows_why(true, true, false), refused);
+        assert_eq!(shared_rows_why(true, false, true), refused);
+        assert_eq!(shared_rows_why(true, false, false), refused);
+        assert_eq!(shared_rows_why(false, false, false), None);
+        assert_eq!(refusal(refused.unwrap()),
+                   "refused: a shared-row public file (header shared_rows): a statement form the soundness proof does not cover");
     }
 
     #[test]

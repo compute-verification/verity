@@ -7,8 +7,8 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
   weight's slot of its k's stage (`stage`).  After the replay (`after`), each k's stage is one commitment of role X rows
   (``hm96-sha512/row-seg/v1``), and the forward's tile leaves (the scheme's, `run.nb` bytes each, standing in for the statement's tile
   digest, TurboSHAKE128, which is not computed) one of ``row/v2`` rows.
-- **The salts:** C-Flock's ChaCha20 stream under a key derived from the install's salt (`SALT_TAG`), the nonce the forward's
-  serial in the install and the tree's place.  Each tree's domain names its k (or the tiles) and m₁₆, not the forward (v0).
+- **The salts:** read from the OS on the host for every forward's every tree, as C-Flock's are (`rows_bench.Commit.fresh_salts`:
+  192 bytes a row, copied on the replay's stream before the tree's launch).  Each tree's domain names its k (or the tiles) and m₁₆, not the forward (v0).
 - **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-512 over the forwards since the last
   `take` the e2e's decode response reports.
 - **What it is not:** the scheme's own A root seeds forming (seed_A), so the statement's roots are in addition to its.  Prefill
@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-SALT_TAG = b"verity/pouw/served-zk/statement-salt/v0"
 PREFIX = "verity/pouw/served-zk/statement/v0"
 #: forwards whose roots the device ring holds
 ROOTS = 1 << 12
@@ -61,7 +60,7 @@ class Statement:
         self.cubin_sha256 = hashlib.sha256(raw).hexdigest()
         self.h = run.kernel.run.Dev(raw)
         self.h.open()
-        self.consts = self.B.constants(self.h, hashlib.sha256(SALT_TAG + run.salt).digest())
+        self.consts = self.B.constants(self.h)
         self.h.sync()
         self.enabled = self.skip = False
         self.pos, self.count = slots_of({w: wt.k for w, wt in run.weights.items()})
@@ -95,8 +94,8 @@ class Statement:
         if key not in self.commits:
             B, h = self.B, self.h
             cms = [B.Commit(h, h, self.consts, f"x/k{k}/m{m16}", self.stages[(k, m16)].data_ptr(), self.count[k] * m16, 4 * k,
-                            4 * k, B.SEG, 0, prefix=PREFIX) for k in self.ks]
-            cms.append(B.Commit(h, h, self.consts, f"t/m{m16}/{tiles}", 0, tiles, self.run.nb, self.run.nb, B.V2, 0, prefix=PREFIX))
+                            4 * k, B.SEG, prefix=PREFIX) for k in self.ks]
+            cms.append(B.Commit(h, h, self.consts, f"t/m{m16}/{tiles}", 0, tiles, self.run.nb, self.run.nb, B.V2, prefix=PREFIX))
             h.sync()
             self.commits[key] = cms
         return self.commits[key]
@@ -114,7 +113,7 @@ class Statement:
         try:
             at = self.ring.data_ptr() + 64 * (len(cms) * (self.forwards % ROOTS))
             for j, cm in enumerate(cms):
-                cm.nonce = 8 * self.forwards + j
+                cm.fresh_salts()
                 cm.run(2, one_cta=False)
                 self.h.copy_async(at + 64 * j, cm.tree + cm.tree_bytes - 64, 64)
         finally:

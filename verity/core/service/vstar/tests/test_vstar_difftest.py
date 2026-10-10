@@ -202,6 +202,15 @@ def statements(v) -> list:
                   for j, p in enumerate(ps)]
 
 
+def verifier_parts(v) -> dict:
+    """Every algebra statement's unit is the Lean verifier's own `rec-residuals/…` net, and it refuses the part past the
+    last."""
+    sh = _shape(v)
+    ps = _algebra(lambda sh: RR.parts(RR.spec(sh)), sh)
+    return {"parts": [{"name": f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", "equal": True} for j in range(len(ps))],
+            "past_refused": True}
+
+
 def _lowering(low: IL.Lowering) -> dict:
     return {"sha256": low.sha256, "bytes": len(low.text.encode()), "rows": low.layout.useful}
 
@@ -359,13 +368,25 @@ def _shapes(claims: int):
         st.dictionaries(st.sampled_from(["m", "k_log", "claims", "x"]), st.integers(20, 24), max_size=3), JSON))
 
 
-#: S cut under limits it fits (64 regions, 128 slots), limits few residuals fit (3 regions: one port a part; 1 or 2 slots),
-#: and S or limits that refuse
+@st.composite
+def _many(draw) -> dict:
+    """A valid S of more residuals than one statement holds (a whole algebra's, as at 12 claims), each one of S's."""
+    S = draw(rep_s())
+    res = draw(st.lists(st.sampled_from(S["gf"]["res"] or [{"mul": [], "add": []}]), min_size=17, max_size=20))
+    return {**S, "gf": {**S["gf"], "res": res}}
+
+
+#: S cut under limits it fits (64 regions, 160 slots), limits few residuals fit (3 regions: one port a part; 1 or 2 slots),
+#: S of more residuals than a part holds, and S or limits that refuse
+MAX = {"max_regions": st.just(RR.MAX_REGIONS), "max_slots": st.just(RR.MAX_SLOTS)}
 PARTS = st.one_of(
-    st.fixed_dictionaries({"S": rep_s(), "max_regions": st.sampled_from([3, 4, 64]), "max_slots": st.sampled_from([1, 2, 128])}),
-    st.fixed_dictionaries({"S": rep_s(big=True), "max_regions": st.sampled_from([3, 64]), "max_slots": st.sampled_from([2, 128])}),
+    st.fixed_dictionaries({"S": rep_s(), "max_regions": st.sampled_from([3, 4, RR.MAX_REGIONS]),
+                           "max_slots": st.sampled_from([1, 2, RR.MAX_SLOTS])}),
+    st.fixed_dictionaries({"S": rep_s(big=True), "max_regions": st.sampled_from([3, RR.MAX_REGIONS]),
+                           "max_slots": st.sampled_from([2, RR.MAX_SLOTS])}),
+    _one(st.fixed_dictionaries({"S": _many(), **MAX})),
     _one(st.fixed_dictionaries({"S": rep_s(valid=False) | rep_s(), "max_regions": _near(0, 3), "max_slots": _near(0, 3)}),
-         st.fixed_dictionaries({"S": rep_s(valid=False), "max_regions": st.just(64), "max_slots": st.just(128)}), JSON))
+         st.fixed_dictionaries({"S": rep_s(valid=False), **MAX}), JSON))
 
 REPS = st.one_of(rep_s(), rep_s(valid=False), JSON)
 DIGEST = st.text(HEX, min_size=128, max_size=128)
@@ -420,7 +441,7 @@ def test_structure_agrees(server):
 
 @pytest.mark.slow
 def test_spec_agrees(server):
-    stats = D.run(port("spec", spec, _shapes(11)), examples=32, seed=SEED, server=server)
+    stats = D.run(port("spec", spec, _shapes(14)), examples=32, seed=SEED, server=server)
     assert stats.outputs >= 8 and stats.rejects >= 4, stats
 
 
@@ -432,11 +453,25 @@ def test_parts_agree(server):
 
 @pytest.mark.slow
 def test_statements_agree(server):
-    """Drawn shapes, and the largest whose rep fits one statement's 16 residuals."""
-    p = port("statements", statements, _shapes(11))
-    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 11}, server)[0] == "output"
+    """Drawn shapes, the universal unit's inner shape (17 residuals, two parts), and the largest whose widest residual fits
+    MAX_SLOTS (14 claims: 151 slots; 15 claims' 162 refuse)."""
+    p = port("statements", statements, _shapes(14))
+    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 32, "claims": 14}):
+        assert D.replay(p, sh, server)[0] == "output"
+    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 15}, server)[0] == "reject"
     stats = D.run(p, examples=32, seed=SEED, server=server)
     assert stats.outputs >= 8 and stats.rejects >= 4, stats
+
+
+@pytest.mark.slow
+def test_the_verifiers_part_nets_are_vstars_units(server):
+    """The Lean verifier refuses a `rec-residuals/…` unit unless it is the verifier's own net for that part
+    (`Flock.RecResiduals`, PROTOCOL.md §16.10), which it computes from the shape alone; V*'s units must be those nets, or
+    the verifier refuses honest recursive sessions. At a shape of one part and one of two (about two minutes: each unit's
+    net, built twice, is a few million rows); no cheaper test builds the real parts' nets on both sides."""
+    p = port("verifier_parts", verifier_parts, st.nothing())
+    for shape in ({"m": 22, "k_log": 6, "claims": 2}, {"m": 28, "k_log": 20, "claims": 4}):
+        assert D.replay(p, shape, server)[0] == "output", shape
 
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
@@ -498,8 +533,8 @@ def _vstar(tmp_path: Path, *args) -> bytes:
 #: `rec_outer.subcircuit(8, 1)`'s program digest (core's codec), and the circuit file `compose` writes under it with the
 #: bindings `a…a` and `b…b`.
 REC_OPEN_8_1 = {"RecOpen_v4{LANES=8,H=1}": "cb8c446680677966b08cdf47d09426438abcf47e3ac7cff5f76cd0225ef157ce"}
-REC_OPEN_8_1_FILE = ("53f94750ba21b8d16f489eb419cce68160af910f414df000dcc6f0f348a08eb4"
-                     "21599bc8e20d7cc3b6985b011c3b303acd31bff8c609c8fd6622522ae2bcff46", 92449954)
+REC_OPEN_8_1_FILE = ("1087318c40a3a8da1994bd1eae6c836ea7025bc17878cf187cf7aad290ad4bfe"
+                     "afb71f00d0e0802270e76a47c5ef50213a02a6f5252151f654fbdc5c4ee661ce", 92449957)
 
 
 @pytest.mark.slow

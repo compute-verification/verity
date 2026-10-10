@@ -92,7 +92,7 @@ N2_GUARD = (f'ok=0; s=$(head -n 1 {FILL_STATUS} 2>/dev/null); n=$(date +%s); t=$
             f'[ "$ok" = 1 ] || {{ printf "%s %s %s %s\\n" "{SKIPPED}" "$n" "$a" "$s"; exit 0; }}; ')
 N2_S = 90                                        # node 2's one session per pass, local; node 2's `timeout` ends it 10 s sooner
 PASS_S = 180                                     # a node pass's deadline, well inside vy-monitors.service's TimeoutStartSec
-HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console")
+HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting")
 EVENTS_KEEP_S = 14 * 86400
 RETRY_KEEP_S = 86400
 
@@ -1110,6 +1110,7 @@ REPO_SLUG = "danielreuter/verity"
 CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
 SLOT_WRAPPER = "check/slot.py"
 CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
+NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
@@ -1124,6 +1125,7 @@ FAILED_READER = r'''
 import fcntl, json, os, re, subprocess, time
 A = json.loads(__ARGS__)
 PICK = [re.compile(p) for p in A["pick"]]
+SUITE = re.compile(r"^(passed|failed|reused|skipped)\s+(\S+)\s")
 
 
 def load(p):
@@ -1147,6 +1149,28 @@ def first_failing(p):
     return next((ln.strip()[:300] for ln in reversed(lines) if ln.strip()), None)
 
 
+def failed_suite(p):
+    """The first suite suites.py reports failed in the run's stdout (`failed  NAME  ...`, followed by its output up to the next
+    suite's line), and that output's first failing line: a suites.py run writes no steps.jsonl."""
+    try:
+        with open(p, errors="replace") as f:
+            lines = f.read(A["log_bytes"]).splitlines()
+    except OSError:
+        return None
+    for i, ln in enumerate(lines):
+        if m := SUITE.match(ln):
+            if m[1] != "failed":
+                continue
+            out = []
+            for later in lines[i + 1:]:
+                if SUITE.match(later):
+                    break
+                out.append(later)
+            line = next((o.strip()[:300] for rx in PICK for o in out if rx.search(o)), None)
+            return m[2], line or ln.strip()[:300]
+    return None
+
+
 def steps(p):
     out = []
     try:
@@ -1168,7 +1192,7 @@ except OSError:
     names = []
 for n in names:
     d = os.path.join(A["runs"], n)
-    ts = [os.stat(p).st_mtime for p in (os.path.join(d, "status.json"), os.path.join(d, "steps.jsonl")) if os.path.exists(p)]
+    ts = [os.stat(p).st_mtime for p in (os.path.join(d, f) for f in ("status.json", "steps.jsonl", "stdout.log")) if os.path.exists(p)]
     if not ts or now - max(ts) > A["recent_s"]:
         continue
     req = load(os.path.join(A["requests"], n, "request.json"))
@@ -1177,16 +1201,20 @@ for n in names:
     st = load(os.path.join(d, "status.json"))
     last = (st.get("transitions") or [{}])[-1]
     bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped")), None)
+    suite = failed_suite(os.path.join(d, "stdout.log")) if bad is None else None
+    if suite:
+        bad = {"step": "suite " + suite[0], "ended_utc": last.get("ended_utc") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+               "rc": None, "line": suite[1], "suite": True}
     state = st.get("state") or last.get("state")
-    if bad is None and state not in ("failed", "cancelled"):
+    if bad is None and (state not in ("failed", "cancelled") or last.get("rc") == A["not_started"]):
         continue
     fail = load(os.path.join(d, "failure.json"))
     sha, cwd = (req.get("remote") or {}).get("source_sha"), req.get("cwd") or ""
     row = {"run": n, "state": state, "rc": last.get("rc"), "ended": last.get("ended_utc"), "class": fail.get("class"),
            "why": (fail.get("why") or "")[:300], "by": req.get("submitted_by") or "", "sha": sha, "subjects": []}
     if bad is not None:
-        row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"),
-                   line=first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None)
+        row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"), suite=bad.get("suite", False),
+                   line=bad.get("line") or (first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None))
     if sha and os.path.isdir(cwd):
         try:
             r = subprocess.run(["git", "-C", cwd, "log", "--first-parent", "--format=%s", "-n", "40", sha],
@@ -1221,7 +1249,7 @@ print(json.dumps({"rows": rows, "waiting": waiting}))
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
-            "pick": list(FAILING), "log_bytes": 8 << 20}
+            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
@@ -1305,8 +1333,10 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
 
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
     """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
-    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled."""
-    if not (ctx.act and waiting and row.get("step") and row.get("state") == "running"):
+    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
+    run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
+    (top, 9 Oct: 25ea's verity-ops failure was cpu-1's, and its circuit_check worth keeping)."""
+    if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",

@@ -228,7 +228,8 @@ def _keys(S) -> dict[str, str]:
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.object_ids(tree, sorted(set(paths) | set(S.RUNNER))), env, [], S.resolved(S.roots(s, pkgs), lock, s.path))
+        out[s.name] = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s)), env, [],
+                            S.resolved(S.roots(s, pkgs), lock, s.path))
     return out
 
 
@@ -320,8 +321,42 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     _lock(tmp_path, numpy="2.0", pytest="8.0")
     assert touched() == []
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    keys = _keys(S)
+    (tmp_path / "tools" / "verity" / "check" / "check.py").write_text("# check, which runs the runner\n")
+    assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
     (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
-    assert touched() == ["a", "b"]
+    assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
+
+
+def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
+    """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
+    then lets it read Markdown (test_guard.py holds the others to reading none)."""
+    _workspace(tmp_path)
+    (tmp_path / "a" / "README.md").write_text("prose\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    keys = _keys(S)
+    (tmp_path / "a" / "README.md").write_text("other prose\n")
+    (tmp_path / "a" / "GUIDE.md").write_text("new prose\n")
+    assert touched() == [] and _keys(S) == keys
+    (tmp_path / "a" / "data.txt").write_text("not prose\n")
+    assert touched() == ["a"] and _keys(S)["a"] != keys["a"]
+    (tmp_path / "a" / "data.txt").unlink()
+    (tmp_path / "b" / "pyproject.toml").write_text((tmp_path / "b" / "pyproject.toml").read_text()
+                                                   + '\n[tool.verity.tests]\ninputs = ["a/README.md"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "b reads a's README")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    keys = _keys(S)
+    (tmp_path / "a" / "README.md").write_text("third prose\n")
+    assert touched() == ["b"]                                       # b reads a's README: its edit reaches b alone
+    assert _keys(S)["a"] == keys["a"] and _keys(S)["b"] != keys["b"]
 
 
 def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch):
@@ -333,6 +368,48 @@ def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch)
     S = _suites(monkeypatch, tmp_path)
     pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
     _git(tmp_path, "mv", "a/mod.py", "b/mod.py")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
+
+
+def test_a_dependencys_dependency_group_is_not_in_its_dependents_closure(tmp_path, monkeypatch):
+    """`b`'s dev group (its own tests' tooling, `a`) keys `b`'s suite but not `c`'s, which depends on `b`: code importing `b`
+    never reads `a`, so a change there need not run `c`."""
+    _workspace(tmp_path)
+    (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text().replace('["a", "b"]', '["a", "b", "c"]'))
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\n\n[dependency-groups]\ndev = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "c" / "tests").mkdir(parents=True)
+    (tmp_path / "c" / "pyproject.toml").write_text('[project]\nname = "c"\ndependencies = ["b"]\n\n[tool.uv.sources]\n'
+                                                   'b = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.inputs_of(by["b"], pkgs) == ["a", "b"] and S.inputs_of(by["c"], pkgs) == ["b", "c"]
+    (tmp_path / "a" / "mod.py").write_text("X = 1\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
+
+
+def test_a_dependency_that_lists_exports_is_those_paths_to_its_dependents(tmp_path, monkeypatch):
+    """`a` lists `a/lib.py` under `exports`: `b`, which depends on it, keys on that file and not on the rest of `a`, so a change
+    to `a/cli.py` runs `a`'s suite alone."""
+    _workspace(tmp_path)
+    text = (tmp_path / "a" / "pyproject.toml").read_text()
+    (tmp_path / "a" / "pyproject.toml").write_text(text + '\n[tool.verity.tests]\nexports = ["a/lib.py"]\n')
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    for f in ("lib.py", "cli.py"):
+        (tmp_path / "a" / f).write_text("X = 1\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.inputs_of(by["a"], pkgs) == ["a"] and S.inputs_of(by["b"], pkgs) == ["a/lib.py", "b"]
+    (tmp_path / "a" / "cli.py").write_text("X = 2\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a"]
+    (tmp_path / "a" / "lib.py").write_text("X = 2\n")
     assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
 
 
@@ -360,6 +437,31 @@ def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, 
     assert touched() == ["a", "b"]
     (tmp_path / "b" / "mod.py").write_text("Y = 1\n")
     assert touched() == ["a", "b", "c"]
+
+
+def test_an_inputs_only_suite_keys_on_what_it_declares_of_its_dependencies(tmp_path, monkeypatch):
+    """`inputs_only = true`: a suite depends on `a` for its package but its tests read only `a/used.py`, so a change elsewhere in
+    `a` need not run it; the guard allows only `inputs_of`, so a read of the rest of `a` fails it."""
+    _workspace(tmp_path)
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                   '[tool.verity.tests]\ninputs = ["a/used.py"]\ninputs_only = true\n')
+    (tmp_path / "a" / "used.py").write_text("X = 1\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert by["b"].inputs_only and not by["a"].inputs_only
+    assert S.inputs_of(by["b"], pkgs) == ["a/used.py", "b"]
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    (tmp_path / "a" / "other.py").write_text("Y = 1\n")
+    assert touched() == ["a"]
+    (tmp_path / "a" / "used.py").write_text("X = 2\n")
+    assert touched() == ["a", "b"]
 
 
 def test_the_roots_own_distribution_is_a_member_and_its_dependents_key_on_the_packages_it_ships(tmp_path, monkeypatch):
@@ -793,6 +895,34 @@ def test_explain_names_what_a_miss_changed(tmp_path):
     assert "pkg/tests/test_uses.py: it reaches pkg/tests/test_shared.py, which changed" in p.stdout, p.stdout
 
 
+def test_each_suite_that_runs_says_what_forced_it(tmp_path):
+    """`--json`'s `forced_by`, which check's reuse report reads: no pass to compare, then the input that moved against the
+    nearest kept pass (whose run and commit it names), and `--fresh`; a cached suite has none."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    _git(root, "commit", "-qam", "passing")
+    out = tmp_path / "suites.json"
+
+    def forced(*args: str) -> dict | None:
+        p = _run_suite(root, tmp_path, "--json", str(out), *args)
+        assert p.returncode == 0, p.stdout
+        [doc] = json.loads(out.read_text())
+        assert (doc["forced_by"] is None) == (doc["status"] == "cached")
+        assert doc["forced_by"] is None or f"ran because: {doc['forced_by']['why'][0]}"[:60] in p.stdout, p.stdout
+        return doc["forced_by"]
+
+    assert forced()["why"] == ["no pass of it kept here records its key's components (passes kept before `--explain` don't)"]
+    assert forced() is None
+    (tests / "helpers.py").write_text("VALUE = 1  # moved\n")
+    got = forced()
+    assert got["why"][0].startswith("input pkg changed") and "pkg/tests/helpers.py" in got["why"][0], got
+    assert got["nearest"]["commit"] == _git(root, "rev-parse", "HEAD") and set(got["nearest"]) == {"run", "commit", "when"}
+    assert forced("--fresh") == {"why": ["--fresh"]}
+
+
 def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, bytes]:
     """(whether something was written to ``fifo`` before ``p`` closed its stdout, ``p``'s output read meanwhile), never waiting
     on a bare blocking ``open``: a runner that dies before the writer starts would leave that waiting forever."""
@@ -1173,3 +1303,32 @@ def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert S.metadata() == ["pké/pyproject.toml", "pyproject.toml", "uv.lock"]
     assert [s.path for s in S.discover()] == ["pké"]
+
+
+def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_their_longest(tmp_path, monkeypatch):
+    """ee02's pytest step ran its parallel suites one at a time (650 s) before circuit_check's one process (2,730 s) started, and
+    its lean-suites ran evaluate (527 s) only after flock (862 s): the suites in one process now run beside the parallel ones."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([2730.0, 231.0, 203.0, 138.0, 98.0, 94.0, 36.0], 8, 32) == 2
+    assert S.serial_slots([527.0, 289.0, 62.0, 52.0, 46.0, 42.0, 7.0], 1, 32) == 2
+    assert S.serial_slots([100.0, 100.0, 100.0, None], 1, 32) == 4, "a suite never timed gets a slot of its own"
+    assert S.serial_slots([None] * 40, 2, 32) == 8, "a fresh test cache times none: the parallel lane keeps 24 of 32"
+    assert S.serial_slots([100.0, 100.0] + [None] * 40, 2, 32) == 10
+    assert S.serial_slots([100.0] * 40, 1, 32) == 31, "the parallel suites keep a slot"
+    assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
+
+
+def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
+    import json
+
+    root = tmp_path / "tree"
+    _env_workspace(root, {"wide": "def test_a():\n    pass\n\ndef test_b():\n    pass\n", "one": "def test_one():\n    pass\n"})
+    wide = root / "wide" / "pyproject.toml"
+    wide.write_text(wide.read_text() + "\n[tool.verity.tests]\nparallel = true\n")
+    _git(root, "commit", "-qam", "wide is parallel")
+    (tmp_path / "cache").mkdir()
+    (tmp_path / "cache" / "durations.json").write_text(json.dumps({"one": 100.0, "wide": 50.0}))
+    p = _run_suite(root, tmp_path, "--fresh", "--jobs", "3")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
+    assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout

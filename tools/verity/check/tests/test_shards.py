@@ -148,7 +148,7 @@ def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_it
 
 
 def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
-    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 16 * CHECK.CIRCUIT_CHECK_GB_PER_JOB)
 
     def jobs(n, k):
         gs = CHECK.groups(tmp_path, 16, only=_resolved(n)[k - 1])
@@ -287,6 +287,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
 
 def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     """The preflight asks for the Lean dependencies of the packages a shard audits, the only ones it carries URLs for."""
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
     real, parts = subprocess.run, []
 
     def run(cmd, *a, **k):

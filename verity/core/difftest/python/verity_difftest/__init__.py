@@ -21,6 +21,9 @@ never answers hangs its test.
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
 its Lean steps (`AFTER_LEAN` in `tools/verity/check/check.py`, held by `tests/test_no_wall_clock.py`).
+
+Only `run` imports Hypothesis: `build`, `Server` and `canonical` need the stdlib alone, so a port's Lean can serve at run
+time (the memory challenger's `verdict.py` in the PoUS harness) where no test dependency is installed.
 """
 
 from __future__ import annotations
@@ -35,11 +38,10 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis import seed as use_seed
-from hypothesis.strategies import SearchStrategy
+if TYPE_CHECKING:
+    from hypothesis.strategies import SearchStrategy
 
 #: One side's answer to one input: `(kind, text)`. A `Port`'s kinds are `output` (the canonical text), `reject` (the
 #: reason) and `error`; a `ProtocolPort`'s are the verdicts (the outcome's canonical text) and `error`.
@@ -350,7 +352,10 @@ class Stats:
 def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
     """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
-    count Python's outcomes by kind."""
+    count Python's outcomes by kind.  Hypothesis is imported here, so the server, `build` and `replay` run without it."""
+    from hypothesis import HealthCheck, given, settings
+    from hypothesis import seed as use_seed
+
     seen: dict[str, int] = {}
 
     @use_seed(seed)

@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.ZK.Hiding
 /-!
 # Proofs of the recursive audit's guarantees
 
-* `Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound` is `zk_sessions_recursive_fork` with V*'s bridge
+* `Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound` is `zk_sessions_recursive_fork_read` with V*'s
+  bridge
   (`Flock.Assumptions.VBridge`) taken apart, the inner verifier reading each round's message whole (`same` is equality,
   `Inner.accepts_of_rel_eq`).
 * `Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK` is two hybrids: the outer session's simulator at
@@ -23,7 +24,7 @@ open scoped ENNReal
 theorem RecursiveSound : Flock.Guarantees.RecursiveSound := by
   intro n L Reg I Cm S Vs Reg' Reg₂ hS hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
   obtain ⟨hb, hcmt, hdec, hfull⟩ := hbr
-  exact zk_sessions_recursive_fork hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg hb (fun _ _ a b => a = b)
+  exact zk_sessions_recursive_fork_read hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg hb (fun _ _ a b => a = b)
     I.accepts_of_rel_eq Sk cmt msg hcmt hdec hfull hin
 
 section ZK

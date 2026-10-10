@@ -14,7 +14,8 @@ open NetworkCertifier (ClockSync)
 namespace Properties.NetworkCertifier
 
 /-- What SHA-512 hashes for a record head: `tagged_sha512(RECORD_TAG, encode(h))`'s input. -/
-def HeadString (h : RecordHead) (x : ByteArray) : Prop := ∃ enc, h.encode = .ok enc ∧ x = taggedInput recordTag enc
+def HeadString (h : RecordHead) (x : ByteArray) : Prop :=
+  ∃ enc, h.encode = .ok enc ∧ Properties.Identity.taggedInput recordTag enc = .ok x
 
 /-- What SHA-512 hashes for the tree of `frames` under grid parameters `g`: each frame's leaf, each node of each level
 below the root, and every empty subtree up to the depth. -/

@@ -24,7 +24,7 @@ every table is set up, and `DrawOkZKHJ` holds at every draw, so at every draw of
 existence, `hRec`, `hpub`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundHJR_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    (hscope : Layout.scopeOk c = true) (kd : ℕ) (hdiv : kd % nTab I = 0)
+    (hscope : Layout.scopeOkH c = true) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
     {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
@@ -48,7 +48,7 @@ covered: the session's existence, `hCust.1` (`RecordsLiveZKJ`), `hpub`, `hkd`, `
 `TableCRZ`. -/
 theorem zk_session_soundHJR_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    (hscope : Layout.scopeOk c = true) (kd : ℕ) (hdiv : kd % nTab I = 0)
+    (hscope : Layout.scopeOkH c = true) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
     {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
