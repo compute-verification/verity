@@ -20,7 +20,7 @@ fixes the class at `UniversalUnit_v1{G, N_IN, N_OUT}`'s, and there the premise i
 * `compiledForkSound_ofStmt`, `compiledForkSound_ofSchedule`: `CompiledForkSound` there, at the statement's regions
   (`Refine.regionsOf`) and its `fast100` schedule. `LinkLayout` reads only the regions and the block bits, so it is
   `Refine.stmtOf_linkLayout`'s at every hidden template. What is left are the executable's own checks of the statement:
-  `StmtWF` and `RegionsWF` (what setupH's acceptance gives) and `Zk.schedule st.m` accepting.
+  `StmtWF` and `RegionsWF` (what setupH's or setupHidden's acceptance gives) and `Zk.schedule st.m` accepting.
 -/
 
 namespace FlockSoundness.Discharge.Recursion

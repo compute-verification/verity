@@ -1,5 +1,8 @@
+import Flock.RecVStar
 import Proofs.Flock.Recursive.Universal
 import Proofs.Flock.Recursive.VStarU2
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # Recursion: the class, regions and schedule of an executable statement
@@ -14,9 +17,14 @@ function of it (`execClassAt`), so the class's fields are no hypotheses and the 
 * `ClassOk st`: the executable's checks of the class: `StmtWF`, `RegionsWF` and `Zk.schedule st.m` accepting.
 * `execClassAt st`: when `ClassOk (shapeOf st)`, `HClass.ofStmt` at no hidden entries (the universal unit's class,
   the one public statement: `HClass.ofStmt_toStatement`), the statement's regions (`Refine.regionsOf`) and its
-  `fast100` schedule (`ExecClass.ofStmt`); otherwise the constant `ExecClass.fixed`.
-* `AcceptsStmt st`: Lean's verifier accepts the statement: `Stmt.setupH` returns it and `Zk.schedule` accepts its `m`.
-  `classOk_of_accepts`: then its class checks pass, so an accepted statement's class is its own
+  `fast100` schedule (`ExecClass.ofStmt`); otherwise the constant `ExecClass.fixed`. A hidden entry is one of a private
+  circuit's template (`HClass.units`, `nnz`), not a hidden output: the inner statement hides its outputs, and those are
+  regions (`HmOut.regions`, in `Refine.regionsOf st`) of the `setupHidden` statement whose matrices the class reads,
+  as HiddenExec's tables are `stmtOf` of it.
+* `AcceptsStmt st`: Lean's verifier accepts the statement as `RecCoins.Inner.load` sets it up: `Stmt.setupTables` at
+  `RecVStar.innerTags` and one table returns it (through `Stmt.setupHidden`, since those tags hide outputs), and
+  `Zk.schedule` accepts its `m`. `classOk_of_accepts`: then its class checks pass, so an accepted statement's class is
+  its own
   (`execClassAt_of_accepts`), never the fixed one.
 * `compiledForkSound_execClassAt`: the compile premise at `execClassAt st` when its checks pass
   (`compiledForkSound_of_fast100`, from `flock_inner_sound_compiled`).
@@ -45,13 +53,17 @@ def shapeOf (st : Flock.Stmt) : Flock.Stmt :=
 def ClassOk (st : Flock.Stmt) : Prop :=
   Refine.StmtWF st ∧ Refine.RegionsWF st ∧ ∃ p, Flock.Zk.schedule st.m = .ok p
 
-/-- **Lean's verifier accepts `st` as the inner statement**: its setup on the hm96 path (`Flock.Stmt.setupH`) returns
-`st` from some circuit and public files, and `Flock.Zk.schedule` accepts its `m`. -/
+/-- **Lean's verifier accepts `st` as the inner statement**, set up as `RecCoins.Inner.load` sets it up: from some
+circuit and public files and partition object, `Flock.Stmt.setupTables` at the inner tags (`RecVStar.innerTags`) and
+the coin server's coins returns one table, `st`, and `Flock.Zk.schedule` accepts its `m`. -/
 def AcceptsStmt (st : Flock.Stmt) : Prop :=
-  (∃ (tags : Flock.Tags) (cf pf : ByteArray) (coins : Flock.Coins) (tables : List (String × ByteArray))
-      (draw partition : Option Lean.Json) (program : Option ByteArray),
-    Flock.Stmt.setupH tags cf pf coins tables draw partition program = .ok st) ∧
+  (∃ (cf pf : ByteArray) (partition : Lean.Json) (spec : Flock.SessionSpec),
+    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := some partition) =
+      .ok (spec, #[st])) ∧
   ∃ p, Flock.Zk.schedule st.m = .ok p
+
+/-- The inner tags hide the statement's outputs, so `setupTables` sets the inner statement up with `setupHidden`. -/
+theorem innerTags_hiddenOutputs : Flock.RecVStar.innerTags.hiddenOutputs = true := rfl
 
 /-- **A class, its regions and its schedule**, the compiled table's parameters. -/
 structure ExecClass where
@@ -117,12 +129,16 @@ theorem ClassOk.to_shape {st : Flock.Stmt} (h : ClassOk st) : ClassOk (shapeOf s
   have w := hr.regions r hr'
   exact ⟨w.free_lt, w.nodup, w.free_size⟩
 
-/-- **Lean's verifier accepting a statement passes its class checks**: `setupH`'s statements are well formed
-(`Refine.setupH_wf`), and `Zk.schedule` is the acceptance's own. -/
+/-- **Lean's verifier accepting a statement passes its class checks**: one table of `setupTables` at the inner tags is
+`setupHidden`'s statement (`HiddenExec.setupTables_okH`), which is well formed (`Hidden.setupHidden_wf`), and
+`Zk.schedule` is the acceptance's own. -/
 theorem classOk_of_accepts {st : Flock.Stmt} (h : AcceptsStmt st) : ClassOk (shapeOf st) := by
-  obtain ⟨⟨_, _, _, _, _, _, _, _, hs⟩, hp⟩ := h
-  obtain ⟨hwf, hr⟩ := Refine.setupH_wf hs
-  exact ClassOk.to_shape ⟨hwf, hr, hp⟩
+  obtain ⟨⟨_, _, _, _, hs⟩, hp⟩ := h
+  rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hs with ⟨-, st', hst, -, hsts⟩ | ⟨hc, -⟩
+  · obtain rfl : st = st' := by simpa using hsts
+    obtain ⟨hwf, hr⟩ := Hidden.setupHidden_wf hst
+    exact ClassOk.to_shape ⟨hwf, hr, hp⟩
+  · omega
 
 /-- **An accepted statement's class is its own**: `execClassAt` takes the `ExecClass.ofStmt` branch. -/
 theorem execClassAt_of_accepts {st : Flock.Stmt} (h : AcceptsStmt st) :
