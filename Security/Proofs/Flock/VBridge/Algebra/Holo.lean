@@ -145,13 +145,16 @@ theorem termValue_holo (hc : comb.size = 64) (hp : p ≤ w.size) (t : Term) (ht 
 
 variable {V comb h w}
 
+theorem holoS_op {c0 : Nat} {S : GfS} {k : Nat} (hk : k < S.ops.size) :
+    (holoS p c0 S).ops[k]! = (S.ops[k]'hk).flatMap (holoTerm p c0) := by
+  rw [getElem!_pos (holoS p c0 S).ops k (by simpa [holoS] using hk)]
+  exact Array.getElem_map _ _
+
 theorem opValue_holo {S : GfS} (hc : comb.size = 64) (hp : p ≤ w.size) (hok : HoloOk p S) (k : Nat) :
     opValue (holoS p V.size S) (insH p w h) (V ++ comb) k = opValue S w (V ++ addH comb h) k := by
   unfold opValue
   by_cases hk : k < S.ops.size
-  · rw [getElem!_pos (holoS p V.size S).ops k (by simpa [holoS] using hk), getElem!_pos S.ops k hk]
-    simp only [holoS, Array.getElem_map]
-    rw [Array.foldl_flatMap]
+  · rw [holoS_op hk, getElem!_pos S.ops k hk, Array.foldl_flatMap]
     exact afoldlA_congr _ _ _
       (fun t ht b => termValue_holo V comb h w hc hp t (hok.1 _ (Array.getElem_mem hk) t ht) b) 0
   · rw [getElem!_neg (holoS p V.size S).ops k (by simpa [holoS] using hk), getElem!_neg S.ops k hk]
