@@ -27,9 +27,9 @@ is out of range: flock-circuit refuses it.
 (``unit_costs_padding``); each shape's sessions (mean and the public 1 − 2⁻⁴⁰ count), its session's RSS and prove time, and
 the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The cap** is the
 largest power of two Z at which a B = 16 session at the workload's least ρ is in range and fits one node's memory
-(:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap is split below the subcircuit into
-ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions ceil(p X / B) for X of its units drawn);
-every other unit keeps its dp4 bucket.
+(:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap
+is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
+ceil(p X / B) for X of its units drawn); every other unit keeps its dp4 bucket.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
 (``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on circuits'
@@ -38,12 +38,16 @@ staging ladder (:data:`STAGING`); a registered type lowers one unit, at least th
 
 **The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3, ``note:proofs/20261010T0250Z-draft-f4-bitsumcheck``): V* runs
 the slot sumcheck's verifier and opens the committed bits, so each session's prover adds, apart from Flock's prove, K1 ns
-per entry per rep x entries x reps seconds. A session's entries are slots x Z: each slot the template of its own unit
-type, of at most the bucket's padded nonzero bound Z (a session's type count is hidden, so every slot pays; F4's table
-pads each to n = 2^ν ≥ Z slots, at most 2x more, whose padding pairs the kernel skips). Its memory is the committed bits
-of every slot's table, resident (bytes per entry x entries), plus the sumcheck's working set over the one slot being
-proved (bytes per entry x Z; slots run one after another). A session's time is Flock's prove plus the sumcheck, its peak
-memory Flock's peak RSS plus the sumcheck's, and the cap and the prover hours use those.
+per entry per rep x entries x reps seconds. A slot's entries are its type's *template*, the registered table: the
+nonzeros of what the circuit text holds for the type (:func:`netlists`: a registered type's one unit, a tree's distinct
+members, a generic type's whole subcircuit), at most Z. A session's entries are slots x its largest template's (the 16
+slots run as one sumcheck and the type is hidden, so every slot is padded to the session's largest; F4's table pads a
+template to n = 2^ν slots, whose padding pairs the kernel skips; proofs' ``vstar_c3.py`` takes the same shape). K1 is
+measured per ν: a template of 2^ν entries takes the measurement at the least measured ν' ≥ ν (the last beyond). Its memory
+is the committed bits of the bucket's stacked table (its T distinct templates, T padded to a power of two, each at the
+largest's size; bytes per entry) plus the sumcheck's working set (bytes per entry x the session's entries). A session's
+time is Flock's prove plus the sumcheck, its peak memory Flock's peak RSS plus the sumcheck's, and the cap and the prover
+hours use those.
 """
 from __future__ import annotations
 
@@ -74,12 +78,14 @@ CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
-#: candidate 3's slot sumcheck, F4's estimate until proofs' pod run of K1: ns per entry per rep on the pod's 32 threads (its
-#: K1 estimate at ν = 20, 9.7-16.0 ns, and its band), reps, the committed table's bytes per entry (P' = 64 bit planes at
-#: ν ≥ 24, §1.2), and the working set per entry of the slot being proved (K1's factor records, 1.2 GiB at ν = 24)
-SLOT_SUMCHECK: dict[str, Any] = {"k1_ns": 13.0, "band": (10.0, 16.0), "reps": 2, "bits_bytes": 8.0,
-                                 "work_bytes": 1.2 * 2 ** 30 / 2 ** 24,
-                                 "source": "estimate (F4's K1, note:proofs/20261010T0250Z-draft-f4-bitsumcheck)"}
+#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (r20261010-093619-c3ee; upper bounds,
+#: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
+#: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
+#: and the working set per entry (peak RSS 37 GiB at ν = 28). F4's estimate before it: 13 ns (10-16) at ν = 20.
+SLOT_SUMCHECK: dict[str, Any] = {
+    "k1_ns": ((20, 15.2), (28, 26.1)), "band": (((20, 12.2), (28, 19.3)), ((20, 18.2), (28, 32.9))), "reps": 2,
+    "bits_bytes": 8.0, "work_bytes": 37 * 2 ** 30 / 2 ** 28,
+    "source": "measured, proofs' K1 r20261010-093619-c3ee (art:10599a37d2ec), upper bounds"}
 
 #: (run, definition, instances, k_log, dense_m, circuit bytes, prove s (median), prover process wall s, prover peak RSS GiB,
 #: threads): ``benchmarks/pouw/hidden_zk`` summaries on vy-nebius-1/2
@@ -288,13 +294,26 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
     x = features(D, cb, 2.0 ** k_log)
     s = {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "in_range": k_log <= K_LOG_MAX, "D": D,
          "circuit_bytes": cb, **{k: _at(c, x) for k, c in coef.items()}}
-    entries = slots * Z
-    s["entries"] = entries
-    s["sumcheck_s"] = 0.0 if slot is None else slot["k1_ns"] * 1e-9 * entries * slot["reps"]
-    s["sumcheck_gib"] = 0.0 if slot is None else (slot["bits_bytes"] * entries + slot["work_bytes"] * Z) / 2 ** 30
+    T = slots if nets is None else max(len(nets), 1)
+    s["template"] = max((min(n, full) / bytes_per_nnz for n in held), default=Z)
+    s["entries"] = entries = slots * s["template"]
+    s["k1_ns"] = 0.0 if slot is None else k1(slot["k1_ns"], s["template"])
+    s["sumcheck_s"] = s["k1_ns"] * 1e-9 * entries * (slot or {}).get("reps", 0)
+    bits = 2 ** math.ceil(math.log2(T)) * s["template"]
+    s["sumcheck_gib"] = 0.0 if slot is None else (slot["bits_bytes"] * bits + slot["work_bytes"] * entries) / 2 ** 30
     s["total_s"] = s.get("prove_s", 0.0) + s["sumcheck_s"]
     s["peak_gib"] = s.get("rss_gib", 0.0) + s["sumcheck_gib"]
     return s
+
+
+def k1(ns: float | Sequence[tuple[int, float]], template: float) -> float:
+    """K1 (ns per entry per rep) for a template of ``template`` entries: ``ns`` itself, or of ``ns``' (ν, ns) points the one
+    at the least ν ≥ the template's ceil(log2), the last beyond."""
+    if isinstance(ns, (int, float)):
+        return float(ns)
+    nu = math.ceil(math.log2(max(template, 2)))
+    pts = sorted(ns)
+    return next((v for m, v in pts if m >= nu), pts[-1][1])
 
 
 def cap(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int = SLOTS, **kw: Any) -> float | None:
@@ -495,23 +514,21 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
         out[node] = {"gib": gib, "cap": c, "cap_flock": cap(r0, coef, gib, nets=every, **{**kw, "slot": None}),
                      "fits_unsplit": unsplit["in_range"] and unsplit["max_peak_gib"] <= gib,
                      "split": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
-                     "at_cap": at, "top_session": max(at["body"], key=lambda s: s["Z"])["session"] if at["body"] else None,
-                     "band": band(at, kw.get("slot"))}
+                     "at_cap": at, "heaviest": max(at["body"] + at["tail"], key=lambda s: s["session"]["total_s"])["session"],
+                     "band": [hours(audit(N, K, units, rho, coef, limit=c if over else None, nets=nets,
+                                          **{**kw, "slot": dict(kw["slot"], k1_ns=b)}), b)
+                              for b in kw["slot"]["band"]] if kw.get("slot") else []}
     return out
 
 
-def band(a: Mapping[str, Any], slot: Mapping[str, Any] | None) -> list[dict[str, float]]:
-    """An audit's prover hours and the slot sumcheck's share at each K1 of the slot sumcheck's band (the sumcheck is linear
-    in K1, and K1 moves no cap)."""
-    out = []
-    for k1 in slot["band"] if slot else ():
-        r = {"k1_ns": k1}
-        for m in ("mean", "public"):
-            sc = a[f"sumcheck_h_{m}"] * k1 / slot["k1_ns"]
-            r[f"prover_h_{m}"] = a[f"prover_h_{m}"] - a[f"sumcheck_h_{m}"] + sc
-            r[f"share_{m}"] = sc / r[f"prover_h_{m}"] if r[f"prover_h_{m}"] else 0.0
-        out.append(r)
-    return out
+def hours(a: Mapping[str, Any], k1_ns: Any = None) -> dict[str, Any]:
+    """An audit's prover hours and the slot sumcheck's share of them, mean and public (K1 moves no cap, so the band reruns
+    the audit at the same cap)."""
+    r: dict[str, Any] = {"k1_ns": k1_ns}
+    for m in ("mean", "public"):
+        r[f"prover_h_{m}"] = a[f"prover_h_{m}"]
+        r[f"share_{m}"] = a[f"sumcheck_h_{m}"] / a[f"prover_h_{m}"] if a[f"prover_h_{m}"] else 0.0
+    return r
 
 
 def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
@@ -523,7 +540,8 @@ def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
     kw["slot"] = slot
     return {"format": "verity/f6-prover/v3", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
             "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_LOG_MAX, "fit": law,
-            "slot_sumcheck": None if slot is None else {**slot, "entries": "slots x Z (each slot its own type's template)"},
+            "slot_sumcheck": None if slot is None else {
+                **slot, "entries": "slots x the session's largest template (its type's registered table, at most Z)"},
             "staging_fit": {"coef": slaw, "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
                             "registered": [dict(zip(("run", "lowering", "K", "ands", "wall_s", "peak_gib"), r))
                                            for r in REGISTERED_STAGING]},
@@ -554,34 +572,46 @@ def _st(x: Mapping[str, Any] | None) -> str:
     return "–" if x is None else f"{_t(x['wall_s'])}, {x['peak_gib']:.3g} GiB ({x['kind']})"
 
 
+def _k1s(ns: Any) -> str:
+    if isinstance(ns, (int, float)):
+        return f"{ns:.4g} ns"
+    pts = sorted(ns)
+    return ", ".join(f"{v:.4g} ns at ν ≤ {m}" if i < len(pts) - 1 else f"{v:.4g} ns beyond" if i else f"{v:.4g} ns"
+                     for i, (m, v) in enumerate(pts))
+
+
 def _slot_law(sl: Mapping[str, Any] | None) -> list[str]:
     if not sl:
         return []
-    return [f"- slot sumcheck (candidate 3), K1 {sl['source']}: seconds = {sl['k1_ns']:.4g} ns x entries x {sl['reps']} reps "
-            f"(band {sl['band'][0]:.4g}-{sl['band'][1]:.4g} ns); GiB = ({sl['bits_bytes']:.4g} B x entries, the committed "
-            f"bits, + {sl['work_bytes']:.4g} B x Z, the working set of the slot being proved) / 2^30; entries = slots x Z, "
-            "each slot its own type's template of at most the bucket's padded nonzero bound (the type count is hidden). A "
-            "session's time is prove + sumcheck, its peak RSS + sumcheck memory."]
+    lo, hi = sl["band"]
+    return [f"- slot sumcheck (candidate 3), K1 {sl['source']}: seconds = K1 x entries x {sl['reps']} reps, K1 = "
+            f"{_k1s(sl['k1_ns'])} (band: {_k1s(lo)} to {_k1s(hi)}); GiB = ({sl['bits_bytes']:.4g} B x the bucket's stacked "
+            f"table, its T templates (T up to a power of two) at the largest's entries, the committed bits, + "
+            f"{sl['work_bytes']:.4g} B x entries, the working set) / 2^30; "
+            "entries = slots x the session's largest template (its type's registered table: a registered type's one unit, "
+            "a tree's distinct members, a generic type's whole subcircuit; at most Z). A session's time is prove + "
+            "sumcheck, its peak RSS + sumcheck memory."]
 
 
 def _slot_table(pr: Mapping[str, Any]) -> list[str]:
     sl = pr["slot_sumcheck"]
     lo, hi = sl["band"]
-    L = ["", f"## Slot sumcheck per workload (K1 {sl['k1_ns']:.4g} ns, {sl['source']})", "",
-         "The largest session at the node cap, split into Flock's prove and the slot sumcheck; its peak; the caps with the "
-         "sumcheck and with Flock alone; prover hours per audit at the node cap and the sumcheck's share of them, at K1 and "
-         f"over its band {lo:.4g}-{hi:.4g} ns.", "",
-         "| workload | cap: node / GPU | Flock alone | Z | Flock prove | slot sumcheck | session | Flock RSS | sumcheck memory | "
-         f"peak | prover h mean / public | sumcheck share mean / public | K1 {lo:.4g} ns: prover h (share) | "
-         f"K1 {hi:.4g} ns: prover h (share) |", "|" + "---|" * 14]
+    L = ["", f"## Slot sumcheck per workload (K1 {_k1s(sl['k1_ns'])}; {sl['source']})", "",
+         "The heaviest session at the node cap (its Z and its largest template), split into Flock's prove and the slot "
+         "sumcheck; its peak; the caps with the sumcheck and with Flock alone; prover hours per audit at the node cap and "
+         f"the sumcheck's share of them, at K1 and at its band's ends (low: {_k1s(lo)}; high: {_k1s(hi)}).", "",
+         "| workload | cap: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
+         "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
+         "band high: prover h (share) |", "|" + "---|" * 15]
     for w in pr["workloads"]:
         n, g, a = w["cpu"], w["gpu"], w["cpu"]["at_cap"]
-        s = n["top_session"]
+        s = n["heaviest"]
         sh = lambda m: a[f"sumcheck_h_{m}"] / a[f"prover_h_{m}"] if a[f"prover_h_{m}"] else 0.0  # noqa: E731
         bd = [f"{b['prover_h_mean']:.3g} / {b['prover_h_public']:.3g} ({b['share_mean']:.0%})" for b in n["band"]]
         L.append("| " + " | ".join([
             P._short(w["workload"]), f"{_p2(n['cap'])} / {_p2(g['cap'])}", f"{_p2(n['cap_flock'])} / {_p2(g['cap_flock'])}",
-            P._si(s["Z"]), _t(s["prove_s"]), _t(s["sumcheck_s"]), _t(s["total_s"]), f"{s['rss_gib']:.3g} GiB",
+            P._si(s["Z"]), P._si(s["template"]), _t(s["prove_s"]), _t(s["sumcheck_s"]), _t(s["total_s"]),
+            f"{s['rss_gib']:.3g} GiB",
             f"{s['sumcheck_gib']:.3g} GiB", f"{s['peak_gib']:.3g} GiB",
             f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}", f"{sh('mean'):.0%} / {sh('public'):.0%}", *bd]) + " |")
     return L
@@ -686,13 +716,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--inventory", required=True, help="unit_costs' unit-costs.json")
     ap.add_argument("--out", required=True, help="directory for prover.json and prover.md")
     d = SLOT_SUMCHECK
-    ap.add_argument("--k1-ns", type=float, default=d["k1_ns"], help="slot sumcheck ns per entry per rep (default: F4's estimate)")
-    ap.add_argument("--k1-band", type=float, nargs=2, default=d["band"], metavar=("LO", "HI"), help="K1's band (ns)")
+    k1s = lambda t: tuple(sorted(tuple(map(float, x.split(":"))) for x in t)) if ":" in t[0] else float(t[0])  # noqa: E731
+    ap.add_argument("--k1-ns", nargs="+", default=None, metavar="[NU:]NS",
+                    help="slot sumcheck ns per entry per rep, one value or NU:NS points (default: proofs' measurement)")
+    ap.add_argument("--k1-lo", nargs="+", default=None, metavar="[NU:]NS", help="K1's band, low end")
+    ap.add_argument("--k1-hi", nargs="+", default=None, metavar="[NU:]NS", help="K1's band, high end")
     ap.add_argument("--reps", type=int, default=d["reps"])
     ap.add_argument("--bits-bytes-per-entry", type=float, default=d["bits_bytes"], help="committed bits' bytes per entry")
     ap.add_argument("--work-bytes-per-entry", type=float, default=d["work_bytes"],
                     help="the sumcheck's working set per entry of the slot being proved")
-    ap.add_argument("--k1-source", default=None, help="where K1 comes from (default: F4's estimate; a run id once measured)")
+    ap.add_argument("--k1-source", default=None, help="where K1 comes from (default: proofs' K1 run)")
     ap.add_argument("--no-slot-sumcheck", action="store_true", help="Flock's prove alone")
     a = ap.parse_args(argv)
     from pathlib import Path
@@ -702,11 +735,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     inv = json.loads(Path(a.inventory).read_text())
     if "token_select" not in inv:
         retree(inv)
-    given = (a.k1_ns, tuple(a.k1_band), a.reps, a.bits_bytes_per_entry, a.work_bytes_per_entry) != (
-        d["k1_ns"], tuple(d["band"]), d["reps"], d["bits_bytes"], d["work_bytes"])
+    given = any(v is not None for v in (a.k1_ns, a.k1_lo, a.k1_hi)) or (
+        a.reps, a.bits_bytes_per_entry, a.work_bytes_per_entry) != (d["reps"], d["bits_bytes"], d["work_bytes"])
     slot = None if a.no_slot_sumcheck else {
-        "k1_ns": a.k1_ns, "band": tuple(a.k1_band), "reps": a.reps, "bits_bytes": a.bits_bytes_per_entry,
-        "work_bytes": a.work_bytes_per_entry, "source": a.k1_source or ("given" if given else d["source"])}
+        "k1_ns": k1s(a.k1_ns) if a.k1_ns else d["k1_ns"],
+        "band": (k1s(a.k1_lo) if a.k1_lo else d["band"][0], k1s(a.k1_hi) if a.k1_hi else d["band"][1]),
+        "reps": a.reps, "bits_bytes": a.bits_bytes_per_entry, "work_bytes": a.work_bytes_per_entry,
+        "source": a.k1_source or ("given" if given else d["source"])}
     pr = prover(inv, slot=slot)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

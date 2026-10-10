@@ -1,6 +1,6 @@
 """F6's prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
-coefficients, the range and memory caps, the slot sumcheck's term, netlists, staging, a tiny audit unsplit and split exactly, and token-select's
-argmax tree."""
+coefficients, the range and memory caps, the slot sumcheck's term, netlists, staging, a tiny audit unsplit and split
+exactly, and token-select's argmax tree."""
 from __future__ import annotations
 
 import math
@@ -61,24 +61,32 @@ def test_a_session_from_fixed_coefficients():
 
 
 def test_the_slot_sumcheck_at_fixed_coefficients():
-    """K1 10 ns, 2 reps, 8 B of committed bits per entry and 64 B of working set per entry of one slot. At 2^20, 16 slots:
-    2^24 entries, 10e-9 x 2^24 x 2 s, (8 x 2^24 + 64 x 2^20) / 2^30 = 0.1875 GiB. At 2^28 the sumcheck adds
-    32 + 16 GiB to Flock's 53, so the cap at 101 GiB stays 2^28 and drops to 2^27 below it."""
-    S = {"k1_ns": 10.0, "band": (5.0, 20.0), "reps": 2, "bits_bytes": 8.0, "work_bytes": 64.0}
+    """K1 10 ns, 2 reps, 8 B of committed bits and 16 B of working set per entry. At 2^20, 16 slots each its own template of
+    2^20: 2^24 entries, 10e-9 x 2^24 x 2 s, (8 x 16 x 2^20 + 16 x 2^24) / 2^30 = 0.375 GiB. At 2^28 the sumcheck adds
+    32 + 64 GiB to Flock's 53, so the cap at 149 GiB stays 2^28 and drops to 2^27 below it."""
+    S = {"k1_ns": 10.0, "band": (5.0, 20.0), "reps": 2, "bits_bytes": 8.0, "work_bytes": 16.0}
     flock, s = PR.session(2 ** 20, 16, COEF, **TINY), PR.session(2 ** 20, 16, COEF, slot=S, **TINY)
     assert (flock["sumcheck_s"], flock["total_s"], flock["peak_gib"]) == (0, flock["prove_s"], flock["rss_gib"])
-    assert s["entries"] == 2 ** 24 and s["sumcheck_s"] == pytest.approx(10e-9 * 2 ** 25)
-    assert s["sumcheck_gib"] == pytest.approx(0.1875) and s["total_s"] == pytest.approx(s["prove_s"] + s["sumcheck_s"])
-    assert s["peak_gib"] == pytest.approx(s["rss_gib"] + 0.1875)
-    assert PR.cap(16, COEF, 101, slot=S, **TINY) == 2 ** 28 and PR.cap(16, COEF, 100.9, slot=S, **TINY) == 2 ** 27
+    assert (s["template"], s["entries"]) == (2 ** 20, 2 ** 24) and s["sumcheck_s"] == pytest.approx(10e-9 * 2 ** 25)
+    assert s["sumcheck_gib"] == pytest.approx(0.375) and s["total_s"] == pytest.approx(s["prove_s"] + s["sumcheck_s"])
+    assert s["peak_gib"] == pytest.approx(s["rss_gib"] + 0.375)
+    assert PR.cap(16, COEF, 149, slot=S, **TINY) == 2 ** 28 and PR.cap(16, COEF, 148.9, slot=S, **TINY) == 2 ** 27
+    # every slot padded to the session's largest template (at most Z); the stacked table holds T = 2 templates at its size
+    s = PR.session(2 ** 20, 16, COEF, nets=[4 * 1000, 4 * 3000], slot=S, **TINY)
+    assert (s["template"], s["entries"]) == (3000, 16 * 3000)
+    assert s["sumcheck_gib"] == pytest.approx((8 * 2 * 3000 + 16 * 16 * 3000) / 2 ** 30)
+    assert PR.session(2 ** 20, 16, COEF, nets=[4 * 2 ** 30], slot=S, **TINY)["template"] == 2 ** 20
+    # K1 per ν: the point at the least ν' ≥ the template's, the last beyond
+    pts = ((20, 1.0), (28, 2.0))
+    assert [PR.k1(pts, t) for t in (3000, 2 ** 20, 2 ** 20 + 1, 2 ** 29)] == [1.0, 1.0, 2.0, 2.0] and PR.k1(7, 1) == 7.0
     units = [P.Unit("a", "t", 4, 3, 3), P.Unit("b", "t", 2, 10, 10)]
     a0 = PR.audit(6, 3, units, {}, COEF, slots=2, k=2)
     a = PR.audit(6, 3, units, {}, COEF, slots=2, k=2, slot=S)
+    a2 = PR.audit(6, 3, units, {}, COEF, slots=2, k=2, slot=dict(S, k1_ns=20.0))
     assert a["prover_h_mean"] - a["sumcheck_h_mean"] == pytest.approx(a0["prover_h_mean"])
     assert a["sumcheck_h_mean"] == pytest.approx(sum(b["sessions_mean"] * 10e-9 * 2 * b["Z"] * 2 for b in a["body"]) / 3600)
-    lo, hi = PR.band(a, S)
-    assert hi["prover_h_public"] - lo["prover_h_public"] == pytest.approx(1.5 * a["sumcheck_h_public"])
-    assert lo["share_mean"] == pytest.approx(a["sumcheck_h_mean"] / 2 / (a0["prover_h_mean"] + a["sumcheck_h_mean"] / 2))
+    assert a2["sumcheck_h_public"] == pytest.approx(2 * a["sumcheck_h_public"])
+    assert PR.hours(a)["share_mean"] == pytest.approx(a["sumcheck_h_mean"] / a["prover_h_mean"])
 
 
 def test_netlists_and_staging():
