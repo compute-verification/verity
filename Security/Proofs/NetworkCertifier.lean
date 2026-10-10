@@ -1,4 +1,5 @@
 import Models.NetworkCertifier.Guarantees
+import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
@@ -12,7 +13,7 @@ import Proofs.NetworkCertifier.Accepted
 /-!
 # Proofs of the network certifier's guarantees
 
-One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee, each the theorem of the same statement
+One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
 constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
 behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program (`certifier_program`,
