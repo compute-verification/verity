@@ -25,7 +25,8 @@ private circuit registered by hm96 leaves. It is a conjunction:
 * (ii) zero knowledge with circuit privacy, stated about the firewall's code (`Flock.Firewall.run`) and V*'s outer
   sessions run by the honest prover's code (`Recursion.OuterZK.proverExe`), `RecursiveFirewallPrivate`'s form
   (`Proofs.Flock.Recursive.Firewall`), the inner coins live: a simulator that reads only the class, the schedule's
-  transcript and the owed outputs, `hash-derived-key` its one premise and what it takes of the code each an obligation.
+  transcript and the owed outputs, at the pinned key's hiding gap with no premise, and what it takes of the code each an
+  obligation.
 
 Its premises are the list in `Proofs.Flock.Recursive.Premises`. Its proof (`Flock.SecurityProofs.RecursiveAudit`,
 `Proofs.Flock.Recursive.Audit`) rests on the open lemmas that file names.
@@ -171,13 +172,14 @@ $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \tex
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and the compiled table's error.
 
-(ii) `RecursiveFirewallPrivate`, under `hash-derived-key`: for the class's private circuits registered by hm96 leaves
+(ii) `RecursiveFirewallPrivate`, with no premise: for the class's private circuits registered by hm96 leaves
 (`regLeaves rows pub`), the auditor's whole view (`fwRealPr`: the registration's, what the firewall sends,
 `Flock.Firewall.run` at the pinned schedule `s` on the honest worker's requests `reqs` and `nh` salts of 192 uniform
 bytes, and V*'s outer sessions `V` run by the honest prover's code `OuterZK.proverExe`) and the simulated one
 (`fwSimPr`: `p₀` registered, the schedule's transcript `T` on ideal commit strings, V*'s simulator at the public
 context `pubS` reads), which reads only the class, `T` and the owed outputs, give every event probabilities within
-`2 n_r·2^-193 + ε_V + n_h·2^-193` both ways, `ε_V` V*'s sessions' error (`OuterZK.Sessions.err`). The inner coins are
+`2 n_r·δ_{K*} + ε_V(δ_{K*}) + n_h·δ_{K*}` both ways, `δ_{K*}` the hiding gap of hm96-sha512's pinned key
+(`hidingGap My saltHash`) and `ε_V(δ)` V*'s sessions' error at `δ` (`OuterZK.Sessions.errAt`). The inner coins are
 live: the auditor draws each after the commit strings before it, and each message `msgs … i` and the requests `reqs`
 read those strings (`firewallStrings`, `firewallCommits`). What it takes of the code is each an obligation: the requests run through the firewall to `T` with the messages' salted commit strings in
 it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
@@ -246,7 +248,6 @@ def RecursiveAudit : Prop :=
           ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
   (∀ {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp]
-    (_hKey : Flock.Premises.HashDerivedKeyHm96)
     -- the firewall's pinned schedule
     (s : Flock.Firewall.Schedule)
     -- the registration: the private circuit's rows, and what the auditor sees of their leaves
@@ -266,8 +267,12 @@ def RecursiveAudit : Prop :=
     (_hH : SessionsHonest honest msgs V), honest o P w →
     ∀ E : Rv × Ωa × (Array Flock.Firewall.Sent × Bool) × V.View → Prop,
       fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E ≤ fwSimPr rows pub T V pubS o p₀ E +
-          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
+            V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
         fwSimPr rows pub T V pubS o p₀ E ≤ fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E +
-          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)))
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
+            V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)))
 
 end Flock.Guarantees
