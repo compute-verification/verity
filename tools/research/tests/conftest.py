@@ -42,6 +42,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
     # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot)
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
+    # ... nor its disk guard's launch hold (/etc/vy/launch-hold)
+    monkeypatch.setenv("LAUNCH_HOLD_FILE", str(tmp_path_factory.mktemp("launch-hold") / "absent-launch-hold"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
     # ... nor its dispatcher's settings: importing dispatch.py loads $VY_DISPATCH_ROOT/dispatch.env (default

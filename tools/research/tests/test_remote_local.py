@@ -160,6 +160,30 @@ def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp
     _wait_terminal(runs_root / "slot")
 
 
+def test_a_node_under_its_launch_hold_refuses_every_run_but_its_exceptions(tmp_path, monkeypatch):
+    """/etc/vy/launch-hold (vy-disk-guard's, at the disk or inode mark): the launcher refuses a new run there, so a hold no longer
+    depends on the launching lane reading Slack (lean's 720b started on node 1 during its 9 Oct hold). An `except:` token naming the
+    run id or a piece of the launcher's agent URL admits it; a hold file with no reason refuses too."""
+    hold = tmp_path / "launch-hold"
+    monkeypatch.setenv("LAUNCH_HOLD_FILE", str(hold))
+    hold.write_text("reason: /workspace's inodes are 66% used (hold at 65%, release under 63%)\nsince: 2026-10-09T20:43:00Z\n"
+                    "by: vy-disk-guard\nexcept: r-allowed bc-8416\n")
+    req, runs_root = _request(tmp_path, "held", [PY, "-c", "print('no')"])
+    out = remote.launch_request(req)
+    assert out["started"] is False and "inodes are 66% used" in out["refused"] and "since 2026-10-09T20:43:00Z" in out["refused"]
+    assert R.summarize(runs_root / "held")["state"] == "refused" and not (runs_root / "held" / "job.json").exists()
+    assert remote.launch_hold(hold, "r-allowed", None) is None
+    assert remote.launch_hold(hold, "r-other", "https://cursor.com/agents/bc-8416bc72-c4cc") is None
+    assert remote.launch_hold(hold, "r-other", "https://cursor.com/agents/bc-1234") is not None
+    hold.write_text("except: r-allowed\n")
+    assert "names no reason" in remote.launch_hold(hold, "r-allowed", None)
+    hold.unlink()
+    assert remote.launch_hold(hold, "r-other", None) is None
+    req, runs_root = _request(tmp_path, "free", [PY, "-c", "print('ok')"])
+    assert remote.launch_request(req)["started"]
+    _wait_terminal(runs_root / "free")
+
+
 def test_tool_tarball_is_deterministic_and_excludes_caches():
     d1, s1 = remote.tool_tarball()
     d2, s2 = remote.tool_tarball()

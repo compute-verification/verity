@@ -230,8 +230,9 @@ def stop_policy_node(tmp_path: Path, start: dict[str, str]):
     bin_dir, kq = tmp_path / "bin", tmp_path / "cq"
     for d in (bin_dir, kq):
         d.mkdir()
-    (bin_dir / "df").write_text('#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted"\n'
-                                'echo "/dev/vdc 100 $DF_USED $((100 - DF_USED)) x /workspace"\n')
+    (bin_dir / "df").write_text('#!/bin/sh\nu=$DF_USED; [ "$1" = -iP ] && u=${DF_IUSED:-10}\n'
+                                'echo "Filesystem 1024-blocks Used Available Capacity Mounted"\n'
+                                'echo "/dev/vdc 100 $u $((100 - u)) x /workspace"\n')
     (bin_dir / "date").write_text('#!/bin/sh\n[ "$2" = +%H%M ] && { echo "$HM"; exit 0; }\nexec /bin/date "$@"\n')
     (bin_dir / "kubectl").write_text('#!/bin/sh\ncase $1 in\n  get) cat "$KQ/$3" ;;\n'
                                      '  patch) echo "$6" | sed \'s/.*stopPolicy":"\\([A-Za-z]*\\)".*/\\1/\' > "$KQ/$3" ;;\nesac\n')
@@ -240,10 +241,11 @@ def stop_policy_node(tmp_path: Path, start: dict[str, str]):
     for q, p in start.items():
         (kq / q).write_text(p)
 
-    def run(script: str, verb: str, used: int = 70, hm: str = "1400") -> str:
-        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "KQ": str(kq), "DF_USED": str(used), "HM": hm, "VY_KUBECTL": str(bin_dir / "kubectl"),
-               "VY_DISK_STATE": str(tmp_path / "disk-held"), "VY_DISK_OUTBOX": str(tmp_path / "outbox"),
-               "VY_QUIET_STATE": str(tmp_path / "quiet-held")}
+    def run(script: str, verb: str, used: int = 70, hm: str = "1400", inodes: int = 10) -> str:
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "KQ": str(kq), "DF_USED": str(used), "DF_IUSED": str(inodes), "HM": hm,
+               "VY_KUBECTL": str(bin_dir / "kubectl"), "VY_DISK_STATE": str(tmp_path / "disk-held"),
+               "VY_DISK_OUTBOX": str(tmp_path / "outbox"), "VY_QUIET_STATE": str(tmp_path / "quiet-held"),
+               "VY_LAUNCH_HOLD": str(tmp_path / "launch-hold")}
         r = subprocess.run(["sh", str(SKY / script), verb], env=env, capture_output=True, text=True)
         assert r.returncode == 0 and r.stderr == "", r.stderr
         return r.stdout
@@ -265,15 +267,38 @@ def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(
 
     assert tick(79) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
     assert "held deployments-cpu deployments-gpu provers backfill" in tick(80)
-    assert set(policies().values()) == {"Hold"} and len(list(outbox.iterdir())) == 1
-    note = next(outbox.iterdir()).read_text()
+    assert set(policies().values()) == {"Hold"} and len(list(outbox.glob("*disk-guard-hold.md"))) == 1
+    note = next(outbox.glob("*disk-guard-hold.md")).read_text()
     assert "lane: infra" in note and "nothing was deleted" in note and "provers" in note
     (kq / "provers").write_text("None")                                   # released by hand while the disk is still full
-    assert tick(81) == "" and policies()["provers"] == "Hold" and len(list(outbox.iterdir())) == 1
+    assert tick(81) == "" and policies()["provers"] == "Hold" and len(list(outbox.glob("*disk-guard-hold.md"))) == 1
     assert tick(77) == "" and set(policies().values()) == {"Hold"}        # between the marks: nothing changes
-    assert tick(70, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
+    out = tick(70, hm="1245")                                             # the quiet hour releases its own queues; launches go
+    assert "released deployments" not in out and "launches released" in out and set(policies().values()) == {"Hold"}
     assert "released deployments-cpu deployments-gpu provers backfill" in tick(70)
-    assert policies() == {**{q: "None" for q in queues}, "circuits": "Hold"} and len(list(outbox.iterdir())) == 2
+    assert policies() == {**{q: "None" for q in queues}, "circuits": "Hold"} and len(list(outbox.glob("*disk-guard-release.md"))) == 1
+
+
+def test_the_disk_guard_holds_launches_at_the_disk_or_inode_mark_and_keeps_its_exceptions(tmp_path):
+    """/etc/vy/launch-hold: the guard writes it at 80% disk or 65% inodes, so research.remote refuses new runs on the node (lean's
+    720b started on node 1 during the 9 Oct inode hold, which lived only on Slack); it keeps a hand-added `except:` line and its first
+    `since:`, and removes the file only once the disk is under 75% and the inodes under 63%."""
+    run, _ = stop_policy_node(tmp_path, {q: "None" for q in QUEUES})
+    hold, outbox = tmp_path / "launch-hold", tmp_path / "outbox"
+    assert run("disk_guard.sh", "check", 70, inodes=64) == "" and not hold.exists()
+    assert "launches held: /workspace's inodes are 65% used" in run("disk_guard.sh", "check", 70, inodes=65)
+    first = hold.read_text()
+    assert first.startswith("reason: /workspace's inodes are 65% used (hold at 65%, release under 63%)\nsince: ") and "by: vy-disk-guard" in first
+    assert len(list(outbox.glob("*launch-hold.md"))) == 1
+    hold.write_text(first + "except: r20261009-211935-322a\n")          # infra admits one run by hand
+    assert run("disk_guard.sh", "check", 81, inodes=66) != ""           # the disk fills too: Kueue's queues are held as well
+    t = hold.read_text()
+    assert "is 81% full" in t and "inodes are 66% used" in t and "except: r20261009-211935-322a" in t
+    assert t.split("since: ")[1].split("\n")[0] == first.split("since: ")[1].split("\n")[0]
+    assert run("disk_guard.sh", "check", 77, inodes=64) == "" and hold.exists()          # between the marks: kept
+    assert "launches released" in run("disk_guard.sh", "check", 74, inodes=62) and not hold.exists()
+    assert len(list(outbox.glob("*launch-hold.md"))) == 1 and len(list(outbox.glob("*launch-release.md"))) == 1
+    assert run("disk_guard.sh", "status", 74, inodes=62).splitlines()[1] == "inodes at 62% (launch hold at 65%, release under 63%); launch hold: "
 
 
 def test_the_quiet_hour_releases_only_the_holds_it_set(tmp_path):

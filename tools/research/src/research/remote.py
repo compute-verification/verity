@@ -153,6 +153,8 @@ DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods
 DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
                                               # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
 RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only through a check slot (pods/nebius/slot_only.py); cpu-1's
+LAUNCH_HOLD_FILE = "/etc/vy/launch-hold"      # present: the node takes no new run (its disk guard, pods/nebius/sky/disk_guard.sh, writes it at
+                                              # the disk or inode mark); `launch_hold` reads it
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -1206,6 +1208,26 @@ def run_preflight(argv: list[str], tree: Path | str, env: dict[str, str]) -> dic
     return rep
 
 
+def launch_hold(path: Path, run_id: str, submitted_by: str | None) -> str | None:
+    """Why this node refuses a new run, or None: LAUNCH_HOLD_FILE's `reason:` line while it exists, unless one of its `except:` lines
+    names the run (its id, or a piece of the launcher's agent URL). A file there that can't be read or names no reason refuses too:
+    a guard never fails open."""
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        return f"this node holds new runs ({path} can't be read: {e})"
+    lines = [ln.partition(":") for ln in text.splitlines()]
+    reason = next((v.strip() for k, _, v in lines if k.strip() == "reason" and v.strip()), None)
+    exempt = [t for k, _, v in lines if k.strip() == "except" for t in v.split()]
+    if reason and any(t == run_id or (submitted_by and t in submitted_by) for t in exempt):
+        return None
+    since = next((v.strip() for k, _, v in lines if k.strip() == "since"), None)
+    return (f"this node holds new runs{f' since {since}' if since else ''}: {reason or f'{path} names no reason'}. Send it to another "
+            f"machine, or ask infra for an `except:` line in {path}")
+
+
 def launch_request(request_path: Path) -> dict[str, Any]:
     """Claim the run directory and start the detached runner (idempotent per run id); with the request's `guard`, make sure the pod's
     guard daemon runs (ensure_guard; its answer is the result's `guard`, and a guard that cannot start never fails the launch)."""
@@ -1257,6 +1279,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     remote = dict(req.get("remote") or {})
     remote["request"] = str(request_path)
     try:
+        if why := launch_hold(Path(os.environ.get("LAUNCH_HOLD_FILE") or LAUNCH_HOLD_FILE), run_id, req.get("submitted_by")):
+            raise Refused(why)
         if (marker := Path(os.environ.get("RUNS_VIA_SLOT_FILE") or RUNS_VIA_SLOT_FILE)).exists():
             from .pods.nebius import slot_only
 
