@@ -465,19 +465,19 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
   exact ⟨upv_pos hc (F.Vs _).hscope, unitLog_le (F.Vs _).hscope, _,
     params_of_check (parse_facts hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)⟩
 
-/-- **V*'s parts are at least the verifier's**: where `parts (spec vsh)` returns, it has at least as many parts as the
-verifier's `groups` at the shape (`partsOf`). V*'s `parts` (`Parts.lean:51-72`) and the verifier's `groups`
-(`RecResiduals.lean:119-139`) are the same first-fit packing of the same residuals, V*'s over the supports it computes
-(`Algebra.supports`), the verifier's over its symbolic algebra (`structureOf`); established by a lemma that `spec`'s S is
-`structureOf`'s (V*'s algebra lane), or by a verifier check that a session per part `p<j>` of `groups` is present. -/
+/-- **The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
+`k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,
+`VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:51-100`), and its own, `groups (structureOf sh) (portSizes sh)`
+(`partsOf`, `RecResiduals.lean:119-139`), and refuses when they number differently. Both are the same first-fit packing,
+V*'s over the supports it computes (`Algebra.supports`), the verifier's over its symbolic algebra (`structureOf`). -/
 def HPartCount : Prop :=
-  ∀ sp ps, VStar.Algebra.spec F.vsh = .ok sp → VStar.parts sp = .ok ps → (partsOf F.sh).size ≤ ps.size
+  ∀ sp ps, VStar.Algebra.spec F.vsh = .ok sp → VStar.parts sp = .ok ps → ps.size = (partsOf F.sh).size
 
 /-- **`HCover`**: each of the verifier's parts is one of V*'s (`HPartCount`), which is a statement (`statements_inner`). -/
 theorem hCover_of (hc : F.HPartCount) : F.HCover := by
   intro p hp
   obtain ⟨-, sp, ps, -, hsp, hps, -⟩ := statements_eq F.hstmts
-  exact statements_inner F.hstmts hsp hps (Nat.lt_of_lt_of_le hp (hc sp ps hsp hps))
+  exact statements_inner F.hstmts hsp hps (Nat.lt_of_lt_of_le hp (hc sp ps hsp hps).ge)
 
 /-- **`HSomePart`**: V*'s S has residuals (`spec_res`), so V* has a part (`parts_size`), which is a statement
 (`statements_inner`). -/
