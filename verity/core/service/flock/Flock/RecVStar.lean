@@ -12,6 +12,7 @@ up for V*'s native side, read once, since the inner circuit can be tens of GB; `
 printed.
 -/
 import Flock.HmRow
+import Flock.Registered
 import VStar.Compose
 import VStar.Stage
 
@@ -20,12 +21,13 @@ namespace RecVStar
 
 open Lean
 
-/-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), and its claims, two and one per region and
-link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`). -/
+/-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), its claims, two and one per region and
+link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), and its table's regions (`Stmt.regions`). -/
 structure Inner where
   m : Nat
   kLog : Nat
   claims : Nat
+  regions : Nat
   deriving Repr, BEq, Inhabited
 
 /-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
@@ -35,23 +37,36 @@ def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) : V Inner := do
   let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
-  pure ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size⟩
+  pure ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size, st.regions.size⟩
 
-def FORMAT : String := "verity/rec-inner/v0"
+def FORMAT : String := "verity/rec-inner/v1"
 
 def Inner.toJson (i : Inner) : Json :=
-  Json.mkObj [("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog), ("claims", Lean.toJson i.claims)]
+  Json.mkObj [("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog), ("claims", Lean.toJson i.claims),
+    ("regions", Lean.toJson i.regions)]
 
 def Inner.ofJson (j : Json) : Except String Inner := do
   if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
-  pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims"⟩
+  pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims",
+    ← j.getObjValAs? Nat "regions"⟩
 
-/-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at. -/
+/-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at,
+whose claims are two and two per region of the inner statement (an extra claim per region at each of two link points), and
+where V*'s parts (`VStar.parts (spec vsh)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
+(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`). -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
-  if (RecResiduals.shape? i.m i.kLog i.claims).isNone then
-    throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
-      "k_log at least 6, claims at least 2")
-  VStar.statements { m := i.m, kLog := i.kLog, claims := i.claims }
+  let some sh := RecResiduals.shape? i.m i.kLog i.claims
+    | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
+        "k_log at least 6, claims at least 2")
+  if i.claims != 2 + 2 * i.regions then
+    throw s!"the inner session's claims {i.claims}, not two and two per region of its {i.regions} ({2 + 2 * i.regions})"
+  let vsh : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
+  let ps ← (do VStar.parts (← VStar.Algebra.spec vsh)).mapError (s!"V*'s parts: " ++ ·)
+  let gs ← (do RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)).mapError
+    (s!"the verifier's groups: " ++ ·)
+  if ps.size != gs.size then
+    throw s!"at the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): V* has {ps.size} parts, the verifier's algebra {gs.size} groups"
+  VStar.statements vsh
 
 def isVStar (name : String) : Bool := name.startsWith "rec-open/" || name.startsWith "rec-residuals/"
 
@@ -139,19 +154,54 @@ def checkBindings (c : Circuit) (partition : Option Json) (program : Option Byte
 
 /-- `check` on the unit of `c`, parsed from the circuit file `circuitB`, over `n` instances at the inner shape `i`, then
 `checkFile` on `circuitB` under its META bindings. -/
-def checkCircuit (i : Inner) (c : Circuit) (n : Nat) (circuitB : ByteArray) : V Unit := do
+def checkCircuit (i : Inner) (c : Circuit) (n : Nat) (circuitB : ByteArray) : V VStar.Stmt := do
   let s ← check i c.unit.name n
   checkFile s (← bindingsOf c) circuitB
+  pure s
+
+/-- `m<k>`'s `k`. -/
+def mIndex (name : String) : Option Nat := if name.startsWith "m" then (name.drop 1).toString.toNat? else none
+
+/-- `rec-c<k>`'s `k`. -/
+def cIndex (value : String) : Option Nat := if value.startsWith "rec-c" then (value.drop 5).toString.toNat? else none
+
+/-- A reads file's message-round ports, those named `m<k>` or registering a `rec-c<k>`: each one's name, value and reads. -/
+def msgPorts (ports : Array Registered.Port) : List (String × String × Array (Option Nat)) :=
+  (ports.toList.filter fun p => (mIndex p.name).isSome || (cIndex p.value).isSome).map fun p => (p.name, p.value, p.reads)
+
+/-- A statement's message-round ports: a part's ports `m<k>` (`VStar/Algebra.lean:385-387`), each under `rec-c<k>` read
+at rows `0` and `1`, the two reps' (`rec_residuals.write`, `rec_residuals.py:452-454`); a level has none. -/
+def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
+  | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
+  | .recOpen .. => []
+
+def showPort (q : String × String × Array (Option Nat)) : String :=
+  s!"{q.1} under {q.2.1} reading {q.2.2.toList.map fun r => (r.map toString).getD "null"}"
+
+/-- **The verifier's reads file has the statement's message-round ports**: `msgPorts` of the `--registered` file and
+`ownPorts` of the statement hold the same ports, compared by membership (`Registered.ofJson` lists a file's ports in its
+object's key order). -/
+def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
+  let file := msgPorts registered
+  let own := ownPorts s
+  if let some q := file.find? (!own.contains ·) then
+    let theirs := match own.find? (·.1 == q.1) with
+      | some o => s!"the statement's is {showPort o}"
+      | none => s!"the statement has no port {q.1} ({own.length} message-round ports)"
+    throw s!"{s.name}: the registered reads' port {showPort q} is not the statement's: {theirs}"
+  if let some q := own.find? (!file.contains ·) then
+    throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
 
 /-- `checkBindings` against the verifier's own partition object and program, then `checkCircuit` on a statement's
-circuit and population with its own inner shape `inner`; a statement of V*'s needs all three files, and with an inner
-shape, the statement must be V*'s. -/
+circuit and population with its own inner shape `inner`, and `checkOwn` on the verifier's own registered reads; a
+statement of V*'s needs all three files, and with an inner shape, the statement must be V*'s. -/
 def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
-    (program : Option ByteArray := none) : V Unit :=
+    (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) : V Unit :=
   match inner with
   | some i => do
     discard <| checkBindings st.c partition program
-    checkCircuit i st.c (population st) circuitB
+    let s ← checkCircuit i st.c (population st) circuitB
+    if let some r := registered then checkOwn s r
   | none =>
     if isVStar st.c.unit.name then
       throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
