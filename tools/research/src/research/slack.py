@@ -123,7 +123,8 @@ WAIT_GRACE = timedelta(minutes=5)                                # the site's de
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
 ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
 ROUTE_SCHEMA = "verity/slack-route/v1"
-LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
+LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001faff]\ufe0f?)\s*)?"   # one emoji may lead (`:mega: @a`)
+                     r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
@@ -624,8 +625,8 @@ def poster(msg: dict | None, reg: dict) -> str | None:
 
 
 def lead_names(text: str, reg: dict) -> list[str]:
-    """The names a post addresses: the `@name`s and user-group mentions at its very start, before any other word, or a
-    handle written bare as the first word with a colon (`lean: ...`)."""
+    """The names a post addresses: the `@name`s and user-group mentions at its very start (after one emoji at most), before
+    any other word, or a handle written bare as the first word with a colon (`lean: ...`)."""
     m = LEAD_RE.match(text or "")
     if not m and (bare := BARE_LEAD_RE.match(text or "")) and any(h["handle"] == bare[1] for h in reg["handles"]):
         return [bare[1]]
@@ -750,8 +751,8 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         out = lead_names(text, reg)
         if not reply and is_announcement(msg):
             out += header_names(text, reg) or [h["handle"] for h in reg["handles"]]
-        if reply and out:
-            pass                                                     # a reply that names someone is for them alone
+        if reply and set(out) - {author}:
+            pass                                                     # a reply that names someone else is for them alone
         elif reply and by and by != author:
             out.append(by)
         elif reply and by:
