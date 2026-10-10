@@ -1,4 +1,4 @@
-import VStar.Compose
+import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.Soundness.ExecCircuit
 
 /-!
@@ -544,4 +544,446 @@ theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × B
   simp only [Circuit.unit, c0, h0, e]
   exact hp
 
+/-! ## Lines without a newline -/
+
+/-- `s` holds no `\n`. -/
+def NoNl (s : String) : Prop := '\n' ∉ s.toList
+
+theorem noNl_append {a b : String} : NoNl (a ++ b) ↔ NoNl a ∧ NoNl b := by
+  simp [NoNl, String.toList_append]
+
+theorem noNl_of_noWs {s : String} (h : NoWs s) : NoNl s := fun hm => absurd (h _ hm) (by decide)
+
+theorem noNl_intercalate {sep : String} (hsep : NoNl sep) :
+    ∀ l : List String, (∀ x ∈ l, NoNl x) → NoNl (sep.intercalate l)
+  | [], _ => by simp [NoNl]
+  | [a], h => by simpa using h a (by simp)
+  | a :: b :: l, h => by
+    rw [String.intercalate_cons_cons]
+    refine noNl_append.2 ⟨noNl_append.2 ⟨h a (by simp), hsep⟩, noNl_intercalate hsep (b :: l) fun x hx => h x ?_⟩
+    exact List.mem_cons_of_mem _ hx
+
+theorem nat_noNl (n : ℕ) : NoNl (toString n) := by
+  intro h
+  have : '\n'.isDigit = true := Nat.isDigit_of_mem_toDigits (b := 10) (n := n) (by decide) (by decide) (by
+    rw [← Nat.toList_repr]; exact h)
+  exact absurd this (by decide)
+
+theorem int_noNl (i : ℤ) : NoNl (toString i) := by
+  cases i with
+  | ofNat n => exact nat_noNl n
+  | negSucc n =>
+    show NoNl ("-" ++ toString (n + 1))
+    exact noNl_append.2 ⟨by simp [NoNl], nat_noNl _⟩
+
+theorem hex_ne : ∀ x, x < 16 → (if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)) ≠ '\n' := by
+  decide
+
+theorem hex4_noNl (n : ℕ) : NoNl (VStar.hex4 n) := by
+  unfold VStar.hex4
+  simp only [NoNl, String.toList_ofList, List.mem_cons, List.not_mem_nil, or_false, not_or]
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> exact fun h => hex_ne _ (Nat.mod_lt _ (by decide)) h.symm
+
+theorem foldl_noNl {β : Type} (g : String → β → String) (hg : ∀ o c, NoNl o → NoNl (g o c)) :
+    ∀ (l : List β) o, NoNl o → NoNl (l.foldl g o)
+  | [], _, ho => ho
+  | c :: l, o, ho => foldl_noNl g hg l _ (hg o c ho)
+
+set_option maxRecDepth 100000 in
+/-- **`pyStr` escapes every newline** (`PyJson.lean:20-34`). -/
+theorem pyStr_noNl (s : String) : NoNl (VStar.pyStr s) := by
+  unfold VStar.pyStr
+  simp only [Id.run]
+  rw [List.forIn_pure_yield_eq_foldl]
+  refine noNl_append.2 ⟨foldl_noNl _ ?_ _ _ (by simp [NoNl]), by simp [NoNl]⟩
+  intro o c ho
+  have hx := hex4_noNl
+  simp only [NoNl] at hx ho ⊢
+  split <;> (repeat' split) <;> simp_all [String.toList_append]
+  all_goals exact fun h => by subst h; contradiction
+
+/-- **`pyDumps` writes one line** (`PyJson.lean:37-51`): strings through `pyStr`, the rest digits and punctuation. -/
+theorem pyDumpsAt_noNl : ∀ (k : ℕ) (j : Lean.Json) (d : String), VStar.pyDumpsAt k j = .ok d → NoNl d
+  | 0, _, _, h => by cases h
+  | k + 1, .null, d, h => by cases h; simp [NoNl]
+  | k + 1, .bool b, d, h => by cases h; cases b <;> simp [NoNl]
+  | k + 1, .num n, d, h => by
+    unfold VStar.pyDumpsAt at h
+    split at h
+    · cases h; exact int_noNl _
+    · cases h
+  | k + 1, .str s, d, h => by cases h; exact pyStr_noNl s
+  | k + 1, .arr a, d, h => by
+    unfold VStar.pyDumpsAt at h
+    obtain ⟨parts, hp, h⟩ := except_bind_ok h
+    cases h
+    refine noNl_append.2 ⟨noNl_append.2 ⟨by simp [NoNl], noNl_intercalate (by simp [NoNl]) _ fun x hx => ?_⟩,
+      by simp [NoNl]⟩
+    obtain ⟨y, -, hy⟩ := array_mapM_ok hp x hx
+    exact pyDumpsAt_noNl k y x hy
+  | k + 1, .obj kvs, d, h => by
+    unfold VStar.pyDumpsAt at h
+    obtain ⟨parts, hp, h⟩ := except_bind_ok h
+    cases h
+    refine noNl_append.2 ⟨noNl_append.2 ⟨by simp [NoNl], noNl_intercalate (by simp [NoNl]) _ fun x hx => ?_⟩,
+      by simp [NoNl]⟩
+    obtain ⟨⟨key, v⟩, -, hy⟩ := array_mapM_ok hp x hx
+    obtain ⟨e, he, hy⟩ := except_bind_ok hy
+    cases hy
+    exact noNl_append.2 ⟨noNl_append.2 ⟨pyStr_noNl key, by simp [NoNl]⟩, pyDumpsAt_noNl k v e he⟩
+
+theorem pyDumps_noNl {j : Lean.Json} {d : String} (h : VStar.pyDumps j = .ok d) : NoNl d :=
+  pyDumpsAt_noNl 64 j d h
+
+theorem noWs_append {a b : String} : NoWs (a ++ b) ↔ NoWs a ∧ NoWs b := by
+  simp only [NoWs, String.toList_append, List.mem_append]
+  exact ⟨fun h => ⟨fun c hc => h c (Or.inl hc), fun c hc => h c (Or.inr hc)⟩,
+    fun h c hc => hc.elim (h.1 c) (h.2 c)⟩
+
+theorem digit_noWs {c : Char} (h : c.isDigit = true) : c.isWhitespace = false := by
+  simp only [Char.isWhitespace, Bool.or_eq_false_iff, decide_eq_false_iff_not]
+  refine ⟨⟨⟨?_, ?_⟩, ?_⟩, ?_⟩ <;> (rintro rfl; exact absurd h (by decide))
+
+theorem nat_noWs (n : ℕ) : NoWs (toString n) := fun _ hc =>
+  digit_noWs (Nat.isDigit_of_mem_toDigits (b := 10) (n := n) (by decide) (by decide) (by
+    rw [← Nat.toList_repr]; exact hc))
+
+theorem append_ne_empty {a b : String} (ha : a ≠ "") : a ++ b ≠ "" := by
+  intro h
+  have := congrArg String.toList h
+  simp only [String.toList_append, String.toList_empty, List.append_eq_nil_iff] at this
+  exact ha (String.toList_eq_nil_iff.1 this.1)
+
+/-- **An opening statement's unit name is one word.** -/
+theorem recOpen_name (L H : ℕ) : NoWs (Flock.RecOpen.unitName L H) ∧ Flock.RecOpen.unitName L H ≠ "" := by
+  show NoWs ("rec-open/l" ++ toString L ++ "-h" ++ toString H) ∧ "rec-open/l" ++ toString L ++ "-h" ++ toString H ≠ ""
+  refine ⟨noWs_append.2 ⟨noWs_append.2 ⟨noWs_append.2 ⟨by simp [NoWs], nat_noWs _⟩, by simp [NoWs]⟩, nat_noWs _⟩,
+    append_ne_empty (append_ne_empty (append_ne_empty (by decide)))⟩
+
+/-- **A part statement's unit name is one word.** -/
+theorem residuals_name (m k c j : ℕ) :
+    NoWs (Flock.RecResiduals.unitName m k c j) ∧ Flock.RecResiduals.unitName m k c j ≠ "" := by
+  show NoWs ("rec-residuals/m" ++ toString m ++ "-k" ++ toString k ++ "-c" ++ toString c ++ "-p" ++ toString j) ∧
+    "rec-residuals/m" ++ toString m ++ "-k" ++ toString k ++ "-c" ++ toString c ++ "-p" ++ toString j ≠ ""
+  simp only [noWs_append, nat_noWs, and_true]
+  refine ⟨⟨⟨⟨by simp [NoWs], by simp [NoWs]⟩, by simp [NoWs]⟩, by simp [NoWs]⟩,
+    append_ne_empty (append_ne_empty (append_ne_empty (append_ne_empty (append_ne_empty (append_ne_empty
+      (append_ne_empty (by decide)))))))⟩
+
+/-! ## The emitted text -/
+
+/-- A `StateM String` program that only appends to its state. -/
+def Ext {α : Type} (p : StateM String α) : Prop := ∀ s, ∃ x, (p.run s).2 = s ++ x
+
+/-- A `StateM String` program that appends `w` and then more. -/
+def Pre {α : Type} (w : String) (p : StateM String α) : Prop := ∀ s, ∃ x, (p.run s).2 = s ++ w ++ x
+
+theorem ext_put (x : String) : Ext (modify (fun s : String => s ++ x)) := fun _ => ⟨x, rfl⟩
+
+theorem ext_pure {α : Type} (a : α) : Ext (pure a : StateM String α) := fun _ => ⟨"", by simp; rfl⟩
+
+theorem ext_bind {α β : Type} {p : StateM String α} {f : α → StateM String β} (hp : Ext p) (hf : ∀ a, Ext (f a)) :
+    Ext (p >>= f) := by
+  intro s
+  obtain ⟨x, hx⟩ := hp s
+  obtain ⟨y, hy⟩ := hf (p.run s).1 (p.run s).2
+  refine ⟨x ++ y, ?_⟩
+  rw [StateT.run_bind]
+  show (StateT.run (f (p.run s).1) (p.run s).2).2 = _
+  rw [hy, hx, String.append_assoc]
+
+theorem ext_forIn {β σ : Type} (l : List β) (f : β → σ → StateM String (ForInStep σ)) (hf : ∀ b c, Ext (f b c)) :
+    ∀ init, Ext (forIn l init f) := by
+  induction l with
+  | nil => intro init; exact ext_pure _
+  | cons b l ih =>
+    intro init
+    rw [List.forIn_cons]
+    refine ext_bind (hf b init) fun r => ?_
+    cases r with
+    | done c => exact ext_pure _
+    | yield c => exact ih c
+
+theorem ext_emitNet (name : String) (l : Flock.HmNets.Laid) (lv : Option String) :
+    Ext (VStar.emitNet (m := StateM String) (fun x => modify (· ++ x)) name l lv) := by
+  unfold VStar.emitNet
+  refine ext_bind (ext_put _) fun _ => ext_bind ?_ fun _ => ?_
+  · rw [Std.Legacy.Range.forIn_eq_forIn_range']
+    exact ext_forIn _ _ (fun _ _ => ext_bind (ext_put _) fun _ => ext_pure _) _
+  · split
+    · exact ext_put _
+    · exact ext_pure _
+
+theorem pre_put {β : Type} (x w : String) {f : Unit → StateM String β} (hf : ∀ a, Pre w (f a)) :
+    Pre (x ++ w) ((modify (· ++ x) : StateM String Unit) >>= f) := by
+  intro s
+  obtain ⟨y, hy⟩ := hf () (s ++ x)
+  exact ⟨y, by show (StateT.run (f ()) (s ++ x)).2 = _; rw [hy]; simp only [String.append_assoc]⟩
+
+theorem pre_bind {α β : Type} (w : String) {p : StateM String α} {f : α → StateM String β} (hp : Pre w p)
+    (hf : ∀ a, Ext (f a)) : Pre w (p >>= f) := by
+  intro s
+  obtain ⟨x, hx⟩ := hp s
+  obtain ⟨y, hy⟩ := hf (p.run s).1 (p.run s).2
+  refine ⟨x ++ y, ?_⟩
+  rw [StateT.run_bind]
+  show (StateT.run (f (p.run s).1) (p.run s).2).2 = _
+  rw [hy, hx]; simp only [String.append_assoc]
+
+theorem pre_ext {α : Type} {p : StateM String α} (hp : Ext p) : Pre "" p := fun s => by
+  obtain ⟨x, hx⟩ := hp s
+  exact ⟨x, by rw [hx, String.append_empty]⟩
+
+/-- **The sections start with the unit's**: `CIRCUIT unit <lines>`, then the unit's header line
+(`Compose.lean:233-237`, `Unit.lean:94-100`). -/
+theorem sections_text (u : VStar.UnitC) (l : Flock.HmNets.Laid) :
+    Pre (("CIRCUIT unit " ++ toString (VStar.netLines l) ++ "\n") ++ (VStar.header u.name l ++ "\n"))
+      (VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l) := by
+  unfold VStar.emitSections
+  rw [List.forIn_cons]
+  refine pre_bind _ (pre_bind _ ?_ fun r => ?_) fun _ => ext_pure _
+  · dsimp only
+    refine pre_put _ _ fun _ => pre_bind _ ?_ fun _ => ext_pure _
+    rw [show VStar.header u.name l ++ "\n" = (VStar.header u.name l ++ "\n") ++ "" from (String.append_empty).symm]
+    unfold VStar.emitNet
+    refine pre_put _ _ fun _ => pre_ext (ext_bind ?_ fun _ => ?_)
+    · rw [Std.Legacy.Range.forIn_eq_forIn_range']
+      exact ext_forIn _ _ (fun _ _ => ext_bind (ext_put _) fun _ => ext_pure _) _
+    · exact ext_pure _
+  · cases r with
+    | done c => exact ext_pure _
+    | yield c =>
+      refine ext_forIn _ _ (fun a _ => ?_) _
+      obtain ⟨nm, net, lay⟩ := a
+      exact ext_bind (ext_put _) fun _ => ext_bind (ext_emitNet _ _ _) fun _ => ext_pure _
+
+/-- **The file's first two lines** (`Compose.lean:187-230`): `flock-circuit <unit>` and `META ` with `pyDumps`'s text. -/
+theorem metaHead_ok {u : VStar.UnitC} {l : Flock.HmNets.Laid} {sub : VStar.Sub} {b : VStar.Bindings}
+    {sha head : String} (h : VStar.metaHead u l sub b sha = .ok head) :
+    ∃ j d, VStar.pyDumps j = .ok d ∧ head = s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n" := by
+  unfold VStar.metaHead at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | split at h | (injection h with h; subst h))
+  all_goals first | exact absurd h (by simp) | exact ⟨_, _, ‹_›, rfl⟩
+
+theorem emitCircuit_ok {m : Type → Type} [Monad m] {put : String → m Unit} {u : VStar.UnitC}
+    {l : Flock.HmNets.Laid} {sub : VStar.Sub} {b : VStar.Bindings} {e : m Unit}
+    (h : VStar.emitCircuit put u l sub b = .ok e) :
+    ∃ sha head, VStar.metaHead u l sub b sha = .ok head ∧ e = (do put head; VStar.emitSections put u l) := by
+  unfold VStar.emitCircuit at h
+  obtain ⟨_, -, h⟩ := except_bind_ok h
+  obtain ⟨head, hh, h⟩ := except_bind_ok h
+  cases h
+  exact ⟨_, _, hh, rfl⟩
+
+theorem header_eq (name : String) (l : Flock.HmNets.Laid) :
+    ∃ rest, VStar.header name l = VStar.FORMAT ++ " " ++ name ++ " " ++ rest := by
+  unfold VStar.header
+  simp only [List.cons_append]
+  rw [String.intercalate_cons_cons, String.intercalate_cons_cons]
+  exact ⟨_, by simp only [String.append_assoc]; exact rfl⟩
+
+theorem header_noNl (name : String) (l : Flock.HmNets.Laid) (h : NoNl name) : NoNl (VStar.header name l) := by
+  unfold VStar.header
+  refine noNl_intercalate (by simp [NoNl]) _ fun x hx => ?_
+  simp only [List.cons_append, List.nil_append, List.mem_cons, List.mem_append, List.mem_flatMap, List.mem_map] at hx
+  rcases hx with rfl | rfl | rfl | rfl | rfl | ⟨g, -, n, -, rfl⟩ | rfl | ⟨g, -, n, -, rfl⟩
+  · simp [NoNl, VStar.FORMAT]
+  · exact h
+  all_goals exact nat_noNl _
+
+theorem recOpenUnit_name {L H : ℕ} {u : VStar.UnitC} (h : VStar.recOpenUnit L H = .ok u) :
+    u.name = Flock.RecOpen.unitName L H := by
+  unfold VStar.recOpenUnit at h
+  obtain ⟨_, -, h⟩ := except_bind_ok h
+  cases h
+  rfl
+
+theorem innerUnit_name {S : VStar.RepS} {nm : String} {u : VStar.UnitC} (h : VStar.innerUnit S nm = .ok u) :
+    u.name = nm := by
+  unfold VStar.innerUnit at h
+  obtain ⟨_, -, h⟩ := except_bind_ok h
+  obtain ⟨_, -, h⟩ := except_bind_ok h
+  cases h
+  rfl
+
+/-! ## The split lines -/
+
+theorem splitOn_line (a rest : String) (ha : NoNl a) : (a ++ "\n" ++ rest).splitOn "\n" = a :: rest.splitOn "\n" := by
+  rw [splitOn_nl, splitOn_nl, String.toList_append, String.toList_append, show "\n".toList = ['\n'] by decide,
+    List.append_assoc, List.singleton_append, List.splitOn_eq_splitOnP,
+    List.splitOnP_append_cons_of_forall_mem (fun x hx => by
+      simp only [beq_eq_false_iff_ne, ne_eq]; rintro rfl; exact ha hx) '\n' rfl, List.map_cons,
+    String.ofList_toList, List.splitOn_eq_splitOnP]
+
+theorem splitOn_ne_nil (s : String) : s.splitOn "\n" ≠ [] := by
+  rw [splitOn_nl]; simp [List.splitOn_ne_nil '\n' s.toList]
+
+theorem linesOf_four {text a b c d : String} {r : List String} (h : text.splitOn "\n" = a :: b :: c :: d :: r)
+    (hr : r ≠ []) : (linesOf text).getD 2 "" = c ∧ (linesOf text).getD 3 "" = d ∧ 4 ≤ (linesOf text).size := by
+  unfold linesOf
+  have hs : 5 ≤ (text.splitOn "\n").toArray.size := by
+    simp only [h, List.size_toArray, List.length_cons]
+    cases r with
+    | nil => exact absurd rfl hr
+    | cons _ _ => simp
+  have h2 : (text.splitOn "\n").toArray.getD 2 "" = c := by simp [h]
+  have h3 : (text.splitOn "\n").toArray.getD 3 "" = d := by simp [h]
+  dsimp only
+  split
+  · refine ⟨?_, ?_, by rw [Array.size_pop]; omega⟩
+    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, if_pos (by omega), ← Array.getD_eq_getD_getElem?, h2]
+    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, if_pos (by omega), ← Array.getD_eq_getD_getElem?, h3]
+  · exact ⟨h2, h3, by omega⟩
+
+/-! ## The parsed unit's name -/
+
+theorem ofRows_name {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)} {n : Net}
+    (h : Net.ofRows name useful constPos ig og ra rb = .ok n) : n.name = name := by
+  unfold Net.ofRows at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | split at h | (injection h with h; subst h))
+  all_goals first | exact absurd h (by simp) | rfl
+
+/-- **`Net.parse`'s name is its header line's second token** (`Net.lean:200-204`, `ofRows`). -/
+theorem parse_name {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
+    (tokens (lines.getD 0 ""))[0]? = some "flock-ir-unit/v2" ∧ net.name = (tokens (lines.getD 0 "")).getD 1 "" := by
+  unfold Net.parse at h
+  simp only at h
+  by_cases h0 : ((tokens (lines.getD 0 ""))[0]? != some "flock-ir-unit/v2") = true
+  · rw [ite_eq_left_of_eq_true _ _ (eq_true h0)] at h; cases h
+  rw [ite_eq_right_of_eq_false _ _ (eq_false h0)] at h
+  refine ⟨by simpa using h0, ?_⟩
+  obtain ⟨useful, -, h⟩ := except_bind_ok h
+  obtain ⟨constPos, -, h⟩ := except_bind_ok h
+  obtain ⟨ig, -, h⟩ := except_bind_ok h
+  obtain ⟨og, -, h⟩ := except_bind_ok h
+  replace h := ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok h))))
+  obtain ⟨s, -, h⟩ := except_bind_ok h
+  by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
+  · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
+    rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+    · rw [hj] at h; exact absurd h throw_bind_ne
+    · rw [hj] at h
+      exact ofRows_name (ite_throw_ok (ite_throw_ok h))
+  · rw [ite_eq_right_of_eq_false _ _ (eq_false hL)] at h
+    exact ofRows_name (ite_throw_ok (ite_throw_ok h))
+
+/-- **The parse of a statement's circuit file names its unit as the statement's unit**: `circuitFile` writes
+`flock-circuit <unit>`, the one-line `META`, `CIRCUIT unit <n>` and the unit's header `flock-ir-unit/v2 <unit> …`
+(`Family.lean:51`, `Compose.lean:187-244`, `Unit.lean:80-100`), and `HmRow.parse` takes the first section, `unit`, as
+the circuit's unit (`parse_unit`), named by its header's second token (`parse_name`). The name is one word. -/
+theorem file_unitName {s : VStar.Stmt} {b : VStar.Bindings} {file : ByteArray}
+    (hf : FlockVBridge.Family.circuitFile s b = .ok file) {tags : Tags} {tables : List (String × ByteArray)}
+    {c : Circuit} (hp : HmRow.parse tags file tables = .ok c)
+    (hw : ∀ u, s.unit = .ok u → NoWs u.name ∧ u.name ≠ "") : ∃ u, s.unit = .ok u ∧ c.unit.name = u.name := by
+  unfold FlockVBridge.Family.circuitFile at hf
+  obtain ⟨u, hu, hf⟩ := except_bind_ok hf
+  obtain ⟨l, -, hf⟩ := except_bind_ok hf
+  obtain ⟨e, he, hf⟩ := except_bind_ok hf
+  cases hf
+  refine ⟨u, hu, ?_⟩
+  obtain ⟨hws, hne⟩ := hw u hu
+  obtain ⟨sha, head, hh, he'⟩ := emitCircuit_ok he
+  obtain ⟨j, d, hd, rfl⟩ := metaHead_ok hh
+  have hpre : Pre ((s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n") ++
+      (("CIRCUIT unit " ++ toString (VStar.netLines l) ++ "\n") ++ (VStar.header u.name l ++ "\n"))) e := by
+    rw [he']
+    exact pre_put _ _ (fun _ => sections_text u l)
+  obtain ⟨tl, hX⟩ := hpre ""
+  have hp' : HmRow.parse tags (StateT.run e "").2.toUTF8 tables = .ok c := hp
+  rw [hX] at hp'
+  have key : ∀ text : String,
+      text = "" ++ ((s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n") ++
+        (("CIRCUIT unit " ++ toString (VStar.netLines l) ++ "\n") ++ (VStar.header u.name l ++ "\n"))) ++ tl →
+      HmRow.parse tags text.toUTF8 tables = .ok c → c.unit.name = u.name := by
+    intro text ht hp
+    have e1 : text = ("flock-circuit " ++ u.name) ++ "\n" ++ (("META " ++ d) ++ "\n" ++
+        (("CIRCUIT unit " ++ toString (VStar.netLines l)) ++ "\n" ++ (VStar.header u.name l ++ "\n" ++ tl))) := by
+      rw [ht, show s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " = "flock-circuit " ++ u.name ++ "\n" ++ "META " from by
+        show "flock-circuit" ++ " " ++ u.name ++ "\nMETA " = _
+        rw [show ("flock-circuit" : String) ++ " " = "flock-circuit " by decide,
+          show ("\nMETA " : String) = "\n" ++ "META " by decide]
+        simp only [String.append_assoc]]
+      simp only [String.empty_append, String.append_assoc]
+    have hsplit : text.splitOn "\n" = ("flock-circuit " ++ u.name) :: ("META " ++ d) ::
+        ("CIRCUIT unit " ++ toString (VStar.netLines l)) :: VStar.header u.name l :: tl.splitOn "\n" := by
+      rw [e1, splitOn_line _ _ (noNl_append.2 ⟨by simp [NoNl], noNl_of_noWs hws⟩),
+        splitOn_line _ _ (noNl_append.2 ⟨by simp [NoNl], pyDumps_noNl hd⟩),
+        splitOn_line _ _ (noNl_append.2 ⟨by simp [NoNl], nat_noNl _⟩),
+        splitOn_line _ _ (header_noNl _ _ (noNl_of_noWs hws))]
+    obtain ⟨h2, h3, -⟩ := linesOf_four hsplit (splitOn_ne_nil tl)
+    have hu2 : (tokens ((linesOf text).getD 2 "")).getD 1 "" = "unit" := by
+      rw [h2, show ("CIRCUIT unit " : String) = "CIRCUIT" ++ " " ++ "unit" ++ " " by decide]
+      exact tokens_second _ _ _ (by decide) (by decide) (by simp [NoWs]) (by simp [NoWs])
+    obtain ⟨n, hn, hpn⟩ := parse_unit hp (fromUTF8?_toUTF8 text) hu2
+    obtain ⟨hfmt, hname⟩ := parse_name hpn
+    rw [hname]
+    cases n with
+    | zero =>
+      have : ((linesOf text).extract 3 (3 + 0)).getD 0 "" = "" := by
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_extract, if_neg (by omega)]; rfl
+      rw [this, tokens_eq] at hfmt
+      simp at hfmt
+    | succ n =>
+      have : ((linesOf text).extract 3 (3 + (n + 1))).getD 0 "" = (linesOf text).getD 3 "" := by
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_extract, if_pos (by omega), ← Array.getD_eq_getD_getElem?]
+      rw [this, h3]
+      obtain ⟨rest, hr⟩ := header_eq u.name l
+      rw [hr]
+      exact tokens_second _ _ _ (by decide) hne (by simp [NoWs, VStar.FORMAT]) hws
+  exact key _ rfl hp'
+
 end FlockVBridge.Names
+
+namespace FlockVBridge.Family
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
+open FlockVBridge.Names
+
+section family
+
+variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
+variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+
+namespace VStarFamily
+
+variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
+
+/-- **`HUnitName` from the circuit file's round trip** (`file_unitName`): a part statement `.inner p nm pt` has unit
+`innerUnit pt.S nm` (`Stage.lean:44-47`), named `nm` (`InnerRepCheck.lean:38-52`), which is
+`RecResiduals.unitName …`, one word (`statements_name`). At any history and registration the session parses its circuit
+from that file (`parse_circuitFile`). -/
+theorem hUnitName_of (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.HUnitName := by
+  obtain ⟨⟨R, ω, R₂⟩⟩ := hne
+  intro j p nm pt hj
+  have hp := F.parse_circuitFile R ω [] R₂ j (F.hfile R ω [] R₂ j)
+  have hnm := statements_name F.hstmts j hj
+  obtain ⟨u, hu, hn⟩ := file_unitName (F.hfile R ω [] R₂ j) hp fun u hu => by
+    rw [hj] at hu
+    rw [innerUnit_name hu, hnm]
+    exact residuals_name _ _ _ _
+  rw [hj] at hu
+  rw [hn, innerUnit_name hu]
+
+/-- **`HOpenName` from the circuit file's round trip** (`file_unitName`): an opening statement `.recOpen ℓ LANES H m`
+has unit `recOpenUnit LANES H` (`Stage.lean:44-46`), named `RecOpen.unitName LANES H` (`Unit.lean:36-46`), one word. -/
+theorem hOpenName_of (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.HOpenName := by
+  obtain ⟨⟨R, ω, R₂⟩⟩ := hne
+  intro j ℓ LANES H m hj
+  have hp := F.parse_circuitFile R ω [] R₂ j (F.hfile R ω [] R₂ j)
+  obtain ⟨u, hu, hn⟩ := file_unitName (F.hfile R ω [] R₂ j) hp fun u hu => by
+    rw [hj] at hu
+    rw [recOpenUnit_name hu]
+    exact recOpen_name _ _
+  rw [hj] at hu
+  rw [hn, recOpenUnit_name hu]
+
+end VStarFamily
+
+end family
+
+end FlockVBridge.Family
