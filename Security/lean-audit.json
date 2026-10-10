@@ -90,6 +90,9 @@
    "owner": "@compute-accounting",
    "digest": "eb91440586d6aa9ea8e63cd68c85bd3a2b323e91e039bca6aa8ecaaa710e53fc"
   },
+  "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.NCP.Assumptions.TTNCP": {
    "owner": "@compute-accounting",
    "digest": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
@@ -2441,6 +2444,9 @@
    "assumptions": [],
    "type_hash": "a7362ea74a7037fe8af6f390997f4cf697055cf410f55bde27c35526c4b2b7c4"
   },
+  "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.NCP.GameProofs.gammaFromTTNCP": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.NCP.GameProofs.gammaFromTTNCP : Pouw.NCP.GamePinned.GammaFromTTNCP"],
@@ -3574,7 +3580,8 @@
    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check."
+   "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check.",
+   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": "frozen (conjecture,no-function): It is a consequence of the named open conjecture DistinctLiveH1T, a lower bound on the cost of every MH100w program (draft semantics) that computes H-1T's credited words, not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -3584,6 +3591,11 @@
    "Nci.Assumptions.PartialSumsIncompressible": {
     "status": "falsified",
     "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
+   },
+   "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
+    "status": "open",
+    "test": "verity/core/protocols/pouw/tests/test_h1t_conjectures.py::test_distinct_live_h1t",
+    "why": "On every legal unit, H-1T's credited words are pairwise distinct functions of the unit's salt and none is free; open, with no counterexample on the legal units its test enumerates or samples."
    }
   }
  },
