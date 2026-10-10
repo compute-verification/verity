@@ -62,6 +62,8 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         assert all(w % CS.BLOCK_WORDS == 0 for w in st["ports"])          # the output row: one per instance, never shared
         if (s, cl) == gather:
             assert st["shared_rows"] == {"p0": 1, "p1": 8, "out": 8}        # one table row shared by every instance; a row per index
+            (template,) = json.loads(text.split("\n", 2)[1][5:])["program_digests"]
+            assert template.startswith("unit-class/")                       # a primitive has no Program, so the class names itself
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]

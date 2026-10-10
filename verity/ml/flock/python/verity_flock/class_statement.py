@@ -54,6 +54,7 @@ from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
+from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
 
 from . import circuit as FC
@@ -601,7 +602,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS).
     ``seg_ports``, ``seg_out_rows`` and ``v2_out_rows`` are `circuit.compose`'s, over the shims' port names (``p0``, …, ``out``).
     Unwired, a class whose unit is one whole activation of its flat Definition names that Definition as the circuit's template
-    (META ``program_digests``, `_shims`); a class of part of an activation names itself.
+    (META ``program_digests``, `_shims`); a class of part of an activation, or of a primitive (which has no Program), names
+    itself.
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
     template as the unit class's ``definition`` (the class names itself in ``program_digests``), and every read of another
@@ -662,7 +664,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                   for i, (o, s) in enumerate(zip(origin, spans))]
     links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
-    whole = wiring is None and uc.computing == act.graph.n
+    whole = wiring is None and uc.computing == act.graph.n and not isinstance(act.fn, PrimitiveDefinition)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +
                        (b"/links:" + json.dumps(links).encode() if links else b""), len(groups), act.fn if whole else None)
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
