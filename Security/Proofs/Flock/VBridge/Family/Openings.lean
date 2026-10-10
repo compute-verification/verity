@@ -673,8 +673,8 @@ theorem hAccRows_of (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).
     rw [hp]
     rfl
   obtain ⟨hreg, hio⟩ := hin R ω t R₂ τ o h r ℓ hℓ j hj
-  exact ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h (F.sessO ℓ)).2.2 hup hreg (hio hup) i hi,
-    accOut_of_regOut (F.zs R ω t R₂ (F.sessO ℓ)) (h (F.sessO ℓ)).2 hup hp' (hout R ω t R₂ τ o h r ℓ hℓ j hj hup) i hi⟩
+  exact ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2 hup hreg (hio hup) i hi,
+    accOut_of_regOut (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2 hup hp' (hout R ω t R₂ τ o h r ℓ hℓ j hj hup) i hi⟩
 
 /-- **`HEnds` from the algebra unit's registered bits** (`readsEnds_of_regBits`): at every accepted outer proof, rep
 `r`'s algebra unit `uA r` of session `sA r` holds bit `b` of the rep's `acc0 i` and `acc1 i` at the columns
@@ -715,12 +715,13 @@ theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
     (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
     (hdec : F.HDecodes) (hfull : VFullR (ℐ).r F.Sk) :
     Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
-  ⟨fun R ω t R₂ τ o h =>
+  ⟨fun R ω t R₂ hc τ o h₀ =>
+    have h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc⟩
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).accepts regs (F.x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
         obtain ⟨⟨v, info, kappa, hv, hvs⟩, hw, hc⟩ := hsh R ω t R₂ τ o h r
         exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decodeL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
-            (fun s => (h s).2) hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hv hw hc hvs hst.2 F.sess
+            (fun s => (h.1 s).2) hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hv hw hc hvs hst.2 F.sess
             (fun p => F.un p r) (fun p => cp p r) (hres R ω t R₂ τ o h r),
           FlockVBridge.AccChain.accHolds_of_units
             (unitSums_of_opensAtL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) F.sh _ _ F.sessO

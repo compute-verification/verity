@@ -40,9 +40,9 @@ registration `R₂` of the outer proof, session `j` is `zs R ω t R₂ j`, whose
 --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the registrant's record of the registered
 reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's own). For every prover `σ` of the
 recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`), `cr/sha-512` for the fork finders of each round
-(`hCR`) and the inner protocol's soundness at `ε_in`:
+(`hCR`) and for the registrant records' finder (`regFinder`, at `qX`), and the inner protocol's soundness at `ε_in`:
 $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the hidden statement holds}] \le
-  \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + \sum_{i<r}\Big(\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
+  \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + q_X^2/2^{513} + \sum_{i<r}\Big(\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
   \big(\textstyle\sum_{pos}\kappa_i(pos)\big)\sqrt{q_i^2/2^{513}}\Big) + \varepsilon_{in},$$
 the expectations over the draw, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumV`), each
 term at the registration `R₂` the prover sends and the strategy it names for its session. A session's outer bound
@@ -50,7 +50,9 @@ term at the registration `R₂` the prover sends and the strategy it names for i
 finders satisfy `cr/sha-512` at budgets `qF, qS, qW, qR` (`ZkOuter.CR`), its law's miss at one bad unit plus
 `zk_session_soundR`'s and `zk_session_regValsR`'s terms at the drawn units and `qR²/2^513` for its registered paths
 (`ZkOuter.bound`), and `1` elsewhere; its stage slack (`ZkOuter.slackCR`) is likewise `ZkOuter.stageSlack` or `1`. The
-weights `κ_i = weightS` and `√(q²/2^513)` are the binding of round `i`'s commitments (`stage_bind`). -/
+weights `κ_i = weightS` and `√(q²/2^513)` are the binding of round `i`'s commitments (`stage_bind`); `qX²/2^513`, once
+per audit, prices two sessions' registrant records clashing (`RegColl`, `prob_regColl_le`), off which V*'s bridge
+reads. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: their strata and A3
@@ -72,7 +74,8 @@ def RecursiveSound : Prop :=
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
-    -- cr/sha-512 for the fork finders of each round
+    -- cr/sha-512 for the registrant records' finder, and for the fork finders of each round
+    (qX : ℝ) (_hX : (regFinder zs dg N σ).CR H512 qX)
     (q : ℕ → ℝ)
     (_hCR : ∀ i < I.r, ∀ ω pos,
       (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
@@ -82,6 +85,7 @@ def RecursiveSound : Prop :=
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
           (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+        ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +

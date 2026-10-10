@@ -130,17 +130,18 @@ theorem vbridge_of_reps
       (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).Runs)
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFullR (ℐ).r Sk) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ τ o h =>
+  ⟨fun R ω t R₂ hc τ o h₀ =>
+    have h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc⟩
     (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).accepts regs (x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
         obtain ⟨v, info, kappa, hv, hvs⟩ := hvr R ω t R₂ τ o h r
         obtain ⟨hw, hc⟩ := hsz R ω t R₂ τ o h r
         exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decode (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ)
-            (fun s => (h s).2) hS (Flock.RecAlgebra.structureOf_bitsOk hS) hv hw hc hvs hg sess (fun p => un p r)
+            (fun s => (h.1 s).2) hS (Flock.RecAlgebra.structureOf_bitsOk hS) hv hw hc hvs hg sess (fun p => un p r)
             (fun p => cp p r) (hres R ω t R₂ τ o h r),
           FlockVBridge.AccChain.accHolds_of_units
             (FlockVBridge.AccChain.unitSums_of_decode (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ)
-              (fun s => (h s).2) sh _ _ sessO (fun ℓ j => unO ℓ r j) (fun ℓ j => cpO ℓ r j) (hu R ω t R₂ τ o h r))
+              (fun s => (h.1 s).2) sh _ _ sessO (fun ℓ j => unO ℓ r j) (fun ℓ j => cpO ℓ r j) (hu R ω t R₂ τ o h r))
             (hcoef R ω t R₂ τ o h r) (hcons R ω t R₂ τ o h r) (hrd R ω t R₂ τ o h r)⟩),
     hcm, hdec, hfull⟩
 

@@ -480,7 +480,7 @@ theorem hAccRows_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × 
     F.HAccRows dg N k Rw V := by
   intro R ω t R₂ τ o h r ℓ hℓ j hj i hi
   obtain ⟨hup, -⟩ := hU ℓ hℓ
-  refine ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h (F.sessO ℓ)).2.2 (u := F.unO ℓ r j) hup
+  refine ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2 (u := F.unO ℓ r j) hup
     (base := accCol (levelLanes F.sh ℓ) (F.depth ℓ))
     (A := V R ω t R₂ (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j)) (fun b hb => ?_) (fun b hb hc => ?_) i hi,
     hout R ω t R₂ τ o h r ℓ hℓ j hj i hi⟩
@@ -522,7 +522,7 @@ theorem hTopsL_of_out (hU : F.HOpenUnits) (hout : F.TopsOutL dg N k Rw cap lig) 
   have hp' : Flock.RecOpen.params (F.Vs (F.sessO ℓ)).c.unit.name = some (levelLanes F.sh ℓ, F.depth ℓ) := by
     rw [show F.depth ℓ = H by rw [depth, hp]; rfl]
     exact hp
-  have e := bytesAt_of_regOut (F.zs R ω t R₂ (F.sessO ℓ)) (h (F.sessO ℓ)).2 (u := F.unO ℓ r j) hup
+  have e := bytesAt_of_regOut (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2 (u := F.unO ℓ r j) hup
     hp' fun t' ht' => hb hup t' (by rw [hsz] at ht'; omega)
   rw [hsz] at e
   exact e
