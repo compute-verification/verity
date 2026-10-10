@@ -22,6 +22,12 @@ log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR (art:4e9ff8
 :data:`~unit_costs_prover.NODE_GIB`), has D within the law's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
 fits one node, the least public inner + outer hours (ties to the smaller B). Without ``--outer`` it chooses on the public
 inner hours alone, and the output says so. Openings are not batched across sessions.
+
+**One session per shape** (:func:`one_session_per_shape`; top's ruling, merge thread 1791664434.225959): a model's
+entries that share a shape, (slots, bound), all take the largest inner session among them (a smaller entry's units are
+costed in it by the law) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
+whose entries had different sessions would tell which entry a session holds. B is still chosen per bucket, before the
+shapes are merged.
 """
 from __future__ import annotations
 
@@ -33,7 +39,7 @@ import math
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from . import unit_costs_padding as P
 from . import unit_costs_prover as U
@@ -77,7 +83,7 @@ def inner(N: int, K: int, b: Mapping[str, Any], B: int, rho: Mapping[str, float]
     return {"slots": B, "k_log": s["k_log"], "in_range": s["in_range"], "D": s["D"], "inner_m": round(math.log2(s["D"])),
             "peak_gib": s["peak_gib"], "session_s": s["total_s"], "sessions_mean": sh["sessions_mean"],
             "sessions_public": sh["sessions_public"], "inner_h_mean": sh["prover_s_mean"] / 3600,
-            "inner_h_public": sh["prover_s_public"] / 3600}
+            "inner_h_public": sh["prover_s_public"] / 3600, "rho": s["rho"]}
 
 
 def excluded(o: Mapping[str, Any], gib: float = U.NODE_GIB) -> str | None:
@@ -104,7 +110,8 @@ def pick(options: Mapping[int, Mapping[str, Any]], gib: float = U.NODE_GIB) -> i
 
 def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHECK,
          b_menu: Sequence[int] = B_MENU) -> list[dict[str, Any]]:
-    """Every workload's cap, buckets and each bucket's :func:`inner` at every B."""
+    """Every workload's cap, buckets and each bucket's :func:`inner` at every B, with ``at_rho(B, r)``: its :func:`inner`
+    at B with every unit at ρ = r (:func:`one_session_per_shape` sizes a smaller entry's session to its shape's)."""
     coef = U.fit()["coef"]
     K = int(inv["K"])
     out = []
@@ -116,6 +123,8 @@ def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHEC
         bs = buckets(N, K, units, nets, cap if cap is not None and any(u.z > cap for u in units) else None)
         for b in bs:
             b["by_B"] = {B: inner(N, K, b, B, rho, coef, nets=nets, slot=slot) for B in b_menu}
+            b["at_rho"] = lambda B, r, N=N, b=b, nets=nets: inner(N, K, b, B, {u.label: r for u in b["units"]}, coef,
+                                                                 nets=nets, slot=slot)
         out.append({"workload": w, "N": N, "cap": cap, "buckets": bs})
     return out
 
@@ -160,6 +169,46 @@ TOTALS = ("sessions_mean", "sessions_public", "inner_h_mean", "inner_h_public", 
           "total_h_mean", "total_h_public")
 
 
+SESSION = ("k_log", "inner_m", "inner_peak_gib", "inner_session_s")
+
+
+def one_session_per_shape(entries: Sequence[dict[str, Any]],
+                          own: Sequence[tuple[float, Callable[[float], Mapping[str, Any]]]] | None = None,
+                          gib: float = U.NODE_GIB) -> None:
+    """Size every entry of a shape (slots, bound) to the shape's largest inner session (largest k_log) and give it the
+    shape's largest outer session and RSS, with every outer refusal among them; reprice its hours at them. ``own[i]``:
+    entry i's ρ and its :func:`inner` at a given ρ, so a smaller entry is costed as its own units in the larger session
+    (the larger entry's ρ gives its k_log); without it, the smaller entry takes the larger's session costs."""
+    shapes: dict[tuple[int, float], list[int]] = {}
+    for i, e in enumerate(entries):
+        shapes.setdefault((e["slots"], e["bound"]), []).append(i)
+    for ix in shapes.values():
+        es = [entries[i] for i in ix]
+        t = max(ix, key=lambda i: (entries[i]["k_log"], entries[i]["inner_session_s"]))
+        top = entries[t]
+        has = es[0]["outer_session_s"] is not None
+        out_s = max(e["outer_session_s"] for e in es) if has else None
+        rss = max(e["outer_rss_gib"] for e in es) if has else None
+        refused = sorted({r for e in es for r in e["outer_refused"]}) if has else None
+        for i in ix:
+            e = entries[i]
+            if e["k_log"] < top["k_log"]:
+                if own is None:
+                    e.update({k: top[k] for k in SESSION})
+                else:
+                    o = own[i][1](own[t][0])
+                    assert (o["k_log"], o["inner_m"]) == (top["k_log"], top["inner_m"]), (o["k_log"], top["k_log"])
+                    if why := excluded(o, gib):
+                        raise ValueError(f"entry {i} cannot run at its shape's session: {why}")
+                    e.update(k_log=o["k_log"], inner_m=o["inner_m"], inner_peak_gib=o["peak_gib"],
+                             inner_session_s=o["session_s"])
+            e.update(outer_session_s=out_s, outer_rss_gib=rss, outer_refused=refused)
+            for m in ("mean", "public"):
+                e[f"inner_h_{m}"] = e[f"sessions_{m}"] * e["inner_session_s"] / 3600
+                e[f"outer_h_{m}"] = e[f"sessions_{m}"] * out_s / 3600 if has else None
+                e[f"total_h_{m}"] = e[f"inner_h_{m}"] + (e[f"outer_h_{m}"] or 0.0)
+
+
 def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | None = None,
          outer_sha512: str | None = None) -> dict[str, Any]:
     """Each workload's pinned menu: every bucket at its :func:`pick`, and the totals per audit."""
@@ -190,6 +239,9 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
                 **{f"total_h_{m}": c[f"inner_h_{m}"] + (c[f"outer_h_{m}"] if has else 0.0) for m in ("mean", "public")},
                 "options": {str(x): excluded(o) or round(o["inner_h_public"] + (o.get("outer_h_public") or 0.0), 6)
                             for x, o in opts.items()}})
+        own = [(b["by_B"][e["slots"]]["rho"], lambda r, b=b, B=e["slots"]: b["at_rho"](B, r))
+               for b, e in zip(W["buckets"], entries)] if all("at_rho" in b for b in W["buckets"]) else None
+        one_session_per_shape(entries, own)
         tot = {k: sum(e[k] or 0.0 for e in entries) for k in TOTALS}
         if outer is None:
             tot["outer_h_mean"] = tot["outer_h_public"] = None
@@ -199,7 +251,8 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
             "k_log_max": U.K_LOG_MAX, "d_fit_log": D_FIT_LOG,
             "chosen_on": ("public inner + outer hours (outer per (bucket, B) from the input)" if outer is not None else
                           "public inner hours alone: no outer input, so the outer proof's cost and memory are not counted"),
-            "outer_sha512": outer_sha512, "openings_batched": False, "models": models}
+            "outer_sha512": outer_sha512, "openings_batched": False,
+            "inner_per_shape": "the largest among the shape's entries", "models": models}
 
 
 def _h(x: float | None) -> str:

@@ -67,3 +67,39 @@ def test_the_menu_with_and_without_the_outer_input():
     assert e["total_h_public"] == pytest.approx(e["inner_h_public"] + e["outer_h_public"])
     assert m["models"][0]["totals"]["refused_entries"] == 0 and isinstance(e["options"]["16"], float)
     assert M.render(m) == M.render(M.menu(pl, 50, outer))
+
+
+def test_a_shape_takes_its_largest_inner_session():
+    """llama32-1b/b1/i256's clash: two entries of the shape (256, 2^29), at (m 35, k_log 27) and (32, 24). Both take the
+    larger session and the larger outer, and are priced at them; an entry of another shape keeps its own."""
+    def e(slots, m, k, s, outer_s, sessions, refused=()):
+        return {"slots": slots, "bound": 2.0 ** 29, "k_log": k, "inner_m": m, "inner_peak_gib": float(m),
+                "inner_session_s": s, "outer_session_s": outer_s, "outer_rss_gib": outer_s / 10,
+                "outer_refused": list(refused), "sessions_mean": sessions / 2, "sessions_public": sessions}
+    es = [e(256, 35, 27, 3600.0, 360.0, 1), e(256, 32, 24, 450.0, 720.0, 2, ["x"]), e(64, 30, 22, 100.0, 36.0, 3)]
+    M.one_session_per_shape(es)
+    a, b, c = es
+    assert {k: b[k] for k in M.SESSION} == {k: a[k] for k in M.SESSION} == {
+        "k_log": 27, "inner_m": 35, "inner_peak_gib": 35.0, "inner_session_s": 3600.0}
+    assert a["outer_session_s"] == b["outer_session_s"] == 720.0 and a["outer_refused"] == b["outer_refused"] == ["x"]
+    assert b["inner_h_public"] == pytest.approx(2.0) and b["outer_h_public"] == pytest.approx(0.4)
+    assert b["total_h_mean"] == pytest.approx(1.2)
+    assert (c["inner_m"], c["inner_h_public"], c["outer_h_public"]) == (30, pytest.approx(300 / 3600), pytest.approx(0.03))
+
+
+def test_a_smaller_entry_is_costed_as_its_own_units_in_the_shape_session():
+    """Two buckets of one shape (Z = 2^21, B = 16) at ρ 1 and ρ 1/4, k_log 24 and 26: the denser one is resized to k_log 26
+    at its own units' cost, through the plan's ``at_rho``."""
+    coef, kw = dict(COEF, prove_s=(0.0, 1e-6, 0.0, 0.0)), dict(TINY, slot=None)
+    rho = {"a": 1.0, "b": 1 / 4}
+    pl = [{"workload": "w", "N": 100, "cap": 2.0 ** 29, "buckets": []}]
+    for label in ("a", "b"):
+        b = _bucket([P.Unit(label, "t", 60, 2.0 ** 21, 2.0 ** 21)], 2.0 ** 21)
+        b["by_B"] = {16: M.inner(100, 50, b, 16, rho, coef, **kw)}
+        b["at_rho"] = lambda B, r, b=b: M.inner(100, 50, b, B, {u.label: r for u in b["units"]}, coef, **kw)
+        pl[0]["buckets"].append(b)
+    small, big = (b["by_B"][16] for b in pl[0]["buckets"])
+    assert (small["k_log"], big["k_log"]) == (24, 26)
+    a, b = M.menu(pl, 50)["models"][0]["entries"]
+    assert (a["k_log"], a["inner_m"]) == (b["k_log"], b["inner_m"]) == (big["k_log"], big["inner_m"])
+    assert a["inner_session_s"] == pytest.approx(big["session_s"]) and a["inner_h_public"] > small["inner_h_public"]
