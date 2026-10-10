@@ -1,5 +1,5 @@
 """F6's prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
-coefficients, the range and memory caps, netlists, staging, a tiny audit unsplit and split exactly, and token-select's
+coefficients, the range and memory caps, the slot sumcheck's term, netlists, staging, a tiny audit unsplit and split exactly, and token-select's
 argmax tree."""
 from __future__ import annotations
 
@@ -58,6 +58,27 @@ def test_a_session_from_fixed_coefficients():
     assert s["circuit_bytes"] == 2 ** 22 + 2 ** 10 + 5
     blk = dict(COEF, rss_gib=(0.0, 0.0, 0.0, 16.0))
     assert PR.session(2 ** 20, 16, blk, **TINY)["rss_gib"] == pytest.approx(16 * 2 ** 22 / 2 ** 30)
+
+
+def test_the_slot_sumcheck_at_fixed_coefficients():
+    """K1 10 ns, 2 reps, 8 B of committed bits per entry and 64 B of working set per entry of one slot. At 2^20, 16 slots:
+    2^24 entries, 10e-9 x 2^24 x 2 s, (8 x 2^24 + 64 x 2^20) / 2^30 = 0.1875 GiB. At 2^28 the sumcheck adds
+    32 + 16 GiB to Flock's 53, so the cap at 101 GiB stays 2^28 and drops to 2^27 below it."""
+    S = {"k1_ns": 10.0, "band": (5.0, 20.0), "reps": 2, "bits_bytes": 8.0, "work_bytes": 64.0}
+    flock, s = PR.session(2 ** 20, 16, COEF, **TINY), PR.session(2 ** 20, 16, COEF, slot=S, **TINY)
+    assert (flock["sumcheck_s"], flock["total_s"], flock["peak_gib"]) == (0, flock["prove_s"], flock["rss_gib"])
+    assert s["entries"] == 2 ** 24 and s["sumcheck_s"] == pytest.approx(10e-9 * 2 ** 25)
+    assert s["sumcheck_gib"] == pytest.approx(0.1875) and s["total_s"] == pytest.approx(s["prove_s"] + s["sumcheck_s"])
+    assert s["peak_gib"] == pytest.approx(s["rss_gib"] + 0.1875)
+    assert PR.cap(16, COEF, 101, slot=S, **TINY) == 2 ** 28 and PR.cap(16, COEF, 100.9, slot=S, **TINY) == 2 ** 27
+    units = [P.Unit("a", "t", 4, 3, 3), P.Unit("b", "t", 2, 10, 10)]
+    a0 = PR.audit(6, 3, units, {}, COEF, slots=2, k=2)
+    a = PR.audit(6, 3, units, {}, COEF, slots=2, k=2, slot=S)
+    assert a["prover_h_mean"] - a["sumcheck_h_mean"] == pytest.approx(a0["prover_h_mean"])
+    assert a["sumcheck_h_mean"] == pytest.approx(sum(b["sessions_mean"] * 10e-9 * 2 * b["Z"] * 2 for b in a["body"]) / 3600)
+    lo, hi = PR.band(a, S)
+    assert hi["prover_h_public"] - lo["prover_h_public"] == pytest.approx(1.5 * a["sumcheck_h_public"])
+    assert lo["share_mean"] == pytest.approx(a["sumcheck_h_mean"] / 2 / (a0["prover_h_mean"] + a["sumcheck_h_mean"] / 2))
 
 
 def test_netlists_and_staging():
