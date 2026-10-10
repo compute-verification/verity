@@ -1094,8 +1094,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   `m > 35` (no Fast100 schedule exists above it).
 - **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
   soundness package's `Stmt.InRange`: `k_log ≤ 27`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
-  and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
-  check accepts exactly that range.
+  and not only the writer, accepts only statements the proved bound covers. The pinned statement is
+  `flock_verify_sound_205` (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean`): every statement
+  accepted without `--zk` carries the 2^-205 per-table bound, with no range hypothesis, since acceptance gives the range.
+  `checkInRange_ok` is the lemma that says the check accepts exactly that range.
 
 ### 16.6 frame-v3 roots
 
