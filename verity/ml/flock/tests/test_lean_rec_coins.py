@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -69,7 +70,8 @@ def shape(forged, tmp_path_factory) -> Path:
     return f
 
 
-def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None) -> dict:
+def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None,
+            session: Path = SET / "outer-L3" / "session") -> dict:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
@@ -77,7 +79,7 @@ def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
                         str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec,
-                        "--session", str(SET / "outer-L3" / "session")], capture_output=True, text=True, check=False)
+                        "--session", str(session)], capture_output=True, text=True, check=False)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
@@ -123,3 +125,37 @@ def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, 
     v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's dirs row is not the "
                         "verifier's rec-dirs row 0"), v["why"]
+
+
+@pytest.fixture(scope="module")
+def undrawn(tmp_path_factory) -> Path:
+    """Level 3's outer session with its unit draw removed: `verify` sets a part's statement up over its whole population, so
+    the V* checks run on it, and the session, not the part's, is refused after setup."""
+    d = tmp_path_factory.mktemp("undrawn") / "session"
+    shutil.copytree(SET / "outer-L3" / "session", d)
+    s = json.loads((d / "session.json").read_text())
+    s["unit_draw"] = None
+    (d / "session.json").write_text(json.dumps(s))
+    return d
+
+
+@pytest.fixture(scope="module")
+def algebra(forged, tmp_path_factory) -> Path:
+    """V*'s algebra parts (`p<j>`) staged over the honest inner session."""
+    d = tmp_path_factory.mktemp("rec-alg")
+    _stage(d, levels=[], algebra=True, evaluate=False)
+    return d / "alg"
+
+
+def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, undrawn, tmp_path):
+    """`HVCoins`' check (`RecCoins.checkResiduals`): the algebra staged with rep 0's first comb element of v one bit off
+    (`rec_vstage --forge comb`) changes one part's registration, and that part is refused by the v the verifier's coins and
+    fold give."""
+    _stage(tmp_path, levels=[], algebra=True, evaluate=False, forge="comb")
+    parts = sorted((tmp_path / "forged-comb" / "alg").iterdir())
+    changed = [p for p in parts if (p / "registered.json").read_bytes() != (algebra / p.name / "registered.json").read_bytes()]
+    assert len(changed) == 1 and len(parts) > 1, changed
+    (p,) = changed
+    why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", session=undrawn)["why"]
+    assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
+                        "the statement's v row is not the verifier's rec-v row 0", why), why
