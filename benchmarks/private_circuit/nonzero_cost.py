@@ -345,23 +345,33 @@ def bucket_cost(b: dict, part: str, g: dict, weights: dict, dm: dict, reg: dict,
 
 
 NODE_GIB = 1716
-CAP_LOG = 32
+K_LOG_MAX = 27
+SLOTS = 16
+
+
+def _law(fit: dict, key: str, D: float, cb: float, k: int) -> float:
+    x = (1.0, D / 2 ** 30, cb / 2 ** 30, 2.0 ** k / 2 ** 30)  # F6 v2: (1, D, text, block); v1 has no block term
+    return sum(a * v for a, v in zip(fit["coef"][key], x))
 
 
 def layout(rows: float, fit: dict, glue: float, bytes_per_nnz: float) -> dict:
-    """C-Flock's layout of a circuit of ``rows`` rows as one slot (D = 2^max(22, ceil(log2 rows) + 2)), its text at ``RHO``
-    nonzeros a row, and F6's fitted prove time and peak RSS. Two readings of the cap: ``fits_D``, D <= 2^32 bits for the
-    whole circuit; and F6's own (``prover.md``: the cap bounds a slot's nonzeros, Z <= 2^32, and a 16-slot session at it is
-    D = 2^34, 1.24e3 GiB), ``f6_sessions``: the cap sessions V*'s nonzeros fill, ``fits_f6``: one, within the node."""
-    k = max(22, math.ceil(rows).bit_length() + 2)
-    cb = rows * RHO * bytes_per_nnz + glue
-    c = fit["coef"]
-    x = (1.0, 2.0 ** k / 2 ** 30, cb / 2 ** 30)
-    rss = sum(a * v for a, v in zip(c["rss_gib"], x))
-    prove = sum(a * v for a, v in zip(c["prove_s"], x))
-    f6 = math.ceil(rows * RHO / (16 * 2 ** CAP_LOG))
-    return {"rows": rows, "k_log": k, "D": 2 ** k, "circuit_bytes": cb, "rss_gib": rss, "prove_s": prove,
-            "fits_D": k <= CAP_LOG, "fits_node": rss <= NODE_GIB, "f6_sessions": f6, "fits_f6": f6 == 1}
+    """C-Flock's layout of a circuit of ``rows`` rows under the proved range (``Stmt.InRange``: a block is at most 2^27
+    bits, ``IN_RANGE_K_LOG``; a block of r rows is 2^max(22, ceil(log2 r) + 2) bits, so at most 2^25 rows), in sessions of
+    ``SLOTS`` blocks (F6's cap session: 16 slots at k_log 27, Z <= 2^29 nonzeros a slot), its text at ``RHO`` nonzeros a
+    row (V*'s netlist is its own, shared by no slot), and F6's fitted prove time (summed over the sessions) and peak RSS
+    (one session's). ``fits``: one block (``blocks``) or one cap session (``sessions``)."""
+    one = max(22, math.ceil(rows).bit_length() + 2)
+    blocks = 1 if one <= K_LOG_MAX else math.ceil(rows / 2 ** (K_LOG_MAX - 2))
+    k = min(one, K_LOG_MAX)
+    sessions = math.ceil(blocks / SLOTS)
+    per = min(blocks, SLOTS)
+    rows_per = rows / blocks * per
+    D, cb = per * 2.0 ** k, rows_per * RHO * bytes_per_nnz + glue
+    rss = _law(fit, "rss_gib", D, cb, k)
+    prove = rows / rows_per * _law(fit, "prove_s", D, cb, k)
+    return {"rows": rows, "k_log": k, "blocks": blocks, "sessions": sessions, "D_session": D, "D_total": blocks * 2.0 ** k,
+            "circuit_bytes_session": cb, "rss_gib": rss, "prove_s": prove, "fits_block": blocks == 1,
+            "fits_session": sessions == 1, "fits_node": rss <= NODE_GIB}
 
 
 def _k2(path: Path):
@@ -418,34 +428,33 @@ def buckets(path: Path, reps: int, depth: int, c3: Path | None = None) -> dict:
     print("weight per entry and rep (sl: chunks -> ANDs):", {sl: (w["chunks"], w["ands"]) for sl, w in weights.items()})
     print(f"demux {dm['ands']}; registration, 64 KiB rows read whole: {reg['whole_per_bit']:.1f} ANDs per bit; "
           f"selection path per slot at depth 20: {20 * g['FrameV3Node_v1{2}'] + g['LmsEqual_v1']:,}")
-    print(f"\nV* per session, {reps} reps; D = 2^max(22, ceil(log2(rows + 1)) + 2), rows = fold ANDs + "
-          f"{g['sha512_compression_rows'] / g['sha512_compression']:.2f} x hash ANDs; F6's law with circuit = rows x {RHO} x "
-          f"{p['bytes_per_nnz']} B; fits: D <= 2^32 and RSS <= {NODE_GIB} GiB")
-    print(f"{'workload':24} {'part':4} {'Z/slot':>8} {'sl':>3} {'slots':>5} {'types':>5} {'nz/nz':>7} {'unpacked':>9} {'D':>4} "
-          f"{'nz/pk':>5} {'packed':>9} {'D':>4} {'prove s':>9} {'RSS GiB':>9} {'sel/sess':>9} {'fits':>4}")
+    print(f"\nV* per session, {reps} reps; rows = fold ANDs + {g['sha512_compression_rows'] / g['sha512_compression']:.2f} x "
+          f"hash ANDs, in blocks of k_log <= {K_LOG_MAX} (2^{K_LOG_MAX - 2} rows) and cap sessions of {SLOTS} blocks; "
+          f"F6's law ({p['format']}) per cap session, text = rows x {RHO} x {p['bytes_per_nnz']} B; prove summed")
+    print(f"{'workload':24} {'part':4} {'Z/slot':>8} {'sl':>3} {'slots':>5} {'types':>5} {'nz/nz':>7} {'unpacked':>9} "
+          f"{'blocks':>8} {'nz/pk':>5} {'packed':>9} {'blocks':>8} {'sessions':>8} {'prove s':>9} {'RSS GiB':>8} {'sel/sess':>9}")
     for r in out:
         u, k = r["unpacked"], r["packed"]
         wl = r["workload"].removeprefix("vllm/").split("__")
         print(f"{wl[0] + '/' + wl[4] + '/' + wl[5]:24} {r['part']:4} {r['Z']:>8.3g} {r['sl']:>3} {r['slots']:>5} {r['types']:>5} "
-              f"{r['per_nonzero']['total']:>7,.0f} {u['ands']:>9.2e} {u['k_log']:>4} {r['packed_ratio']:>5.2f} "
-              f"{k['ands']:>9.2e} {k['k_log']:>4} {k['prove_s']:>9.3g} {k['rss_gib']:>9.3g} "
-              f"{r['selection_by_types']:>9.2e} {'yes' if k['fits_D'] and k['fits_node'] else 'no':>4}")
+              f"{r['per_nonzero']['total']:>7,.0f} {u['ands']:>9.2e} {u['blocks']:>8.2e} {r['packed_ratio']:>5.2f} "
+              f"{k['ands']:>9.2e} {k['blocks']:>8.2e} {k['sessions']:>8.2e} {k['prove_s']:>9.3g} {k['rss_gib']:>8.3g} "
+              f"{r['selection_by_types']:>9.2e}")
     if c3:
         print(f"\ncandidate 3 (proofs' K2 count), V* per session, {reps} reps: one registered opening per slot (unbatched) or "
-              f"per distinct type (batched), and one inner slot alone; same layout and law. 'D<=32': D <= 2^32 bits; "
-              f"'F6': cap sessions (Z <= 2^32 a slot, 16 slots) V*'s nonzeros fill; 'vs opt4': option 4 packed rows / these")
-        print(f"{'workload':24} {'part':4} {'Z/slot':>8} {'slots':>5} {'types':>5} {'m':>3} {'ANDs':>9} {'rows':>9} {'D':>4} "
-              f"{'prove s':>8} {'RSS GiB':>8} {'D<=32':>5} {'F6':>3} | {'batched':>9} {'D':>4} {'RSS GiB':>8} {'F6':>3} | "
-              f"{'1 slot':>9} {'D':>4} {'prove s':>8} {'RSS GiB':>8} {'F6':>3} | {'vs opt4':>7}")
+              f"per distinct type (batched), and one inner slot alone; same layout and law. blk: k_log-{K_LOG_MAX} blocks; "
+              f"ses: cap sessions of {SLOTS} blocks; 'vs opt4': option 4 packed rows / unbatched")
+        print(f"{'workload':24} {'part':4} {'Z/slot':>8} {'slots':>5} {'types':>5} {'m':>3} {'ANDs':>9} {'rows':>9} {'blk':>4} "
+              f"{'ses':>3} {'prove s':>8} {'RSS GiB':>8} | {'batched':>9} {'blk':>4} {'ses':>3} {'prove s':>8} | "
+              f"{'1 slot':>9} {'blk':>4} {'prove s':>8} | {'vs opt4':>7}")
         for r in out:
             c = r["candidate3"]
             u, bt, one = c["unbatched"], c["batched"], c["per_slot"] or c["unbatched"]
             wl = r["workload"].removeprefix("vllm/").split("__")
             print(f"{wl[0] + '/' + wl[4] + '/' + wl[5]:24} {r['part']:4} {r['Z']:>8.3g} {r['slots']:>5} {r['types']:>5} "
-                  f"{c['m']:>3} {u['ands']:>9.2e} {u['rows']:>9.2e} {u['k_log']:>4} {u['prove_s']:>8.3g} {u['rss_gib']:>8.3g} "
-                  f"{'yes' if u['fits_D'] else 'no':>5} {u['f6_sessions']:>3} | {bt['rows']:>9.2e} {bt['k_log']:>4} "
-                  f"{bt['rss_gib']:>8.3g} {bt['f6_sessions']:>3} | {one['rows']:>9.2e} {one['k_log']:>4} {one['prove_s']:>8.3g} "
-                  f"{one['rss_gib']:>8.3g} {one['f6_sessions']:>3} | {r['packed']['rows'] / u['rows']:>7.0f}")
+                  f"{c['m']:>3} {u['ands']:>9.2e} {u['rows']:>9.2e} {u['blocks']:>4} {u['sessions']:>3} {u['prove_s']:>8.3g} "
+                  f"{u['rss_gib']:>8.3g} | {bt['rows']:>9.2e} {bt['blocks']:>4} {bt['sessions']:>3} {bt['prove_s']:>8.3g} | "
+                  f"{one['rows']:>9.2e} {one['blocks']:>4} {one['prove_s']:>8.3g} | {r['packed']['rows'] / u['rows']:>7.0f}")
     return {"source": str(path), "reps": reps, "gadgets": g, "demux": dm, "weights": weights, "registration": reg,
             "rho": RHO, "node_gib": NODE_GIB, "packed_ratio": PACKED_RATIO, "candidate3_source": str(c3) if c3 else None,
             "buckets": out}
