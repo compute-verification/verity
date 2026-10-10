@@ -239,10 +239,11 @@ TAKES = [[["Array", 2, ["Array", 4, ["Value", 32]]], {"affine": ["n", 0, 0, 8]},
          [["Array", 2, ["Array", 3, ["Array", 2, ["Value", 32]]]], {"affine": ["p", 0, 0, 12]}, 2, 1],
          [["Array", 2, ["Array", 2, ["Value", 32]]], {"strided": ["n", 4, 0, 2, 1, 2, 4]}, 1, 0]]
 INPUT_IDS = ["Input16_v1", "Input1_v1", "Input128_v1", "Input016_v1", "Input0_v1", "Input16_v2", "Input16", "input16_v1",
-             "Input16_v1 ", "XInput16_v1", "Input-16_v1", "Input1a_v1"]
+             "Input16_v1 ", "Input16_v1\n", "XInput16_v1", "Input-16_v1", "Input1a_v1"]
 #: run and registered input ids, and near misses
 BINDING_IDS = ["Input16_v1", "RegisteredInput16_v1", "RegisteredInput1_v1", "RegisteredInput016_v1", "RegisteredInput0_v1",
-               "RegisteredInput16_v2", "RegisteredInput16", "registeredInput16_v1", "Registered16_v1", "RegisteredInput16_v1 "]
+               "RegisteredInput16_v2", "RegisteredInput16", "registeredInput16_v1", "Registered16_v1", "RegisteredInput16_v1 ",
+               "RegisteredInput16_v1\n"]
 LOWERINGS = [["Array", 2, ["Array", 3, ["Value", 16]]], ["Record", [["h", ["Array", 2, ["Value", 16]]], ["b", ["Value", 32]]]],
              ["Array", 2, ["Tuple", [["Value", 16], ["Value", 32]]]], ["Array", 0, ["Value", 16]]]
 #: (label, root scope as (node, member) steps, reference)
@@ -331,6 +332,7 @@ REJECT = [
     ("an integer past 2^53 - 1", lambda d: _set_binding(d, "N", 2**53), "exceeds 2^53 - 1"),
     ("a float", lambda d: _set_binding(d, "C", 1.5), "float"),
     ("an Input id with a leading zero", lambda d: _rename(d, "Input16_v1", "Input016_v1"), "primitive Input016_v1 is not in the registry"),
+    ("an Input id with a trailing newline", lambda d: _rename(d, "Input16_v1", "Input16_v1\n"), r"primitive Input16_v1\n is not in the registry"),
     ("a primitive keyed by another id", lambda d: d["definitions"]["TSum4_v1"].update(id="TSum6_v1"), "keyed by its id"),
     ("a binding unlike the key's record", lambda d: _set_binding(d, "N", 5), "keyed by its id and binding record"),
     ("a composite id that is not Name_vN", lambda d: d["definitions"]["TPair_v1"].update(id="TPair_v01"), "Name_vN"),
@@ -432,7 +434,7 @@ def build() -> dict:
         "alias_writer": [[label, list(at) if at else None, enc.refs(r, at)] for label, at, r in ALIAS],
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
         "decoder_rejects": rejects,
-        "input_ids": [[i, bool(INPUT_ID.match(i))] for i in INPUT_IDS],
+        "input_ids": [[i, bool(INPUT_ID.fullmatch(i))] for i in INPUT_IDS],
         "input_lowering": [[t, [[n.fn.id, n.form, list(n.axes), n.n] for n in Program(_identity(t)).root.body.nodes]] for t in LOWERINGS],
         "program": {"root": D.root.id, "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(D.root.body.nodes) if is_input(n.fn)],
                     "input_gates": program.input_gates, "calls": [[k, fn.id] for k, fn in PO.calls(D)]},
