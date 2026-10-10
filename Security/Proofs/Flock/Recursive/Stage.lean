@@ -8,11 +8,11 @@ import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 `zk_sessions_recursive_upto` takes one `Openings` for every history and stage, while the value binding of a session of
 V* at a history (`ZkOuter.vb`) is built from that history's inputs. What the openings read is fixed by the session's
 circuit `c`: the commit strings (`PosK`: unit `u`'s row of port `q`, input or output, or a single gate), their values
-(`ValK`: bit strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96` of `rowEncP` under the rows'
-prefix `Hidden.rowPre` at a row, `SHA-512(bitCode v)` at a single gate). `obK` is those openings, and the value binding's openings at each history are
-`obK` by definition (`ZkOuter.openingsOf_vb`); what a history's inputs change is only the registered digests
-(`ValueBindingZ.cs`, from the public file). V*'s sessions together open `obS`: session `j`'s `obK`, tagged by `j`
-(`Openings.sigma`).
+(`ValK`: bit strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96X` of the row's port's bytes,
+`HiddenExec.encKeyH`, at a row, `SHA-512(bitCode v)` at a single gate). `obK` is those openings, and the value
+binding's openings at each history are `obK` by definition (`ZkOuter.openingsOf_vb`); what a history's inputs change is
+only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s sessions together open `obS`: session
+`j`'s `obK`, tagged by `j` (`Openings.sigma`).
 
 * `candWeightK`: `candWeightZC` read off a session's law alone (`ZkOuter.candWeight_vb`);
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
@@ -54,11 +54,12 @@ abbrev PosK : Type := (Fin n × Fin c.ports.size) ⊕ Fin ((keyProg c hU n).circ
 /-- **Their values**: bit strings of at most the widest row's `16 · words` bits, with their width. -/
 abbrev ValK : Type := Layout.BitVal (Finset.univ.sup (Layout.portRowW c) + 1)
 
-/-- **Each commit string's leaf scheme**: `hm96` of `rowEncP` under the rows' prefix (`Hidden.rowPre`: the bytes
-`sha512/row/v1` or `sha512/row/v2` hashes) at a row, `SHA-512(bitCode v)` at a single gate. -/
+/-- **Each commit string's leaf scheme**: `hm96X` of the bytes its port's hash reads (`HiddenExec.encKeyH`:
+`sha512/row/v1`'s, `/row/v2`'s or `/row-seg/v1`'s, `HiddenExec.encPortH`) at a row, `SHA-512(bitCode v)` at a single
+gate. -/
 noncomputable def schemeK (p : PosK c hU n) : Binding.ExplicitLeaf (ValK c) :=
   if p.isLeft = true then
-    Binding.ExplicitLeaf.hm96 (Layout.rowEncP (Hidden.rowPre (Hidden.rowV2 c))) (Layout.rowEncP_inj (Hidden.size_rowPre _))
+    Binding.ExplicitLeaf.hm96X (HiddenExec.encKeyH c p) (HiddenExec.extKeyH c p) (HiddenExec.extKeyH_spec c p)
   else Binding.ExplicitLeaf.plain Layout.bitCode Layout.bitCode_inj
 
 /-- **V*'s openings**: a commit string, a value and a salt, opening the commit string's leaf of the value under the
@@ -219,7 +220,7 @@ theorem slackIf_le {k Rw M : ℕ} (ρ : ℝ) {τ : Strategy (zo.game dg N)} (h :
 
 /-- The value binding's commit string of each wire is `posK`'s. -/
 theorem vb_pos (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N) : zo.vb.pos g = posK c hU nv g := by
-  dsimp only [vb, vbHJ, rsZHJS, HmRowsZ.bindingZ, LayoutZ.bindingZ, ZkHidden.layZHJ, LayoutZ.ofShadow,
+  dsimp only [vb, vbHJ, rsZHJS, HmRowsZX.bindingZ, LayoutZ.bindingZ, ZkHidden.layZHJ, LayoutZ.ofShadow,
     ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits, HiddenExec.keyReadersH]
   unfold posK
   rcases h : HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩
@@ -229,7 +230,7 @@ theorem vb_pos (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N) :
 /-- The value binding's bit of each wire is `bitK`'s. -/
 theorem vb_bit (v : ValK c) (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N) :
     zo.vb.bit v g = bitK c hU nv v g := by
-  dsimp only [vb, vbHJ, rsZHJS, HmRowsZ.bindingZ, LayoutZ.bindingZ, ZkHidden.layZHJ, LayoutZ.ofShadow,
+  dsimp only [vb, vbHJ, rsZHJS, HmRowsZX.bindingZ, LayoutZ.bindingZ, ZkHidden.layZHJ, LayoutZ.ofShadow,
     ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits, HiddenExec.keyReadersH,
     Layout.Readers.ofRows]
   unfold bitK idxK

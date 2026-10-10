@@ -1,6 +1,6 @@
 import Proofs.Flock.Recursive.ZkReg.DrawnRefines
 import Proofs.Flock.Recursive.ZkReg.RegLink
-import Proofs.Flock.Soundness.Registered.Defs
+import Proofs.Flock.Soundness.Registered.ReadsX
 
 /-!
 # The committed values of a `--zk --registered` session at its registered reads
@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Registered.Defs
 values the simulation `simZHJ` decodes (`XplurZC` at the rows `rsZHJS`, whose value binding is `vbHJ`), no drawn unit
 reads a registered read whose session leaf is the registrant's and whose committed value is not the registrant's, except
 with probability `ε_ks + δ_link + δ_reg` (`RegValsSound`'s event, at `layShHJ`'s registered reads `rd`). The registrant's
-opening of each commit string is its row and salt (`regOpenZ`), whose hm96 leaf is `rd.leaf`; `δ_reg = regTermZC` is
+opening of each commit string is its row and salt (`regOpenZ`), whose `hm96X` leaf at its encoding is `rd.leaf`; `δ_reg = regTermZC` is
 `cr/sha-512` for the finders that collide an extracted opening with the registrant's (`RegCRZC`, a hypothesis as `hCR`
 is).
 -/
@@ -36,7 +36,7 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
-    (rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) :
     (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Opening :=
   fun p => (p, rd.wv p, rd.ws p)
@@ -67,7 +67,7 @@ theorem zk_session_regValsR
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     -- the registered reads
-    (rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     -- the live prover, and cr/sha-512 for the knowledge and registered-value finders of its simulation
     (τ : Strategy (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
@@ -121,7 +121,7 @@ theorem zk_session_regValsR
   refine ⟨hacc, u, hu, g, hg, ?_, hne⟩
   refine Prod.ext rfl ?_
   show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
-  unfold HmRowsZ.scheme
+  unfold HmRowsZX.scheme
   split_ifs with hrow
   · exact hleaf.symm
   · exact absurd (rd.read_row _ hread) hrow
@@ -132,7 +132,7 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
-    (rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     (R : Reg) (Xt : Fin (Layout.keyN c hU n) → Bool) (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N)
     (hread : rd.isRead ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g))
@@ -144,7 +144,7 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
       (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd) R Xt g := by
   refine ⟨Prod.ext rfl ?_, hne⟩
   show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
-  unfold HmRowsZ.scheme
+  unfold HmRowsZX.scheme
   split_ifs with hrow
   · exact hleaf.symm
   · exact absurd (rd.read_row _ hread) hrow
@@ -173,7 +173,7 @@ theorem zk_session_regDrawnR
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     -- the registered reads
-    (rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     -- the live prover, and cr/sha-512 for the knowledge and registered-value finders of its simulation
     (τ : Strategy (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))

@@ -21,7 +21,7 @@ of its name. So:
 The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain; not its name or
 positions): `ColKeyedS`, `SiteRowsShared` (implies `RowsShared`, `rowsShared_of_site`; from `SharedRowsS`, and that
 from `NoRegistrantCollisionS`, since the verifier's leaf check reads only a port's registration, `opensLeaf_site`;
-all three hold, `siteRowsShared`, since `Accepted` excludes `RegColl`),
+all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented`, since `Accepted` excludes `RegColl`),
 `AccRowsAreS` at `accRegS` (`accRowsAreS_of_shared`), `EndKeysS`, `OpenKeysS`, and `hEnds_of_partS`,
 `hAccRows_of_keysS` as in `Ends.lean`.
 
@@ -141,19 +141,19 @@ end Drawn
 
 section Two
 
-open FlockSoundness.Registered (Reads TwoOpenings)
-open FlockSoundness.Binding (HmRows Collides hm96Pair hm96Pair_spec)
+open FlockSoundness.Registered (ReadsX TwoOpenings)
+open FlockSoundness.Binding (HmRowsX Collides hm96Pair hm96Pair_spec)
 
 variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRows lay}
+  {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRowsX lay}
   {C' : FlockSoundness.Audit.Circuit} {n' : ℕ} {P' : FlockSoundness.Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (FlockSoundness.TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : FlockSoundness.Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
-  {lay' : FlockSoundness.Binding.Layout P' plan' tab' decode'} {rs' : HmRows lay'}
+  {lay' : FlockSoundness.Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
 /-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain and root). -/
 theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
@@ -165,14 +165,14 @@ theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
 
 /-- **`registrants_eq_or_collides` at one registration**: two registered reads of one registration (`site`) at one
 position carry one row's bytes, or their openings collide, or hm96's leaves do (`opensLeaf_site`). -/
-theorem registrants_eq_or_collides_site (rd : Reads lay rs) (rd' : Reads lay' rs') {p : lay.Pos} {p' : lay'.Pos}
+theorem registrants_eq_or_collides_site (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') {p : lay.Pos} {p' : lay'.Pos}
     (hp : rd.isRead p) (hp' : rd'.isRead p') (hsite : site (rd.port p) = site (rd'.port p'))
     (hat : rd.readAt p = rd'.readAt p') :
-    rs.enc (rd.wv p) = rs'.enc (rd'.wv p') ∨
+    rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p') ∨
       Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
-      Collides (hm96Pair (rs.enc (rd.wv p)) (rd.ws p) (rs'.enc (rd'.wv p')) (rd'.ws p')) := by
+      Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')) := by
   by_cases hl : rd.leaf p = rd'.leaf p'
-  · by_cases he : rs.enc (rd.wv p) = rs'.enc (rd'.wv p')
+  · by_cases he : rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p')
     · exact Or.inl he
     · exact Or.inr (Or.inr (hm96Pair_spec _ _ _ _ he hl))
   · refine Or.inr (Or.inl (TwoOpenings.collides _ ⟨hl, rd.committed p hp, ?_⟩))
@@ -283,7 +283,7 @@ section Shared
 
 open FlockSoundness.Registered (TwoOpenings)
 open FlockSoundness.Binding (Collides hm96Pair)
-open FlockSoundness.Discharge.Layout (rowEncP)
+open FlockSoundness.Discharge.HiddenExec (encPortH)
 
 /-- Obligation: discharged, as `NoRegistrantCollision`, by `Accepted`'s `¬ RegColl` (`noRegistrantCollisionS`); no
 finder behind the transfer's `cr/sha-512` term prices it.
@@ -299,9 +299,9 @@ def NoRegistrantCollisionS : Prop :=
         (F.zs R ω t R₂ s).rd.leaf (.inl (u, q)), (F.zs R ω t R₂ s).rd.wpath (.inl (u, q)),
         (F.zs R ω t R₂ s').rd.leaf (.inl (u', q')), (F.zs R ω t R₂ s').rd.wpath (.inl (u', q'))⟩ : TwoOpenings).pair ∧
       ¬ Collides (hm96Pair
-        (rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s).c)) (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))))
+        (encPortH (F.Vs s).c.ports[q.val]! (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))))
         ((F.zs R ω t R₂ s).rd.ws (.inl (u, q)))
-        (rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s').c)) (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
+        (encPortH (F.Vs s').c.ports[q'.val]! (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
 /-- Obligation: discharged by `NoRegistrantCollisionS` (`sharedRowsS`).
@@ -313,8 +313,8 @@ def SharedRowsS : Prop :=
     (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)) → (F.zs R ω t R₂ s').rd.isRead (.inl (u', q')) →
     site ((F.zs R ω t R₂ s).rd.port (.inl (u, q))) = site ((F.zs R ω t R₂ s').rd.port (.inl (u', q'))) →
     (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) →
-    rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s).c)) (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
-      rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s').c)) (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
+    encPortH (F.Vs s).c.ports[q.val]! (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
+      encPortH (F.Vs s').c.ports[q'.val]! (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
 
 /-- **`SharedRowsS` where no two registrant records collide** (`registrants_eq_or_collides_site`). -/
 theorem sharedRowsS_of (h : F.NoRegistrantCollisionS dg N k Rw) : F.SharedRowsS dg N k Rw := by
@@ -325,10 +325,13 @@ theorem sharedRowsS_of (h : F.NoRegistrantCollisionS dg N k Rw) : F.SharedRowsS 
   · exact absurd hc h1
   · exact absurd hc h2
 
-/-- **`SiteRowsShared` from one row's bytes** (`SharedRowsS`, `rowEncPre_get_eq`). -/
-theorem siteRowsShared_of_sharedRowsS (h : F.SharedRowsS dg N k Rw) : F.SiteRowsShared dg N k Rw := by
+/-- **`SiteRowsShared` from one row's bytes at unsegmented reads** (`SharedRowsS`, `ReadsUnsegmented`,
+`bits_of_encPortH`). -/
+theorem siteRowsShared_of_sharedRowsS (h : F.SharedRowsS dg N k Rw) (hu : F.ReadsUnsegmented dg N k Rw) :
+    F.SiteRowsShared dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat b hb hb'
-  exact rowEncPre_get_eq (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat) b _ _
+  exact bits_of_encPortH (hu R ω t R₂ τ o ha s u q hr) (hu R ω t R₂ τ o ha s' u' q' hr')
+    (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat) b _ _
 
 /-- **No two sessions' registrant records collide at one registration and position** (`NoRegistrantCollisionS`): both
 collisions are `RegColl`'s, which `Accepted` excludes. -/
@@ -340,9 +343,9 @@ theorem noRegistrantCollisionS : F.NoRegistrantCollisionS dg N k Rw := by
 /-- **`SharedRowsS`** (`noRegistrantCollisionS`). -/
 theorem sharedRowsS : F.SharedRowsS dg N k Rw := F.sharedRowsS_of dg N k Rw (F.noRegistrantCollisionS dg N k Rw)
 
-/-- **`SiteRowsShared`** (`sharedRowsS`). -/
-theorem siteRowsShared : F.SiteRowsShared dg N k Rw :=
-  F.siteRowsShared_of_sharedRowsS dg N k Rw (F.sharedRowsS dg N k Rw)
+/-- **`SiteRowsShared` where no read is segmented** (`sharedRowsS`). -/
+theorem siteRowsShared (hu : F.ReadsUnsegmented dg N k Rw) : F.SiteRowsShared dg N k Rw :=
+  F.siteRowsShared_of_sharedRowsS dg N k Rw (F.sharedRowsS dg N k Rw) hu
 
 end Shared
 
@@ -411,10 +414,10 @@ theorem accRowsAreS_of_shared (hshared : F.SiteRowsShared dg N k Rw)
   have hx := Classical.choose_spec hex
   exact (hshared R ω t R₂ τ o h _ j _ u _ q hx.1 hread (hx.2.1.trans hsite.symm) hx.2.2.1 b hx.2.2.2 hb).symm
 
-/-- **`AccRowsAreS` at `rec-acc`'s rows as registered** (`accRegS`; `siteRowsShared`). -/
-theorem accRowsAreS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) :
+/-- **`AccRowsAreS` at `rec-acc`'s rows as registered** (`accRegS`; `siteRowsShared`), where no read is segmented. -/
+theorem accRowsAreS (hu : F.ReadsUnsegmented dg N k Rw) (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) :
     F.AccRowsAreS dg N k Rw (F.accRegS s) s :=
-  F.accRowsAreS_of_shared dg N k Rw (F.siteRowsShared dg N k Rw) s
+  F.accRowsAreS_of_shared dg N k Rw (F.siteRowsShared dg N k Rw hu) s
 
 /-- Obligation: discharged by the parse of the part's circuit (its keys), the session's reads file (`acc0`, `acc1`
 read `rec-acc` at the rep's ends, rec_vstage.py:355-357) and a verifier check that every session's `rec-acc` entry is

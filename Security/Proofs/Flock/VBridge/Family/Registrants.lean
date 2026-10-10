@@ -1,26 +1,30 @@
-import Proofs.Flock.Soundness.Registered.Binding
+import Proofs.Flock.Soundness.Registered.ReadsX
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 import Proofs.Flock.Level3.RowV2
 import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # Two registrants' records at one registered root and position
 
-`RowsShared` (`Family/Registered.lean`) asks that two sessions' registrant records (`Reads`) agree where they read one
-registered root at one position. Each record's opening opens that root there (`Reads.committed`), so they agree up to a
-SHA-512 collision, in a pair fixed by the two records rather than by a run:
+`RowsShared` (`Family/Registered.lean`) asks that two sessions' registrant records (`ReadsX`) agree where they read one
+registered root at one position. Each record's opening opens that root there (`ReadsX.committed`), so they agree up to
+a SHA-512 collision, in a pair fixed by the two records rather than by a run:
 
-* `registrants_eq_or_collides`: two registered reads at one root and position carry one row's bytes (`enc`), or their
-  openings collide (`TwoOpenings.collides`), or hm96's leaves do (`hm96Pair_spec`);
+* `registrants_eq_or_collides`: two registered reads at one root and position carry one row's bytes (each at its own
+  encoding, `enc`), or their openings collide (`TwoOpenings.collides`), or hm96's leaves do (`hm96Pair_spec`);
 * `rowEncP_get_eq`, `rowEncPre_get_eq`: one row's bytes (`rowEncP` under a first block, what `sha512/row/v1` or
   `sha512/row/v2` hashes, `Hidden.rowPre`) fix its bits at every width and either label, so two sessions' values agree
-  at each bit both widths hold;
+  at each bit both widths hold; `encPortH_of_none`: a port without segments hashes those bytes (`HiddenExec.encPortH`);
+* `ReadsUnsegmented`: no registered read is of a segmented row (`sha512/row-seg/v1`), whose bytes (`Layout.encSeg`)
+  need not fix its bits;
 * `SharedRows`, `rowsShared_of_sharedRows`: `RowsShared` where two sessions' registrant records at one root and
-  position hold one row's bytes, as they do when the family takes them from one choice;
+  position hold one row's bytes, as they do when the family takes them from one choice, and no read is segmented;
 * `NoRegistrantCollision`, `sharedRows_of`, `rowsShared_of`: `SharedRows`, and so `RowsShared`, where no two such
   records give either collision;
-* `noRegistrantCollision`, `sharedRows`, `rowsShared`: all three hold, since both collisions are `RegColl`'s
-  (`Recursive/Registrants.lean`), which `Accepted` excludes and the recursive audit prices once.
+* `noRegistrantCollision`, `sharedRows`, `rowsShared`: the three hold (`RowsShared` where no read is segmented), since
+  both collisions are `RegColl`'s (`Recursive/Registrants.lean`), which `Accepted` excludes and the recursive audit
+  prices once.
 -/
 
 namespace FlockVBridge.Family
@@ -33,24 +37,24 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : Layout P plan tab decode} {rs : HmRows lay}
+  {lay : Layout P plan tab decode} {rs : HmRowsX lay}
   {C' : Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
-  {lay' : Layout P' plan' tab' decode'} {rs' : HmRows lay'}
+  {lay' : Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
 /-- **Two registrants' rows at one registered root and position are one row's bytes, or SHA-512 collides**: where two
 records' registered reads `p`, `p'` name one root (`port`) and one position (`readAt`), each record's opening opens it
-there (`Reads.committed`), so their leaves are one, or the two openings conflict (`TwoOpenings.collides`); one leaf
-over two rows' bytes is hm96's collision (`hm96Pair_spec`). -/
-theorem registrants_eq_or_collides (rd : Reads lay rs) (rd' : Reads lay' rs') {p : lay.Pos} {p' : lay'.Pos}
+there (`ReadsX.committed`), so their leaves are one, or the two openings conflict (`TwoOpenings.collides`); one leaf
+over two rows' bytes, each at its read's encoding, is hm96's collision (`hm96Pair_spec`). -/
+theorem registrants_eq_or_collides (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') {p : lay.Pos} {p' : lay'.Pos}
     (hp : rd.isRead p) (hp' : rd'.isRead p') (hport : rd.port p = rd'.port p') (hat : rd.readAt p = rd'.readAt p') :
-    rs.enc (rd.wv p) = rs'.enc (rd'.wv p') ∨
+    rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p') ∨
       Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
-      Collides (hm96Pair (rs.enc (rd.wv p)) (rd.ws p) (rs'.enc (rd'.wv p')) (rd'.ws p')) := by
+      Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')) := by
   by_cases hl : rd.leaf p = rd'.leaf p'
-  · by_cases he : rs.enc (rd.wv p) = rs'.enc (rd'.wv p')
+  · by_cases he : rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p')
     · exact Or.inl he
     · exact Or.inr (Or.inr (hm96Pair_spec _ _ _ _ he hl))
   · refine Or.inr (Or.inl (TwoOpenings.collides _ ⟨hl, rd.committed p hp, ?_⟩))
@@ -153,6 +157,22 @@ theorem rowEncPre_get_eq {b b' : Bool} {W W' : ℕ} {v : BitVal W} {w : BitVal W
     (i : ℕ) (hi : i < W) (hi' : i < W') : v.2 ⟨i, hi⟩ = w.2 ⟨i, hi'⟩ :=
   rowEncP_get_eq (rowPre_length b) (rowPre_length b') (rowPre_head b) (rowPre_head b') h i hi hi'
 
+/-- **A port without segments hashes a row's bytes under its first block** (`HiddenExec.encPortH`: `rowEncP` at
+`Hidden.rowPre`, `sha512/row/v1`'s or `sha512/row/v2`'s). -/
+theorem encPortH_of_none {p : Flock.Port} {W : ℕ} (h : p.segs = none) :
+    FlockSoundness.Discharge.HiddenExec.encPortH (W := W) p =
+      rowEncP (FlockSoundness.Discharge.Hidden.rowPre p.v2) := by
+  simp [FlockSoundness.Discharge.HiddenExec.encPortH, h]
+
+/-- **One row's bytes at two ports without segments fix the bits both widths hold** (`encPortH_of_none`,
+`rowEncPre_get_eq`). -/
+theorem bits_of_encPortH {p p' : Flock.Port} {W W' : ℕ} {v : BitVal W} {w : BitVal W'} (hs : p.segs = none)
+    (hs' : p'.segs = none)
+    (h : FlockSoundness.Discharge.HiddenExec.encPortH p v = FlockSoundness.Discharge.HiddenExec.encPortH p' w)
+    (b : ℕ) (hb : b < W) (hb' : b < W') : v.2 ⟨b, hb⟩ = w.2 ⟨b, hb'⟩ :=
+  rowEncPre_get_eq ((congrFun (encPortH_of_none hs) v).symm.trans (h.trans (congrFun (encPortH_of_none hs') w)))
+    b hb hb'
+
 end Enc
 
 /-! ## At the family -/
@@ -161,7 +181,7 @@ section family
 
 open FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Recursion FlockSoundness.Model
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
-open FlockSoundness.Discharge.Layout (rowEncP)
+open FlockSoundness.Discharge.HiddenExec (encPortH)
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
@@ -172,6 +192,18 @@ local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.lea
 namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+
+/-- Obligation: holds where the family registers reads only at rows of ports its sessions' reads files `own` name, as
+`RowsRegistered` takes them, and each session's registered check runs: that check refuses such a port when it is a bit
+row (`Registered.checkPort`: `sha512/row/v2` or `/row-seg/v1`), and every segmented port is one (`HmRow.parse` gives
+a port segments only with `v2`).
+**No registered read is of a segmented row.** At every accepted outer proof, each session's registered reads are rows
+of ports without segments. Acceptance does not give it: `hown` speaks of the drawn units' reads only, and `rd` is the
+family's field. A segmented row's bytes (`Layout.encSeg`, what `sha512/row-seg/v1` hashes) need not fix its bits
+across two ports or two widths, so one row's bytes (`SharedRows`) would not give one row's bits (`RowsShared`). -/
+def ReadsUnsegmented : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s : Fin F.stmts.size) (u : Fin (F.Vs s).nv)
+    (q : Fin (F.Vs s).c.ports.size), (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)) → (F.Vs s).c.ports[q.val]!.segs = none
 
 /-- Obligation: discharged by `Accepted`'s `¬ RegColl` (`noRegistrantCollision`), which the recursive audit prices once
 (`regFinder`, `prob_regColl_le`); no finder behind the transfer's `cr/sha-512` term prices it, since each sees one
@@ -192,24 +224,25 @@ def NoRegistrantCollision : Prop :=
         (F.zs R ω t R₂ s).rd.leaf (.inl (u, q)), (F.zs R ω t R₂ s).rd.wpath (.inl (u, q)),
         (F.zs R ω t R₂ s').rd.leaf (.inl (u', q')), (F.zs R ω t R₂ s').rd.wpath (.inl (u', q'))⟩ : TwoOpenings).pair ∧
       ¬ Collides (hm96Pair
-        (rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s).c)) (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))))
+        (encPortH (F.Vs s).c.ports[q.val]! (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))))
         ((F.zs R ω t R₂ s).rd.ws (.inl (u, q)))
-        (rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s').c)) (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
+        (encPortH (F.Vs s').c.ports[q'.val]! (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
 /-- Obligation: discharged by `NoRegistrantCollision` (`sharedRows`).
 **Two sessions' registrant records at one registered root and position hold one row's bytes.** At every accepted
 outer proof, where two sessions' registered reads name one root and one position, the registrants' values there have
-one row's bytes (`rowEncP` under each session's first block, `Hidden.rowPre`). It holds where the family's sessions take the registrant's opening at a root and position from one
-choice, the same in every session; `sharedRows_of` gives it from `NoRegistrantCollision` otherwise. -/
+one row's bytes, each at its port's encoding (`HiddenExec.encPortH`). It holds where the family's sessions take the
+registrant's opening at a root and position from one choice, the same in every session; `sharedRows_of` gives it from
+`NoRegistrantCollision` otherwise. -/
 def SharedRows : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
     (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
     (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)) → (F.zs R ω t R₂ s').rd.isRead (.inl (u', q')) →
     (F.zs R ω t R₂ s).rd.port (.inl (u, q)) = (F.zs R ω t R₂ s').rd.port (.inl (u', q')) →
     (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) →
-    rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s).c)) (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
-      rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s').c)) (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
+    encPortH (F.Vs s).c.ports[q.val]! (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
+      encPortH (F.Vs s').c.ports[q'.val]! (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
 
 /-- **`SharedRows` where no two registrant records collide** (`registrants_eq_or_collides`). -/
 theorem sharedRows_of (h : F.NoRegistrantCollision dg N k Rw) : F.SharedRows dg N k Rw := by
@@ -220,14 +253,18 @@ theorem sharedRows_of (h : F.NoRegistrantCollision dg N k Rw) : F.SharedRows dg 
   · exact absurd hc h1
   · exact absurd hc h2
 
-/-- **`RowsShared` from one row's bytes** (`SharedRows`, `rowEncPre_get_eq`). -/
-theorem rowsShared_of_sharedRows (h : F.SharedRows dg N k Rw) : F.RowsShared dg N k Rw := by
+/-- **`RowsShared` from one row's bytes at unsegmented reads** (`SharedRows`, `ReadsUnsegmented`,
+`bits_of_encPortH`). -/
+theorem rowsShared_of_sharedRows (h : F.SharedRows dg N k Rw) (hu : F.ReadsUnsegmented dg N k Rw) :
+    F.RowsShared dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat b hb hb'
-  exact rowEncPre_get_eq (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat) b _ _
+  exact bits_of_encPortH (hu R ω t R₂ τ o ha s u q hr) (hu R ω t R₂ τ o ha s' u' q' hr')
+    (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat) b _ _
 
-/-- **`RowsShared` where no two registrant records collide**. -/
-theorem rowsShared_of (h : F.NoRegistrantCollision dg N k Rw) : F.RowsShared dg N k Rw :=
-  F.rowsShared_of_sharedRows dg N k Rw (F.sharedRows_of dg N k Rw h)
+/-- **`RowsShared` where no two registrant records collide and no read is segmented**. -/
+theorem rowsShared_of (h : F.NoRegistrantCollision dg N k Rw) (hu : F.ReadsUnsegmented dg N k Rw) :
+    F.RowsShared dg N k Rw :=
+  F.rowsShared_of_sharedRows dg N k Rw (F.sharedRows_of dg N k Rw h) hu
 
 /-- **No two sessions' registrant records collide** (`NoRegistrantCollision`): both collisions are `RegColl`'s, which
 `Accepted` excludes. -/
@@ -239,8 +276,9 @@ theorem noRegistrantCollision : F.NoRegistrantCollision dg N k Rw := by
 /-- **`SharedRows`** (`noRegistrantCollision`). -/
 theorem sharedRows : F.SharedRows dg N k Rw := F.sharedRows_of dg N k Rw (F.noRegistrantCollision dg N k Rw)
 
-/-- **`RowsShared`** (`noRegistrantCollision`). -/
-theorem rowsShared : F.RowsShared dg N k Rw := F.rowsShared_of dg N k Rw (F.noRegistrantCollision dg N k Rw)
+/-- **`RowsShared` where no read is segmented** (`noRegistrantCollision`). -/
+theorem rowsShared (hu : F.ReadsUnsegmented dg N k Rw) : F.RowsShared dg N k Rw :=
+  F.rowsShared_of dg N k Rw (F.noRegistrantCollision dg N k Rw) hu
 
 end VStarFamily
 

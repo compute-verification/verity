@@ -93,7 +93,7 @@ the extractor gets), else by record custody. **The rows `own` names are register
 port the session's reads file `own` names is a registered read at every unit. Acceptance does not give it: `hown`
 (`OwnReads`) says only that a registered read is such a row, and `rd` is the family's field. It says how the family's
 sessions take `rd` from the registration: at each such row, the registrant's committed row, salt and path at the root
-and position the verifier holds (`Reads.committed`), which only the registrant's knowledge of its openings supplies,
+and position the verifier holds (`ReadsX.committed`), which only the registrant's knowledge of its openings supplies,
 no file. -/
 def RowsRegistered : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
@@ -150,11 +150,12 @@ def SameRow : Prop :=
         (F.zs R ω t R₂ (F.sess p)).rd.readAt (.inl (F.un p r, q)) =
           (F.zs R ω t R₂ (F.sess p')).rd.readAt (.inl (F.un p' r, q'))
 
-/-- Obligation: discharged by `SharedRows` (`rowsShared_of_sharedRows`, `rowsShared`); the transfer's `cr/sha-512` term
-does not price it, since each of its finders sees one session's record.
+/-- Obligation: discharged by `SharedRows` where no read is segmented (`rowsShared_of_sharedRows`, `rowsShared` at
+`ReadsUnsegmented`); the transfer's `cr/sha-512` term does not price it, since each of its finders sees one session's
+record.
 **One registrant row per registered root and position.** At every accepted outer proof, two sessions' registered
 reads at the same registered root and position carry the same registrant bits. Acceptance does not give it: each
-session's `rd` is its own field, and `Reads.committed` makes both rows open one root at one position, which pins them
+session's `rd` is its own field, and `ReadsX.committed` makes both rows open one root at one position, which pins them
 only up to a SHA-512 collision. It says that the family's sessions take the registrant's opening at a registered root
 and position from one choice, the same in every session (as `RowsRegistered` says which rows they read). -/
 def RowsShared : Prop :=

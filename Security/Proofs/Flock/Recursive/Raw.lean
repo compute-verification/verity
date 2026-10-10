@@ -55,7 +55,7 @@ structure ZkOuterR (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   rd : ∀ (ht : I.tags.typed = false) (S₀ : Finset (Fin nv)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok (pubZ I)),
-    FlockSoundness.Registered.Reads
+    FlockSoundness.Registered.ReadsX
       (layShHJ (Reg := Reg') dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU (pub := pubZ I))
       (rsShHJS dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU hpub)
   hown : ∀ ht S₀ d₀ y₀ hc hpub ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →

@@ -1,15 +1,15 @@
-import Proofs.Flock.Soundness.Registered.Binding
+import Proofs.Flock.Soundness.Registered.ReadsX
 import Proofs.Flock.Soundness.Discharge.Exec.Live
 
 /-!
 # Registered reads off the registrant's leaf, at the outcome's draw
 
-`Reads.prob_off_le` bounds the probability that a registered read's session leaf is not the registrant's at one
+`ReadsX.prob_off_le` bounds the probability that a registered read's session leaf is not the registrant's at one
 registration and one set of reads. In a live session both are the outcome's: the registration is the one the prover sent,
 and the verifier checks only the reads of the units it draws. So:
 
-* `rowIn S`: a commit string that is a row of a unit of `S`; `Reads.restrict`: the reads at the positions `A` keeps;
-* `Reads.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
+* `rowIn S`: a commit string that is a row of a unit of `S`; `ReadsX.restrict`: the reads at the positions `A` keeps;
+* `ReadsX.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
 * `prob_auditLive_draw`: an event of the live audit's draw alone has the law's probability (implications at every
   outcome of the session bound probabilities: `prob_auditLive_liveOfZJ_mono`, `Proofs.Flock.Recursive.Flock`);
 * `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
@@ -39,12 +39,12 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
-namespace Reads
+namespace ReadsX
 
-variable {lay : Layout P plan tab decode} {rs : HmRows lay}
+variable {lay : Layout P plan tab decode} {rs : HmRowsX lay}
 
 /-- **The registered reads at the positions `A` keeps.** -/
-def restrict (rd : Reads lay rs) (A : lay.Pos → Prop) : Reads lay rs where
+def restrict (rd : ReadsX lay rs) (A : lay.Pos → Prop) : ReadsX lay rs where
   isRead p := rd.isRead p ∧ A p
   read_row p h := rd.read_row p h.1
   port := rd.port
@@ -59,7 +59,7 @@ def restrict (rd : Reads lay rs) (A : lay.Pos → Prop) : Reads lay rs where
 `path o`: the probability of accepting while one of `rdo o`'s reads has a leaf under `Rof o` that is not the
 registrant's is at most `qR²/2^513`, under `SHA512CRStrict` (`cr/sha-512`) for the finder that plays `G` once and
 outputs the extractor's pair. -/
-theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → Reads lay rs) (Rof : β → Reg)
+theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → ReadsX lay rs) (Rof : β → Reg)
     (accept : β → Prop) (path : β → lay.Pos → ByteArray) (hchk : ∀ o, accept o → (rdo o).Checked (Rof o) (path o))
     {qR : ℝ} (hR : (StrictCR.oneRun G σ fun o => (rdo o).pick (Rof o) (path o)).CR H512 qR) :
     prob (fun o => accept o ∧ (rdo o).Off (Rof o)) G σ ≤ ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
@@ -76,7 +76,7 @@ theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → 
     ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
   exact hle.trans ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 hev)
 
-end Reads
+end ReadsX
 
 end FlockSoundness.Registered
 

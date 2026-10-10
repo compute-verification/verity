@@ -21,7 +21,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the draw misses every
   bad unit (`miss 1`); or a drawn unit computes wrongly or reads a registered value other than the registrant's at a
   leaf that is the registrant's (`zk_session_regDrawnR`: `ksAvgStrictZ + linkBoundZC + regTermZC`); or a drawn row's
-  registered leaf is not the registrant's while the verifier's registered check passes (`Reads.prob_offOn_le`:
+  registered leaf is not the registrant's while the verifier's registered check passes (`ReadsX.prob_offOn_le`:
   `qR²/2^513`). The units are bad at the strategy alone, so one sampling step covers all three.
 * `sessions`: the `S` sessions in a row, each played by a strategy the prover names at its start (`seqC`, `ofBase`);
   every strategy of a session is named (`ZkOuter.ofBase_surj`), so no prover is lost.
@@ -76,7 +76,7 @@ structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω)
   hTags : TagsOkZHJ I
   hJ : nTab I = J
-  rd : FlockSoundness.Registered.Reads
+  rd : FlockSoundness.Registered.ReadsX
     (layShHJ (Reg := Reg') dj y₀ ht hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := pub))
     (rsShHJS dj y₀ ht hcH (Layout.scopeOkH_of_scopeOk hscope) hU hpub)
   hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
@@ -198,7 +198,7 @@ def TabCR (qF qS : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
 
 /-- **`cr/sha-512` at the strategy `τ`**: for the knowledge finders of its simulation (`TabCR`) at budgets `qF, qS`,
 for its registered-value finders at `rd` (`RegCRZC`) at budget `qW`, and for the finder that plays the session once and
-outputs the extractor's pair of an off-leaf read at a drawn row (`Reads.pick`) at budget `qR`. -/
+outputs the extractor's pair of an off-leaf read at a drawn row (`ReadsX.pick`) at budget `qR`. -/
 def CR (k Rw : ℕ) (qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
   zo.TabCR dg N qF qS τ ∧
     RegCRZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
@@ -226,7 +226,7 @@ noncomputable def boundIf (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ)
 /-- **A fork of the session at the strategy `τ`**: a run of one of `CR`'s finders, or of the link finder, from the
 prover's own continuations in its simulation, outputs a SHA-512 collision: the knowledge finders of a drawn table
 (`TableForkZ`), the registered-value finders (`RegForkZC`), the run that opens a drawn row's registered leaf off the
-registrant's (`Reads.pick`), or the link finder (`LinkForkZC`). -/
+registrant's (`ReadsX.pick`), or the link finder (`LinkForkZC`). -/
 def Fork (k Rw M : ℕ) (τ : Strategy (zo.game dg N)) : Prop :=
   (∃ ω j, TableForkZ execArith hs512 (planZHJ zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
       (zcStrat execArith hs512 (planZHJ zo.dj zo.y₀) (cont (zo.sim dg N τ) ω))) ∨
@@ -322,7 +322,7 @@ theorem badUnits_nonempty (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (hG : ¬ z
   · exact (Finset.nonempty_iff_ne_empty.2 hw).mono (Finset.subset_union_left.trans Finset.subset_union_left)
 
 /-- **An off-leaf registered read at a drawn row**, at an accepted outcome, is at most `qR²/2^513` likely, under
-`cr/sha-512` for the finder that plays V*'s session once (`Reads.prob_offOn_le`): the verifier's registered check
+`cr/sha-512` for the finder that plays V*'s session once (`ReadsX.prob_offOn_le`): the verifier's registered check
 holds at the drawn rows (`checked_of_acceptsHJ`, on `hown`). -/
 theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
     (hR : (StrictCR.oneRun (zo.game dg N) τ fun o =>
@@ -341,7 +341,7 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
   refine (prob_auditLive_liveOfZJ_mono dg N zo.wr τ
     (q := fun o => (LiveAcceptsZKR zo.I zo.own o ∧ ∃ ω o', o.2.1 = Lv.draw ω ∧ o.2.2 = zo.wr (Lv.draw ω) o.1 o') ∧
       (zo.rd.restrict (rowIn o.2.1)).Off o.1) hmono).trans
-    (FlockSoundness.Registered.Reads.prob_offOn_le (zo.game dg N) τ (fun o => zo.rd.restrict (rowIn o.2.1))
+    (FlockSoundness.Registered.ReadsX.prob_offOn_le (zo.game dg N) τ (fun o => zo.rd.restrict (rowIn o.2.1))
       (fun o => o.1) (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ∃ ω o', o.2.1 = Lv.draw ω ∧ o.2.2 = zo.wr (Lv.draw ω) o.1 o')
       (fun o => regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port) ?_ hR)
   rintro ⟨R', S', tr⟩ ⟨hacc, ω, o', hS', htr⟩
