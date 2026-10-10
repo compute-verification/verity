@@ -103,3 +103,46 @@ def test_a_smaller_entry_is_costed_as_its_own_units_in_the_shape_session():
     a, b = M.menu(pl, 50)["models"][0]["entries"]
     assert (a["k_log"], a["inner_m"]) == (b["k_log"], b["inner_m"]) == (big["k_log"], big["inner_m"])
     assert a["inner_session_s"] == pytest.approx(big["session_s"]) and a["inner_h_public"] > small["inner_h_public"]
+
+
+def _entry(slots, regions, m=35, k=27, outer_s=100.0, sessions=1):
+    return {"slots": slots, "bound": 2.0 ** 29, "k_log": k, "inner_m": m, "inner_peak_gib": 1.0, "inner_session_s": 10.0,
+            "outer_session_s": outer_s, "outer_rss_gib": 20.0, "outer_refused": [], "sessions_mean": sessions,
+            "sessions_public": sessions, "regions": regions, "claims": None}
+
+
+def test_a_shape_takes_its_largest_region_count_and_v_star_checks_the_reps_algebra_at_it():
+    """llama32-1b/b1/i256's (256, 2^29): regions 4, 7 and 2 pad to 7, claims 16; another shape keeps its own 3, claims 8.
+    V*'s check of the reps' algebra is one statement of 2 x products x rows-per-product rows, priced at the input's one-block
+    statement of its k_log, and a refusal of the shape's parts is the entry's outer refusal."""
+    es = [_entry(256, 4), _entry(256, 7), _entry(256, 2), _entry(64, 3, m=30, k=22)]
+    M.one_session_per_shape(es)
+    assert [(e["regions"], e["claims"]) for e in es] == [(7, 16)] * 3 + [(3, 8)]
+    seen = []
+
+    def algebra(m, k, claims):
+        seen.append((m, k, claims))
+        return (5000, "V* parts: too wide") if claims > 14 else (2000, None)
+
+    M.inner_algebra(es, {26: (10.0, 14.0), 27: (21.0, 25.0)}, algebra)
+    assert set(seen) == {(35, 27, 16), (30, 22, 8)}
+    a, d = es[0], es[3]
+    assert a["inner_algebra_rows"] == pytest.approx(2 * 5000 * M.ROWS_PER_PRODUCT) and a["inner_algebra_k_log"] == 27
+    assert (a["outer_session_s"], a["outer_rss_gib"], a["outer_refused"]) == (121.0, 25.0, ["V* parts: too wide"])
+    assert a["outer_h_public"] == pytest.approx(121.0 / 3600)
+    assert (d["inner_algebra_k_log"], d["outer_session_s"], d["outer_refused"]) == (26, 110.0, [])
+    with pytest.raises(ValueError, match="no one-block statement at k_log 27"):
+        M.inner_algebra([_entry(256, 7) | {"claims": 16}], {26: (10.0, 14.0)}, algebra)
+
+
+def test_v_star_refuses_the_reps_algebra_at_16_claims():
+    """proofs' blocker (note:proofs/20261010T2112Z-finding-c3-claims-per-shape): at m 35, k_log 27 and 16 claims the
+    batched-T residual alone needs more sha512x3 slots than a part holds."""
+    products, why = M.rep_algebra(35, 27, 16)
+    assert products > 4900 and why is not None and "residual 20 alone" in why
+
+
+def test_a_unit_types_regions_are_its_ports():
+    """Gumbel's top-p sampler has 6 inputs and 1 output, SiluMul 1 and 1."""
+    assert M.regions({"template": "gumbel-top-p-token-select", "subcircuit_parameters": {"V": 128256}}) == 7
+    assert M.regions({"template": "silu-mul", "subcircuit_parameters": {"I": 8192}}) == 2
