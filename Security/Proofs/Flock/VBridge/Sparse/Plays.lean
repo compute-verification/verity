@@ -54,7 +54,7 @@ theorem drawFin_plays (cs : Array F128) : ∀ (n a : ℕ),
           Fin (n + 1) → 𝔽) = fun i => fOf cs[a + i.val]! := by
         funext i
         refine Fin.cases ?_ (fun j => ?_) i
-        · simp [getElem!_single]
+        · simp
         · simp only [Fin.cons_succ, Fin.val_succ]
           rw [show a + 1 + j.val = a + (j.val + 1) by omega]
       rw [drawFin, coinTape_succ, ← e]
@@ -80,7 +80,7 @@ theorem degRounds_plays (k : ℕ) (msg : ℕ → 𝔽 × (Fin k → 𝔽)) (cs :
           Fin (n + 1) → 𝔽) = fun i => fOf cs[o + a + i.val]! := by
         funext i
         refine Fin.cases ?_ (fun j => ?_) i
-        · simp [getElem!_single]
+        · simp
         · simp only [Fin.cons_succ, Fin.val_succ]
           rw [show o + a + 1 + j.val = o + a + (j.val + 1) by omega]
       have e2 : degFold msg (fun j => fOf cs[o + j]!) (a + 1) n
@@ -151,14 +151,6 @@ def verdictOf (w : Array F128) (τ : Array ℕ) (c : SCoins) : Option (RegClaim 
     (uOf sh w) (fun i => fOf c.cs[12 + nR sh + i.val]!) (vtOf sh w)
     (fun i => fOf c.cs[12 + nR sh + sh.pLog + i.val]!)
 
-theorem vt_plays (w : Array F128) :
-    Plays fOf (if sh.tLog = 0 then (pure fun _ => 0 : Game (Fin (2 ^ sh.tLog) → 𝔽))
-      else recv (Fin (2 ^ sh.tLog) → 𝔽)) (vtTape sh w) [] (vtOf sh w) := by
-  unfold vtTape vtOf
-  split_ifs
-  · exact Plays.pure _
-  · exact Plays.recv _ _
-
 /-- **A run of the sparse phase** on `RecSparse_v1`'s messages and coins, to `verdictOf`. -/
 theorem sparsePhase_plays (w : Array F128) (τ : Array ℕ) (c : SCoins) :
     Plays fOf (sparsePhase execArith sh (pubOf sh c) (fun σ => τ[σ.val]!) (fun s => fOf w[s.val]!))
@@ -168,7 +160,6 @@ theorem sparsePhase_plays (w : Array F128) (τ : Array ℕ) (c : SCoins) :
   have h3 := degRounds_plays (2 * sh.ell) (msg3 sh w (2 * sh.ell)) c.cs 12 sh.nu 0 (fOf w[wV2]!)
   have h4 := degRounds_plays (2 * sh.ell + 1) (msg3 sh w (2 * sh.ell + 1)) c.cs 12 sh.sLog sh.nu (c3Of sh w c.cs)
   have h5 := drawFin_plays c.cs sh.pLog (12 + nR sh)
-  have h6 := vt_plays sh w
   have h7 := drawFin_plays c.cs sh.tLog (12 + nR sh + sh.pLog)
   simp only [Nat.add_zero] at h2 h3
   unfold sparsePhase
@@ -178,10 +169,29 @@ theorem sparsePhase_plays (w : Array F128) (τ : Array ℕ) (c : SCoins) :
   refine Plays.bind' h3 ?_ rfl rfl
   refine Plays.bind' h4 ?_ rfl rfl
   refine Plays.bind' (Plays.recv _ (uOf sh w)) ?_ rfl rfl
-  refine Plays.bind' h5 ?_ rfl rfl
-  refine Plays.bind' h6 ?_ (List.append_nil _).symm rfl
-  refine Plays.bind' h7 ?_ rfl (List.append_nil _).symm
-  exact Plays.pure _
+  refine Plays.bind' h5 (ms₂ := vtTape sh w) (cs₂ := coinTape c.cs (12 + nR sh + sh.pLog) sh.tLog) ?_
+    (List.nil_append _).symm rfl
+  -- the model's `vt` is a do-notation join point over `if sh.tLog = 0`
+  dsimp only
+  by_cases ht : sh.tLog = 0
+  · have hm : vtTape sh w = [] := by unfold vtTape; exact ite_eq_left ht
+    have hv : vtOf sh w = fun _ => 0 := by unfold vtOf; exact ite_eq_left ht
+    rw [ite_eq_left ht, hm]
+    unfold verdictOf
+    rw [hv]
+    refine Plays.bind' (ms₂ := []) (cs₂ := coinTape c.cs (12 + nR sh + sh.pLog) sh.tLog) (Plays.pure _) ?_ rfl rfl
+    refine Plays.bind' (ms₂ := []) (cs₂ := []) h7 ?_ rfl (List.append_nil _).symm
+    exact Plays.pure _
+  · have hm : vtTape sh w = [⟨Fin (2 ^ sh.tLog) → 𝔽, fun t => fOf w[wVt sh + t.val]!⟩] := by
+      unfold vtTape; exact ite_eq_right ht
+    have hv : vtOf sh w = fun t => fOf w[wVt sh + t.val]! := by unfold vtOf; exact ite_eq_right ht
+    rw [ite_eq_right ht, hm]
+    unfold verdictOf
+    rw [hv]
+    refine Plays.bind' (ms₂ := []) (cs₂ := coinTape c.cs (12 + nR sh + sh.pLog) sh.tLog)
+      (Plays.recv _ (fun t : Fin (2 ^ sh.tLog) => fOf w[wVt sh + t.val]!)) ?_ rfl rfl
+    refine Plays.bind' (ms₂ := []) (cs₂ := []) h7 ?_ rfl (List.append_nil _).symm
+    exact Plays.pure _
 
 end
 
