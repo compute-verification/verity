@@ -74,8 +74,13 @@ theorem firewallPairs_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) 
     Flock.Guarantees.firewallPairs m y i =
       (ZkView.bitsOf (Flock.Sha512.hash (m i fun j =>
           Flock.Guarantees.commitBytes (Flock.Guarantees.firewallPairs m y (Fin.castLE i.isLt.le j)))) +
-        ZkView.My (y i), ZkView.saltHash (y i)) :=
-  ZK.adaptiveLeaves_eq _ _ _ i
+        ZkView.My (y i), ZkView.saltHash (y i)) := by
+  -- `dsimp` first: unifying `(π i).1` with `ZkView.My (y i)` unfolds `My`'s 1536-term sum past `maxRecDepth`
+  have h := ZK.adaptiveLeaves_eq (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
+    (fun i l => ZkView.bitsOf (Flock.Sha512.hash (m i fun j => Flock.Guarantees.commitBytes (l j))))
+    (fun i => (ZkView.My (y i), ZkView.saltHash (y i))) i
+  dsimp only [id_eq] at h
+  exact h
 
 theorem firewallStrings_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (ys : Fin nh → ByteArray)
     (i : Fin nh) :
