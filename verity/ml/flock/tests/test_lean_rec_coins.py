@@ -145,29 +145,28 @@ def undrawn(tmp_path_factory) -> Path:
     return d
 
 
-def test_a_v_registered_one_element_off_is_refused_at_its_part(forged, shape, undrawn, tmp_path):
-    """`HVCoins`' check (`RecCoins.checkResiduals`): the algebra staged with rep 0's first comb element of v one bit off
-    (`rec_vstage --forge comb`) is refused at the one part holding it, by the v the verifier's coins and fold give; every
-    other part passes setup (`undrawn`'s session is refused after it)."""
-    _stage(tmp_path, levels=[], algebra=True, evaluate=False, forge="comb")
-    t = SET / "inner-honest" / "public.json"
-    whys = {p.name: _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
-                            session=undrawn)["why"]
-            for p in sorted((tmp_path / "forged-comb" / "alg").iterdir())}
-    refused = {k: w for k, w in whys.items() if w.startswith("setup:")}
-    assert len(refused) == 1 and len(whys) > 1, whys
-    ((part, why),) = refused.items()
-    assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{part}: rep 0: part {part[1:]}'s \d+ elements of v: the "
-                        "statement's v row is not the verifier's rec-v row 0", why), why
-
-
 @pytest.fixture(scope="module")
 def algebra(forged, tmp_path_factory) -> Path:
-    """V*'s algebra parts staged over the honest inner session: the first that reads the first message round, `rec-c0`."""
+    """V*'s algebra parts (`p<j>`) staged over the honest inner session."""
     d = tmp_path_factory.mktemp("rec-alg")
     _stage(d, levels=[], algebra=True, evaluate=False)
-    reads = lambda p: [x["value"] for x in json.loads((p / "registered.json").read_text())["ports"].values()]
-    return next(p for p in sorted((d / "alg").iterdir()) if "rec-c0" in reads(p))
+    return d / "alg"
+
+
+def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, undrawn, tmp_path):
+    """`HVCoins`' check (`RecCoins.checkResiduals`): the algebra staged with rep 0's first comb element of v one bit off
+    (`rec_vstage --forge comb`) changes one part's registration, and that part is refused by the v the verifier's coins and
+    fold give."""
+    _stage(tmp_path, levels=[], algebra=True, evaluate=False, forge="comb")
+    parts = sorted((tmp_path / "forged-comb" / "alg").iterdir())
+    changed = [p for p in parts if (p / "registered.json").read_bytes() != (algebra / p.name / "registered.json").read_bytes()]
+    assert len(changed) == 1 and len(parts) > 1, changed
+    (p,) = changed
+    t = SET / "inner-honest" / "public.json"
+    why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
+                  session=undrawn)["why"]
+    assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
+                        "the statement's v row is not the verifier's rec-v row 0", why), why
 
 
 def _transcript(dst: Path, change) -> Path:
@@ -178,17 +177,19 @@ def _transcript(dst: Path, change) -> Path:
 
 
 def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape, undrawn, tmp_path):
-    """`HPubRows`' check (`RecVStar.checkPubRows`): an algebra part's `pub.bin` rows at its `rec-c<k>` reads are the
-    `c_k` the coin server recorded. The honest part passes setup with the inner transcript (`undrawn`'s session is
-    refused after it), is refused without it, and is refused at a transcript whose rep 0 `c_0` is one bit
-    off, or whose coins there are not the inner session's."""
-    t = SET / "inner-honest" / "public.json"
-    v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
-                session=undrawn)
-    assert not v["why"].startswith("setup:"), v["why"]
-    with (algebra / "circuit.txt").open() as f:
+    """`HPubRows`' check (`RecVStar.checkPubRows`): the `pub.bin` rows of the first algebra part that reads `rec-c0` are,
+    at its `rec-c<k>` reads, the `c_k` the coin server recorded. The honest part passes setup with the inner transcript
+    (`undrawn`'s session is refused after it), is refused without it, and is refused at a transcript whose rep 0 `c_0` is
+    one bit off, or whose coins there are not the inner session's."""
+    reads = lambda p: {k: x["value"] for k, x in json.loads((p / "registered.json").read_text())["ports"].items()}
+    a = next(p for p in sorted(algebra.iterdir()) if "rec-c0" in reads(p).values())
+    (port,) = [k for k, x in reads(a).items() if x == "rec-c0"]
+    with (a / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
-    v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", session=undrawn)
+    t = SET / "inner-honest" / "public.json"
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t), session=undrawn)
+    assert not v["why"].startswith("setup:"), v["why"]
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", session=undrawn)
     assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
 
     def flip(r):
@@ -197,12 +198,9 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
         r["commits"] = [c.hex()]
 
     bad = _transcript(tmp_path / "c0.json", flip)
-    v = _verify(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
-                str(bad), session=undrawn)
-    (port,) = [k for k, x in json.loads((algebra / "registered.json").read_text())["ports"].items() if x["value"] == "rec-c0"]
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn)
     assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not rep 0's c_0 \(inner round \d+\) "
                         "of the inner transcript", v["why"]), v["why"]
     bad = _transcript(tmp_path / "coins.json", lambda r: r.__setitem__("coins", ["00" * 16] * len(r["coins"])))
-    p = _run(algebra, algebra / "pub.bin", algebra / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad),
-             session=undrawn)
+    p = _run(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn)
     assert p.returncode == 2 and "round" in p.stderr and "coins are not the inner session record's" in p.stderr, p.stderr
