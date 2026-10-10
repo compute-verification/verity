@@ -53,7 +53,8 @@ theorem coverage_holds : Coverage := by
     obtain ⟨hj, he⟩ := drawOrder_eq_some
       ((hr (route.symm q)).symm.trans ((congrArg β.held (route.apply_symm_apply q)).trans hq))
     have e := (S.orderEmbOfFin rfl).injective he
-    exact (route.apply_symm_apply q).symm.trans (congrArg route (Fin.ext (congrArg Fin.val e)))
+    subst e
+    exact (route.apply_symm_apply q).symm
   · have hcard : Fintype.card β.Pos = ∑ b, (β.shape b).slots :=
       Fintype.card_sigma.trans (Finset.sum_congr rfl fun b _ => Fintype.card_fin _)
     have hsum : ∑ b, (β.shape b).slots = (β.view.map Shape.slots).sum :=
@@ -85,6 +86,7 @@ theorem slotBinding_holds : SlotBinding := by
         (hopen p i hp) (hcom.opens i t v hX)
 
 theorem slotsSound_holds : SlotsSound := by
+  classical
   intro N T V Ty C X path₀ S h hinj hcom hp
   rcases slotBinding_holds C X path₀ h hinj hcom hp.opens with hB | hbrk
   · left
