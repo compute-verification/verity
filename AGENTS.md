@@ -268,7 +268,9 @@ Never print a secret's value.
 - List environment variable names with `compgen -e`, never `env | cut`, `env | grep` or `printenv | …`: a multi-line
   value's later lines print as if they were names.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
-  (`tools/agent-guard/shell_hook.py`).
+  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
+  environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs
+  `install.sh`.
 - A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
   on the VM.
 
