@@ -239,7 +239,8 @@ theorem drawOkZKHJ_of_accepts_subset (I : Inputs) (ht : I.tags.typed = false) {c
     DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S := by
   refine drawOkZKHJ_of_file I ht hc kd pop ?_ dj hdj S
   by_cases h1 : I.count ≤ 1
-  · simp [nTab, h1]
+  · rw [show nTab I = 1 from if_pos h1]
+    exact Nat.mod_one kd
   · obtain ⟨hd, -⟩ := hRec S R o hacc
     obtain ⟨spec, sts, hs, -⟩ := hacc
     rw [Exec.setupOf, hd] at hs

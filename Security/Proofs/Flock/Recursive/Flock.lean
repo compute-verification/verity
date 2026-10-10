@@ -352,8 +352,9 @@ variable {nv : ℕ} (law : VLaw nv)
 /-- The live full draw on the source's bytes. -/
 abbrev live : Law nv := Law.execOS (n := nv) law.src (.subset nv) nv
 
-/-- The model's full draw. -/
-abbrev model : Law nv := Law.subset nv nv le_rfl
+/-- The model's full draw. It reads nothing of the law but its unit count; the argument is there so that
+`(Vs j).law.model` names it. -/
+abbrev model (_law : VLaw nv) : Law nv := Law.subset nv nv le_rfl
 
 end VLaw
 
