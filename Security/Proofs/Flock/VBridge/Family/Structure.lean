@@ -374,7 +374,8 @@ def toF128 (a : 𝔽) : F128 := a
 the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`), §5 and
 §16.2. The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
 theorem setupRealizes_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) {sch : Flock.Schedule}
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (hf : Flock.fast100 st.m = some sch) (hb : RegionBytes st) :
+    (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (hf : Flock.fast100 st.m = some sch)
+    (hb : RegionBytes st) :
     SetupRealizes (Setup.ofCircuit st) (stmtOf st hwf (regionsOf st)) sch PT_LOCAL st.mPts := by
   refine ⟨rfl, rfl, ofCircuit_fold st hwf _, hms, hf, ?_, hwf.hk, rfl, fun pts => ?_⟩
   · show 14 ≤ st.m

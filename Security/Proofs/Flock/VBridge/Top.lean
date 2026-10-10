@@ -29,7 +29,7 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S �
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Flock.Schedule)
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 /-- **VBridge G from V*'s facts.** -/
 theorem vbridge_of_vstar
@@ -87,7 +87,7 @@ theorem vbridge_of_vstar
     (hio : ∀ i < (ℐ).r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
       ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
-  vbridge_compiled T CT execArith H512 enc512 leaf512 cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
+  vbridge_compiled T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
     (FlockVBridge.OfVStar.algebraDecodes_of_decode zs dg N k Rw sh rep hS (Flock.RecAlgebra.structureOf_bitsOk hS) hg
       sess un cp hvr hsz hres)
     (FlockVBridge.AccChain.accChains_of_decode zs dg N k Rw sh rep acc ops sessO unO cpO hu hcoef hcons hrd)

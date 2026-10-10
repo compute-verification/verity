@@ -5,7 +5,7 @@ import Proofs.Flock.VBridge.Runs.Rep
 # The family's table files: `HSch`, `HFiles`, `HRuns`
 
 `files` is a proof device: `vbridge_of_family` reads it only through `TableFiles.accepts`, which routes the inner
-transcript through the verifier of record (`verifyRep`, then `table_refines_hm96`). So the files are made from what the
+transcript through the verifier of record (`verifyRep`, then `table_refines_plain`). So the files are made from what the
 family already reads, at each history and registration:
 
 * the proof file of rep `r` (`proofOf`) holds the messages w holds (`decoded`, at `F.rep`), the verifier's `final_c`
@@ -333,7 +333,8 @@ theorem proofOf_zc {sh : Shape} {params : PcsParams} {cap : Array ByteArray} {li
 claims at `pts` (§5). The verifier's setup of the inner circuit establishes it (`Setup.ofCircuit`, Verify.lean:29-32;
 `Refine.Regions`' `extraRealizes` gives the points' half at `ptsOf`'s arrays). -/
 def SetupRealizes (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (ptLocal mPts : ℕ) : Prop :=
-  st.m = S.m ∧ st.kLog = S.kLog ∧ FoldRealizes st.fold S ∧ st.merkle = MerkleScheme.hm96Sha512 ∧
+  st.m = S.m ∧ st.kLog = S.kLog ∧ FoldRealizes st.fold S ∧
+    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" ∧
     Flock.fast100 st.m = some sch ∧ 14 ≤ st.m ∧ st.kLog ≤ st.m ∧ st.fold.kLog = st.kLog ∧
     ∀ pts, ∃ P, PointsOK st S ptLocal mPts pts P
 
@@ -582,7 +583,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 
@@ -615,7 +616,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 

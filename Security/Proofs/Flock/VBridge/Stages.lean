@@ -60,7 +60,8 @@ spine, and the inner transcript `t`'s steps are the level-0 cap, the link points
 def Valid (F : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls) {nT nR : ℕ}
     (T : Fin nT → Type) (CT : Fin nR → Type) (t : List (List (SMsg T) × ((k : Fin nR) → CT k))) : Prop :=
   F.st.m = (M.toStatement regs).m ∧ F.st.kLog = (M.toStatement regs).kLog ∧
-    FoldRealizes F.st.fold (M.toStatement regs) ∧ F.st.merkle = MerkleScheme.hm96Sha512 ∧
+    FoldRealizes F.st.fold (M.toStatement regs) ∧
+    F.st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" ∧
     Flock.fast100 F.st.m = some F.sch ∧
     ExtraRealizes F.st (M.toStatement regs) F.sess.points
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts F.pts) ∧
@@ -86,7 +87,7 @@ def Runs (F : TableFiles cls) : Prop :=
 theorem accepts (F : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls) {nT nR : ℕ}
     (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] (sch : Flock.Schedule)
     (hsch : F.sch = sch) (t : List (List (SMsg T) × ((k : Fin nR) → CT k))) (hv : F.Valid regs M T CT t)
-    (hr : F.Runs) : (flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)).accepts M t := by
+    (hr : F.Runs) : (flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)).accepts M t := by
   subst hsch
   obtain ⟨hmS, hkS, hfold, hms, hf, hext, hwf, hex, hrep, ht⟩ := hv
   have hsize := (hext F.extras hex).1
@@ -115,7 +116,7 @@ variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fint
 variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Flock.Schedule)
 
 /-- The compiled inner protocol on the verifier's own definitions. -/
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 /-- **G item 5 from one table's files and both reps' runs.** When, at every accepted outer proof, V*'s layers hold a
 valid table (`files`, at a schedule `sch`), and, where the reps also meet E's preconditions, both reps' programs run,
@@ -173,7 +174,7 @@ theorem vbridge_exec
           (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
         ∃ p ∈ own j, Flock.Registered.roundCommitment p.value = true ∧ ∃ x, p.reads[u.val]? = some (some x)) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
-  vbridge_compiled T CT execArith H512 enc512 leaf512 cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
+  vbridge_compiled T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
     halg hacc (stagesAccept_of_runs T CT cls regs sch zs dg N k Rw sh rep x wmsg files hsch hfiles hruns) hcm hdec
     (vFullR_of_vFull (FlockVBridge.Full.vFull_of_checkFull _ Sk hS own dj d hd hlaw hU4 hreads))
 
