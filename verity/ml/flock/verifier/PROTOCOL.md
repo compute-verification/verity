@@ -1557,7 +1557,13 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
-   `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+   `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
+   bits in at least one chunk`). Under hidden outputs (§16.13) the check is `Layout.scopeOkH`: the same unit, and every
+   row a `sha512/row/v1` row as above or every row an unsegmented `sha512/row/v2` row (§16.14) of `16 · words` bits whose
+   last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block (`128 · chunks ≤ 2 · words` and
+   `2 · words + 17 ≤ 128 · (chunks + 1)`), each output row holding one output port (`rows that are neither all
+   sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits
+   ending in their hm96 block, one output port each`). A segmented row (`sha512/row-seg/v1`) is outside both.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
 design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
@@ -1570,7 +1576,7 @@ population's statement, and its verdict is
 passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's reason. A
 claim for the draw of every unit would cover it; none is proved.
 
-The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
+The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
