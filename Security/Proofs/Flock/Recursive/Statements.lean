@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Assumptions.Recursive
 import Proofs.Flock.Soundness.Assumptions.Zk
 import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # The recursive audit's guarantees (trusted)
@@ -130,13 +131,14 @@ def commitBytes (u : ZkView.Bits × ByteArray) : ByteArray := ZkView.bytesOf (k 
 /-- **The firewall's commit strings under live inner coins**, as their two halves: string `i` is
 `(SHA-512(m_i) ⊕ M·y_i, c(y_i))`, a `firewallLeaf`'s before its leaf hash, where the message `m_i = msgs i l` reads the
 commit strings `l` before it (`commitBytes` of their halves). The auditor has seen those strings when it draws the coins
-message `i` answers, so the message may read them: each inner coin is live, drawn after the commitment before it. -/
-def firewallPairs {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt)
-    (i : Fin nh) : ZkView.Bits × ByteArray :=
-  (ZkView.bitsOf (Sha512.hash (msgs i fun j => commitBytes (firewallPairs msgs y (Fin.castLE i.isLt.le j)))) +
-    ZkView.My (y i), ZkView.saltHash (y i))
-termination_by i.val
-decreasing_by exact j.isLt
+message `i` answers, so the message may read them: each inner coin is live, drawn after the commitment before it. They
+are `ZK.adaptiveLeaves` at the identity encoding: pair `i` is message `i`'s digest at the pairs before it, plus
+`(M·y_i, c(y_i))`. -/
+def firewallPairs {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt) :
+    Fin nh → ZkView.Bits × ByteArray :=
+  FlockSoundness.ZK.adaptiveLeaves (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
+    (fun i l => ZkView.bitsOf (Flock.Sha512.hash (msgs i fun j => commitBytes (l j))))
+    (fun i => (ZkView.My (y i), ZkView.saltHash (y i)))
 
 /-- **The firewall's commitments under live inner coins**: commitment `i` is the hm96-sha512 leaf of message `i`'s
 SHA-512 under its own fresh salt `y i`, `firewallLeaf (msgs i l) (y i)`, where message `i` reads the commit strings `l`

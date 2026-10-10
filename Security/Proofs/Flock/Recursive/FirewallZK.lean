@@ -74,8 +74,8 @@ theorem firewallPairs_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) 
     Flock.Guarantees.firewallPairs m y i =
       (ZkView.bitsOf (Flock.Sha512.hash (m i fun j =>
           Flock.Guarantees.commitBytes (Flock.Guarantees.firewallPairs m y (Fin.castLE i.isLt.le j)))) +
-        ZkView.My (y i), ZkView.saltHash (y i)) := by
-  rw [Flock.Guarantees.firewallPairs]
+        ZkView.My (y i), ZkView.saltHash (y i)) :=
+  ZK.adaptiveLeaves_eq _ _ _ i
 
 theorem firewallStrings_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (ys : Fin nh → ByteArray)
     (i : Fin nh) :
@@ -90,7 +90,7 @@ theorem firewallPairs_adaptive {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteA
     Flock.Guarantees.firewallPairs m y = ZK.adaptiveLeaves (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
       (fun i l => ZkView.bitsOf (Flock.Sha512.hash (m i fun j => Flock.Guarantees.commitBytes (l j))))
       (fun i => (ZkView.My (y i), ZkView.saltHash (y i))) :=
-  ZK.adaptiveLeaves_unique _ _ _ _ fun i => firewallPairs_eq m y i
+  rfl
 
 /-- **The firewall's commit strings at salts' bytes split**, one message at a time (`ZkView.commitString_split`, each
 message reading the strings before it): at the bytes of the salts `y` they are `commitBytes` of `firewallPairs`. -/
