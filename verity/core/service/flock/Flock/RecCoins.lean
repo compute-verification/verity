@@ -69,12 +69,17 @@ structure Files where
   partition : Json
   record : String
 
-/-- The inner session of V*'s unit `unit`: its statement's setup, its record and its table. -/
+/-- What check 5 reads of the inner session of V*'s unit `unit`: its statement's `m` and `k_log`, its extra claims at the
+record's link points, each rep's coins (an error without the unit), and the comb at a rep's fold points (`Inner.comb`). Set
+up from the inner statement (`Inner.load`), or read from the verifier's record of them (`Inner.ofJson`, which `rec-coins`
+writes once per inner session from `Inner.load`'s values). -/
 structure Inner where
   unit : String
-  setup : Setup
-  sess : Session
-  table : String
+  m : Nat
+  kLog : Nat
+  extras : V (Array Claim)
+  roundsOf : Nat → V (Array (Array F128))
+  combOf : Nat → RecAlgebra.Info RecAlgebra.Lin → V (Array F128)
 
 /-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
@@ -90,20 +95,27 @@ def Inner.load (unit : String) (f : Files) : V Inner := do
   let sess ← match Record.decode spec f.record with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's record: {e}"
-  return ⟨unit, Setup.ofCircuit st, sess, spec.tables[0]!⟩
+  let setup := Setup.ofCircuit st
+  let table := spec.tables[0]!
+  return { unit, m := setup.m, kLog := setup.kLog, extras := setup.extra sess.points
+           roundsOf := fun r => do
+             let name := s!"{table}/rep{r}"
+             let some s := sess.streams.find? (·.name == name) | throw s!"the inner record has no stream {name}"
+             return s.rounds.map (·.coins)
+           combOf := fun _ info => do
+             let f := info.lc.fold
+             setup.fold.folded f.alpha f.beta f.lw f.rhoIn f.ts }
 
 /-- Rep `r`'s coins, round by round: its stream's, as `verifyRep` replays them (Verify.lean:40). -/
-def Inner.rounds (inn : Inner) (r : Nat) : V (Array (Array F128)) := do
-  let name := s!"{inn.table}/rep{r}"
-  let some s := inn.sess.streams.find? (·.name == name) | throw s!"rec-coins: {inn.unit}: the inner record has no stream {name}"
-  return s.rounds.map (·.coins)
+def Inner.rounds (inn : Inner) (r : Nat) : V (Array (Array F128)) :=
+  (inn.roundsOf r).mapError fun e => s!"rec-coins: {inn.unit}: {e}"
 
 /-- The verifier's shape and extra claims: the inner statement's `m` and `k_log`, its extra claims at the record's link
 points (Verify.lean:41), two claims besides them. -/
 def Inner.algebra (inn : Inner) : V (Shape × Array Claim) := do
-  let extras ← inn.setup.extra inn.sess.points
-  let some sh := RecResiduals.shape? inn.setup.m inn.setup.kLog (2 + extras.size)
-    | throw s!"rec-coins: {inn.unit}: the inner statement's shape (m {inn.setup.m}, k_log {inn.setup.kLog}) has no algebra"
+  let extras ← inn.extras
+  let some sh := RecResiduals.shape? inn.m inn.kLog (2 + extras.size)
+    | throw s!"rec-coins: {inn.unit}: the inner statement's shape (m {inn.m}, k_log {inn.kLog}) has no algebra"
   return (sh, extras)
 
 def ZERO_COMB : Array F128 := Array.replicate 64 0
@@ -121,10 +133,9 @@ def Inner.rep (inn : Inner) (sh : Shape) (extras : Array Claim) (r : Nat) : V Re
   | .ok (v, info, kappa) => return ⟨rounds, v, info, kappa⟩
   | .error e => throw s!"rec-coins: {inn.unit}: rep {r}: {e}"
 
-/-- The comb at the rep's fold points (`CircuitFold.folded`, as V*'s `InnerFold.lean` computes it). -/
-def Inner.comb (inn : Inner) (rep : Rep) : V (Array F128) := do
-  let f := rep.info.lc.fold
-  let comb ← inn.setup.fold.folded f.alpha f.beta f.lw f.rhoIn f.ts
+/-- The comb at rep `r`'s fold points (`CircuitFold.folded`, as V*'s `InnerFold.lean` computes it). -/
+def Inner.comb (inn : Inner) (r : Nat) (rep : Rep) : V (Array F128) := do
+  let comb ← inn.combOf r rep.info
   if comb.size != 64 then throw s!"rec-coins: {inn.unit}: a comb of {comb.size}"
   return comb
 
@@ -202,15 +213,85 @@ def checkResiduals (inn : Inner) (c : Circuit) (pub : Public) (own : Array Regis
   let rows ← #[0, 1].mapM fun r => do
     let rep ← inn.rep sh extras r
     let base := rep.v.extract 0 (rep.v.size - 64)
-    let comb ← if vs.any (· ≥ base.size) then inn.comb rep else pure ZERO_COMB
+    let comb ← if vs.any (· ≥ base.size) then inn.comb r rep else pure ZERO_COMB
     let full := base ++ comb
     pure (padTo (words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size))
   checkValue c pub own "v" V_VALUE rows fun r => s!"rep {r}: part {j}'s {vs.size} elements of v"
 
+def COINS_FORMAT : String := "verity/rec-coins/v1"
+
+def f128Json (x : F128) : Json := Json.arr #[Lean.toJson x.lo.toNat, Lean.toJson x.hi.toNat]
+def f128sJson (xs : Array F128) : Json := Json.arr (xs.map f128Json)
+
+def f128Of (j : Json) : Except String F128 := do
+  let #[lo, hi] ← j.getArr? | throw "an F element is not [lo, hi]"
+  let (lo, hi) := (← lo.getNat?, ← hi.getNat?)
+  if lo ≥ 2 ^ 64 || hi ≥ 2 ^ 64 then throw "an F element's halves are 64 bits"
+  return ⟨lo.toUInt64, hi.toUInt64⟩
+def f128sOf (j : Json) : Except String (Array F128) := do (← j.getArr?).mapM f128Of
+
+def exceptJson {α : Type} (f : α → Json) : V α → Json
+  | .ok a => Json.mkObj [("ok", f a)]
+  | .error e => Json.mkObj [("error", .str e)]
+
+def exceptOf {α : Type} (f : Json → Except String α) (j : Json) : Except String (V α) :=
+  match j.getObjValAs? String "error" with
+  | .ok e => pure (.error e)
+  | .error _ => do pure (.ok (← f (← j.getObjVal? "ok")))
+
+/-- What check 5 reads of `inn`, as `rec-coins` writes it (`verity/rec-coins/v1`): `m`, `k_log`, the extra claims, and
+for reps 0 and 1 the coins and the comb at the rep's fold points, each value or the error computing it gives (the comb
+only where the rep's values are computed, `Inner.rep`); `record_sha512` binds the inner session's record it decodes. -/
+def Inner.toJson (inn : Inner) (record : String) : Json :=
+  let claim := fun (c : Claim) => Json.mkObj [("value", f128Json c.value), ("skip", f128sJson c.skip), ("x", f128sJson c.x)]
+  let rep := fun (r : Nat) =>
+    let comb : Json := match (do let (sh, extras) ← inn.algebra; inn.rep sh extras r) with
+      | .ok rp => exceptJson f128sJson (inn.combOf r rp.info)
+      | .error _ => Json.null
+    Json.mkObj [("rounds", exceptJson (fun rs => Json.arr (rs.map f128sJson)) (inn.roundsOf r)), ("comb", comb)]
+  Json.mkObj [("format", .str COINS_FORMAT), ("record_sha512", .str (hexOf (Sha512.hash record.toUTF8))),
+    ("m", Lean.toJson inn.m), ("k_log", Lean.toJson inn.kLog),
+    ("extras", exceptJson (fun cs => Json.arr (cs.map claim)) inn.extras), ("reps", Json.arr #[rep 0, rep 1])]
+
+/-- The verifier's record of what check 5 reads of the inner session (`Inner.toJson`), for V*'s unit `unit`, made from the
+record `record`. -/
+def Inner.ofJson (unit : String) (j : Json) (record : String) : Except String Inner := do
+  if (j.getObjValAs? String "format").toOption != some COINS_FORMAT then throw s!"rec inner coins: not a {COINS_FORMAT} object"
+  if (j.getObjValAs? String "record_sha512").toOption != some (hexOf (Sha512.hash record.toUTF8)) then
+    throw "rec inner coins: made from another inner session record than --rec-inner-session's"
+  let claim := fun (c : Json) => do
+    pure ({ value := ← f128Of (← c.getObjVal? "value"), skip := ← f128sOf (← c.getObjVal? "skip"),
+            x := ← f128sOf (← c.getObjVal? "x") } : Claim)
+  let extras ← exceptOf (fun x => do (← x.getArr?).mapM claim) (← j.getObjVal? "extras")
+  let reps ← j.getObjValAs? (Array Json) "reps"
+  if reps.size != 2 then throw "rec inner coins: not two reps"
+  let rounds ← reps.mapM fun rp => do exceptOf (fun x => do (← x.getArr?).mapM f128sOf) (← rp.getObjVal? "rounds")
+  let combs ← reps.mapM fun rp => do
+    match rp.getObjVal? "comb" with
+    | .ok .null | .error _ => pure none
+    | .ok c => some <$> exceptOf f128sOf c
+  return { unit, m := ← j.getObjValAs? Nat "m", kLog := ← j.getObjValAs? Nat "k_log", extras
+           roundsOf := fun r => rounds.getD r (.error s!"the verifier's inner coins hold no rep {r}")
+           combOf := fun r _ => (combs.getD r none).getD (.error s!"rec-coins: {unit}: the verifier's inner coins hold no comb of rep {r}") }
+
+/-- Where check 5 reads the inner session: its statement and record (`Files`), or the verifier's record of what it reads
+of them (`--rec-inner-coins`, `Inner.toJson`) and the record. -/
+inductive Source where
+  | files (f : Files)
+  | coins (j : Json) (record : String)
+
+def Source.record : Source → String
+  | .files f => f.record
+  | .coins _ r => r
+
+def Source.load (unit : String) : Source → V Inner
+  | .files f => Inner.load unit f
+  | .coins j r => Inner.ofJson unit j r
+
 /-- V*'s statement `st` against the verifier's coins: a `rec-open/…` or `rec-residuals/…` unit is refused unless the
 verifier holds its registered reads and the inner session (`files`), and its verifier-registered values are the ones the
 coins give (`checkOpen`, `checkResiduals`); any other unit passes. -/
-def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Files) : V Unit := do
+def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source) : V Unit := do
   let unit := st.c.unit.name
   let o := RecOpen.params unit
   let res := RecResiduals.params unit
@@ -219,7 +300,7 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Fil
     | throw s!"rec-coins: {unit}: the verifier holds no registered reads (--registered): its coefficients would be the prover's"
   let some f := files
     | throw s!"rec-coins: {unit}: the verifier holds no inner session (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition, --rec-inner-session), so no coins to check its coefficients against"
-  let inn ← Inner.load unit f
+  let inn ← f.load unit
   match o, res with
   | some (LANES, H), _ => checkOpen inn st.c st.pub own LANES H
   | _, some (m, k, cl, j) => checkResiduals inn st.c st.pub own m k cl j
@@ -233,7 +314,7 @@ def argOf (args : List String) (k : String) : Option String :=
 
 /-- `--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR`: the inner statement and
 the inner session (its `session.json`), all four or none. -/
-def filesInput (args : List String) : IO (Except String (Option Files)) := do
+def filesOnly (args : List String) : IO (Except String (Option Files)) := do
   match argOf args "--rec-inner-circuit", argOf args "--rec-inner-public", argOf args "--rec-inner-partition",
       argOf args "--rec-inner-session" with
   | none, none, none, none => return .ok none
@@ -246,6 +327,22 @@ def filesInput (args : List String) : IO (Except String (Option Files)) := do
     catch e => return .error s!"rec inner session: {e}"
   | _, _, _, _ =>
     return .error "--rec-inner-circuit, --rec-inner-public, --rec-inner-partition and --rec-inner-session go together"
+
+/-- `filesOnly`, or `--rec-inner-coins F --rec-inner-session DIR`: the verifier's record of what check 5 reads of the inner
+session (`rec-coins`), in place of the inner statement's three files, and the session's record. -/
+def filesInput (args : List String) : IO (Except String (Option Source)) := do
+  let some f := argOf args "--rec-inner-coins" | return (← filesOnly args).map (·.map .files)
+  let some s := argOf args "--rec-inner-session"
+    | return .error "--rec-inner-coins goes with the inner session (--rec-inner-session)"
+  if (argOf args "--rec-inner-circuit").isSome || (argOf args "--rec-inner-public").isSome ||
+      (argOf args "--rec-inner-partition").isSome then
+    return .error "--rec-inner-coins stands in for --rec-inner-circuit, --rec-inner-public and --rec-inner-partition"
+  try
+    let j ← match Json.parse (← IO.FS.readFile f) with
+      | .ok j => pure j
+      | .error e => return .error s!"--rec-inner-coins {f}: not JSON: {e}"
+    return .ok (some (.coins j (← IO.FS.readFile (s ++ "/session.json"))))
+  catch e => return .error s!"rec inner session: {e}"
 
 end RecCoins
 end Flock

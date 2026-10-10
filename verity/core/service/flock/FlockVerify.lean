@@ -302,6 +302,19 @@ def recInnerCmd (args : List String) : IO UInt32 := do
   | .ok i => IO.println i.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
+/-- `rec-coins --rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR`: what check 5
+reads of the inner session (`RecCoins.Inner.toJson`), set up once from the inner statement, as one `verity/rec-coins/v1`
+line, for `verify --rec-inner-coins F --rec-inner-session DIR` in place of the inner statement's three files. -/
+def recCoinsCmd (args : List String) : IO UInt32 := do
+  match ← RecCoins.filesOnly args with
+  | .ok (some f) => match RecCoins.Inner.load "the inner session" f with
+    | .ok inn => IO.println (inn.toJson f.record).compress; return 0
+    | .error e => IO.eprintln e; return 1
+  | .ok none =>
+    IO.eprintln "usage: flock-verify rec-coins --rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR"
+    return 2
+  | .error e => IO.eprintln e; return 2
+
 /-- `rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N] [--registered F]`: V*'s statements at the
 inner shape (`RecVStar.statements`), each unit name and instance count, as one `RECVSTAR` line; with `--unit` and
 `--instances`, `RecVStar.check` on them as well, with `--circuit` and `--instances`, `RecVStar.checkCircuit` on that
@@ -392,7 +405,8 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
 shape `--rec-inner F` (`RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
-statement and session its coefficients are checked against (`RecCoins.check`), and a statement reading a `rec-c<k>` the
+statement and session its coefficients are checked against (`RecCoins.check`; or, with the session, `rec-coins`'s record
+of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
 (`--rec-rows`, `RecVStar.checkRows`). Each DIR holds `session.json`
@@ -404,7 +418,7 @@ every check has passed (so the reason is the refusal only when nothing else fail
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR [--rec-inner-transcript F]] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F]] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -1053,6 +1067,7 @@ def main (args : List String) : IO UInt32 := do
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
+  | "rec-coins" :: rest => recCoinsCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path

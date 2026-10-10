@@ -8,7 +8,7 @@ its registration is consistent. Staging the level takes about a minute and each 
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
 coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v`,
 their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
-rows (`--rec-rows`)."""
+rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in place of its statement (`--rec-inner-coins`)."""
 from __future__ import annotations
 
 import hashlib
@@ -72,12 +72,14 @@ def shape(forged, tmp_path_factory) -> Path:
     return f
 
 
-def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
-         session: Path = SET / "outer-L3" / "session", rows: Path | None = None) -> subprocess.CompletedProcess:
+def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
+         session: Path = SET / "outer-L3" / "session", rows: Path | None = None,
+         coins: Path | None = None) -> subprocess.CompletedProcess:
     u = SET / "u" / "stage"
-    rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
-                                    "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
-                                    str(SET / inner / "session")]
+    files = ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
+             "--rec-inner-partition", str(u / "partition.json")]
+    rec = [] if inner is None else [*(files if coins is None else ["--rec-inner-coins", str(coins)]),
+                                    "--rec-inner-session", str(SET / inner / "session")]
     rec += [] if rows is None else ["--rec-rows", str(rows)]
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
@@ -86,9 +88,21 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
     return p
 
 
-def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
-            session: Path = SET / "outer-L3" / "session", rows: Path | None = None) -> dict:
-    p = _run(level, public, registered, shape, inner, *extra, session=session, rows=rows)
+@pytest.fixture(scope="module")
+def coins(forged, tmp_path_factory) -> Path:
+    """`rec-coins`' record of what check 5 reads of the honest inner session, set up once from the inner statement."""
+    u = SET / "u" / "stage"
+    p = subprocess.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
+                        str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
+                        str(SET / "inner-honest" / "session")], capture_output=True, text=True, check=True)
+    f = tmp_path_factory.mktemp("rec-coins-record") / "coins.json"
+    f.write_text(p.stdout)
+    return f
+
+
+def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
+            session: Path = SET / "outer-L3" / "session", rows: Path | None = None, coins: Path | None = None) -> dict:
+    p = _run(level, public, registered, shape, inner, *extra, session=session, rows=rows, coins=coins)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
@@ -338,3 +352,32 @@ def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, sha
     v = _verify(forged, c / "pub.bin", c / "registered.json", shape, "inner-honest", rows=rows)
     assert v["why"] == (f"setup: {UNIT}: its rec-acc ports acc and acc_out are two registrations: root {honest}, against "
                         f"{other}"), v["why"]
+
+
+def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged, algebra, shape, undrawn, rows, coins,
+                                                                         tmp_path):
+    """Check 5's setup once per inner session (`rec-coins`, `--rec-inner-coins`): the honest level is accepted on the record,
+    the coef registered one bit off is refused with the message the inner statement's files give, and the part holding v's
+    comb gets the same verdict either way. The record is refused against another inner session's record, and in place of
+    nothing: beside the inner statement's files."""
+    acc = _acc_rows(tmp_path / "rows.json", SET / "L3")
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=acc, coins=coins)
+    assert v["accepted"], v.get("why")
+    v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "forged-rows.json", forged), coins=coins)
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
+                        "verifier's rec-coef row 0"), v["why"]
+    p = sorted(algebra.iterdir())[-1]
+    t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
+    both = [_verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows, coins=c)
+            for c in (None, coins)]
+    assert both[0] == both[1] and not both[0]["why"].startswith("setup:"), both
+    other = tmp_path / "other"
+    shutil.copytree(SET / "inner-honest" / "session", other / "session")
+    (other / "session" / "session.json").write_text((other / "session" / "session.json").read_text() + "\n")
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, other, rows=acc, coins=coins)
+    assert v["why"] == "setup: rec inner coins: made from another inner session record than --rec-inner-session's", v["why"]
+    u = SET / "u" / "stage"
+    p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", "--rec-inner-circuit",
+             str(u / "circuit.txt"), rows=acc, coins=coins)
+    assert p.returncode == 2 and "--rec-inner-coins stands in for" in p.stderr, p.stderr
