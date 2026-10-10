@@ -15,6 +15,7 @@
  "chosen_on": "public inner + outer hours (outer per (bucket, B) from the input)",
  "outer_sha512": "176c1307adfb1115bbf25804a2f44332df9d2bbe2517a47927e3cc9160799b2e88fdf4be2f525bde8b49e0dbfedba534d00dab1832d9115bd32ba6f40ca83952",
  "openings_batched": false,
+ "inner_per_shape": "the largest among the shape's entries",
  "models": [
   {
    "workload": "vllm/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
@@ -609,21 +610,23 @@
      "unit_types": [
       "SiluMul_v1{I=8192}"
      ],
-     "k_log": 24,
-     "inner_m": 32,
-     "inner_peak_gib": 32.77671107718394,
-     "inner_session_s": 21.760751646966032,
-     "outer_session_s": 328.3108355498236,
-     "outer_rss_gib": 27.292094289574475,
-     "outer_refused": [],
+     "k_log": 27,
+     "inner_m": 35,
+     "inner_peak_gib": 158.34449015478432,
+     "inner_session_s": 151.75660254615835,
+     "outer_session_s": 351.07842389626234,
+     "outer_rss_gib": 27.453846492733824,
+     "outer_refused": [
+      "open L2: RecOpen{16,0}"
+     ],
      "sessions_mean": 0.6770768151020662,
      "sessions_public": 1,
-     "inner_h_mean": 0.0040926945609318895,
-     "inner_h_public": 0.006044653235268342,
-     "outer_h_mean": 0.06174768191599243,
-     "outer_h_public": 0.09119745431939544,
-     "total_h_mean": 0.06584037647692433,
-     "total_h_public": 0.09724210755466378,
+     "inner_h_mean": 0.028541910311850834,
+     "inner_h_public": 0.04215461181837732,
+     "outer_h_mean": 0.06602973919520401,
+     "outer_h_public": 0.09752178441562842,
+     "total_h_mean": 0.09457164950705485,
+     "total_h_public": 0.13967639623400574,
      "options": {
       "1": 5.120825,
       "4": 1.46512,
@@ -637,13 +640,13 @@
    "totals": {
     "sessions_mean": 32.76726579293391,
     "sessions_public": 37,
-    "inner_h_mean": 0.478049859379233,
-    "inner_h_public": 0.548398914963224,
-    "outer_h_mean": 3.1121815150919976,
-    "outer_h_public": 3.527404595542802,
-    "total_h_mean": 3.5902313744712306,
-    "total_h_public": 4.075803510506026,
-    "refused_entries": 7
+    "inner_h_mean": 0.5024990751301519,
+    "inner_h_public": 0.584508873546333,
+    "outer_h_mean": 3.1164635723712095,
+    "outer_h_public": 3.533728925639035,
+    "total_h_mean": 3.618962647501361,
+    "total_h_public": 4.118237799185368,
+    "refused_entries": 8
    }
   },
   {
@@ -922,7 +925,7 @@
      "inner_m": 35,
      "inner_peak_gib": 154.26469733794937,
      "inner_session_s": 150.84006151575835,
-     "outer_session_s": 351.07842389626234,
+     "outer_session_s": 429.8827256847551,
      "outer_rss_gib": 27.453846492733824,
      "outer_refused": [
       "open L2: RecOpen{16,0}"
@@ -931,10 +934,10 @@
      "sessions_public": 1,
      "inner_h_mean": 0.041863118742614044,
      "inner_h_public": 0.041900017087710656,
-     "outer_h_mean": 0.09743590396244696,
-     "outer_h_public": 0.09752178441562842,
-     "total_h_mean": 0.139299022705061,
-     "total_h_public": 0.13942180150333908,
+     "outer_h_mean": 0.11930671076303828,
+     "outer_h_public": 0.1194118682457653,
+     "total_h_mean": 0.16116982950565234,
+     "total_h_public": 0.16131188533347596,
      "options": {
       "1": 9.664818,
       "4": 2.640956,
@@ -1047,7 +1050,9 @@
      "inner_session_s": 151.75660254615835,
      "outer_session_s": 429.8827256847551,
      "outer_rss_gib": 27.453846492733824,
-     "outer_refused": [],
+     "outer_refused": [
+      "open L2: RecOpen{16,0}"
+     ],
      "sessions_mean": 1.9177476455323625,
      "sessions_public": 4,
      "inner_h_mean": 0.08084190756302381,
@@ -1071,11 +1076,11 @@
     "sessions_public": 40,
     "inner_h_mean": 0.5490651946220088,
     "inner_h_public": 0.6682251145615778,
-    "outer_h_mean": 3.232156866862882,
-    "outer_h_public": 3.8953045949995824,
-    "total_h_mean": 3.781222061484891,
-    "total_h_public": 4.563529709561161,
-    "refused_entries": 6
+    "outer_h_mean": 3.2540276736634737,
+    "outer_h_public": 3.9171946788297194,
+    "total_h_mean": 3.8030928682854825,
+    "total_h_public": 4.5854197933912975,
+    "refused_entries": 7
    }
   },
   {
@@ -1409,17 +1414,19 @@
      "inner_m": 35,
      "inner_peak_gib": 158.39074388145758,
      "inner_session_s": 151.75660254615835,
-     "outer_session_s": 406.11499098125194,
-     "outer_rss_gib": 27.453846492733824,
-     "outer_refused": [],
+     "outer_session_s": 486.44198866427365,
+     "outer_rss_gib": 27.616372629879578,
+     "outer_refused": [
+      "open L0: RecOpen{64,19}"
+     ],
      "sessions_mean": 0.9199204078424725,
      "sessions_public": 1,
      "inner_h_mean": 0.038778887696402774,
      "inner_h_public": 0.04215461181837732,
-     "outer_h_mean": 0.10377596337067092,
-     "outer_h_public": 0.11280971971701442,
-     "total_h_mean": 0.1425548510670737,
-     "total_h_public": 0.15496433153539174,
+     "outer_h_mean": 0.12430219794548389,
+     "outer_h_public": 0.1351227746289649,
+     "total_h_mean": 0.16308108564188667,
+     "total_h_public": 0.17727738644734223,
      "options": {
       "1": 18.972188,
       "4": 5.10525,
@@ -1435,11 +1442,11 @@
     "sessions_public": 44,
     "inner_h_mean": 0.9086330327829679,
     "inner_h_public": 0.9551255333931257,
-    "outer_h_mean": 3.990546465675209,
-    "outer_h_public": 4.40658273214967,
-    "total_h_mean": 4.899179498458177,
-    "total_h_public": 5.361708265542796,
-    "refused_entries": 6
+    "outer_h_mean": 4.011072700250022,
+    "outer_h_public": 4.42889578706162,
+    "total_h_mean": 4.91970573303299,
+    "total_h_public": 5.384021320454746,
+    "refused_entries": 7
    }
   },
   {
@@ -3129,7 +3136,7 @@
      "inner_m": 35,
      "inner_peak_gib": 154.38152894139668,
      "inner_session_s": 150.87923811735837,
-     "outer_session_s": 351.07842389626234,
+     "outer_session_s": 401.1142591959297,
      "outer_rss_gib": 27.453846492733824,
      "outer_refused": [
       "open L2: RecOpen{16,0}"
@@ -3138,10 +3145,10 @@
      "sessions_public": 1,
      "inner_h_mean": 0.04191044742095153,
      "inner_h_public": 0.04191089947704399,
-     "outer_h_mean": 0.09752073253372316,
-     "outer_h_public": 0.09752178441562842,
-     "total_h_mean": 0.1394311799546747,
-     "total_h_public": 0.1394326838926724,
+     "outer_h_mean": 0.11141942575789608,
+     "outer_h_public": 0.11142062755442492,
+     "total_h_mean": 0.1533298731788476,
+     "total_h_public": 0.1533315270314689,
      "options": {
       "1": 8.824404,
       "4": 2.458826,
@@ -3214,7 +3221,9 @@
      "inner_session_s": 151.75660254615835,
      "outer_session_s": 401.1142591959297,
      "outer_rss_gib": 27.453846492733824,
-     "outer_refused": [],
+     "outer_refused": [
+      "open L2: RecOpen{16,0}"
+     ],
      "sessions_mean": 1.0000004184180278,
      "sessions_public": 2,
      "inner_h_mean": 0.04215462945662685,
@@ -3238,11 +3247,11 @@
     "sessions_public": 155,
     "inner_h_mean": 13.755260840875966,
     "inner_h_public": 15.089522086689065,
-    "outer_h_mean": 16.344763909998385,
-    "outer_h_public": 18.00877965371104,
-    "total_h_mean": 30.10002475087435,
-    "total_h_public": 33.0983017404001,
-    "refused_entries": 5
+    "outer_h_mean": 16.35866260322256,
+    "outer_h_public": 18.02267849684984,
+    "total_h_mean": 30.113923444098525,
+    "total_h_public": 33.1122005835389,
+    "refused_entries": 6
    }
   },
   {
@@ -3514,7 +3523,7 @@
      "inner_m": 35,
      "inner_peak_gib": 154.40488696295793,
      "inner_session_s": 150.87923811735837,
-     "outer_session_s": 351.07842389626234,
+     "outer_session_s": 401.1142591959297,
      "outer_rss_gib": 27.453846492733824,
      "outer_refused": [
       "open L2: RecOpen{16,0}"
@@ -3523,10 +3532,10 @@
      "sessions_public": 1,
      "inner_h_mean": 0.041910899349797186,
      "inner_h_public": 0.04191089947704399,
-     "outer_h_mean": 0.09752178411953993,
-     "outer_h_public": 0.09752178441562842,
-     "total_h_mean": 0.13943268346933713,
-     "total_h_public": 0.1394326838926724,
+     "outer_h_mean": 0.11142062721613777,
+     "outer_h_public": 0.11142062755442492,
+     "total_h_mean": 0.15333152656593496,
+     "total_h_public": 0.1533315270314689,
      "options": {
       "1": 16.388178,
       "4": 4.462314,
@@ -3595,7 +3604,9 @@
      "inner_session_s": 151.75660254615835,
      "outer_session_s": 401.1142591959297,
      "outer_rss_gib": 27.453846492733824,
-     "outer_refused": [],
+     "outer_refused": [
+      "open L2: RecOpen{16,0}"
+     ],
      "sessions_mean": 0.9999277249444561,
      "sessions_public": 2,
      "inner_h_mean": 0.04215156509146671,
@@ -3619,11 +3630,11 @@
     "sessions_public": 183,
     "inner_h_mean": 22.547021125889522,
     "inner_h_public": 24.09412105223913,
-    "outer_h_mean": 20.96199323915503,
-    "outer_h_public": 22.867345538168767,
-    "total_h_mean": 43.50901436504456,
-    "total_h_public": 46.961466590407895,
-    "refused_entries": 7
+    "outer_h_mean": 20.97589208225163,
+    "outer_h_public": 22.881244381307564,
+    "total_h_mean": 43.522913208141155,
+    "total_h_public": 46.97536543354669,
+    "refused_entries": 8
    }
   }
  ]
