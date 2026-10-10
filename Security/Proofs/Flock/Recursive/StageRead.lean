@@ -9,8 +9,9 @@ unit's `io`, so `VFull` fails there. `VFullR` and `VDecodesR` are the two at the
 transfer reads a commit string only at a wire where the layer disagrees with the openings' values, and a layer that
 agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is read, and `VFullR` draws it:
 
-* `sessions_stage_le_read`, `outerV_stage_le_read`, `zk_sessions_recursive_read`: `sessions_stage_le`,
-  `outerV_stage_le` and `zk_sessions_recursive_full` at `VFullR` and `VDecodesR`, with the same bounds;
+* `sessions_stage_le_read`, `outerV_stage_le_read`, `zk_sessions_recursive_read`, `zk_sessions_recursive_fork_read`:
+  `sessions_stage_le`, `outerV_stage_le`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork` at `VFullR` and
+  `VDecodesR`, with the same bounds;
 * `vFullR_of_vFull`, `vDecodes_of_vDecodesR`: `VFull` gives `VFullR`, and `VDecodesR` gives `VDecodes`.
 -/
 
@@ -42,7 +43,7 @@ theorem sessions_stage_le_read
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
-      sumS zs dg N (fun j τ => (zs j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+      sumS zs dg N (fun j τ => (zs j).slackIf dg N k Rw M ρ t' qF qS τ) s +
         ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
@@ -64,7 +65,7 @@ theorem sessions_stage_le_read
           (zs j).layer dg N k Rw ((zs j).ofBase dg N τ₀) g ≠
             bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
         ((zs j).game dg N) ((zs j).ofBase dg N τ₀) ≤
-      (zs j).slackCR dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
+      (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
         ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
@@ -73,7 +74,7 @@ theorem sessions_stage_le_read
     by_cases hj : ∃ tr, AcceptsZKR (zs j).I (zs j).own tr
     swap
     · exact ((prob_mono (fun a ha => (hj ⟨a.2.2, ha.1⟩).elim) _ _).trans (prob_false _ _).le).trans (zero_le ..)
-    unfold ZkOuter.slackCR
+    unfold ZkOuter.slackIf
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
         (((zs j).candTransfer (Vs j).law.St (Vs j).law.Kd (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src dg N hk hRw
@@ -94,7 +95,7 @@ theorem sessions_stage_le_read
       ∃ g, (posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j ∧ ReadW Vs j g) ∧
         (zs j).layer dg N k Rw ((zs j).ofBase dg N r.1) g ≠
           bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
-    (fun j τ₀ => (zs j).slackCR dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
+    (fun j τ₀ => (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
       ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
         prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
           ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
@@ -129,7 +130,7 @@ theorem outerV_stage_le_read
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
-      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s +
         ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
@@ -179,14 +180,14 @@ theorem zk_sessions_recursive_read
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
+              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   refine zk_sessions_recursive_upto hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
-    (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s)
+    (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
   refine (outerV_stage_le_read hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
     (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
@@ -196,5 +197,62 @@ theorem zk_sessions_recursive_read
   rw [Fintype.sum_sigma]
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
     mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
+
+/-- **The recursive audit is sound at the read wires, in fork form**: `zk_sessions_recursive_fork` at `VDecodesR` and
+`VFullR`, from `zk_sessions_recursive_read` at no finder budgets, with the same disjuncts and bound. -/
+theorem zk_sessions_recursive_fork_read
+    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (hbr : Recursion.VBridge zs dg N k Rw x wmsg)
+    (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
+    (hsame : ∀ y (ms ms' : List I.Msg) (ρs : List I.Coin), (∀ i < ρs.length, Option.Rel (same i ρs) ms[i]? ms'[i]?) →
+      I.accepts y (ms.zip ρs) → I.accepts y (ms'.zip ρs))
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
+    {εin : ℝ≥0∞} (hin : InnerSound I εin) :
+    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
+  by_cases h1 : RoundFork zs dg N k Rw σ cmt
+  · exact Or.inl h1
+  by_cases h2 : SessionFork zs dg N k Rw M σ
+  · exact Or.inr (Or.inl h2)
+  refine Or.inr (Or.inr ?_)
+  have hno := allAt_of_not_exAt h2
+  have hB : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
+      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) := by
+    refine expAt_mono_all (hno.mono fun ω t s hs => ?_)
+    unfold sumV sumS
+    exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
+      ZkOuter.boundIf_le _ _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
+  have hsl : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ 0 0 0 τ) s) ≤
+      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) := by
+    refine expAt_mono_all (hno.mono fun ω t s hs => ?_)
+    unfold sumV sumS
+    exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
+      ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
+  refine (zk_sessions_recursive_read hS hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
+    hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
+    hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
+  simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,
+    mul_zero, add_zero]
+  rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
+  exact mul_le_mul' le_rfl hsl
 
 end FlockSoundness.Discharge.Recursion
