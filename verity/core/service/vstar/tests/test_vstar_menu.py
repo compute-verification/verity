@@ -1,7 +1,10 @@
 """`Menu.Staged` at F6's pinned menus, checked by running V*: `vstar menu` runs compiled `VStar.statements` over every
 pinned menu's inner session (`VStar.Menu.sessions`, each shape's largest entry at its entries' most claims), which is
-the premise `FlockSampled.Menu.ofEntries_staged` takes. The proof, a bound on `VStar.parts`, is deferred; the kernel
-cannot evaluate `statements` at these sizes."""
+the premise `FlockSampled.Menu.ofEntries_staged` takes. The proof, a bound on `VStar.parts`, is deferred.
+
+These run V* at the deployed sizes, which nothing cheaper does: the kernel cannot evaluate `statements` there, and the
+difftest compares Lean with Python on drawn small shapes, not on the pinned ones. A menu or a parts limit that leaves a
+pinned shape unstaged fails here and nowhere else before an audit refuses it."""
 
 from __future__ import annotations
 
@@ -18,8 +21,8 @@ from verity_flock import rec_residuals as RR
 
 LEAN = Path(__file__).resolve().parents[1]
 #: an inner session whose batched-T residual alone needs 300 sha512x3 slots, under `MAX_REGIONS`
-CONTROL = (35, 27, 28)
-pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+CONTROL = (26, 24, 28)
+pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
 def _menu(*shape: int) -> tuple[int, list[dict]]:

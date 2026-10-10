@@ -75,9 +75,9 @@ def menuSessions : Array (Algebra.Shape × Array String) := Id.run do
       | none => out := out.push (sh, #[w])
   pure out
 
-def menuShapes : List String → IO (Array (Algebra.Shape × Array String))
-  | [] => pure menuSessions
-  | m :: k :: c :: rest => do pure (#[(← shape m k c, #[])] ++ (← menuShapes rest))
+def shapes : List String → IO (Array (Algebra.Shape × Array String))
+  | [] => pure #[]
+  | m :: k :: c :: rest => do pure (#[(← shape m k c, #[])] ++ (← shapes rest))
   | _ => throw (IO.userError "menu: shapes are M K_LOG CLAIMS triples")
 
 def cmd (args : List String) : IO UInt32 := do
@@ -108,9 +108,10 @@ def cmd (args : List String) : IO UInt32 := do
       res := res.push (j.mergeObj (Json.mkObj [("name", s.name), ("dir", s.dir)]))
     IO.println (Json.arr res).compress
     pure 0
-  | "menu" :: shapes =>
+  | "menu" :: given =>
     let mut refused := false
-    let runs := (← menuShapes shapes).map fun (sh, ws) => (sh, ws, Task.spawn fun _ => statements sh)
+    let todo ← if given.isEmpty then pure menuSessions else shapes given
+    let runs := todo.map fun (sh, ws) => (sh, ws, Task.spawn fun _ => statements sh)
     for (sh, ws, t) in runs do
       let base := [("m", (sh.m : Json)), ("k_log", (sh.kLog : Json)), ("claims", (sh.claims : Json)),
         ("models", Json.arr (ws.map Json.str))]
