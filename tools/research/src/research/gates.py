@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 import sys
 
+from .clone import RECORD_DRIVER
+
 OK, FINDING, USAGE, REFUSED = 0, 1, 2, 3
 
 #: the variables `git rev-parse --local-env-vars` names that pick a repository, index or object store other than the one at
@@ -23,13 +25,6 @@ GIT_KEPT_ENV = ("GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT")
 #: (a nested `lean_slot.py` or `slot.py` takes the variable as a slot already held)
 CALLER_ENV = ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "LEAN_SLOT", "LEAN_SLOT_POOL", "LEAN_SLOTS",
               "CHECK_SLOT")
-
-
-#: git's merge driver for `lean-audit.json` (`.gitattributes`: `lean-audit.json merge=lean-audit`), set for every git a gate
-#: runs: a clone's config holds it only after `merge.py --install`, and without it git merges a record line by line (the queue's
-#: own clone, a fresh VM's checkout); a tree from before the tools/verity move has it at tools/lean/merge.py
-RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
-                 "merge.lean-audit.driver": 'f=tools/verity/lean/merge.py; [ -f "$f" ] || f=tools/lean/merge.py; python3 "$f" %O %A %B %P'}
 
 
 def git_env(**extra: str) -> dict[str, str]:
