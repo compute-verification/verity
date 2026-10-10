@@ -152,7 +152,7 @@ are the opening's consistency terms. -/
 theorem unitSum_of_decode {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) (u : Fin nv)
     (hC : ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).Correct bits u) {j : ℕ} (hj : j < c.upv)
     (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true)
-    (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+    (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (p : Ports) (outBits : Array ℕ) {name : String}
     (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hu : c.unit.unitLog ≤ 32) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)
@@ -191,7 +191,7 @@ def OpensAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES : 
   ∃ (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true ∧
   ∃ (ms : MerkleScheme), (∀ l r, ms.node l r = Sha512.hash (l ++ r)) ∧
   ∃ (H : ℕ) (p : Ports) (outBits : Array ℕ) (name : String) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray),
-    H ≤ 16 ∧ Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit ∧ c.unit.unitLog ≤ 32 ∧
+    H ≤ 32 ∧ Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit ∧ c.unit.unitLog ≤ 32 ∧
     (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0 ∧
     r.size = LANES ∧ a.size = 2 ∧ ss.length = H ∧
     p.row = 8 * (MerkleScheme.rowBytes r).size ∧ 512 * H ≤ p.aux ∧
