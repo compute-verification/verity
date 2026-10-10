@@ -198,8 +198,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
       (F.tableSrc spec st cap lig R ω t l).TranscriptIs T CT cls ((F.wmsg l).zip (t.map Prod.snd)))
     (hopen : F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
       OpenedAll (st R ω) sch F.sh ((F.tableSrc spec st cap lig R ω t l).proofAt r) (F.rep R ω t l r))
-    (hpub : F.PubCommits bc) (hsel : SelRounds sel) (hS : F.LawsExec) {dj : Fin F.stmts.size → Lean.Json}
-    {d : Fin F.stmts.size → Flock.Draw.UnitDraw} (hu4 : F.U4Passes own dj d) :
+    (hpub : F.PubCommits bc) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg := by
   obtain ⟨hsome, hcov, hU, hn⟩ := F.structure_of hne honame hcount
   obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome hname
@@ -218,7 +217,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
       (fun R ω t _ _ _ _ => F.coins_of spec st cap lig hrep hco R ω t _)
       (fun R ω t _ _ _ _ => F.combFolds_at spec st cap lig hrep hfold R ω t _) hopen)
     (F.hCommits_of own sel bc hSk hcmt hpub) (F.vDecodesRead_of dec hw hm)
-    (F.vFullRead_of own sel hSk hsel hS hu4)
+    F.vFullRead_of
 
 /-- **The family at the lanes' definitions**: `F`'s statements, sessions and statement family, with `Sk`, `cmt`, `wmsg`
 and `msg` hc's at `own`, `sel`, `bc` and `dec`, `rep₀` `repOf coinFiles` at those messages, `rows` and `acc` the
@@ -262,13 +261,12 @@ theorem vbridgeRead_assembled (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j
       OpenedAll (st R ω) sch F.sh
         (((F.assembled spec st cap lig own sel bc dec).tableSrc spec st cap lig R ω t l).proofAt r)
         ((F.assembled spec st cap lig own sel bc dec).rep R ω t l r))
-    (hpub : (F.assembled spec st cap lig own sel bc dec).PubCommits bc) (hsel : SelRounds sel) (hS : F.LawsExec)
-    {dj : Fin F.stmts.size → Lean.Json} {d : Fin F.stmts.size → Flock.Draw.UnitDraw} (hu4 : F.U4Passes own dj d) :
+    (hpub : (F.assembled spec st cap lig own sel bc dec).PubCommits bc) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec) (skOf F.Vs own sel)
       (cmtOf F.Vs bc) (msgOf F.Vs (skOf F.Vs own sel) dec) :=
   (F.assembled spec st cap lig own sel bc dec).vbridgeRead_of_lanes dg N k Rw spec st cap lig own sel bc dec
     rfl rfl rfl rfl rfl rfl rfl rfl hne honame hcount hname hseen hv hlay hrr hrck hsame hshared hz hcoef V hV hE hset
-    hshp hcl hfold hco hcapS hligS hregs htr hopen hpub hsel hS hu4
+    hshp hcl hfold hco hcapS hligS hregs htr hopen hpub
 
 end VStarFamily
 

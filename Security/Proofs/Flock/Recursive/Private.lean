@@ -247,9 +247,9 @@ theorem RanRegisteredRun : Flock.Guarantees.RanRegisteredRun := by
     exact ⟨ha, hq.resolve_right fun hne => hb ⟨b, hr, ha, hne, hbind rt _ _ _ _ (hacc b ha) h₀ hne⟩⟩
 
 theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
-  intro n L Reg I Cm S Vs Reg' Reg₂ hS hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
+  intro n L Reg I Cm S Vs Reg' Reg₂ hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
     Root Pos Row Op com hbind rt p op₀ hreg stmt reads row op hop hx
-  rcases RecursiveSound hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hb
+  rcases RecursiveSound hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · by_cases hc : ∃ o, Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧

@@ -139,11 +139,11 @@ abbrev hiddenAt {Ω H : Type} (st : Flock.Stmt) (rt : Flock.Registered.Port)
 
 (i) For every inner statement `st`, with its class, regions and schedule `execClassAt st`, and every prover `σ` of the
 recursive audit with C-Flock's compiled table there as its inner protocol (`innerAt`): V*'s statements `Vs`, as many
-as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each with its model read off its
-executable strata (`execStmts Vs`: `VStmt.exec`, which keeps its live law and so its sessions), V*'s sessions
-`zr R ω t R₂ j` under their laws as the prover supplies them (`ZkOuterR`: inputs, own ports, draw file and record
-writer, with nothing assumed of what the inputs parse to), their records' custody `_hCust`, the messages V*'s layers
-hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root
+as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each drawing all its units (`VLaw`:
+the full draw on the operating system's bytes, `--draw subset:<units>`), V*'s sessions `zr R ω t R₂ j` under
+their laws as the prover supplies them (`ZkOuterR`: inputs, own ports, draw file and record writer, with nothing
+assumed of what the inputs parse to), their records' custody `_hCust`, the messages V*'s layers hold and the rounds'
+commitments (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root
 `rt`. Where every index has a session that types (`Typed zr`: its inputs pass the statement check, parse to V*'s
 circuit, have V*'s units and set up at some draw), `custodied zr _hCust h` are the typed sessions (`zsOf`: each
 session that types, and at one that doesn't, a session of its index that types, refusing everything) and
@@ -160,8 +160,8 @@ there is a round fork, a session fork, or an inner fork of the transported prove
 play the compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \text{every session verifies} \wedge
   \neg\,\text{the statement of } p \text{ holds}]$$
-is at most V*'s sessions' expected statistical errors under the models read off their executable strata, `r` times
-their expected stage slack, and the compiled table's error.
+is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
+slack, and the compiled table's error.
 
 (ii) `RecursiveCircuitPrivateLeaves`: for the class's private circuits registered by hm96 leaves, when V*'s sessions
 are zero knowledge within `ε_o` with a simulator reading the owed outputs, the registration's view, the auditor's tape and the
@@ -175,36 +175,36 @@ def RecursiveAudit : Prop :=
     {n : ℕ} {L : Law n} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the inner statement; the compiled table's class, regions and schedule are `execClassAt st`
     (st : Flock.Stmt)
-    -- V*'s statements over the class, each with its model read off its executable strata (`execStmts`), and V*'s
-    -- sessions at each history and registration `R₂`, as the prover supplies them
+    -- V*'s statements over the class, each drawing all its units, and V*'s sessions at each history and
+    -- registration `R₂`, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
     (zr : Reg → L.Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
-      (j : Fin (outerStatementsAt st)) → (execStmts Vs j).OuterR Reg')
+      (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
-    (wmsg : ((j : Fin (outerStatementsAt st)) → (execStmts Vs j).Bits) → List (innerAt T CT st).Msg)
+    (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
-      Finset (PosK (execStmts Vs j).c (execStmts Vs j).hU (execStmts Vs j).nv))
+      Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin (outerStatementsAt st)) → Cm →
-      PosK (execStmts Vs j).c (execStmts Vs j).hU (execStmts Vs j).nv →
-      (obK (execStmts Vs j).c (execStmts Vs j).hU (execStmts Vs j).nv).Dg)
+      PosK (Vs j).c (Vs j).hU (Vs j).nv →
+      (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin (outerStatementsAt st)) →
-      PosK (execStmts Vs j).c (execStmts Vs j).hU (execStmts Vs j).nv → ValK (execStmts Vs j).c) →
+      PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (innerAt T CT st).Msg)
     -- the registration's root, and the private circuit's statement by the commit strings of its rows
     (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → L.Ω → Hidden (execClassAt st).cls)
     -- A3
-    (_hA3 : Flock.Premises.UniformRandomBytes (execStmts Vs))
+    (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the registered commit strings, each opening `rt` at its row through the developer's path
     (p path₀ : ℕ → ByteArray) (_hreg : ∀ r < rt.leaves, Flock.Registered.opens rt (p r) r (path₀ r) = true)
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (y₀ : DrawSetupZK (zr R ω t R₂ j).I (execStmts Vs j).mPts S₀ ((zr R ω t R₂ j).dj S₀)) S' R' i,
+      (y₀ : DrawSetupZK (zr R ω t R₂ j).I (Vs j).mPts S₀ ((zr R ω t R₂ j).dj S₀)) S' R' i,
       rateZ (planZAt (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- V*'s bridge, at the typed sessions
     (_hbr : ∀ h : Typed zr,
@@ -226,7 +226,7 @@ def RecursiveAudit : Prop :=
           (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
-              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (execStmts Vs j).law.model k Rw M ρ τ) s) +
+              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           ((innerAt T CT st).r : ℝ≥0∞) *
             expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +

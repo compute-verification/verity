@@ -71,8 +71,7 @@ local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs
 /-- **`vbridge_of_vstar` with a unit and copy per rep, and the reps' values at the history**: part `p` of rep `r` is
 copy `cp p r` of unit `un p r` of session `sess p`, opening `j` of level `ℓ` of rep `r` copy `cpO ℓ r j` of unit
 `unO ℓ r j` of session `sessO ℓ`; each rep's values, its openings, `rec-acc`'s rows and the table files are read at the
-history `(R, ω, t)` as well as the layers, and `VFull` is taken whole (`vFull_of_whole` or `vFull_of_checkFull` give
-it). The proof is `vbridge_compiled`'s: `TableFiles.accepts`, its runs from the
+history `(R, ω, t)` as well as the layers, and `VFull` is taken whole (`vFull_of_whole` gives it). The proof is `vbridge_compiled`'s: `TableFiles.accepts`, its runs from the
 per-rep lemmas (`algebraHolds_of_decode`, `accHolds_of_units` on `unitSums_of_decode`) at each rep's maps. -/
 theorem vbridge_of_reps
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -359,41 +358,20 @@ def HCommits : Prop := VCommits F.zs F.Sk F.cmt
 /-- **`hdec`**: V*'s circuits decode each stage's message from the read wires of its commit strings. -/
 def HDecodes : Prop := VDecodesR F.wmsg (fun _ _ a b => a = b) F.Sk F.msg
 
-/-- **`hks`, `hio`**: V*'s laws draw every stratum whole, and each stage's commit string is a wire of a unit. -/
+/-- **`hio`**: each stage's commit string is a wire of a unit. -/
 def HFull : Prop :=
-  (∀ j t, (Law.stratum (F.Vs j).law.σs t).card ≤ (F.Vs j).law.ks t) ∧
-    ∀ i < (ℐ).r, ∀ j g, posK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv g ∈ F.Sk i j →
-      ∃ u, g ∈ ((Placed.keyProg (F.Vs j).c (F.Vs j).hU (F.Vs j).nv).partition
-        (Layout.outsOf (F.Vs j).c (F.Vs j).hU (F.Vs j).nv)).io u
+  ∀ i < (ℐ).r, ∀ j g, posK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv g ∈ F.Sk i j →
+    ∃ u, g ∈ ((Placed.keyProg (F.Vs j).c (F.Vs j).hU (F.Vs j).nv).partition
+      (Layout.outsOf (F.Vs j).c (F.Vs j).hU (F.Vs j).nv)).io u
 
-/-- **`VFull` from U4** (`vFull_of_checkFull`'s hypotheses): V*'s laws' strata, and for some registered ports and draw
-of each session, the draw its law's, U4's `checkFull` passing, and each stage's commit string a wire of a unit some
-round-commitment port reads. -/
-def HU4 : Prop :=
-  (∀ j, Law.ExecStrata (F.Vs j).law.σs (F.Vs j).law.ks (F.Vs j).law.St) ∧
-    ∃ (own : Fin F.stmts.size → Array Flock.Registered.Port) (dj : Fin F.stmts.size → Lean.Json)
-      (d : Fin F.stmts.size → Flock.Draw.UnitDraw),
-      (∀ j, Flock.Draw.UnitDraw.ofJson (dj j) = .ok (d j)) ∧
-      (∀ j, (d j).law = .stratified (F.Vs j).law.Kd (Array.ofFn (F.Vs j).law.St)) ∧
-      (∀ j, Flock.Registered.checkFull (some (own j)) (some (dj j)) = .ok ()) ∧
-      ∀ i < (ℐ).r, ∀ j g, posK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv g ∈ F.Sk i j →
-        ∃ u, g ∈ ((Placed.keyProg (F.Vs j).c (F.Vs j).hU (F.Vs j).nv).partition
-            (Layout.outsOf (F.Vs j).c (F.Vs j).hU (F.Vs j).nv)).io u ∧
-          ∃ p ∈ own j, Flock.Registered.roundCommitment p.value = true ∧ ∃ x, p.reads[u.val]? = some (some x)
-
-/-- `VFull` for sessions drawn whole (`vFull_of_whole`). -/
-theorem vFull_of_hFull (h : F.HFull) : VFull (ℐ).r F.Sk := FlockVBridge.Full.vFull_of_whole _ F.Sk h.1 h.2
-
-/-- `VFull` from U4 (`vFull_of_checkFull`). -/
-theorem vFull_of_hU4 (h : F.HU4) : VFull (ℐ).r F.Sk := by
-  obtain ⟨hS, own, dj, d, hd, hlaw, hU4, hreads⟩ := h
-  exact FlockVBridge.Full.vFull_of_checkFull _ F.Sk hS own dj d hd hlaw hU4 hreads
+/-- `VFull` under the full draw (`vFull_of_whole`). -/
+theorem vFull_of_hFull (h : F.HFull) : VFull (ℐ).r F.Sk := FlockVBridge.Full.vFull_of_whole _ F.Sk h
 
 end VStarFamily
 
 /-- **VBridge G at V*'s statement family**: `Flock.Assumptions.VBridge` at the family's sessions, statement, messages,
 commit strings and digests, from its obligations (`vbridge_of_reps`; `CoefsAre` and `ConsAre` hold by definition) and
-`VFull`, which `HFull` (`vFull_of_hFull`) or U4 (`vFull_of_hU4`) gives. -/
+`VFullR`, which V*'s full draw gives (`vFullR_of_read`). -/
 theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw)

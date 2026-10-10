@@ -139,8 +139,8 @@ theorem stagesAccept_of_runs
     ((wmsg (layers zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h halg)
 
 /-- **VBridge G on the verifier's own definitions**, from the pieces still open: `vbridge_compiled` at `ℐ`, with
-`StagesAccept` from one table's files and both reps' runs (`stagesAccept_of_runs`) and `VFull` from the verifier's U4
-(`FlockVBridge.Full.vFull_of_checkFull`). -/
+`StagesAccept` from one table's files and both reps' runs (`stagesAccept_of_runs`) and `VFullR` from V*'s full draw
+(`vFullR_of_read`). -/
 theorem vbridge_exec
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → Hidden cls)
@@ -161,21 +161,11 @@ theorem vbridge_exec
         AccHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r)) →
       (files (layers zs dg N k Rw R ω t R₂ τ)).Runs)
     -- V*'s public files (G item 6)
-    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
-    -- `VFull` from U4: V*'s laws, their draws, U4's pass, and each committed position's reads
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
-    (own : Fin S → Array Flock.Registered.Port) (dj : Fin S → Lean.Json) (d : Fin S → Flock.Draw.UnitDraw)
-    (hd : ∀ j, Flock.Draw.UnitDraw.ofJson (dj j) = .ok (d j))
-    (hlaw : ∀ j, (d j).law = .stratified (Vs j).law.Kd (Array.ofFn (Vs j).law.St))
-    (hU4 : ∀ j, Flock.Registered.checkFull (some (own j)) (some (dj j)) = .ok ())
-    (hreads : ∀ i < (ℐ).r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
-      ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition
-          (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
-        ∃ p ∈ own j, Flock.Registered.roundCommitment p.value = true ∧ ∃ x, p.reads[u.val]? = some (some x)) :
+    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
   vbridge_compiled T CT execArith H512 enc512 leaf512 cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
     halg hacc (stagesAccept_of_runs T CT cls regs sch zs dg N k Rw sh rep x wmsg files hsch hfiles hruns) hcm hdec
-    (vFullR_of_vFull (FlockVBridge.Full.vFull_of_checkFull _ Sk hS own dj d hd hlaw hU4 hreads))
+    (vFullR_of_read _ Sk)
 
 end outer
 

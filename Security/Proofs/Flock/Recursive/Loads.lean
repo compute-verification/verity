@@ -1,5 +1,4 @@
 import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Recursive.VStarU2
 import Proofs.Flock.Soundness.Discharge.FailClosed.One
 
 /-!
@@ -20,10 +19,6 @@ as the prover supplies them (`ZkOuterR`), and no check the verifier of record ma
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
   empty; elsewhere the raw recursive audit's event is no likelier than the typed sessions' (`zsOf`) at the transported
   strategy (`recT`).
-* `VStmt.pop_eq_nv`: at a session that loads `Q`, with its draw file the verifier's draw at the law's own population
-  (`DrawFileZK`, custody), the population is `Q`'s units: the draw's population is the registered population's count
-  (`HmRow.drawn`'s U check, `VStmt.pop_of_session`), and `Loads` fixes that count. With the strata tiling the population
-  (`ofJson`'s U2 check, `VStmt.tiles_of_session`) this gives `_hS`.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -126,26 +121,5 @@ theorem verifies_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} {dg
   unfold AcceptsV Accepts
   rw [hz]
   exact ⟨hacc, hck⟩
-
-/-- **At a session that loads `Q`, the law's population is `Q`'s units**: the draw's population is the registered
-population's count (`VStmt.pop_of_session`), the registered population is the inputs' own (`ScopeZ.load`, at `Q`'s
-circuit), and `Loads` gives its count. -/
-theorem VStmt.pop_eq_nv {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
-    (hdj : ZkLink.DrawFileZK z.dj (.stratified Q.law.Kd (Array.ofFn Q.law.St)) Q.law.pop)
-    (hck : ScopeZ z.I) (hL : Q.Loads z.I) : Q.law.pop = Q.nv := by
-  have hp : z.pub = pubZ z.I := by
-    have h := hck.load z.hTags.1
-    rw [hL.1] at h
-    exact Except.ok.inj (z.hpub.symm.trans h)
-  rw [VStmt.pop_of_session z hdj, hp]
-  exact hL.2
-
-/-- **The strata tile V*'s units at a session that loads `Q`**: `VStmt.tiles_of_session` at the law's own population,
-which is `Q`'s units (`VStmt.pop_eq_nv`). -/
-theorem VStmt.tiles_of_loads {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
-    (hdj : ZkLink.DrawFileZK z.dj (.stratified Q.law.Kd (Array.ofFn Q.law.St)) Q.law.pop)
-    (hck : ScopeZ z.I) (hL : Q.Loads z.I) : Audit.Law.Tiles Q.law.St Q.nv := by
-  have h := VStmt.tiles_of_session z hdj
-  rwa [VStmt.pop_eq_nv z hdj hck hL] at h
 
 end FlockSoundness.Discharge.Recursion

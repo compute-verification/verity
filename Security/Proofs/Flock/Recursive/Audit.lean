@@ -21,10 +21,6 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
   below `rt.leaves`: `readsBelow_stmtAt`);
 * at one it accepts, the class checks pass (`classOk_of_accepts`), and the compile premise holds at `execClassAt st`
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
-* `_hS` at V*'s statements with their models read off their strata (`execStmts`), at each index's session that types:
-  its draw file custody ties to the strata over the law's own population (`RecordCustody`'s `DrawFileZK`), which is
-  V*'s units since the session loads V*'s statement (`VStmt.tiles_of_loads`, `VStmt.pop_eq_nv`,
-  `VStmt.exec_execStrata`);
 * the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
 Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the law's field
@@ -86,11 +82,6 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact Or.inr (Or.inl hcol)
   refine Or.inr (Or.inr ⟨hT, ?_⟩)
   have hin := compiledForkSound_execClassAt T CT (classOk_of_accepts hacc)
-  have hS : ∀ j, Law.ExecStrata (execStmts Vs j).law.σs (execStmts Vs j).law.ks (execStmts Vs j).law.St := fun j => by
-    obtain ⟨q, hq⟩ := hT j
-    exact (Vs j).exec_execStrata (VStmt.tiles_of_loads
-      ((zr q.1 q.2.1 q.2.2.1 q.2.2.2 j).build hq (hCust q.1 q.2.1 q.2.2.1 q.2.2.2 j).1)
-      (hCust q.1 q.2.1 q.2.2.1 q.2.2.2 j).2 hq.1 ⟨hq.2.1, hq.2.2.1⟩)
   have hr' : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg')
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).dj
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).y₀ S' R') i k ≤ ρ := by
@@ -101,7 +92,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       exact hr R ω t R₂ j _ hx'.y₀ S' R' i
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ S' R' i
-  rcases zk_sessions_recursive_fork_inner hS hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
+  rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
     Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
       (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hb

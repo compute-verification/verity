@@ -18,8 +18,8 @@ strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96-sha51
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
   finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackIf` where the session's
   knowledge finders satisfy `cr/sha-512`, else `1`);
-* `execOS_full_mem`, `vCovers_full`: a stratum the live stratified law draws in full is in every draw, so units there
-  cover their wires;
+* `execOS_subset_full_mem`, `vCovers_full`: V*'s live law, the full draw, draws every unit, so every unit's wires are
+  covered;
 * `sessions_stage_le`: at V*'s sessions in a row, a layer that disagrees on a wire of a session's commit strings with
   the values `wv` is at most the sessions' expected slack plus each commit string's weight times its trial's chance of
   opening the session's registered digest there off `wv`; `outerV_stage_le` is the same at the registration `R₂` the
@@ -27,7 +27,7 @@ strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96-sha51
 * `VCommits`, `VDecodes`, `VFull`: what V*'s inputs, circuits and laws must do at each stage: session `j`'s public file
   at history `t` registers `t`'s stage-`i` commitment at the stage's commit strings `Sk i j`, at every registration
   `R₂`, the layers' round-`i` message is read from the wires of those commit strings, and every such wire is a wire of
-  a unit whose stratum the session's law draws in full;
+  some unit;
 * `ReadW`, `VDecodesR`, `VFullR`: a wire some unit reads, and `VDecodes` and `VFull` at those wires alone
   (`Proofs.Flock.Recursive.StageRead`);
 * `zk_sessions_recursive_full`: `zk_sessions_recursive_upto` at `obS`, its transfer from `sessions_stage_le`;
@@ -122,40 +122,49 @@ theorem prob_auditLive_mono {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (F
   rw [prob_map, prob_map]
   exact prob_mono (fun t => h τ.1 ω t) _ _
 
-/-- **A stratum drawn in full is in every draw of the live stratified law**: when `k s` is all of stratum `s`, the
-local draw is a permutation's values on all of `[0, |s|)`, and a run that reads past the source's bytes draws every
-unit. -/
-theorem execOS_full_mem {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum)
-    (hS : Law.ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin m → ℕ}
-    (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) {u : Fin n} (hfull : (Law.stratum σ (σ u)).card ≤ k (σ u)) :
-    u ∈ (Law.execOS (n := n) t (.stratified K (Array.ofFn S)) pop).draw ω := by
-  show u ∈ (match Law.runOS (t ω) (.stratified K (Array.ofFn S)) pop with
+/-- **A live subset draw that succeeds is `Flock.Draw.subset` on the source's one stream.** -/
+theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ) {d : Flock.Draw.UnitDraw}
+    (hd : Law.runOS f (.subset k) n = some d) : Flock.Draw.subset k n (Law.streamOf (f 0)) = some d.units := by
+  unfold Law.runOS at hd
+  rw [Law.drawWith_subset_run] at hd
+  cases ho : (Flock.Draw.onWith (Law.tapeGet (Law.tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
+      (Flock.Draw.subset k n)).run (fun _ => 0) with
+  | none => rw [ho] at hd; exact absurd hd (by simp)
+  | some p =>
+    obtain ⟨u, pos'⟩ := p
+    rw [ho] at hd
+    cases u with
+    | none => exact absurd hd (by simp)
+    | some D =>
+      have hD : D = d.units := by rw [← Option.some.inj hd]
+      have h1 := (Law.onWith_tape (Law.tapesOf f) 0 _ (by omega) _ (fun a b u h => Law.subset_append _ _ a b u h) _
+        pos' _ rfl ho).2 D rfl
+      have h2 : Law.tapesOf f 0 = Law.streamOf (f 0) := by simp [Law.tapesOf, Array.getD_eq_getD_getElem?]
+      rw [h2] at h1
+      rw [← hD]; exact h1
+
+/-- **The full draw draws every unit**: a run of `subset n` over `[0, n)` that succeeds is a permutation's values on
+all of `[0, n)`, and a run that reads past the source's bytes draws every unit. -/
+theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+    (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) (u : Fin n) :
+    u ∈ (Law.execOS (n := n) t (.subset n) n).draw ω := by
+  show u ∈ (match Law.runOS (t ω) (.subset n) n with
     | some d => Finset.univ.filter fun u : Fin n => u.val ∈ d.units
     | none => Finset.univ)
-  cases h : Law.runOS (t ω) (.stratified K (Array.ofFn S)) pop with
+  cases h : Law.runOS (t ω) (.subset n) n with
   | none => exact Finset.mem_univ _
   | some d =>
-    have hd := Law.runOS_strata (t ω) _ _ pop d
-      (fun get s => ⟨_, fun _ => rfl, Law.drawWith_stratified_run get K pop _ s⟩) h
     simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-    obtain ⟨li, hli, hmemD⟩ := Law.stratified_units _ _ _ hd (σ u).val (by simp)
-    have hSs : (Array.ofFn S)[(σ u).val]! = S (σ u) := by
-      rw [getElem!_pos (Array.ofFn S) (σ u).val (by simp)]; simp
-    rw [hSs] at hli hmemD
-    obtain ⟨π, -, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec hli
-    have hu : u.val ∈ (Finset.range (S (σ u)).size).image (S (σ u)).unit := by
-      rw [(hS (σ u)).2.2]; exact Finset.mem_map_of_mem _ (Law.mem_stratum.2 rfl)
-    obtain ⟨j, hj, hju⟩ := Finset.mem_image.1 hu
-    have himg : (Finset.range (S (σ u)).size).image π = Finset.range (S (σ u)).size :=
+    obtain ⟨π, -, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec (runOS_subset (t ω) n n h)
+    have himg : (Finset.range n).image π = Finset.range n :=
       Finset.eq_of_subset_of_card_le
         (fun x hx => by
           obtain ⟨i, hi, rfl⟩ := Finset.mem_image.1 hx
           exact Finset.mem_range.2 (hπ i (Finset.mem_range.1 hi)))
         (Finset.card_image_of_injective _ π.injective).ge
-    obtain ⟨i, hi, hij⟩ := Finset.mem_image.1 (by rw [himg]; exact hj : j ∈ (Finset.range (S (σ u)).size).image π)
-    have hk : (S (σ u)).size ≤ (S (σ u)).k := by rw [(hS (σ u)).1, (hS (σ u)).2.1]; exact hfull
-    rw [← hju]
-    exact hmemD j ((hmem j).2 ⟨i, lt_of_lt_of_le (Finset.mem_range.1 hi) hk, hij⟩)
+    obtain ⟨i, hi, hiu⟩ :=
+      Finset.mem_image.1 (by rw [himg]; exact Finset.mem_range.2 u.isLt : u.val ∈ (Finset.range n).image π)
+    exact (hmem u.val).2 ⟨i, Finset.mem_range.1 hi, hiu⟩
 
 namespace ZkOuter
 
@@ -241,11 +250,7 @@ theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU n
 /-- **A stage's transfer at one session**, in `htr`'s shape with `obK`: `Pr[accept ∧ a drawn unit reads a wire of Sk
 whose layer bit is not wv's] ≤ stageSlack + Σ_pos candWeightK pos · Pr[the trial for pos opens pos's registered digest
 to a value other than wv pos]`; `zk_session_candValsR` with `candTermZC_le`. -/
-theorem candTransfer {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (zo : ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop))
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+theorem candTransfer {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg') zo.dj zo.y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (τ : Strategy (zo.game dg N)) {qF qS : ℝ} (hCR : zo.TabCR dg N qF qS τ)
     (Sk : Finset (PosK c hU nv)) (wv : PosK c hU nv → ValK c) :
@@ -254,10 +259,10 @@ theorem candTransfer {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Kd pop : ℕ
           CandBadZ execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
             (tabZAt zo.dj zo.y₀) zo.vb Sk wv (zo.layer dg N k Rw τ) g) (zo.game dg N) τ ≤
       zo.stageSlack dg N k Rw M ρ t' qF qS τ +
-        ∑ pos, candWeightK c hU nv (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop) Sk ρ pos *
+        ∑ pos, candWeightK c hU nv Lv Sk ρ pos *
           prob (OffAt (obK c hU nv) (zo.vb.cs (reg (zo.sim dg N τ)) pos) (wv pos)) (zo.trial dg N k Rw τ pos).g
             (zo.trial dg N k Rw τ pos).s := by
-  refine ((zk_session_candValsR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope St Kd pop Lb src
+  refine ((zk_session_candValsR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope Lv
     zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' Sk wv τ hCR).trans (add_le_add le_rfl
       (candTermZC_le execArith hs512 _ _ _ zo.vb Sk wv _ _ k Rw hρ))).trans_eq ?_
   rw [← add_assoc]
@@ -271,17 +276,15 @@ section Covers
 
 variable {nv : ℕ} {c : Flock.Circuit} {hU : Built c.unit}
 
-/-- **Coverage from strata drawn in full**: when every wire of `Sk` is a wire of a unit whose stratum V*'s law draws
-in full, every draw of the live stratified law reads every wire of `Sk` (`execOS_full_mem`). -/
-theorem vCovers_full {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (St : Fin m → Flock.Draw.Stratum)
-    (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] {Lb : Fin m → ℕ}
-    (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256) (Sk : Finset (PosK c hU nv))
-    (hfull : ∀ g, posK c hU nv g ∈ Sk → ∃ u, g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u ∧
-      (Law.stratum σs (σs u)).card ≤ ks (σs u)) :
-    VCovers c hU nv (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop) Sk := by
+/-- **Coverage by the full draw**: when every wire of `Sk` is a wire of a unit, every draw of the live full draw reads
+every wire of `Sk` (`execOS_subset_full_mem`). -/
+theorem vCovers_full {Ω : Type} [Fintype Ω] [Nonempty Ω] {Lb : Fin 1 → ℕ}
+    (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (Sk : Finset (PosK c hU nv))
+    (hfull : ∀ g, posK c hU nv g ∈ Sk → ∃ u, g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u) :
+    VCovers c hU nv (Law.execOS (n := nv) src (.subset nv) nv) Sk := by
   intro ω g hg
-  obtain ⟨u, hgu, hu⟩ := hfull g hg
-  exact ⟨u, execOS_full_mem σs ks St hS Kd pop src ω hu, hgu⟩
+  obtain ⟨u, hgu⟩ := hfull g hg
+  exact ⟨u, execOS_subset_full_mem src ω u, hgu⟩
 
 end Covers
 
@@ -384,17 +387,15 @@ theorem trialS_le (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → B
 /-- **A stage's transfer at V*'s sessions**: when every layer agreeing with the values `wv` on the wires of the commit
 strings `Sk j` satisfies `Q`, the sessions accept with `Q` failing at most the sessions' expected `slackIf` plus, at
 each session's commit string, its weight times the chance its trial opens the session's registered digest `cs j pos`
-off `wv j pos` (`ZkOuter.candTransfer` at each session, `prob_seqC_exists_le`). Every wire of `Sk j` is read at every
-draw (`hfull`, `vCovers_full`). -/
+off `wv j pos` (`ZkOuter.candTransfer` at each session, `prob_seqC_exists_le`). Every wire of `Sk j` is a unit's, so it
+is read at every draw (`hfull`, `vCovers_full`). -/
 theorem sessions_stage_le
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ j S' R' i, rateZ (planZAt (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
-      ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
-        (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
+      ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (hcs : ∀ j, (∃ tr, AcceptsZKR (zs j).I (zs j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg', (zs j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
@@ -436,11 +437,10 @@ theorem sessions_stage_le
     unfold ZkOuter.slackIf
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
-        (((zs j).candTransfer (Vs j).law.St (Vs j).law.Kd (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src dg N hk hRw
-          hM hρ (hr j) ht' _ hc (Sk j) (wv j)).trans (add_le_add le_rfl (Finset.sum_le_sum fun pos _ => ?_)))
+        (((zs j).candTransfer dg N hk hRw hM hρ (hr j) ht' _ hc (Sk j) (wv j)).trans
+          (add_le_add le_rfl (Finset.sum_le_sum fun pos _ => ?_)))
       · rintro R' ω' tr ⟨hacc, g, hg, hne⟩
-        obtain ⟨u, hu, hgu⟩ := vCovers_full (Vs j).law.σs (Vs j).law.ks (Vs j).law.St (hS j) (Vs j).law.Kd
-          (Vs j).law.pop (Vs j).law.src (Sk j) (hfull j) ω' g hg
+        obtain ⟨u, hu, hgu⟩ := vCovers_full (Vs j).law.src (Sk j) (hfull j) ω' g hg
         refine ⟨hacc, u, hu, g, hgu, ?_⟩
         unfold CandBadZ
         rw [ZkOuter.vb_pos, ZkOuter.vb_bit]
@@ -476,14 +476,12 @@ noncomputable def trialV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg
 /-- **A stage's transfer at V*'s outer proof**: `sessions_stage_le` at the registration the prover sends, the session's
 registered digests at `Sk j` being `cs j` at every registration where it accepts some transcript. -/
 theorem outerV_stage_le
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
     (ht' : 0 ≤ t') (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
-      ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
-        (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
+      ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (hcs : ∀ R₂ j, (∃ tr, AcceptsZKR (zs R₂ j).I (zs R₂ j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg',
       (zs R₂ j).vb.cs R' pos = cs j pos)
@@ -501,7 +499,7 @@ theorem outerV_stage_le
             ((zs s.1 j).trial dg N k Rw ((zs s.1 j).ofBase dg N (rs j).1) pos).s) (sessions (zs s.1) dg N)
             (sessOf zs dg N s) := by
   rw [prob_outerV]
-  exact sessions_stage_le hS (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS Sk hfull cs (hcs s.1) Q wv hQ
+  exact sessions_stage_le (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS Sk hfull cs (hcs s.1) Q wv hQ
     (sessOf zs dg N s)
 
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
@@ -527,12 +525,11 @@ def VDecodes (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ �
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (v j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) →
     Option.Rel (same i ρs) (wmsg Xt)[i]? (some (msg i v))
 
-/-- **V*'s laws draw every wire the stages are read from**: each wire of `Sk i j` (`i < r`) is a wire of a unit whose
-stratum session `j`'s law draws in full. -/
+/-- **The stages are read from units' wires**: each wire of `Sk i j` (`i < r`) is a wire of some unit, so session `j`'s
+law, the full draw, draws it. -/
 def VFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
   ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
-    ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
-      (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u)
+    ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
 
 variable (Vs) in
 /-- **Wire `g` of session `j` is read**: a committed wire of some unit. -/
@@ -553,20 +550,21 @@ def VDecodesR (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ 
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (v j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) →
     Option.Rel (same i ρs) (wmsg Xt)[i]? (some (msg i v))
 
-/-- **`VFull` at the read wires**: each read wire of `Sk i j` (`i < r`) is a wire of a unit whose stratum session `j`'s
-law draws in full. -/
+/-- **`VFull` at the read wires**: each read wire of `Sk i j` (`i < r`) is a wire of some unit, which holds of every read
+wire (`vFullR_of_read`). -/
 def VFullR (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
   ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j → ReadW Vs j g →
-    ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
-      (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u)
+    ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
+
+theorem vFullR_of_read (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : VFullR r Sk :=
+  fun _ _ _ _ _ h => h
 
 /-- **The recursive audit with V*'s `--zk --registered` sessions as the outer proof is sound, with its stages' transfer
 from V*'s sessions**: `zk_sessions_recursive_upto` at V*'s tagged openings `obS`, stage `i`'s trial for each tagged
 commit string `trialV`, its slack the sessions' expected `slackIf` and its weights `weightS` on `Sk i`, the transfer
 from `outerV_stage_le` on `VCommits`, `VDecodes` and `VFull`. -/
 theorem zk_sessions_recursive_full
-    -- V*'s laws: their strata and A3
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    -- V*'s laws: A3
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -584,8 +582,8 @@ theorem zk_sessions_recursive_full
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsame : ∀ y (ms ms' : List I.Msg) (ρs : List I.Coin), (∀ i < ρs.length, Option.Rel (same i ρs) ms[i]? ms'[i]?) →
       I.accepts y (ms.zip ρs) → I.accepts y (ms'.zip ρs))
-    -- the stages: their commit strings, commitments and messages, V*'s registration and decoding of them, the strata
-    -- V*'s laws draw in full, and cr/sha-512 for the fork finders
+    -- the stages: their commit strings, commitments and messages, V*'s registration and decoding of them, the units
+    -- they are read from, and cr/sha-512 for the fork finders
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
@@ -603,11 +601,11 @@ theorem zk_sessions_recursive_full
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
+  refine zk_sessions_recursive_upto hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
-  refine (outerV_stage_le hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
+  refine (outerV_stage_le (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
     (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
@@ -641,7 +639,6 @@ times their expected stage slack (`ZkOuter.slackCR`), and the inner error. `zk_s
 budgets and no SHA-512 evaluations to count: with no fork, every finder satisfies `cr/sha-512` at budget `0` and every
 link finder `ecr/sha-512` at cost `0`. -/
 theorem zk_sessions_recursive_fork
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -687,7 +684,7 @@ theorem zk_sessions_recursive_fork
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_full hS hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
+  refine (zk_sessions_recursive_full hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
     hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
     hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
   simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,
