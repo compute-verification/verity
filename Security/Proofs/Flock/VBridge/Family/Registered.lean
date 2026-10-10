@@ -189,8 +189,8 @@ def RowsRegistered : Prop :=
     (q : Fin (F.Vs j).c.ports.size), (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = (F.Vs j).c.ports[q].name) →
       (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))
 
-/-- Obligation: discharged by `rowColKeys_of` (`Family/PartReads.lean`), from the parse of the part's circuit
-(`PartRowCols`) and the session's reads file (`OwnNamesRows`).
+/-- Obligation: discharged by `rowColKeys_of` (`Family/PartReads.lean`), from the verifier's check of the part
+(`rowColOf_lt`), the parse of its circuit (`PartRowCols`) and the session's reads file (`OwnNamesRows`).
 **Each part's row-port columns are keyed by a bit of a row `own` names.** At every accepted outer proof, every
 row-port column `rowColOf` of part `p`'s unit is an input column whose Δ key (`Aliased.srcKey`, copy 0) is message bit
 `k` of a row port `q'`, within its row, and the session's reads file names `q'`. A fact about V*'s `InnerRepCheck`

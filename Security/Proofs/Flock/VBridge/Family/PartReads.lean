@@ -7,8 +7,9 @@ import Proofs.Flock.VBridge.Family.Registered
 what the part sessions' reads files and registered reads say there:
 
 * `RowPort`: a port of part `p`'s circuit that one of its row columns `rowColOf` is keyed to;
-* `PartRowCols`, `PartRowBits`: each row column is an input keyed by a row bit, and two parts' columns of one element of
-  `w` key the same bit of rows of one name (the parse of the parts' circuits);
+* `rowColOf_lt`: each row column is an input (the verifier's `RecResiduals.check`);
+* `PartRowCols`, `PartRowBits`: each row column is keyed by a row bit, and two parts' columns of one element of `w` key
+  the same bit of rows of one name (the parse of the parts' circuits);
 * `OwnNamesRows`, `PartPortsOne`: each part's reads file names its row ports, and two parts' entries at a row port of
   one name are one entry (`rec_vstage.py:356-357`, `rec_residuals.py:446-449`). Not at every port: each part's `v` and
   `out` entries are its own (`rec_residuals.py:451-461`);
@@ -44,15 +45,14 @@ def RowPort (p : ℕ) (j : Fin F.stmts.size) (q' : Fin (F.Vs j).c.ports.size) : 
 
 /-- Obligation: discharged by the parse of the part's circuit (`parse_circuitFile` with `circuitFile`'s emit and parse
 round trip, the lane that proves `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Each row
-column of a part is an input keyed by a row bit.** In the circuit of part `p`'s statement, every row column
-`rowColOf` of the unit is an input column whose Δ key (`Aliased.srcKey`, copy 0) is message bit `k'` of a port `q'`,
-within its row. V*'s `InnerRepCheck` circuit takes its row ports as its inputs from column 0 (`rowCol`), each a port of
-the statement under its name (`rec_residuals.py:125`). -/
+column of a part is keyed by a row bit.** In the circuit of part `p`'s statement, the Δ key (`Aliased.srcKey`, copy 0)
+of every row column `rowColOf` of the unit is message bit `k'` of a port `q'`, within its row. V*'s `InnerRepCheck`
+circuit takes its row ports as its inputs from column 0 (`rowCol`), each a port of the statement under its name
+(`rec_residuals.py:125`). That the column is an input is the verifier's check (`rowColOf_lt`). -/
 def PartRowCols : Prop :=
   ∀ (p : ℕ) (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt →
-    ∀ q < 128 * (nsOf F.sh p).sum, rowColOf F.sh p q < (Rows.ofNet (F.Vs j).hU).nIn ∧
-      ∃ (q' : Fin (F.Vs j).c.ports.size) (k' : ℕ) (_ : k' < Layout.portRowW (F.Vs j).c q'),
-        Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) = .msg q'.val (k' / 8) (k' % 8)
+    ∀ q < 128 * (nsOf F.sh p).sum, ∃ (q' : Fin (F.Vs j).c.ports.size) (k' : ℕ) (_ : k' < Layout.portRowW (F.Vs j).c q'),
+      Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) = .msg q'.val (k' / 8) (k' % 8)
 
 /-- Obligation: discharged by the parse of the parts' circuits (`parse_circuitFile` with `circuitFile`'s emit and parse
 round trip, the lane that proves `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Two parts'
@@ -121,16 +121,38 @@ theorem nv_part {p : ℕ} {j : Fin F.stmts.size} {nm : String} {pt : VStar.Part}
   rw [F.hnv j, hj]
   rfl
 
+/-- **A part's row columns are inputs**: its circuit passes `RecResiduals.check` (`ParseFacts.recResiduals`), so its
+unit is the verifier's part `p` (`HUnitName`, `check_part`, `part_eq` at `HStruct`), whose row columns are below its
+inputs' end (`rowCol_lt_nIn`). -/
+theorem rowColOf_lt {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
+    (hname : F.HUnitName) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) {p : ℕ} {j : Fin F.stmts.size}
+    {nm : String} {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) (hp : p < (partsOf F.sh).size) {q : ℕ}
+    (hq : q < 128 * (nsOf F.sh p).sum) : rowColOf F.sh p q < (Rows.ofNet (F.Vs j).hU).nIn := by
+  have hP : partsOf F.sh = gs := partsOf_eq hst.1 hst.2
+  have hpg : p < gs.size := by rw [← hP]; exact hp
+  have hnm : (F.Vs j).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims p :=
+    (hname _ p nm pt hj).trans (statements_name F.hstmts _ hj)
+  have hchk : RecResiduals.check (F.Vs j).c = .ok () := (parse_facts (F.zs R ω t R₂ j).hc).recResiduals
+  obtain ⟨S, ns, nv, hpart, hn⟩ := FlockVBridge.OfVStar.check_part hchk (resParams_of_check hchk hnm) F.hsh
+  obtain ⟨-, hns, hnv⟩ := FlockVBridge.OfVStar.part_eq hst.1 hst.2 hpg hpart
+  have hgp : (partsOf F.sh)[p]! = gs[p] := by rw [hP, getElem!_pos gs p hpg]
+  have hnsp : nsOf F.sh p = ns := by rw [nsOf, hgp, hns]
+  have hnvp : nvOf F.sh p = nv := by rw [nvOf, hgp, hnv]
+  rw [rowColOf, hnsp, hnvp]
+  exact OfVStar.rowCol_lt_nIn (F.Vs j).hU hn (by rw [← hnsp]; exact hq)
+
 /-- **`RowColKeys` from the parts' circuits and reads files** (`PartRowCols`, `OwnNamesRows`, at the part's statement
-`HCover` gives). -/
-theorem rowColKeys_of (hcov : F.HCover) (hcols : F.PartRowCols) (hnames : F.OwnNamesRows dg N k Rw) :
+`HCover` gives; the columns inputs by `rowColOf_lt`). -/
+theorem rowColKeys_of {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
+    (hname : F.HUnitName) (hcov : F.HCover) (hcols : F.PartRowCols) (hnames : F.OwnNamesRows dg N k Rw) :
     F.RowColKeys dg N k Rw := by
   intro R ω t R₂ τ o hacc p hp q hq
   obtain ⟨j, nm, pt, hj⟩ := hcov p hp
   have hsj : F.sess p = j := F.hsess p j ⟨nm, pt, hj⟩
   subst hsj
-  obtain ⟨hlt, q', k', hk, hkey⟩ := hcols p _ nm pt hj q hq
-  exact ⟨hlt, q', k', hk, hkey, hnames R ω t R₂ τ o hacc p _ nm pt hj q' ⟨q, hq, k', hk, hkey⟩⟩
+  obtain ⟨q', k', hk, hkey⟩ := hcols p _ nm pt hj q hq
+  exact ⟨F.rowColOf_lt hst hname R ω t R₂ hj hp hq, q', k', hk, hkey,
+    hnames R ω t R₂ τ o hacc p _ nm pt hj q' ⟨q, hq, k', hk, hkey⟩⟩
 
 /-- **`SameRow` from the parts' circuits, reads files and registered reads** (`PartRowBits`, `ReadsOwn`,
 `PartPortsOne`, at the parts' statements `HCover` gives): the two columns key one bit of rows of one name, both reads
