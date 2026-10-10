@@ -159,7 +159,8 @@ theorem Menu.staged_ok {M : Menu} (h : M.staged = true) : M.Staged :=
 
 /-- **The live verifier accepts `menu₀`**: its inner session has `k_log` 6, no regions and 24 + 16 link-point
 coordinates. -/
-theorem menu₀_inRange : menu₀.InRange := fun _ _ => rfl
+theorem menu₀_inRange : menu₀.InRange :=
+  fun _ _ => (Flock.checkInRange_ok _ _ _).2 (by simp [menu₀, Flock.PT_LOCAL])
 
 /-- **`menu₀` is a shape menu.** -/
 theorem menu₀_shapeMenu : ShapeMenu menu₀ := by
