@@ -102,6 +102,27 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
+  on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
+  through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
+  proves coverage against the committed partition: each sampled unit sits in exactly one slot, of its committed type,
+  on its committed values. Revealing each sampled unit's type would leak the architecture, since a uniform sample's
+  type mix estimates the model's. The public-unit case is this design with the partition opened, and
+  `RecursiveAudit` is stated for it first. The same night:
+  - The universal unit (option 3) is frozen. Its registration, hidden reads, statement hiding and `circuit_indist`
+    are kept; its unit-specific work stops.
+  - VBridge is to become a theorem about one Lean function: Lean's `VStar.statements` builder, proved correct one
+    building block at a time.
+  - Hiding the type mix costs padding, not an evaluation of every type. A session picks its type's matrix by a hidden
+    index, small types are padded to the shape's nonzero bound, and session counts are padded per shape.
+  - No benchmark harness is built until the theory lands.
+- 2026-10-09 (4:48–5:00 PM PDT, relayed by top): a key that hides a commitment is drawn by the party the hiding
+  protects, and fixed in the commitment before use: the developer's for its leaves, the ZK server's for its commitments,
+  the challenger's for coin commitments. One key per registration is enough. hm96's pinned key stays only where the key
+  is wired into a circuit (the row gadget), as a named exception. The inner phase's coins are sent live, because the
+  auditor sees only hiding commitments that are never opened; committed coins are for V\*'s outer sessions. "The
+  verifier accepts the inner statement" in a soundness event means the statement-level checks the auditor runs, never
+  acceptance of the inner transcript, which VBridge derives.
 - 2026-10-09 (9:01 AM PDT, relayed by top): a part's verdict in `check` is keyed on the code that decides that verdict (a
   suite's runner and harness), not on every line of the check tool; that is what the 7 Oct ruling's "the check's code" means.
   The other half of reuse is declared inputs narrowed to what each suite reads, and since the guard fails a suite that
