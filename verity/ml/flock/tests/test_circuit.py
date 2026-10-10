@@ -324,6 +324,24 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
         assert {k: v for k, v in pairs if k in words} == words, name
 
 
+def test_the_zk_hooks_name_the_provers_randomness():
+    """Under ``--zk`` the identity's ``hooks``, which the statement digest binds, name where the pads and every table's
+    draws come from: the Lean verifier's default statements (``Flock.Zk.hooks`` under ``Tags.osMasks``) and the prover's
+    ``zk_identity`` and session tables write the same words."""
+    import re
+    from pathlib import Path
+
+    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    lean = _body(service / "flock" / "Flock" / "Zk.lean", "def hooks")
+    os_words = dict(re.findall(r'let (\w+) := if os then "([^"]*)" else', lean))
+    assert set(os_words) == {"pads", "draws"}, os_words
+    want = {k: re.search(rf'\("{k}", s s!"([^"]*)"\)', lean)[1].replace("{pads}", os_words["pads"])
+            .replace("{draws}", os_words["draws"]) for k in ("pads", "tables")}
+    rust = (flock / "live" / "src" / "bin" / "flock-circuit.rs").read_text()
+    tables = re.search(r'id\["hooks"\]\["tables"\] = json!\("((?:[^"\\]|\\\n)*)"\)', rust)[1]
+    assert want == {"pads": re.search(r'"pads": "([^"]*)"', rust)[1], "tables": re.sub(r"\\\n\s*", "", tables)}
+
+
 def test_returned_outputs_need_a_cut_tail():
     class U:
         cut, tail_rets = [], [0]

@@ -61,6 +61,10 @@ structure Tags where
   /-- the prover of main from `804be92b4`: on per-round OS coins (`FC_COINS=os`) its identity names the coin mode and no coin
   commitment or derivation (`liveOsIdentity`) -/
   liveOs : Bool := false
+  /-- the prover after verity `cec3e347` (Daniel's decision 4): every random value it uses is the OS's bytes, which the
+  `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's draws were ChaCha20 streams of the
+  prover's seed -/
+  osMasks : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -341,30 +345,45 @@ def circuitTypesB3727bd9Selftest : Tags :=
     name := "verity/flock-circuit/types@b3727bd9+seed-injection", identity := identityHidden true "verity/flock-circuit/types",
     liveOs := false }
 
-/-- `verity/flock-circuit` (PROTOCOL.md §16.13): `b3727bd9`'s statement with META's leaf salts named as the prover draws
-them (`leafSchemeHm96Os`), in the identity and the pinned leaf scheme. -/
-def circuit : Tags :=
+/-- `verity/flock-circuit` (PROTOCOL.md §16.13) up to verity `cec3e347`: `b3727bd9`'s statement with META's leaf salts
+named as the prover draws them (`leafSchemeHm96Os`), in the identity and the pinned leaf scheme; its `--zk` identity names
+the pads and every table's draws ChaCha20 streams of the prover's seed. -/
+def circuitCec3e347 : Tags :=
   { circuitB3727bd9 with
-    name := "verity/flock-circuit", identity := identityHidden false (leafScheme := leafSchemeHm96Os),
+    name := "verity/flock-circuit@cec3e347", identity := identityHidden false (leafScheme := leafSchemeHm96Os),
     pinnedLeafScheme := some leafSchemeHm96Os }
 
 /-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
-def circuitSelftest : Tags :=
-  { circuit with
-    name := "verity/flock-circuit+seed-injection", identity := identityHidden true (leafScheme := leafSchemeHm96Os),
+def circuitCec3e347Selftest : Tags :=
+  { circuitCec3e347 with
+    name := "verity/flock-circuit@cec3e347+seed-injection", identity := identityHidden true (leafScheme := leafSchemeHm96Os),
     liveOs := false }
 
-/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13): `b3727bd9`'s typed statement with META's `leafSchemeHm96Os`. -/
-def circuitTypes : Tags :=
+/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13) up to verity `cec3e347`: `b3727bd9`'s typed statement with META's
+`leafSchemeHm96Os`. -/
+def circuitTypesCec3e347 : Tags :=
   { circuitTypesB3727bd9 with
-    name := "verity/flock-circuit/types",
+    name := "verity/flock-circuit/types@cec3e347",
     identity := identityHidden false "verity/flock-circuit/types" (leafScheme := leafSchemeHm96Os),
     pinnedLeafScheme := some leafSchemeHm96Os }
 
-def circuitTypesSelftest : Tags :=
-  { circuitTypes with
-    name := "verity/flock-circuit/types+seed-injection",
+def circuitTypesCec3e347Selftest : Tags :=
+  { circuitTypesCec3e347 with
+    name := "verity/flock-circuit/types@cec3e347+seed-injection",
     identity := identityHidden true "verity/flock-circuit/types" (leafScheme := leafSchemeHm96Os), liveOs := false }
+
+/-- `verity/flock-circuit` (PROTOCOL.md §16.13): `cec3e347`'s statement, its prover's every random value the OS's bytes,
+as its `--zk` identity's `hooks` say (`osMasks`). -/
+def circuit : Tags := { circuitCec3e347 with name := "verity/flock-circuit", osMasks := true }
+
+/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
+def circuitSelftest : Tags := { circuitCec3e347Selftest with name := "verity/flock-circuit+seed-injection", osMasks := true }
+
+/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13): `cec3e347`'s typed statement with `osMasks`. -/
+def circuitTypes : Tags := { circuitTypesCec3e347 with name := "verity/flock-circuit/types", osMasks := true }
+
+def circuitTypesSelftest : Tags :=
+  { circuitTypesCec3e347Selftest with name := "verity/flock-circuit/types+seed-injection", osMasks := true }
 
 /-- META `leaf_scheme` of a recursive session's inner statement (upstream's `leaf_scheme_plain`,
 `verity_flock.circuit.LEAF_SCHEME_PLAIN`): plain SHA-512 leaves and no salt, since the firewall commits every tree top under
@@ -392,6 +411,7 @@ def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit6315
   circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
   circuitTypes210d32e1Selftest, circuitF5df3bbc, circuitF5df3bbcSelftest, circuitTypesF5df3bbc, circuitTypesF5df3bbcSelftest,
   circuitB3727bd9, circuitB3727bd9Selftest, circuitTypesB3727bd9, circuitTypesB3727bd9Selftest,
+  circuitCec3e347, circuitCec3e347Selftest, circuitTypesCec3e347, circuitTypesCec3e347Selftest,
   circuit, circuitSelftest, circuitTypes, circuitTypesSelftest, circuitPlainLeaves]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)

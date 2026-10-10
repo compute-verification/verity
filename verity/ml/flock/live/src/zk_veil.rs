@@ -56,7 +56,7 @@ pub const K_PAD: usize = 192;
 pub const Q: usize = 168;
 /// Inner codeword length over the message length: rate at most 1/8.
 pub const INNER_LOG_INV_RATE: usize = 3;
-/// ChaCha20 streams of [`crate::zk_hooks::ProverRng`] (1-3 are M0's).
+/// [`crate::zk_hooks::ProverRng`]'s purposes (an injected seed's ChaCha20 streams; 1-3 are M0's).
 pub const STREAM_PADS: u64 = 4;
 pub const STREAM_DOT_MASK: u64 = 5;
 
@@ -230,7 +230,7 @@ pub struct Pads {
 }
 
 impl Pads {
-    /// Rep `rep`'s pads from the prover's ChaCha20 streams (never from the transcript).
+    /// Rep `rep`'s pads from the prover's randomness (OS bytes; never from the transcript), drawn once and kept in the rep's state.
     pub fn draw(rng: &mut crate::zk_hooks::ProverRng, lay: &Layout, rep: usize) -> Self {
         let s = lay.len();
         let base = (rep as u64) << 32;
