@@ -23,6 +23,7 @@ import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Recursive.UniversalLower
 import Proofs.Flock.Recursive.UniversalPack
+import Proofs.Flock.Recursive.UniversalSlot
 import Proofs.Flock.Recursive.UniversalStmt
 import Proofs.Flock.Recursive.UniversalAudit
 
@@ -36,6 +37,7 @@ read off an outcome, whose commit strings open the registration's root when ever
 `ReadsOpen`), V*'s sessions as the prover supplies them, typed where they type and refusing elsewhere, with the
 prover's strategy carried across (`Raw`), where V*'s statement enters a session, with the law's population V*'s units
 (`Loads`), the unit's lowering, which computes that class's interpretation (`UniversalLower`), that lowering packed
-onto the 16-bit leaf ports the verifier accepts, as any circuit type packs (`UniversalPack`), the statement read off
+onto the 16-bit leaf ports the verifier accepts, as any circuit type packs (`UniversalPack`), what a table class's slot
+of that unit computes in a satisfying witness (`UniversalSlot`), the statement read off
 the description's rows, with when a session is faulty (`UniversalStmt`), and what `RecursiveAudit`'s (i) reads of the
 registered private circuit at the executable's class (`UniversalAudit`). -/
