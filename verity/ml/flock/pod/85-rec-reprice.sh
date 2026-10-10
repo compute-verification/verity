@@ -561,7 +561,10 @@ EOF
   V=$DD/v; rm -rf $V; mkdir -p $V
   /usr/bin/time -v -o $O/vstage/time-points.txt python3 -m verity_flock.rec_vstage points $INNER $DD/stage/circuit.txt \
     $DD/stage/pub-$N.bin > $V/points.json 2> $O/vstage/points.err || { tail -20 $O/vstage/points.err; exit 1; }
-  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json verity/flock-circuit \
+  # an inner statement whose description is registered (stage/registered.json, verity_flock.inner_registered) is folded
+  # against that registration (--registered)
+  REG=(); [ -s $DD/stage/registered.json ] && REG=(--registered $DD/stage/registered.json)
+  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json "${REG[@]}" verity/flock-circuit \
     $DD/stage/circuit.txt $DD/stage/pub-$N.bin $V/points.json os > $V/fold.json 2> $O/vstage/fold.err
   rc=$?; echo "fold exit $rc"; [ $rc = 0 ] || { tail -20 $O/vstage/fold.err; exit 1; }
   cp $V/points.json $V/fold.json $O/vstage/
@@ -641,9 +644,13 @@ oreplay)
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
+  # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
+  # session STEP=vstage staged every statement from, a forgery's too
+  INNER=${INNER:-$DD/inner/s$((NS - 1))}
+  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session"
   for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
