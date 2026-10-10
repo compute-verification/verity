@@ -551,6 +551,118 @@ def proofs_c3(path: Path, prover: Path) -> dict:
             "summary": summary, "buckets": out}
 
 
+AUDIT_S = (1, 4, 16, 64, None)  # inner sessions one outer proof covers; None: all of the bucket's
+
+
+def _rows_template(rows: float, s: int) -> tuple[int, int]:
+    """``s`` instances of an unlowered circuit of ``rows`` rows as one template statement, by `layout`'s rule: an instance of
+    k_log k1 = max(22, ceil(log2 rows) + 2), 2^(27 - k1) of them a block (or, past 27, each its own blocks of 2^25 rows)."""
+    k1 = max(22, math.ceil(rows).bit_length() + 2)
+    if k1 > K_LOG_MAX:
+        return s * math.ceil(rows / 2 ** (K_LOG_MAX - 2)), K_LOG_MAX
+    G = 2 ** (K_LOG_MAX - k1)
+    return math.ceil(s / G), k1 + (min(G, 1 << (s - 1).bit_length()).bit_length() - 1)
+
+
+def per_audit(path: Path, prover: Path) -> dict:
+    """Outer prover-hours per audit when one outer proof covers S inner sessions of one bucket (`AUDIT_S`), on proofs'
+    candidate-3 rows and F6's per-bucket session counts (``prover.json``'s unsplit buckets, mean and public, the rows proofs'
+    table is keyed by) and law.
+
+    One outer proof over s sessions of a bucket proves: the registered opening once (its RecOpen statements; the s sessions'
+    2s claims enter its Ligerito part as one ring-switch round each, ``rec_live.rep_rounds``, which no query or H depends on),
+    and per session the opening algebra (proofs' whole-opening size, an upper bound on the per-claim part), the sparse phase
+    and the inner table's openings (fresh commitments each session). Equal circuits merge into one statement: the s sessions'
+    instances of each inner level's ``RecOpen{L, H}`` (`recopen_block`, row commitments included), and the algebra and
+    sparse phase as template statements (`_rows_template`). Each statement's cap sessions cost F6's law (`_session_law`)."""
+    p, rows = json.loads(prover.read_text()), json.loads(path.read_text())
+    fit, glue, bpn = p["fit"], p["glue_bytes"], p["bytes_per_nnz"]
+    k2, units = _k2(path.parent)
+    by = {(r["workload"], r["part"], r["Z"]): r for r in rows}
+    blk: dict = {}
+
+    def recopen(L, H, n):
+        if (L, H, n) not in blk:
+            u = int(k2.unit_rows(units, L, H)[0])
+            f = recopen_block(L, H, u, n=n)
+            blk[L, H, n] = _session_law(math.ceil(n / f["G"]), f["k_log"], u, fit, glue, bpn)
+        return blk[L, H, n]
+
+    def outer(r: dict, s: int) -> dict:
+        """One outer proof over ``s`` sessions of bucket ``r``: seconds by part, the largest statement's RSS."""
+        m = r["m_if_T_types"] if r["templates"] > 1 else r["m"]
+        reg = [recopen(L, H, n) for L, H, n in k2.statements(m, True)]
+        inner = [recopen(L, H, s * n) for L, H, n in k2.statements(r["inner_m"], False)]
+        sparse = r["terms"]["sparse algebra"] + r["terms"]["firewall commitments"] + r["terms"]["type selects"]
+        rest = [_session_law(*_rows_template(x, s), x, fit, glue, bpn) for x in (r["terms"]["opening algebra"], sparse)]
+        return {"registered": sum(x["prove_s"] for x in reg), "per_session": sum(x["prove_s"] for x in rest),
+                "inner": sum(x["prove_s"] for x in inner), "rss_gib": max(x["rss_gib"] for x in reg + inner + rest),
+                "blocks": sum(x["blocks"] for x in reg + inner + rest)}
+
+    def bucket(r: dict, N: float, S: int | None, public: bool) -> dict:
+        """Expected seconds by part for N sessions in outer proofs of at most S (public: N whole, split as evenly as can be;
+        mean: N/S proofs of S, or one of N interpolated between its whole neighbours)."""
+        S = S or math.ceil(N)
+        add = lambda acc, o, w: {k: acc.get(k, 0) + w * v for k, v in o.items() if k != "rss_gib"} | {
+            "rss_gib": max(acc.get("rss_gib", 0), o["rss_gib"])}
+        acc: dict = {}
+        if public:
+            P = math.ceil(N / S)
+            for i in range(P):
+                acc = add(acc, outer(r, int(N) // P + (i < int(N) % P)), 1)
+        elif N > S:
+            acc = add(acc, outer(r, S), N / S)
+        elif N < 1:
+            acc = add(acc, outer(r, 1), N)
+        else:
+            lo, f = math.floor(N), N - math.floor(N)
+            acc = add(add(acc, outer(r, lo), 1 - f), outer(r, lo + 1), f) if f else add(acc, outer(r, lo), 1)
+        return acc
+
+    out = []
+    for w in p["workloads"]:
+        res = {"workload": w["workload"], "buckets": [], "hours": {}}
+        bks = [(part, b, by[w["workload"], part, b["Z"]]) for part in ("body", "tail") for b in w["unsplit"][part]]
+        for part, b, r in bks:
+            res["buckets"].append({"part": part, "Z": b["Z"], "types": b["types"], "templates": r["templates"],
+                                   "sessions_mean": b["sessions_mean"], "sessions_public": b["sessions_public"],
+                                   "m": r["m_if_T_types"] if r["templates"] > 1 else r["m"], "inner_m": r["inner_m"],
+                                   "one_session": outer(r, 1)})
+        for cnt in ("mean", "public"):
+            for S in AUDIT_S:
+                tot: dict = {}
+                for part, b, r in bks:
+                    x = bucket(r, b[f"sessions_{cnt}"], S, cnt == "public")
+                    tot = {k: (max if k == "rss_gib" else lambda a, c: a + c)(tot.get(k, 0), v) for k, v in x.items()}
+                h = {k: v / 3600 for k, v in tot.items() if k not in ("rss_gib", "blocks")}
+                res["hours"][f"{cnt}/S={S or 'all'}"] = {"vstar": h["registered"] + h["per_session"],
+                                                       "with_inner": h["registered"] + h["per_session"] + h["inner"],
+                                                       **h, "blocks": tot["blocks"], "rss_gib": tot["rss_gib"]}
+            res["hours"][f"{cnt}/floor"] = {
+                "vstar": sum(b[f"sessions_{cnt}"] * (outer(r, 64)["per_session"] / 64) for _, b, r in bks) / 3600,
+                "with_inner": sum(b[f"sessions_{cnt}"] * ((outer(r, 64)["per_session"] + outer(r, 64)["inner"]) / 64)
+                                  for _, b, r in bks) / 3600}
+        out.append(res)
+
+    print("\nper audit, outer prover-hours (composed RecOpen with row commitments; F6 unsplit sessions; one outer proof over at "
+          "most S sessions of one bucket). V* alone / with the inner table's openings")
+    cols = [f"S={S or 'all'}" for S in AUDIT_S] + ["floor"]
+    print(f"{'workload':34} {'cnt':6} {'sessions':>8} " + " ".join(f"{c:>13}" for c in cols))
+    for res in out:
+        wl = res["workload"].removeprefix("vllm/").split("__")
+        for cnt in ("mean", "public"):
+            n = sum(b[f"sessions_{cnt}"] for b in res["buckets"])
+            print(f"{wl[0] + '/' + wl[4] + '/' + wl[5] + ('/' + wl[7] if wl[7] != 'mixed' else ''):34} {cnt:6} {n:>8.0f} "
+                  + " ".join(f"{res['hours'][f'{cnt}/{c}']['vstar']:>5.1f}/{res['hours'][f'{cnt}/{c}']['with_inner']:<7.1f}"
+                             for c in cols))
+    rng = lambda key, part: (min(o["hours"][key][part] for o in out), max(o["hours"][key][part] for o in out))
+    summary = {f"{key}/{part}": rng(key, part) for key in out[0]["hours"] for part in ("vstar", "with_inner")}
+    summary["rss_gib_max"] = max(o["hours"][k]["rss_gib"] for o in out for k in o["hours"] if "rss_gib" in o["hours"][k])
+    print("\nsummary:", json.dumps(summary))
+    return {"source": str(path), "prover": str(prover), "format": p["format"], "S": [S or "all" for S in AUDIT_S],
+            "summary": summary, "workloads": out}
+
+
 def buckets(path: Path, reps: int, depth: int, c3: Path | None = None) -> dict:
     p = json.loads(path.read_text())
     g, dm = gadgets(), demux()
@@ -606,6 +718,7 @@ def main() -> None:
     ap.add_argument("--candidate3", type=Path, help="with --buckets: proofs' F4 K2 tree (k2.py, units.json), candidate 3 beside")
     ap.add_argument("--proofs-c3", type=Path, help="with --buckets (for F6's law): proofs' candidate-3 buckets.json (k2.py and "
                                                   "units.json beside it), V*'s outer proof as multi-block statements alone")
+    ap.add_argument("--per-audit", action="store_true", help="with --proofs-c3: outer prover-hours per audit over S sessions")
     ap.add_argument("--units", default=",".join(UNITS))
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--row-bits", type=int, nargs="*", default=[1024, 8192, 65536])
@@ -621,6 +734,10 @@ def main() -> None:
         if out:
             out.mkdir(parents=True, exist_ok=True)
             (out / "proofs_c3_multiblock.json").write_text(json.dumps(res, indent=1))
+        if a.per_audit:
+            aud = per_audit(a.proofs_c3, a.buckets)
+            if out:
+                (out / "per_audit.json").write_text(json.dumps(aud, indent=1))
         return
     if a.buckets:
         res = buckets(a.buckets, a.reps, a.depth, a.candidate3)
