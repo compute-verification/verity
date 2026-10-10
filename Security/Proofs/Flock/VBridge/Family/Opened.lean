@@ -1,4 +1,5 @@
 import Proofs.Flock.VBridge.Family.Assembly
+import Proofs.Flock.VBridge.Family.Lig
 import Proofs.Flock.VBridge.Runs.ZcLc
 import Proofs.Flock.Soundness.Refine.Seam
 
@@ -21,6 +22,9 @@ scheme V* climbs, `plain` (`flock-leaf/sha512-unsalted`):
   layers' (`LigOpens`), the `dirs` columns being the verifier's positions (`HDirCols`), the `out` columns being the
   cap's entries (`HTopsL`), the caps' shape (`CapsAt`) and the openings' constants (`HOneOpen`).
 * `hopen_of_plain`: `vbridgeRead_assembled`'s `hopen`, at a setup whose scheme is `plain`.
+* `ligOpens_none`, `capsAt_capOf`: `LigOpens` and `CapsAt` at the lig lane's `capOf` and `ligOfRead` (Lig.lean) at
+  `plain`'s layout, no salts (`sl := none`; `ligOf`'s `some 192` is hm96's), and `hopen_of_plain_lig`: `hopen` there,
+  from `HOneOpen`, `HDirCols` and `HTopsL`.
 -/
 
 namespace FlockVBridge.Family
@@ -276,7 +280,7 @@ theorem merkleCheck_of {ms : MerkleScheme} {cap : Array ByteArray} {c d : Nat} {
       opens ms cap c d lanes pos[j]! rows[j]! (salts.getD j ByteArray.empty) (sibsOf sibs (d - c) j) = true) :
     merkleCheck ms cap c d pos rows sibs salts lanes = .ok () := by
   unfold merkleCheck
-  rw [if_neg (by simp [h1, h2, h3, h4]), if_neg (by
+  rw [ite_eq_right (by simp [h1, h2, h3, h4]), ite_eq_right (by
     simp only [Bool.or_eq_true, not_or, Array.any_eq_true, not_exists, bne_iff_ne, ne_eq, Decidable.not_not]
     exact ⟨fun i hi => h5 _ (by simp), fun i hi => h6 _ (by simp)⟩)]
   rw [List.find?_eq_none.mpr]
@@ -457,6 +461,52 @@ theorem capsAt_of {st : Setup} {sch : Flock.Schedule} {cap : Array ByteArray} {l
     rw [getD_default, show ℓ - 1 + 1 = ℓ by omega] at h1
     rw [getElem!_pos lig.recursiveCaps (ℓ - 1) hi]
     exact ⟨h1, fun x hx => (h2 x hx).trans hd⟩
+
+/-- Level `ℓ`'s openings in `ligOfRead 64 sl sch x`, at rows of `w` elements (Lig.lean's `lev`). -/
+def levAt (sl : Option ℕ) (sch : Flock.Schedule) (x : LigRead) (ℓ w : ℕ) : LevelProof :=
+  levelOf 64 sl (sch.levels.getD ℓ default).q w ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap)
+    (x.row ℓ) (x.sib ℓ) (x.salt ℓ)
+
+/-- **`openAt` of `ligOfRead`**: level `ℓ`'s openings are `levAt`'s, at rows of `2^lanes` elements or, past level 0,
+16. -/
+theorem openAt_ligOfRead {sch : Flock.Schedule} (sl : Option ℕ) (x : LigRead) {ℓ : ℕ} (hℓ : ℓ < sch.levels.size) :
+    ∃ w, (w = 2 ^ (sch.levels.getD ℓ default).lanes ∨ (0 < ℓ ∧ w = 16)) ∧
+      openAt (ligOfRead 64 sl sch x) (sch.levels.size - 1) ℓ =
+        ((levAt sl sch x ℓ w).rows, (levAt sl sch x ℓ w).siblings, (levAt sl sch x ℓ w).salts) := by
+  unfold openAt
+  rcases Nat.eq_zero_or_pos ℓ with rfl | h0
+  · exact ⟨_, .inl rfl, by rw [ite_eq_left (show (0 : ℕ) = 0 from rfl)]; rfl⟩
+  · rw [ite_eq_right (show ¬ℓ = 0 by omega)]
+    obtain ⟨i, rfl⟩ : ∃ i, ℓ = i + 1 := ⟨ℓ - 1, by omega⟩
+    refine ⟨16, .inr ⟨h0, rfl⟩, ?_⟩
+    by_cases h1 : i + 1 < sch.levels.size - 1
+    · have hi : i < (ligOfRead 64 sl sch x).recursiveProofs.size := by
+        simp only [ligOfRead, Array.size_ofFn]; omega
+      rw [ite_eq_left h1, Nat.add_sub_cancel, getElem!_pos _ i hi]
+      simp only [ligOfRead, Array.getElem_ofFn, levAt]
+    · have hR : sch.levels.size - 1 = i + 1 := by omega
+      rw [ite_eq_right h1]
+      simp only [ligOfRead, levAt, hR]
+
+/-- **`CapsAt` at `ligOfRead`'s caps** (`capArr`), the level-0 one any `capArr` of the level's `2^cap` entries. -/
+theorem capsAt_ligOfRead {sch : Flock.Schedule} (sl : Option ℕ) (x : LigRead) (e : ℕ → ByteArray) :
+    CapsAt sch (capArr 64 (sch.levels.getD 0 default).cap e) (ligOfRead 64 sl sch x) := by
+  intro ℓ hℓ
+  unfold capAt
+  split
+  · rename_i h0
+    subst h0
+    refine ⟨by rw [capArr, Array.size_ofFn, getD_default], fun y hy => ?_⟩
+    obtain ⟨i, rfl⟩ := Array.mem_ofFn.1 hy
+    exact size_fitB _ _
+  · rename_i h0
+    obtain ⟨i, rfl⟩ : ∃ i, ℓ = i + 1 := ⟨ℓ - 1, by omega⟩
+    have hi : i < (ligOfRead 64 sl sch x).recursiveCaps.size := by simp only [ligOfRead, Array.size_ofFn]; omega
+    rw [Nat.add_sub_cancel, getElem!_pos _ i hi]
+    simp only [ligOfRead, Array.getElem_ofFn]
+    refine ⟨by rw [capArr, Array.size_ofFn, getD_default], fun y hy => ?_⟩
+    obtain ⟨k, rfl⟩ := Array.mem_ofFn.1 hy
+    exact size_fitB _ _
 
 section family
 
@@ -642,6 +692,75 @@ theorem hopen_of_plain (own : Fin F.stmts.size → Array Flock.Registered.Port) 
   rw [openedAll_iff, hm R ω]
   exact (F.assembled spec st cap lig own sel bc dec).openedAllAt_plain dg N k Rw spec st cap lig hne hname hsch rfl
     rfl hone hdir hlig htop hcaps R ω t R₂ τ o hacc r
+
+/-- **The lig lane's openings at no salts are the layers'**: `ligOfRead 64 none` at `ligRead`'s reads opens, at each
+level, `rowsOf`'s rows and `sibsFlat`'s siblings (past level 0 its rows are 16 elements, `DimSeam`'s 4 lanes). -/
+theorem openAt_ligRead (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
+    (ms : List (List (SMsg T))) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) {ℓ : ℕ}
+    (hℓ : ℓ < F.sh.sched.levels.size) :
+    openAt (ligOfRead 64 none sch (F.ligRead ms l r)) (F.sh.sched.levels.size - 1) ℓ =
+      (F.rowsOf l r ℓ, F.sibsFlat l r ℓ, #[]) := by
+  have hsize : sch.levels.size = F.sh.sched.levels.size := by rw [hsch]
+  have hlv : sch.levels.getD ℓ default = F.sh.sched.levels[ℓ]! := by rw [getD_default, hsch]
+  have hdep : F.depth ℓ = (F.sh.sched.levels[ℓ]!).d - (F.sh.sched.levels[ℓ]!).cap := by
+    simp only [VStarFamily.depth, F.hOpenParams_of hne hname ℓ hℓ, Option.getD_some]
+  have hdims : ∀ i < F.sh.sched.levels.size, 1 ≤ i → (F.sh.sched.levels.getD i default).lanes = 4 := by
+    have h := (fast100_dims _ _ (shape?_eq F.hsh).1).1
+    unfold DimSeam at h
+    exact h.2.2.2.2.1
+  obtain ⟨w, hw, e⟩ := openAt_ligOfRead (sch := sch) none (F.ligRead ms l r) (by rw [hsize]; exact hℓ)
+  have hlw : levelLanes F.sh ℓ = w := by
+    rcases hw with rfl | ⟨h0, rfl⟩
+    · rw [hlv]; rfl
+    · rw [levelLanes, ← getD_default, hdims ℓ hℓ h0]; rfl
+  have h1 : (levAt none sch (F.ligRead ms l r) ℓ w).rows = F.rowsOf l r ℓ := by
+    apply Array.ext
+    · simp only [levAt, levelOf, rowsOf, VStarFamily.q, hlv, Array.size_ofFn, Array.size_map, Array.size_range]
+    · intro j _ hj2
+      have hj : j < F.q ℓ := by simpa only [rowsOf, Array.size_map, Array.size_range] using hj2
+      rw [← getElem!_pos (F.rowsOf l r ℓ) j hj2, F.rowsOf_get l r hj]
+      simp only [levAt, levelOf, Array.getElem_ofFn, VStarFamily.ligRead, hlv]
+      exact fitRow_of_size ((size_elems _ _ _).trans hlw)
+  have h2 : (levAt none sch (F.ligRead ms l r) ℓ w).siblings = F.sibsFlat l r ℓ := by
+    apply Array.ext
+    · simp only [levAt, levelOf, sibsFlat, Array.size_ofFn, hlv, ← hdep, VStarFamily.q]
+    · intro t _ _
+      simp only [levAt, levelOf, sibsFlat, Array.getElem_ofFn, VStarFamily.ligRead, hlv, ← hdep, levelLanes,
+        fitB_of_size, size_bytesAt]
+  rw [← hsize, e, h1, h2]; rfl
+
+/-- **`LigOpens` at the lig lane's openings at no salts** (`ligOfRead 64 none` at `ligRead`, any inner messages). -/
+theorem ligOpens_none (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
+    (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) :
+    F.LigOpens dg N k Rw (fun l r => ligOfRead 64 none sch (F.ligRead (ms l) l r)) := by
+  intro R ω t R₂ τ o _ r ℓ hℓ
+  exact F.openAt_ligRead hne hname hsch (ms _) _ r hℓ
+
+/-- **`CapsAt` at the lig lane's caps** (`capOf`, `ligOfRead`'s recursive caps). -/
+theorem capsAt_capOf (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) :
+    F.AtAccepted dg N k Rw fun _ _ _ l => ∀ r,
+      CapsAt sch (capOf T sch (ms l)) (ligOfRead 64 none sch (F.ligRead (ms l) l r)) := by
+  intro R ω t R₂ τ o _ r
+  exact capsAt_ligOfRead none _ _
+
+/-- **`hopen` at the lig lane's cap and openings**, at a setup whose scheme is `plain` and the openings at its layout
+(no salts): `hopen_of_plain` with `LigOpens` and `CapsAt` proved, from `HOneOpen`, `HDirCols` and `HTopsL`. -/
+theorem hopen_of_plain_lig (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
+    (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
+    (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T)))
+    (hcap : cap = fun l => capOf T sch (ms l)) (hlig : lig = fun l r => ligOfRead 64 none sch (F.ligRead (ms l) l r))
+    (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
+    (hm : ∀ R ω, (st R ω).merkle = plain) (hone : F.HOneOpen dg N k Rw)
+    (hdir : (F.assembled spec st cap lig own sel bc dec).HDirCols dg N k Rw)
+    (htop : (F.assembled spec st cap lig own sel bc dec).HTopsL dg N k Rw cap lig) :
+    F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
+      OpenedAll (st R ω) sch F.sh
+        (((F.assembled spec st cap lig own sel bc dec).tableSrc spec st cap lig R ω t l).proofAt r)
+        ((F.assembled spec st cap lig own sel bc dec).rep R ω t l r) := by
+  subst hcap hlig
+  exact F.hopen_of_plain dg N k Rw spec st _ _ own sel bc dec hne hname hsch hm hone hdir
+    (F.ligOpens_none dg N k Rw hne hname hsch ms) htop (F.capsAt_capOf dg N k Rw ms)
 
 end VStarFamily
 
