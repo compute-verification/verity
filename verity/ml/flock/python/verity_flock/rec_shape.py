@@ -35,7 +35,8 @@ REPS = 2
 
 
 class Refused(ValueError):
-    """An inner session whose V* would not have the cap's shape."""
+    """An inner session whose V* would not have the cap's shape, or an inner statement of another shape than its class's
+    (`rec_vstage.same_shape`)."""
 
 
 @dataclass(frozen=True)

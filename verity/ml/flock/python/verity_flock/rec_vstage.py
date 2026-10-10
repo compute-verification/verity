@@ -6,7 +6,8 @@ staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's c
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
     inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
-        [--salts FILE]
+        [--salts FILE] [--class CIRCUIT PUBLIC --statement CIRCUIT PUBLIC]
+    python -m verity_flock.rec_vstage shape CLASS_CIRCUIT CLASS_PUBLIC CIRCUIT PUBLIC
 
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
 table's shape as its setup derives it (`shape`), each rep's coins (its stream's rounds), the fold points they give
@@ -48,9 +49,15 @@ In both, the opening climbs to the output row the prover gives, and that row doe
 
 ``--cap`` (default REC_CAP, `rec_shape.Cap.parse`): the deployment's public cap; a session whose V* is not the cap's shape is
 refused before anything is staged (`rec_shape.check`, exit 2).
+
+**The private circuit's shape** (``shape``, and ``stage --class --statement``): the prover refuses an inner statement whose
+shape is not its class's (`same_shape`, exit 2) before it commits or registers anything of it, so a private circuit of another
+shape shows the auditor nothing. The shape is what the recursive audit's ``shapeOf`` keeps of the statement Lean's verifier
+sets up (`statement_shape`).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -87,6 +94,34 @@ def shape(meta_: dict, n: int, claims: int = 2) -> A.Shape:
     ``n`` instances in blocks of ``vus_per_block``."""
     blocks = max(1, -(-n // meta_["vus_per_block"]))
     return A.Shape(meta_["k_log"] + max(3, (blocks - 1).bit_length()), meta_["k_log"], claims)
+
+
+def statement_shape(circuit: Path, public: Path) -> dict:
+    """What ``shapeOf`` (``Proofs/Flock/Recursive/ExecClass.lean``) keeps of the statement `Stmt.setupH` sets up from these
+    files: the circuit, which its file's SHA-512 names (`HmRow.parse` holds it as ``c.sha``; the pin, Δ and each region's name,
+    free bits, mask and fixed bits read the circuit alone), and the blocks ``nbl`` of the public file's ``n`` instances, which
+    give ``m`` and the link points. ``n`` itself, the regions' bytes and the rest of the public file are dropped."""
+    h = hashlib.sha512()
+    with open(circuit, "rb") as f:
+        while chunk := f.read(1 << 24):
+            h.update(chunk)
+    meta_, n = meta(Path(circuit)), instances(Path(public))
+    nbl = shape(meta_, n).m - meta_["k_log"]
+    return {"circuit_sha512": h.hexdigest(), "nbl": nbl, "m": meta_["k_log"] + nbl, "n": n}
+
+
+def same_shape(cls: tuple[Path, Path], statement: tuple[Path, Path]) -> dict:
+    """Refuse (`rec_shape.Refused`) an inner statement (its circuit and public files) whose shape (`statement_shape`) is not
+    its class's (the class's circuit and public files): the honest prover's check, before it commits or registers anything of
+    the statement. Returns both shapes."""
+    from . import rec_shape
+
+    want, got = statement_shape(*cls), statement_shape(*statement)
+    for k, what in (("circuit_sha512", "circuit (its file's SHA-512)"), ("nbl", "blocks")):
+        if got[k] != want[k]:
+            raise rec_shape.Refused(f"SHAPE-REFUSED: the private circuit's statement has another {what} than its class's: "
+                                    f"{got[k]}, not {want[k]}")
+    return {"class": want, "statement": got}
 
 
 def _stream(public: dict, rep: int) -> list[dict]:
@@ -282,12 +317,18 @@ def _copy_verifier(src: Path, dst: Path) -> None:
 
 
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
-          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None) -> dict:
+          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None,
+          cls: tuple[Path, Path] | None = None, statement: tuple[Path, Path] | None = None) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
-    session whose V* is not the cap's shape (`rec_shape.check`) before staging. Returns what each statement costs and holds,
-    and the verifier's own seconds."""
+    session whose V* is not the cap's shape (`rec_shape.check`) before staging. ``cls`` and ``statement`` (circuit and public
+    files): refuse an inner statement of another shape than its class's (`same_shape`) before reading the session. Returns
+    what each statement costs and holds, and the verifier's own seconds."""
+    if (cls is None) != (statement is None):
+        raise ValueError("the class's files and the inner statement's go together")
+    if cls is not None:
+        same_shape(cls, statement)
     inner, out = Path(inner), Path(out)
     t = {}
     t0 = time.perf_counter()
@@ -394,7 +435,24 @@ def main(argv=None) -> int:
                    "staged with one FILE reads one chain")
     s.add_argument("--cap", default=os.environ.get("REC_CAP") or None, help="the deployment's cap, instances=N,claims=C,k_log=K,"
                    "vus_per_block=V (rec_shape.Cap.parse; default REC_CAP): refuse a session of another shape, exit 2")
+    s.add_argument("--class", dest="cls", nargs=2, default=None, metavar=("CIRCUIT", "PUBLIC"),
+                   help="the class's files: refuse an inner statement (--statement) of another shape, exit 2")
+    s.add_argument("--statement", nargs=2, default=None, metavar=("CIRCUIT", "PUBLIC"), help="the inner statement's files")
+    h = sub.add_parser("shape", help="refuse an inner statement whose shape is not its class's (exit 2), before anything of it "
+                       "is committed or registered")
+    for x in ("class_circuit", "class_public", "circuit", "public"):
+        h.add_argument(x)
     a = ap.parse_args(argv)
+    from . import rec_shape
+
+    if a.cmd == "shape":
+        try:
+            res = same_shape((Path(a.class_circuit), Path(a.class_public)), (Path(a.circuit), Path(a.public)))
+        except rec_shape.Refused as e:
+            print(json.dumps({"refused": str(e)}), flush=True)
+            return 2
+        print(json.dumps(res, sort_keys=True), flush=True)
+        return 0
     if a.cmd == "points":
         inner = Path(a.inner)
         t0 = time.perf_counter()
@@ -404,11 +462,12 @@ def main(argv=None) -> int:
         return 0
     levels = None if a.levels == "all" else [] if a.levels == "none" else [int(x) for x in a.levels.split(",")]
     pts = json.loads(Path(a.points).read_text()) if a.points else None
-    from . import rec_shape
-
+    if (a.cls is None) != (a.statement is None):
+        ap.error("--class and --statement go together")
+    files = {"cls": tuple(map(Path, a.cls)), "statement": tuple(map(Path, a.statement))} if a.cls else {}
     try:
         res = stage(Path(a.inner), json.loads(Path(a.fold).read_text()), Path(a.out), levels, not a.no_algebra, a.forge,
-                    not a.no_evaluate, pts, a.salts, rec_shape.Cap.parse(a.cap) if a.cap else None)
+                    not a.no_evaluate, pts, a.salts, rec_shape.Cap.parse(a.cap) if a.cap else None, **files)
     except rec_shape.Refused as e:
         print(json.dumps({"refused": str(e)}), flush=True)
         return 2
