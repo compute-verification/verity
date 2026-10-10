@@ -29,8 +29,9 @@ What it takes, against `RecursiveAudit`:
   server's randomness is the game's own coin draw (`uniform/flock-coin-server`, no `Prop`), and SHA-512 enters only
   as the fork disjuncts;
 * obligations, facts about our own code: in (i), `VStarComputes` (V*'s circuits compute C-Flock's inner verifier,
-  VBridge, at the public statement), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and V*'s tags (`_hT`), as
-  in `RecursiveAudit`; in (ii), whatever `RecursiveFirewallPrivate` takes.
+  VBridge, at the public statement), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound` (each
+  session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
+  `RecursiveFirewallPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
 shown at one recorded recursive run with a public inner unit (the F1 gate).
@@ -90,8 +91,9 @@ element, so the law's `nonempty` is no hypothesis): V*'s statements `Vs` (`outer
 all its units), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their records' custody
 `_hCust`, the verifier of record's own inputs to them (the inner shape `ish`, V*'s bindings `bind` and the shared rows
 `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files parse to `Vs` (`VStarParses`, an
-obligation until gap 4), V*'s tags at every session (`_hT`, the fact one verifier check will supply), the messages V*'s
-layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in `RecursiveAudit`. Taken: A3 (`_hA3`).
+obligation until gap 4), every session's inputs carrying the tags their name names (`TagsFound`, `_hF`, an obligation
+on our code), the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in
+`RecursiveAudit`. Taken: A3 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
 V*'s circuits compute the inner verifier at the typed sessions and the public statement (`VStarComputes`, an
 obligation): the event below is empty; or the sessions type and there is a round fork, a session fork, or an inner
@@ -103,7 +105,8 @@ slack, and the compiled table's error.
 
 (ii) `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
 no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p₀`: the registration's term
-`2 n_r·2^-193` is zero, and the simulator reads `P`, the schedule's transcript and the owed outputs. -/
+`2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
+and the owed outputs. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws
@@ -122,9 +125,8 @@ def PublicAudit : Prop :=
     (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
     (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
-    -- V*'s tags at every session: not a premise but the fact one verifier check will supply, since refusal (5)
-    -- compares the tags' names only
-    (_hT : ∀ R ω t R₂ j, (zr R ω t R₂ j).I.tags = Flock.Tags.circuit)
+    -- obligation (our code): every session's inputs carry the tags their name names, as `verifyCmd` forms them
+    (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
     (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))

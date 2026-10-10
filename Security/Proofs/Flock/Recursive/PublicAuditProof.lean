@@ -10,7 +10,7 @@ import Proofs.Flock.Recursive.Loads
 
 In (i), from the statement and the premises, as in `RecursiveAudit`'s:
 * where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
-  index loads it (`loads_of_verifiesV`, at the obligation `VStarParses` and V*'s tags) and so types
+  index loads it (`loads_of_verifiesV`, at the obligations `VStarParses` and `TagsFound`) and so types
   (`typable_of_accepts`), so at that index none verifies (`prob_sessionsR_untypable`);
 * at a statement Lean's verifier doesn't build from its partition object and program, the event is empty
   (`AcceptsPublic` is its first conjunct);
@@ -38,7 +38,7 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust ish bind rows hob htags dg N σ wmsg Sk cmt
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt
     msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -47,7 +47,7 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
     obtain ⟨j₀, hj₀⟩ := hT
     refine prob_recGame_zero _ σ fun ω t s => ?_
     rw [prob_outerVR]
-    exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (htags σ.1 ω t s.1) j₀
+    exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (hF σ.1 ω t s.1) j₀
       (hj₀ (σ.1, ω, t, s.1)) _ (fun b hb => hb.2.1) _
   by_cases hacc : Flock.Guarantees.AcceptsPublic obj prog st
   swap
@@ -72,7 +72,7 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT htags σ _
+  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT hF σ _
       (fun o => Flock.Guarantees.AcceptsPublic obj prog st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.publicHidden st))
