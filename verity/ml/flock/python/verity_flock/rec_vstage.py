@@ -100,12 +100,19 @@ def statement_shape(circuit: Path, public: Path) -> dict:
     """What ``shapeOf`` (``Proofs/Flock/Recursive/ExecClass.lean``) keeps of the statement `Stmt.setupH` sets up from these
     files: the circuit, which its file's SHA-512 names (`HmRow.parse` holds it as ``c.sha``; the pin, Δ and each region's name,
     free bits, mask and fixed bits read the circuit alone), and the blocks ``nbl`` of the public file's ``n`` instances, which
-    give ``m`` and the link points. ``n`` itself, the regions' bytes and the rest of the public file are dropped."""
+    give ``m`` and the link points. ``n`` itself, the regions' bytes and the rest of the public file are dropped. A public file
+    staged for another circuit sets up no statement (`HmRow.loadPublic`), so it is refused (`rec_shape.Refused`)."""
+    from . import rec_shape
+
     h = hashlib.sha512()
     with open(circuit, "rb") as f:
         while chunk := f.read(1 << 24):
             h.update(chunk)
-    meta_, n = meta(Path(circuit)), instances(Path(public))
+    with open(public, "rb") as f:
+        header = json.loads(f.readline())
+    if header.get("circuit_sha512") != h.hexdigest():
+        raise rec_shape.Refused(f"SHAPE-REFUSED: {public} is staged for another circuit than {circuit}")
+    meta_, n = meta(Path(circuit)), int(header["instances"])
     nbl = shape(meta_, n).m - meta_["k_log"]
     return {"circuit_sha512": h.hexdigest(), "nbl": nbl, "m": meta_["k_log"] + nbl, "n": n}
 
