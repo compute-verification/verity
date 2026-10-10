@@ -12,13 +12,13 @@ carries over to any unit class, and proves what the packed type computes.
 * **The packing** (`pack P T`): `P` gives the input runs and the output words, each `(bits, words)`. Every wire moves by
   one map, `segPos P.ins`: input bit `i` to its run's first word times 16 plus its place in the run, and AND wire `N + k`
   to `16·words + k`. Each output form is mapped the same way, and padded with zero forms to its words (`padL`).
-* **Re-indexing** (`flatOk_pack`, `eval_pack`): when the runs fit their words, `segPos` is strictly monotone, so the
-  packed type is flat whenever `T` is, and on inputs `x` it computes `T`'s outputs at `x ∘ segPos`, laid into the output
-  words with zeros.
+* **Re-indexing** (`flatOk_pack`, `eval_pack`, `evalT_pack`): when the runs fit their words, `segPos` is strictly
+  monotone, so the packed type is flat whenever `T` is, and on inputs `x` it computes `T`'s outputs at `x ∘ segPos`, laid
+  into the output words with zeros.
 * **The unit's rows** (`pack_unit_sound`): when `deriveChecked` accepts a statement's layouts and its unit's type is
   `pack P T`, the unit's rows as the block holds them carry on output `o`'s packed column `T`'s output `o` on the packed
   input columns (`Dag.unit_sound`, `Dag.evalT_flat`).
-* **The universal unit** (`uuTypeW p`, `uuW_unit_sound`): `uuType p` packed as `rec_inner.program_unit` stages it in
+* **The universal unit** (`uuTypeW p`, `evalT_uuTypeW`, `uuW_unit_sound`): `uuType p` packed as `rec_inner.program_unit` stages it in
   argument order (6692c8703): the description's `width` bits one row, `x` the next, each `⌈bits/16⌉` words padded to
   whole blocks (`blockWords`), and each output its own word. Its unit rows carry `Desc.eval` of description bit `j` at
   input column `j` on data bit `a` at input column `16·blockWords width + a`, at output column `16·i`.
@@ -322,6 +322,16 @@ theorem eval_pack (hP : P.Packs T) (hT : flatOk T = true) (x : ℕ → Bool) :
 theorem length_eval (T : CircuitType) (x : ℕ → Bool) : (eval T x).length = T.outputs.size := by
   simp [eval]
 
+/-- **`pack P T` computes `T` re-indexed**, at any fuel: its output `segPos P.outs o` on `x` is `T`'s output `o` on
+`x ∘ segPos P.ins`. -/
+theorem evalT_pack (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (hP : P.Packs T)
+    (hT : flatOk T = true) (F : ℕ) (x : ℕ → Bool) {o : ℕ} (ho : o < T.outputs.size) :
+    (Dag.evalT types words (F + 1) (pack P T) x).getD (segPos P.outs o) false =
+      (eval T (x ∘ segPos P.ins)).getD o false := by
+  have hob : o < bitsOf P.outs := by rw [hP.outs_bits, ← (flatOk_outputs hT).1]; exact ho
+  rw [Dag.evalT_flat types words (flatOk_pack hP hT) F, eval_pack hP hT]
+  exact getD_padL _ _ _ _ hP.outs_fit (le_of_eq (by rw [length_eval, hP.outs_bits, (flatOk_outputs hT).1])) hob
+
 /-- **The packed unit's rows compute `T`.** When `deriveChecked` accepts a statement's layouts and its unit's type is
 `pack P T`, column values that satisfy the unit's rows as the block holds them (Δ applied), with the block's `one` at 1,
 carry on output `o`'s packed column `T`'s output `o` on the packed input columns. -/
@@ -336,9 +346,8 @@ theorem pack_unit_sound {types : String → Option CircuitType} {ls : Array Floc
   have hob : o < bitsOf P.outs := by rw [hP.outs_bits, ← (flatOk_outputs hT).1]; exact ho
   have hs : segPos P.outs o < (pack P T).outputs.size := by
     rw [pack_outputs_size hP hT]; exact segPos_lt P.outs hP.outs_fit hob
-  rw [Dag.unit_sound hd ht one z hz h1 (unit + 1) (Nat.lt_succ_self unit) _ hs,
-    Dag.evalT_flat types words (flatOk_pack hP hT) unit, eval_pack hP hT]
-  exact getD_padL _ _ _ _ hP.outs_fit (le_of_eq (by rw [length_eval, hP.outs_bits, (flatOk_outputs hT).1])) hob
+  rw [Dag.unit_sound hd ht one z hz h1 (unit + 1) (Nat.lt_succ_self unit) _ hs]
+  exact evalT_pack types words hP hT unit _ ho
 
 end Packed
 
@@ -403,6 +412,33 @@ theorem segPos_replicate : ∀ (n : ℕ) {i : ℕ}, i < n → segPos (List.repli
 
 theorem segPos_out {i : ℕ} (hi : i < p.nOut) : segPos (uuPacking p).outs i = 16 * i := segPos_replicate p.nOut hi
 
+theorem wordsOf_replicate (n b w : ℕ) : wordsOf (List.replicate n (b, w)) = n * w := by
+  induction n with
+  | zero => simp
+  | succ n ih => rw [List.replicate_succ, wordsOf_cons, ih]; ring
+
+theorem size_outputs_uuTypeW : (uuTypeW p).outputs.size = 16 * p.nOut := by
+  rw [uuTypeW, pack_outputs_size (uuPacking_packs p) (flatOk_uuType (p := p))]
+  simp [uuPacking, wordsOf_replicate]
+
+theorem eval_uuType_packed (x : ℕ → Bool) (i : Fin p.nOut) :
+    (eval (uuType p) (x ∘ segPos (uuPacking p).ins)).getD i false =
+      Desc.eval (fun j : Fin p.width => x j) (fun a => x (16 * blockWords p.width + a)) i := by
+  rw [eval_uuType, getD_ofFn, dite_eq_left i.isLt]
+  congr 1
+  · funext j; simp [descOf, segPos_desc p j.isLt]
+  · funext a; simp [dataOf, segPos_data p a.isLt]
+
+/-- **`uuTypeW p` computes the class's interpretation**, at any fuel: its output word `i` on `x` is `Desc.eval` of
+description bit `j` at input `j` on data bit `a` at input `16·blockWords width + a`. -/
+theorem evalT_uuTypeW (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (F : ℕ)
+    (x : ℕ → Bool) (i : Fin p.nOut) :
+    (Dag.evalT types words (F + 1) (uuTypeW p) x).getD (16 * i.val) false =
+      Desc.eval (fun j : Fin p.width => x j) (fun a => x (16 * blockWords p.width + a)) i := by
+  rw [← segPos_out p i.isLt]
+  exact (evalT_pack types words (uuPacking_packs p) (flatOk_uuType (p := p)) F x
+    (by rw [size_outputs]; exact i.isLt)).trans (eval_uuType_packed p x i)
+
 /-- **On a statement's unit rows, packed.** When `deriveChecked` accepts a statement's layouts and its unit's type is
 `uuTypeW p`, column values that satisfy the unit's rows as the block holds them (Δ applied), with the block's `one` at 1,
 carry on output word `i`'s column `Desc.eval` of description bit `j` at input column `j` on data bit `a` at input column
@@ -417,11 +453,8 @@ theorem uuW_unit_sound {types : String → Option CircuitType} {ls : Array Flock
         (fun a => z ((done.getD unit default).inCols.getD (16 * blockWords p.width + a) 0)) i := by
   have h := pack_unit_sound hd (uuPacking_packs p) (flatOk_uuType (p := p)) ht one z hz h1 (o := i.val)
     (by rw [size_outputs]; exact i.isLt)
-  rw [segPos_out p i.isLt, eval_uuType, getD_ofFn, dite_eq_left i.isLt] at h
-  rw [h]
-  congr 1
-  · funext j; simp [descOf, segPos_desc p j.isLt]
-  · funext a; simp [dataOf, segPos_data p a.isLt]
+  rw [segPos_out p i.isLt] at h
+  exact h.trans (eval_uuType_packed p (fun j => z ((done.getD unit default).inCols.getD j 0)) i)
 
 /-! ## The tie to Python
 
