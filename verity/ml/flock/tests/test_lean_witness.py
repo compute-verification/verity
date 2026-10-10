@@ -6,7 +6,7 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
 * `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
   `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`. The inner description is not registered (no staging runs `inner_registered register`), and V*'s
+  `verity/flock-circuit`; like the gate's, its outer session was proved before #1677. The inner description is not registered (no staging runs `inner_registered register`), and V*'s
   sessions hide their outputs where `ZkOuterR.hTags` (`TagsOk`) takes public ones, so their shared-row public file fails
   `Typable`'s `ScopeZ`.
 * `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:743978d1…, 85 at K = 4096, N = 2,
@@ -53,6 +53,10 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 STATEMENT = "verity/flock-circuit"
+#: the statement both sets' V* sessions were proved as: `verity/flock-circuit` before #1677 put the OS's masks in its identity
+PROVED = "verity/flock-circuit@cec3e347"
+#: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
+S2_R7 = "S2/R7: the session parameters are not the verifier's"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
@@ -65,10 +69,6 @@ F1_PARTS = ("L0", "L1", "L2", "L3", "alg/p0", "alg/p1")
 #: `RecVStar.statements` at the inner shape, each with its population
 F1_STATEMENTS = (("rec-open/l64-h8", 436), ("rec-open/l16-h7", 212), ("rec-open/l16-h5", 142), ("rec-open/l16-h4", 106),
                  ("rec-residuals/m27-k24-c8-p0", 2), ("rec-residuals/m27-k24-c8-p1", 2))
-#: the statement the gate's sessions were proved as: `verity/flock-circuit` before #1677 put the OS's masks in its identity
-F1_PROVED = "verity/flock-circuit@cec3e347"
-#: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
-S2_R7 = "S2/R7: the session parameters are not the verifier's"
 #: a standalone program of one call, to evaluate the inner unit's Definition with the IR oracle
 _ROOT = CompositeDefinition("Standalone", 1, ("FN",), lambda D: D.FN.signature(), lambda B, D, *args: B.call(D.FN, *args),
                             doc="root wrapper: one call of FN over Input gates", register=False)
@@ -99,16 +99,21 @@ def inner() -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def outer(inner, tmp_path_factory) -> dict[str, dict]:
+def level(inner, tmp_path_factory) -> list[str]:
+    """`flock-witness session`'s files and session at the recorded level, its statement restaged."""
     d = tmp_path_factory.mktemp("rec-witness")
     S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
             pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
     level = d / f"L{LEVEL}"
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
-    return _witness("session", "--statement", STATEMENT, "--circuit", str(level / "circuit.txt"), "--public",
-                    str(SET / f"L{LEVEL}" / "pub.bin"), "--partition", str(level / "partition.json"), "--program",
-                    str(level / "program.json"), "--registered", str(SET / f"L{LEVEL}" / "registered.json"), "--session",
-                    str(SET / f"outer-L{LEVEL}" / "session"))
+    return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
+            str(level / "partition.json"), "--program", str(level / "program.json"), "--registered",
+            str(SET / f"L{LEVEL}" / "registered.json"), "--session", str(SET / f"outer-L{LEVEL}" / "session")]
+
+
+@pytest.fixture(scope="module")
+def outer(level) -> dict[str, dict]:
+    return _witness("session", "--statement", STATEMENT, *level)
 
 
 def test_lean_accepts_the_inner_statement(inner):
@@ -129,11 +134,20 @@ def test_no_recorded_inner_description_is_registered(inner):
                         "opens no registered root")
 
 
-@pytest.mark.parametrize("check", ["scope_zr", "scope_ok", "full_draw", "accepts_zkr"])
+@pytest.mark.parametrize("check", ["scope_zr", "scope_ok", "full_draw"])
 def test_the_recorded_level_meets(outer, check):
-    """`ScopeZR` (the event's statement check, with the registered reads), `VStmt.hscope`, the full draw `RecordCustody`
-    reads, and `AcceptsZKR`."""
+    """`ScopeZR` (the event's statement check, with the registered reads), `VStmt.hscope`, and the full draw
+    `RecordCustody` reads."""
     assert outer[check]["ok"], outer[check].get("why")
+
+
+def test_the_recorded_level_was_proved_before_the_os_masks(outer, level):
+    """As at the gate: `AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello (its re-record's
+    prover, 505b9bfb1, lacked #1677's `osMasks`) and accepts it as `PROVED`. Holds as `verity/flock-circuit` once the
+    level is proved again with the OS-masks prover."""
+    assert (outer["accepts_zkr"]["ok"], outer["accepts_zkr"].get("why")) == (False, S2_R7)
+    c = _witness("session", "--statement", PROVED, *level)["accepts_zkr"]
+    assert c["ok"], c.get("why")
 
 
 def test_the_recorded_level_is_not_typable(outer):
