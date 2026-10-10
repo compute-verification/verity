@@ -25,6 +25,10 @@ host and reads the opening: the certified records and their salts. It accepts wh
   ingress record on its status and parameters, both under the network certifier's public key; so each certificate
   verifies, names the registered link-window and signs its head's digest, and each head's deadline bit is set.
 
+When the audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the reference: a link-window
+where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's accept bit (`reference`),
+never a violation's kind.
+
 What that establishes, and what it doesn't: the outcome is accept exactly when the host audit accepts the committed
 records, and the outcome record binds the registered root, the draw and the delivered session. The stand-in reads the
 witness, so it is not zero-knowledge: until the check is a Program with a proof, the verifier of record must run where
@@ -48,7 +52,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.certificate import CertifiedRecord, PublicKey, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
@@ -109,6 +113,10 @@ def encode(record: CertifiedRecord) -> bytes:
 
 def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
+
+
+def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
+    return len(egress) > window and egress[window].accepted and ingress[window].accepted
 
 
 @dataclass(frozen=True)
@@ -234,12 +242,17 @@ class LinkWindows:
         audit = Audit()
         out = audit.check_link(self.link, [egress], frames, list(syncs)[:w + 1], self.sync_set, self.params, key=self.key)
         inn = audit.check_ingress_link(self.link, [ingress], w + 1, key=self.key, params=self.ingress_params)
-        accepted = sealed and len(out) > w and out[w].accepted and inn[w].accepted
+        accepted = sealed and _accepts(out, inn, w)
         public = {"verdict": int(accepted), "deadline": int(egress.head.deadline and ingress.head.deadline)}
         sessions = [self.session(opening, draw)]
         digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
                           "accepted": accepted, "public": public})
-        return {"of_record": True, "accepted": accepted, "digest": digest, "sessions": sessions, "public": public}
+        verdict = {"of_record": True, "accepted": accepted, "digest": digest, "sessions": sessions, "public": public}
+        reference = getattr(audit, "reference", None)
+        if reference is not None:
+            verdict |= {"by": "lean",
+                        "reference": {"accepted": sealed and _accepts(reference[:len(out)], reference[len(out):], w)}}
+        return verdict
 
     def statement(self, opening: Opening) -> dict[str, Any]:
         return {"format": STATEMENT, "check": P.program_sha512(Program(UNIT)), "link": self.link,

@@ -16,8 +16,9 @@ its `clock` reads the trace's clock, and its `sleep` parks the calling ticker (e
 task's coroutine) until the trace's next tick of that grid releases it, whatever the delay; the link is an in-memory
 reader and writer whose backlog the tick event sets; `asyncio.open_connection` is replaced by one that records the
 connection and waits for the trace's `connected` or `refused`; a server connection's reader gives the trace's bytes, and
-its writer records each write and holds a drain until the trace's `delivered`. After each event the loop runs until no
-callback is ready (`loop._ready` empty, with no timer or socket in play), so each event's effects, and the order of the
+its writer records each write and holds a drain until the trace's `delivered`; `asyncio.to_thread` (the proxy's
+executor shutdown) runs its call inline. After each event the loop runs until no callback is ready (`loop._ready`
+empty, with no timer, socket or thread in play), so each event's effects, and the order of the
 actions its tasks take, are a function of the trace alone. An event the proxy isn't waiting for (bytes on a connection
 not open, a second `connected`) is dropped, as `step` drops it.
 
@@ -167,7 +168,7 @@ async def settle() -> None:
     loop = asyncio.get_running_loop()
     for _ in range(100_000):
         await asyncio.sleep(0)
-        if not loop._ready:  # noqa: SLF001 -- no timer or socket is in play, so an empty ready queue is quiescence
+        if not loop._ready:  # noqa: SLF001 -- no timer, socket or thread in play: an empty ready queue is quiescence
             return
     raise RuntimeError("the proxy never settles")
 
@@ -262,15 +263,20 @@ async def drive(h: Harness, inst: dict) -> dict:
             "requests_released": proxy.requests_released}
 
 
+async def inline_to_thread(fn, /, *args, **kwargs):
+    return fn(*args, **kwargs)
+
+
 def python_results(inst: dict) -> dict:
-    """`drive` on a fresh loop, with `asyncio.open_connection` (which the proxy calls) the harness's."""
-    saved = asyncio.open_connection
+    """`drive` on a fresh loop, with `asyncio.open_connection` and `asyncio.to_thread` (which the proxy calls) the
+    harness's: a real thread would finish when the host gets to it, after `settle` has taken the loop as quiet."""
+    saved = asyncio.open_connection, asyncio.to_thread
     h = Harness()
-    asyncio.open_connection = h.open_connection
+    asyncio.open_connection, asyncio.to_thread = h.open_connection, inline_to_thread
     try:
         return asyncio.run(drive(h, inst))
     finally:
-        asyncio.open_connection = saved
+        asyncio.open_connection, asyncio.to_thread = saved
 
 
 # --- the traces -----------------------------------------------------------------------------------------------------

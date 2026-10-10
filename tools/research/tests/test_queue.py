@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from research.cli import _custody_ttl_problem, main as research_main
+from research.pods.nebius import slot_only
 from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
@@ -119,7 +120,7 @@ def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless
     assert [m.pr for m in members] == [1, 2, 3, 6] == world.on_next(q)
     assert members[3].owner == AGENT and members[0].owner == "lane-1"
     assert entries[4].why == entries[7].why == "held (`hold` label)" and entries[5].why.startswith("no owner")
-    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8 --on MACHINE` (or --local)"
+    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8 --on MACHINE` (or --local; --mark without the tier)"
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^1^1^1^1") == _git(world.origin, "rev-parse", "main")    # one merge commit each
     msg = _git(world.origin, "log", "-1", "--format=%B", tip)
@@ -440,12 +441,24 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     h2 = world.change({"a.txt": "a2\n"})
     world.gh.put(1, h2, ready=False)                           # a new push: the label was for the old head
     members, entries = q.sync()
-    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1 --on MACHINE` (or --local)"
+    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1 --on MACHINE` (or --local; --mark without the tier)"
     world.gh.put(1, h2, labels=("hold",), ready=False)
     assert ready(world.gh, world.store, 1, "lane-1", PASS) == 0
     members, entries = q.sync()
     assert members == [] and entries[1].why == "held (`hold` label)"   # hold wins over ready
     assert ready(world.gh, world.store, 99, "lane-1", PASS) == 2
+
+
+def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
+    """#1650 lost 5.5 h to a ready post with no mark behind it; `--mark` needs neither a machine nor a tier."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    h = world.change({"m.txt": "m\n"})
+    world.gh.put(3, h, ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly()) == 0
+    assert "marked on lane-3's word, with no quick tier" in capsys.readouterr().out
+    assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
 def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
@@ -497,7 +510,9 @@ FAKE_SUITES = """\
 import json, os, shutil, sys
 from pathlib import Path
 a = sys.argv[1:]
+umask = os.umask(0)
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
+                                                     "umask": umask, "cores": sorted(os.sched_getaffinity(0)),
                                                      "pythonpath": os.environ.get("PYTHONPATH"),
                                                      "built": Path("verity/core/service/flock/.lake/built").is_file(),
                                                      "lake": shutil.which("lake"),
@@ -515,7 +530,7 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -529,6 +544,8 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     assert tier(world.gh.prs[1]) is None
     s = json.loads(seen.read_text())
     assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None   # from the PR's merge base, in its own tree
+    cores = os.sched_getaffinity(0)
+    assert s["umask"] == 0o002 and s["cores"] == sorted(cores - {min(cores)} if len(cores) > 1 else cores)   # a node's umask, off core 0
     [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
     assert _git(wt, "rev-parse", "HEAD") == h1
     (wt / "stray.txt").write_text("left by the last PR\n")
@@ -664,18 +681,16 @@ class Machine:
 
 
 def _remote_tier(world, monkeypatch, machine: Machine, **kw):
-    """A `RemoteQuickTier` on machine `vy-test` for `world`, its slot.py the fake one and its clock the time its sleeps took; and
+    """A `RemoteQuickTier` on machine `vy-test` for `world`, its clock the time its sleeps took; and
     those sleeps."""
     from research import queue as Q
 
     world.with_store_remote()
-    (world.tmp / "bin").mkdir(exist_ok=True)
-    (slot := world.tmp / "bin" / "slot.py").write_text(FAKE_SLOT)
     monkeypatch.setenv("RESEARCH_RUNS", str(world.tmp / "runs"))
     monkeypatch.setenv("FAKE_SLOT_SEEN", str(world.tmp / "slot-seen.json"))
     sleeps: list[float] = []
     return Q.RemoteQuickTier(world.dev, str(world.origin), "vy-test", by="lane-1", root=world.tmp / "ready", sleep=sleeps.append,
-                             **{"clock": lambda: sum(sleeps), "slot": slot, "launch": machine.launch, "fetch": machine.fetch,
+                             **{"clock": lambda: sum(sleeps), "launch": machine.launch, "fetch": machine.fetch,
                                 **kw}), sleeps
 
 
@@ -686,7 +701,7 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
 
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -716,9 +731,10 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     ttl = flags[flags.index("--custody-ttl") + 1]
     assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
         "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
-    assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
+    assert [Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send"] == ["quick_tier.py"]
+    assert slot_only.through_slot(argv[argv.index("--") + 1:]), "cpu-1's launcher refuses a run whose command isn't slot.py's"
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
-        "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
+        "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "sh"]
     s = json.loads(seen.read_text())
     assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None
     assert Path(s["argv"][s["argv"].index("--json") + 1]) == machine.root / "runs" / rid / "out" / "suites.json"
@@ -743,7 +759,7 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
 
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -914,8 +930,6 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     exited = Machine(world.tmp, outcome=lambda run, rid, head: None, fetched={"launcher_exited": {"last_line": "Traceback: boom"}})
     tier, sleeps = _remote_tier(world, monkeypatch, exited)
     assert re.fullmatch(r"run r\S+'s runner on vy-test exited before the run ended \(Traceback: boom\)", tier(pr)) and len(sleeps) == 1
-    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
-    assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
 
 
@@ -957,6 +971,32 @@ def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+def test_a_runner_seen_gone_just_after_it_recorded_its_end_is_not_lost(tmp_path):
+    """10 Oct: memory-accounting's tier r20261010-134738-7625 passed with rc 0, and the wait reported it lost. A fetch copies
+    status.json, then probes the runner's pid; a runner that records its end and exits in between reads as gone with a status
+    that isn't terminal. The wait fetches once more before calling it lost, and only a runner still gone then is."""
+    from research import queue as Q
+
+    fetched = []
+
+    def fetch(d: Path, ended: bool = True) -> dict:
+        fetched.append(d)
+        if len(fetched) == 1 or not ended:
+            (d / "status.json").write_text(json.dumps({"state": "running", "pid": 7}))
+            return {"runner_gone": {"why": "its runner (pid 7) is gone without recording an end"}}
+        (d / "status.json").write_text(json.dumps({"state": "done", "rc": 0}))
+        return {}
+
+    (d := tmp_path / "runs" / "r1").mkdir(parents=True)
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", poll_s=30, fetch=fetch, sleep=lambda s: None)
+    assert tier._wait(d, "vy-test") == ({"state": "done", "rc": 0}, None) and len(fetched) == 2
+    fetched.clear()
+    tier.fetch = lambda d: fetch(d, ended=False)
+    _, why = tier._wait(d, "vy-test")
+    assert why == "run r1 on vy-test ended without recording it: its runner (pid 7) is gone without recording an end"
+    assert len(fetched) == 2
+
+
 def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):
     """The wait counted polls as if a fetch took no time, and `remote.fetch` may take its ssh's 900 s each poll: against a machine
     that takes the ssh and then hangs, the caller waited 180 polls of 930 s, about two days, not the run's timeout and the grace
@@ -990,7 +1030,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     tier ran tools/research on vy-nebius-1 failed it (#985, #1021)."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
@@ -1019,7 +1059,7 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
     It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/core/service/flock/lakefile.toml": 'name = "flock"\n'})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "verity/core/service/flock/lakefile.toml": 'name = "flock"\n'})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])

@@ -173,8 +173,8 @@ fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
 }
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
-/// the four uniform lanes (a pair per rep), from the prover's ChaCha20 streams 6 and 7; for rep 0 (a rep's copy sets `rep`).
-/// `zero`: M1's control (all zero). Lane `i` of stream `s` is `rng.f128s(s, i << 32, n)`, the lanes drawn in parallel.
+/// the four uniform lanes (a pair per rep), read from the OS (an injected seed's ChaCha20 streams 6 and 7); for rep 0 (a rep's
+/// copy sets `rep`). `zero`: M1's control (all zero). The lanes are drawn in parallel (`ProverRng::f128s_lanes`).
 fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
     let tr = Instant::now();
@@ -202,7 +202,7 @@ fn zk_identity(c: &Composite) -> Value {
            "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
                                       verifier's session key in its answer; every coin opened against them, or the prover stops",
                                      flock_live::coin_tree::SCHEME),
-           "pads": "zerocheck and lincheck: every sent value + a pad (prover ChaCha20 stream 4); pads committed before the zerocheck's first coin",
+           "pads": "zerocheck and lincheck: every sent value + a pad (os bytes, getrandom); pads committed before the zerocheck's first coin",
            "pads_commitment": format!("rs over gf(2^128), {} padding symbols, rate 1/{}, {} queries, hm96-sha512/v1 leaves, sha512 nodes",
                                       zkv::K_PAD, 1 << zkv::INNER_LOG_INV_RATE, zkv::Q),
            "product": "h_ab = h_a h_b committed; sacrificed against a committed triple (x, y, x y)",
@@ -356,7 +356,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
         id["session"] = json!({"tables": count, "table": j,
                                "units": "the draw's units (without a draw, the population's) in equal consecutive parts; table j proves part j as a subset draw of the population"});
         if is_zk(st) {
-            id["hooks"]["tables"] = json!("per table: ChaCha20 streams at purpose | j << 32 and hm96 salt trees from id j << 32 (table 0's are a \
+            id["hooks"]["tables"] = json!("per table: os bytes of its own (getrandom) and hm96 salt trees from id j << 32 (table 0's are a \
                                            one-table session's); a rank check per table; every table's level-0 root in one commit; every proof \
                                            after the last coin of every stream (the barrier)");
         }
@@ -975,7 +975,7 @@ fn level0_root(st: &Stmt, wt: &WitData, lig: LigeritoProfile, level0: Option<&fl
     #[cfg(feature = "sha512")]
     {
         let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
-        flock_merkle::hm96::begin(Arc::new(s.expand(s.level0_id(), pcs.n_leaves())), Box::new(|_| panic!("the level-0 commitment draws no other tree")));
+        flock_merkle::hm96::begin(s.level0(pcs.n_leaves()), Box::new(|_| panic!("the level-0 commitment draws no other tree")));
     }
     #[cfg(not(feature = "sha512"))]
     let _ = salts;
@@ -1100,7 +1100,7 @@ impl Firewall {
     fn new(st: &Arc<Stmt>, z: Vec<F128>, lig: LigeritoProfile, l0: &flock_core::pcs::ligerito::zk::Level0Zk,
            salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool) -> Firewall {
         let pcs = params(st.m, lig);
-        let level0 = { let s = salts.lock().unwrap_or_else(PoisonError::into_inner); Arc::new(s.expand(s.level0_id(), pcs.n_leaves())) };
+        let level0 = salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs.n_leaves());
         let draws = Arc::new(Mutex::new(FirewallDraws { shared: salts.clone(), fork: None, level0: level0.clone(), device_trees: 0, two }));
         let d = draws.clone();
         flock_merkle::hm96::begin(level0, Box::new(move |n| {
@@ -2712,12 +2712,17 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
         w
     });
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
-    // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v)
+    // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v). A block's are drawn once and
+    // kept: a proving build's are OS reads, and every build of this witness (rep 1's own, the device's) commits one level 0
     let random = plan.mask_random || (is_zk(st) && !plan.zk_zero_pads);
     let hooks = Arc::new(Mutex::new(NoMask::for_table(seed, table as u64)));
+    let drawn: Arc<Vec<std::sync::OnceLock<Vec<F128>>>> = Arc::new((0..if random { st.blocks() } else { 0 }).map(|_| Default::default()).collect());
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
-        let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
-        if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
+        let draw = || {
+            let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
+            if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
+        };
+        if random { drawn[b].get_or_init(draw).clone() } else { draw() }
     });
     let ur = st.c.unit_range();
     let unit = st.c.unit();
@@ -2891,8 +2896,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
-    // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
-    // tree a fresh id (table j's from j << 32). The device expands its own trees' salts; a CPU proof takes host expansions.
+    // hm96-sha512 leaf salts, read from the OS: the level-0 tree is id 0 (both reps bind one root), every later tree a fresh
+    // id (table j's from j << 32). The device takes the host's salts tree by tree, as a CPU proof does.
     let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
@@ -2992,10 +2997,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             }
             // under the firewall its own salt context spans the table (`Firewall::new`)
             #[cfg(feature = "sha512")]
-            let level0 = (!plan.gpu && !firewalled && salted(st)).then(|| {
-                let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
-                Arc::new(s.expand(s.level0_id(), pcs_of(st, lig).n_leaves()))
-            });
+            let level0 = (!plan.gpu && !firewalled && salted(st))
+                .then(|| salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs_of(st, lig).n_leaves()));
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
             let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
@@ -3890,13 +3893,16 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]
         if gpu {
-            let s = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os());
-            let idx: Vec<i64> = vec![0, 1, 2, 31, 1000, (1 << 22) + 3];
-            let ok = [0u64, 1, 5, u64::MAX].iter().all(|&nonce| {
-                let d = flock_live::gpu_circuit::device_salts(s.key(), nonce, &idx);
-                idx.iter().enumerate().all(|(k, &i)| d[192 * k..192 * (k + 1)] == s.salt(nonce, i as u64))
+            let n = 1000usize;
+            let x: Vec<u8> = (0..64 * n).map(|i| (i * 7 + 3) as u8).collect();
+            let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
+            let d = flock_live::gpu_circuit::device_leaves(&x, &salts);
+            let ok = (0..n).all(|i| {
+                let mut xi = flock_merkle::Hash::default();
+                xi.as_flattened_mut().copy_from_slice(&x[64 * i..64 * (i + 1)]);
+                d[64 * i..64 * (i + 1)] == *flock_merkle::hm96::leaf(&xi, &salts[192 * i..192 * (i + 1)]).as_flattened()
             });
-            return json!({"case": name, "gpu": true, "expect": "the device's salts equal LeafSalts::salt", "pass": ok});
+            return json!({"case": name, "gpu": true, "expect": "the device's leaves from the host's salts equal hm96::leaf", "pass": ok});
         }
         return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }
@@ -3984,7 +3990,10 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst)))));
+    // drawn (`--draw`) only when the verifier's file is the prover's: a drawn statement's digest reads the file, so R7 would
+    // refuse a case whose files differ before the check it is for
+    let s = Arc::new(Mutex::new(if Arc::ptr_eq(&pinst, &vinst) { server(st, &vinst) }
+                                else { Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst))) }));
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -4168,41 +4177,65 @@ fn barrier_holds(order: &[String]) -> bool {
 
 /// The public-circuit ZK proof's gap 1, at the session's own draws: two tables' level-0 hiding (every lane's padding, the extra
 /// lanes), both reps' pads (h, μ, the pads' padding, τ's salt), the mask slot, and the salts of their level-0 and later trees
-/// share no 16-byte word. The per-rep indexing alone (the second table at the first's addresses) gives the second table every
-/// word of the first, which would reveal the difference of their masked values.
+/// share no 16-byte word. A proving build reads every one from the OS, so the second table drawn at the first's addresses (the
+/// control) shares none either. Under an injected seed (the test harness's) the control repeats every word: the per-rep
+/// indexing alone would give the second table every word of the first, which would reveal the difference of their masked values.
 fn tables_randomness_case(tabs: &Tables) -> Value {
-    let seed = ProverSeed::from_os();
+    let os = tables_draws(tabs, ProverSeed::from_os());
+    let pass = |d: &Value, control: bool| {
+        let n = |k: &str| d[k].as_u64().unwrap_or(u64::MAX);
+        let (a, b) = (&d["words"][0], &d["words"][1]);
+        a.as_u64().is_some_and(|x| x > 0) && a == b && n("shared_words") == 0
+            && if control { n("control_words_equal") == n("stream_words") && n("control_salt_words_shared") == n("salt_words") }
+               else { n("control_words_equal") == 0 && n("control_salt_words_shared") == 0 }
+    };
+    #[cfg(feature = "seed-injection")]
+    let injected = tables_draws(tabs, ProverSeed::injected([3; 32]));
+    #[cfg(not(feature = "seed-injection"))]
+    let injected = json!({"skipped": "built without the test harness's seed-injection feature"});
+    let injected_ok = injected.get("skipped").is_some() || pass(&injected, true);
+    json!({"case": "zk_tables_share_no_randomness",
+           "expect": "no word in common across the tables, nor at one table's addresses; an injected seed's control repeats at them",
+           "os": os, "injected": injected, "pass": pass(&os, false) && injected_ok})
+}
+
+/// [`tables_randomness_case`]'s draws under `seed`: the words the two tables share, and those the second table drawn at the first's
+/// addresses (the control) shares with the first.
+fn tables_draws(tabs: &Tables, seed: ProverSeed) -> Value {
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
-    let draws = |tb: &Table, at: u64| -> Vec<[u8; 16]> {
+    // (the prover's stream words, the leaf salts)
+    let draws = |tb: &Table, at: u64| -> (Vec<[u8; 16]>, Vec<[u8; 16]>) {
         let (st, lay) = (&tb.st, zk_layout(&tb.st));
         let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, at);
         let l0 = level0_zk(st, &mut prng, false, 0);
         let mut w: Vec<F128> = l0.extra.iter().chain(&l0.pads).flatten().copied().collect();
         let mut s = salts.table(at);
-        let mut b = s.expand(s.level0_id(), 64);
+        let (mut tau, mut b) = (Vec::new(), s.level0(64).to_vec());
         for rep in 0..2 {
             let p = zkv::Pads::draw(&mut prng, &lay, rep);
             w.extend(p.h.iter().chain(&p.mu).chain(&p.pad_h).chain(&p.pad_mu));
-            b.extend(&p.tau_salt);
+            tau.extend(&p.tau_salt);
             let id = s.next_id();
             b.extend(s.expand(id, 64));
         }
         let mask = wit(st, &tb.inst, &Plan::default(), false, seed, at as usize).mask;
         w.extend((0..st.blocks().min(4)).flat_map(|k| mask(k)));
-        w.iter().map(|x| {
+        let words = w.iter().map(|x| {
             let mut a = [0u8; 16];
             a[..8].copy_from_slice(&x.lo.to_le_bytes());
             a[8..].copy_from_slice(&x.hi.to_le_bytes());
             a
-        }).chain(b.chunks(16).map(|c| c.try_into().expect("16 bytes"))).collect()
+        }).chain(tau.chunks(16).map(|c| c.try_into().expect("16 bytes"))).collect();
+        (words, b.chunks(16).map(|c| c.try_into().expect("16 bytes")).collect())
     };
-    let (a, b, control) = (draws(&tabs.list[0], 0), draws(&tabs.list[1], 1), draws(&tabs.list[1], 0));
-    let first: std::collections::BTreeSet<&[u8; 16]> = a.iter().collect();
-    let shared = b.iter().filter(|x| first.contains(x)).count();
+    let ((a, sa), (b, sb), (control, sc)) = (draws(&tabs.list[0], 0), draws(&tabs.list[1], 1), draws(&tabs.list[1], 0));
+    let first: std::collections::BTreeSet<&[u8; 16]> = a.iter().chain(&sa).collect();
+    let shared = b.iter().chain(&sb).filter(|x| first.contains(x)).count();
     let control_equal = a.iter().zip(&control).filter(|(x, y)| x == y).count();
-    json!({"case": "zk_tables_share_no_randomness", "expect": "no word in common across the tables; all of them at one table's addresses",
-           "words": [a.len(), b.len()], "shared_words": shared, "control_words_equal": control_equal,
-           "pass": !a.is_empty() && a.len() == b.len() && shared == 0 && control.len() == a.len() && control_equal == a.len()})
+    let control_salts_shared = sc.iter().filter(|x| first.contains(x)).count();
+    let same_shape = !sa.is_empty() && a.len() == b.len() && sa.len() == sb.len() && control.len() == a.len() && sc.len() == sa.len();
+    json!({"words": [a.len() + sa.len(), if same_shape { b.len() + sb.len() } else { 0 }], "stream_words": a.len(), "salt_words": sa.len(),
+           "shared_words": shared, "control_words_equal": control_equal, "control_salt_words_shared": control_salts_shared})
 }
 
 #[cfg(not(feature = "seed-injection"))]

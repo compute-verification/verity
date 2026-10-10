@@ -18,7 +18,7 @@
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
 #      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's draw coin opened after the
 #      registration, once, and Lean flock-verify draw --population N --k K' --stream over its key)
-#   5. per drawn unit u<t>: stage_tile.py (Pc8TileHidden{K=4096,1,1,sm120}), the --zk session, the opening check, Lean;
+#   5. per drawn unit u<t>: stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk session, the opening check, Lean;
 #      the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
@@ -66,7 +66,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python
+export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -80,6 +80,12 @@ expect() { EXPECT[$1]=$2; VERDICT[$1]=$3; log "  $1: $3 (expected $2)"; }
 first() { cut -d' ' -f1; }
 jq_() { "$PY" -c "import json, sys; d = json.load(open(sys.argv[1])); print(eval(sys.argv[2], {'d': d, 'json': json}))" "$@"; }
 mkdir -p "$OUT/request" "$OUT/other"
+# the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+{ (cd "$SRC/verity/core/protocols/pouw/lean/check" && lake build pouw-check pouw-check-difftest) \
+  && (cd "$SRC/verity/core/service/sampled_proofs" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
+  || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
+log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
 # ---- 2-3. params and commit ---------------------------------------------------------------------------------------------------
 for p in request other; do
@@ -113,8 +119,13 @@ R=$OUT/request/registration.json RP=$OUT/request/params.json
 "$PY" "$SC" edit "$R" "$OUT/registration-extra.json" 'window.public.calls=2'
 "$PY" "$SC" edit "$R" "$OUT/registration-raised.json" "window.public.work.level=$(( $(jq_ "$R" "d['window']['public']['work']['level']") + 1 ))"
 # the challenger: one process holding P1's streams and the epoch's coins from the receipt to the outcomes; ask() is its one channel
-coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" 2> "$OUT/challenger.err"; }
+# A pass salted by epoch coins (manifest v2) was salted by the serving controller's challenger, whose entropy this one holds
 MAN=$PASSES/request/manifest.json
+V1=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'] == 'verity-vllm/pouw-pearl-c-run/v1')" "$MAN")
+STATE=${SZ_COIN_STATE:-$WORK/coin-state/$SERVED_RUN}
+if [ "$V1" = True ]; then REC=true STATEARG=(); else REC=false STATEARG=(--state "$STATE"); fi
+log "pass: $("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'])" "$MAN"), the challenger ${STATEARG[*]:-fresh}"
+coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
 ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
   local line=
   if [ -n "${SVC[1]:-}" ]; then echo "$2" >&"${SVC[1]}" && IFS= read -r line <&"${SVC[0]}"; fi
@@ -124,6 +135,11 @@ ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out
 req() { "$PY" -c "import json, sys; a = sys.argv[1:]; print(json.dumps(dict(zip(a[::2], a[1::2]))))" "$@"; }
 ask coins "$(req op coins)"
 expect coins COINS "$REPLY"
+if [ "$V1" != True ]; then
+  v=$("$PY" -c "import json, sys; print('SAME' if json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])) else 'DIFFERENT')" \
+    "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
+  expect coins-pass SAME "${v:-ERROR}"
+fi
 WR=$("$PY" -c "import json, sys; from verity.core.protocols.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
@@ -133,17 +149,23 @@ for c in foreign early mislabelled tampered resalted; do
   ask "receive-coin-$c" "$(req op register name "coin-$c" registration "$R" manifest "$W/coin-$c.json")"
   expect "receive-coin-$c" REFUSED "$REPLY"
 done
-ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$MAN")"
+UNREC=$MAN
+if [ "$V1" != True ]; then   # the pass as one recorded before epoch coins would carry it: a beacon's salt, no coin
+  UNREC=$W/beacon.json
+  "$PY" -c "import json, os, sys; m = json.load(open(sys.argv[1])); [m.pop(k, None) for k in ('coins', 'salt_opening')]; \
+m.update(schema='verity-vllm/pouw-pearl-c-run/v1', beacon=os.urandom(32).hex()); json.dump(m, open(sys.argv[2], 'w'))" "$MAN" "$UNREC"
+fi
+ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$UNREC")"
 expect receive-unrecorded REFUSED "$REPLY"
-ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded true)"
+ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded $REC)"
 expect receive-foreign REFUSED "$REPLY"
-ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded true)"
+ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded $REC)"
 expect receive-extra REFUSED "$REPLY"
-ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded true)"
+ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded $REC)"
 expect receive-raised REFUSED "$REPLY"
-ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded true out "$OUT/receipt.json")"
+ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded $REC out "$OUT/receipt.json")"
 expect receive-honest REGISTERED "$REPLY"
-ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded true)"
+ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded $REC)"
 expect receive-open REFUSED "$REPLY"
 [ -f "$OUT/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
 log "select: the draw coin, opened after the registration, and $LEAN draw over its key"
@@ -156,6 +178,35 @@ UNITS=$(jq_ "$OUT/draw.json" "' '.join(map(str, sorted(d['units'])))")
 FILL=$(jq_ "$OUT/request/advice.json" "[e for e in d['entries'] if e['kind'] == 'filler'][0]['lo']")
 REAL=$(jq_ "$OUT/request/advice.json" "d['real']")
 log "draw: units $UNITS of $(jq_ "$R" "d['population']") (real tiles $REAL, the filler from $FILL)"
+
+# ---- 7. the challenger's replay and the summary -----------------------------------------------------------------------------
+finish() {       # the challenger quits, then its requests again from its recorded coins, Lean drawing and the reference's
+  [ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
+  [ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
+  local v
+  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" | tee "$OUT/replay.out" | first)
+  expect replay SAME "${v:-ERROR}"
+  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
+  expect replay-twin SAME "${v:-ERROR}"
+}
+summary() {      # summary.json
+  {
+    echo "{"
+    echo "\"served_run\": \"$SERVED_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
+    echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": ${FU:-null}, \"params\": $(cat "$RP"),"
+    echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
+    echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
+    echo "\"stage\": $(cat "$OUT/u$U0/stage.json" 2>/dev/null || echo null),"
+    echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
+    echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"
+    echo "}"
+  } > "$OUT/summary.json"
+  local ok=1
+  for t in "${!VERDICT[@]}"; do [ "${VERDICT[$t]}" = "${EXPECT[$t]}" ] || ok=0; done
+  log "served-zk window: $([ $ok = 1 ] && echo 'every check as expected' || echo 'a check NOT as expected'): $("$PY" -c "import json; print(json.dumps({k: v['verdict'] for k, v in sorted(json.load(open('$OUT/summary.json'))['checks'].items())}))")"
+  "$PY" -c "import json; json.load(open('$OUT/summary.json'))" || { log "summary.json is not JSON"; ok=0; }
+  [ $ok = 1 ] || exit 1
+}
 
 # ---- 5. the units -------------------------------------------------------------------------------------------------------------
 stage_unit() {   # stage_unit TAG SIDE UNIT: $W/TAG staged, its stage.json, opening.json, pin.txt and pub.bin copied to $OUT/TAG
@@ -189,7 +240,7 @@ for t in $UNITS; do
   [ "$t" -lt "$FILL" ] && [ -z "$REAL_UNIT" ] && REAL_UNIT=$t
   prove_unit "u$t"
 done
-[ -n "$U0" ] || { log "no drawn unit staged"; exit 4; }
+[ -n "$U0" ] || { log "no drawn unit staged: $(tail -1 "$OUT/u${UNITS%% *}/stage.out")"; finish; summary; exit 3; }
 if [ -z "$REAL_UNIT" ]; then stage_unit u0-real request 0 && prove_unit u0-real && REAL_UNIT=0-real; fi
 DRAWN_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | head -1)
 FU=${DRAWN_FILLER:-$FILL}
@@ -268,34 +319,12 @@ expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
 units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
-ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded true)"
+ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded $REC)"
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
   units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out" "" "$W/u$U0/st/$c/session.json"
   control "st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$OUT/units-st-$c.json"
 done
-[ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
-[ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
-v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" | tee "$OUT/replay.out" | first)
-expect replay SAME "${v:-ERROR}"
-v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
-expect replay-twin SAME "${v:-ERROR}"
-
-# ---- 7. summary ---------------------------------------------------------------------------------------------------------------
-{
-  echo "{"
-  echo "\"served_run\": \"$SERVED_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
-  echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": $FU, \"params\": $(cat "$RP"),"
-  echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
-  echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
-  echo "\"stage\": $(cat "$OUT/u$U0/stage.json"),"
-  echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
-  echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"
-  echo "}"
-} > "$OUT/summary.json"
-ok=1
-for t in "${!VERDICT[@]}"; do [ "${VERDICT[$t]}" = "${EXPECT[$t]}" ] || ok=0; done
-log "served-zk window: $([ $ok = 1 ] && echo 'every check as expected' || echo 'a check NOT as expected'): $("$PY" -c "import json; print(json.dumps({k: v['verdict'] for k, v in sorted(json.load(open('$OUT/summary.json'))['checks'].items())}))")"
-"$PY" -c "import json; json.load(open('$OUT/summary.json'))" || log "summary.json is not JSON"
-[ $ok = 1 ]
+finish
+summary

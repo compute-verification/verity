@@ -30,6 +30,10 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
+- **Parallel proof work runs against fixed statements** (Daniel, 8 Oct). Before any worker starts, the final theorem's
+  statement and each open piece's statement are on the branch; each worker proves its piece against that statement, and
+  integration builds the final theorem against them continuously. What isn't closed by the deadline is a gap list on the
+  branch: exact lemma names with no `sorry` outside them, each with a size and an owner.
 - **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file. The Lean check lists where they are
   (`reads` in `Security/lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
@@ -154,6 +158,21 @@ simp with that.
   `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
   and the theorem keeps its named assumptions as binders (tools/verity/lean/README.md, "A lift is not a change"). Daniel's DM
   still lists the changed record.
+- **One shape.** A property takes its inputs, one hypothesis that its function returned an outcome, and premises; the
+  rest is its conclusion. Each guarantee's entry under `shape.properties` in `lean-audit.json` names its `function` (a
+  constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
+  outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
+  acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
+  constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
+  and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
+  `{function, outcome}` each. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
+  with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
+  `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
+  `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one
+  lists it under `rests_on`, and a falsified one takes every property resting on it off the list. Every `def G : Prop` of a `Guarantees` module (or a module
+  under `shape.statements`) is the statement of a guarantee the lock lists, or is under `shape.frozen` until it is. Adding an entry is a claims change the
+  landing DM shows Daniel: rather restate the guarantee, or move what isn't a property (an iff's converse, an honest
+  case) to `Proofs/` as completeness.
 
 ## Before the PR
 

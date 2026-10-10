@@ -3,12 +3,12 @@ import Properties.Proofs.Pouw.Grid
 /-!
 # Proofs of the draw's properties (`Properties.Pouw`, "The draw")
 
-`KPrimeLeast`, on Lean core: the fixed-point bounds `fixedPow` computes are sound (`fixedPow_sound`), so whatever they
+`kPrime_least`, on Lean core: the fixed-point bounds `fixedPow` computes are sound (`fixedPow_sound`), so whatever they
 decide is the exact answer and `missAtMost` is the integer comparison `a^k·dd ≤ dn·b^k` (`missAtMost_eq`), which is
 `q^k ≤ δ` (`exact_iff`) and holds from some `k` on (`exact_mono`); the bisection finds the least such `k`
 (`leastAbove_spec`).
 
-`DrawMisses`, from `KPrimeLeast`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each draw's
+`draw_misses`, from `kPrime_least`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each draw's
 miss factor `(N − B − i)/(N − i)` is in `[0, 1 − p]` and the miss chance is at most `(1 − p)^K′ ≤ δ` (`missProb_le`);
 when `K′ = N` the draw takes every tile and the chance is 0 (`missProb_zero`).
 -/
@@ -198,8 +198,11 @@ theorem exact_mono {a b dn dd : Nat} (hab : a ≤ b) {i j : Nat} (hij : i ≤ j)
 
 /-! ### K′ -/
 
-theorem kPrimeLeast : KPrimeLeast := by
-  intro eps δ credited n w hd
+/-- On its domain, `kPrime` answers the least `K ≥ 1` with `(1 − p)^K ≤ δ`, capped at `n`. -/
+theorem kPrime_least (eps δ : Rat) (credited n w : Int) (hd : KPrimeDomain eps δ credited n w) :
+    let q := 1 - missShare eps credited n w
+    ∃ k, kPrime eps δ credited n w = .ok k ∧ 1 ≤ k ∧ k ≤ n.toNat ∧ (k < n.toNat → q ^ k ≤ δ) ∧
+      ∀ j, 1 ≤ j → j < k → δ < q ^ j := by
   have hd' := hd
   obtain ⟨he0, he1, hδ0, hδ1, hn, hw, hc0, hc1⟩ := hd
   dsimp only
@@ -283,9 +286,10 @@ theorem missProb_zero {N B : Nat} : ∀ k, N - B < k → missProb N B k = 0
       simp [missFactor, this, Rat.div_def]
     · rw [missProb_zero k (by omega)]; simp
 
-theorem drawMisses : DrawMisses := by
-  intro eps δ credited n w B k hd hk hB hcov
-  obtain ⟨k', hk', h1, hkN, hlt, -⟩ := kPrimeLeast eps δ credited n w hd
+theorem draw_misses (eps δ : Rat) (credited n w : Int) (B k : Nat) (hd : KPrimeDomain eps δ credited n w)
+    (hk : kPrime eps δ credited n w = .ok k) : MissBounded eps δ credited n w B k := by
+  intro hB hcov
+  obtain ⟨k', hk', h1, hkN, hlt, -⟩ := kPrime_least eps δ credited n w hd
   rw [hk] at hk'; cases hk'
   have hd' := hd
   obtain ⟨he0, he1, hδ0, hδ1, hn, hw, hc0, hc1⟩ := hd'

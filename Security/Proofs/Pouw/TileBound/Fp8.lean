@@ -1,6 +1,5 @@
 import Proofs.Pouw.TileBound.Proofs
 import Definitions.Pouw.TileBound.Fp8Defs
-import Models.Pouw.Guarantees.TileBound
 
 /-!
 # The FP8-tile model: the E4M3 count from the FP4-tile core (proofs)
@@ -124,13 +123,3 @@ theorem honest8_representable [DecidableEq β] [DecidableEq γ] (BX : XBlocks m 
   simp [capacity8]
 
 end Pouw.TileBound
-
-theorem Pouw.SecurityProofs.TileBound.Bf16OpenAt8 : Pouw.Guarantees.TileBound.Bf16OpenAt8 := @Pouw.TileBound.bf16_open_at8
-
-theorem Pouw.SecurityProofs.TileBound.CostGe8 : Pouw.Guarantees.TileBound.CostGe8 := @Pouw.TileBound.cost_ge8
-
-theorem Pouw.SecurityProofs.TileBound.Fmt8ClosedIff : Pouw.Guarantees.TileBound.Fmt8ClosedIff := @Pouw.TileBound.fmt8_closed_iff
-
-theorem Pouw.SecurityProofs.TileBound.Fp32OpenAt8 : Pouw.Guarantees.TileBound.Fp32OpenAt8 := @Pouw.TileBound.fp32_open_at8
-
-theorem Pouw.SecurityProofs.TileBound.Tf32OpenAt8 : Pouw.Guarantees.TileBound.Tf32OpenAt8 := @Pouw.TileBound.tf32_open_at8

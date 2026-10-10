@@ -27,6 +27,12 @@ def sha(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
+def unshaped(rep: dict) -> list[str]:
+    """A report's failures other than the shape rule's, for a test of something else that adds guarantees to the control
+    without entering them under `shape.properties`."""
+    return [f for f in rep["failures"] if not f.startswith("shape:")]
+
+
 def fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
     reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32, "own": ["P.f.match_1"]},
                                              {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
@@ -313,16 +319,16 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
-    assert audit()["failures"] == []
+    assert unshaped(audit()) == []
     before = (pkg / A.POLICY).read_text()
     record = tmp_path / "out" / "audit-control" / A.POLICY
     assert record.read_text() == before, "the record beside the reports, where a recorded run publishes it"
     record.unlink()
-    assert audit()["failures"] == [] and (pkg / A.POLICY).read_text() == before
+    assert unshaped(audit()) == [] and (pkg / A.POLICY).read_text() == before
     assert record.read_text() == before, "an update that changes nothing writes it all the same"
     (pkg / A.POLICY).write_text(before.replace('"guarantees"', '"pins"'))
     rep = audit()
-    assert rep["failures"] == [] and "review" not in rep and (pkg / A.POLICY).read_text() == before, "renamed, not reviewed"
+    assert unshaped(rep) == [] and "review" not in rep and (pkg / A.POLICY).read_text() == before, "renamed, not reviewed"
     moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b",
              "Control.c": "Control.SecurityProofs.c", "Control.f": "Control.Protocol.f", "Control.g": "Control.Protocol.g"}
     after = ("def Control.Protocol.f (n : Nat) : Nat := n + 0\ndef Control.Protocol.g (n : Nat) : Nat := 0 + n\n"
@@ -345,7 +351,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Lifted\n")
     build()
     rep = audit(moved=moved)
-    assert rep["failures"] == []
+    assert unshaped(rep) == []
     assert rep["before"] == {k: json.loads(before)[k] for k in ("guarantees", "reads")} and rep["guarantees"] == A.load(pkg)["guarantees"]
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
@@ -360,7 +366,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     spec.write_text(stated.replace("f n = n\n", "f n = Control.f n\n"))
     build()
     rep = audit(moved=moved)
-    assert [f.split(":")[0] for f in rep["failures"]] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
+    assert [f.split(":")[0] for f in unshaped(rep)] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -388,7 +394,7 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
     build()
-    assert audit()["failures"] == []
+    assert unshaped(audit()) == []
     before = A.load(pkg)
     (pkg / "Control" / "Guarantees.lean").write_text(
         "import Control.Assumptions\nimport Control.Defs\nnamespace Control.Guarantees\nopen Control\nuniverse u\n"
@@ -416,7 +422,7 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
                                                   "Control.Spec": {"imports": ["Control.Defs"]}}})
     build()
     rep = audit()
-    assert rep["failures"] == []
+    assert unshaped(rep) == []
     after = A.load(pkg)
     assert after["guarantees"]["Control.main_thm"] == before["guarantees"]["Control.main_thm"]
     assert after["guarantees"]["Control.q"]["signature"] == ["Control.q (n : Nat) : Control.Guarantees.Q n"]
@@ -530,12 +536,12 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
     build()
-    assert audit(update=True)["failures"] == []
+    assert unshaped(audit(update=True)) == []
     rep = audit(lifts={"Control.Sub.twice": {"as": "Control.Guarantees.Twice", "into": "Control.Guarantees"},
                        "Control.Sub.refl": {"as": "Control.Guarantees.Refl", "into": "Control.Guarantees",
                                             "beside": "Control.Collect"},
                        "Control.Sub.pick": {"as": "Control.Guarantees.Pick", "into": "Control.Guarantees"}})
-    assert rep["failures"] == [] and rep["moved"] == {"Control.Sub.twice": "Control.SecurityProofs.Twice",
+    assert unshaped(rep) == [] and rep["moved"] == {"Control.Sub.twice": "Control.SecurityProofs.Twice",
                                                       "Control.Sub.refl": "Control.SecurityProofs.Refl",
                                                       "Control.Sub.pick": "Control.SecurityProofs.Pick"}
     assert (pkg / "Control" / "Guarantees.lean").read_text() == (
@@ -556,7 +562,7 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
         "theorem Control.SecurityProofs.Refl.{u} : Control.Guarantees.Refl.{u} := @Control.Sub.refl.{u}\n")
     build()
     rep = audit(update=True, moved=rep["moved"])
-    assert rep["failures"] == [] and A.statement_changes(rep["review"]) == []
+    assert unshaped(rep) == [] and A.statement_changes(rep["review"]) == []
     assert set(A.load(pkg)["guarantees"]) == {"Control.main_thm", "Control.SecurityProofs.Twice", "Control.SecurityProofs.Refl",
                                               "Control.SecurityProofs.Pick"}
 
@@ -1055,6 +1061,56 @@ def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_r
     assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
+def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_path, monkeypatch):
+    """`a` and `b` both require `d` by path, as four of flock's dependents did in check 4cd5, whose builds rebuilt flock's
+    stale modules into its one `.lake/build` at once, so that one's `clang` read a `.c` file another was rewriting. The first
+    fake build holds on until the other package's build has started or waits for it: without the wait, the two overlap."""
+    d, a, b = tmp_path / "d", tmp_path / "a", tmp_path / "b"
+    for p in (d, a, b):
+        p.mkdir()
+    for p in (a, b):
+        (p / A.POLICY).write_text(json.dumps({"roots": [p.name.upper()]}))
+        (p / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "d", "dir": "../d"}]}))
+    state = threading.Condition()
+    building, done, overlaps, waits = set(), set(), [], {}
+
+    def fake_run(argv, cwd, log=None, timeout=0):
+        me, other = cwd.name, ({"a", "b"} - {cwd.name}).pop()
+        with state:
+            if building:
+                overlaps.append((me, sorted(building)))
+            building.add(me)
+            state.notify_all()
+            state.wait_for(lambda: other in building or other in waits or other in done)
+            building.discard(me)
+            done.add(me)
+            state.notify_all()
+        return 1, "fake build"
+
+    def log_for(name):
+        def log(line):
+            with state:
+                waits[name] = line
+                state.notify_all()
+        return log
+
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    reps = {}
+    threads = [threading.Thread(target=lambda p=p: reps.__setitem__(
+        p.name, A.audit(p, tmp_path / "out", build=True, log=log_for(p.name), runs=False))) for p in (a, b)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert overlaps == []
+    [(second, line)] = waits.items()
+    assert line == f"build: {tmp_path / second} waits for a build that writes the .lake of {d.resolve()}"
+    assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
+
+
 def test_a_guarantee_is_proved_by_exactly_one_package():
     spec = facts(modules=["P.Defs"], pins={"P.t": {"kind": "missing"}, "P.u": fact() | {"module": "P.Defs"},
                                             "P.v": {"kind": "missing"}, "P.w": {"kind": "missing"}})
@@ -1144,7 +1200,9 @@ SPEC = {"assumptions": ["Core.Assumptions"], "meaning": ["Core.Protocol", "Core.
                    "Core.Assumptions": {"imports": ["Core.Assumptions"], "why": "a named assumption imports no proof"},
                    "Core.Guarantees": {"imports": ["Core.Protocol", "Core.Assumptions", "Core.Guarantees"],
                                        "why": "a guarantee is stated over the spec"}},
-        "guarantees": {"Core.SecurityProofs.main": {"owner": "@lean"}, "Core.SecurityProofs.inline": {"owner": "@lean"}}}
+        "guarantees": {"Core.SecurityProofs.main": {"owner": "@lean"}, "Core.SecurityProofs.inline": {"owner": "@lean"}},
+        "shape": {"frozen": {"Core.SecurityProofs.main": "frozen: a test of moving proofs, not of the shape",
+                             "Core.SecurityProofs.inline": "frozen: a test of moving proofs, not of the shape"}}}
 
 
 def _package(d: Path, files: dict[str, str], lakefile: str, policy: dict) -> None:
@@ -1177,7 +1235,7 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     for d in (one, spec, proofs):
         build(d)
     for d in (one, proofs):
-        assert A.audit(d, out, update=True, replay=False, runs=False, log=lambda *_: None)["failures"] == []
+        assert unshaped(A.audit(d, out, update=True, replay=False, runs=False, log=lambda *_: None)) == []
     proofs_policy = (proofs / A.POLICY).read_text()
     assert set(json.loads(proofs_policy)) == {"roots", "dependencies"}
     assert A.main([str(spec), "--update", "--no-replay", "--out", str(out)]) == 0
@@ -1195,7 +1253,7 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     (proofs / "lakefile.toml").write_text((proofs / "lakefile.toml").read_text() + 'roots = ["CoreProofs", "Extra.Lemma"]\n')
     A.dump(proofs, A.load(proofs) | {"exempt": {"Extra": "a lemma outside the roots"}})
     build(proofs)
-    assert A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"] == [
+    assert unshaped(A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)) == [
         "proved_in: ../proofs's roots (CoreProofs) import its Extra.Lemma, which are not under them, so its replay does not "
         "check them"]
     (proofs / "CoreProofs.lean").write_text(PROOFS.replace(
@@ -1331,3 +1389,141 @@ def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path)
     A.run(["true"], tmp_path)
     A.took(rep, "fresh", 0.0)
     assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
+
+
+def hyp(name, at, reaches, module=None, source="binder"):
+    return {"source": source, "name": name, "at": at, "type": name, "head": None, "module": module, "reaches": reaches}
+
+
+def part(hyps=(), inputs=(), conclusion=()):
+    return {"inputs": [{"name": n, "at": a, "head": None} for n, a in inputs], "hypotheses": list(hyps),
+            "conclusion": list(conclusion)}
+
+
+ACCEPTS = hyp("h", 1, ["P.check", "Except.ok"])
+
+
+def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_what_follows():
+    """The shape rule (`refusals`): one hypothesis that its function accepted, besides premises (a constant of a module
+    under `shape.premises`); what follows the first input bound after the acceptance is the conclusion, so a later binder
+    is the conclusion's own; a second acceptance is the first's pair, and a hypothesis that is neither is refused, and so is a field of a
+    structure an input ranges over that is neither."""
+    entry = {"function": "P.check", "outcome": "accept"}
+    fits = part([ACCEPTS, hyp("q", 3, ["P.Q"])], inputs=[("x", 0), ("w", 2)], conclusion=["P.Good"])
+    assert A.refusals(entry, [fits], []) == []
+    loose = part([ACCEPTS, hyp("q", 2, ["P.Q"], module="P.Other")], inputs=[("x", 0)])
+    assert [w.split(",")[0] for w in A.refusals(entry, [loose], [])] == ["takes q : q"]
+    assert A.refusals(entry, [loose], ["P.Other"]) == []
+    twice = part([ACCEPTS, hyp("h2", 2, ["P.check"])], inputs=[("x", 0)])
+    assert A.refusals(entry, [twice], []) == [], "two acceptances are one, of the pair (a binding property)"
+    field = part([hyp("s.hscope", 0, ["P.Scope"], source="field"), ACCEPTS], inputs=[("s", 0)])
+    assert "a field of an input it ranges over" in A.refusals(entry, [field], [])[0]
+    assert "takes no hypothesis that its function returned accept" in A.refusals(entry, [part(inputs=[("x", 0)])], [])[0]
+    assert A.refusals({"function": "P.check", "outcome": "reject"}, [fits], [])[0].startswith("takes no hypothesis")
+    assert A.refusals({"function": "P.check", "outcome": "reject"},
+                      [part([hyp("h", 1, ["P.check", "P.reject"])], inputs=[("x", 0)])], []) == []
+    assert A.refusals(None, [fits], [])[0].startswith("has no entry under shape.properties")
+
+
+def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_must_be_about_it():
+    """Outcome `none` (`step`, a constant): no acceptance, the function anywhere in the statement; a conjunction is a
+    property when each conjunct is, so a conjunct of bare arithmetic is refused by its number."""
+    entry = {"function": ["P.step", "P.LIMIT"], "outcome": "none"}
+    assert A.refusals(entry, [part(inputs=[("s", 0)], conclusion=["P.step"]), part(conclusion=["P.LIMIT"])], []) == []
+    out = A.refusals(entry, [part(conclusion=["P.step"]), part(conclusion=["Nat", "LE.le"])], [])
+    assert out == ["(conjunct 2) says nothing about P.step or P.LIMIT, the function its entry names"]
+    assert A.reaches("P.protocol.check", {"P.protocol", "P.Protocol.check"})
+    assert not A.reaches("P.protocol.check", {"P.protocol"})
+
+
+def test_an_entry_may_name_each_conjuncts_own_function_and_outcome():
+    """`conjuncts` in an entry: soundness of a check and simulation of a server, one statement, each conjunct held to its
+    own function and outcome, so the second needs no acceptance of the first's function; the list has one entry per
+    conjunct, each naming both, and replaces the entry's own function and outcome rather than joining them."""
+    sound = part([ACCEPTS], inputs=[("x", 0)], conclusion=["P.Good"])
+    sim = part(inputs=[("s", 0)], conclusion=["P.run"])
+    entry = {"conjuncts": [{"function": "P.check", "outcome": "accept"}, {"function": "P.run", "outcome": "none"}]}
+    assert A.refusals(entry, [sound, sim], []) == []
+    assert A.refusals({"function": "P.check", "outcome": "accept"}, [sound, sim], [])[0].startswith(
+        "(conjunct 2) takes no hypothesis that its function returned accept")
+    swapped = {"conjuncts": entry["conjuncts"][::-1]}
+    assert {w.split(")")[0] for w in A.refusals(swapped, [sound, sim], [])} == {"(conjunct 1", "(conjunct 2"}
+    for bad in ({"conjuncts": entry["conjuncts"][:1]}, {"conjuncts": [entry["conjuncts"][0], {"function": "P.run"}]},
+                {"conjuncts": "P.run"}):
+        assert A.refusals(bad, [sound, sim], [])[0].startswith("has 2 conjunct(s)"), bad
+    both = entry | {"function": "P.check"}
+    assert "both `conjuncts` and a function" in A.refusals(both, [sound, sim], [])[0]
+
+
+def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink():
+    """`shape` with `shape.frozen`: a frozen guarantee that doesn't fit passes, one that fits fails until its entry goes,
+    an entry needs a reason and a guarantee or unstated statement of this package, an unfrozen misfit fails, as does a
+    guarantee whose shape `Facts.lean` couldn't compute, and a package with no `shape` section is checked all the same."""
+    entries = {"P.a": {"function": "P.check", "outcome": "accept"}, "P.b": {"function": "P.check", "outcome": "accept"}}
+    pol = lambda frozen: {"guarantees": {"P.a": {}, "P.b": {}}, "shape": {"premises": [], "properties": entries, "frozen": frozen}}
+    good, bad = [part([ACCEPTS], inputs=[("x", 0)])], [part(inputs=[("x", 0)])]
+    facts = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": bad}}}
+    assert A.shape(pol({"P.b": "restatable: split the iff."}), facts) == []
+    fails = A.shape(pol({"P.b": "restatable: split it", "P.a": " ", "P.z": "frozen: gone"}), facts)
+    assert [f.split()[1] for f in fails] == ["shape.frozen", "shape.frozen[P.a]", "P.a"], fails
+    assert "which only shrinks" in fails[2]
+    assert [f.split()[1] for f in A.shape(pol({}), facts)] == ["P.b"]
+    assert [f.split()[1] for f in A.shape({"guarantees": {"P.b": {}}}, facts)] == ["P.b"], "no shape section: still checked"
+    assert A.shape({"guarantees": {"P.b": {}}, "shape": {"frozen": {"P.b": "frozen: not swept yet"}}}, facts) == []
+    loose = facts | {"spec_definitions": [{"name": "P.A", "module": "P.Guarantees", "kind": "def", "statement": True},
+                                          {"name": "P.Pred", "module": "P.Guarantees", "kind": "def", "statement": False},
+                                          {"name": "P.Cond", "module": "P.Defs", "kind": "def", "statement": True}],
+                     "pins": {"P.a": {"shape": good, "lift": {"head": "P.A"}}, "P.b": {"shape": good}}}
+    assert A.shape(pol({}), loose) == []
+    loose["pins"]["P.a"]["lift"] = None
+    assert [f.split()[1] for f in A.shape(pol({}), loose)] == ["P.A"], "a statement no guarantee states fails"
+    held = pol({}) | {"shape": pol({})["shape"] | {"statements": ["P.Defs"]}}
+    assert [f.split()[1] for f in A.shape(held, loose)] == ["P.Cond"], "where shape.statements says statements are"
+    assert A.shape(pol({"P.A": "unstated: memory-accounting lists it."}), loose) == [], "until shape.frozen names it"
+    loose["pins"]["P.a"]["lift"] = {"head": "P.A"}
+    assert "neither a guarantee" in A.shape(pol({"P.A": "unstated: listed now"}), loose)[0]
+    gone = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": {"error": "boom"}}}}
+    assert A.shape(pol({}), gone) == ["shape: P.b has no shape in the facts (boom)"], "a shape Facts couldn't read fails"
+
+
+def test_a_frozen_reason_starts_with_its_category_and_an_unstated_statement_is_unstated():
+    """Each `shape.frozen` reason starts with one of `CATEGORIES`, so a record counts its guarantees by category: a
+    guarantee's isn't `unstated`, and a statement no guarantee states has only that one."""
+    pol = {"guarantees": {"P.b": {}}, "shape": {"frozen": {"P.b": "RESTATE: split the iff"}}}
+    facts = {"pins": {"P.b": {"shape": [part(inputs=[("x", 0)])]}},
+             "spec_definitions": [{"name": "P.A", "module": "P.Guarantees", "kind": "def", "statement": True}]}
+    out = A.shape(pol | {"shape": {"frozen": {"P.b": "RESTATE: split the iff", "P.A": "unstated: owed"}}}, facts)
+    assert [f.split()[1] for f in out] == ["shape.frozen[P.b]"] and "starts with no category" in out[0]
+    out = A.shape(pol | {"shape": {"frozen": {"P.b": "unstated: x", "P.A": "lemma: y"}}}, facts)
+    assert sorted(f.split()[1] for f in out) == ["shape.frozen[P.A]", "shape.frozen[P.b]"], out
+    assert A.category("falsified (conjecture): rests on P.C") == "falsified" and A.category("lemmas") is None
+
+
+def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_comes_off():
+    """`shape.conjectures`: a hypothesis whose head is a named conjecture is a premise, and a property resting on one
+    (a hypothesis reaching it, even inside an existential) lists it under `rests_on`, so it is listed as conditional; a
+    conjecture marked falsified refuses every property resting on it, which stays frozen only as `falsified`; an open
+    conjecture names its falsification test, and every entry is a named assumption with a reason."""
+    entry = {"function": "P.check", "outcome": "accept"}
+    rests = part([ACCEPTS, hyp("c", 2, ["P.Conj"]) | {"head": "P.Conj"}], inputs=[("x", 0)])
+    pol = lambda status, frozen=None, rests_on=("P.Conj",): {
+        "assumptions": {"P.Conj": {}}, "guarantees": {"P.a": {}},
+        "shape": {"properties": {"P.a": entry | {"rests_on": list(rests_on)}}, "frozen": frozen or {},
+                  "conjectures": {"P.Conj": {"status": status, "test": "tests/test_conj.py", "why": "open since Oct 8"}}}}
+    facts = {"pins": {"P.a": {"shape": [rests]}}}
+    assert A.shape(pol("open"), facts) == []
+    assert "but its entry's `rests_on` lists none" in A.shape(pol("open", rests_on=()), facts)[0]
+    out = A.shape(pol("falsified"), facts)
+    assert len(out) == 1 and "which shape.conjectures marks falsified" in out[0], out
+    assert A.shape(pol("falsified", {"P.a": "falsified (conjecture): rests on P.Conj"}), facts) == []
+    out = A.shape(pol("falsified", {"P.a": "frozen: rests on P.Conj"}), facts)
+    assert out and "its reason's category is `falsified`" in out[0], out
+    deep = {"pins": {"P.a": {"shape": [part([ACCEPTS, hyp("e", 2, ["Exists", "P.Conj"])], inputs=[("x", 0)])]}}}
+    assert "marks falsified" in " ".join(A.shape(pol("falsified", {}), deep)), "a conjecture inside a hypothesis counts"
+    bad = pol("open") | {"assumptions": {}}
+    bad["shape"]["conjectures"]["P.Conj"] = {"status": "open"}
+    out = A.shape(bad, facts)
+    assert ["not a named assumption" in out[0], "gives no reason" in out[1], "names no falsification test" in out[2]] \
+        == [True] * 3, out
+    bad["shape"]["conjectures"]["P.Conj"] = {"status": "maybe", "why": "x"}
+    assert "has no status" in A.shape(bad, facts)[1]

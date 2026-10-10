@@ -1,0 +1,8 @@
+{
+ "PousSha512Compress_v1": 151.02,
+ "RecSha512Compress_v1": 151.02,
+ "LmsMessage_v1{N=8,W=1}": 137.81,
+ "Sha512RowSegOuter_v1{N_BITS=13}": 133.42,
+ "PousRowDigestEnd_v1{N=264,END='tail'}": 129.19,
+ "Sha512RowSegSegment_v1{M=13}": 125.51
+}
