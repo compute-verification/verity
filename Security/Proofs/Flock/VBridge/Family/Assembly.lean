@@ -50,7 +50,7 @@ theorem vbridgeRead_of_layers (F : VStarFamily T CT cls regs sch L Reg Cm Reg' R
   ⟨fun R ω t R₂ τ o h => by
     have hr := hruns R ω t R₂ τ o h fun r => by
         obtain ⟨⟨v, info, kappa, hv, hvs⟩, hw, hc⟩ := hsh R ω t R₂ τ o h r
-        exact ⟨algebraHolds_of_decodeL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
+        exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decodeL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
             (fun s => (h s).2) hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hv hw hc hvs hst.2 F.sess
             (fun p => F.un p r) (fun p => cp p r) (hres R ω t R₂ τ o h r),
           FlockVBridge.AccChain.accHolds_of_units

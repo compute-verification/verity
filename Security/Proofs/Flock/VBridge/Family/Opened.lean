@@ -678,19 +678,18 @@ theorem openedAllAt_plain (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HO
 `rows` and `alpha` are `rowsOf` and `alphaOf` by `rfl`). -/
 theorem hopen_of_plain (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
-    (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
     (hm : ∀ R ω, (st R ω).merkle = plain) (hone : F.HOneOpen dg N k Rw)
-    (hdir : (F.assembled spec st cap lig own sel bc dec).HDirCols dg N k Rw) (hlig : F.LigOpens dg N k Rw lig)
-    (htop : (F.assembled spec st cap lig own sel bc dec).HTopsL dg N k Rw cap lig)
+    (hdir : (F.assembled dg N k Rw spec st cap lig own sel bc).HDirCols dg N k Rw) (hlig : F.LigOpens dg N k Rw lig)
+    (htop : (F.assembled dg N k Rw spec st cap lig own sel bc).HTopsL dg N k Rw cap lig)
     (hcaps : F.AtAccepted dg N k Rw fun _ _ _ l => ∀ r, CapsAt sch (cap l) (lig l r)) :
     F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
       OpenedAll (st R ω) sch F.sh
-        (((F.assembled spec st cap lig own sel bc dec).tableSrc spec st cap lig R ω t l).proofAt r)
-        ((F.assembled spec st cap lig own sel bc dec).rep R ω t l r) := by
+        (((F.assembled dg N k Rw spec st cap lig own sel bc).tableSrc spec st cap lig R ω t l).proofAt r)
+        ((F.assembled dg N k Rw spec st cap lig own sel bc).rep R ω t l r) := by
   intro R ω t R₂ τ o hacc r
   rw [openedAll_iff, hm R ω]
-  exact (F.assembled spec st cap lig own sel bc dec).openedAllAt_plain dg N k Rw spec st cap lig hne hname hsch rfl
+  exact (F.assembled dg N k Rw spec st cap lig own sel bc).openedAllAt_plain dg N k Rw spec st cap lig hne hname hsch rfl
     rfl hone hdir hlig htop hcaps R ω t R₂ τ o hacc r
 
 /-- **The lig lane's openings at no salts are the layers'**: `ligOfRead 64 sl` at `ligRead`'s reads, at a layout that
@@ -750,20 +749,19 @@ theorem capsAt_capOf (sl : Option ℕ) (ms : ((j : Fin F.stmts.size) → (F.Vs j
 (no salts): `hopen_of_plain` with `LigOpens` and `CapsAt` proved, from `HOneOpen`, `HDirCols` and `HTopsL`. -/
 theorem hopen_of_plain_lig (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
-    (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) {sl : Option ℕ}
     (hsl : sl = none ∨ sl = some 0) (hcap : cap = fun l => capOf T sch (ms l))
     (hlig : lig = fun l r => ligOfRead 64 sl sch (F.ligRead (ms l) l r))
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
     (hm : ∀ R ω, (st R ω).merkle = plain) (hone : F.HOneOpen dg N k Rw)
-    (hdir : (F.assembled spec st cap lig own sel bc dec).HDirCols dg N k Rw)
-    (htop : (F.assembled spec st cap lig own sel bc dec).HTopsL dg N k Rw cap lig) :
+    (hdir : (F.assembled dg N k Rw spec st cap lig own sel bc).HDirCols dg N k Rw)
+    (htop : (F.assembled dg N k Rw spec st cap lig own sel bc).HTopsL dg N k Rw cap lig) :
     F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
       OpenedAll (st R ω) sch F.sh
-        (((F.assembled spec st cap lig own sel bc dec).tableSrc spec st cap lig R ω t l).proofAt r)
-        ((F.assembled spec st cap lig own sel bc dec).rep R ω t l r) := by
+        (((F.assembled dg N k Rw spec st cap lig own sel bc).tableSrc spec st cap lig R ω t l).proofAt r)
+        ((F.assembled dg N k Rw spec st cap lig own sel bc).rep R ω t l r) := by
   subst hcap hlig
-  exact F.hopen_of_plain dg N k Rw spec st _ _ own sel bc dec hne hname hsch hm hone hdir
+  exact F.hopen_of_plain dg N k Rw spec st _ _ own sel bc hne hname hsch hm hone hdir
     (F.ligOpens_unsalted dg N k Rw hne hname hsch hsl ms) htop (F.capsAt_capOf dg N k Rw sl ms)
 
 end VStarFamily
