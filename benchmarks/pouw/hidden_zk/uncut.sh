@@ -6,12 +6,18 @@
 # verify the last session with the Lean `verify --zk`. Run from the source tree's root (`research run --cwd source
 # --declared-output 'out/*'`). Results: out/k<K>/{generate,stage,serve,prove,lean}.time, stage.out (the unit's rows, nnz,
 # k_log), prove.out, serve.log, lean.out, uncut.json, and out/uncut.json.
-# env: HZ_K="2048 16384"  HZ_N=16  HZ_MEM_GB  HZ_RUNS=2  HZ_WARM=1  HZ_THREADS=32  HZ_CACHE  FLOCK_PROVE / FLOCK_VERIFY / HZ_PYTHON
+# env: HZ_K="2048 16384"  HZ_N=16  HZ_MEM_GB  HZ_RUNS=2  HZ_WARM=1  HZ_THREADS=32  HZ_DRAW (serve's --draw law)  HZ_CACHE
+#      FLOCK_PROVE / FLOCK_VERIFY / HZ_PYTHON
 set -uo pipefail
 export HZ_CONFIGS=uncut
 source benchmarks/pouw/hidden_zk/job.sh
 setup
 export RAYON_NUM_THREADS=${HZ_THREADS:-32}
+# job.sh's session, its server drawing by HZ_DRAW (`serve --draw`, e.g. subset:16) when set: a drawn session, which the
+# Lean verifier's claims cover (a session without a draw is refused, D12)
+if [ -n "${HZ_DRAW:-}" ]; then
+  eval "$(declare -f session | sed "s|--operator loopback|--operator loopback --draw $HZ_DRAW|")"
+fi
 SEM=sm80.mma.m16n8k16.bf16
 for k in ${HZ_K:-2048 16384}; do
   D=$W/k$k O=$OUT/k$k
