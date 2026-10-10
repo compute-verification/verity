@@ -164,6 +164,8 @@ def test_a_node_under_its_launch_hold_refuses_every_run_but_its_exceptions(tmp_p
     """/etc/vy/launch-hold (vy-disk-guard's, at the disk or inode mark): the launcher refuses a new run there, so a hold no longer
     depends on the launching lane reading Slack (lean's 720b started on node 1 during its 9 Oct hold). An `except:` token naming the
     run id or a piece of the launcher's agent URL admits it; a hold file with no reason refuses too."""
+    from research.pods.nebius.launch_hold import hold_reason
+
     hold = tmp_path / "launch-hold"
     monkeypatch.setenv("LAUNCH_HOLD_FILE", str(hold))
     hold.write_text("reason: /workspace's inodes are 66% used (hold at 65%, release under 63%)\nsince: 2026-10-09T20:43:00Z\n"
@@ -172,16 +174,44 @@ def test_a_node_under_its_launch_hold_refuses_every_run_but_its_exceptions(tmp_p
     out = remote.launch_request(req)
     assert out["started"] is False and "inodes are 66% used" in out["refused"] and "since 2026-10-09T20:43:00Z" in out["refused"]
     assert R.summarize(runs_root / "held")["state"] == "refused" and not (runs_root / "held" / "job.json").exists()
-    assert remote.launch_hold(hold, "r-allowed", None) is None
-    assert remote.launch_hold(hold, "r-other", "https://cursor.com/agents/bc-8416bc72-c4cc") is None
-    assert remote.launch_hold(hold, "r-other", "https://cursor.com/agents/bc-1234") is not None
+    assert hold_reason(hold, "r-allowed", None) is None
+    assert hold_reason(hold, "r-other", "https://cursor.com/agents/bc-8416bc72-c4cc") is None
+    assert hold_reason(hold, "r-other", "https://cursor.com/agents/bc-1234") is not None
     hold.write_text("except: r-allowed\n")
-    assert "names no reason" in remote.launch_hold(hold, "r-allowed", None)
+    assert "names no reason" in hold_reason(hold, "r-allowed", None)
     hold.unlink()
-    assert remote.launch_hold(hold, "r-other", None) is None
+    assert hold_reason(hold, "r-other", None) is None
     req, runs_root = _request(tmp_path, "free", [PY, "-c", "print('ok')"])
     assert remote.launch_request(req)["started"]
     _wait_terminal(runs_root / "free")
+
+
+def test_the_nodes_interpreter_refuses_a_held_launch_before_the_shipped_package_runs(tmp_path):
+    """vy-research-python (pods/nebius/launch_hold.py, machines.d `python` for vy-nebius-1): a launcher whose shipped research package
+    predates the launch hold still runs `<python> -m research launch-request REQUEST` there, so the node's own interpreter answers
+    with launch-request's refusal (claimed false, exit 3) while the hold names no exception for the run; anything else runs as
+    /usr/bin/python3."""
+    import subprocess
+    from research.pods.nebius import launch_hold
+
+    script = Path(launch_hold.__file__)
+    assert script.stat().st_mode & 0o111 and script.read_text().startswith("#!/usr/bin/python3 -I\n")
+    hold, req = tmp_path / "launch-hold", tmp_path / "request.json"
+    hold.write_text("reason: /workspace is 81% full (hold at 80%, release under 75%)\nexcept: r-ok\n")
+    env = {"PATH": "/usr/bin:/bin", "LAUNCH_HOLD_FILE": str(hold)}
+
+    def launch(run_id: str) -> subprocess.CompletedProcess:
+        req.write_text(json.dumps({"run_id": run_id}))
+        return subprocess.run([sys.executable, str(script), "-m", "research", "launch-request", "--expect-tool", "x", str(req)],
+                              env=env, capture_output=True, text=True)
+
+    r = launch("r-held")
+    assert r.returncode == 3 and json.loads(r.stdout) == {"claimed": False, "fault": "LaunchHold", "refused": launch_hold.held(hold, req)}
+    assert "81% full" in remote.launch_request_failure(r.returncode, r.stdout.encode(), r.stderr.encode()).args[0]
+    r = launch("r-ok")                                                    # excepted: python3 runs it (no research package here)
+    assert r.returncode == 1 and "No module named research" in r.stderr
+    r = subprocess.run([sys.executable, str(script), "-c", "print('passed through')"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout == "passed through\n"
 
 
 def test_tool_tarball_is_deterministic_and_excludes_caches():

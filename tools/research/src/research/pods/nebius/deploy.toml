@@ -93,6 +93,15 @@ src = "tools/research/src/research/pods/nebius/ssh-memory.conf"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
+# ---- node 1: its interpreter for `research run --on` (machines.d `python`), which refuses a launch during the disk guard's
+# launch hold whatever research package the launcher shipped; set machines.d/vy-nebius-1.toml's python only after installing
+
+[[file]]
+path = "/usr/local/bin/vy-research-python"
+src = "tools/research/src/research/pods/nebius/launch_hold.py"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
 # ---- cpu-1: a `research run` only through a check slot (research.remote refuses one; slot_only.py stops one from an older tree);
 # after installing, `sudo systemctl enable --now vy-slot-only.timer`
 
