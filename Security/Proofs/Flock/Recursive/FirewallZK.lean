@@ -1,18 +1,23 @@
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # Proof of (ii) at the firewall and V*'s code
 
 `Flock.SecurityProofs.RecursiveFirewallPrivate : Flock.Guarantees.RecursiveFirewallPrivate` is
-`RecursiveCircuitPrivateLeaves`' argument at the commit strings the firewall sends, where that one is at their leaves:
+`RecursiveCircuitPrivateLeaves`' argument at the commit strings the firewall sends, where that one is at their leaves,
+with the inner coins live: message `i` reads the commit strings before it, so T1 is taken over adaptive leaves.
 
-* `ZkView.commitString_split`, `ZkView.commitString_os`: the executable's commit string of `x` at a salt's bytes, or
-  at the operating system's bytes `b`, is `commitBytes (x ⊕ M·y, c(y))` (`leafSplit` before its leaf hash).
+* `ZkView.commitString_split`: the executable's commit string of `x` at a salt's bytes is `commitBytes (x ⊕ M·y, c(y))`
+  (`leafSplit` before its leaf hash). `FirewallZK.firewallStrings_os`: so the strings the firewall sends at the
+  operating system's bytes `b` are `commitBytes` of `firewallPairs` at the salts `saltOfBytes b`, one message at a time.
+* `FirewallZK.firewallPairs_adaptive`: the firewall's commit strings are T1's adaptive leaves (`ZK.adaptiveLeaves`).
 * `FirewallZK.recursiveZK_enc`: `recursiveZK_le` with the auditor reading the commitments through any encoding `H` of
-  their two halves (`encAt`, `encIdeal`; `ZK.ideal_leaves_swap` takes any), under `hash-derived-key`;
-  `FirewallZK.private_enc`: `RecursiveCircuitPrivate`'s two ways there, with the registration's hiding.
+  their two halves (`encAt`, `encIdeal`), under `hash-derived-key`, T1 over the adaptive leaves
+  (`ZK.ideal_leaves_adaptive`); `FirewallZK.private_enc`: `RecursiveCircuitPrivate`'s two ways there, with the
+  registration's hiding.
 * `FirewallZK.fwRealPr_eq`: the firewall's real view is that at `H = commitBytes`, by `FirewallSends` at the OS's
   bytes, taken to salts (`ZkView.saltsEquiv`).
 * `RecursiveFirewallPrivate`: `private_enc` at `commitBytes`, V*'s sessions' zero knowledge (`OuterZK.vstar_outer_zk`
@@ -54,14 +59,6 @@ theorem commitString_split (x : ByteArray) (y : Salt) :
   simp only [Pi.add_apply, bitsOf, My_apply y ⟨t, ht'⟩, bitL]
   exact xor_ind _ _
 
-/-- **The executable's commit string at the OS's salt bytes**: at the 192 bytes `b` the operating system gives, the
-commit string of `x` is `commitBytes (x ⊕ M·y, c(y))` with `y = saltOfBytes b`. -/
-theorem commitString_os (x : ByteArray) (b : Fin 192 → Fin 256) :
-    Hm96.Default512.commitString x (Audit.Law.streamOf b) =
-      Flock.Guarantees.commitBytes (bitsOf x + My (saltOfBytes b), saltHash (saltOfBytes b)) := by
-  rw [← saltBytes_saltOfBytes]
-  exact commitString_split x _
-
 end FlockSoundness.Discharge.ZkView
 
 namespace FlockSoundness.Discharge.Recursion.FirewallZK
@@ -72,10 +69,70 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- The commitments to `m` under the salts `y`, through an encoding `H` of their two halves. -/
-def encAt {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (m : Fin n → ByteArray) (y : Fin n → ZkView.Salt) :
-    Fin n → D :=
-  fun i => H (OuterZK.commitStrs m y i)
+theorem firewallPairs_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt)
+    (i : Fin nh) :
+    Flock.Guarantees.firewallPairs m y i =
+      (ZkView.bitsOf (Flock.Sha512.hash (m i fun j =>
+          Flock.Guarantees.commitBytes (Flock.Guarantees.firewallPairs m y (Fin.castLE i.isLt.le j)))) +
+        ZkView.My (y i), ZkView.saltHash (y i)) := by
+  -- `dsimp` first: unifying `(π i).1` with `ZkView.My (y i)` unfolds `My`'s 1536-term sum past `maxRecDepth`
+  have h := ZK.adaptiveLeaves_eq (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
+    (fun i l => ZkView.bitsOf (Flock.Sha512.hash (m i fun j => Flock.Guarantees.commitBytes (l j))))
+    (fun i => (ZkView.My (y i), ZkView.saltHash (y i))) i
+  dsimp only [id_eq] at h
+  exact h
+
+theorem firewallStrings_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (ys : Fin nh → ByteArray)
+    (i : Fin nh) :
+    Flock.Guarantees.firewallStrings m ys i = Flock.Hm96.Default512.commitString
+      (Flock.Sha512.hash (m i fun j => Flock.Guarantees.firewallStrings m ys (Fin.castLE i.isLt.le j))) (ys i) := by
+  rw [Flock.Guarantees.firewallStrings]
+
+/-- **The firewall's commit strings are T1's adaptive leaves** (`ZK.adaptiveLeaves` at `H = id`): string `i` is
+`x_i(the strings before it) + M·y_i` beside `c(y_i)`, with `x_i` the SHA-512 of message `i` at those strings. -/
+theorem firewallPairs_adaptive {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (y : Fin nh → ZkView.Salt) :
+    Flock.Guarantees.firewallPairs m y = ZK.adaptiveLeaves (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
+      (fun i l => ZkView.bitsOf (Flock.Sha512.hash (m i fun j => Flock.Guarantees.commitBytes (l j))))
+      (fun i => (ZkView.My (y i), ZkView.saltHash (y i))) :=
+  rfl
+
+/-- **The firewall's commit strings at salts' bytes split**, one message at a time (`ZkView.commitString_split`, each
+message reading the strings before it): at the bytes of the salts `y` they are `commitBytes` of `firewallPairs`. -/
+theorem firewallStrings_salts {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (y : Fin nh → ZkView.Salt) :
+    Flock.Guarantees.firewallStrings m (fun i => ZkView.saltBytes (y i)) =
+      fun i => Flock.Guarantees.commitBytes (Flock.Guarantees.firewallPairs m y i) := by
+  suffices h : ∀ k (i : Fin nh), i.val = k →
+      Flock.Guarantees.firewallStrings m (fun i => ZkView.saltBytes (y i)) i =
+        Flock.Guarantees.commitBytes (Flock.Guarantees.firewallPairs m y i) from funext fun i => h _ i rfl
+  intro k
+  induction k using Nat.strong_induction_on with
+  | _ k ih =>
+    intro i hi
+    have e : (fun j : Fin i =>
+          Flock.Guarantees.firewallStrings m (fun i => ZkView.saltBytes (y i)) (Fin.castLE i.isLt.le j)) =
+        fun j => Flock.Guarantees.commitBytes (Flock.Guarantees.firewallPairs m y (Fin.castLE i.isLt.le j)) :=
+      funext fun j => ih j.val (lt_of_lt_of_eq j.isLt hi) (Fin.castLE i.isLt.le j) rfl
+    refine (firewallStrings_eq m (fun i => ZkView.saltBytes (y i)) i).trans
+      ((congrArg (fun F => Flock.Hm96.Default512.commitString (Flock.Sha512.hash (m i F)) (ZkView.saltBytes (y i)))
+        e).trans ?_)
+    exact (ZkView.commitString_split _ _).trans (congrArg Flock.Guarantees.commitBytes (firewallPairs_eq m y i).symm)
+
+/-- The firewall's commitments to `m` under the salts `y`, the inner coins live (`firewallPairs`), through an encoding
+`H` of their two halves. -/
+def encAt {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (m : (i : Fin n) → (Fin i → ByteArray) → ByteArray)
+    (y : Fin n → ZkView.Salt) : Fin n → D :=
+  fun i => H (Flock.Guarantees.firewallPairs m y i)
+
+/-- **The firewall's commit strings at the OS's salt bytes**: at the 192 bytes `b i` the operating system gives each
+salt, they are `commitBytes` of the commitments' halves at the salts `saltOfBytes (b i)`. -/
+theorem firewallStrings_os {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (b : Fin nh → Fin 192 → Fin 256) :
+    Flock.Guarantees.firewallStrings m (fun i => FlockSoundness.Audit.Law.streamOf (b i)) =
+      encAt Flock.Guarantees.commitBytes m fun i => ZkView.saltOfBytes (b i) :=
+  (congrArg (Flock.Guarantees.firewallStrings m) (funext fun i => (ZkView.saltBytes_saltOfBytes (b i)).symm)).trans
+    (firewallStrings_salts m fun i => ZkView.saltOfBytes (b i))
 
 /-- Ideal commitments through `H`. -/
 def encIdeal {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (u : Fin n → ZkView.Bits × ZkView.Salt) :
@@ -83,10 +140,12 @@ def encIdeal {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (u : Fin 
   fun i => H (OuterZK.idealStrs u i)
 
 /-- **`recursiveZK_le` through any encoding of the commitments**, under `hash-derived-key`: the outer session's
-simulator at the commitments (`hOuter`), then T1 once per commitment (`ZK.ideal_leaves_swap` at `H`). -/
+simulator at the commitments (`hOuter`), then T1 once per commitment over the adaptive leaves
+(`ZK.ideal_leaves_adaptive`: message `i` reads the commit strings before it). -/
 theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
     [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] (H : ZkView.Bits × ByteArray → D) (nh : ℕ)
-    (msgs : Ωa → Ωp → Fin nh → ByteArray) (view : Ωa → (Fin nh → D) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
+    (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (view : Ωa → (Fin nh → D) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Ωa → (Fin nh → D) → Ωs → V) {εo : ℝ≥0∞}
     (hOuter : ∀ a p y (E : V → Prop),
       prCoin (fun q : Ωo => E (view a (encAt H (msgs a p) y) p y q))
@@ -122,7 +181,8 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
           congrArg (· + εo) (ZK.prCoin_prod_split fun (ωy : (Ωa × Ωp) × (Fin nh → ZkView.Salt)) (s : Ωs) =>
             E (ωy.1.1, encAt H (msgs ωy.1.1 ωy.1.2) ωy.2,
               sim ωy.1.1 (encAt H (msgs ωy.1.1 ωy.1.2) ωy.2) s)).symm
-  -- T1 once per commitment: the simulated session reads the salts only through the commitments
+  -- T1 once per commitment: the simulated session reads the salts only through the commitments, each message the
+  -- commit strings before it
   have h2 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2, sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2)) ≤
       prCoin (fun w : ((Ωa × Ωp) × Ωs) × (Fin nh → ZkView.Bits × ZkView.Salt) =>
@@ -130,10 +190,15 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
     refine (ZK.prCoin_congr_equiv (Flock.SecurityProofs.swapLast (Ωa × Ωp) (Fin nh → ZkView.Salt) Ωs)
       (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
-          sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2))).symm.trans_le ?_
-    exact ZK.ideal_leaves_swap ZkView.My ZkView.saltHash hKey H nh
-      (fun (ω : (Ωa × Ωp) × Ωs) i => ZkView.bitsOf (Flock.Sha512.hash (msgs ω.1.1 ω.1.2 i)))
-      (fun ω l => E (ω.1.1, l, sim ω.1.1 l ω.2))
+          sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2))).symm.trans_le
+      (le_of_eq_of_le ?_ (ZK.ideal_leaves_adaptive ZkView.My ZkView.saltHash hKey
+        (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray) nh
+        (fun (ω : (Ωa × Ωp) × Ωs) i l =>
+          ZkView.bitsOf (Flock.Sha512.hash (msgs ω.1.1 ω.1.2 i fun j => Flock.Guarantees.commitBytes (l j))))
+        (fun ω l => E (ω.1.1, (fun i => H (l i)), sim ω.1.1 (fun i => H (l i)) ω.2))))
+    refine congrArg prCoin (funext fun x => ?_)
+    exact congrArg (fun l => E (x.1.1.1, (fun i => H (l i)), sim x.1.1.1 (fun i => H (l i)) x.1.2))
+      (firewallPairs_adaptive (msgs x.1.1.1 x.1.1.2) x.2)
   -- the developer's randomness is no longer read
   have h3 : prCoin (fun w : ((Ωa × Ωp) × Ωs) × (Fin nh → ZkView.Bits × ZkView.Salt) =>
         E (w.1.1.1, encIdeal H w.2, sim w.1.1.1 (encIdeal H w.2) w.1.2)) =
@@ -155,7 +220,7 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
 /-- The real view's probability of `E` at the registration's salts `r`, the commitments through `H`. -/
 noncomputable def realAt {D Prog Wit Rr Rv Ωa Ωp Ωo V : Type} [Fintype Ωa] [Fintype Ωp] [Fintype Ωo]
     (H : ZkView.Bits × ByteArray → D) (reg : Prog → Rr → Rv) (nh : ℕ)
-    (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → D) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (P : Prog) (w : Wit) (E : Rv × Ωa × (Fin nh → D) × V → Prop) (r : Rr) : ℝ≥0∞ :=
   prCoin fun z : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
@@ -176,7 +241,8 @@ in `[0, 1]` (`Hides.avg_le`). -/
 theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa]
     [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
     (H : ZkView.Bits × ByteArray → D) (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (hreg : PrivateCircuit.Hides reg ε)
-    (honest : Out → Prog → Wit → Prop) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
+    (honest : Out → Prog → Wit → Prop) (nh : ℕ)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → D) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → D) → Ωs → V) {εo : ℝ≥0∞}
     (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
@@ -215,12 +281,12 @@ theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr]
 
 /-- **The firewall's real view is the commit strings' view**: under `FirewallSends`, what the firewall sends at the
 OS's bytes `b` is the schedule's transcript filled with `commitBytes` of the commitments at the salts `saltOfBytes b`
-(`ZkView.commitString_os`), and the bytes are uniform exactly when those salts are (`ZkView.saltsEquiv`). V*'s
+(`firewallStrings_os`), and the bytes are uniform exactly when those salts are (`ZkView.saltsEquiv`). V*'s
 sessions read the commitments' leaves, `Default512.treeLeaf` of their commit strings. -/
 theorem fwRealPr_eq {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp] {nr nh : ℕ}
     (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv) (s : Flock.Firewall.Schedule)
-    (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → List ByteArray)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
     (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub) (prover : OuterZK.TableProver)
     (hF : Flock.Guarantees.FirewallSends s reqs msgs T) (P : Prog) (w : Wit)
@@ -235,12 +301,14 @@ theorem fwRealPr_eq {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp]
   rw [← ZK.prCoin_congr_equiv
     (((Equiv.refl (Ωa × Ωp)).prodCongr (ZkView.saltsEquiv nh)).prodCongr (Equiv.refl V.Ωo))]
   refine congrArg prCoin (funext fun z => ?_)
-  have hrun : Flock.Firewall.run s (reqs P w r z.1.1.1 z.1.1.2)
+  have hrun : Flock.Firewall.run s (reqs P w r z.1.1.1 z.1.1.2
+        (Flock.Guarantees.firewallStrings (msgs P w r z.1.1.1 z.1.1.2)
+          fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)))
       (List.ofFn fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)) =
         (T (encAt Flock.Guarantees.commitBytes (msgs P w r z.1.1.1 z.1.1.2) fun i => ZkView.saltOfBytes (z.1.2 i)),
-          true) := by
-    rw [hF]
-    exact congrArg (fun f => (T f, true)) (funext fun i => ZkView.commitString_os _ _)
+          true) :=
+    (hF P w r z.1.1.1 z.1.1.2 fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)).trans
+      (congrArg (fun f => (T f, true)) (firewallStrings_os (msgs P w r z.1.1.1 z.1.1.2) z.1.2))
   exact congrArg (fun u => E (Flock.Guarantees.regLeaves rows pub P r, z.1.1.1, u,
     V.view prover (OuterZK.hctxAt msgs P w r z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i)) z.2)) hrun
 

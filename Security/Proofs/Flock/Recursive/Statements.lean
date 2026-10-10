@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Assumptions.Recursive
 import Proofs.Flock.Soundness.Assumptions.Zk
 import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # The recursive audit's guarantees (trusted)
@@ -36,6 +37,10 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   accepts every session while the registered private circuit's hidden statement fails with probability at most
   `RecursiveSound`'s bound. `RanRegisteredRun` is the one-session form, `PrivateCircuit.RanRegistered` with its
   `cr/sha-512` hypothesis replaced by the same kind of break.
+* `commitBytes`, `firewallPairs`, `firewallCommits`: the firewall's commit strings and commitments when the inner coins
+  are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the firewall reads
+  (`Proofs.Flock.Recursive.Firewall`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
+  each message fixed by the auditor's tape before any commitment.
 
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
@@ -118,6 +123,30 @@ def firewallLeaf (msg : ByteArray) (y : ZkView.Salt) : ByteArray :=
 reads no message. -/
 def idealLeaf (u : ZkView.Bits × ZkView.Salt) : ByteArray :=
   ZkView.leafH (u.1, ZkView.saltHash u.2)
+
+/-- **An hm96-sha512 commit string from its two halves**, `b ‖ c`: the 128 bytes a firewall leaf hashes
+(`ZkView.leafH` is `Default512.treeLeaf` of them). -/
+def commitBytes (u : ZkView.Bits × ByteArray) : ByteArray := ZkView.bytesOf (k := 64) u.1 ++ u.2
+
+/-- **The firewall's commit strings under live inner coins**, as their two halves: string `i` is
+`(SHA-512(m_i) ⊕ M·y_i, c(y_i))`, a `firewallLeaf`'s before its leaf hash, where the message `m_i = msgs i l` reads the
+commit strings `l` before it (`commitBytes` of their halves). The auditor has seen those strings when it draws the coins
+message `i` answers, so the message may read them: each inner coin is live, drawn after the commitment before it. They
+are `ZK.adaptiveLeaves` at the identity encoding: pair `i` is message `i`'s digest at the pairs before it, plus
+`(M·y_i, c(y_i))`. -/
+def firewallPairs {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt) :
+    Fin nh → ZkView.Bits × ByteArray :=
+  FlockSoundness.ZK.adaptiveLeaves (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
+    (fun i l => ZkView.bitsOf (Flock.Sha512.hash (msgs i fun j => commitBytes (l j))))
+    (fun i => (ZkView.My (y i), ZkView.saltHash (y i)))
+
+/-- **The firewall's commitments under live inner coins**: commitment `i` is the hm96-sha512 leaf of message `i`'s
+SHA-512 under its own fresh salt `y i`, `firewallLeaf (msgs i l) (y i)`, where message `i` reads the commit strings `l`
+before it (`firewallPairs`). A message that reads none of them is the committed-coin case,
+`firewallLeaf (msgs i) (y i)`. -/
+def firewallCommits {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt)
+    (i : Fin nh) : ByteArray :=
+  ZkView.leafH (firewallPairs msgs y i)
 
 /-- **The recursive audit is zero knowledge.** The auditor's tape is `Ωa` and the developer's randomness `Ωp`. The
 firewall sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each

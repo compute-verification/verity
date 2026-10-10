@@ -2,6 +2,7 @@ import Proofs.Flock.VBridge.Family.Assembly
 import Proofs.Flock.VBridge.Family.Lig
 import Proofs.Flock.VBridge.Algebra.Sim
 import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+import Proofs.Flock.VBridge.Family.Names
 
 /-!
 # The inner statement's setup, from the hidden statement
@@ -517,11 +518,12 @@ variable (spec : SessionSpec)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
 
 /-- **VBridge G's read conjunct at the model setup**: `vbridgeRead_assembled` at `innerSetup`, whose `SetupRealizes`,
-`ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`. Without a history and registration
+`ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`, and `HOpenName` and `HUnitName` from the circuit files'
+emit/parse round trip (`hOpenName_of`, `hUnitName_of`). Without a history and registration
 (`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
 lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model
-    (hshape : F.ShapeAt) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
+    (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)
     (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
@@ -550,9 +552,10 @@ theorem vbridgeRead_model
       exact (he.false (R, ω, R₂)).elim
     · intro _ R ω _ _ _ R₂
       exact (he.false (R, ω, R₂)).elim
-  · obtain ⟨hsome, -, -, -⟩ := F.structure_of hne honame hcount
-    obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome hname
-    exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc hne honame hcount hname hv
+  · obtain ⟨hsome, -, -, -⟩ := F.structure_of hne (F.hOpenName_of hne) hcount
+    obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome (F.hUnitName_of hne)
+    exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc hne (F.hOpenName_of hne) hcount
+      (F.hUnitName_of hne) hv
       hlay hrr hrck hsame hshared hz hcoef V hV hE (F.setupRealizes_of hshape) (F.shapeIs_of hshape) hcl
       (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl) hcapS hligS hregs hCT hleaf hread hT hopen hpub
 
@@ -576,7 +579,7 @@ variable (spec : SessionSpec) (own : Fin F.stmts.size → Array Flock.Registered
 /-- **`vbridgeRead_model` with the cap and openings read from the inner messages**: `cap := capW w` and
 `lig := ligW w`, whose `CapShaped` and `LigShaped` follow from the model setup's scheme (`hCapS_of`, `hLigS_of`). -/
 theorem vbridgeRead_model_msgs
-    (hshape : F.ShapeAt) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
+    (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HVCoins dg N k Rw)
     (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
@@ -596,7 +599,7 @@ theorem vbridgeRead_model_msgs
       (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r (F.decOf dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel))
       (skOf F.Vs own sel) (cmtOf F.Vs bc)
       (msgOf F.Vs (skOf F.Vs own sel) (F.decOf dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel)) :=
-  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc hshape honame hcount hname hv hlay hrr
+  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc hshape hcount hv hlay hrr
     hrck hsame hshared hz hcoef V hV hE hcl
     (F.hCapS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w)
     (F.hLigS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w) hregs hCT hleaf hread hT hopen hpub

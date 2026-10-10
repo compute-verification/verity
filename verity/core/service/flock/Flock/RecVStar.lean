@@ -215,6 +215,79 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
   if let some q := own.find? (!file.contains ·) then
     throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
 
+/-- A statement's row ports: a part's ports (`VStar/Algebra.lean:385-387`: its `m<k>`, `acc0`, `acc1`), not its `v` and
+`out`, which are its own (`rec_residuals.write`, rec_residuals.py:451-461); a level has none. -/
+def rowPorts : VStar.Stmt → List String
+  | .inner _ _ p => p.S.ports.map (·.1)
+  | .recOpen .. => []
+
+def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
+
+/-- The first field in which two registered ports differ, with both values: the registration (value, root, leaf count,
+row width, domain) and, with `reads`, the read positions; none if they agree. -/
+def portDiff? (a b : Registered.Port) (reads : Bool := true) : Option String :=
+  let w := fun (x : Option Nat) => (x.map toString).getD "none"
+  if a.value != b.value then some s!"value {a.value}, against {b.value}"
+  else if a.root != b.root then some s!"root {hexOf a.root}, against {hexOf b.root}"
+  else if a.leaves != b.leaves then some s!"leaves {a.leaves}, against {b.leaves}"
+  else if a.words != b.words then some s!"words {w a.words}, against {w b.words}"
+  else if a.wordBits != b.wordBits then some s!"word_bits {a.wordBits}, against {b.wordBits}"
+  else if a.domain != b.domain then some s!"domain {hexOf a.domain}, against {hexOf b.domain}"
+  else if reads && a.reads != b.reads then some s!"reads {showReads a.reads}, against {showReads b.reads}"
+  else none
+
+/-- **The verifier's reads file names a part's row ports, each the family's one entry of that name** (`OwnNamesRows`,
+`PartPortsOne`): every row port of the statement (`rowPorts`) is a port of `--registered`, and agrees in every field
+(`portDiff?`: value, root, leaf count, row width, domain and reads) with the port of that name in the verifier's record of
+V*'s shared rows (`--rec-rows`), one file for every session of the family. -/
+def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) : V Unit := do
+  let names := rowPorts s
+  if let some nm := names.find? fun nm => !registered.any (·.name == nm) then
+    throw s!"{s.name}: its row port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
+  if names.isEmpty then return
+  let some rows := rows
+    | throw s!"{s.name}: one of V*'s parts; pass the verifier's record of V*'s shared rows (--rec-rows F), which each of its row ports must be"
+  for nm in names do
+    let some reg := registered.find? (·.name == nm) | throw s!"{s.name}: its row port {nm} is not a port of the registered reads"
+    let some want := rows.find? (·.name == nm)
+      | throw s!"{s.name}: its row port {nm} is not a port of the verifier's shared rows (--rec-rows: {rows.toList.map (·.name)})"
+    if let some d := portDiff? reg want then
+      throw s!"{s.name}: its row port {nm} is not the verifier's shared row {nm} (--rec-rows): {d}"
+
+def ACC_VALUE : String := "rec-acc"
+
+/-- A statement's ports that read `rec-acc`: a level's `acc` and `acc_out` (`rec_outer.stage`, rec_outer.py:236), a
+part's `acc0` and `acc1` among its ports (rec_vstage.py:357). -/
+def accPorts : VStar.Stmt → List String
+  | .inner _ _ p => (p.S.ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
+  | .recOpen .. => ["acc", "acc_out"]
+
+/-- **A session's `rec-acc` reads are one registration, the verifier's** (the `site` of `Family/AccRows.lean`: value,
+root, leaf count, row width and domain; not name or reads): each of the statement's `accPorts` is a port of `--registered`
+reading `rec-acc`, every port there reading `rec-acc` has the registration of the first, and that is the registration of
+`acc0` in the verifier's shared rows (`--rec-rows`), one file for every session of the family, whose `rec-acc` ports all
+have it. -/
+def checkAcc (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) : V Unit := do
+  for nm in accPorts s do
+    match registered.find? (·.name == nm) with
+    | some p => if p.value != ACC_VALUE then throw s!"{s.name}: its port {nm} reads {p.value}, not {ACC_VALUE}"
+    | none => throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
+  let accs := registered.filter (·.value == ACC_VALUE)
+  let some a := accs[0]? | return
+  for b in accs do
+    if let some d := portDiff? a b false then
+      throw s!"{s.name}: its {ACC_VALUE} ports {a.name} and {b.name} are two registrations: {d}"
+  let some rows := rows
+    | throw s!"{s.name}: it reads {ACC_VALUE}; pass the verifier's record of V*'s shared rows (--rec-rows F), whose {ACC_VALUE} registration it must be"
+  let some w := rows.find? (·.name == "acc0")
+    | throw s!"{s.name}: the verifier's shared rows (--rec-rows) have no acc0, whose {ACC_VALUE} registration it must be"
+  if w.value != ACC_VALUE then throw s!"the verifier's shared rows (--rec-rows): acc0 reads {w.value}, not {ACC_VALUE}"
+  for b in rows.filter (·.value == ACC_VALUE) do
+    if let some d := portDiff? w b false then
+      throw s!"the verifier's shared rows (--rec-rows): its {ACC_VALUE} ports acc0 and {b.name} are two registrations: {d}"
+  if let some d := portDiff? a w false then
+    throw s!"{s.name}: its {ACC_VALUE} port {a.name} is not the verifier's {ACC_VALUE} registration (--rec-rows acc0): {d}"
+
 def TRANSCRIPT_FORMAT : String := "rec/inner-transcript/v1"
 
 /-- A round's coins, as hex strings. -/
@@ -273,16 +346,25 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
       if Registered.tableRow st.pub t p r != c then
         throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} is not rep {x}'s c_{i} (inner round {k}) of the inner transcript"
 
-/-- With an inner shape, the statement must be V*'s: it needs the verifier's own partition object and program, which of
-V*'s statements the session is (`part`, `--rec-part J`) and the verifier's own bindings (`bindings`, `--rec-bindings F`);
-then `checkOwnBindings` of those bindings against the partition object and program, `checkCircuit` on the statement's
-circuit and population as statement `part` under those bindings, and `checkOwn` on the verifier's own registered reads. -/
-def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
+/-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
+V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
+(`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
+partition object and program, which of V*'s statements the session is (`part`, `--rec-part J`) and the verifier's own
+bindings (`bindings`, `--rec-bindings F`); then `checkOwnBindings` of those bindings against the partition object and
+program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings, and
+`checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) on the verifier's own
+registered reads. -/
+def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × ByteArray)) (st : Stmt) (circuitB : ByteArray)
+    (partition : Option Json := none)
     (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) (part : Option Nat := none)
-    (bindings : Option VStar.Bindings := none) : V Unit :=
+    (bindings : Option VStar.Bindings := none) (rows : Option (Array Registered.Port) := none) : V Unit :=
   let name := st.c.unit.name
   match inner with
   | some i => do
+    if tags.name != Tags.circuit.name then
+      throw s!"{name}: one of V*'s statements, which are {Tags.circuit.name} statements (--statement {Tags.circuit.name}), not {tags.name}"
+    if !tables.isEmpty then
+      throw s!"{name}: one of V*'s statements, which read no lookup table; the verifier holds {tables.map (·.1)} (--tables, --archive)"
     let (some obj, some prog) := (partition, program)
       | throw s!"{name}: one of V*'s statements; pass the verifier's own partition object and program (--partition F, --program F)"
     let some j := part
@@ -291,7 +373,10 @@ def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partiti
       | throw s!"{name}: one of V*'s statements; pass the verifier's own bindings (--rec-bindings F, from verity_flock.rec_bindings)"
     checkOwnBindings name f obj prog
     let s ← checkCircuit i j st.c (population st) circuitB f
-    if let some r := registered then checkOwn s r
+    if let some r := registered then
+      checkOwn s r
+      checkRows s r rows
+      checkAcc s r rows
   | none =>
     if isVStar name then
       throw s!"{name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
