@@ -431,7 +431,7 @@ def recopen_block(L: int, H: int, useful: int, links: bool = True, n: int | None
     from verity_flock import circuit as FC
     from verity_flock import rec_open as R
 
-    words = {"row": R.row_words(L), "aux": R.aux_words(max(H, 1)), "acc": R.ACC_WORDS, "coef": 16 * L, "dirs": R.DIRS_WORDS,
+    words = {"row": R.row_words(L), "aux": R.aux_words(H), "acc": R.ACC_WORDS, "coef": 16 * L, "dirs": R.DIRS_WORDS,
              "out": R.OUT_WORDS, "acc_out": R.ACC_WORDS}
     ports = [p for p in words if links or p not in LINK_PORTS]
     n_sha, n_hm, ul = -(-sum(_comps(words[p]) for p in ports) // 3), FC._pow2(len(ports)), FC._slot_log(useful)
@@ -446,6 +446,26 @@ def recopen_block(L: int, H: int, useful: int, links: bool = True, n: int | None
         G *= 2
     return {"unit_log": ul, "sha512x3": n_sha, "hm96": n_hm, "vu": 2 ** ul + (n_sha + n_hm) * 2 ** SLOT_LOG, "k_log_1": k_log(1),
             "G": G, "k_log": k_log(min(G, FC._pow2(n)) if n else G)}
+
+
+_LOWERED: dict = {}
+
+
+def _unit_rows(k2, units: dict, L: int, H: int) -> tuple[int, str, bool]:
+    """``RecOpen{L, H}``'s unit rows, its grade and whether ``rec_open`` refuses H: K2's lowered count (``units.json``) where
+    it has one at 1 <= H <= 16, else this checkout's own ``rec_outer.lowering(L, H)`` (H 0 to ``rec_open.DIRS_BITS``); a
+    height ``rec_open`` refuses keeps K2's extrapolation, marked refused."""
+    from verity_flock import rec_open as R
+    from verity_flock import rec_outer as O
+
+    if 1 <= H <= 16 and f"{L},{H}" in units:
+        return units[f"{L},{H}"]["rows"], "C", False
+    if not 0 <= H <= R.DIRS_BITS:
+        return int(k2.unit_rows(units, L, H)[0]), "E", True
+    if (L, H) not in _LOWERED:
+        _LOWERED[L, H] = O.lowering(L, H).layout.useful
+        print(f"  lowered RecOpen{{{L},{H}}}: {_LOWERED[L, H]:,} unit rows", flush=True)
+    return _LOWERED[L, H], "C (lowered here)", False
 
 
 def _session_law(blocks: int, k: int, text_rows: float, fit: dict, glue: float, bpn: float) -> dict:
@@ -476,9 +496,9 @@ def proofs_c3(path: Path, prover: Path) -> dict:
 
     def recopen(L, H):
         if (L, H) not in cache:
-            useful, grade = k2.unit_rows(units, L, H)
+            useful, grade, refused = _unit_rows(k2, units, L, H)
             on, off = recopen_block(L, H, int(useful)), recopen_block(L, H, int(useful), links=False)
-            cache[L, H] = {"L": L, "H": H, "unit_rows": int(useful), "grade": grade, "refused": not 1 <= H <= 16,
+            cache[L, H] = {"L": L, "H": H, "unit_rows": int(useful), "grade": grade, "refused": refused,
                            "link_D_per_instance": on["vu"] - off["vu"]} | on
         return cache[L, H]
 
@@ -530,7 +550,7 @@ def proofs_c3(path: Path, prover: Path) -> dict:
     print(f"{'circuit':>16} {'unit rows':>10} {'VU':>10} {'xunit':>5} {'k_log(1)':>8} {'G':>3} {'links/VU':>9} refused")
     for f in sorted(cache.values(), key=lambda f: (f["L"], f["H"])):
         print(f"{f'RecOpen{{{f["L"]},{f["H"]}}}':>16} {f['unit_rows']:>10,} {f['vu']:>10,} {f['vu'] / f['unit_rows']:>5.2f} "
-              f"{f['k_log_1']:>8} {f['G']:>3} {f['link_D_per_instance']:>9,} {'H outside 1..16' if f['refused'] else ''}")
+              f"{f['k_log_1']:>8} {f['G']:>3} {f['link_D_per_instance']:>9,} {'H outside rec_open' if f['refused'] else ''}")
     print("\nper bucket: proofs' rows by layout's rule (total = V* + inner openings) vs the split's statements")
     print(f"{'workload':24} {'part':4} {'m':>3} {'im':>3} {'rule blk':>8} {'split blk':>9} {'stmts':>5} {'ses':>4} "
           f"{'prove s':>8} {'RSS':>6} {'link rows':>9} {'link D':>7} refused")
@@ -583,7 +603,7 @@ def per_audit(path: Path, prover: Path) -> dict:
 
     def recopen(L, H, n):
         if (L, H, n) not in blk:
-            u = int(k2.unit_rows(units, L, H)[0])
+            u = int(_unit_rows(k2, units, L, H)[0])
             f = recopen_block(L, H, u, n=n)
             blk[L, H, n] = _session_law(math.ceil(n / f["G"]), f["k_log"], u, fit, glue, bpn)
         return blk[L, H, n]
