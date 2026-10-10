@@ -146,8 +146,8 @@ def FIELDS : Array String := #["blocks_per_segment", "c0", "profile", "scheme", 
 
 /-- The store a SETUP_COMMIT's manifest names (`_canonical_json`, `_params`): UTF-8 JSON that is its own canonical form
 (sorted keys, no whitespace, integers only), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
-integers in range, a known payload profile, and `p = 2^w − c0 ≡ 3 mod 4` with `w` a multiple of 32. Every refusal is
-malformed. -/
+integers in range, a known payload profile, `p = 2^w − c0 ≡ 3 mod 4` with `w` a multiple of 32, and every payload below
+`p` (`reference.Params`). Every refusal is malformed. -/
 def manifestParams (data : ByteArray) : W Params := do
   let bad {α : Type} (m : String) : W α := fault MALFORMED m
   let some text := String.fromUTF8? data | bad "manifest is not canonical UTF-8 JSON"
@@ -167,9 +167,11 @@ def manifestParams (data : ByteArray) : W Params := do
     bad "manifest geometry is out of range"
   let bits ← payloadBits profile w.toNat
   let q : Params := ⟨w.toNat, c0, bps.toNat, segments.toNat, profile, bits⟩
-  if w < 8 || w % 32 != 0 || c0 < 1 || c0 % 4 != 1 || q.p % 4 != 3 then bad "no P2 prime: w, c0"
+  if w < 8 || w % 32 != 0 || c0 < 1 || c0 % 4 != 1 || q.p % 4 != 3 then
+    bad "no P2 prime: P2 needs w a multiple of 32 bits and c0 = 1 mod 4 with p = 2^w - c0 = 3 mod 4"
   let payloadBytes := max 1 (bits / 8)
-  if !(0 < payloadBytes && payloadBytes < q.widthBytes) then bad "no P2 prime: payload"
+  if !(0 < payloadBytes && payloadBytes < q.widthBytes) then bad "no P2 prime: a payload is fewer bytes than a block"
+  if q.p ≤ 2 ^ (8 * payloadBytes) then bad "no P2 prime: every payload is below p"
   pure q
 
 /-! ## Setup -/
