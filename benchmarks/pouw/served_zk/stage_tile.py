@@ -1,17 +1,14 @@
 """stage_tile.py COMMIT_DIR PARAMS UNIT OUT: unit UNIT of a served window as one C-Flock --zk unit, on the committer's rows.
 
-The unit is `Pc8TileHidden{K=4096,TM=1,TN=1,DEV=sm120}`: A row i (fp8-p, role X, row-seg) and B row j (fp8-p, role W, v2)
+The unit is `Pc8TileSide{K=4096,TM=1,TN=1,DEV=sm120}`: A row i (fp8-pi, role X, row-seg) and B row j (fp8-pi, role W, v2)
 of the window's entry the unit falls in (`pouw.window.tile_at` of ``advice.json``: a call's kept rows, or the filler's
-zero rows), under the salts `served_commit.py commit` committed them with, so the proof's committed rows have the b ‖ c
-the entry's leaves hold; the tile digest is its output row.  `class_statement.stage_unit` writes circuit.txt, inst.bin
-and pub.bin under OUT; this writes pin.txt, stage.json and opening.json (the prover's: the entry, its salt and path to the
-window root, and each row's frame-v3 path to the entry's side root).  As `hidden_zk/stage.py`'s hiding tile, the PoUW word primitives lower through
-`hash_scratch`'s pieces, checked against their primitives first, so a result is labelled 'hash scratch'; `HZ_STAGE`
-(``fast``, the default, or ``library``) as there.
-
-It refuses a window whose side rows carry their index (`pouw.window.side_row`, every window `served_commit.py commit`
-writes now): `Pc8TileHidden`'s input rows are bare fp8-p rows, so its b ‖ c is not the side tree's, until TileRead's
-template reads the index word."""
+zero rows), each a side row with its index field (`pouw.window.side_row`), under the salts `served_commit.py commit`
+committed them with, so the proof's committed rows have the b ‖ c the entry's leaves hold; the tile digest is its output
+row.  `class_statement.stage_unit` writes circuit.txt, inst.bin and pub.bin under OUT; this writes pin.txt, stage.json
+and opening.json (the prover's: the entry, its salt and path to the window root, and each row's frame-v3 path to the
+entry's side root).  As `hidden_zk/stage.py`'s hiding tile, the PoUW word primitives lower through `hash_scratch`'s
+pieces, checked against their primitives first, so a result is labelled 'hash scratch'; `HZ_STAGE` (``fast``, the
+default, or ``library``) as there.  A window committed before side rows carried their index is refused."""
 from __future__ import annotations
 
 import json
@@ -58,15 +55,14 @@ def main() -> None:
     k = params["k"]
     e, i, j = Wd.tile_at(SC.entries_of(advice), unit)
     side = {"a": priv[e]["a"], "b": priv[e]["b"]}
-    bits = 16 * L.ROW_WORDS["fp8-p"](k)
-    if 16 * side["a"]["words"].shape[1] != bits:
-        raise SystemExit(f"{src}: its side rows are {side['a']['words'].shape[1]} words, not Pc8TileHidden's bare fp8-p "
-                         f"rows of {bits // 16}: they carry their index (pouw.window.side_row), which TileRead's template "
-                         "reads and Pc8TileHidden does not")
-    d = pc8.templates(k, TILE, DEV, hidden=True)["tile"]
-    in_rows = [("a0", L.ROW_SCHEMA["fp8-p", ROLE_X], bits, ["ac[0]", "pa[0]"]),
-               ("b0", L.ROW_SCHEMA["fp8-p", ROLE_W], bits, ["bc[0]", "pb[0]"])]
-    sr = L.statement_rows(pc8.PORTS["tile"], k, {p: 1 for p in ("ac", "pa", "bc", "pb")})
+    bits = 16 * L.ROW_WORDS["fp8-pi"](k)
+    if any(16 * side[s]["words"].shape[1] != bits for s in side):
+        raise SystemExit(f"{src}: its side rows are {side['a']['words'].shape[1]} words, not Pc8TileSide's fp8-pi rows of "
+                         f"{bits // 16}: a window committed before side rows carried their index (pouw.window.side_row)")
+    d = SC.template(k)
+    in_rows = [("a0", L.ROW_SCHEMA["fp8-pi", ROLE_X], bits, ["ac[0]", "pa[0]", "ia[0]"]),
+               ("b0", L.ROW_SCHEMA["fp8-pi", ROLE_W], bits, ["bc[0]", "pb[0]", "jb[0]"])]
+    sr = L.statement_rows(pc8.SIDE_PORTS, k, {p: 1 for p in ("ac", "pa", "ia", "bc", "pb", "jb")})
     outs_ = sr["row_schemas"][2:]
     runs = sr.get("out_row_ports") or [1] * len(outs_)
     out_rows, at = [], 0

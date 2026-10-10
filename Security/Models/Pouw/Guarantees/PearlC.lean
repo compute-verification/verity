@@ -86,16 +86,6 @@ def _root_.Pouw.Guarantees.PearlC.GammaFp4Sm120LoopLut256_8192 : Prop :=
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- `G_γ^U` gives `G_γ` when `W_ref` is non-negative. -/
-def _root_.Pouw.Guarantees.PearlC.GammaUImpliesGamma : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u) (h : GγU CM P D γ η),
-    Gγ CM P D γ η
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `γ = 5473473967/895794400000` (0.61102%). -/
@@ -194,58 +184,6 @@ def _root_.Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut : Prop :=
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-open Finset Pouw.Fp8Atom
-
-/-- **The fragment corollary** (the 16:05Z ruling's item 5), a supporting line: P2 rests on `ttOutRowSeed_of_ttOut`
-alone, and this takes no TT_OUT. Under the named assumption `FragDraw` at `Λ = 100`, (C4) and (C6): for every
-adversary program `T` with at most `q` oracle calls whose result is a skip program on unit `u`, the probability over
-the oracle that the skip program is in the skip class and saves more than `(4096/11)·100` units per row of the unit,
-against the honest program on some activation input and state, is at most `(q + m)/2^128`, `m` the unit's rows. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutRowSeedSkipClass : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] {CM : CostModel Q R S} {sem : PearlCSem Q R S} {p : Pipeline} {G : ℕ} {s : S} {U : Workload} {u : ℕ} {xJ : Q} {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (e : SkipEmbed CM sem p G U u) (hD : sem.RowDrawn s U u xJ key) (hF : Assumptions.FragDraw sem p G s U u key 100) (hC4 : CM.FragmentPriced e) (T : QTree Q R SkipProgram) (q : ℕ) (hq : ∀ H, T.calls H ≤ q),
-    pr (fun H : Q → R => (T.eval H).InClass sem p G s U u H ∧ ∃ (act : ℕ → Codes) (σ : State),
-      4096 / 11 * 100 * ((U.layout.shape u).m : ℝ) <
-        CM.cost e.honest H U act σ s - CM.cost (e.embed (T.eval H)) H U act σ s)
-    ≤ (q + (U.layout.shape u).m) / 2 ^ 128
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **Row additivity for P2 per audit tile (a theorem).** rev1's TT_OUT per tile at `sem` bounds the row-seeded game
-per tile at `sem'`, with the cap checked per credited row: each credited row of a good tile is a good one-row tile of
-the split layout carrying that row's credit, and the error is the split layout's, at `R = Σ_u m_u` units. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutTileRowSeedOfTTOutTile : Prop :=
-  ∀ {Q R S : Type} {sem sem' : PearlCSem Q R S} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S} {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16),
-    TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ)
-    (pearlCDomainDev d) (1 / 400)
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **An admitted unit has at most a `ρ` share of its atom-words flagged**, at every shape: a debit within
-`ρ·chainCreditDev` has `32·atoms ≤ ρ·m·k·n`. -/
-def _root_.Pouw.Guarantees.PearlC.ChainCapFlaggedLe : Prop :=
-  ∀ (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (ρ : ℚ) (s : Shape) (x : Debit) (h : debitDev d x ≤ ρ * chainCreditDev d s),
-    32 * (x.atoms : ℚ) ≤ ρ * ((s.m : ℚ) * s.k * s.n)
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.Fp8Atom
-
-/-- **The saving bound** (`fragSkip_saving_le`): at 4,096 units per omitted instruction, the undebited slots of a skip
-program whose words stay correct save at most `(4096/11)·Σ_i fragCount i`. -/
-def _root_.Pouw.Guarantees.PearlC.FragSkipSavingLe : Prop :=
-  ∀ (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ → Finset (ℕ × ℕ)) (hb : ∀ s ∈ slots, 16 * s.1 + 16 ≤ m) (hJ : ∀ s ∈ slots, s.2.1 < n / 8) (ht : ∀ s ∈ slots, s.2.2 < k / 32) (hp : ∀ s ∈ slots, (patch s).card ≤ 5) (hcorrect : ∀ (i : Fin m) (j : Fin n), SkipSetU p G (rowAtoms (A i) (B j)) (omittedAt slots patch i j)) (hundebited : ∀ s ∈ slots, ∀ (i : Fin m) (j : Fin n), (i : ℕ) / 16 = s.1 → (j : ℕ) / 8 = s.2.1 → ((i : ℕ), (j : ℕ)) ∉ patch s → SkipP.flagsAt p G k (A i) (B j) s.2.2 = false),
-    (4096 * slots.card : ℚ) ≤ 4096 / 11 * ∑ i : Fin m, (fragCount p G A B i : ℚ)
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions
 
 /-- Pearl-C4's chain-only γ at FP32 8.00, the `lut256` scale path, 8192³, cap `1/400`:
@@ -286,40 +224,6 @@ open Pouw.PearlC.Assumptions
 def _root_.Pouw.Guarantees.PearlC.GammaFp4Sm120IssueLut256_8192 : Prop :=
   ∀ (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At 8 Fp4ScalePath.lut256),
     gammaFp4 d (1 / 400) sh8192 = 6492677 / 917600000
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- A record without promotion admits a `1 × 1 × 128` unit. -/
-def _root_.Pouw.Guarantees.PearlC.DomainDevUnpromoted : Prop :=
-  ∀ (d : PearlCDevice) (hG : d.G = 0),
-    pearlCDomainDev d ⟨1, fun _ => ⟨1, 1, 128⟩, fun _ => 0⟩
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Assumptions Pouw.Fp8Atom Matrix
-
-/-- The worst case at 16384³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
-def _root_.Pouw.Guarantees.PearlC.Gamma16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)),
-    Gγ CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh16384)
-    ((536953 / 103540000 : ℚ) : ℝ) εPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Assumptions Pouw.Fp8Atom Matrix
-
-/-- The worst case at 8192³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
-def _root_.Pouw.Guarantees.PearlC.Gamma8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)),
-    Gγ CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh8192)
-    ((281273 / 52340000 : ℚ) : ℝ) εPearlC
 
 end Pouw.PearlC
 
@@ -905,69 +809,5 @@ def _root_.Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192 : Prop :=
     GγSampled CM (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCTilesDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) εPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **The chain cap asserts less than the per-unit cap at the same `ρ`.** -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevChainCapOfCap : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDevChainCap CM d sem ρ
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **A stricter cap asserts less under rev1**: rev1's TT_OUT at a device record at cap `ρ` gives it at any cap
-`ρ' ≤ ρ ≤ 1`. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1CapAnti : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevRev1 CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ'
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **rev1 asserts less than the granted TT_OUT at the same record**, for non-negative prices and `0 ≤ ρ ≤ 1`. An
-implication only: its premise `TTOutPearlCDev` is falsified by the first-promotion skip (rating D) at the H100 and
-sm_120 records, so it carries no evidence for rev1. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfGranted : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-open Classical in
-/-- **TT_OUT over U asserts more than the (C̃, U) row** at the same record, for non-negative prices and `ρ ≤ 1`. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfUOnly : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevUOnly CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **A stricter cap asserts less**: TT_OUT at a device record at cap `ρ` gives it at any cap `ρ' ≤ ρ ≤ 1`. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevCapAnti : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDev CM d sem ρ'
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **The chain cap per tile asserts less than the per-unit cap per tile at the same `ρ`.** -/
-def _root_.Pouw.Guarantees.PearlC.TTOutTilePearlCDevChainCapOfCap : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutTilePearlCDev CM d sem ρ),
-    TTOutTilePearlCDevChainCap CM d sem ρ
 
 end Pouw.PearlC

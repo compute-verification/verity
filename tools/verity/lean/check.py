@@ -110,7 +110,8 @@ Each package's report lists, without failing, the spec definitions that no guara
 package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
-too; its reading and replay run beside the builds that follow.
+too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
+Its reading and replay run beside the builds that follow.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -119,6 +120,7 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import difflib
 import gzip
 import hashlib
@@ -1058,7 +1060,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
     one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
-    hypothesis too, and a conjunction counts as its conjuncts. A guarantee under `shape.frozen` ({name: why it
+    hypothesis too, and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
+    entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A guarantee under `shape.frozen` ({name: why it
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
@@ -1134,13 +1137,25 @@ def shape(policy: dict, facts: dict) -> list[str]:
 
 def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
     """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
-    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one."""
-    if not entry or not entry.get("function") or entry.get("outcome") not in OUTCOMES:
+    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one, of
+    the entry's function, or of its own when the entry lists `conjuncts` (one `{function, outcome}` each, in order) in
+    place of one function and outcome for them all."""
+    named = lambda e: isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
+    each = (entry or {}).get("conjuncts")
+    if each is not None:
+        if "function" in entry or "outcome" in entry:
+            return ["has an entry under shape.properties with both `conjuncts` and a function or outcome for them all: "
+                    "give one or the other"]
+        if not isinstance(each, list) or len(each) != len(got) or not all(map(named, each)):
+            return [f"has {len(got)} conjunct(s), and its entry's `conjuncts` must list one entry naming its function "
+                    f"and its outcome ({', '.join(OUTCOMES)}) for each, in order"]
+    elif not named(entry):
         return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
+    each = each or [entry] * len(got)
     if len(got) == 1:
-        return part_refusals(entry, got[0], premises, conjectures)
-    return [f"(conjunct {k + 1}) {w}" for k, part in enumerate(got)
-            for w in part_refusals(entry, part, premises, conjectures)]
+        return part_refusals(each[0], got[0], premises, conjectures)
+    return [f"(conjunct {k + 1}) {w}" for k, (e, part) in enumerate(zip(each, got))
+            for w in part_refusals(e, part, premises, conjectures)]
 
 
 def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
@@ -1603,11 +1618,39 @@ def path_deps(pkg: Path) -> list[Path]:
             if d.get("type") == "path"] if manifest.exists() else []
 
 
+def writable(pkg: Path) -> list[Path]:
+    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's."""
+    return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
+
+
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the `.lake` directories of the package and its path dependencies
-    (``argv`` as is where there is no sandbox)."""
-    rw = [str(d / ".lake") for d in [pkg.resolve(), *path_deps(pkg)]]
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *rw, "--", *argv] if sandboxed() else argv
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories (``argv`` as is where there
+    is no sandbox)."""
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+
+
+#: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
+_WRITING: set[Path] = set()
+_WROTE = threading.Condition()
+
+
+@contextlib.contextmanager
+def writing(pkg: Path, log=print):
+    """Hold ``pkg``'s `writable` directories for one Lake build: two builds that share one run one at a time, and the
+    others side by side. Two dependents of one stale path dependency would both rebuild its modules into its one
+    `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135)."""
+    dirs = set(writable(pkg))
+    with _WROTE:
+        if busy := sorted(str(d.parent) for d in _WRITING & dirs):
+            log(f"build: {pkg} waits for a build that writes the .lake of {', '.join(busy)}")
+        _WROTE.wait_for(lambda: not _WRITING & dirs)
+        _WRITING.update(dirs)
+    try:
+        yield
+    finally:
+        with _WROTE:
+            _WRITING.difference_update(dirs)
+            _WROTE.notify_all()
 
 
 def olean_files(lib: Path) -> list[Path]:
@@ -1802,9 +1845,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         for step, argv in (("setup", None),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
-            s = time.monotonic()
-            rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
-            rep["seconds"][step] = round(time.monotonic() - s, 1)
+            with contextlib.nullcontext() if argv is None else writing(pkg, log):
+                s = time.monotonic()
+                rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
+                rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
                 return rep

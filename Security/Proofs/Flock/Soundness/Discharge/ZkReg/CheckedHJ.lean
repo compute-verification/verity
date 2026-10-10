@@ -28,9 +28,9 @@ theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Arr
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOk c = true)
+    {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (hTags : TagsOkZHJ I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKR I own o)
-    (rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     (hown : OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt) :
     rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port) := by

@@ -99,12 +99,6 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
-output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
-registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
-def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
-  Registered.check st.c st.pub registered (Registered.derived st.partition)
-
 /-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the
 verifier's own `--identifier F` (`own`, its RFC 8785 form) in RFC 8785 form: `canon`'s, on the domain where it is RFC 8785
 (`Program.domainError`). The public digest binds the header, so Σ binds the identifier; a header with one and no `F`, or
@@ -377,7 +371,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
-  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
+  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure

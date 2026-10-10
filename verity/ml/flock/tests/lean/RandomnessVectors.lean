@@ -149,5 +149,5 @@ def windowVectors : Json := .arr <| windows.toArray.map fun calls =>
 
 def main (args : List String) : IO Unit := do
   let .ok j := Json.parse (← IO.FS.readFile args[0]!) | throw (IO.userError "vectors.json is not JSON")
-  IO.println (Json.mkObj [("source", .str "backends/flock/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh"),
+  IO.println (Json.mkObj [("source", .str "verity/ml/flock/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh"),
     ("kat", kat j), ("extra", extra), ("window", windowVectors)]).compress

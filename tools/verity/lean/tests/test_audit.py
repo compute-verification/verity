@@ -1061,6 +1061,56 @@ def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_r
     assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
+def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_path, monkeypatch):
+    """`a` and `b` both require `d` by path, as four of flock's dependents did in check 4cd5, whose builds rebuilt flock's
+    stale modules into its one `.lake/build` at once, so that one's `clang` read a `.c` file another was rewriting. The first
+    fake build holds on until the other package's build has started or waits for it: without the wait, the two overlap."""
+    d, a, b = tmp_path / "d", tmp_path / "a", tmp_path / "b"
+    for p in (d, a, b):
+        p.mkdir()
+    for p in (a, b):
+        (p / A.POLICY).write_text(json.dumps({"roots": [p.name.upper()]}))
+        (p / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "d", "dir": "../d"}]}))
+    state = threading.Condition()
+    building, done, overlaps, waits = set(), set(), [], {}
+
+    def fake_run(argv, cwd, log=None, timeout=0):
+        me, other = cwd.name, ({"a", "b"} - {cwd.name}).pop()
+        with state:
+            if building:
+                overlaps.append((me, sorted(building)))
+            building.add(me)
+            state.notify_all()
+            state.wait_for(lambda: other in building or other in waits or other in done)
+            building.discard(me)
+            done.add(me)
+            state.notify_all()
+        return 1, "fake build"
+
+    def log_for(name):
+        def log(line):
+            with state:
+                waits[name] = line
+                state.notify_all()
+        return log
+
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    reps = {}
+    threads = [threading.Thread(target=lambda p=p: reps.__setitem__(
+        p.name, A.audit(p, tmp_path / "out", build=True, log=log_for(p.name), runs=False))) for p in (a, b)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert overlaps == []
+    [(second, line)] = waits.items()
+    assert line == f"build: {tmp_path / second} waits for a build that writes the .lake of {d.resolve()}"
+    assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
+
+
 def test_a_guarantee_is_proved_by_exactly_one_package():
     spec = facts(modules=["P.Defs"], pins={"P.t": {"kind": "missing"}, "P.u": fact() | {"module": "P.Defs"},
                                             "P.v": {"kind": "missing"}, "P.w": {"kind": "missing"}})
@@ -1384,6 +1434,25 @@ def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_mu
     assert out == ["(conjunct 2) says nothing about P.step or P.LIMIT, the function its entry names"]
     assert A.reaches("P.protocol.check", {"P.protocol", "P.Protocol.check"})
     assert not A.reaches("P.protocol.check", {"P.protocol"})
+
+
+def test_an_entry_may_name_each_conjuncts_own_function_and_outcome():
+    """`conjuncts` in an entry: soundness of a check and simulation of a server, one statement, each conjunct held to its
+    own function and outcome, so the second needs no acceptance of the first's function; the list has one entry per
+    conjunct, each naming both, and replaces the entry's own function and outcome rather than joining them."""
+    sound = part([ACCEPTS], inputs=[("x", 0)], conclusion=["P.Good"])
+    sim = part(inputs=[("s", 0)], conclusion=["P.run"])
+    entry = {"conjuncts": [{"function": "P.check", "outcome": "accept"}, {"function": "P.run", "outcome": "none"}]}
+    assert A.refusals(entry, [sound, sim], []) == []
+    assert A.refusals({"function": "P.check", "outcome": "accept"}, [sound, sim], [])[0].startswith(
+        "(conjunct 2) takes no hypothesis that its function returned accept")
+    swapped = {"conjuncts": entry["conjuncts"][::-1]}
+    assert {w.split(")")[0] for w in A.refusals(swapped, [sound, sim], [])} == {"(conjunct 1", "(conjunct 2"}
+    for bad in ({"conjuncts": entry["conjuncts"][:1]}, {"conjuncts": [entry["conjuncts"][0], {"function": "P.run"}]},
+                {"conjuncts": "P.run"}):
+        assert A.refusals(bad, [sound, sim], [])[0].startswith("has 2 conjunct(s)"), bad
+    both = entry | {"function": "P.check"}
+    assert "both `conjuncts` and a function" in A.refusals(both, [sound, sim], [])[0]
 
 
 def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink():

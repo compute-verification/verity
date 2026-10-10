@@ -575,7 +575,9 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
                 extra: Sequence[str] = ()) -> dict[str, Any]:
     """One memory challenger process (`script`, with `extra` arguments) against the responder `start()` returns, judged
     against `limit_ns` when given, with `load` run until the memory challenger exits.  Every load call is synchronized
-    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones."""
+    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones.  The answers' blocks stay in
+    `audit-{tag}.json` beside `ready-{tag}.json`, where a replay of the verdict reads them, and out of the returned copy,
+    which the result embeds."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
@@ -595,6 +597,10 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
     counts = {"answered": int(responder.answered()), "pings": int(responder.pings())}
     responder.stop()
     doc = json.loads(result.read_text()) if result.exists() else {}
+    for r in doc.get("records") or ():
+        for a in r.get("answers") or () if isinstance(r, dict) else ():
+            if isinstance(a, dict):
+                a.pop("block", None)
     return {"rc": proc.returncode, "forwards_completed": completed, "responder": counts, **doc}
 
 
