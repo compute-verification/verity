@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
 import Proofs.Flock.Soundness.Discharge.ZkBind.At
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
 
@@ -19,7 +20,7 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
 * `placeZH`: each drawn unit's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`; `decAgreeH`: the two
   decoders read one witness alike.
 * `layZH`, `rsZH`, `rsZH_computes`: the public layout and rows moved to the `--zk` tables (`LayoutZ.ofShadow`,
-  `HmRowsZ.ofShadow`).
+  `HmRowsZX.ofShadow`).
 * `zk_flock_countC_execOS_atH`: #874's count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with those.
 -/
 
@@ -128,7 +129,7 @@ noncomputable abbrev layShH :
 
 /-- **`rs` at the public plan**: `keyRowsH` at `sitesShH`, its circuit conditions from `scopeOk`, with `hsite` from
 `sitesShH_bcSite`. -/
-noncomputable abbrev rsShH : Binding.HmRows (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
+noncomputable abbrev rsShH : Binding.HmRowsX (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShH_bcSite dj y₀ ht hc hscope hU hpub hpt)
@@ -172,14 +173,14 @@ noncomputable abbrev layZH :
   LayoutZ.ofShadow (planAtZKH_S dj y₀) (layShH dj y₀ ht hc hscope hU (pub := pub)) (decAgreeH dj y₀ ht hc hscope hU)
 
 /-- **`rs` at the hidden-output `--zk` tables**: `rsShH` moved along `planAtZKH_S`. -/
-noncomputable abbrev rsZH : HmRowsZ (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
-  HmRowsZ.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShH dj y₀ ht hc hscope hU hpub hpt)
+noncomputable abbrev rsZH : HmRowsZX (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
+  HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShH dj y₀ ht hc hscope hU hpub hpt)
 
 /-- **`hHm` at the hidden-output `--zk` tables' rows** (`rsShH_computes`, moved along): in a satisfying witness of a
 drawn unit's `--zk` table, each row's `b ‖ c` at the unit's site, input or output, is the commit string of the row's
 bytes under the salt at its `hm96` slot. -/
 theorem rsZH_computes : (rsZH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
-  HmRowsZ.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
+  HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
     (rsShH_computes dj y₀ ht hc hscope hU hpub hpt)
 
 /-- **The compiled `--zk` count curve at the hidden-output `--zk` tables, its places and binding built**:
