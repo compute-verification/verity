@@ -211,7 +211,20 @@
    }
   }
  },
- "guarantees": {},
+ "guarantees": {
+  "Flock.SecurityProofs.RecursiveAudit": {"owner": "@proofs"}
+ },
+ "shape": {
+  "premises": ["Proofs.Flock.Soundness.Assumptions"],
+  "properties": {
+   "Flock.SecurityProofs.RecursiveAudit": {
+    "conjuncts": [
+     {"function": "FlockSoundness.Discharge.Recursion.VerifiesV", "outcome": "accept"},
+     {"function": "Flock.Firewall.run", "outcome": "none"}
+    ]
+   }
+  }
+ },
  "dependencies": {
   "Arklib": "dd87231a60935b888a323851a96eb3dc4d6b1dd859510a5eafccdaa0d1119015",
   "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
