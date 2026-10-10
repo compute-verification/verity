@@ -35,21 +35,39 @@ section w
 
 variable (sh : Shape) (w comb comb' : Array F128) (cons cons' : ℕ → ℕ → F128)
 
-local macro "wfield" : tactic =>
-  `(tactic| (simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
-    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl))
-
-theorem decoded_ab : (decoded sh w comb cons).ab = (decoded sh w comb' cons').ab := by wfield
-theorem decoded_c : (decoded sh w comb cons).c = (decoded sh w comb' cons').c := by wfield
-theorem decoded_zc : (decoded sh w comb cons).zc = (decoded sh w comb' cons').zc := by wfield
-theorem decoded_fa : (decoded sh w comb cons).fa = (decoded sh w comb' cons').fa := by wfield
-theorem decoded_fb : (decoded sh w comb cons).fb = (decoded sh w comb' cons').fb := by wfield
-theorem decoded_lc : (decoded sh w comb cons).lc = (decoded sh w comb' cons').lc := by wfield
-theorem decoded_zp : (decoded sh w comb cons).zp = (decoded sh w comb' cons').zp := by wfield
-theorem decoded_rs : (decoded sh w comb cons).rs = (decoded sh w comb' cons').rs := by wfield
-theorem decoded_ood : (decoded sh w comb cons).ood = (decoded sh w comb' cons').ood := by wfield
-theorem decoded_msgs : (decoded sh w comb cons).msgs = (decoded sh w comb' cons').msgs := by wfield
-theorem decoded_yr : (decoded sh w comb cons).yr = (decoded sh w comb' cons').yr := by wfield
+theorem decoded_ab : (decoded sh w comb cons).ab = (decoded sh w comb' cons').ab := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_c : (decoded sh w comb cons).c = (decoded sh w comb' cons').c := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_zc : (decoded sh w comb cons).zc = (decoded sh w comb' cons').zc := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_fa : (decoded sh w comb cons).fa = (decoded sh w comb' cons').fa := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_fb : (decoded sh w comb cons).fb = (decoded sh w comb' cons').fb := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_lc : (decoded sh w comb cons).lc = (decoded sh w comb' cons').lc := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_zp : (decoded sh w comb cons).zp = (decoded sh w comb' cons').zp := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_rs : (decoded sh w comb cons).rs = (decoded sh w comb' cons').rs := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_ood : (decoded sh w comb cons).ood = (decoded sh w comb' cons').ood := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_msgs : (decoded sh w comb cons).msgs = (decoded sh w comb' cons').msgs := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
+theorem decoded_yr : (decoded sh w comb cons).yr = (decoded sh w comb' cons').yr := by
+  simp only [decoded, RecAlgebra.Messages.map, symbolic, Array.map_map, Function.comp_def,
+    RecAlgebra.Lin.eval_var, RecAlgebra.KV.map]; try rfl
 
 /-- **A rep's messages read only w**: the proof files (`proofOf`) of two reps that hold the same w have the same
 messages (`repMsgs`), whatever their comb, consistency sums, coins and claims. -/
