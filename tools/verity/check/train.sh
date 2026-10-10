@@ -22,9 +22,10 @@
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, a COMMIT that is
-# empty (its tree is its first parent's) or that origin doesn't hold, and a BASE that isn't an ancestor of COMMIT.
+# empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
+# doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() against=
 while [ $# -gt 0 ]; do
@@ -42,15 +43,20 @@ done
 root=$(git rev-parse --show-toplevel)
 sha=$(git -C "$root" rev-parse --verify "$commit^{commit}")
 git -C "$root" fetch -q origin
-[ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse -q --verify "$sha^1^{tree}" || true)" ] \
-  || { echo "train: ${sha:0:12} is empty (its tree is its parent's): nothing to check" >&2; exit 1; }
 [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
   || { echo "train: ${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds" >&2; exit 1; }
 if [ -n "$against" ]; then
   base=$(git -C "$root" rev-parse --verify "$against^{commit}") || { echo "train: --against $against: no such commit" >&2; exit 1; }
   git -C "$root" merge-base --is-ancestor "$base" "$sha" \
     || { echo "train: --against ${base:0:12} is not an ancestor of ${sha:0:12}" >&2; exit 1; }
+elif git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main; then
+  base=$(git -C "$root" rev-parse -q --verify "$sha^1" || true)
+else
+  base=$(git -C "$root" merge-base "$sha" refs/remotes/origin/main) \
+    || { echo "train: ${sha:0:12} shares no history with origin/main" >&2; exit 1; }
 fi
+[ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
+  || { echo "train: ${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check" >&2; exit 1; }
 tree="${TMPDIR:-/tmp}/train-${sha:0:12}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
 git -C "$root" worktree add -q --detach "$tree" "$sha"
