@@ -28,6 +28,7 @@ import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.PublicAudit
+import Proofs.Flock.Recursive.PublicAuditProof
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -43,4 +44,4 @@ in them, which never stops (`OuterAbort`), V*'s outer sessions (`Sessions`) and 
 `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), (ii) stated about the firewall's code
 and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), and its proof (`FirewallZK`), and the recursive
 audit at public units, the inner statement the verifier's own from its partition object and program
-(`PublicAudit`). -/
+(`PublicAudit`), and its proof (`PublicAuditProof`). -/
