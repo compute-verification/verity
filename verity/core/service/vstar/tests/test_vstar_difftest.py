@@ -533,8 +533,8 @@ def _vstar(tmp_path: Path, *args) -> bytes:
 #: `rec_outer.subcircuit(8, 1)`'s program digest (core's codec), and the circuit file `compose` writes under it with the
 #: bindings `a…a` and `b…b`.
 REC_OPEN_8_1 = {"RecOpen_v4{LANES=8,H=1}": "cb8c446680677966b08cdf47d09426438abcf47e3ac7cff5f76cd0225ef157ce"}
-REC_OPEN_8_1_FILE = ("53f94750ba21b8d16f489eb419cce68160af910f414df000dcc6f0f348a08eb4"
-                     "21599bc8e20d7cc3b6985b011c3b303acd31bff8c609c8fd6622522ae2bcff46", 92449954)
+REC_OPEN_8_1_FILE = ("1087318c40a3a8da1994bd1eae6c836ea7025bc17878cf187cf7aad290ad4bfe"
+                     "afb71f00d0e0802270e76a47c5ef50213a02a6f5252151f654fbdc5c4ee661ce", 92449957)
 
 
 @pytest.mark.slow

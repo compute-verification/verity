@@ -44,6 +44,8 @@ class Reads:
         self.allowed += (*self.prefix, self.here)                                       # the tracer itself
         self.allowed_files = frozenset(p for p in paths if not os.path.isdir(p))
         self.inside = os.path.join(self.root, "")
+        #: "0" for a suite whose keys leave Markdown out (`suites.markdown`): every `.md` it opens is outside its inputs
+        self.markdown = env.get("VERITY_SUITE_MARKDOWN", "1") != "0"
         self.log = env.get("VERITY_SUITE_READS")
         self.busy = False
         self.sent: set[tuple[str, str, str]] = set()
@@ -63,9 +65,12 @@ class Reads:
 
     def outside(self, path: str) -> bool:
         """Whether ``path`` (absolute and normalized) is a repository file outside the inputs; a cached module is inside when its
-        source is."""
-        return (path.startswith(self.inside) and not path.startswith(self.allowed) and path not in self.allowed_files
-                and _source(path) not in self.allowed_files)
+        source is, and Markdown is outside them in a suite whose keys leave it out."""
+        if not path.startswith(self.inside):
+            return False
+        if not self.markdown and path.endswith(".md") and not path.startswith((*self.prefix, self.here)):
+            return True
+        return not path.startswith(self.allowed) and path not in self.allowed_files and _source(path) not in self.allowed_files
 
     def traced(self, path: str) -> str | None:
         """The repository path a key narrowed to what the tests use holds for an open of ``path``; None outside the repository,

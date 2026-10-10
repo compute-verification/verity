@@ -4,9 +4,10 @@
 //! so its verdicts are the Lean verifier's.
 //!
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, so the Lean
-//! check's rules on those hold of every statement it sets up, as do its parse and its public file's load.
+//! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
+//! all have hidden outputs, so the circuit's check is `scopeOkH`.
 
-use crate::circuit::{port_cols, Composite, Instances, STATEMENT};
+use crate::circuit::{port_cols, Composite, Instances, Port, STATEMENT};
 use crate::ir_block::IrUnitNet;
 
 const WORD: usize = 128;
@@ -38,8 +39,20 @@ pub fn port_reads(net: &IrUnitNet) -> bool {
     (n..net.const_pos).all(|r| row(&net.a, r).iter().chain(row(&net.b, r)).all(|&x| x >= n || mask[x]))
 }
 
-/// `ProvedScope.scopeWhy` of a circuit outside `scopeOk`, `None` inside: the unit reads only its leaf group, returns the
-/// outputs, has at most `2^32` rows and reads only port bits among its inputs, and every row is a `sha512/row/v1` row.
+/// `ProvedScope.v1Ports`' row: a `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+fn v1_row(p: &Port) -> bool {
+    !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0
+}
+
+/// `ProvedScope.v2Row`: an unsegmented `sha512/row/v2` row of `16 · words` bits, its bytes filling its compressions' blocks
+/// and ending, with SHA-512's 17 bytes of padding, in its hm96 slot's block.
+fn v2_row(p: &Port) -> bool {
+    p.v2 && p.segs.is_none() && p.bits == 16 * p.words && WORD * p.comps <= 2 * p.words && 2 * p.words + 17 <= WORD * (p.comps + 1)
+}
+
+/// `ProvedScope.scopeWhy true` of a circuit outside `scopeOkH`, `None` inside: the unit reads only its leaf group, returns
+/// the outputs, has at most `2^32` rows and reads only port bits among its inputs, and every row is a `sha512/row/v1` row or
+/// every row a `v2_row`, one output port each.
 pub fn circuit_why(c: &Composite) -> Option<String> {
     let unit = c.unit();
     if unit.in_groups.len() != 1 {
@@ -50,8 +63,9 @@ pub fn circuit_why(c: &Composite) -> Option<String> {
         Some(format!("a unit of 2^{} rows", unit.unit_log))
     } else if !port_reads(unit) {
         Some("a unit row reading an input column that is not a port bit".into())
-    } else if !c.ports.iter().all(|p| !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0) {
-        Some("a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk".into())
+    } else if !c.ports.iter().all(v1_row) && !(c.ports.iter().all(v2_row) && c.out_row_ports.iter().all(|&k| k == 1)) {
+        Some("rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented \
+              sha512/row/v2 rows of 16 · words bits ending in their hm96 block, one output port each".into())
     } else {
         None
     }
@@ -129,6 +143,25 @@ mod tests {
         assert_eq!(statement_why("verity/flock-circuit", false, true, 2, true).unwrap(), "public input ports (--public-inputs)");
         assert_eq!(statement_why("verity/flock-circuit", false, true, 2, false), None);
         assert_eq!(statement_why("verity/flock-circuit", false, false, 1, false), None);
+    }
+
+    fn port(words: usize, comps: usize, bits: usize, v2: bool, segs: Option<Vec<(usize, usize)>>) -> Port {
+        Port { name: "x".into(), words, comps, bits, v2, segs }
+    }
+
+    #[test]
+    fn rows_in_scope_are_lean_v1_or_v2_rows() {
+        assert!(v1_row(&port(64, 1, 1024, false, None)));
+        assert!(!v1_row(&port(64, 0, 1024, false, None)));
+        assert!(!v1_row(&port(64, 1, 1024, true, None)));
+        // a v2 row of 64 or 100 words ends, padded, in its slot's block; at 120 its last 112 bytes leave no room for the padding
+        assert!(v2_row(&port(64, 1, 1024, true, None)));
+        assert!(v2_row(&port(100, 1, 1600, true, None)));
+        assert!(!v2_row(&port(120, 1, 1920, true, None)));
+        assert!(!v2_row(&port(32, 1, 512, true, None)));
+        assert!(!v2_row(&port(64, 1, 1000, true, None)));
+        assert!(!v2_row(&port(64, 1, 1024, true, Some(vec![(1024, 1)]))));
+        assert!(!v2_row(&port(64, 1, 1024, false, None)));
     }
 
     #[test]

@@ -8,10 +8,11 @@ import Proofs.Flock.Soundness.Accounting.Numbers
 `√ρ'` by a rational upper bound `s̄` with `ρ' ≤ s̄²` (`padQueryError_le`), and the padded code's
 MCA numerator by a crude closed form (`padMcaA_le`; its terms sit below 2^-200).
 
-At C-Flock ZK's values (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7 item 6: level-0 query
-counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, padding `t = 2q₀`, a pair of extra lanes per rep),
-every table is sound to `2^-205` at `η = 1/200` for every statement shape in range (`padTableError_le_m1`).
-The rational checks run in Lean's kernel (`decide +kernel`).
+At C-Flock ZK's values (`verity/ml/flock/live/PROTOCOL.md` §7 item 6, the verifier's `Zk.queries0`: level-0
+query counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31` and 218 at `m = 32..35`, padding
+`t = 2q₀`, a pair of extra lanes per rep), every table is sound to `2^-205` at `η = 1/200` for every statement
+shape in range, at every `m` the verifier serves (`padTableError_le_m1`). The rational checks run in Lean's
+kernel (`decide +kernel`).
 -/
 
 namespace FlockSoundness.Accounting
@@ -216,12 +217,13 @@ theorem padTableError_le_up (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
 
 /-! ## C-Flock ZK's values -/
 
-/-- C-Flock ZK's level-0 query count at `m` (#123's `PROTOCOL.md` §7 item 6), where it differs from
+/-- C-Flock ZK's level-0 query count at `m` (`PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
 `fast100`'s 218. -/
 def m1Queries₀ : ℕ → ℕ
   | 25 => 277
   | 26 => 242
   | 27 => 229
+  | 28 | 29 | 30 | 31 => 219
   | _ => 218
 
 /-- C-Flock ZK's schedule at `m`: `fast100` with level 0's query count for the padded rate. -/
@@ -230,30 +232,41 @@ def m1Schedule (m : ℕ) : Schedule := ((fast100 m).getD default).withQueries₀
 /-- C-Flock ZK's padding at `m`: `t = 2q₀`, every distinct level-0 position the session opens. -/
 def m1Pad (m : ℕ) : ℕ := 2 * m1Queries₀ m
 
-/-- The rational upper bounds on `√ρ'` at `m = 25, 26, 27` (eight digits, rounded up). -/
+/-- The rational upper bounds on `√ρ'` at `25 ≤ m ≤ 35` (eight digits, rounded up). -/
 def m1SqrtUp : ℕ → ℚ
   | 25 => 37670511 / 50000000
   | 26 => 72769569 / 100000000
   | 27 => 71692193 / 100000000
+  | 28 | 29 | 30 => 35414363 / 50000000
+  | 31 => 70769727 / 100000000
+  | 32 => 35370037 / 50000000
+  | 33 => 35362689 / 50000000
+  | 34 => 70718029 / 100000000
+  | 35 => 35357177 / 50000000
   | _ => 1
 
-/-- The rational check at `m = 25, 26, 27`. -/
-theorem m1_check : ∀ m, 25 ≤ m → m ≤ 27 →
+/-- The rational check for `25 ≤ m ≤ 33`. -/
+theorem m1_check_le_33 : ∀ m, 25 ≤ m → m ≤ 33 →
     padLinkUp (m1Schedule m) (m1Pad m) + padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
       (1 / 2) ^ 205 := by
   intro m h1 h2
   interval_cases m <;> decide +kernel
 
-theorem m1Schedule_25 : m1Schedule 25 =
-    ⟨25, 6, [⟨1, 277, 12, 6⟩, ⟨2, 106, 9, 4⟩, ⟨3, 71, 6, 4⟩, ⟨4, 53, 3, 4⟩], 3⟩ := rfl
-theorem m1Schedule_26 : m1Schedule 26 =
-    ⟨26, 6, [⟨1, 242, 13, 6⟩, ⟨2, 106, 10, 4⟩, ⟨3, 71, 7, 4⟩, ⟨4, 53, 4, 4⟩], 4⟩ := rfl
-theorem m1Schedule_27 : m1Schedule 27 =
-    ⟨27, 6, [⟨1, 229, 14, 6⟩, ⟨2, 106, 11, 4⟩, ⟨3, 71, 8, 4⟩, ⟨4, 53, 5, 4⟩], 5⟩ := rfl
-
-theorem m1Schedule_m : ∀ m, 25 ≤ m → m ≤ 27 → (m1Schedule m).m = m := by
+/-- The rational check for `m = 34, 35`. -/
+theorem m1_check_34_35 : ∀ m, 34 ≤ m → m ≤ 35 →
+    padLinkUp (m1Schedule m) (m1Pad m) + padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
+      (1 / 2) ^ 205 := by
   intro m h1 h2
-  interval_cases m <;> rfl
+  interval_cases m <;> decide +kernel
+
+/-- The rational check at `25 ≤ m ≤ 35`. -/
+theorem m1_check : ∀ m, 25 ≤ m → m ≤ 35 →
+    padLinkUp (m1Schedule m) (m1Pad m) + padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
+      (1 / 2) ^ 205 := by
+  intro m h1 h2
+  rcases le_or_gt m 33 with h | h
+  · exact m1_check_le_33 m h1 h
+  · exact m1_check_34_35 m (by omega) h2
 
 theorem padRadius_pos_of (l : Level) (t : ℕ) (sbar : ℚ) (h0 : 0 ≤ sbar)
     (hs : l.padRate t ≤ (sbar : ℝ) ^ 2) (hlt : sbar < 49 / 50) : 0 < l.padRadius t := by
@@ -265,42 +278,57 @@ theorem padRadius_pos_of (l : Level) (t : ℕ) (sbar : ℚ) (h0 : 0 ≤ sbar)
   unfold Level.padRadius eta
   linarith
 
-/-- C-Flock ZK's padded level 0 meets the rational bounds' conditions. -/
-theorem m1_padNumOK : ∀ m, 25 ≤ m → m ≤ 27 →
-    PadNumOK ((m1Schedule m).levels.headD default) (m1Pad m) (m1SqrtUp m) := by
+/-- `ρ' ≤ s̄²`, from the rational inequality `2^cols + t ≤ s̄²·2^d`. -/
+theorem padRate_le_sq (l : Level) (t : ℕ) (sbar : ℚ)
+    (h : ((2 ^ l.logCols + t : ℕ) : ℚ) ≤ sbar ^ 2 * 2 ^ l.logLen) : l.padRate t ≤ (sbar : ℝ) ^ 2 := by
+  have h' := (Rat.cast_le (K := ℝ)).2 h
+  push_cast at h'
+  unfold Level.padRate
+  rw [div_le_iff₀ (by positivity)]
+  push_cast
+  linarith
+
+/-- C-Flock ZK's schedule at `m` has two levels or more, and its padded level 0 and its levels meet the
+conditions of the rational bounds and of the soundness theorem: one check, run in the kernel. -/
+def m1Facts (m : ℕ) : Bool :=
+  let s := m1Schedule m
+  let l := s.levels.headD default
+  let t := m1Pad m
+  decide (2 ≤ s.levels.length) && decide (s.m = m) && decide (1 ≤ t) && decide (l.logLen = l.logCols + 1) &&
+    decide (l.logLen ≤ 40) && decide (t ≤ 2 ^ l.logCols) && decide (2 ^ l.logCols + t ≤ 2 ^ l.logLen) &&
+    decide (1 < 2 ^ l.logCols + t) && decide (0 ≤ m1SqrtUp m) &&
+    decide (((2 ^ l.logCols + t : ℕ) : ℚ) ≤ m1SqrtUp m ^ 2 * 2 ^ l.logLen) && decide (m1SqrtUp m < 49 / 50) &&
+    s.levels.all (fun l => decide l.Ok)
+
+theorem m1Facts_all : ∀ m, 25 ≤ m → m ≤ 35 → m1Facts m = true := by
   intro m h1 h2
-  have key : ∀ (l : Level) (t : ℕ) (sbar : ℚ), 1 ≤ t → l.logLen = l.logCols + 1 →
-      2 ^ l.logCols + t ≤ 2 ^ l.logLen → 0 ≤ sbar → l.padRate t ≤ (sbar : ℝ) ^ 2 →
-      sbar < 49 / 50 → PadNumOK l t sbar := fun l t sbar a b c d e f =>
-    ⟨a, b, c, d, e, padRadius_pos_of l t sbar d e f⟩
-  interval_cases m
-  · rw [m1Schedule_25]
-    refine key _ _ _ (by decide) rfl (by decide) (by norm_num [m1SqrtUp])
-      ?_ (by norm_num [m1SqrtUp])
-    norm_num [Level.padRate, Level.logLen, m1Pad, m1Queries₀, m1SqrtUp]
-  · rw [m1Schedule_26]
-    refine key _ _ _ (by decide) rfl (by decide) (by norm_num [m1SqrtUp])
-      ?_ (by norm_num [m1SqrtUp])
-    norm_num [Level.padRate, Level.logLen, m1Pad, m1Queries₀, m1SqrtUp]
-  · rw [m1Schedule_27]
-    refine key _ _ _ (by decide) rfl (by decide) (by norm_num [m1SqrtUp])
-      ?_ (by norm_num [m1SqrtUp])
-    norm_num [Level.padRate, Level.logLen, m1Pad, m1Queries₀, m1SqrtUp]
+  interval_cases m <;> decide +kernel
+
+theorem m1Facts_spec {m : ℕ} (h : m1Facts m = true) :
+    2 ≤ (m1Schedule m).levels.length ∧ (m1Schedule m).m = m ∧
+      PadNumOK ((m1Schedule m).levels.headD default) (m1Pad m) (m1SqrtUp m) ∧
+      PadOK ((m1Schedule m).levels.headD default) (m1Pad m) ∧ ∀ l ∈ (m1Schedule m).levels, l.Ok := by
+  simp only [m1Facts, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, and_assoc] at h
+  obtain ⟨h2, hm, ht1, hd, hd40, ht, hk, hk1, h0, hq, hlt, hok⟩ := h
+  have hs := padRate_le_sq _ _ _ hq
+  have hr := padRadius_pos_of _ _ _ h0 hs hlt
+  exact ⟨h2, hm, ⟨ht1, hd, hk, h0, hs, hr⟩, ⟨hd40, ht, hk, hk1, hr⟩, hok⟩
+
+theorem m1Schedule_m : ∀ m, 25 ≤ m → m ≤ 35 → (m1Schedule m).m = m := fun m h1 h2 =>
+  (m1Facts_spec (m1Facts_all m h1 h2)).2.1
+
+/-- C-Flock ZK's padded level 0 meets the rational bounds' conditions. -/
+theorem m1_padNumOK : ∀ m, 25 ≤ m → m ≤ 35 →
+    PadNumOK ((m1Schedule m).levels.headD default) (m1Pad m) (m1SqrtUp m) := fun m h1 h2 =>
+  (m1Facts_spec (m1Facts_all m h1 h2)).2.2.1
 
 /-- C-Flock ZK's padded level 0 meets the soundness theorem's conditions. -/
-theorem m1_padOK : ∀ m, 25 ≤ m → m ≤ 27 →
-    PadOK ((m1Schedule m).levels.headD default) (m1Pad m) := by
-  intro m h1 h2
-  have hp := m1_padNumOK m h1 h2
-  refine ⟨?_, ?_, hp.hk, ?_, hp.hr⟩ <;> (interval_cases m <;> decide)
+theorem m1_padOK : ∀ m, 25 ≤ m → m ≤ 35 →
+    PadOK ((m1Schedule m).levels.headD default) (m1Pad m) := fun m h1 h2 =>
+  (m1Facts_spec (m1Facts_all m h1 h2)).2.2.2.1
 
-theorem m1_levels_ok : ∀ m, 25 ≤ m → m ≤ 27 → ∀ l ∈ (m1Schedule m).levels, l.Ok := by
-  intro m h1 h2 l hl
-  have key : ∀ m', 25 ≤ m' → m' ≤ 27 → ((m1Schedule m').levels.all fun l => decide l.Ok) = true := by
-    intro m' h1' h2'
-    interval_cases m' <;> decide +kernel
-  have := List.all_eq_true.1 (key m h1 h2) l hl
-  simpa using this
+theorem m1_levels_ok : ∀ m, 25 ≤ m → m ≤ 35 → ∀ l ∈ (m1Schedule m).levels, l.Ok := fun m h1 h2 =>
+  (m1Facts_spec (m1Facts_all m h1 h2)).2.2.2.2
 
 theorem padRepError_nonneg (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (t e : ℕ)
     (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : Stmt) :
@@ -336,43 +364,44 @@ theorem padRepError_nonneg (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) 
     linarith
   linarith
 
-theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 27 → ∀ st : Stmt,
+theorem padRepError_nonneg_of (s : Schedule) (st : Stmt) (t e : ℕ) (sbar : ℚ) (h2 : 2 ≤ s.levels.length)
+    (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok) :
+    0 ≤ padRepError s st t e := by
+  obtain ⟨m, k0, levels, ext⟩ := s
+  rcases levels with _ | ⟨l₀, _ | ⟨l₁, rest⟩⟩
+  · simp at h2
+  · simp at h2
+  · exact padRepError_nonneg m k0 l₀ l₁ rest ext t e sbar hp
+      (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
+
+/-- A schedule's table with the padded level 0 is sound to `2^-205` once its rational check passes. -/
+theorem padTableError_le_of_check (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
+    (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok)
+    (hc : padLinkUp s t + padRepUp s t e sbar ^ 2 ≤ (1 / 2) ^ 205) :
+    padTableError s st t e ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
+  obtain ⟨m, k0, levels, ext⟩ := s
+  rcases levels with _ | ⟨l₀, _ | ⟨l₁, rest⟩⟩
+  · simp at h2
+  · simp at h2
+  · have hs : ∀ l ∈ l₁ :: rest, l.Ok := fun l hl => hok l (List.mem_cons_of_mem _ hl)
+    refine (padTableError_le_up m k0 l₀ l₁ rest ext t e sbar hp hs st hst
+      (padRepError_nonneg m k0 l₀ l₁ rest ext t e sbar hp hs st)).trans (le_trans ?_ half_pow_205_le)
+    have h := Rat.cast_le (K := ℝ) |>.2 hc
+    refine h.trans (le_of_eq ?_); push_cast; ring
+
+theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt,
     0 ≤ padRepError (m1Schedule m) st (m1Pad m) 2 := by
   intro m h1 h2 st
-  have hp := m1_padNumOK m h1 h2
-  have hok := m1_levels_ok m h1 h2
-  interval_cases m
-  · rw [m1Schedule_25] at hp hok ⊢
-    exact padRepError_nonneg _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
-  · rw [m1Schedule_26] at hp hok ⊢
-    exact padRepError_nonneg _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
-  · rw [m1Schedule_27] at hp hok ⊢
-    exact padRepError_nonneg _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
+  have h := m1Facts_spec (m1Facts_all m h1 h2)
+  exact padRepError_nonneg_of (m1Schedule m) st (m1Pad m) 2 (m1SqrtUp m) h.1 h.2.2.1 h.2.2.2.2
 
-/-- **The soundness number with C-Flock ZK's padded level 0**, `m = 25, 26, 27`: at most `2^-205` per
+/-- **The soundness number with C-Flock ZK's padded level 0**, `25 ≤ m ≤ 35`: at most `2^-205` per
 table, for every statement shape in range. -/
-theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 27 → ∀ st : Stmt, st.InRange →
+theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt, st.InRange →
     padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   intro m h1 h2 st hst
-  have hp := m1_padNumOK m h1 h2
-  have hok := m1_levels_ok m h1 h2
-  have hc := Rat.cast_le (K := ℝ) |>.2 (m1_check m h1 h2)
-  have hfin := half_pow_205_le
-  interval_cases m
-  · rw [m1Schedule_25] at hp hok hc ⊢
-    refine (padTableError_le_up _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l
-      (List.mem_cons_of_mem _ hl)) st hst (padRepError_nonneg _ _ _ _ _ _ _ _ _ hp
-        (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st)).trans (le_trans ?_ hfin)
-    refine hc.trans (le_of_eq ?_); push_cast; ring
-  · rw [m1Schedule_26] at hp hok hc ⊢
-    refine (padTableError_le_up _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l
-      (List.mem_cons_of_mem _ hl)) st hst (padRepError_nonneg _ _ _ _ _ _ _ _ _ hp
-        (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st)).trans (le_trans ?_ hfin)
-    refine hc.trans (le_of_eq ?_); push_cast; ring
-  · rw [m1Schedule_27] at hp hok hc ⊢
-    refine (padTableError_le_up _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l
-      (List.mem_cons_of_mem _ hl)) st hst (padRepError_nonneg _ _ _ _ _ _ _ _ _ hp
-        (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st)).trans (le_trans ?_ hfin)
-    refine hc.trans (le_of_eq ?_); push_cast; ring
+  have h := m1Facts_spec (m1Facts_all m h1 h2)
+  exact padTableError_le_of_check (m1Schedule m) st hst (m1Pad m) 2 (m1SqrtUp m) h.1 h.2.2.1 h.2.2.2.2
+    (m1_check m h1 h2)
 
 end FlockSoundness.Accounting

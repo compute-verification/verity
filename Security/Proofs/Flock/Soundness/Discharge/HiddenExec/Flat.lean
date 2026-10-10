@@ -1,4 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
+import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # A hidden-output statement's flat twin
@@ -9,8 +11,9 @@ bits, copied from the output bits the circuit computes. Its flat twin `Hidden.fl
 (`flat_layout`) and the unit facts the copy positions read (`flat_unitFacts`), as setupH's statement does.
 
 Every first column of `outPairs` is a message bit of a row's `sha512x3` slot (`deltaMsgCol`), which no unit slot's row
-is (`outPairs_ne_unit`, for `sha512/row/v1` rows). So at every unit slot's row the hidden statement's level-0 matrices
+is (`outPairs_ne_unit`, for output rows that fit, `Hidden.OutRowsF`). So at every unit slot's row the hidden statement's level-0 matrices
 are its flat twin's (`unitRowsFlat`): the rows that place a template instance and copy its inputs read the same in both.
+`Layout.scopeOkH` gives rows that fit, with one prefix kind for every row (`rowsFit_of_scope`).
 -/
 
 set_option Elab.async false
@@ -89,35 +92,37 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
   refine hne (Eq.trans ?_ he)
   omega
 
-/-- **No output pair of Δ is at a unit slot's row**, for `sha512/row/v1` rows: every output row's bytes are within its
-compressions (`2 · words = 128 · chunks`). -/
-theorem outPairs_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c)
-    (hsha : st.c.unitNet ≠ st.c.shaNet) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false)
-    (hle : st.c.outRowPorts.size ≤ st.c.ports.size) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ}
-    (hs₀ : s₀ < st.c.unitRange.count) (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b := by
+/-- **No output pair of Δ is at a unit slot's row**, at rows that fit: every output row's data bit is an input bit of
+its compression's `sha512x3` slot or of its `hm96` slot (`Hidden.msg_at`), another net's slot. -/
+theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows : Hidden.OutRowsF st.c)
+    {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
+    (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  have hp : HmOut.nIn st.c + j < st.c.ports.size := by unfold HmOut.nIn; omega
-  have hw := P.portWords _ (getElem_mem_toList' hp) (hv1 _ (getElem_mem_toList' hp))
-  have e : st.c.ports.getD (HmOut.nIn st.c + j) default = st.c.ports[HmOut.nIn st.c + j]! := by
-    rw [getElem!_pos st.c.ports _ hp, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some]
-  have hs : (st.c.ports.getD (HmOut.nIn st.c + j) default).segs = none := by
-    rw [e]; exact P.v1Segs _ (getElem_mem_toList' hp) (hv1 _ (getElem_mem_toList' hp))
-  rw [e] at hk
-  exact deltaMsgCol_ne_unit L P C hsha hg hp hs (by omega) (Nat.mod_lt _ (by norm_num)) hs₀ hb
+  rw [hrows.size] at hj
+  obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
+  have R := Hm.RowRanges.ofL L F.parse F.check
+  obtain ⟨n, s, off, hn, hat, -⟩ := Hidden.msg_at R hrows.segs (b := 2 * k + t / 8) hg hp ht8
+  have hun : st.c.unitNet ≠ n := by
+    rcases hn with rfl | rfl
+    · exact F.sha
+    · exact F.hm
+  intro he
+  have hb' : b < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact hb
+  exact Hm.atSlot_ne L F (R.rowNet_lt hn) F.parse.unitNet hun hat
+    (show AtSlot st.c st.c.unitNet s₀ b _ from ⟨hs₀, hb', he⟩)
 
-/-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, for `sha512/row/v1` rows, when
-its Δ being `HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
+/-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at rows that fit, its Δ being
+`HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
 theorem unitRowsFlat (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false) : UnitRowsFlat st := by
+    (hrows : Hidden.OutRowsF st.c) : UnitRowsFlat st := by
   have s := Hidden.setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := Hidden.parse_untyped ht s.parse
   have L := flat_layout ht h
   have F := flat_unitFacts ht h
   intro s₀ hs₀ b hb r j hr
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
-    rw [hr]; exact outPairs_ne_unit L F.parse F.check F.sha hv1 (checkRows_le hcr) hq hs₀ hb
+    rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by rw [s.da, Hidden.hidden_delta']
   have hdb : st.db = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by rw [s.db, Hidden.hidden_delta']
   refine ⟨?_, ?_⟩
@@ -127,5 +132,37 @@ theorem unitRowsFlat (ht : tags.typed = false)
   · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val =
       rangesEntry st (slotEntryB st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).2 r.val j.val
     rw [hdb, Hidden.deltaEntry_append_out hout]
+
+/-! ## The rows `scopeOkH` covers -/
+
+/-- **`scopeOkH`'s rows fit**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then `HmOut.checkRows`), all
+`sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port, `Hidden.out_rows_v1`) or all
+`v2Row`s, one output port each. -/
+theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
+    Hidden.RowsFit c := by
+  have P := parse_facts hp
+  rcases Layout.scopeOkH_rows h with h1 | ⟨h2, hr⟩
+  · have hv : ∀ p ∈ c.ports.toList, p.v2 = false := fun p hm => (h1 p hm).1
+    obtain ⟨hu, hrep, hj⟩ := Hidden.out_rows_v1 hp hc hv
+    have hr2 : Hidden.rowV2 c = false := by
+      unfold Hidden.rowV2
+      rw [Array.any_eq_false']
+      intro p hm
+      rw [hv p (Array.mem_toList_iff.2 hm)]
+      decide
+    refine ⟨⟨fun p hm => ?_, hrep, fun j hj' => (hj j hj').1⟩, fun p hm => by rw [hv p hm, hr2]⟩
+    have hw := P.portWords p hm (hv p hm)
+    exact ⟨hu p hm, (h1 p hm).2.1, by omega, by omega⟩
+  · have hrep := Hidden.outRows_single (Hidden.parse_rowPorts hp).2 fun j hj => by
+      simp only [HmOut.outGroup, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some]
+      exact hr _ (Array.getElem_mem_toList hj)
+    refine ⟨⟨fun p hm => ?_, hrep, fun j hj => (Hidden.checkRows_out hc (by rw [hrep, Array.size_replicate]; exact hj)).1⟩,
+      fun p hm => ?_⟩
+    · obtain ⟨-, hs, hb, h1', h2'⟩ := h2 p hm
+      exact ⟨hs, hb, h1', h2'⟩
+    · have hv := (h2 p hm).1
+      rw [hv]
+      exact (Array.any_eq_true'.2 ⟨p, Array.mem_toList_iff.1 hm, hv⟩).symm
 
 end FlockSoundness.Discharge.HiddenExec
