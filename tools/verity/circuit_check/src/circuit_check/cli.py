@@ -195,9 +195,9 @@ def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple) -
                     return
                 ticket, item = msg
                 r, w = os.pipe()
-                with warnings.catch_warnings():
+                with warnings.catch_warnings(), CC.internal():
                     warnings.simplefilter("ignore", DeprecationWarning)        # the numeric libraries' idle threads
-                    pid = os.fork()
+                    pid = os.fork()                                            # the child keeps the tracer's hook
                 if pid == 0:
                     os.close(r)
                     _child(w, fn, item)

@@ -558,8 +558,8 @@ the timed audit and the simulator with the dense codec as default.
 
 - **Trusted without proof:** `Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
   `Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
-  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Models/Pous/Assumptions.lean` and
-  `Security/Models/Pous/Guarantees.lean`.
+  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Models/Pous/Assumptions.lean`,
+  `Security/Models/Pous/Guarantees.lean` and, for the lemmas, `Security/Proofs/Pous/Statements.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
 - **Proofs:** `Security/Proofs/Pous/`, checked by Verity's `tools/verity/lean/check.py` against `lean-audit.json`.
@@ -674,7 +674,16 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
 
-## Guarantees (`Security/Models/Pous/Guarantees.lean`)
+## Guarantees and lemmas
+
+The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
+computes) are in `Security/Models/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
+category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
+transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
+`InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
+`Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
+The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict` are in
+`Security/Properties/Pous/`.
 
 | Statements | What | Status |
 |---|---|---|
