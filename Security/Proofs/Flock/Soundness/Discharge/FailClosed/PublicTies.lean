@@ -79,11 +79,8 @@ structure PublicTies (hidden : Bool) (c : Circuit) (pub : Public) : Prop where
 /-! ## The checks establish them -/
 
 theorem bytes_of_not_bne {a b : ByteArray} (h : ¬ (a != b) = true) : a = b := by
-  have hb : (a == b) = true := by
-    cases hb : (a == b)
-    · exact absurd (by simp [bne, hb]) h
-    · rfl
-  exact ByteArray.ext (beq_iff_eq.1 hb)
+  have hb : (a == b) = true := by simpa [bne] using h
+  exact ByteArray.ext (beq_iff_eq.1 (hb : (a.data == b.data) = true))
 
 theorem ok_of_not_bne {α : Type} [BEq α] [LawfulBEq α] {x : V α} {a b : α} (hx : x = .ok a)
     (hc : ¬ (a != b) = true) : x = .ok b := by
@@ -149,7 +146,7 @@ theorem hmRow_ties {c : Circuit} {pub : Public} (h : HmRow.checkPublic c pub = .
         pub.fv3Bytes "roots" x.1 = .ok (outRoot c pub s x.2 dom))
       (fun x s y h => by
         obtain ⟨oname, w⟩ := x
-        dsimp only at h
+        dsimp only at h ⊢
         simp only [throw_bind', pure_bind] at h
         repeat' walk_step
         simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -161,7 +158,7 @@ theorem hmRow_ties {c : Circuit} {pub : Public} (h : HmRow.checkPublic c pub = .
         ok_of_not_bne ‹J.str _ "row_key_sha512" _ = _› hcf.2⟩
       instances := fun d hd => by
         first
-        | (rw [hu] at hd; cases hd)
+        | (rw [hu] at hd; cases hd; done)
         | (obtain rfl := Except.ok.inj (hu.symm.trans hd)
            have hcu := not_or_true ‹¬ ((_ : ℕ) != _ || _) = true›
            exact ⟨_, ‹Draw.UnitDraw.ofJson _ = _›, ok_of_not_bne ‹J.nat _ "instances" _ = _› hcu.1,
@@ -171,7 +168,7 @@ theorem hmRow_ties {c : Circuit} {pub : Public} (h : HmRow.checkPublic c pub = .
       dummy := fun p hp => by simpa using (hin p hp).2
       outputs := fun _ j hj => by
         have := hout j (by simpa using hj)
-        rw [Nat.zero_add, Array.getElem_toList] at this
+        simp only [Nat.zero_add, Array.getElem_toList] at this
         exact this }
 
 set_option maxHeartbeats 4000000 in
@@ -211,7 +208,7 @@ theorem hmOut_ties {c : Circuit} {pub : Public} (h : HmOut.checkPublic c pub = .
         ok_of_not_bne ‹J.str _ "row_key_sha512" _ = _› hcf.2⟩
       instances := fun d hd => by
         first
-        | (rw [hu] at hd; cases hd)
+        | (rw [hu] at hd; cases hd; done)
         | (obtain rfl := Except.ok.inj (hu.symm.trans hd)
            have hcu := not_or_true ‹¬ ((_ : ℕ) != _ || _) = true›
            exact ⟨_, ‹Draw.UnitDraw.ofJson _ = _›, ok_of_not_bne ‹J.nat _ "instances" _ = _› hcu.1,
