@@ -3138,7 +3138,7 @@
    ]
   },
   "Flock.Draw": {
-   "digest": "966792c0f73bd5155c3ed71e404f53e07de0850bee48767f5e461dca1c3323db",
+   "digest": "09cf7a7f8db9eb8be10049e1edfcb51d4c05d443ee379b2934a72935daea757a",
    "definitions": {
     "Flock.Draw.Law": "89d70aef494b09e73d1a96bde31b4b235372685ef6f2c157ffafdcc9607b9106",
     "Flock.Draw.Law.bernoulli": "74f514d660c8772abf134bce094e4bc4c8b12f30a7c18bcfcb3de380468388db",
@@ -3159,12 +3159,14 @@
     "Flock.Draw.WorkStratum.toJson": "999c6f978f18676d4909884c850deaf5ab7531b7a93e1a0eeeddcec625710a37",
     "Flock.Draw.WorkStratum.toStratum": "1be491674fba2a0f01f671db5fe348c03f76fe4023d42306592040ca4117a752",
     "Flock.Draw.WorkStratum.work": "eeee7219f73bfc21bdc0e819bc356be12e9950221a80b9b620b14c35ca1f8b35",
+    "Flock.Draw.beNat": "f33b44ce3176ec4606668c2599a46d7d8983a16678aa2e21c506b543e62ca721",
     "Flock.Draw.derive": "68bfb2c0bc577d59cad8cd401b2657489ce70e9c3340a6fd73886b2b98c85602",
     "Flock.Draw.deriveWork": "e8e4e38834c03b0c1880fc7ec2e05be790a4d7b8aac0674bac41ecca04dfd006",
     "Flock.Draw.strataOf": "c2e2e3e53ebd658086060b239c578e6bd1545ab73d3de6fabf8a67159a9486a5",
     "Flock.Draw.stratumK": "30eec83966e6292ad4120b55dc8e02b63770e2f59f87ca616cdb9da952644c2b",
     "Flock.Draw.subset.match_1": "b531d8df0074d46d525934f8c69161747cdeb0f27e3b8c424325ace51ead22b0",
     "Flock.Draw.totalWork": "651dbeeadb0c32f981cd7db2bfb4895ff5fda55a9845884927bc19afaf994ee4",
+    "Flock.Draw.uniform": "1817d8be46815930147d46d70a731b71a18fa88bdebb880f99e4124286bcdfe1",
     "Flock.Draw.width": "80674d324269f3df3066a958d4159bf0d1321b5d14bfc80c928ca16a55aa77f4",
     "Flock.Draw.workK": "5c3c79eb2b5987210aebb3ee1917df08192782aca6b37463d87b2a544b69a2ca",
     "Flock.Draw.workTableOfJson": "159cde433dd73eea3bf64b4e252d3d90d93e18bdc7d62be749494aa54c535e41",
@@ -3172,6 +3174,7 @@
     "Flock.Draw.workTableOfJson._sparseCasesOn_7": "e1c5d286ad2918af56c64eb00aed16daa57590a93e7f925915ca8639130417cc"
    },
    "guarantees": [
+    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.drawShape",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing"
@@ -3295,7 +3298,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "9e75141a25c41e0e2c1dda575419b8ed8680e9235b8f5a0465f205d579496e6b",
+   "digest": "e79594f92b521972f4fbbf99c2554e6c904e542bfbaec5bd666331746dbfc2b2",
    "definitions": {
     "Flock.HmRow.EVALUABLE": "330c9f10310fe11080b8816408e976c202262b5b86d2a0ec6f92150fccd0c27c",
     "Flock.HmRow.PARTITION_V1": "3ed2295db95f2ad8ba797c1e15a7ac801e7c3fb22d9344c9b627ad180a2b63d8",
@@ -3318,6 +3321,7 @@
     "Flock.HmRow.segmentPrefix": "4697fee7f838457c74b72c6ab88de0b73fee17b5d13b33dad5c6f5b2bcabf297"
    },
    "guarantees": [
+    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing"
@@ -3427,7 +3431,12 @@
     "Flock.FV3.hash": "b59ec9cab0b358159e9e87bbae75fb83fb1b8266134f3ad0d2959008ae422824",
     "Flock.FV3.uint": "f00ede6b3df22859c2566c85b1665172f6061ba7a25333f7f96b23c90f52252c"
    },
-   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
+    "Properties.SampledProofs.acceptMeans",
+    "Properties.SampledProofs.bernoulliBoundsNothing"
+   ]
   },
   "Flock.Qcall": {
    "digest": "7dddd82c1acf24342d048e807657cc51f21ddcb980a61f3bbe262886459fb01e",
