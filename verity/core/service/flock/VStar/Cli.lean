@@ -110,10 +110,11 @@ def cmd (args : List String) : IO UInt32 := do
     pure 0
   | "menu" :: shapes =>
     let mut refused := false
-    for (sh, ws) in ← menuShapes shapes do
+    let runs := (← menuShapes shapes).map fun (sh, ws) => (sh, ws, Task.spawn fun _ => statements sh)
+    for (sh, ws, t) in runs do
       let base := [("m", (sh.m : Json)), ("k_log", (sh.kLog : Json)), ("claims", (sh.claims : Json)),
         ("models", Json.arr (ws.map Json.str))]
-      match statements sh with
+      match t.get with
       | .ok st => IO.println (Json.mkObj (base ++ [("statements", (st.size : Json))])).compress
       | .error e =>
         refused := true
