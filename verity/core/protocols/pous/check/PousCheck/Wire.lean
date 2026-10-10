@@ -355,8 +355,8 @@ def parseResponse (f : ByteArray) (blockBytes : Nat) :
     (Array.range count).map fun x => body.extract (stop + 2 + D * x) (stop + 2 + D * (x + 1)))
 
 /-- A round's record: `u16 round ‖ u64 index ‖ u64 elapsed ‖ flags ‖ SHA512(challenge) ‖ SHA512(response)`. An elapsed
-time outside u64 is refused before (`verifyAudit`); an index past u64 (a store of more than `2^64` blocks) is truncated
-here, where the Python raises (`to_bytes`). -/
+time outside u64 is refused before (`verifyAudit`). Every index recorded is below `B`, and `B` is below `2^64`: `parseSetup`
+binds the manifest's `B` to SETUP_ROOT's u64 block count (code 2 otherwise), and `rounds` runs only on a parsed setup. -/
 def record (j index elapsed flags : Nat) (challengeHash responseHash : ByteArray) : ByteArray :=
   be j 2 ++ be index 8 ++ be elapsed 8 ++ ⟨#[flags.toUInt8]⟩ ++ challengeHash ++ responseHash
 
