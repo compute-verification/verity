@@ -62,4 +62,5 @@ def test_boot_refuses_without_origin_or_an_earlier_copy(tmp_path):
     subprocess.run(["git", "init", "-q", str(tmp_path / "ws")], check=True, env=env)
     p = subprocess.run(["bash", str(BOOT), str(tmp_path / "ws")], capture_output=True, text=True, env=env)
     assert p.returncode == 1 and "no guard on this VM" in p.stderr, p.stderr
-    assert not (tmp_path / "ws/.cursor").exists()
+    (entry,) = json.loads((tmp_path / "ws/.cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
+    assert entry["failClosed"] is True and not (tmp_path / "opt/shell_hook.py").exists()
