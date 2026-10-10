@@ -3,6 +3,10 @@
 measured on the repository's own gadgets. Nothing here is estimated but the composition, which is written out below.
 
     python benchmarks/private_circuit/nonzero_cost.py [--out DIR] [--units rope,gemm,silu,f32mul,rmsnorm] [--reps 2]
+    python benchmarks/private_circuit/nonzero_cost.py --buckets prover.json [--out DIR]
+
+``--buckets`` takes compute-accounting's F6 prover table (``verity/f6-prover/v1``) and gives V* per session at each unsplit
+bucket instead (`bucket_cost`): ANDs unpacked and packed, D under C-Flock's layout, and F6's prove-time and RSS law.
 
 **What V* computes.** The lincheck's circuit fold, Lean's `Flock.Stmt.foldedPartial`: for the unit's slot type (2^sl
 columns), each nonzero (i, c) of A_0 adds ``α · lw[i mod 64] · eq(ρ_lo, i >> 6) · eq(r_lo, c >> 6)`` into ``comb[c mod 64]``
@@ -36,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import subprocess
@@ -84,12 +89,12 @@ def const_read(C, bits, table: list[int], width: int = 128):
     return out
 
 
-def _eq_table(point: list[int], n: int) -> list[int]:
+def _eq(point: list[int], x: int) -> int:
     from verity.ml.circuits.ops.boolean import gf2k as G
 
-    out = [1]
-    for r in point[:n]:
-        out = [G.mul(e, 1 ^ r) for e in out] + [G.mul(e, r) for e in out]
+    out = 1
+    for j, r in enumerate(point):
+        out = G.mul(out, r if x >> j & 1 else 1 ^ r)
     return out
 
 
@@ -155,10 +160,9 @@ def fold_weight(sl: int, seed: int = 0, check: int = 64) -> dict:
     vals = {"i": [sum(((e[0] >> b) & 1) << v for v, e in enumerate(ents)) for b in range(sl)],
             "q": [sum(((e[1] >> b) & 1) << v for v, e in enumerate(ents)) for b in range(sl - 6)]}
     outs, _ = C.evaluate(vals, check)
-    erho, er = _eq_table(rho, sl - 6), _eq_table(r, sl - 6)
     for v, (i, q) in enumerate(ents):
         got = sum(((outs["w"][j] >> v) & 1) << j for j in range(128))
-        want = G.mul(G.mul(lw[i & 63], erho[i >> 6]), er[q])
+        want = G.mul(G.mul(lw[i & 63], _eq(rho, i >> 6)), _eq(r, q))
         assert got == want, (sl, i, q)
     return {"sl": sl, "index_bits": n, "chunks": sizes, "ands": ands, "checked": check}
 
@@ -294,9 +298,92 @@ def per_nonzero(u: dict, g: dict, w: dict, dm: dict, reg: dict, reps: int) -> di
             "streams_total": streams, "streams_pad": slot_pad, "packed_total": packed_cost, "packed_ratio": u["nnz"] / packed}
 
 
+# --- F6's buckets ---------------------------------------------------------------------------------------------------------
+
+# nonzeros per packed (row, c >> 6) entry of the unit measured above that a bucket's label family lowers to; a bucket takes the
+# smallest over its labels (F6 gives no per-label mix), and a family not measured takes the smallest measured (the tc step's)
+PACKED_RATIO = {"rope": 4.64, "gemm": 3.67, "silu": 23.94, "f32mul": 4.48, "rmsnorm": 4.24}
+FAMILY = (("RoPE", "rope"), ("SiluMul", "silu"), ("RMSNorm", "rmsnorm"), ("Gemm", "gemm"), ("ScaledMm", "gemm"),
+          ("Attention", "gemm"))
+RHO = 26.5  # nonzeros per row of V*'s own lowering, F6's default
+
+
+def _family(label: str) -> str | None:
+    return next((f for p, f in FAMILY if p in label), None)
+
+
+def bucket_cost(b: dict, part: str, g: dict, weights: dict, dm: dict, reg: dict, reps: int, fit: dict, glue: float,
+                bytes_per_nnz: float) -> dict:
+    """V* for one session of an F6 bucket: each of its ``slots`` slots an independently hidden type with the bucket's nonzero
+    bound Z (F6 counts nnz_a + nnz_b + rows; the identity C's rows are not read, so V* reads Z (1 - 1/ρ)) at slot size
+    sl = k_log, and its type chosen by a hidden path into the registry."""
+    s = b["session"]
+    sl, slots = s["k_log"], b["slots"]
+    nnz = slots * b["Z"] * (1 - 1 / s["rho"])
+    w = weights[sl]["ands"]
+    per_bit = reg["whole_per_bit"]
+    fold, regist = reps * (w + dm["ands"]), 2 * sl * per_bit
+    fams = {_family(x) for x in b["labels"]}
+    ratio = min(PACKED_RATIO[f] if f else min(PACKED_RATIO.values()) for f in fams)
+    packed_fold, packed_reg = fold * nnz / ratio, (2 * sl - 6 + 64) * per_bit * nnz / ratio
+    path = g["FrameV3Node_v1{2}"]
+    sel_fixed = slots * (20 * path + g["LmsEqual_v1"])
+    sel_types = slots * (max(1, (b["types"] - 1).bit_length()) * path + g["LmsEqual_v1"])
+    copy = g["sha512_compression_rows"] / g["sha512_compression"]
+
+    def law(fold_ands: float, hash_ands: float) -> dict:
+        rows = fold_ands + copy * hash_ands
+        k = max(22, math.ceil(rows).bit_length() + 2)
+        cb = rows * RHO * bytes_per_nnz + glue
+        c = fit["coef"]
+        x = (1.0, 2.0 ** k / 2 ** 30, cb / 2 ** 30)
+        rss = sum(a * v for a, v in zip(c["rss_gib"], x))
+        prove = sum(a * v for a, v in zip(c["prove_s"], x))
+        return {"ands": fold_ands + hash_ands, "rows": rows, "k_log": k, "D": 2 ** k, "circuit_bytes": cb, "rss_gib": rss,
+                "prove_s": prove, "fits_D": k <= 32, "fits_node": rss <= NODE_GIB}
+
+    return {"part": part, "Z": b["Z"], "slots": slots, "types": b["types"], "labels": b["labels"],
+            "sessions_public": b["sessions_public"], "sl": sl, "nnz_read": nnz, "packed_ratio": ratio,
+            "per_nonzero": {"weight": reps * w, "demux": reps * dm["ands"], "registration": regist, "total": fold + regist},
+            "selection_fixed_depth20": sel_fixed, "selection_by_types": sel_types,
+            "inner": {"D": s["D"], "rss_gib": s["rss_gib"], "prove_s": s["prove_s"]},
+            "unpacked": law(fold * nnz, regist * nnz + sel_fixed), "packed": law(packed_fold, packed_reg + sel_fixed)}
+
+
+NODE_GIB = 1716
+
+
+def buckets(path: Path, reps: int, depth: int) -> dict:
+    p = json.loads(path.read_text())
+    g, dm = gadgets(), demux()
+    reg = registration(g, 65536, depth)
+    rows = [(w["workload"], part, b) for w in p["workloads"] for part in ("body", "tail") for b in w["unsplit"][part]]
+    weights = {sl: fold_weight(sl) for sl in sorted({b["session"]["k_log"] for _, _, b in rows})}
+    out = [{"workload": wl} | bucket_cost(b, part, g, weights, dm, reg, reps, p["fit"], p["glue_bytes"], p["bytes_per_nnz"])
+           for wl, part, b in rows]
+    print("weight per entry and rep (sl: chunks -> ANDs):", {sl: (w["chunks"], w["ands"]) for sl, w in weights.items()})
+    print(f"demux {dm['ands']}; registration, 64 KiB rows read whole: {reg['whole_per_bit']:.1f} ANDs per bit; "
+          f"selection path per slot at depth 20: {20 * g['FrameV3Node_v1{2}'] + g['LmsEqual_v1']:,}")
+    print(f"\nV* per session, {reps} reps; D = 2^max(22, ceil(log2(rows + 1)) + 2), rows = fold ANDs + "
+          f"{g['sha512_compression_rows'] / g['sha512_compression']:.2f} x hash ANDs; F6's law with circuit = rows x {RHO} x "
+          f"{p['bytes_per_nnz']} B; fits: D <= 2^32 and RSS <= {NODE_GIB} GiB")
+    print(f"{'workload':24} {'part':4} {'Z/slot':>8} {'sl':>3} {'slots':>5} {'types':>5} {'nz/nz':>7} {'unpacked':>9} {'D':>4} "
+          f"{'nz/pk':>5} {'packed':>9} {'D':>4} {'prove s':>9} {'RSS GiB':>9} {'sel/sess':>9} {'fits':>4}")
+    for r in out:
+        u, k = r["unpacked"], r["packed"]
+        wl = r["workload"].removeprefix("vllm/").split("__")
+        print(f"{wl[0] + '/' + wl[4] + '/' + wl[5]:24} {r['part']:4} {r['Z']:>8.3g} {r['sl']:>3} {r['slots']:>5} {r['types']:>5} "
+              f"{r['per_nonzero']['total']:>7,.0f} {u['ands']:>9.2e} {u['k_log']:>4} {r['packed_ratio']:>5.2f} "
+              f"{k['ands']:>9.2e} {k['k_log']:>4} {k['prove_s']:>9.3g} {k['rss_gib']:>9.3g} "
+              f"{r['selection_by_types']:>9.2e} {'yes' if k['fits_D'] and k['fits_node'] else 'no':>4}")
+    return {"source": str(path), "reps": reps, "gadgets": g, "demux": dm, "weights": weights, "registration": reg,
+            "rho": RHO, "node_gib": NODE_GIB, "packed_ratio": PACKED_RATIO, "buckets": out}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--buckets", type=Path, help="F6's prover.json: V* per session at each unsplit bucket instead")
     ap.add_argument("--units", default=",".join(UNITS))
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--row-bits", type=int, nargs="*", default=[1024, 8192, 65536])
@@ -305,6 +392,13 @@ def main() -> None:
     a = ap.parse_args()
     if a.one_unit:
         print(json.dumps(unit_stats(a.one_unit)))
+        return
+    out = a.out or (Path(os.environ["RESEARCH_RUN_DIR"]) / "out" if os.environ.get("RESEARCH_RUN_DIR") else None)
+    if a.buckets:
+        res = buckets(a.buckets, a.reps, a.depth)
+        if out:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "bucket_cost.json").write_text(json.dumps(res, indent=1))
         return
     g = gadgets()
     dm = demux()
@@ -342,7 +436,6 @@ def main() -> None:
     for u in rows:
         u["even_instances"] = u["cost"]["total"] * u["nnz"] / u["ands"]
         print(f"  {u['unit'][:56]:56} unit ANDs {u['ands']:>9,}  V* = inner at {u['even_instances']:>12,.0f} instances")
-    out = a.out or (Path(os.environ["RESEARCH_RUN_DIR"]) / "out" if os.environ.get("RESEARCH_RUN_DIR") else None)
     if out:
         out.mkdir(parents=True, exist_ok=True)
         (out / "nonzero_cost.json").write_text(json.dumps(res, indent=1))
