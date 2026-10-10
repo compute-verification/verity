@@ -5,14 +5,16 @@ import Proofs.Flock.Sampled.Statements
 /-!
 # F2's statements, proved
 
-All but `Composition`.
-
 * `coverage_holds`: the coverage check routes the slots bijectively onto the draw's order, which is injective, so each
   drawn unit is held by exactly one slot; and the slots, `Σ_b slots(b)` of them, number at least the draw.
 * `slotBinding_holds`: a held slot off its unit's committed record opens the root at the unit's position with a record
   other than the committed one (the record's format), so the two openings give a SHA-512 collision: of the two tree
   leaves' inputs, or of the two openings' (`Flock.Registered.opensLeaf_binding`).
 * `slotsSound_holds`: from the two, and the statement's slot check.
+* `composition_holds`: at each draw, F1's soundness bounds the sessions verifying with the statement failing by `ε`; at
+  each outcome the run reaches where it holds, `slotsSound_holds` puts the draw clear of the wrong units or gives a
+  reached slot break, and the outcomes it doesn't reach carry probability 0 (`prob_mono_reaches`). So a draw that hits
+  a wrong unit accepts with probability at most `ε`, and averaging over the draws gives the escape plus `E_ω[ε]`.
 * `zeroKnowledge_holds`: F1's `hides` at the honest audit's reveal list.
 * `menuComplete_holds`, `menuCompleteAt_holds`, `zeroKnowledgeAt_holds`: the honest prover fills a fitting batching's
   held slots with the trace's values (`fillValues`); so it aborts only where the draw doesn't fit; and at every other
@@ -95,6 +97,53 @@ theorem slotsSound_holds : SlotsSound := by
     obtain ⟨q, ⟨hq, hX⟩, -⟩ := hcov i hi
     exact (Finset.mem_filter.1 hw).2 _ _ hX (hp.holds q i hq)
   · exact Or.inr hbrk
+
+/-- An event implied at every outcome the run reaches is at least as likely: the outcomes it doesn't reach carry
+probability 0. -/
+theorem prob_mono_reaches {O : Type} {p q : O → Prop} :
+    ∀ (g : Game O) (τ : Strategy g), (∀ o, Reaches g τ o → p o → q o) → prob p g τ ≤ prob q g τ
+  | .ret a, _, h => by
+      classical
+      simp only [prob]
+      by_cases hp : p a
+      · simp [hp, h a rfl hp]
+      · simp [hp]
+  | .send _ k, τ, h => prob_mono_reaches (k τ.1) τ.2 h
+  | @Game.coin _ C _ _ k, τ, h =>
+      Finset.sum_le_sum fun c _ =>
+        mul_le_mul_right (prob_mono_reaches (k c) (τ c) fun o ho => h o (Exists.intro c ho)) _
+
+theorem composition_holds : Composition := by
+  intro N T V Reg O L Ty M session com view I R X path₀ hinj hcom σ
+  by_cases hB : ∃ ω, I.Break (L.draw ω) R (contOf σ ω)
+  · exact Or.inl hB
+  by_cases hS : ∃ ω o, Reaches (session (L.draw ω) R) (contOf σ ω) o ∧ I.verifies o = true ∧
+      SlotBreak (com R) X path₀ (I.hid (L.draw ω) R o)
+  · exact Or.inr (Or.inl hS)
+  refine Or.inr (Or.inr ?_)
+  have key : ∀ ω, prob (fun o => Accepts M view I.verifies (L.draw ω) o) (session (L.draw ω) R) (contOf σ ω) ≤
+      (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) := by
+    intro ω
+    by_cases hd : Disjoint (L.draw ω) (wrong Ty X)
+    · rw [ite_eq_left hd]
+      exact (prob_le_one _ _ _).trans le_self_add
+    · rw [ite_eq_right hd, zero_add]
+      have hε := (I.sound (L.draw ω) R (contOf σ ω)).resolve_left fun h => hB ⟨ω, h⟩
+      refine le_trans ?_ hε
+      refine prob_mono_reaches _ _ fun o ho ha => ⟨ha.2, fun hp => ?_⟩
+      rcases slotsSound_holds Ty (com R) X path₀ (L.draw ω) (I.hid (L.draw ω) R o) hinj hcom hp with h | h
+      · exact hd h
+      · exact hS ⟨ω, o, ho, ha.2, h⟩
+  calc prob (fun x => Accepts M view I.verifies x.2 x.1) (sampledAudit L session R) σ
+      = avg fun ω => prob (fun o => Accepts M view I.verifies (L.draw ω) o) (session (L.draw ω) R) (contOf σ ω) := by
+        unfold sampledAudit
+        rw [prob_coin]
+        exact congrArg avg (funext fun ω => prob_map _ _ _ _)
+    _ ≤ avg fun ω => (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) :=
+        avg_mono key
+    _ = L.escape (wrong Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω) := by
+        unfold Law.escape
+        rw [avg_add, avg_ite_eq_prCoin]
 
 theorem zeroKnowledge_holds : ZeroKnowledge := by
   intro N T V Reg O session Ty com I M R S h hv hp

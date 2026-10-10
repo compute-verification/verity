@@ -4,7 +4,7 @@ import Proofs.Flock.Sampled.Defs
 # F2's statements: sampling with prover-chosen batching, the partition hidden
 
 `Proofs.Flock.Sampled.NonVacuity` shows each one's hypotheses hold together, and `Proofs.Flock.Sampled.Proofs` proves
-all but `Composition`.
+each one.
 
 * `Coverage`: the outer proof's coverage check and slot binding's conclusion put each drawn unit in exactly one slot, of
   its committed type, on its committed values, against the committed hidden partition; and the auditor, which checks
