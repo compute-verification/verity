@@ -21,7 +21,7 @@ other declaration is proved.
   recursive prover's own runs after a round's commitment whose two decoded transcripts `pick` reads as a collision.
 * `zk_sessions_recursive_fork_inner` (**gap 2**): `zk_sessions_recursive_fork` with V*'s bridge as
   `Flock.Assumptions.VBridge` and the inner protocol's soundness in fork form (`InnerSoundForkOn`), the inner fork
-  (`InnerForkRec`) a third beside the round and session forks.
+  (`InnerForkRec`) a fourth beside the registrant, round and session forks.
 * `recursive_sound_compiled`: the target, from the two gaps: `RecursiveSound`'s conclusion at `I := flockInnerCL`, with
   V*'s bridge as VBridge G (`vbridge_compiled`) concludes it, the inner fork, and the inner term the table's error;
   `recursive_sound_compiled_fast100` at `2^-205`.
@@ -171,8 +171,8 @@ def InnerForkRec (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : 
 
 /-- **Gap 2: the recursive audit is sound with the inner protocol's soundness in fork form.**
 `zk_sessions_recursive_fork` with V*'s bridge as `Flock.Assumptions.VBridge` (the inner verifier reads each round's
-message whole) and `InnerSoundForkOn` in place of `InnerSound`: a round fork, a session fork, an inner fork of `σ`'s own
-runs (`InnerForkRec`), or the same bound.
+message whole) and `InnerSoundForkOn` in place of `InnerSound`: a registrant fork (`regFinder`), a round fork, a session
+fork, an inner fork of `σ`'s own runs (`InnerForkRec`), or the same bound.
 
 Its proof is open: `commit_and_prove_upto` read at `G` := the inner transcripts some accepted outer proof decodes at a
 leaf of `σ` with their coins, so that its inner term is `prob (accepts ∧ G)` against `refStrat` (`leafAvg_relabel`) and
@@ -192,7 +192,8 @@ theorem zk_sessions_recursive_fork_inner
     (hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
     {D : Type} (H : List UInt8 → D) (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair)
     {εin : ℝ≥0∞} (hin : InnerSoundForkOn H I pick εin) :
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨ InnerForkRec zs dg N k Rw σ x wmsg H pick ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      InnerForkRec zs dg N k Rw σ x wmsg H pick ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
@@ -200,13 +201,14 @@ theorem zk_sessions_recursive_fork_inner
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
-  · exact Or.inr (Or.inr (Or.inl hf))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
   rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
       (fun _ _ _ _ h => h) Sk cmt msg hbr.2.1 hbr.2.2.1 hbr.2.2.2
-      (innerAtLeavesV_of_forkOn zs dg N k Rw σ x wmsg H pick hin hf) with h | h | h
+      (innerAtLeavesV_of_forkOn zs dg N k Rw σ x wmsg H pick hin hf) with h | h | h | h
   · exact Or.inl h
   · exact Or.inr (Or.inl h)
-  · exact Or.inr (Or.inr (Or.inr h))
+  · exact Or.inr (Or.inr (Or.inl h))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
 
 end Chain
 
@@ -222,7 +224,7 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : La
 
 /-- **The recursive audit is sound at C-Flock's compiled inner protocol.** `RecursiveSound` at `I := flockInnerCL`
 (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins), V*'s bridge as VBridge G
-(`vbridge_compiled`) concludes it: a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded
+(`vbridge_compiled`) concludes it: a registrant fork, a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded
 transcripts play the compiled table to outcomes that clash (`InnerForkRec` at `clashPickCL`), or the audit accepts a
 false hidden statement with probability at most V*'s sessions' expected statistical errors, `r` times their expected
 stage slack, and the interactive table's error. From `flock_inner_sound_compiled` (gap 1) and
@@ -246,7 +248,7 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (flockInnerCL T CT A H E Lf cls regs sch).Msg)
     (hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg) :
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       InnerForkRec zs dg N k Rw σ x wmsg H (clashPickCL T CT A H E Lf cls regs sch) ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (flockInnerCL T CT A H E Lf cls regs sch).holds (x o.1 o.2.1))
@@ -281,7 +283,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (flockInnerCL T CT A H E Lf cls regs sch).Msg)
     (hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg) :
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       InnerForkRec zs dg N k Rw σ x wmsg H (clashPickCL T CT A H E Lf cls regs sch) ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (flockInnerCL T CT A H E Lf cls regs sch).holds (x o.1 o.2.1))
@@ -292,7 +294,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   (recursive_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg
-    hbr).imp id <| Or.imp id <| Or.imp id fun h =>
+    hbr).imp id <| Or.imp id <| Or.imp id <| Or.imp id fun h =>
       h.trans (add_le_add le_rfl (ENNReal.ofReal_le_ofReal (Accounting.tableError_le_of_le_33 hm1 hm2 hsch _ hshape)))
 
 end Target

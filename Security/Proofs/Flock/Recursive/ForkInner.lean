@@ -1,4 +1,4 @@
-import Proofs.Flock.Recursive.StageRead
+import Proofs.Flock.Recursive.Registrants
 import Proofs.Flock.Recursive.ForkRuns
 
 /-!
@@ -13,7 +13,9 @@ the relabelled transcript is accepted and that some outer outcome the leaf reach
 
 * `commit_and_prove_on`, `recursive_sound_on`, `zk_sessions_recursive_upto_on`, `zk_sessions_recursive_full_on`,
   `zk_sessions_recursive_fork_on`: the chain at `InnerAtLeaves` for every choice of reference openings, with the inner
-  verifier reading each round's message whole (`hsameEq`, as `Flock.Assumptions.VBridge` has it).
+  verifier reading each round's message whole (`hsameEq`, as `Flock.Assumptions.VBridge` has it), on V*'s bridge off
+  an event `Bad` whose probability is added to the outer term (`zk_sessions_recursive_upto_off`); the fork form takes
+  `Bad := RegColl`, with `regFinder` finding a collision as one more fork (`zk_sessions_recursive_fork_read_off`).
 * `innerAtLeavesV_of_forkOn`: `InnerSoundForkOn` gives `InnerAtLeaves` at V*'s outer proof unless the recursive prover
   has an inner fork (the body of `InnerForkRec`).
 -/
@@ -367,7 +369,9 @@ theorem zk_sessions_recursive_upto_on
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     -- the hidden circuit's statement, the messages V*'s layers hold, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (hbr : VBridge zs dg N k Rw x wmsg)
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop) (hbr : VBridgeOff Bad zs dg N k Rw x wmsg) {εX : ℝ≥0∞}
+    (hX : prob (fun o => Bad o.1 o.2.1 o.2.2.1 o.2.2.2.1) (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+      εX)
     -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsameEq : ∀ i ρs a b, same i ρs a b → a = b)
@@ -387,18 +391,40 @@ theorem zk_sessions_recursive_upto_on
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) + εX +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   have h := recursive_sound_on ob σ (fun R ω t o => AcceptsV (zs R ω t) o) x
     (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω))
     Prod.snd (fun w => wmsg w.1) same hsameEq cmt msg T εtr κ q
-    (εo := expAt σ fun ω t s => sumV (zs σ.1 ω t) dg N
-      (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
+    (εo := expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+      (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) + εX) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
-  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
-      qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd))) (hbr σ.1 ω t) _) _
+  · have hsplit : ∀ ω t (s : Strategy (outerV (zs σ.1 ω t) dg N)),
+        prob (fun b => AcceptsV (zs σ.1 ω t) b ∧
+            ¬ I.accepts (x σ.1 ω) ((wmsg (layers (zs σ.1 ω t b.1) dg N k Rw b.2)).zip (t.map Prod.snd)))
+          (outerV (zs σ.1 ω t) dg N) s ≤
+        sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s +
+          prob (fun b => Bad σ.1 ω t b.1) (outerV (zs σ.1 ω t) dg N) s := by
+      intro ω t s
+      refine (prob_mono (q := fun b : Reg₂ × VRec Vs Reg' dg N => (AcceptsV (zs σ.1 ω t) b ∧
+          ¬ (Bad σ.1 ω t b.1 ∨
+            I.accepts (x σ.1 ω) ((wmsg (layers (zs σ.1 ω t b.1) dg N k Rw b.2)).zip (t.map Prod.snd)))) ∨
+          Bad σ.1 ω t b.1) (fun b hb => ?_) _ _).trans ((prob_or_le _ _ _ _).trans (add_le_add ?_ le_rfl))
+      · obtain ⟨ha, hn⟩ := hb
+        by_cases hb : Bad σ.1 ω t b.1
+        · exact Or.inr hb
+        · exact Or.inl ⟨ha, fun h => h.elim hb hn⟩
+      · exact outerV_le_dep hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS qW qR
+          (fun R₂ Xs => Bad σ.1 ω t R₂ ∨ I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
+          (fun R₂ τ o h => (Classical.em (Bad σ.1 ω t R₂)).elim Or.inl fun hb => Or.inr (hbr σ.1 ω t R₂ hb τ o h)) s
+    refine le_trans (b := expAt σ fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s +
+          prob (fun b => Bad σ.1 ω t b.1) (outerV (zs σ.1 ω t) dg N) s)
+      (avg_mono fun ω => leafAvg_mono (fun t s => hsplit ω t _) _) ?_
+    exact (expAt_add σ _ _).trans_le (add_le_add le_rfl ((prob_recGame _ σ).symm.le.trans hX))
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
     exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
@@ -418,7 +444,9 @@ theorem zk_sessions_recursive_full_on
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     -- the hidden circuit's statement, the messages V*'s layers hold, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (hbr : VBridge zs dg N k Rw x wmsg)
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop) (hbr : VBridgeOff Bad zs dg N k Rw x wmsg) {εX : ℝ≥0∞}
+    (hX : prob (fun o => Bad o.1 o.2.1 o.2.2.1 o.2.2.2.1) (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+      εX)
     -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsameEq : ∀ i ρs a b, same i ρs a b → a = b)
@@ -436,12 +464,12 @@ theorem zk_sessions_recursive_full_on
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) + εX +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto_on hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsameEq
+  refine zk_sessions_recursive_upto_on hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg Bad hbr hX same hsameEq
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
@@ -463,7 +491,7 @@ theorem zk_sessions_recursive_fork_on
     (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (hbr : VBridge zs dg N k Rw x wmsg)
+    (hbr : VBridgeOff (RegColl zs) zs dg N k Rw x wmsg)
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsameEq : ∀ i ρs a b, same i ρs a b → a = b)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -471,18 +499,20 @@ theorem zk_sessions_recursive_fork_on
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
     {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesV zs dg N k Rw σ x wmsg ref εin) :
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
+  by_cases h0 : (regFinder zs dg N σ).Finds H512
+  · exact Or.inl h0
   by_cases h1 : RoundFork zs dg N k Rw σ cmt
-  · exact Or.inl h1
+  · exact Or.inr (Or.inl h1)
   by_cases h2 : SessionFork zs dg N k Rw M σ
-  · exact Or.inr (Or.inl h2)
-  refine Or.inr (Or.inr ?_)
+  · exact Or.inr (Or.inr (Or.inl h2))
+  refine Or.inr (Or.inr (Or.inr ?_))
   have hno := allAt_of_not_exAt h2
   have hB : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
         (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
@@ -500,13 +530,16 @@ theorem zk_sessions_recursive_fork_on
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_full_on hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsameEq Sk cmt
-    msg hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
-    hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
-  simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,
-    mul_zero, add_zero]
-  rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
-  exact mul_le_mul' le_rfl hsl
+  refine (zk_sessions_recursive_full_on hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg (RegColl zs) hbr
+    (prob_regColl_le zs dg N σ (Finder.cr_of_not_finds h0 0)) same hsameEq Sk cmt msg hcmt hdec hfull (fun _ => 0)
+    (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0) hin).trans
+    (add_le_add (add_le_add ?_ ?_) le_rfl)
+  · simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, ENNReal.ofReal_zero, add_zero]
+    exact hB
+  · simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,
+      mul_zero, add_zero]
+    rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
+    exact mul_le_mul' le_rfl hsl
 
 /-- **The inner protocol's soundness in fork form bounds the inner term at the prover's own leaves**, at every choice of
 reference openings, unless the recursive prover has an inner fork (the body of `InnerForkRec`: at some draw and round,

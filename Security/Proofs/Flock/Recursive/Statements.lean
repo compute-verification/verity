@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Assumptions.Recursive
 import Proofs.Flock.Soundness.Assumptions.Zk
 import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # The recursive audit's guarantees (trusted)
@@ -17,7 +18,7 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 (`Proofs.Flock.Recursive.Guarantees`).
 
 * `RecursiveSound`, for the auditor, in fork form: either a run of the prover's own strategy finds a SHA-512 collision
-  (at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
+  (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
   hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
   the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
@@ -36,6 +37,10 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   accepts every session while the registered private circuit's hidden statement fails with probability at most
   `RecursiveSound`'s bound. `RanRegisteredRun` is the one-session form, `PrivateCircuit.RanRegistered` with its
   `cr/sha-512` hypothesis replaced by the same kind of break.
+* `commitBytes`, `firewallPairs`, `firewallCommits`: the firewall's commit strings and commitments when the inner coins
+  are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the firewall reads
+  (`Proofs.Flock.Recursive.Firewall`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
+  each message fixed by the auditor's tape before any commitment.
 
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
@@ -54,8 +59,11 @@ history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is 
 `flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the
 registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's
 own). For every prover `σ` of the recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`) and the inner
-protocol's soundness at `ε_in`, one of three holds.
+protocol's soundness at `ε_in`, one of four holds.
 
+* A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
+  sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
+  collision), and outputs that collision. V*'s bridge reads off such outcomes (`VBridgeOff`).
 * A round fork (`RoundFork`): for some round `i < r`, draw `ω` and commit string `pos`, round `i`'s fork finder
   (`forkAt`: two continuations of `σ` after its round-`i` commitment, each running the trial for `pos`) outputs a
   SHA-512 collision at an outcome it reaches.
@@ -97,7 +105,7 @@ def RecursiveSound : Prop :=
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
     -- the inner protocol
     {εin : ℝ≥0∞} (_hin : InnerSound I εin),
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
@@ -118,6 +126,30 @@ def firewallLeaf (msg : ByteArray) (y : ZkView.Salt) : ByteArray :=
 reads no message. -/
 def idealLeaf (u : ZkView.Bits × ZkView.Salt) : ByteArray :=
   ZkView.leafH (u.1, ZkView.saltHash u.2)
+
+/-- **An hm96-sha512 commit string from its two halves**, `b ‖ c`: the 128 bytes a firewall leaf hashes
+(`ZkView.leafH` is `Default512.treeLeaf` of them). -/
+def commitBytes (u : ZkView.Bits × ByteArray) : ByteArray := ZkView.bytesOf (k := 64) u.1 ++ u.2
+
+/-- **The firewall's commit strings under live inner coins**, as their two halves: string `i` is
+`(SHA-512(m_i) ⊕ M·y_i, c(y_i))`, a `firewallLeaf`'s before its leaf hash, where the message `m_i = msgs i l` reads the
+commit strings `l` before it (`commitBytes` of their halves). The auditor has seen those strings when it draws the coins
+message `i` answers, so the message may read them: each inner coin is live, drawn after the commitment before it. They
+are `ZK.adaptiveLeaves` at the identity encoding: pair `i` is message `i`'s digest at the pairs before it, plus
+`(M·y_i, c(y_i))`. -/
+def firewallPairs {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt) :
+    Fin nh → ZkView.Bits × ByteArray :=
+  FlockSoundness.ZK.adaptiveLeaves (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
+    (fun i l => ZkView.bitsOf (Flock.Sha512.hash (msgs i fun j => commitBytes (l j))))
+    (fun i => (ZkView.My (y i), ZkView.saltHash (y i)))
+
+/-- **The firewall's commitments under live inner coins**: commitment `i` is the hm96-sha512 leaf of message `i`'s
+SHA-512 under its own fresh salt `y i`, `firewallLeaf (msgs i l) (y i)`, where message `i` reads the commit strings `l`
+before it (`firewallPairs`). A message that reads none of them is the committed-coin case,
+`firewallLeaf (msgs i) (y i)`. -/
+def firewallCommits {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt)
+    (i : Fin nh) : ByteArray :=
+  ZkView.leafH (firewallPairs msgs y i)
 
 /-- **The recursive audit is zero knowledge.** The auditor's tape is `Ωa` and the developer's randomness `Ωp`. The
 firewall sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
@@ -328,7 +360,7 @@ output holds the strategy the prover names for each session, and with it the reg
 statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
 (`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of four holds.
 
-* `RecursiveSound`'s round fork (`RoundFork`) or session fork (`SessionFork`).
+* `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`).
 * A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting, having read at some
   position `i` a row other than the registered `p i`, and its opening of `rt` at `i` and the developer's collide
   (`Binding.Collides ((com i).ext (op o i) (op₀ i))`).
@@ -361,7 +393,7 @@ def RecursiveRanRegistered : Prop :=
     (_hop : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i → (com i).Opens rt (row o i) (op o i))
     (_hx : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : Pos → Row, (∀ i, reads o i → q i = row o i) →
       x o.1 o.2.1 = stmt q o.2.1),
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       (∃ o, FlockSoundness.Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
         AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((com i).ext (op o i) (op₀ i))) ∨
