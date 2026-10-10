@@ -39,8 +39,8 @@ open FlockVBridge.AccChain (RegOut OpensAt)
 
 section Reads
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A registered read is a row** (`Reads.read_row`; `rowsSh`'s rows are the commit strings `.inl (u, q)`,
 `Readers.ofRows`' `isRow`). -/

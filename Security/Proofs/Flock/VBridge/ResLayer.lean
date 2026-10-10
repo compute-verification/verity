@@ -169,8 +169,8 @@ section Decode
 
 open FlockVBridge.Decode
 
-variable {mPts nU : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU Reg' c hU hscope Lv)
+variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **`decode_resUnit` from the read row columns**: the row ports registered bits of `w` only at the columns some
 computed row reads (`unit_partR` at `fill`). -/

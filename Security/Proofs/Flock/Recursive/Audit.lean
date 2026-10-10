@@ -84,16 +84,16 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact Or.inr (Or.inl hcol)
   refine Or.inr (Or.inr ⟨hT, ?_⟩)
   have hin := compiledForkSound_execClassAt T CT (classOk_of_accepts hacc)
-  have hr' : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg')
+  have hr' : ∀ R ω t R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg')
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).dj
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).y₀ S' R') i k ≤ ρ := by
     intro R ω t R₂ j S' R' i
     dsimp only [Flock.Guarantees.custodied]
     by_cases hx' : (zr R ω t R₂ j).Typable
     · rw [zsOf_pos zr _ hT R ω t R₂ j hx']
-      exact hr R ω t R₂ j _ hx'.y₀ S' R' i
+      exact hr R ω t R₂ j _ _ hx'.y₀ S' R' i
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
-      exact hr _ _ _ _ j _ _ S' R' i
+      exact hr _ _ _ _ j _ _ _ S' R' i
   rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
     Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls

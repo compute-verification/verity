@@ -89,8 +89,8 @@ theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl 
 registrant's read): where the transcript's draw `d` draws unit `u`, the drawn statement labels it `idx`, and `reg ∈ own`
 is the circuit's port `q` by name and gives position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q`
 opens `reg`'s root at `x` through the header's path. -/
-theorem opens_of_acceptsZKR {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv) {tr : Exec.Transcript}
+theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
     (hacc : AcceptsZKR zo.I zo.own tr) {reg : Registered.Port} (hmem : reg ∈ zo.own) {u : Fin nv}
     {q : Fin c.ports.size} (hfind : (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some q.val)
     {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)

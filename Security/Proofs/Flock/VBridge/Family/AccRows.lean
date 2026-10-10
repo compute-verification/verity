@@ -52,8 +52,8 @@ def site (p : Flock.Registered.Port) : Site := (p.value, p.root, p.leaves, p.wor
 
 section Drawn
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Two registered reads of a drawn unit at one registered port read one port of the circuit** (`hown`: each read's
 port is the circuit's port of its name, `OwnReads`). -/

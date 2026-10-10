@@ -35,8 +35,8 @@ open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBri
 
 /-- **The digest a session's value binding registers at a row** is the leaf of the public file's `b ‖ c` of unit `u`'s
 row `q` (`keyReaders`' `regBc`, `Readers.regLeaf` at a row), at every registration. -/
-theorem vb_cs_inl {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv) (R' : Reg')
+theorem vb_cs_inl {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (R' : Reg')
     (u : Fin nv) (q : Fin c.ports.size) :
     zo.vb.cs R' (Sum.inl (u, q) : PosK c hU nv) =
       ((Sum.inl (u, q) : PosK c hU nv),

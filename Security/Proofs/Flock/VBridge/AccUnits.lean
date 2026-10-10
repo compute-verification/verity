@@ -114,8 +114,8 @@ theorem unitSum_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (
 
 section Copy
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy `j`'s output column `col` of unit `u` is a registered bit `b`**: the copy's gate there is committed, at a
 registered read (its own commit string, `posK`'s `.inr`), and the registrant's bit there is `b`. -/

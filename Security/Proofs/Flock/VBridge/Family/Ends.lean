@@ -36,8 +36,8 @@ open FlockSoundness.Discharge.Hm (bitL)
 
 section Keyed
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy 0's input column `col` of unit `u` is keyed by bit `k` of a row `own` names, at the registered root `pa` and
 position `pos`**: its Δ key (`Aliased.srcKey`) is bit `k` of row port `q`, the session's reads file names `q`, and

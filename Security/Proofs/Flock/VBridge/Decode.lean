@@ -40,8 +40,8 @@ open FlockVBridge.OfVStar
 
 section Fill
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 open Classical in
 /-- **The layer `bits` at the registrant's bits**: every wire at a registered read carries the registrant's bit there. -/
@@ -208,8 +208,8 @@ end Keys
 
 section Reg
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- The registered reads, at V*'s commit strings. -/
 def regRead (p : PosK c hU nv) : Prop := zo.rd.isRead p
@@ -390,8 +390,8 @@ theorem vOf_eq {sh : Flock.Shape} {rounds : Array (Array Flock.F128)} {extras : 
 
 section Part
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A part of S computes its residuals at the whole ports, in a layer agreeing with the registrant** (`decode_innerUnit` at `sub`). When copy
 `j` of unit `u` is V*'s `InnerRepCheck` unit of a part `S` whose row ports are registered bits of the whole message
