@@ -13,13 +13,18 @@ import Proofs.Flock.Soundness.Refine.Rep
 the circuit's META binds exactly those, its unit is V*'s statement `J` at the inner shape, its population is that
 statement's instance count, and the circuit file is byte for byte the one `vstar stage` writes for that statement under
 the verifier's bindings. `AcceptsZKR` doesn't read that check. This file states it and what it gives; `Loads` takes it
-to `VStmt.Loads` (`loads_of_verifiesV`). Nothing in `RecursiveAudit` reads it yet.
+to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in its event (`AcceptsVRV`).
 
 * `innerAt spec st`: the verifier's own inner shape at the inner statement, the value `RecVStar.innerOf` returns.
 * `AcceptsZKV i j f rows I own t`: flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F
   --rec-rows F` accepts: `AcceptsZKR`, and each statement passes `checkStmt` at the inner shape `i`, as statement `j`
   under the bindings `f`, against the inputs' tags, lookup tables, circuit file, partition object and program, `own`
   and the shared rows `rows`.
+* `LiveAcceptsZKV`, `AcceptsRV`, `AcceptsVRV`: the same of the live audit's transcript, and of every one of V*'s
+  sessions as the prover supplies them, session `j` as statement `j` under `bind j` (`acceptsVR_of_V`: they accept).
+* `VStarParses` (an obligation, open until gap 4 builds `Vs j` from the partition): at the inner shape `i`, V*'s
+  statement `j`'s file under `bind j` parses, at V*'s constant tags and no lookup tables, to `Vs j`'s circuit, and
+  `Vs j` has its instances.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
 * `checkFile_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it passes.
 * `population_of_setupH`: the set-up statement's population (`RecVStar.population`) is the size of the public file
@@ -51,6 +56,50 @@ def AcceptsZKV (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Optio
   AcceptsZKR I own t ∧ ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
     sts.forM (RecVStar.checkStmt (some i) I.tags I.tables · I.circuitFile I.partition I.program (some own) (some j)
       (some f) rows) = .ok ()
+
+/-- flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the live audit's
+transcript (`AcceptsZKV`). -/
+def LiveAcceptsZKV {n : ℕ} {Reg : Type} (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings)
+    (rows : Option (Array Flock.Registered.Port)) (I : Inputs) (own : Array Flock.Registered.Port)
+    (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop :=
+  AcceptsZKV i j f rows I own o.2.2
+
+section Sessions
+
+variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
+
+/-- **Every session accepts as V*'s statement of its index**, as the prover supplies them: session `j` at the inner
+shape `i`, `--rec-part j`, the bindings `bind j` and the shared rows `rows` (`LiveAcceptsZKV`). -/
+def AcceptsRV (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
+    (zr : (j : Fin S) → (Vs j).OuterR Reg') (b : VRec Vs Reg' dg N) : Prop :=
+  ∀ j : Fin S, LiveAcceptsZKV i j (bind j) rows (zr j).I (zr j).own (b j).2
+
+/-- **Every session accepts as V*'s statement of its index**, at the registration the outcome records. -/
+def AcceptsVRV (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
+    (zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg') (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
+  AcceptsRV i bind rows (zr o.1) o.2
+
+/-- **Sessions accepted as V*'s statements are accepted** (`AcceptsZKV`'s first conjunct). -/
+theorem acceptsVR_of_V {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)} {zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {o : Reg₂ × VRec Vs Reg' dg N} (h : AcceptsVRV i bind rows zr o) : AcceptsVR zr o :=
+  fun j => (h j).1
+
+end Sessions
+
+/-- Obligation: open until gap 4 builds `Vs j` from the partition, as this parse of V*'s file.
+**V*'s statement `j` at the inner shape `i`, written under its bindings, parses to `Vs j`'s circuit, and `Vs j` has one
+unit per instance.** At V*'s tags `t₀` (the `--statement` the verifier requires of a V* session), where `i` has
+statements and the `j`th is `s`, the file `circuitFile s (bind j)` that `vstar stage` writes parses, under `--zk`'s tags
+for one table (`Zk.tags` on the coin tree of `Zk.coinSpec #[t₀.table]`, at the file's `mask_log` and count 1) and with
+no lookup tables, to `(Vs j).c`; and `(Vs j).nv` is `s`'s instance count. A fact about our code, not a premise: the tags
+are a constant of the file, so no session input enters it. -/
+def VStarParses {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings) (Vs : Fin S → VStmt) :
+    Prop :=
+  ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray), RecVStar.statements i = .ok ss →
+    ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) = .ok cf →
+    HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
+      [] = .ok (Vs j).c ∧ (Vs j).nv = s.instances
 
 /-- **A loop that returns early or runs through**, over a state whose first component is the early return: where each
 step from a state with no return either returns a value (`.done` with `some (some y)`) or, at a `k` where `P k` holds,

@@ -4,6 +4,7 @@ import Proofs.Flock.Recursive.Premises
 import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.Description
+import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Flock.RecResiduals
 
@@ -28,7 +29,7 @@ private circuit registered by hm96 leaves. It is a conjunction:
   transcript and the owed outputs, `hash-derived-key` its one premise and what it takes of the code each an obligation.
 
 Its premises are the list in `Proofs.Flock.Recursive.Premises`. Its proof (`Flock.SecurityProofs.RecursiveAudit`,
-`Proofs.Flock.Recursive.Audit`) rests on the open lemmas that file names.
+`Proofs.Flock.Recursive.Audit`) names what else it takes.
 
 The class is a total function of the statement (`Recursion.execClassAt`, `Proofs.Flock.Recursive.ExecClass`): when
 the executable's checks of the statement's shape pass, `HClass.ofStmt` at no hidden entries (the universal unit's one
@@ -40,8 +41,10 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
 * `stmtAt`, `hiddenAt`: the private circuit's statement at a list of commit strings `b ‖ c`, one for each of the
   registration's rows (what `Flock.Registered.opens` opens; the rows are what those strings commit to, so a row's hm96
   binding is in what the statement means), and the run's hidden statement, at `st`'s own description rows.
-* `VerifiesV`, `VerifiesVR`: the verifier of record's verdict on every one of V*'s sessions, typed and as the prover
-  supplies them. (i)'s event reads the latter, so nothing is assumed of what a session's inputs parse to.
+* `VerifiesV`, `VerifiesVR`, `VerifiesVStar`: the verifier of record's verdict on every one of V*'s sessions, typed, as
+  the prover supplies them, and as the prover supplies them with the verifier's check that each is V*'s statement of
+  its index (`RecVStar.checkStmt`). (i)'s event reads the last, so nothing is assumed of what a session's inputs parse
+  to.
 
 C-Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
 in `Security/Properties/`.
@@ -67,6 +70,15 @@ the outcome records. -/
 def VerifiesVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
     {dg : ByteArray → ByteArray} {N : ℕ} (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
   AcceptsVR zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
+
+/-- **The verifier of record accepts every one of V*'s sessions as V*'s statement of its index**, as the prover
+supplies them: each session's proof and the check that it is V*'s statement `j` (`AcceptsVRV`: flock-verify with
+`--rec-inner` at `i`, `--rec-part j`, `--rec-bindings` at `bind j` and `--rec-rows` at `rows`, `RecVStar.checkStmt`),
+and its statement's form (`FailClosed.ScopeZR`), at the registration the outcome records. -/
+def VerifiesVStar {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
+    (rows : Option (Array Flock.Registered.Port)) (zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
+    {dg : ByteArray → ByteArray} {N : ℕ} (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
+  AcceptsVRV i bind rows zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
 
 /-- **C-Flock's compiled inner protocol as the executable runs it**: `flockInnerCL` at the executable's arithmetic
 (`execArith`) and its hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the class
@@ -150,9 +162,12 @@ recursive audit with C-Flock's compiled table there as its inner protocol (`inne
 as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each drawing all its units (`VLaw`:
 the full draw on the operating system's bytes, `--draw subset:<units>`), V*'s sessions `zr R ω t R₂ j` under
 their laws as the prover supplies them (`ZkOuterR`: inputs, own ports, draw file and record writer, with nothing
-assumed of what the inputs parse to), their records' custody `_hCust`, the messages V*'s layers hold and the rounds'
-commitments (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root
-`rt`. Where every index has a session that types (`Typed zr`: its inputs pass the statement check, parse to V*'s
+assumed of what the inputs parse to), their records' custody `_hCust`, the verifier of record's own inputs to them
+(the inner shape `ish`, V*'s bindings `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at
+which V*'s statements' files parse to `Vs` (`VStarParses`, an obligation until gap 4), the messages V*'s layers hold
+and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root
+`rt`. Every session's inputs carry V*'s tags (`_hT`): not a premise, but the fact one verifier check will supply, since
+refusal (5) compares the tags' names only. Where every index has a session that types (`Typed zr`: its inputs pass the statement check, parse to V*'s
 circuit, have V*'s units and set up at some draw), `custodied zr _hCust h` are the typed sessions (`zsOf`: each
 session that types, and at one that doesn't, a session of its index that types, refusing everything) and
 `transported zr _hCust h σ` is `σ` against them (`recT`). `stmt q ω` is the hidden statement at the draw `ω` of the
@@ -166,7 +181,8 @@ that hidden statement: the event below is empty; or at some row `st`'s commit st
 `rt` and the developer's give an explicit SHA-512 collision (`Flock.Registered.bcPair`); or the sessions type and
 there is a round fork, a session fork, or an inner fork of the transported prover's own runs whose decoded transcripts
 play the compiled table to outcomes that clash; or
-$$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \text{every session verifies} \wedge
+$$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \text{every session verifies as V*'s}
+  \text{ statement of its index} \wedge
   \neg\,\text{the statement of } p \text{ holds}]$$
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and the compiled table's error.
@@ -195,6 +211,15 @@ def RecursiveAudit : Prop :=
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
+    -- the verifier of record's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
+    -- statement (`--rec-bindings`) and the shared rows (`--rec-rows`); session `j` runs with `--rec-part j`
+    (ish : RecVStar.Inner) (bind : Fin (outerStatementsAt st) → VStar.Bindings)
+    (rows : Option (Array Flock.Registered.Port))
+    -- obligation (gap 4): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
+    (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
+    -- V*'s tags at every session: not a premise but the fact one verifier check will supply, since refusal (5)
+    -- compares the tags' names only
+    (_hT : ∀ R ω t R₂ j, (zr R ω t R₂ j).I.tags = Flock.Tags.circuit)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
     (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
@@ -222,8 +247,8 @@ def RecursiveAudit : Prop :=
     -- V*'s bridge, at the typed sessions
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
-    prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧ VerifiesVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-          ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
+    prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
+          VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
         (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     (∃ r < rt.leaves, Flock.Registered.rowsOf st.c st.pub rt r ≠ p r ∧
       Flock.Registered.Collides (Flock.Registered.bcPair rt r (Flock.Registered.rowsOf st.c st.pub rt r)
@@ -234,7 +259,8 @@ def RecursiveAudit : Prop :=
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (hiddenAt st rt stmt) wmsg
         Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
           (execClassAt st).regs (execClassAt st).sch) ∨
-      prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧ VerifiesVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+      prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
+            VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
           (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
