@@ -9,9 +9,10 @@ form reads what the finder's runs did instead: some outcome its strategy reaches
 to one digest, or none does and its success is `0`. Every `∃` ranges over what the runs output, never over arbitrary
 strings.
 
-* `Game.Outcome g s a`: `s` plays `g` to `a` at some coins; an event no reached outcome has has probability `0`
+* `Game.Outcome g s a` (`Defs`): `s` plays `g` to `a` at some coins; an event no reached outcome has has probability `0`
   (`Game.prob_eq_zero_of_outcome`);
-* `FindsColl H g s out`: some outcome `s` reaches outputs, by `out`, a collision of `H`; `Finder.Finds` at a finder;
+* `FindsColl H g s out` (`Defs`): some outcome `s` reaches outputs, by `out`, a collision of `H`; `Finder.Finds` at a
+  finder;
 * a finder that finds nothing satisfies `SHA512CRStrict` at every budget (`Finder.cr_of_not_finds`), and
   `SHA512CRExpected` at any nonnegative cost (`crExpected_of_not_finds`);
 * `SessForkZ`, `TableForkZ`, `RegForkZC`, `LinkForkZC`: a fork of a `--zk` session's knowledge, registered-value and link
@@ -25,12 +26,6 @@ strings.
 namespace FlockSoundness.Game
 
 variable {α : Type}
-
-/-- **An outcome the strategy reaches**: `s` plays `g` to `a` at some coins. -/
-def Outcome : (g : Game α) → Strategy g → α → Prop
-  | .ret b, _, a => b = a
-  | .send _ k, s, a => Outcome (k s.1) s.2 a
-  | @Game.coin _ _ _ _ k, s, a => ∃ c, Outcome (k c) (s c) a
 
 /-- **An event that no outcome the strategy reaches has is never seen.** -/
 theorem prob_eq_zero_of_outcome {p : α → Prop} :
@@ -48,17 +43,7 @@ namespace FlockSoundness.StrictCR
 
 open Game
 
-variable {D β : Type} (H : List UInt8 → D)
-
-/-- **A run of `g` against `s` finds a collision of `H`**: some outcome `s` reaches outputs, by `out`, two different
-strings that `H` maps to one digest. -/
-def FindsColl (g : Game β) (s : Strategy g) (out : β → Pair) : Prop :=
-  ∃ b, Game.Outcome g s b ∧ IsColl H (out b)
-
-/-- **A finder finds a collision of `H`** at an outcome its strategy reaches. -/
-def Finder.Finds (Fd : Finder Pair) : Prop := FindsColl H Fd.g Fd.s id
-
-variable {H}
+variable {D β : Type} {H : List UInt8 → D}
 
 theorem prob_coll_eq_zero {g : Game β} {s : Strategy g} {out : β → Pair} (h : ¬ FindsColl H g s out) :
     prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ H x = H y) g s = 0 :=
