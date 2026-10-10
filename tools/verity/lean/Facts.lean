@@ -323,9 +323,36 @@ partial def hypothesisJson (env : Environment) (meaning : Array Name) (moduleOf 
     ("head", toJson (head.map toString)), ("module", toJson ((head.bind moduleOf).map toString)),
     ("reaches", toJson (reaches env meaning t)), ("guarded", toJson guarded), ("applies", toJson body)]]
 
+/-- The events of a conclusion: each argument `fun o => A ∧ …` of a constant `c` (`prob (fun o => A ∧ …) g σ`) whose
+body is a proposition, under any binders of the conclusion (`∃ h, … ∨ prob …`), with `c` (`head`), what its first conjunct
+`A` applies (`applies`) and whether `A` holds under a hypothesis of its own (`guarded`). -/
+partial def eventsOf (env : Environment) (meaning : Array Name) (e : Expr) : MetaM (Array Json) := do
+  match e with
+  | .mdata _ b => eventsOf env meaning b
+  | .proj _ _ b => eventsOf env meaning b
+  | .lam n t b bi | .forallE n t b bi =>
+    withLocalDecl n bi t fun x => eventsOf env meaning (b.instantiate1 x)
+  | .app .. =>
+    let args := e.getAppArgs
+    let mut out := #[]
+    if let .const c _ := e.getAppFn then
+      for a in args do
+        if !a.isLambda then continue
+        out := out ++ (← lambdaTelescope a fun _ b => do
+          unless ← isProp b do return #[]
+          let first := if b.isAppOfArity ``And 2 then b.appFn!.appArg! else b
+          forallTelescope first fun ys body => do
+            let guarded ← ys.anyM fun y => do isProp (← y.fvarId!.getType)
+            return #[Json.mkObj [("head", toJson c.toString), ("applies", toJson (applies env meaning body)),
+              ("guarded", toJson guarded)]])
+    for a in args do
+      out := out ++ (← eventsOf env meaning a)
+    return out
+  | _ => return #[]
+
 /-- One part of a statement's shape, for the audit's shape rule: its binders (`inputs`: those that aren't propositions,
 each with its position and its type's head), its hypotheses (`hypothesisJson`: each `Prop` binder, and each `Prop` field
-of a structure an input ranges over), and what its conclusion reaches. -/
+of a structure an input ranges over), what its conclusion reaches, and its events (`eventsOf`). -/
 def shapeOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json :=
   forallTelescope stmt fun xs concl => do
     let mut inputs := #[]
@@ -358,7 +385,7 @@ def shapeOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opti
               out := out ++ (← hypothesisJson env meaning moduleOf "field" s!"{d.userName}.{fd.userName}" i fd.type)
           return out)
     return Json.mkObj [("inputs", toJson inputs), ("hypotheses", toJson hyps),
-      ("conclusion", toJson (reaches env meaning concl))]
+      ("conclusion", toJson (reaches env meaning concl)), ("events", toJson (← eventsOf env meaning concl))]
 
 partial def conjuncts (e : Expr) : List Expr :=
   if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]

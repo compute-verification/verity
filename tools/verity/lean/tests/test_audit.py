@@ -313,6 +313,7 @@ structure World where
   nonempty : Nonempty Ω
 def Accepts (s : Sess) : Prop := verify s.x = true
 def reads (s : Sess) : Nat := s.x + 1
+def prob (_ : Nat → Prop) (n : Nat) : Nat := n
 end Control
 """
 SHAPE_THMS = """import Control.ShapeSpec
@@ -323,6 +324,10 @@ theorem mentions (s : Sess) (_hacc : Accepts s) (_hm : reads s = s.x + 1) : True
 theorem underForall (s : Sess) (_hacc : Accepts s) (_hA : ∀ j, Uniform j) : True := trivial
 theorem family (_Vs : Fin 3 → Stmt) (zs : Fin 3 → Outer 0) (_hacc : ∀ j, Accepts (zs j)) : True := trivial
 theorem world (_W : World) (s : Sess) (_hacc : Accepts s) : True := trivial
+theorem event (zs : Nat → Sess) (_hA : ∀ j, Uniform j) (_hq : reads (zs 0) > 0) :
+    prob (fun o => Accepts (zs o) ∧ reads (zs o) = 0) 1 ≤ 1 ∨ ∃ k : Nat, prob (fun o => Accepts (zs (o + k)) ∧ True) k ≤ k :=
+  Or.inl (Nat.le_refl 1)
+theorem eventLate (zs : Nat → Sess) : prob (fun o => reads (zs o) = 0 ∧ Accepts (zs o)) 1 ≤ 1 := Nat.le_refl 1
 end Control
 """
 
@@ -333,7 +338,8 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
     mentions-pass`): mentioning a session whose structure names the function (`hown`) is no acceptance, nor is an
     implication whose consequent isn't one (`_hop`); a premise under `∀` is read by its head; a family of structures
     (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is a hypothesis
-    too, since a field `Nonempty {x // Bad x}` is an existence claim."""
+    too, since a field `Nonempty {x // Bad x}` is an existence claim. A probability's events are read under the
+    conclusion's binders (`∨ ∃ k, prob …`), and a family's field that applies the function is refused beside them."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control" / "ShapeSpec.lean").write_text(SHAPE_SPEC)
@@ -341,13 +347,15 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
     (pkg / "Control" / "ShapeThms.lean").write_text(SHAPE_THMS)
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.ShapeThms\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    names = ["guarded", "mentions", "underForall", "family", "world"]
+    names = ["guarded", "mentions", "underForall", "family", "world", "event", "eventLate"]
     f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in names}}, tmp_path)
     entry = {"function": "Control.verify", "outcome": "accept"}
-    got = {n: [w.split(" : ")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"], ["Control.ShapePrem"])]
+    got = {n: [w.split(" : ")[0].split(" that")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"],
+                                                                        ["Control.ShapePrem"], events=["Control.prob"])]
            for n in names}
     assert got == {"guarded": ["takes _hop"], "mentions": ["takes _hm"], "underForall": [], "family": ["takes _Vs.hscope"],
-                   "world": ["takes _W.nonempty"]}, got
+                   "world": ["takes _W.nonempty"], "event": ["takes zs.hown", "takes _hq"],
+                   "eventLate": ["bounds an event of Control.prob"]}, got
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -1510,6 +1518,26 @@ def test_an_entry_may_name_each_conjuncts_own_function_and_outcome():
         assert A.refusals(bad, [sound, sim], [])[0].startswith("has 2 conjunct(s)"), bad
     both = entry | {"function": "P.check"}
     assert "both `conjuncts` and a function" in A.refusals(both, [sound, sim], [])[0]
+
+
+def test_a_probability_statement_has_its_acceptance_in_the_event():
+    """`shape.events`: a conjunct bounding `prob (fun o => accepts o ∧ …)` takes premises only, so its hypotheses, an
+    acceptance outside the event among them, are each refused; an event of a constant not listed is not read, and one
+    that doesn't start with the acceptance, or whose first conjunct holds under a hypothesis, is refused."""
+    entry, prob = {"function": "P.check", "outcome": "accept"}, ["G.prob"]
+    event = lambda applies, guarded=False, head="G.prob": {"head": head, "applies": applies, "guarded": guarded}
+    held = part([hyp("hA3", 0, ["W.Uniform"], module="W.Premises"), hyp("hk", 2, ["LE.le"]),
+                 hyp("zr.hown", 1, ["P.check"], source="field"), ACCEPTS], inputs=[("zr", 1), ("k", 2)])
+    fits = held | {"events": [event(["P.check", "P.Accepts"]), event(["P.check"]), event(["P.Q"], head="Exists")]}
+    assert [w.split(" : ")[0] for w in A.refusals(entry, [fits], ["W.Premises"], events=prob)] == \
+        ["takes zr.hown", "takes h", "takes hk"]
+    assert "its event's first conjunct" in A.refusals(entry, [fits], ["W.Premises"], events=prob)[0]
+    assert A.refusals(entry, [part(inputs=[("x", 0)]) | {"events": fits["events"]}], [], events=prob) == []
+    assert A.refusals(entry, [fits], ["W.Premises"]) == [], "not listed: the old rule, which takes zr.hown as the acceptance"
+    for bad in ([event(["P.check"]), event(["P.Q"])], [event(["P.check"], guarded=True)]):
+        got = A.refusals(entry, [part(inputs=[("x", 0)]) | {"events": bad}], [], events=prob)
+        assert [w.split(" that")[0] for w in got] == ["bounds an event of G.prob", "takes no hypothesis"], bad
+        assert A.refusals(entry, [fits | {"events": bad}], ["W.Premises"], events=prob)[0].startswith("bounds an event")
 
 
 def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink():
