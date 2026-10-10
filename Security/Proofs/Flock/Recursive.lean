@@ -21,6 +21,7 @@ import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Recursive.ReadsOpen
 import Proofs.Flock.Recursive.OuterAbort
+import Proofs.Flock.Recursive.Sessions
 import Proofs.Flock.Recursive.OuterZK
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
@@ -32,4 +33,5 @@ strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at
 (`UniversalClass`), the class, regions and schedule of an executable statement (`ExecClass`), the registered reads read
 off an outcome, whose commit strings open the registration's root when every session verifies (`Reads`, `ReadsOpen`),
 V*'s outer sessions with the honest prover's self-check in them, which never stops (`OuterAbort`), and V*'s outer
-sessions' zero knowledge, (ii)'s `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`). -/
+sessions (`Sessions`) and their zero knowledge, (ii)'s `_hOuter`, at the honest prover's code, its self-check included
+(`OuterZK`). -/
