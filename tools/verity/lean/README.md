@@ -170,7 +170,9 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (a constant, several, or a field path such as `P.protocol.check`) and, unless `O` is `accept`, a constant named `O`,
   and premises (hypotheses whose head is under `premises`), up to the first input bound after that acceptance; what
   follows is its conclusion. With `O` `none` (a function that always returns) it takes no acceptance and must mention
-  `F`. Several acceptances of `F` count as one, of the tuple of their inputs. A `Prop` field of a structure under
+  `F`. A conjunction whose conjuncts are about different functions (soundness of a check and simulation of a server)
+  gives `{"conjuncts": [{"function": F1, "outcome": O1}, ...]}` in place of `function` and `outcome`, one per
+  conjunct in order, so each is checked against its own. Several acceptances of `F` count as one, of the tuple of their inputs. A `Prop` field of a structure under
   `meaning` that an input ranges over is a hypothesis. A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
