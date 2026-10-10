@@ -3985,7 +3985,10 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(server(st, &vinst)));
+    // drawn (`--draw`) only when the verifier's file is the prover's: a drawn statement's digest reads the file, so R7 would
+    // refuse a case whose files differ before the check it is for
+    let s = Arc::new(Mutex::new(if Arc::ptr_eq(&pinst, &vinst) { server(st, &vinst) }
+                                else { Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst))) }));
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
