@@ -3186,7 +3186,7 @@
   "premises": ["Proofs.Flock.Recursive.Premises"],
   "events": ["FlockSoundness.Game.prob"],
   "properties": {
-   "Flock.SecurityProofs.RecursiveAudit": {"function": ["Flock.ProvedScope.check", "Flock.Zk.verify"], "outcome": "accept"}
+   "Flock.SecurityProofs.RecursiveAudit": {"conjuncts": [{"function": ["Flock.Stmt.setupH", "Flock.Registered.checkDescription", "Flock.Zk.verify", "Flock.ProvedScope.check"], "outcome": "accept"}, {"function": ["Flock.Stmt.setupH", "Flock.Registered.checkDescription", "Flock.Zk.verify", "Flock.ProvedScope.check"], "outcome": "accept"}]}
   },
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",

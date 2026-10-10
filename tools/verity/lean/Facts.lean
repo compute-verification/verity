@@ -323,9 +323,13 @@ partial def hypothesisJson (env : Environment) (meaning : Array Name) (moduleOf 
     ("head", toJson (head.map toString)), ("module", toJson ((head.bind moduleOf).map toString)),
     ("reaches", toJson (reaches env meaning t)), ("guarded", toJson guarded), ("applies", toJson body)]]
 
-/-- The events of a conclusion: each argument `fun o => A ∧ …` of a constant `c` (`prob (fun o => A ∧ …) g σ`) whose
-body is a proposition, under any binders of the conclusion (`∃ h, … ∨ prob …`), with `c` (`head`), what its first conjunct
-`A` applies (`applies`) and whether `A` holds under a hypothesis of its own (`guarded`). -/
+partial def conjuncts (e : Expr) : List Expr :=
+  if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
+
+/-- The events of a conclusion: each argument `fun o => A₁ ∧ … ∧ Aₙ` of a constant `c` (`prob (fun o => …) g σ`) whose
+body is a proposition, under any binders of the conclusion (`∃ h, … ∨ prob …`), with `c` (`head`) and, for each
+conjunct `Aᵢ` of the body (`conjuncts`, its `∧`s flattened), what it applies (`applies`) and whether it holds under a
+hypothesis of its own (`guarded`). -/
 partial def eventsOf (env : Environment) (meaning : Array Name) (e : Expr) : MetaM (Array Json) := do
   match e with
   | .mdata _ b => eventsOf env meaning b
@@ -340,11 +344,10 @@ partial def eventsOf (env : Environment) (meaning : Array Name) (e : Expr) : Met
         if !a.isLambda then continue
         out := out ++ (← lambdaTelescope a fun _ b => do
           unless ← isProp b do return #[]
-          let first := if b.isAppOfArity ``And 2 then b.appFn!.appArg! else b
-          forallTelescope first fun ys body => do
+          let cs ← (conjuncts b).mapM fun e => forallTelescope e fun ys body => do
             let guarded ← ys.anyM fun y => do isProp (← y.fvarId!.getType)
-            return #[Json.mkObj [("head", toJson c.toString), ("applies", toJson (applies env meaning body)),
-              ("guarded", toJson guarded)]])
+            return Json.mkObj [("applies", toJson (applies env meaning body)), ("guarded", toJson guarded)]
+          return #[Json.mkObj [("head", toJson c.toString), ("conjuncts", toJson cs)]])
     for a in args do
       out := out ++ (← eventsOf env meaning a)
     return out
@@ -386,9 +389,6 @@ def shapeOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opti
           return out)
     return Json.mkObj [("inputs", toJson inputs), ("hypotheses", toJson hyps),
       ("conclusion", toJson (reaches env meaning concl)), ("events", toJson (← eventsOf env meaning concl))]
-
-partial def conjuncts (e : Expr) : List Expr :=
-  if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
 
 /-- The statement's shape, one part per conjunct of a statement that is a conjunction (`shapeOf` each), after a lifted
 definition is unfolded once (`liftOf`) and its `let`s are inlined. -/
