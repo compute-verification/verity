@@ -46,7 +46,8 @@ Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes thr
 bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on the token.
 
 Until the console site's events route delivers (`routes.d/router.json` says `"mode": "server"`), the sending CLI does: it rings
-the doorbells right after posting. `match` is the older, handle-only test of whether a post is addressed to HANDLE."""
+the doorbells right after posting.  In server mode each send first checks that the route answers (its `url`); when it
+doesn't, the sender rings them itself and alerts the route's `owner`. `match` is the older, handle-only test of whether a post is addressed to HANDLE."""
 from __future__ import annotations
 
 import argparse
@@ -108,6 +109,8 @@ SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
 EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
+ROUTER_DOWN = "the router's events route doesn't answer"         # its owner's alert, by which the next sender sees it was sent
+ROUTER_ALERT_S = 21600                                           # 6 hours: one alert per outage, again if it outlasts that
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -851,6 +854,18 @@ def http_get(url: str, timeout: float = 10) -> bytes | None:
         raise SlackError(f"{url}: {getattr(e, 'reason', e)}") from None
 
 
+def route_answers(url: str, timeout: float = 10) -> str | None:
+    """Why the router's events route at `url` doesn't answer (a 404, a 5xx, no answer at all), or None when it does: a
+    deployed route answers an unsigned GET with a 405 or a 401."""
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout):
+            return None
+    except urllib.error.HTTPError as e:
+        return f"HTTP {e.code}" if e.code == 404 or e.code >= 500 else None
+    except (urllib.error.URLError, OSError) as e:
+        return f"no answer ({getattr(e, 'reason', e)})"
+
+
 class Routes:
     """The routes table, `routes.d/<name>.json` in the notes: the local clone's, and for a name it lacks (a clone not pulled
     since that agent registered) the published file, read without credentials from $RESEARCH_ROUTES_URL (default the notes
@@ -869,6 +884,7 @@ class Routes:
             if _route_ok(r, p.stem):
                 self.local[p.stem] = r
         self._fetched: dict[str, dict | None] = {}
+        self.router_down: tuple[str, str, str] | None = None
 
     def get_route(self, name: str, fresh: bool = False) -> dict | None:
         if not NAME_RE.match(name):
@@ -889,17 +905,23 @@ class Routes:
 
     def server_delivers(self) -> bool:
         """Whether the console site's events route rings the doorbells: `routes.d/router.json` says `"mode": "server"` as
-        published and in the clone, each that can be read.  Either saying otherwise means the sender rings them, so switching
-        back to `cli` reaches every sender at once, a clone not yet pulled included."""
+        published and in the clone, each that can be read, and its `url` answers.  Either saying otherwise means the sender
+        rings them, so switching back to `cli` reaches every sender at once, a clone not yet pulled included; a route that
+        doesn't answer leaves `router_down` = (url, why, owner) for `deliver` to alert its owner."""
         if not hasattr(self, "_mode"):
-            p, modes = self.root / ROUTES_DIR / "router.json", []
+            p, routers = self.root / ROUTES_DIR / "router.json", []
             for read in (lambda: self.get(f"{self.base}router.json"), lambda: p.read_bytes() if p.is_file() else None):
                 try:
                     raw = read()
-                    modes += [(json.loads(raw) or {}).get("mode")] if raw else []
-                except (OSError, SlackError, ValueError, AttributeError):
-                    modes.append(None)
+                    routers += [r if isinstance(r := json.loads(raw), dict) else {}] if raw else []
+                except (OSError, SlackError, ValueError):
+                    routers.append({})
+            modes = [r.get("mode") for r in routers]
             self._mode = "server" if modes and all(m == "server" for m in modes) else "cli"
+            url = next((r["url"] for r in routers if isinstance(r.get("url"), str)), None) if self._mode == "server" else None
+            if url and (why := route_answers(url)):
+                self._mode = "cli"
+                self.router_down = (url, why, next((r["owner"] for r in routers if NAME_RE.match(str(r.get("owner")))), "top"))
         return self._mode == "server"
 
     def inboxes(self) -> set[str]:
@@ -996,6 +1018,24 @@ def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float,
     return history, pr_branches(nums, log) if nums else {}
 
 
+def router_alert(api: Slack, ch: str, routes: Routes, author: str, src: str, ts: str, now: float) -> str:
+    """Ring `router.json`'s owner, urgently, that its events route doesn't answer: once per ROUTER_ALERT_S in its inbox,
+    whichever sender notices first.  The line `deliver` prints for it."""
+    url, why, owner = routes.router_down or ("", "", "")
+    to, r = routes.resolve(owner)
+    down = f"{ROUTER_DOWN} ({why}), so this sender rang"
+    if not r or to == author:
+        return f"@{owner}: {down}" + ("" if r else "; no inbox to alert")
+    seen = api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"], oldest=f"{now - ROUTER_ALERT_S:.6f}")
+    if any(ROUTER_DOWN in (m.get("text") or "") for m in seen):
+        return f"@{to}: {down}; already alerted"
+    api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
+             unfurl_media="false", text=doorbell("router", src, ts, f"{ROUTER_DOWN}: {url} answers {why}. Senders ring the "
+                                                 "doorbells themselves meanwhile. Restore the route, or set routes.d/router.json's "
+                                                 "mode to cli.", urgent=True))
+    return f"@{to}: alerted, {down}"
+
+
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str, *, urgent: bool = False,
             now: float | None = None, log=None) -> list[str]:
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
@@ -1016,6 +1056,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines = thread or msg.get("ts") or "", []
+    if routes.router_down:
+        lines.append(router_alert(api, ch, routes, author, src, msg.get("ts") or src, now))
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     for d in deliveries(msg, root, reg, routes.all(), inboxes, history, branches):
         name = d["name"]
