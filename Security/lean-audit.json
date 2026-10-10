@@ -528,6 +528,12 @@
    "assumptions": [],
    "type_hash": "e718471c446e3db3185d1ccd2741bc02613f8bc76f66725264907253b38df8c7"
   },
+  "Flock.SecurityProofs.RecursiveAudit": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit"],
+   "assumptions": [],
+   "type_hash": "b20765ad9e55e07c733436bb8f8b4b4e46b820d81b8a5f2050b3af098b6c7b8f"
+  },
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered"],
@@ -3177,8 +3183,10 @@
   }
  },
  "shape": {
-  "premises": [],
-  "properties": {},
+  "premises": ["Proofs.Flock.Recursive.Premises"],
+  "properties": {
+   "Flock.SecurityProofs.RecursiveAudit": {"function": ["Flock.ProvedScope.check", "Flock.Zk.verify"], "outcome": "accept"}
+  },
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
