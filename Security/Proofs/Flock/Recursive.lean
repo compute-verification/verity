@@ -25,6 +25,8 @@ import Proofs.Flock.Recursive.Sessions
 import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.FirewallRun
+import Proofs.Flock.Recursive.FirewallFollows
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -37,4 +39,6 @@ off an outcome, whose commit strings open the registration's root when every ses
 V*'s outer sessions with the honest prover's self-check in them, which never stops (`OuterAbort`), and V*'s outer
 sessions (`Sessions`) and their zero knowledge, (ii)'s `_hOuter`, at the honest prover's code, its self-check included
 (`OuterZK`), and (ii) stated about the firewall's code and V*'s, with no zero knowledge of V*'s sessions taken
-(`Firewall`), and its proof (`FirewallZK`). -/
+(`Firewall`), its proof (`FirewallZK`), and `FirewallSends`' template half proved about the firewall's code, what it
+sends at every salt list fixed by one run (`FirewallRun`), the honest worker's half left an obligation
+(`FirewallFollows`). -/
