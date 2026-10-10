@@ -1306,6 +1306,9 @@
    "assumptions": [],
    "type_hash": "81a4e1cc63cce79afc4fef9d1034d2b90dd0084697f853715b87fb454bd7eeed"
   },
+  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": {
    "owner": "@proofs",
    "signature": [
@@ -3310,6 +3313,10 @@
       "outcome": "none"
      }
     ]
+   },
+   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
+    "function": ["Flock.Stmt.setupTables", "Flock.verify", "Flock.Zk.verify", "Flock.ProvedScope.check"],
+    "outcome": "accept"
    }
   },
   "frozen": {

@@ -6,6 +6,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
 import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 import Proofs.Flock.Soundness.Discharge.FailClosed.One
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegisteredTags
+import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 
 /-!
 # The headlines over what the verifier accepts
@@ -18,5 +19,7 @@ hypothesis on the statement's form: `FailClosed/Composed.lean` (public outputs, 
 shared-row public file the check passes) and `FailClosed/Exec.lean` (one table, no `--zk`, public or hidden outputs).
 Zero knowledge's views take `avoidsMask` from the setup (`FailClosed/Mask.lean`): `verify --zk` refuses a statement whose
 Δ or regions meet the mask slot. `FailClosed/One.lean` is the one theorem over all of it (`flock_verify_sound`): its
-conclusion splits on the statement and states each case's strongest claim.
+conclusion splits on the statement and states each case's strongest claim. `FailClosed/PublicTies.lean`
+(`flock_verify_public_ties`) states, deterministically, what the verifier's check of the public file (`checkPublic`)
+ties its header's frame-v3-sha512 roots, domains and schemas to.
 -/
