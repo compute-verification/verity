@@ -1132,11 +1132,9 @@ useful    U/(α_A·α_B), glue
     one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. The chunk
     digests and the strip row are v2 rows padded with zero words to 64, one whole block: C-Flock's composer refuses a
     unit none of whose rows hashes a block before its last, and without a whole block the strip, a row digest, the tile
-    and the tally would read and write only one-block v2 rows. They are not row-seg rows because C-Flock's widened
-    proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
-    blocks; padded, each costs two compressions, as its short row-seg row did, where a row-seg row padded to a block
-    would cost three. A row digest and the strip write the zero words as constants, and the tile and the tally leave
-    them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
+    and the tally would read and write only one-block v2 rows. They are not row-seg rows: padded, each costs two
+    compressions, as its short row-seg row did, where a row-seg row padded to a block would cost three. A row digest and
+    the strip write the zero words as constants, and the tile and the tally leave them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
     statement that reads or writes them, so each (row, role) has one leaf schema wherever it appears and no row is
     `sha512/row/v1` (Daniel's ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a
     128-byte prefix block and the row, and is any length; the role byte v2 drops is bound by the registration domain.

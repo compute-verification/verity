@@ -22,7 +22,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
-  (hv1 : Hidden.RowsFit c)
+  (hv1 : Hidden.Any.RowsFitS c)
 
 namespace TableH
 

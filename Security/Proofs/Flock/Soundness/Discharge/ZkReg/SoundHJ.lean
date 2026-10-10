@@ -71,7 +71,7 @@ theorem zk_session_soundHJR
           ((rsZHJS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHJS_computes dj y₀ ht hc hscope hU hpub))
           k Rw M ρ t' (reg σ) (cont σ) ∧
     ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
-      ∀ rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      ∀ rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHJS dj y₀ ht hc hscope hU hpub),
         OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port) := by
   intro σ hCR
