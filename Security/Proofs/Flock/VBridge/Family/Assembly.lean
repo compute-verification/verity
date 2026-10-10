@@ -1,5 +1,6 @@
 import Proofs.Flock.VBridge.Family.Transcript
 import Proofs.Flock.VBridge.Family.Registered
+import Proofs.Flock.VBridge.Family.Registrants
 import Proofs.Flock.VBridge.Family.Encode
 import Proofs.Flock.VBridge.Family.Structure
 
@@ -75,7 +76,7 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
 the layers' (`rowsOf`, `accOf`), `files` `filesOf`'s, `Sk`, `cmt`, `wmsg` and `msg` `skOf`'s, `cmtOf`'s, `wmsgOf`'s and
 `msgOf`'s. Each obligation is a lane's theorem: `HStruct` (`hStruct_of`, at struct's `hSomePart`), `HFit` (`hFit_of`,
 `claimsIs_of`), `HShape` (`hShape_of`), `HResL` (`hResL_of`, at struct's `hCover_of` and reg's `hOne_of`,
-`hRowKeys_of`, `hRowsAgree_of`), `HUL` (`hUL_of`, at struct's `hOpenUnits_of` and reg's `hOneOpen_of`), `HReads`
+`hRowKeys_of`, `hRowsAgree_of` at `rowsShared`), `HUL` (`hUL_of`, at struct's `hOpenUnits_of` and reg's `hOneOpen_of`), `HReads`
 (`hReads_of`, at struct's `nOpen_pos`), `HSch` (`hSch_of`), `HFilesR` (`hFilesR_of`, at `MsgsAre`, `HLeaf` and
 `CoinTys`), `HRuns` (`hRuns_of`, at `extrasAre_of` and `ptsOf_at`, `coins_of`, `combFolds_at`), `Encodes` (enc's
 `hEnc_of`), `HCommits` (`hCommits_of`), `VDecodesRead` (`vDecodesRead_of`), `VFullRead` (`vFullRead_of`). -/
@@ -86,7 +87,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
     (hv : F.HVCoins dg N k Rw)
     (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
-    (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
+    (hsame : F.SameRow dg N k Rw) (hz : F.HZeroL dg N k Rw)
     (hcoef : F.HCoefCols dg N k Rw) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (hV : F.HAccRows dg N k Rw V) (hE : F.HEnds dg N k Rw V)
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
@@ -111,7 +112,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
   have henc := F.hEnc_of dg N k Rw spec st cap lig hset hshp hfit hxs hcapS hligS hregs
   exact vbridgeRead_of_layers F dg N k Rw hst (F.hShape_of dg N k Rw hrep hst hfit)
     (F.hResL_of dg N k Rw hrep hst hcov hname (F.hRowKeys_of dg N k Rw hrr hrck)
-      (F.hRowsAgree_of dg N k Rw hrr hrck hsame hshared) (F.hOne_of dg N k Rw hlay) hv hz)
+      (F.hRowsAgree_of dg N k Rw hrr hrck hsame (F.rowsShared dg N k Rw)) (F.hOne_of dg N k Rw hlay) hv hz)
     (F.hUL_of dg N k Rw hrows hacc hU (F.hOneOpen_of dg N k Rw hlay) hcoef V hV)
     (F.hReads_of dg N k Rw hacc hn V hV hE)
     (F.hSch_of spec st cap lig hF) (F.hFilesR_of dg N k Rw spec st cap lig hF hrep hset henc hCT hleaf hmsgs)
@@ -157,7 +158,7 @@ theorem vbridgeRead_assembled
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
     (hv : (F.assembled dg N k Rw spec st cap lig own sel bc).HVCoins dg N k Rw)
     (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
-    (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
+    (hsame : F.SameRow dg N k Rw) (hz : F.HZeroL dg N k Rw)
     (hcoef : (F.assembled dg N k Rw spec st cap lig own sel bc).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : (F.assembled dg N k Rw spec st cap lig own sel bc).HEnds dg N k Rw V)
@@ -181,7 +182,7 @@ theorem vbridgeRead_assembled
   (F.assembled dg N k Rw spec st cap lig own sel bc).vbridgeRead_of_lanes dg N k Rw spec st cap lig own sel bc
     (F.decOf dg N k Rw spec st cap lig own sel) rfl rfl rfl rfl rfl rfl rfl rfl
     hne honame hcount hname hv hlay hrr hrck hsame
-    hshared hz hcoef V hV hE hset hshp hcl hfold hco hcapS hligS hregs hCT hleaf
+    hz hcoef V hV hE hset hshp hcl hfold hco hcapS hligS hregs hCT hleaf
     (F.msgsAre_assembled dg N k Rw spec st cap lig own sel bc hread (F.msgTys_of dg N k Rw spec st cap lig hT))
     hopen hpub hsel hS hu4
 

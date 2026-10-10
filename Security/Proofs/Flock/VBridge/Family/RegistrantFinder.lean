@@ -9,7 +9,7 @@ import Proofs.Flock.Recursive.Registrants
 Where every accepted outer proof's history and registration has no `RegColl` (`RegClear`), both hold; the recursive
 audit prices `RegColl` once, by `regFinder` (`prob_regColl_le`), in `zk_sessions_recursive_read_off`.
 
-* `RegClear`: no `RegColl` at an accepted outer proof;
+* `RegClear`: no `RegColl` at an accepted outer proof; `regClear`: it holds, since `Accepted` carries `¬ RegColl`;
 * `noRegistrantCollision_of_clear`, `rowsShared_of_clear`: `NoRegistrantCollision`, and so `RowsShared`;
 * `noRegistrantCollisionS_of_clear`, `siteRowsShared_of_clear`: `NoRegistrantCollisionS`, and so `SiteRowsShared`.
 -/
@@ -33,6 +33,9 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 /-- **No two sessions clash at an accepted outer proof** (`RegColl`). -/
 def RegClear : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ¬ RegColl (I := ℐ) F.zs R ω t R₂
+
+/-- **No two sessions clash at an accepted outer proof**: `Accepted`'s last conjunct. -/
+theorem regClear : F.RegClear dg N k Rw := fun _ _ _ _ _ _ ha => ha.2
 
 /-- **`NoRegistrantCollision` where no two sessions clash**: its two collisions are `RegColl`'s two. -/
 theorem noRegistrantCollision_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistrantCollision dg N k Rw := by
