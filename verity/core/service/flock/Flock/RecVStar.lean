@@ -216,12 +216,14 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
     throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
 
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
-V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it needs the verifier's own
+V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
+(`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
 partition object and program, which of V*'s statements the session is (`part`, `--rec-part J`) and the verifier's own
 bindings (`bindings`, `--rec-bindings F`); then `checkOwnBindings` of those bindings against the partition object and
 program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings, and
 `checkOwn` on the verifier's own registered reads. -/
-def checkStmt (inner : Option Inner) (tags : Tags) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
+def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × ByteArray)) (st : Stmt) (circuitB : ByteArray)
+    (partition : Option Json := none)
     (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) (part : Option Nat := none)
     (bindings : Option VStar.Bindings := none) : V Unit :=
   let name := st.c.unit.name
@@ -229,6 +231,8 @@ def checkStmt (inner : Option Inner) (tags : Tags) (st : Stmt) (circuitB : ByteA
   | some i => do
     if tags.name != Tags.circuit.name then
       throw s!"{name}: one of V*'s statements, which are {Tags.circuit.name} statements (--statement {Tags.circuit.name}), not {tags.name}"
+    if !tables.isEmpty then
+      throw s!"{name}: one of V*'s statements, which read no lookup table; the verifier holds {tables.map (·.1)} (--tables, --archive)"
     let (some obj, some prog) := (partition, program)
       | throw s!"{name}: one of V*'s statements; pass the verifier's own partition object and program (--partition F, --program F)"
     let some j := part

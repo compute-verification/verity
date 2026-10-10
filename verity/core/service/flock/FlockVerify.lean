@@ -412,7 +412,7 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
-shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
+shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`). Each DIR holds `session.json`
@@ -500,7 +500,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        r.2.forM (RecVStar.checkStmt recInner stmtTags · circuitB partition program registered recPart recBindings)
+        r.2.forM (RecVStar.checkStmt recInner stmtTags tables · circuitB partition program registered recPart recBindings)
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered recCoins)
         pure r) with
@@ -602,7 +602,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
-      if recInner.isSome then RecVStar.checkStmt recInner stmtTags st circuitB partition program registered recPart recBindings
+      if recInner.isSome then RecVStar.checkStmt recInner stmtTags tables st circuitB partition program registered recPart recBindings
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
