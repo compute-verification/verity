@@ -1199,8 +1199,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 
 - **Tags.** META `scheme` is `frame-v3-sha512/hm96-sha512` and `row_schema` is `hm96-sha512/row/v1`. The public file's
   circuit key is `circuit_sha512`. `Hello` adds `"digests":"sha512"`. The identity carries META `leaf_scheme`
-  (`hm96-sha512/v1`: salts a ChaCha20 expansion of a per-proof OS key, `key_sha512`) and `seed_injection` (true only in
-  the selftest harness's build: the statement's name with `+seed-injection`).
+  (`hm96-sha512/v1`, `key_sha512`, and `salt_source`: the OS's own bytes, every leaf's 192 read with its tree's; the
+  statements pinned `@b3727bd9` and earlier name a ChaCha20 expansion of a per-proof OS key) and `seed_injection` (true
+  only in the selftest harness's build: the statement's name with `+seed-injection`).
 - **Rows.** For a port of `words` u16 words (`2·words` a multiple of 128): `x = SHA-512(prefix ‖ row)` with `prefix =
   pad128("verity/sha512-row/v1\0" ‖ 01 ‖ 10 ‖ be32 words)`, `b = x ⊕ M(key)·y`, `c = SHA-512(salt_prefix ‖ y)` for the
   row's 192-byte salt `y` under `hm96-sha512/v1`'s default key. The verifier recomputes each row's `prefix`, the midstate
@@ -1465,7 +1466,9 @@ statements define such a session; any other statement refuses `J > 1`.
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
 `@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows (Daniel, Oct 1); `+seed-injection` is the
-selftest build. `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
+selftest build. Statements composed up to verity `b3727bd9` are `@b3727bd9` and `types@b3727bd9`: the same, but META
+`leaf_scheme.salt_source` names a ChaCha20 expansion of a per-proof OS key where the default's names the OS's bytes
+(§16.10's tags), and the identity carries that object. `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
 `--zk` `zk_session_soundH` and `zk_session_soundHJ`, within the one theorem of §16.15) applies §16.10's definitions to every
 row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
 (`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
@@ -1550,7 +1553,13 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
-   `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+   `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
+   bits in at least one chunk`). Under hidden outputs (§16.13) the check is `Layout.scopeOkH`: the same unit, and every
+   row a `sha512/row/v1` row as above or every row an unsegmented `sha512/row/v2` row (§16.14) of `16 · words` bits whose
+   last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block (`128 · chunks ≤ 2 · words` and
+   `2 · words + 17 ≤ 128 · (chunks + 1)`), each output row holding one output port (`rows that are neither all
+   sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits
+   ending in their hm96 block, one output port each`). A segmented row (`sha512/row-seg/v1`) is outside both.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
 design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
@@ -1563,7 +1572,7 @@ population's statement, and its verdict is
 passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's reason. A
 claim for the draw of every unit would cover it; none is proved.
 
-The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
+The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
