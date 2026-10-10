@@ -18,6 +18,7 @@ their message rows and their row ports, and every session's `rec-acc` reads, aga
 rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in place of its statement (`--rec-inner-coins`)."""
 from __future__ import annotations
 
+import concurrent.futures as cf
 import functools
 import hashlib
 import json
@@ -321,31 +322,40 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
     verifier's shared rows (`--rec-rows`, the honest algebra's) and is refused without them. The algebra staged under another
     salt of the running sums' row 0 registers the same rows as another `rec-acc`, consistently: that part passes setup at its
     own staging's shared rows and is refused at the verifier's, by `acc0`'s root. The honest part with `acc0` committed
-    afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing row port."""
+    afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing row port.
+
+    Each of the five verifies sets the part's statement up over its whole population before any V* check (about 9 minutes
+    at one core and 4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the
+    salted staging (about 5 minutes) beside the first three, and the test takes about as long as the staging and one verify
+    (one after the other they took 49 minutes, `r20261010-121137-2b46`)."""
     a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
     unit = _unit(a)
     t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
-    assert v["why"] == S2_R7, v["why"]
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *t, session=undrawn)
-    assert v["why"] == (f"setup: {unit}: one of V*'s parts; pass the verifier's record of V*'s shared rows (--rec-rows F), "
-                        "which each of its row ports must be"), v["why"]
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(S, "acc_salts", _salted)
-        _stage(tmp_path / "salted", levels=[], algebra=True, evaluate=False)
-    b = tmp_path / "salted" / "alg" / a.name
-    own = _rec_rows(tmp_path / "own.json", sorted((tmp_path / "salted" / "alg").iterdir()))
-    v = _verify(b, b / "pub.bin", b / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=own)
-    assert v["why"] == S2_R7, v["why"]
+
+    def verify(ex, d, shared=None):
+        _own(d, shape)  # writes d's rec-bindings.json before any verify of d reads it
+        return ex.submit(_verify, d, d / "pub.bin", d / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=shared)
+
+    with cf.ThreadPoolExecutor(max_workers=5) as ex:
+        honest, bare = verify(ex, a, rows), verify(ex, a)
+        c = _unregistered(a, tmp_path / "fresh", "acc0")
+        fresh = verify(ex, c, rows)
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(S, "acc_salts", _salted)
+            _stage(tmp_path / "salted", levels=[], algebra=True, evaluate=False)
+        b = tmp_path / "salted" / "alg" / a.name
+        own = _rec_rows(tmp_path / "own.json", sorted((tmp_path / "salted" / "alg").iterdir()))
+        salted_own, salted = verify(ex, b, own), verify(ex, b, rows)
+    assert honest.result()["why"] == S2_R7, honest.result()["why"]
+    assert bare.result()["why"] == (f"setup: {unit}: one of V*'s parts; pass the verifier's record of V*'s shared rows "
+                                    "(--rec-rows F), which each of its row ports must be"), bare.result()["why"]
+    assert salted_own.result()["why"] == S2_R7, salted_own.result()["why"]
     root = lambda f: json.loads(f.read_text())["ports"]["acc0"]["root"]
     assert root(b / "registered.json") != root(rows)
-    v = _verify(b, b / "pub.bin", b / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
-    assert v["why"] == (f"setup: {unit}: its row port acc0 is not the verifier's shared row acc0 (--rec-rows): root "
-                        f"{root(b / 'registered.json')}, against {root(rows)}"), v["why"]
-    c = _unregistered(a, tmp_path / "fresh", "acc0")
-    v = _verify(c, c / "pub.bin", c / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
+    assert salted.result()["why"] == (f"setup: {unit}: its row port acc0 is not the verifier's shared row acc0 (--rec-rows): "
+                                      f"root {root(b / 'registered.json')}, against {root(rows)}"), salted.result()["why"]
     assert re.fullmatch(rf"setup: {re.escape(unit)}: its row port acc0 is not a port of the registered reads \(\[.*\]\)",
-                        v["why"]), v["why"]
+                        fresh.result()["why"]), fresh.result()["why"]
 
 
 def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
