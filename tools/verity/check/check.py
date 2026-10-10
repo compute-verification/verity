@@ -1198,57 +1198,88 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree), then `public_fixtures`. Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = os.environ.get("UV") or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
             ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
-            ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--public-fixtures"], ROOT)]
+            ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
 
 
-def public_fixtures(root: Path = ROOT, url: str | None = None, head=None) -> list[str]:
-    """The fetched fixtures (`fixtures/artifacts.json` entries whose path git doesn't hold) whose manifest the public export
-    lacks, which is all `fetch-fixtures --no-private` sees and all node 1 fetches from: the closing train's check (cb20, 10 Oct) failed `lean-suites` after its
-    launch on #1716's rec-coins fixture, preserved privately and never put through `research data export`. One HEAD per
-    manifest, no blob; a refusal before launch costs seconds. Raises when there is no public source to ask."""
+#: preflight steps that judge the machine the check runs on, so `--preflight` elsewhere (a train's prep) only reports them
+ON_NODE = ("preflight-fixtures",)
+
+
+def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
+    """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
+    from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
+    train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
+    never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
+    store keeps a train moving before the export (top, 10 Oct).  Raises when the public export is needed and there is none."""
     from concurrent.futures import ThreadPoolExecutor
 
     from research.store.fetchset import public_url
-    from research.store.fixtures import _is_tracked, entries, load_map, tracked
-    from research.store.local import manifest_key
+    from research.store.fixtures import _is_tracked, entries, fixture_id, load_map, tracked
+    from research.store.local import LocalStore, manifest_key
     from research.store.remote import HttpRemote
 
+    git = tracked(root)
+    arts = {a: path for a, path in entries(load_map(root)).items() if not _is_tracked(path, git)}
+    ask = sorted(arts)
+    if not ask:
+        return {}, []
     base = public_url(url)
     if not base:
-        raise RuntimeError("no public source (RESEARCH_PUBLIC_URL is empty), so nothing shows the fixtures are public")
+        raise RuntimeError(f"no public source (RESEARCH_PUBLIC_URL is empty) to ask for {len(ask)} fixture(s)")
     head = head or HttpRemote(base).head
-    git = tracked(root)
-    arts = sorted(a for a, path in entries(load_map(root)).items() if not _is_tracked(path, git))
     with ThreadPoolExecutor(max_workers=16) as ex:
-        found = list(ex.map(lambda a: head(manifest_key(a.removeprefix("art:"))), arts))
-    return [a for a, h in zip(arts, found) if h is None]
-
-
-def public_fixtures_only() -> int:
-    """`--public-fixtures`: 0 when every registered fixture's manifest is public, else 1 naming the missing ids."""
+        found = list(ex.map(lambda a: head(manifest_key(a.removeprefix("art:"))), ask))
+    where = {a: "the public export" for a, h in zip(ask, found) if h is not None}
+    where |= {a: "the tree" for a in ask if a not in where and (root / arts[a]).is_file() and fixture_id(root / arts[a]) == a}
+    rest = [a for a in ask if a not in where]
     try:
-        missing = public_fixtures()
+        if rest:
+            store = store or LocalStore()
+            where |= {a: "this machine's store" for a in rest if store.has_local(a)}
+    except Exception as e:                              # noqa: BLE001: a store that can't be read holds nothing
+        print(f"check: fixtures: this machine's store can't be read ({type(e).__name__}: {e})", file=sys.stderr)
+    return where, [a for a in rest if a not in where]
+
+
+def fixtures_only() -> int:
+    """`--fixtures`: 0 when every fetched fixture can come from somewhere on this machine (`fetchable_fixtures`), saying from
+    where; else 1 naming the ids that can't."""
+    from collections import Counter
+
+    try:
+        where, missing = fetchable_fixtures()
     except Exception as e:                              # noqa: BLE001: a source that can't be asked shows nothing
-        print(f"check: public fixtures: could not ask the public export ({type(e).__name__}: {e})", file=sys.stderr)
+        print(f"check: fixtures: could not ask the public export ({type(e).__name__}: {e})", file=sys.stderr)
         return 1
+    by = Counter(where.values())
+    found = ", ".join(f"{n} from {w}" for w, n in sorted(by.items()))
+    for a, w in sorted(where.items()):
+        if w != "the public export":
+            print(f"check: fixtures: {a} from {w}, not the public export")
     if missing:
-        print(f"check: public fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json but not in the public export, "
-              f"which is all node 1 fetches: {' '.join(missing)}; run `research data export` for each", file=sys.stderr)
+        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json are in neither this "
+              f"machine's store nor the public export ({found or 'none found'}): {' '.join(missing)}; run `research data "
+              f"export` for each, or put it in this machine's store", file=sys.stderr)
         return 1
-    print("check: public fixtures: every fetched fixture fixtures/artifacts.json registers is in the public export")
+    print(f"check: fixtures: every fetched fixture fixtures/artifacts.json registers can be fetched here ({found or 'none'})")
     return 0
 
 
 def preflight_only() -> int:
-    """`--preflight`: every preflight step, its output here; 0 when all pass."""
+    """`--preflight`: every preflight step, its output here; 0 when all pass but those that judge another machine (`ON_NODE`),
+    which only report: a train's prep can't see the node its check runs on, whose own preflight refuses there."""
     failed = []
     for name, argv, cwd in preflight():
         ok = not isinstance(argv, str) and subprocess.run(argv, cwd=cwd).returncode == 0
+        if not ok and name in ON_NODE:
+            print(f"check: {name}: not refused here: it judges the machine the check runs on, which refuses there", flush=True)
+            continue
         print(f"check: {name}: {'passed' if ok else argv if isinstance(argv, str) else 'FAILED'}", flush=True)
         failed += [] if ok else [name]
     return 1 if failed else 0
@@ -1552,8 +1583,8 @@ def main(argv: list[str]) -> int:
         os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
     if argv == ["--preflight"]:
         return preflight_only()
-    if argv == ["--public-fixtures"]:
-        return public_fixtures_only()
+    if argv == ["--fixtures"]:
+        return fixtures_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
     if "--record" in argv:

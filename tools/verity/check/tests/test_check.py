@@ -808,7 +808,7 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     (lock, argv, cwd), (lints, pytest, cwd2), (fixtures, public, cwd3) = CHECK.preflight()
     assert (lock, argv[1:], cwd) == ("preflight-lock", ["lock", "--check"], ROOT)
     assert (fixtures, public[1:], cwd3) == ("preflight-fixtures", ["-B", str(ROOT / "tools" / "verity" / "check" / "check.py"),
-                                                                   "--public-fixtures"], ROOT)
+                                                                   "--fixtures"], ROOT)
     assert (lints, pytest[1:4], cwd2) == ("preflight-lints", ["-B", "-m", "pytest"], ROOT) and "no:cacheprovider" in pytest
     assert pytest[-len(CHECK.LINTS):] == list(CHECK.LINTS)
     for t in CHECK.LINTS:
@@ -819,18 +819,25 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
 
 
-def test_the_preflight_refuses_a_fetched_fixture_the_public_export_lacks(tmp_path, monkeypatch, capsys):
+def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_the_public_export_has(tmp_path, monkeypatch, capsys):
     """The closing train's check (cb20, 10 Oct) failed `lean-suites` after its launch: #1716 registered rec-coins, preserved
-    privately and never exported, and node 1 fetches only from the public export. The preflight asks the export for each fetched
-    fixture's manifest (one HEAD each, no blob) and names the missing ids; a tracked fixture, whose bytes git holds, and the
-    `previous` history are not asked about, and with no public source it refuses rather than pass."""
+    privately and never exported, and node 1 had it neither in its store nor from the public export. A fixture the tree already
+    holds exactly or this machine's store holds whole needs no export (top, 10 Oct: infra's node-1 copies keep trains moving),
+    though the export is asked first (one HEAD per manifest, no blob), so the ones it lacks are named. A tracked fixture
+    and the `previous` history are not asked about, and with no public source to ask it refuses rather than pass."""
     import json
     import subprocess
 
-    good, gone, small = ("art:" + c * 64 for c in "abc")
+    from research.store.fixtures import fixture_id
+
+    good, gone, small, local = ("art:" + c * 64 for c in "abce")
+    (tmp_path / "big").mkdir()
+    (tmp_path / "big" / "there.bin").write_bytes(b"exact bytes")
+    there = fixture_id(tmp_path / "big" / "there.bin")
     (tmp_path / "fixtures").mkdir()
     (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(
-        {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", "previous": {good: ["art:" + "d" * 64]}}))
+        {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", local: "big/local.bin", there: "big/there.bin",
+         "previous": {good: ["art:" + "d" * 64]}}))
     (tmp_path / "small.json").write_text("{}")
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "small.json", "fixtures"], check=True)
@@ -840,15 +847,39 @@ def test_the_preflight_refuses_a_fetched_fixture_the_public_export_lacks(tmp_pat
         asked.append(key)
         return {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None
 
-    assert CHECK.public_fixtures(tmp_path, "https://public.example/store", head) == [gone]
-    assert sorted(asked) == [f"manifests/{'a' * 64}.json", f"manifests/{'b' * 64}.json"]
-    with pytest.raises(RuntimeError, match="no public source"):
-        CHECK.public_fixtures(tmp_path, "", head)
+    class Store:
+        def has_local(self, art):
+            return art == local
 
-    monkeypatch.setattr(CHECK, "public_fixtures", lambda: [gone])
-    assert CHECK.main(["--public-fixtures"]) == 1 and gone in capsys.readouterr().err
-    monkeypatch.setattr(CHECK, "public_fixtures", lambda: [])
-    assert CHECK.main(["--public-fixtures"]) == 0
+    where, missing = CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Store())
+    assert missing == [gone]
+    assert where == {good: "the public export", local: "this machine's store", there: "the tree"}
+    assert sorted(asked) == sorted(f"manifests/{a.removeprefix('art:')}.json" for a in (good, gone, local, there))
+    with pytest.raises(RuntimeError, match="no public source"):
+        CHECK.fetchable_fixtures(tmp_path, "", head, Store())
+
+    class Broken:
+        def has_local(self, art):
+            raise OSError("no store")
+
+    assert CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Broken())[1] == [gone, local]
+
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, [gone]))
+    assert CHECK.main(["--fixtures"]) == 1
+    out = capsys.readouterr()
+    assert gone in out.err and "1 from this machine's store" in out.err and f"{local} from this machine's store" in out.out
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, []))
+    assert CHECK.main(["--fixtures"]) == 0 and "1 from this machine's store" in capsys.readouterr().out
+
+
+def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs_on(tmp_path, monkeypatch, capsys):
+    """A train's prep runs `--preflight` off the node its check is pinned to, so a fixture only that node's store holds (f1-gate
+    on node 1, 10 Oct) mustn't refuse the train there: the check's own preflight-fixtures judges the node, and refuses on it."""
+    fail = _py("raise SystemExit(1)")
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-fixtures", fail, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 0 and "not refused here" in capsys.readouterr().out
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lints", fail, tmp_path), ("preflight-fixtures", fail, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 1
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
