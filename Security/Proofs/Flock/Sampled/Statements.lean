@@ -10,15 +10,20 @@ Skeletons, stated and not yet proved; `Proofs.Flock.Sampled.NonVacuity` shows ea
   only the sessions' padded shapes, has room for the draw.
 * `SlotBinding`: each held slot's opening of the trace root binds it to its unit's committed record, or the run's two
   openings give a SHA-512 collision.
-* `ShapeMenu`, `Menu.Room`, `MenuComplete`: an audit's padded sessions take only the menu's shapes; they have room for
-  any `k` units whose types are placed within the menu's bounds; and then, at a menu V* stages (`Menu.Staged`, an
-  obligation), an honest prover can batch every draw.
+* `ShapeMenu`, `Menu.Fits`, `Menu.RoomAt`, `Menu.Room`: an audit's padded sessions take only the menu's shapes; a draw's
+  units fit them by type; the draws that don't fit have probability at most δ under the law (F6's quantile session
+  counts); and the deterministic sufficient condition, room for every draw whose types are placed within the menu's
+  bounds, which gives δ = 0 (`Menu.Room.roomAt`, in `Proofs.Flock.Sampled.NonVacuity`).
+* `Menu.Honest`, `MenuComplete`, `MenuCompleteAt`: an honest batching of a draw; at a menu V* stages (`Menu.Staged`, an
+  obligation), one exists at every draw that fits; so the auditor draws one the honest prover can't batch with
+  probability at most δ.
 * `SlotsSound`: the statement the sessions prove puts every drawn unit's committed record in its type's relation, or
   slot binding breaks.
 * `Composition`: at each registration, with F1's conclusion (`Recursion`, an interface), the audit accepts with
   probability at most the law's escape over the committed trace's wrong units plus F1's error, or a run breaks.
-* `ZeroKnowledge`: with F1's zero knowledge (`Recursion.hides`), an honest audit's view is simulated from the reveal list
-  alone: the menu, the draw's size, the padded sessions and the owed outputs.
+* `ZeroKnowledge`, `ZeroKnowledgeAt`: with F1's zero knowledge (`Recursion.hides`), an honest audit's view at a draw is
+  simulated from the reveal list alone: the menu, the draw's size, the padded sessions and the owed outputs; and under
+  the law, except on the honest prover's abort, of probability at most δ, which reveals the type mix.
 -/
 
 namespace FlockSampled
@@ -44,27 +49,55 @@ def SlotBinding : Prop :=
 /-- **The shape menu**: an audit's padded sessions take only shapes on the menu. -/
 def ShapeMenu (M : Menu) : Prop := ∀ k, ∀ s ∈ M.padded k, s ∈ M.shapes
 
-/-- **The padded sessions have room**: any `k` units, whose types `U` are placed within the menu's bounds, fit the menu's
-padded sessions for `k`, each in a slot of its type at its type's shape, each session's type table within its shape's
-type bound. -/
+/-- **The draw's units fit the padded sessions**, by type: some batching of the draw `S` into the menu's padded sessions
+for `|S|` passes the coverage check, puts each held slot on its unit's committed type within its shape's nonzero bound,
+and keeps each session's type table within its shape's type bound. It is an honest batching without the values; a
+placement of the types at shapes with enough sessions at each (F6's) gives one. -/
+def Menu.Fits {N : ℕ} {T V : Type} (M : Menu) (Ty : Types T V) (X : Trace N T V) (S : Finset (Fin N)) : Prop :=
+  ∃ β : Batching N T Unit, β.view = M.padded S.card ∧ CoverCheck S β ∧
+    (∀ p i, β.held p = some i → (∃ v, X i = some (β.slotTyp p, v)) ∧ Ty.nnz (β.slotTyp p) ≤ (β.shape p.1).nnz) ∧
+    ∀ b, (β.table b).card ≤ M.types (β.shape b)
+
+/-- **The padded sessions have room at all but δ of the draws**: under the law `L`, the draws of `X`'s units that don't
+fit `M.padded |S|` (`Menu.Fits`) have probability at most δ. F6's quantile session counts give δ from each shape's
+count of drawn units at 1 − 2⁻⁴⁰; `Menu.Room` gives δ = 0. -/
+def Menu.RoomAt {N : ℕ} {T V : Type} (M : Menu) (Ty : Types T V) (L : Law N) (X : Trace N T V) (δ : ℝ≥0∞) : Prop :=
+  prCoin (fun ω => ¬ M.Fits Ty X (L.draw ω)) ≤ δ
+
+/-- **The padded sessions have room at every draw**, deterministically: any draw `S`, whose units' types `ty` lie in
+`U`, placed within the menu's bounds, fits the menu's padded sessions for `|S|`, each unit in a slot of its type at its
+type's shape, each session's type table within its shape's type bound. A sufficient condition for `Menu.RoomAt` at
+δ = 0 (`Menu.Room.roomAt`); F6's quantile session counts don't meet it. -/
 def Menu.Room {T V : Type} (M : Menu) (Ty : Types T V) : Prop :=
-  ∀ (k : ℕ) (ty : Fin k → T) (U : Finset T) (place : T → Shape), (∀ i, ty i ∈ U) → M.Within Ty U place →
-    ∃ β : Batching k T Unit, β.view = M.padded k ∧ CoverCheck Finset.univ β ∧
+  ∀ {N : ℕ} (S : Finset (Fin N)) (ty : Fin N → T) (U : Finset T) (place : T → Shape), (∀ i ∈ S, ty i ∈ U) →
+    M.Within Ty U place →
+    ∃ β : Batching N T Unit, β.view = M.padded S.card ∧ CoverCheck S β ∧
       (∀ p i, β.held p = some i → β.slotTyp p = ty i ∧ β.shape p.1 = place (ty i)) ∧
       ∀ b, (β.table b).card ≤ M.types (β.shape b)
 
-/-- **The menu admits every draw** (completeness). At a menu V* stages whose padded sessions take only its shapes and
-have room, for every committed trace whose types at the draw are placed within the menu's bounds, and every draw whose
-units it holds, the honest prover has a batching into the padded sessions for the draw's size, each staged by V*, that
-passes the coverage check, is on the committed types and values, keeps each held slot's type within its shape's nonzero
-bound and each session's type table within its shape's type bound. -/
+/-- **An honest batching** of the draw `S` of the trace `X`: into the menu's padded sessions for `|S|`, each staged by
+V*; passing the coverage check; on the committed types and values; each held slot's type within its shape's nonzero
+bound; each session's type table within its shape's type bound. -/
+def Menu.Honest {N : ℕ} {T V : Type} (M : Menu) (Ty : Types T V) (X : Trace N T V) (S : Finset (Fin N))
+    (β : Batching N T V) : Prop :=
+  β.view = M.padded S.card ∧ (∀ s ∈ β.view, ∃ vs, M.vstar s = .ok vs) ∧ CoverCheck S β ∧ Bound X β ∧
+    (∀ p i, β.held p = some i → Ty.nnz (β.slotTyp p) ≤ (β.shape p.1).nnz) ∧
+    ∀ b, (β.table b).card ≤ M.types (β.shape b)
+
+/-- **The menu admits each draw that fits** (completeness, per draw). At a menu V* stages whose padded sessions take
+only its shapes, at every draw whose units fit the padded sessions by type (`Menu.Fits`), the honest prover has an
+honest batching of it. -/
 def MenuComplete : Prop :=
-  ∀ {N : ℕ} {T V : Type} [Inhabited V] (M : Menu) (Ty : Types T V), M.Staged → ShapeMenu M → M.Room Ty →
-    ∀ (X : Trace N T V) (S : Finset (Fin N)) (U : Finset T) (place : T → Shape),
-      (∀ i ∈ S, ∃ t v, X i = some (t, v) ∧ t ∈ U) → M.Within Ty U place →
-      ∃ β : Batching N T V, β.view = M.padded S.card ∧ (∀ s ∈ β.view, ∃ vs, M.vstar s = .ok vs) ∧
-        CoverCheck S β ∧ Bound X β ∧ (∀ p i, β.held p = some i → Ty.nnz (β.slotTyp p) ≤ (β.shape p.1).nnz) ∧
-        ∀ b, (β.table b).card ≤ M.types (β.shape b)
+  ∀ {N : ℕ} {T V : Type} [Inhabited V] (M : Menu) (Ty : Types T V) (X : Trace N T V) (S : Finset (Fin N)),
+    M.Staged → ShapeMenu M → M.Fits Ty X S → ∃ β : Batching N T V, M.Honest Ty X S β
+
+/-- **The menu admits all but δ of the draws** (completeness under the law), the form an end-to-end statement reads:
+at such a menu, with room at all but δ of `X`'s draws (`Menu.RoomAt`), the auditor draws one the honest prover can't
+batch, and aborts on, with probability at most δ. -/
+def MenuCompleteAt : Prop :=
+  ∀ {N : ℕ} {T V : Type} [Inhabited V] (M : Menu) (Ty : Types T V) (L : Law N) (X : Trace N T V) (δ : ℝ≥0∞),
+    M.Staged → ShapeMenu M → M.RoomAt Ty L X δ →
+      prCoin (fun ω => ¬ ∃ β : Batching N T V, M.Honest Ty X (L.draw ω) β) ≤ δ
 
 /-- **The slots are sound.** Under a commitment whose records determine their contents, with `X` the trace it commits:
 when what the sessions hold hidden satisfies the statement they prove at the draw `S`, no drawn unit is wrong in `X`, or
@@ -107,5 +140,24 @@ def ZeroKnowledge : Prop :=
     (I : Recursion session Ty com) (M : Menu) (R : Reg) (S : Finset (Fin N)) (h : Hidden N T V),
     h.β.view = M.padded S.card → Proves Ty (com R) S h →
       I.Close (reveal M S (I.out R)) (I.real (reveal M S (I.out R)) R h) (I.sim (reveal M S (I.out R)))
+
+/-- **Zero knowledge under the law**, the one place δ enters it. At a registration `R` whose committed trace `X` (under
+`com R`, with the openings `path₀`) holds only records in their types' relations, at a menu V* stages with room at all
+but δ of the draws: the honest prover aborts, having no honest batching of the draw, with probability at most δ; and at
+every other draw, for every honest batching, the auditor's view of the honest audit, its slots opened at `path₀`
+(`Hidden.honest`), is close in F1's sense to the simulated one, which reads only the reveal list. An honest abort is not
+simulated from the reveal list: it reveals the type mix, that the draw's types don't fit the padded sessions, which the
+hidden partition decides, so δ bounds that leak as well as the completeness error. `Close` keeps F1's form; δ stays
+outside it. -/
+def ZeroKnowledgeAt : Prop :=
+  ∀ {N : ℕ} {T V Reg O : Type} [Inhabited V] (session : Finset (Fin N) → Reg → Game O) (Ty : Types T V)
+    (com : Reg → Commit N T V) (I : Recursion session Ty com) (M : Menu) (L : Law N) (R : Reg) (X : Trace N T V)
+    (path₀ : Fin N → ByteArray) (δ : ℝ≥0∞),
+    M.Staged → ShapeMenu M → (com R).Committed X path₀ → (∀ i t v, X i = some (t, v) → Ty.holds t v) →
+    M.RoomAt Ty L X δ →
+      prCoin (fun ω => ¬ ∃ β : Batching N T V, M.Honest Ty X (L.draw ω) β) ≤ δ ∧
+      ∀ (ω : L.Ω) (β : Batching N T V), M.Honest Ty X (L.draw ω) β →
+        I.Close (reveal M (L.draw ω) (I.out R))
+          (I.real (reveal M (L.draw ω) (I.out R)) R (Hidden.honest β path₀)) (I.sim (reveal M (L.draw ω) (I.out R)))
 
 end FlockSampled

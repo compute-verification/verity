@@ -10,13 +10,17 @@ and one session of one slot holding the unit (`batch₁`, its slots routed in se
 
 * `coverage_nonvacuous`, `slotBinding_nonvacuous`, `slotsSound_nonvacuous`: the hypotheses of `Coverage`, `SlotBinding`
   and `SlotsSound` at that instance, the draw being the one unit.
-* `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit, one type per shape, each staged over
-  the inner shape `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` and `Menu.Room` by proof; that V* stages it
-  (`menu₀.staged`, so `Menu.Staged`) is checked by `#guard`, by evaluation and not by proof: building V*'s algebra is
-  beyond the kernel's evaluation. `menuComplete_nonvacuous`: `MenuComplete`'s hypotheses there, given the same.
+* `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit (`batchOf`), one type per shape,
+  each staged over the inner shape `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` and `Menu.Room` by proof; that V*
+  stages it (`menu₀.staged`, so `Menu.Staged`) is checked by `#guard`, by evaluation and not by proof: building V*'s
+  algebra is beyond the kernel's evaluation.
+* `Menu.Room.fits`, `Menu.Room.roomAt`: the deterministic room fits every draw, so it gives `Menu.RoomAt` at δ = 0
+  under every law; `menu₀_fits`, `menu₀_roomAt` there. `menuComplete_nonvacuous`: `MenuComplete`'s and
+  `MenuCompleteAt`'s hypotheses at `menu₀`, given that V* stages it.
 * `composition_nonvacuous`: `Composition`'s hypotheses at that instance, under a one-point law and a session that
   verifies at once, with an instance of F1's interface (`I₁`) whose break fires at no draw.
-* `zeroKnowledge_nonvacuous`: `ZeroKnowledge`'s hypotheses at that instance, `menu₀` and the one-unit draw.
+* `zeroKnowledge_nonvacuous`, `zeroKnowledgeAt_nonvacuous`: `ZeroKnowledge`'s hypotheses at that instance, `menu₀` and
+  the one-unit draw; `ZeroKnowledgeAt`'s, under the one-point law.
 -/
 
 namespace FlockSampled
@@ -62,6 +66,20 @@ theorem drawOrder_univ {k : ℕ} (j : Fin k) : drawOrder (Finset.univ : Finset (
 
 theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) :=
   ⟨k, route₁ k, (Finset.card_fin k).le, fun j => (drawOrder_univ j).symm⟩
+
+/-- The draw `S`'s units, one per one-slot session, in the draw's order. -/
+def batchOf {N : ℕ} (S : Finset (Fin N)) : Batching N Unit Unit where
+  sessions := S.card
+  shape := fun _ => ⟨1, 0⟩
+  typ := fun _ _ => ()
+  idx := fun b _ => some (S.orderEmbOfFin rfl b)
+  val := fun _ _ => ()
+
+theorem batchOf_cover {N : ℕ} (S : Finset (Fin N)) : CoverCheck S (batchOf S) :=
+  ⟨S.card, route₁ S.card, le_rfl, fun j => by
+    show some (S.orderEmbOfFin rfl j) = drawOrder S j
+    unfold drawOrder
+    exact (dite_eq_left j.isLt).symm⟩
 
 /-- A one-leaf root whose leaf is the record `bc`'s. -/
 def onePort (bc : ByteArray) : Flock.Registered.Port where
@@ -146,10 +164,14 @@ theorem menu₀_shapeMenu : ShapeMenu menu₀ := by
   exact List.mem_singleton_self _
 
 /-- **`menu₀`'s padded sessions have room**, for `Ty₁`. -/
-theorem menu₀_room : menu₀.Room Ty₁ :=
-  fun k _ _ _ hU hW => ⟨batch₁ k, rfl, batch₁_cover k,
-    fun _ i _ => ⟨rfl, (List.mem_singleton.1 (hW.1 _ (hU i)).1).symm⟩,
+theorem menu₀_room : menu₀.Room Ty₁ := by
+  intro N S ty U place hU hW
+  refine ⟨batchOf S, rfl, batchOf_cover S, fun p i hp => ⟨rfl, ?_⟩,
     fun _ => le_of_le_of_eq (Finset.card_le_univ _) Fintype.card_unit⟩
+  have hi : i ∈ S := by
+    obtain rfl := Option.some.inj hp
+    exact Finset.orderEmbOfFin_mem S rfl _
+  exact (List.mem_singleton.1 (hW.1 _ (hU i hi)).1).symm
 
 /-- The one type's placement, at `menu₀`'s one shape. -/
 def place₁ : Unit → Shape := fun _ => ⟨1, 0⟩
@@ -158,17 +180,45 @@ theorem menu₀_within : menu₀.Within Ty₁ Finset.univ place₁ :=
   ⟨fun _ _ => ⟨List.mem_singleton_self _, Nat.zero_le _⟩,
     fun _ => le_of_le_of_eq (Finset.card_le_univ _) Fintype.card_unit⟩
 
-/-- **`MenuComplete`'s hypotheses hold together**, at `menu₀` given that V* stages it, `Ty₁` placed by `place₁`, and a
-nonempty draw whose units `X₁` holds. -/
-theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
-    menu₀.Staged ∧ ShapeMenu menu₀ ∧ menu₀.Room Ty₁ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧
-      (∀ i ∈ (Finset.univ : Finset (Fin 1)), ∃ t v, X₁ i = some (t, v) ∧ t ∈ (Finset.univ : Finset Unit)) ∧
-      menu₀.Within Ty₁ Finset.univ place₁ :=
-  ⟨Menu.staged_ok h, menu₀_shapeMenu, menu₀_room, Finset.univ_nonempty,
-    fun _ _ => ⟨(), (), rfl, Finset.mem_univ _⟩, menu₀_within⟩
+/-- **`Menu.Room` fits every draw** of a trace whose units all hold records of types in `U`, placed within the menu's
+bounds. -/
+theorem Menu.Room.fits {N : ℕ} {T V : Type} {M : Menu} {Ty : Types T V} (hR : M.Room Ty) {X : Trace N T V}
+    {U : Finset T} {place : T → Shape} (hX : ∀ i, ∃ t v, X i = some (t, v) ∧ t ∈ U) (hW : M.Within Ty U place)
+    (S : Finset (Fin N)) : M.Fits Ty X S := by
+  let ty : Fin N → T := fun i => Classical.choose (hX i)
+  have hty : ∀ i, ∃ v, X i = some (ty i, v) ∧ ty i ∈ U := fun i => Classical.choose_spec (hX i)
+  obtain ⟨β, hv, hc, hp, ht⟩ := hR S ty U place (fun i _ => (hty i).elim fun _ h => h.2) hW
+  refine ⟨β, hv, hc, fun p i hi => ?_, ht⟩
+  obtain ⟨hT, hS⟩ := hp p i hi
+  obtain ⟨w, hw, hU⟩ := hty i
+  exact ⟨⟨w, hw.trans (congrArg (fun t => some (t, w)) hT.symm)⟩,
+    (congrArg Ty.nnz hT).trans_le ((hW.1 _ hU).2.trans_eq (congrArg Shape.nnz hS.symm))⟩
+
+/-- **`Menu.Room` gives `Menu.RoomAt` at δ = 0**, under every law, for a trace whose units all hold records of types in
+`U`, placed within the menu's bounds. -/
+theorem Menu.Room.roomAt {N : ℕ} {T V : Type} {M : Menu} {Ty : Types T V} (hR : M.Room Ty) (L : Law N)
+    {X : Trace N T V} {U : Finset T} {place : T → Shape} (hX : ∀ i, ∃ t v, X i = some (t, v) ∧ t ∈ U)
+    (hW : M.Within Ty U place) : M.RoomAt Ty L X 0 := by
+  unfold Menu.RoomAt
+  refine le_of_le_of_eq (prCoin_mono (q := fun _ => False) fun ω h => ?_) prCoin_false
+  exact h (Menu.Room.fits hR hX hW (L.draw ω))
+
+theorem X₁_placed : ∀ i, ∃ t v, X₁ i = some (t, v) ∧ t ∈ (Finset.univ : Finset Unit) :=
+  fun _ => ⟨(), (), rfl, Finset.mem_univ _⟩
 
 /-- The one-point law over the one unit. -/
 def L₁ : Law 1 := { Ω := Unit, draw := fun _ => Finset.univ }
+
+theorem menu₀_fits : menu₀.Fits Ty₁ X₁ Finset.univ := Menu.Room.fits menu₀_room X₁_placed menu₀_within _
+
+theorem menu₀_roomAt : menu₀.RoomAt Ty₁ L₁ X₁ 0 := Menu.Room.roomAt menu₀_room L₁ X₁_placed menu₀_within
+
+/-- **`MenuComplete`'s and `MenuCompleteAt`'s hypotheses hold together**, at `menu₀` given that V* stages it: a
+nonempty draw of `X₁` fits, and under the one-point law every draw does (δ = 0, from `menu₀_room`). -/
+theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
+    menu₀.Staged ∧ ShapeMenu menu₀ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧ menu₀.Fits Ty₁ X₁ Finset.univ ∧
+      menu₀.RoomAt Ty₁ L₁ X₁ 0 :=
+  ⟨Menu.staged_ok h, menu₀_shapeMenu, Finset.univ_nonempty, menu₀_fits, menu₀_roomAt⟩
 
 /-- Sessions that end at once. -/
 def session₁ : Finset (Fin 1) → Unit → Game Unit := fun _ _ => .ret ()
@@ -208,5 +258,12 @@ draw, and it proves the statement there. -/
 theorem zeroKnowledge_nonvacuous :
     h₁.β.view = menu₀.padded (Finset.univ : Finset (Fin 1)).card ∧ Proves Ty₁ C₁ Finset.univ h₁ :=
   ⟨(rfl : h₁.β.view = menu₀.padded 1).trans (congrArg menu₀.padded (Finset.card_fin 1).symm), h₁_proves⟩
+
+/-- **`ZeroKnowledgeAt`'s hypotheses hold together**: at `menu₀` given that V* stages it, `X₁` committed under `C₁`, its
+one record in its type's relation, and room at every draw of the one-point law. -/
+theorem zeroKnowledgeAt_nonvacuous (h : menu₀.staged = true) :
+    menu₀.Staged ∧ ShapeMenu menu₀ ∧ C₁.Committed X₁ path₀₁ ∧ (∀ i t v, X₁ i = some (t, v) → Ty₁.holds t v) ∧
+      menu₀.RoomAt Ty₁ L₁ X₁ 0 :=
+  ⟨Menu.staged_ok h, menu₀_shapeMenu, C₁_committed, fun _ _ _ _ => trivial, menu₀_roomAt⟩
 
 end FlockSampled

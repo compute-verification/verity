@@ -23,7 +23,8 @@ slot is bound to its unit's committed record by its opening of the root.
   shapes within its bounds.
 * `Trace`, `Types`, `wrong`: the committed trace, partial (it holds nothing at a position no record opens); each type's
   relation and its matrix's nonzeros; the units wrong in a trace.
-* `Batching`, `Hidden`: the prover's sessions, with their slots' hidden types; and those with each slot's opening.
+* `Batching`, `Hidden`, `Hidden.honest`: the prover's sessions, with their slots' hidden types; those with each slot's
+  opening; and the honest prover's openings.
 * `drawOrder`, `CoverCheck`, `Bound`, `Covers`: the drawn units in order; the outer proof's coverage check; each held
   slot on its unit's committed type and values; each drawn unit in exactly one slot, on them.
 * `Commit`, `Commit.Injective`, `Commit.Committed`, `Commit.SlotOpens`, `recordPair`, `SlotBreak`: the trace commitment;
@@ -138,6 +139,10 @@ end Batching
 structure Hidden (N : ℕ) (T V : Type) where
   β : Batching N T V
   path : β.Pos → ByteArray
+
+/-- The honest prover's openings of a batching: each held slot's at its unit's committed path in `path₀`. -/
+def Hidden.honest {N : ℕ} {T V : Type} (β : Batching N T V) (path₀ : Fin N → ByteArray) : Hidden N T V :=
+  ⟨β, fun p => (β.held p).elim ByteArray.empty path₀⟩
 
 /-! ## Coverage -/
 
