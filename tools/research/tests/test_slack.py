@@ -1277,6 +1277,9 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     (routes_dirs[0] / "router.json").write_text(json.dumps(router))
     rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "and again")
     assert rc == 0 and "rang" not in err and len(bells(fake, box)) == 1
+    (routes_dirs[1] / "router.json").write_text(json.dumps({**router, "mode": "cli"}))   # switched back; the clone not pulled
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "once more")
+    assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
 
 
 def notes_clone(tmp_path) -> Path:
