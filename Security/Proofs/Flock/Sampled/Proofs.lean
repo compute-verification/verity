@@ -136,8 +136,7 @@ theorem composition_holds : Composition := by
       · exact hS ⟨ω, o, ho, ha.2, h⟩
   calc prob (fun x => Accepts M view I.verifies x.2 x.1) (sampledAudit L session R) σ
       = avg fun ω => prob (fun o => Accepts M view I.verifies (L.draw ω) o) (session (L.draw ω) R) (contOf σ ω) := by
-        unfold sampledAudit
-        rw [prob_coin]
+        refine (prob_coin _ _ _ σ).trans ?_
         exact congrArg avg (funext fun ω => prob_map _ _ _ _)
     _ ≤ avg fun ω => (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) :=
         avg_mono key
