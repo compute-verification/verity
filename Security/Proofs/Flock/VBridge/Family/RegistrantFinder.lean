@@ -1,16 +1,17 @@
-import Proofs.Flock.VBridge.Family.Registrants
+import Proofs.Flock.VBridge.Family.AccRows
 import Proofs.Flock.Recursive.Registrants
 
 /-!
 # `NoRegistrantCollision` where no two sessions clash
 
-`NoRegistrantCollision`'s pairs are `RegColl`'s (`Recursive/Registrants.lean`): two sessions' registered reads at one
-root and position whose openings or hm96 leaves collide. Where every accepted outer proof's history and registration
-has no `RegColl`, it holds; the recursive audit prices `RegColl` once, by `regFinder` (`prob_regColl_le`), in
-`zk_sessions_recursive_read_off`.
+`NoRegistrantCollision`'s pairs, and `NoRegistrantCollisionS`'s (`AccRows.lean`, keyed by registration), are
+`RegColl`'s (`Recursive/Registrants.lean`): two sessions' registered reads whose openings or hm96 leaves collide.
+Where every accepted outer proof's history and registration has no `RegColl` (`RegClear`), both hold; the recursive
+audit prices `RegColl` once, by `regFinder` (`prob_regColl_le`), in `zk_sessions_recursive_read_off`.
 
-* `noRegistrantCollision_of_clear`, `rowsShared_of_clear`: `NoRegistrantCollision`, and so `RowsShared`, at accepted
-  outer proofs without `RegColl`.
+* `RegClear`: no `RegColl` at an accepted outer proof;
+* `noRegistrantCollision_of_clear`, `rowsShared_of_clear`: `NoRegistrantCollision`, and so `RowsShared`;
+* `noRegistrantCollisionS_of_clear`, `siteRowsShared_of_clear`: `NoRegistrantCollisionS`, and so `SiteRowsShared`.
 -/
 
 namespace FlockVBridge.Family
@@ -29,19 +30,29 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
+/-- **No two sessions clash at an accepted outer proof** (`RegColl`). -/
+def RegClear : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ¬ RegColl (I := ℐ) F.zs R ω t R₂
+
 /-- **`NoRegistrantCollision` where no two sessions clash**: its two collisions are `RegColl`'s two. -/
-theorem noRegistrantCollision_of_clear
-    (h : ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ¬ RegColl (I := ℐ) F.zs R ω t R₂) :
-    F.NoRegistrantCollision dg N k Rw := by
-  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat
-  exact ⟨fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', hport, hat, Or.inl hc⟩,
-    fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', hport, hat, Or.inr hc⟩⟩
+theorem noRegistrantCollision_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistrantCollision dg N k Rw := by
+  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' _ _
+  exact ⟨fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
+    fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
 
 /-- **`RowsShared` where no two sessions clash.** -/
-theorem rowsShared_of_clear
-    (h : ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ¬ RegColl (I := ℐ) F.zs R ω t R₂) :
-    F.RowsShared dg N k Rw :=
+theorem rowsShared_of_clear (h : F.RegClear dg N k Rw) : F.RowsShared dg N k Rw :=
   F.rowsShared_of dg N k Rw (F.noRegistrantCollision_of_clear dg N k Rw h)
+
+/-- **`NoRegistrantCollisionS` where no two sessions clash**: its two collisions are `RegColl`'s two. -/
+theorem noRegistrantCollisionS_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistrantCollisionS dg N k Rw := by
+  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' _ _
+  exact ⟨fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
+    fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
+
+/-- **`SiteRowsShared` where no two sessions clash.** -/
+theorem siteRowsShared_of_clear (h : F.RegClear dg N k Rw) : F.SiteRowsShared dg N k Rw :=
+  F.siteRowsShared_of_sharedRowsS dg N k Rw (F.sharedRowsS_of dg N k Rw (F.noRegistrantCollisionS_of_clear dg N k Rw h))
 
 end VStarFamily
 

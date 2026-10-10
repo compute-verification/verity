@@ -4,14 +4,14 @@ import Proofs.Flock.Recursive.StageRead
 /-!
 # Recursion: two sessions' registrant records, priced by a finder of the recursive audit
 
-Two of V*'s sessions at one history whose registrant records (`ZkOuter.rd`) read one registered root at one position
-open it there, so their leaves are one or SHA-512 collides (`registrants_eq_or_collides`). The colliding pair is fixed
-by the history, across two sessions, so no finder behind a session's `boundCR` (each sees one session's record) outputs
-it. A finder of the whole recursive audit does: it plays the audit once and outputs the pair where the outcome's
-history has one.
+Two of V*'s sessions at one history whose registrant records (`ZkOuter.rd`) read one registered root (or one
+registration) at one position open it there, so their leaves are one or SHA-512 collides
+(`registrants_eq_or_collides`). The colliding pair is fixed by the history, across two sessions, so no finder behind a
+session's `boundCR` (each sees one session's record) outputs it. A finder of the whole recursive audit does: it plays
+the audit once and outputs the pair where the outcome's history has one.
 
-* `Reads.Clash`, `Reads.Clash.collision`: two records' registered reads at one root and position whose openings
-  (`TwoOpenings.pair`) or hm96 leaves (`hm96Pair`) collide, a collision of `H512`;
+* `Reads.Clash`, `Reads.Clash.collision`: two records' registered reads whose openings (`TwoOpenings.pair`) or hm96
+  leaves (`hm96Pair`) collide, a collision of `H512`;
 * `RegColl`, `regFinder`, `prob_regColl_le`: some two of V*'s sessions at a history clash; the finder that plays the
   recursive audit once and outputs that collision; under `cr/sha-512` (`Finder.CR` at `qX`), the audit's outcome has
   such a history with probability at most `qX²/2^513`, once per audit;
@@ -39,17 +39,18 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRows lay'}
 
-/-- **Two registrant records clash**: registered reads `p` of `rd` and `p'` of `rd'` name one root (`port`) and one
-position (`readAt`), and their openings (`TwoOpenings.pair`) or their hm96 leaves (`hm96Pair`) are a SHA-512
-collision. -/
+/-- **Two registrant records clash**: at registered reads `p` of `rd` and `p'` of `rd'`, the openings
+(`TwoOpenings.pair`, under `p`'s root and position) or the hm96 leaves (`hm96Pair`) are a SHA-512 collision. It asks
+nothing of the two reads' roots or positions, so it covers a collision however an obligation keys them (one
+`Registered.Port`, or one registration). -/
 def Reads.Clash (rd : Reads lay rs) (rd' : Reads lay' rs') : Prop :=
-  ∃ p p', rd.isRead p ∧ rd'.isRead p' ∧ rd.port p = rd'.port p' ∧ rd.readAt p = rd'.readAt p' ∧
+  ∃ p p', rd.isRead p ∧ rd'.isRead p' ∧
     (Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
       Collides (hm96Pair (rs.enc (rd.wv p)) (rd.ws p) (rs'.enc (rd'.wv p')) (rd'.ws p')))
 
 theorem Reads.Clash.collision {rd : Reads lay rs} {rd' : Reads lay' rs'} (h : rd.Clash rd') :
     Merkle.Collision H512 := by
-  obtain ⟨_, _, _, _, _, _, ⟨h1, h2⟩ | ⟨h1, h2⟩⟩ := h
+  obtain ⟨_, _, _, _, ⟨h1, h2⟩ | ⟨h1, h2⟩⟩ := h
   · exact ⟨_, _, h1, h2⟩
   · exact ⟨_, _, h1, h2⟩
 
