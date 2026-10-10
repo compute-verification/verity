@@ -96,11 +96,12 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
     Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
-      (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hb
+      (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le zr _ hT σ _
+  · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
+  · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le zr _ hT σ _
       (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.stmtAt rt stmt p o.2.1))
@@ -108,6 +109,6 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
         ⟨ho.1, ho.2.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall ho.2.2.1.1 ho.2.2.1.2, ho.2.2.2⟩))
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)
         fun o _ h => ⟨h.2.2.1.1, fun hh => h.2.2.2
-          (cast (congrArg (Flock.Guarantees.innerAt T CT st).holds (heq p o.2.1)) hh)⟩) hb))))
+          (cast (congrArg (Flock.Guarantees.innerAt T CT st).holds (heq p o.2.1)) hh)⟩) hb)))))
 
 end Flock.SecurityProofs

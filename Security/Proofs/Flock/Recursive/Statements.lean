@@ -360,7 +360,7 @@ output holds the strategy the prover names for each session, and with it the reg
 statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
 (`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of four holds.
 
-* `RecursiveSound`'s round fork (`RoundFork`) or session fork (`SessionFork`).
+* `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`).
 * A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting, having read at some
   position `i` a row other than the registered `p i`, and its opening of `rt` at `i` and the developer's collide
   (`Binding.Collides ((com i).ext (op o i) (op₀ i))`).
@@ -393,7 +393,7 @@ def RecursiveRanRegistered : Prop :=
     (_hop : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i → (com i).Opens rt (row o i) (op o i))
     (_hx : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : Pos → Row, (∀ i, reads o i → q i = row o i) →
       x o.1 o.2.1 = stmt q o.2.1),
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       (∃ o, FlockSoundness.Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
         AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((com i).ext (op o i) (op₀ i))) ∨
