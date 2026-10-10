@@ -10,7 +10,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   sessions hide their outputs where `ZkOuterR.hTags` (`TagsOk`) takes public ones, so their shared-row public file fails
   `Typable`'s `ScopeZ`.
 * `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:743978d1…, 85 at K = 4096, N = 2,
-  restaged with the inner program by `r20261010-081332-4738`. Lean's verifier builds the inner statement from its own
+  restaged with the inner program by `r20261010-081332-4738`; the fixture holds the files these tests read, the circuits
+  and V*'s programs xz-compressed, and each is checked against the art's own listing once decompressed. Lean's verifier builds the inner statement from its own
   partition object and program (`AcceptsPublic`), V*'s six statements are the ones `outerStatementsAt` counts, each
   session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit, and the rate is below 1 at
   `k = 2^21`. The sessions were proved as `verity/flock-circuit` before #1677 named the OS's masks in its `--zk` identity,
@@ -20,8 +21,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to `holds`, and the cheater's row
   not being the circuit's output is up to a SHA-512 second preimage for that row.
 
-Each inner setup reads the 567 MB inner circuit (about a minute and 3 GB) and the gate's sessions take up to about 13
-minutes each, run at once, so the module is slow; it catches what reading the theorems can't: a premise or event conjunct
+Each inner setup reads the 567 MB inner circuit (about a minute and 3 GB), the gate's files decompress to 2.3 GB, and its
+sessions take up to about 13 minutes each, run at once, so the module is slow; it catches what reading the theorems can't: a premise or event conjunct
 that no honest session meets."""
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ import concurrent.futures as cf
 import functools
 import hashlib
 import json
+import lzma
 import math
 import shutil
 import subprocess
@@ -55,6 +57,8 @@ STATEMENT = "verity/flock-circuit"
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
 
+#: art:743978d1…'s files the gate's tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
+#: the art's own listing (`out/data.sha256`)
 F1 = HERE / "fixtures" / "f1-gate"
 #: V*'s statements at the gate, each staged under `v/` with its outer session under `v-sess/`, in `RecVStar.statements`' order
 F1_PARTS = ("L0", "L1", "L2", "L3", "alg/p0", "alg/p1")
@@ -152,25 +156,54 @@ def test_the_recorded_level_hides_its_outputs(outer):
 
 # --- the F1 gate ----------------------------------------------------------------------------------------------------------
 
-def _f1_inner(public: Path, *extra: str) -> dict[str, dict]:
+def _f1_file(dst: Path, line: str) -> str | None:
+    """One line of `prover.sha256`: its file under `dst` (linked, or decompressed from `.xz`), or its path if the bytes
+    are not the listed ones."""
+    digest, rel = line.split("  ", 1)
+    src, out, h = F1 / rel, dst / rel, hashlib.sha256()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_file():
+        out.symlink_to(src)
+        h.update(src.read_bytes())
+    else:
+        with lzma.open(src.with_name(src.name + ".xz")) as f, out.open("wb") as o:
+            while b := f.read(1 << 24):
+                h.update(b)
+                o.write(b)
+    return None if h.hexdigest() == digest else rel
+
+
+@pytest.fixture(scope="module")
+def f1_gate(tmp_path_factory) -> Path:
+    """The gate's files as the prover wrote them."""
+    assert (F1 / "prover.sha256").is_file(), (
+        f"{F1} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/f1-gate`")
+    g = tmp_path_factory.mktemp("f1-gate")
+    with cf.ThreadPoolExecutor(8) as ex:
+        bad = [r for r in ex.map(functools.partial(_f1_file, g), (F1 / "prover.sha256").read_text().splitlines()) if r]
+    assert not bad, f"not the prover's bytes: {bad}"
+    return g
+
+
+def _f1_inner(g: Path, public: Path, *extra: str) -> dict[str, dict]:
     """`flock-witness inner` on the gate's inner statement with the verifier's own partition object and program."""
-    st = F1 / "stage"
+    st = g / "stage"
     return _witness("inner", "--circuit", str(st / "circuit.txt"), "--public", str(public), "--partition",
                     str(st / "partition.json"), "--program", str(st / "program.json"), *extra)
 
 
-def _unit(part: str) -> str:
-    with (F1 / "v" / part / "circuit.txt").open() as f:
+def _unit(g: Path, part: str) -> str:
+    with (g / "v" / part / "circuit.txt").open() as f:
         return f.readline().split()[1]
 
 
-def _f1_inst() -> tuple[dict, list, dict, dict, bytes]:
+def _f1_inst(g: Path) -> tuple[dict, list, dict, dict, bytes]:
     """`stage/inst-2.bin` in `circuit.write`'s shared-row layout: its header, META's ports, every table's rows and salts
     (port-major), and what follows them, which is the verifier's file's body (every row's `b || c`, then the refs)."""
-    raw = (F1 / "stage" / "inst-2.bin").read_bytes()
+    raw = (g / "stage" / "inst-2.bin").read_bytes()
     at = raw.index(b"\n") + 1
     head = json.loads(raw[:at])
-    with (F1 / "stage" / "circuit.txt").open() as f:
+    with (g / "stage" / "circuit.txt").open() as f:
         f.readline()
         ports = C._meta_ports(json.loads(f.readline()[len("META "):]))
     n = head["shared_rows"]
@@ -212,10 +245,10 @@ def _gemm(x, w) -> int:
     return y
 
 
-def _f1_cheat(dst: Path) -> Path:
+def _f1_cheat(g: Path, dst: Path) -> Path:
     """The verifier's file of the gate's inner statement with instance 0's output row committed one bit off: the row's
     `b || c` under its own salt, and the `out` tree's root over it."""
-    head, ports, rows, salts, public = _f1_inst()
+    head, ports, rows, salts, public = _f1_inst(g)
     rows = dict(rows, out=rows["out"].copy())
     rows["out"][0, 0] ^= 1
     fv, bc = _committed(head, ports, rows, salts)
@@ -225,43 +258,42 @@ def _f1_cheat(dst: Path) -> Path:
 
 
 @pytest.fixture(scope="module")
-def f1_inner() -> dict[str, dict]:
-    assert (F1 / "stage" / "circuit.txt").is_file(), (
-        f"{F1} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/f1-gate`")
+def f1_inner(f1_gate) -> dict[str, dict]:
     _build()
-    return _f1_inner(F1 / "stage" / "pub-2.bin", "--record", str(F1 / "inner" / "s1" / "session" / "session.json"))
+    g = f1_gate
+    return _f1_inner(g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s1" / "session" / "session.json"))
 
 
 @pytest.fixture(scope="module")
-def f1(f1_inner, tmp_path_factory) -> dict:
+def f1(f1_gate, f1_inner, tmp_path_factory) -> dict:
     """Every other `flock-witness` run the gate's tests read, at once: the inner statement at the cheater's public file, and
     each of V*'s sessions as `verity/flock-circuit` with the verifier's own V* inputs (the inner shape `accepts_stmt` prints,
     which is `rec-inner`'s; `--rec-part` its unit's index in the printed statements; `rec_bindings` of its partition
     object and program; the family's shared rows, the algebra parts' registered row ports) and as `F1_PROVED`."""
-    d = tmp_path_factory.mktemp("f1-gate")
+    g, d = f1_gate, tmp_path_factory.mktemp("f1-runs")
     shape = d / "inner.json"
     shape.write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
     names = f1_inner["accepts_stmt"]["statements"]
     ports: dict = {}
     for part in F1_PARTS[4:]:
-        for nm, e in json.loads((F1 / "v" / part / "registered.json").read_text())["ports"].items():
+        for nm, e in json.loads((g / "v" / part / "registered.json").read_text())["ports"].items():
             if nm not in ("v", "out"):
                 assert ports.setdefault(nm, e) == e, (part, nm)
     rows = d / "rows.json"
     rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
-    cheat = _f1_cheat(d)
-    jobs = {"cheat": functools.partial(_f1_inner, cheat)}
+    cheat = _f1_cheat(g, d)
+    jobs = {"cheat": functools.partial(_f1_inner, g, cheat)}
     for part in F1_PARTS:
-        v, label = F1 / "v" / part, part.replace("/", "-")
+        v, label = g / "v" / part, part.replace("/", "-")
         b = d / f"bindings-{label}.json"
         b.write_text(json.dumps(RB.bindings(json.loads((v / "partition.json").read_text()),
                                             json.loads((v / "program.json").read_text()))))
         files = ["--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition", str(v / "partition.json"),
                  "--program", str(v / "program.json"), "--registered", str(v / "registered.json")]
-        sess = ["--session", str(F1 / "v-sess" / label)]
+        sess = ["--session", str(g / "v-sess" / label)]
         jobs[part, STATEMENT] = functools.partial(
             _witness, "session", "--statement", STATEMENT, *files, "--rec-inner", str(shape), "--rec-part",
-            str(names.index(_unit(part))), "--rec-bindings", str(b), "--rec-rows", str(rows), *sess)
+            str(names.index(_unit(g, part))), "--rec-bindings", str(b), "--rec-rows", str(rows), *sess)
         jobs[part, F1_PROVED] = functools.partial(_witness, "session", "--statement", F1_PROVED, *files, *sess)
     with cf.ThreadPoolExecutor(len(jobs)) as ex:
         futs = {k: ex.submit(fn) for k, fn in jobs.items()}
@@ -279,14 +311,14 @@ def test_f1_lean_builds_the_inner_statement_from_its_own_partition_object_and_pr
     assert f1_inner["record_sigma"]["ok"], f1_inner["record_sigma"].get("why")
 
 
-def test_f1_vstars_statements_are_outer_statements_at(f1_inner):
+def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
     """`outerStatementsAt st`: the inner shape `innerAt` reads (m, k_log, 2 + points·regions claims, regions; `rec-inner`'s),
     `outerParts` over it (the exe's copy, `outerPartsOf`, is it by `rfl`) and `RecVStar.statements` there, which are the
     units of the gate's six staged statements."""
     c = f1_inner["accepts_stmt"]
     assert c["shape"] == {"format": "verity/rec-inner/v1", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
     assert c["outer_parts"] == len(c["statements"]) == len(F1_PARTS)
-    assert c["statements"] == [nm for nm, _ in F1_STATEMENTS] == [_unit(p) for p in F1_PARTS]
+    assert c["statements"] == [nm for nm, _ in F1_STATEMENTS] == [_unit(f1_gate, p) for p in F1_PARTS]
 
 
 @pytest.mark.parametrize("part", F1_PARTS)
@@ -337,26 +369,27 @@ def test_f1_the_rate_is_below_one_at_k_2_21(f1):
     assert max(2 ** c["level0"]["d"] / (math.e * k) for c in zkr.values()) == 1 / math.e < 1
 
 
-def test_f1_the_honest_outputs_are_the_circuits(f1_inner):
+def test_f1_the_honest_outputs_are_the_circuits(f1_gate):
     """The event's `¬ holds`, executably, at the honest s1: every output row is the inner unit's Definition on its
     instance's input rows (the IR oracle), and every row's `b || c` under its salt and the trees' roots are the verifier's
     file's, `pub-2.bin` byte for byte."""
-    head, ports, rows, salts, public = _f1_inst()
-    assert bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER).id == json.loads((F1 / "stage" / "rec.json").read_text())["definition"]
+    st = f1_gate / "stage"
+    head, ports, rows, salts, public = _f1_inst(f1_gate)
+    assert bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER).id == json.loads((st / "rec.json").read_text())["definition"]
     fv, bc = _committed(head, ports, rows, salts)
     assert fv == head["frame_v3"]
     assert public[:len(bc)] == bc
-    assert (F1 / "stage" / "pub-2.bin").read_bytes() == json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + public
+    assert (st / "pub-2.bin").read_bytes() == json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + public
     for i in range(head["instances"]):
         x, w, out = _inputs(head, ports, rows, public, i)
         assert int(out[0]) == _gemm(x, w) and not out[1:].any(), i
 
 
-def test_f1_a_wrong_output_still_sets_up(f1_inner, f1):
+def test_f1_a_wrong_output_still_sets_up(f1_gate, f1_inner, f1):
     """The cheater: instance 0's output row one bit off, committed under its salt. Lean's verifier still builds the inner
     statement from its own partition object and program (`AcceptsPublic` holds), at another Σ, while the committed output
     is not the circuit's. This is the executable fact `¬ holds` is about, not that Lean's `holds` flips."""
-    head, ports, rows, _, public = _f1_inst()
+    head, ports, rows, _, public = _f1_inst(f1_gate)
     c = f1["cheat"]["accepts_stmt"]
     assert c["ok"], c.get("why")
     assert c["sigma"] != f1_inner["accepts_stmt"]["sigma"]
