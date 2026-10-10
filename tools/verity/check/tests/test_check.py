@@ -805,8 +805,10 @@ def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, 
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     """Without bytecode or pytest's cache; every lint it names exists, so a rename can't turn it into a failure of
     every check. Without uv, the lockfile step fails by name."""
-    (lock, argv, cwd), (lints, pytest, cwd2) = CHECK.preflight()
+    (lock, argv, cwd), (lints, pytest, cwd2), (fixtures, public, cwd3) = CHECK.preflight()
     assert (lock, argv[1:], cwd) == ("preflight-lock", ["lock", "--check"], ROOT)
+    assert (fixtures, public[1:], cwd3) == ("preflight-fixtures", ["-B", str(ROOT / "tools" / "verity" / "check" / "check.py"),
+                                                                   "--public-fixtures"], ROOT)
     assert (lints, pytest[1:4], cwd2) == ("preflight-lints", ["-B", "-m", "pytest"], ROOT) and "no:cacheprovider" in pytest
     assert pytest[-len(CHECK.LINTS):] == list(CHECK.LINTS)
     for t in CHECK.LINTS:
@@ -815,6 +817,38 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     monkeypatch.delenv("UV", raising=False)
     monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
+
+
+def test_the_preflight_refuses_a_fetched_fixture_the_public_export_lacks(tmp_path, monkeypatch, capsys):
+    """The closing train's check (cb20, 10 Oct) failed `lean-suites` after its launch: #1716 registered rec-coins, preserved
+    privately and never exported, and node 1 fetches only from the public export. The preflight asks the export for each fetched
+    fixture's manifest (one HEAD each, no blob) and names the missing ids; a tracked fixture, whose bytes git holds, and the
+    `previous` history are not asked about, and with no public source it refuses rather than pass."""
+    import json
+    import subprocess
+
+    good, gone, small = ("art:" + c * 64 for c in "abc")
+    (tmp_path / "fixtures").mkdir()
+    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(
+        {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", "previous": {good: ["art:" + "d" * 64]}}))
+    (tmp_path / "small.json").write_text("{}")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "small.json", "fixtures"], check=True)
+    asked = []
+
+    def head(key):
+        asked.append(key)
+        return {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None
+
+    assert CHECK.public_fixtures(tmp_path, "https://public.example/store", head) == [gone]
+    assert sorted(asked) == [f"manifests/{'a' * 64}.json", f"manifests/{'b' * 64}.json"]
+    with pytest.raises(RuntimeError, match="no public source"):
+        CHECK.public_fixtures(tmp_path, "", head)
+
+    monkeypatch.setattr(CHECK, "public_fixtures", lambda: [gone])
+    assert CHECK.main(["--public-fixtures"]) == 1 and gone in capsys.readouterr().err
+    monkeypatch.setattr(CHECK, "public_fixtures", lambda: [])
+    assert CHECK.main(["--public-fixtures"]) == 0
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):

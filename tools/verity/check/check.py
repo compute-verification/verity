@@ -1198,11 +1198,50 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree). Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree), then `public_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = os.environ.get("UV") or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT)]
+            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--public-fixtures"], ROOT)]
+
+
+def public_fixtures(root: Path = ROOT, url: str | None = None, head=None) -> list[str]:
+    """The fetched fixtures (`fixtures/artifacts.json` entries whose path git doesn't hold) whose manifest the public export
+    lacks, which is all `fetch-fixtures --no-private` sees and all node 1 fetches from: the closing train's check (cb20, 10 Oct) failed `lean-suites` after its
+    launch on #1716's rec-coins fixture, preserved privately and never put through `research data export`. One HEAD per
+    manifest, no blob; a refusal before launch costs seconds. Raises when there is no public source to ask."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from research.store.fetchset import public_url
+    from research.store.fixtures import _is_tracked, entries, load_map, tracked
+    from research.store.local import manifest_key
+    from research.store.remote import HttpRemote
+
+    base = public_url(url)
+    if not base:
+        raise RuntimeError("no public source (RESEARCH_PUBLIC_URL is empty), so nothing shows the fixtures are public")
+    head = head or HttpRemote(base).head
+    git = tracked(root)
+    arts = sorted(a for a, path in entries(load_map(root)).items() if not _is_tracked(path, git))
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        found = list(ex.map(lambda a: head(manifest_key(a.removeprefix("art:"))), arts))
+    return [a for a, h in zip(arts, found) if h is None]
+
+
+def public_fixtures_only() -> int:
+    """`--public-fixtures`: 0 when every registered fixture's manifest is public, else 1 naming the missing ids."""
+    try:
+        missing = public_fixtures()
+    except Exception as e:                              # noqa: BLE001: a source that can't be asked shows nothing
+        print(f"check: public fixtures: could not ask the public export ({type(e).__name__}: {e})", file=sys.stderr)
+        return 1
+    if missing:
+        print(f"check: public fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json but not in the public export, "
+              f"which is all node 1 fetches: {' '.join(missing)}; run `research data export` for each", file=sys.stderr)
+        return 1
+    print("check: public fixtures: every fetched fixture fixtures/artifacts.json registers is in the public export")
+    return 0
 
 
 def preflight_only() -> int:
@@ -1513,6 +1552,8 @@ def main(argv: list[str]) -> int:
         os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
     if argv == ["--preflight"]:
         return preflight_only()
+    if argv == ["--public-fixtures"]:
+        return public_fixtures_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
     if "--record" in argv:
