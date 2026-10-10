@@ -494,12 +494,6 @@
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
   },
-  "Flock.SecurityProofs.RecursiveAudit": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit"],
-   "assumptions": [],
-   "type_hash": "b20765ad9e55e07c733436bb8f8b4b4e46b820d81b8a5f2050b3af098b6c7b8f"
-  },
   "Flock.SecurityProofs.RecursiveCircuitIndist": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist"],
@@ -3167,27 +3161,8 @@
   }
  },
  "shape": {
-  "premises": ["Proofs.Flock.Recursive.Premises"],
-  "events": ["FlockSoundness.Game.prob"],
-  "properties": {
-   "Flock.SecurityProofs.RecursiveAudit": {
-    "conjuncts": [
-     {
-      "function": [
-       "Flock.Stmt.setupH",
-       "Flock.Registered.checkDescription",
-       "Flock.Zk.verify",
-       "Flock.ProvedScope.check"
-      ],
-      "outcome": "accept"
-     },
-     {
-      "function": "Flock.Firewall.run",
-      "outcome": "none"
-     }
-    ]
-   }
-  },
+  "premises": [],
+  "properties": {},
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
