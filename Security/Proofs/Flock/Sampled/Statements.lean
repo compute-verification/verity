@@ -13,8 +13,8 @@ Skeletons, stated and not yet proved; `Proofs.Flock.Sampled.NonVacuity` shows ea
 * `ShapeMenu`, `Menu.Room`, `MenuComplete`: the menu's shapes are staged by Lean's `VStar.statements` and its padded
   sessions take only them; and when the padded sessions have room for any `k` typed units, an honest prover can batch
   every draw.
-* `Bridge`: the statement the sessions prove puts every drawn unit's committed record in its type's relation, or slot
-  binding breaks.
+* `SlotsSound`: the statement the sessions prove puts every drawn unit's committed record in its type's relation, or
+  slot binding breaks.
 * `Composition`: with F1's conclusion (`Recursion`, an interface), the audit accepts with the committed trace's wrong
   units in any family `𝓑` with probability at most the law's escape over `𝓑` plus F1's error, or a run breaks.
 -/
@@ -60,10 +60,10 @@ def MenuComplete : Prop :=
       ∃ β : Batching N T V, β.view = M.padded S.card ∧ (∀ s ∈ β.view, ∃ vs, M.vstar s = .ok vs) ∧
         CoverCheck S β ∧ Bound X β ∧ ∀ b, Ty.nnz (β.typ b) ≤ (β.shape b).nnz
 
-/-- **The bridge.** Under a commitment whose records determine their contents, with `X` the trace it commits: when what
-the sessions hold hidden satisfies the statement they prove at the draw `S`, no drawn unit is wrong in `X`, or slot
-binding breaks. -/
-def Bridge : Prop :=
+/-- **The slots are sound.** Under a commitment whose records determine their contents, with `X` the trace it commits:
+when what the sessions hold hidden satisfies the statement they prove at the draw `S`, no drawn unit is wrong in `X`, or
+slot binding breaks. -/
+def SlotsSound : Prop :=
   ∀ {N : ℕ} {T V : Type} (Ty : Types T V) (C : Commit N T V) (X : Trace N T V) (path₀ : Fin N → ByteArray)
     (S : Finset (Fin N)) (h : Hidden N T V),
     C.Injective → C.Committed X path₀ → Proves Ty C S h → Disjoint S (wrong Ty X) ∨ SlotBreak C X path₀ h

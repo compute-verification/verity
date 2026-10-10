@@ -7,8 +7,8 @@ One instance for all of them: one padded index, one type, nothing in the values 
 the unit's record (`onePort`: its root is the climb of the record's leaf, so the opening holds without computing SHA-512),
 and one session of one slot holding the unit (`batch₁`).
 
-* `coverage_nonvacuous`, `slotBinding_nonvacuous`, `bridge_nonvacuous`: the hypotheses of `Coverage`, `SlotBinding` and
-  `Bridge` at that instance, the draw being the one unit.
+* `coverage_nonvacuous`, `slotBinding_nonvacuous`, `slotsSound_nonvacuous`: the hypotheses of `Coverage`, `SlotBinding`
+  and `SlotsSound` at that instance, the draw being the one unit.
 * `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit, each staged over the inner shape
   `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` given that V* stages it (`menu₀.staged`, which `#guard` checks by
   evaluation, not by proof: building V*'s algebra is beyond the kernel's evaluation), and `Menu.Room` by proof;
@@ -111,8 +111,8 @@ theorem slotBinding_nonvacuous :
     C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧ C₁.SlotOpens h₁ ∧ ∃ p i, h₁.β.held p = some i :=
   ⟨C₁_injective, C₁_committed, h₁_opens, ⟨⟨⟨0, Nat.zero_lt_one⟩, ⟨0, Nat.zero_lt_one⟩⟩, 0, rfl⟩⟩
 
-/-- **`Bridge`'s hypotheses hold together**, at a nonempty draw. -/
-theorem bridge_nonvacuous :
+/-- **`SlotsSound`'s hypotheses hold together**, at a nonempty draw. -/
+theorem slotsSound_nonvacuous :
     (Finset.univ : Finset (Fin 1)).Nonempty ∧ C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧ Proves Ty₁ C₁ Finset.univ h₁ :=
   ⟨Finset.univ_nonempty, C₁_injective, C₁_committed, h₁_proves⟩
 
