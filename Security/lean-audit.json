@@ -3184,6 +3184,7 @@
  },
  "shape": {
   "premises": ["Proofs.Flock.Recursive.Premises"],
+  "events": ["FlockSoundness.Game.prob"],
   "properties": {
    "Flock.SecurityProofs.RecursiveAudit": {"function": ["Flock.ProvedScope.check", "Flock.Zk.verify"], "outcome": "accept"}
   },

@@ -1063,7 +1063,10 @@ def shape(policy: dict, facts: dict) -> list[str]:
     (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
     its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
-    entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A guarantee under `shape.frozen` ({name: why it
+    entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
+    acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose conclusion's
+    events of those constants all start with the acceptance (`prob (fun o => A o ∧ …) g σ ≤ …`) takes no acceptance
+    hypothesis, and each of its hypotheses that isn't a premise is refused. A guarantee under `shape.frozen` ({name: why it
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
@@ -1076,7 +1079,11 @@ def shape(policy: dict, facts: dict) -> list[str]:
     spec = policy.get("shape", {})
     fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
     frozen, where = spec.get("frozen", {}), "shape.frozen"
-    conjectures = spec.get("conjectures", {})
+    conjectures, events = spec.get("conjectures", {}), spec.get("events", [])
+    if not isinstance(events, list) or not all(isinstance(e, str) and e for e in events):
+        fails.append(f"shape: shape.events is {json.dumps(events)}; it lists constants, each a probability whose event "
+                     f"argument holds a property's acceptance")
+        events = []
     for name, c in sorted(conjectures.items()):
         c = c if isinstance(c, dict) else {}
         if name not in policy.get("assumptions", {}):
@@ -1113,7 +1120,7 @@ def shape(policy: dict, facts: dict) -> list[str]:
         if name in frozen and not frozen[name].strip():
             fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
         got = facts["pins"].get(name, {}).get("shape")
-        why = refusals(entries.get(name), got, premises, set(conjectures)) if isinstance(got, list) else \
+        why = refusals(entries.get(name), got, premises, set(conjectures), events) if isinstance(got, list) else \
             [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
         rests = sorted({c for part in got for h in part["hypotheses"] for c in [h.get("head"), *h["reaches"]]
                         if c in conjectures}) if isinstance(got, list) else []
@@ -1137,7 +1144,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     return fails
 
 
-def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset(),
+             events: list[str] = ()) -> list[str]:
     """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
     ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one, of
     the entry's function, or of its own when the entry lists `conjuncts` (one `{function, outcome}` each, in order) in
@@ -1155,20 +1163,25 @@ def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectur
         return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
     each = each or [entry] * len(got)
     if len(got) == 1:
-        return part_refusals(each[0], got[0], premises, conjectures)
+        return part_refusals(each[0], got[0], premises, conjectures, events)
     return [f"(conjunct {k + 1}) {w}" for k, (e, part) in enumerate(zip(each, got))
-            for w in part_refusals(e, part, premises, conjectures)]
+            for w in part_refusals(e, part, premises, conjectures, events)]
 
 
-def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset(),
+                  events: list[str] = ()) -> list[str]:
     """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
     first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
-    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`."""
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A probability
+    statement has its acceptance in the event (`shape.events`): when its conclusion has an event of one of those constants
+    (`prob (fun o => A o ∧ …) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and every one's first conjunct `A` is about the
+    function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance outside the event too;
+    an event of one of them that doesn't start with the acceptance is refused."""
     fns = [entry["function"]] if isinstance(entry["function"], str) else list(entry["function"])
     outcome, said = entry["outcome"], " or ".join(fns)
 
     def about(h: dict) -> bool:
-        reached = set(h.get("applies", h["reaches"]))
+        reached = set(h["applies"] if "applies" in h else h["reaches"])
         return not h.get("guarded") and any(reaches(f, reached) for f in fns) and (
             outcome == "accept" or any(c.rsplit(".", 1)[-1] == outcome for c in reached))
 
@@ -1176,23 +1189,30 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
         return h.get("head") in conjectures or bool(h["module"]) and under(premises, h["module"])
 
     hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
+    probs = [e for e in got.get("events", []) if e["head"] in events]
+    inevent = outcome != "none" and bool(probs) and all(map(about, probs))
     start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
         next(iter(hyps), None)
     ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
-    taken = [h for h in hyps if ends is None or h["at"] < ends]
+    taken = hyps if inevent else [h for h in hyps if ends is None or h["at"] < ends]
     out = []
-    if outcome != "none" and start is None:
+    if outcome != "none" and probs and not inevent:
+        out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} that doesn't start with its "
+                   f"function returning {outcome} ({said}): a probability statement's acceptance is its event's first "
+                   f"conjunct, under no hypothesis of its own")
+    if outcome != "none" and start is None and not inevent:
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
     for h in taken:
-        if (outcome != "none" and about(h)) or premise(h):
+        if (outcome != "none" and about(h) and not inevent) or premise(h):
             continue
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
+        its = f"its event's first conjunct, {outcome} by {said}" if inevent else f"{outcome} by {said}"
         out.append(f"takes {h['name']} : {h['type']}, {what} that is neither its acceptance nor a premise (its acceptance: "
-                   f"{outcome} by {said}; a premise: "
+                   f"{its}; a premise: "
                    f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})" +
                    (": it holds under a hypothesis of its own, and an acceptance is the event itself, under `∀` binders "
-                    "only" if h.get("guarded") else ""))
+                    "only" if h.get("guarded") and not inevent else ""))
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
     return out
