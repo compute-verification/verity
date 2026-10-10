@@ -14,12 +14,13 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   and V*'s programs xz-compressed, and each is checked against the art's own listing once decompressed. Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s six statements are the
   ones `outerStatementsAt` counts, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every
-  unit, and the rate is below 1 at `k = 2^21`. The sessions were proved as `verity/flock-circuit` before #1677 named the OS's masks in its `--zk` identity,
-  so the verifier of record refuses them now (S2/R7) and accepts them as `verity/flock-circuit@cec3e347`, the statement
-  they were proved as. The event's last conjunct is shown in its executable form only: the honest outputs are the
-  circuit's, and a public file whose one output row is committed one bit off still sets up. That is the executable fact
-  `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to `holds`, and the cheater's row
-  not being the circuit's output is up to a SHA-512 second preimage for that row.
+  unit, and the rate is below 1 at `k = 2^21`. The sessions were proved as `verity/flock-circuit` before #1677 named
+  the OS's masks in its `--zk` identity, so the verifier of record refuses them now (S2/R7) and accepts them as
+  `verity/flock-circuit@cec3e347`, the statement they were proved as. The event's last conjunct is shown in its
+  executable form only: the honest outputs are the circuit's, and a public file whose one output row is committed one
+  bit off still sets up. That is the executable fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean
+  lemma links execution to `holds`, and the cheater's row not being the circuit's output is up to a SHA-512 second
+  preimage for that row.
 
 Each inner setup reads the 567 MB inner circuit (about a minute and 3 GB), the gate's files decompress to 2.3 GB, and its
 sessions take up to about 13 minutes each, run at once, so the module is slow; it catches what reading the theorems
