@@ -338,9 +338,9 @@ theorem RecursiveFirewallPrivate : Flock.Guarantees.RecursiveFirewallPrivate := 
     ⟨⟨0, V.nr_pos j (V.pubOf x₀) (OuterZK.commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
   have : ∀ j, Nonempty (Fin (V.NS j)) := fun j =>
     ⟨⟨0, V.ns_pos j (V.pubOf x₀) (OuterZK.commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
-  obtain ⟨LP, Vs, Reg', D, draw, y, hCeq⟩ := hC
+  obtain ⟨LP, Vs, Reg', D, draw, tab, y, hCeq⟩ := hC
   have hOuter := OuterZK.vstar_outer_zk rows pub honest msgs V pubS hpub
-    (OuterZK.tablesOK_of_sessions V LP Vs D draw y hCeq) (OuterZK.selfCheckSilent_exe stopped) hH hT1
+    (OuterZK.tablesOK_of_sessions V LP Vs D draw tab y hCeq) (OuterZK.selfCheckSilent_exe stopped) hH hT1
   have key := FirewallZK.private_enc Flock.Guarantees.commitBytes (Flock.Guarantees.regLeaves rows pub)
     (regLeaves_hides rows pub hT1) honest nh msgs
     (fun P w r a l p y q =>

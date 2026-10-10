@@ -121,7 +121,7 @@ noncomputable abbrev outerStatementsAt (st : Flock.Stmt) : ℕ :=
   outerStatements (execClassAt st).cls (execClassAt st).regs
 
 /-- **V*'s typed sessions** (`Recursion.zsOf`), at the records' custody (`Flock.Premises.RecordCustody`) and a typing
-of every index (`Recursion.Typed`): each session `zr R ω t R₂ j` that types, with the record (`RecordsLiveZK`) its
+of every index (`Recursion.Typed`): each session `zr R ω t R₂ j` that types, with the record (`RecordsLiveZKJ`) its
 custody gives, and at one that doesn't, a session of its index that types, refusing everything. -/
 noncomputable abbrev custodied {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hC : Flock.Premises.RecordCustody zr) (h : Typed zr) :
@@ -244,8 +244,8 @@ def RecursiveAudit : Prop :=
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (y₀ : DrawSetupZK (zr R ω t R₂ j).I (Vs j).mPts S₀ ((zr R ω t R₂ j).dj S₀)) S' R' i,
-      rateZ (planZAt (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
+      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- V*'s bridge, at the typed sessions
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),

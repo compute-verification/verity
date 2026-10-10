@@ -15,7 +15,7 @@ the `c_k`'s, or the verifier's opening and the honest one collide:
   `opens_commitsRoot`: the honest opening is accepted; `treeLeaf_eq_or_collides`: an accepted opening at the same
   position has the `c_k`'s leaf, or `openPair` collides (`Flock.Registered.opensLeaf_binding`);
 * `opens_of_acceptsZKR`: at a transcript the session accepts, a drawn unit's row of a port of `own` opens the port's root
-  at the position `own` gives (`checked_of_accepts`, without a registrant);
+  at the position `own` gives (`checked_of_acceptsHJ`, without a registrant), at the table the unit is drawn into;
 * `HOwnRoots`, `RowsDrawn`, `PortNamesUnique`: what the family's sessions must be for that: the verifier's reads files'
   roots are `commitsRoot` over the history's `c_k`, an accepted transcript draws every unit that reads a round's
   commitment and labels it itself, and a circuit's port names are distinct;
@@ -32,6 +32,7 @@ open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Mod
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open FlockSoundness.Discharge.ZkReg FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
 open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
+open FlockSoundness.Discharge.Composed (drawJ partOf)
 
 /-! ## The verifier's entry of two `c_k` -/
 
@@ -85,38 +86,37 @@ theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl 
 
 /-! ## A session's accepted rows -/
 
-/-- **An accepted transcript opens a drawn unit's registered row** (`checked_of_accepts`, at a port of `own` rather than a
-registrant's read): where the transcript's draw `d` draws unit `u`, the drawn statement labels it `idx`, and `reg ∈ own`
-is the circuit's port `q` by name and gives position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q`
-opens `reg`'s root at `x` through the header's path. -/
-theorem opens_of_acceptsZKR {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv) {tr : Exec.Transcript}
+/-- **An accepted transcript opens a drawn unit's registered row** (`checked_of_acceptsHJ`, at a port of `own` rather
+than a registrant's read): where the transcript's draw `d` draws unit `u` into its table (`partOf`), that table's drawn
+statement (`HmOut.drawn` at `drawJ`) labels it `idx`, and `reg ∈ own` is the circuit's port `q` by name and gives
+position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q` opens `reg`'s root at `x` through the header's
+path. -/
+theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
     (hacc : AcceptsZKR zo.I zo.own tr) {reg : Registered.Port} (hmem : reg ∈ zo.own) {u : Fin nv}
     {q : Fin c.ports.size} (hfind : (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some q.val)
     {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hdp : HmRow.drawn c zo.pub d = .ok dp)
+    (hD : Draw.UnitDraw.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
+    (hdp : HmOut.drawn c zo.pub (drawJ zo.I d (partOf zo.I d u.val)) = .ok dp)
     (hidx : Registered.unitIndices dp = .ok idx) (hu : u.val ∈ D.proved) {x : ℕ}
     (hread : reg.reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some x)) :
     ∃ path, Registered.opens reg (zo.pub.digest u.val q.val c.ports.size) x path = true := by
   obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
-  have hh' : (zkTags zo.I).hiddenOutputs = false := (zkTags_hiddenOutputs zo.I).trans zo.hTags.1
-  rcases Exec.setupTables_ok hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
-  swap
-  · exact absurd zo.hTags.2.2.2 (by change 1 < zo.I.count at hc'; omega)
-  change Stmt.setupH (zkTags zo.I) zo.I.circuitFile zo.I.publicFile (zkCoins zo.I) zo.I.tables
-    (recordDraw tr.record) zo.I.partition zo.I.program = .ok st at hst
-  rw [hd] at hst
-  have hcst : st.c = c := by
-    have h1 := (setupH_spec ((zkTags_typed zo.I).trans zo.ht) hst).1
-    rw [zo.hc] at h1
+  obtain ⟨hsz, hstJ⟩ := ZkHidden.setupOf_tableJH zo.hTags.1 hd hs
+  have hjs : (partOf zo.I d u.val).val < sts.size := by rw [hsz]; exact (partOf zo.I d u.val).isLt
+  have s := Hidden.setupHidden_spec' (hstJ _ hjs)
+  have hcst : sts[(partOf zo.I d u.val).val].c = c := by
+    have h1 := s.parse
+    rw [ZkHidden.parseH_tagsAt ((zkTags_typed zo.I).trans zo.ht), zo.hcH] at h1
     exact (Except.ok.inj h1).symm
-  obtain ⟨pop', hpop', hdr⟩ := Layout.setupH_drawn hst
-  rw [hcst, zo.hpub] at hpop'
+  obtain ⟨pop', hpop', -, hdr⟩ := s.pub
+  rw [hcst, ZkHidden.loadPublicH_tagsAt, zo.hpub] at hpop'
   cases hpop'
-  rw [hcst, hdp] at hdr
-  have hpd : st.pub = dp := (Except.ok.inj hdr).symm
-  have hck := checkRegistered_ok (array_forM_ok hreg 0 (by simp))
-  simp only [List.getElem_toArray, List.getElem_cons_zero] at hck
+  have hdr' := hdr _ rfl
+  rw [hcst, hdp] at hdr'
+  have hpd : sts[(partOf zo.I d u.val).val].pub = dp := (Except.ok.inj hdr').symm
+  have hdpR : HmRow.drawn { c with outPorts := #[] } zo.pub (drawJ zo.I d (partOf zo.I d u.val)) = .ok dp := hdp
+  have hck := checkRegistered_ok (array_forM_ok hreg _ hjs)
   rw [hcst, hpd] at hck
   obtain ⟨tb, idx', htb, hidx', hports⟩ := check_tables hck
   rw [hidx] at hidx'
@@ -124,7 +124,7 @@ theorem opens_of_acceptsZKR {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdp
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -138,7 +138,7 @@ theorem opens_of_acceptsZKR {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
     exact this
   have hdig : zo.pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW zo.hpub hdp hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil zo.hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
@@ -185,14 +185,17 @@ def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
 
 /-- **An accepted transcript draws the units that read a round's commitment, and labels them itself**: at every
 history, each transcript session `j` accepts has a draw that draws every unit some round-commitment port of `own`
-reads, and the drawn statement's label of that unit is the unit. U4 (`checkFull` at the record's draw, which
-`flock-verify --registered --draw` runs) draws those units in full; the labels are the verifier's own where its
-partition derives the units (`Registered.derived`, which `Registered.check` requires). -/
+reads into its table (`partOf`, at the table's draw `drawJ`), and that table's drawn statement (`HmOut.drawn`) labels
+the unit with the unit. U4 (`checkFull` at the record's draw, which `flock-verify --registered --draw` runs) draws those
+units in full; the labels are the verifier's own where its partition derives the units (`Registered.derived`, which
+`Registered.check` requires). -/
 def RowsDrawn : Prop :=
   ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ reg ∈ (F.zs R ω t R₂ j).own,
     Registered.roundCommitment reg.value = true → ∀ (u : Fin (F.Vs j).nv) x, reg.reads[u.val]? = some (some x) →
-      ∃ d D dp idx, recordDraw tr.record = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧
-        HmRow.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub d = .ok dp ∧ Registered.unitIndices dp = .ok idx ∧
+      ∃ d D dp idx, recordDraw tr.record = some d ∧
+        Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
+        HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) =
+          .ok dp ∧ Registered.unitIndices dp = .ok idx ∧
         u.val ∈ D.proved ∧ idx.getD (D.proved.idxOf u.val) 0 = u.val
 
 /-- **A session's circuit names each port once**: a fact of V*'s circuits (`rec_residuals.statement`'s ports are

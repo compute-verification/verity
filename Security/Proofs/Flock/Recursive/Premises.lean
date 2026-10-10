@@ -20,8 +20,8 @@ abbreviates, unchanged.
 * `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform, at
   each of V*'s laws (one premise over `Vs`, so the shape check reads its head).
 * `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
-* `RecordCustody` (`live-verifier`, `Assumptions.Zk.RecordCustodyZK`): the record and the draw file each of V*'s
-  sessions reads are the challenger's of the live session and the verifier's own draw, at every history (one premise
+* `RecordCustody` (`live-verifier`, `Assumptions.Zk.RecordCustodyZKJ`): the record and the draw file each of V*'s
+  sessions reads are the challenger's of the live session of its statement's `J` tables and the verifier's own draw, at every history (one premise
   over V*'s sessions as the prover supplies them, `ZkOuterR`, so the shape check reads its head; the property builds the
   typed sessions from them and it).
 
@@ -62,11 +62,12 @@ abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
 /-- **hash-derived-key**: `Assumptions.Zk.HashDerivedKeyHm96`. -/
 abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96
 
-/-- **live-verifier** at every one of V*'s sessions: `Assumptions.Zk.RecordCustodyZK` at each session's inputs, draw
-files and record writer, under the full draw of its units `[0, nv)` (`--draw subset:<units>`). -/
+/-- **live-verifier** at every one of V*'s sessions: `Assumptions.Zk.RecordCustodyZKJ` at each session's inputs, draw
+files and record writer of the live session of its statement's `J` tables, under the full draw of its units `[0, nv)`
+(`--draw subset:<units>`). -/
 abbrev RecordCustody {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') : Prop :=
-  ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj
-    (zr R ω t R₂ j).wr (.subset (Vs j).nv) (Vs j).nv
+  ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj
+    (fun _ _ => (Vs j).J) (zr R ω t R₂ j).wr (Vs j).nv
 
 end Flock.Premises
