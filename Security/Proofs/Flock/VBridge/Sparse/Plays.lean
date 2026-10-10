@@ -13,7 +13,7 @@ the rounds (`degFold`).
 
 namespace FlockVBridge.Sparse
 
-open Flock FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Game
+open Flock FlockSoundness FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Game
 
 local notation "𝔽" => FlockLevel3.GF128
 
