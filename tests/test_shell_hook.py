@@ -134,3 +134,15 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
     assert "compgen -e" in json.loads(out)["agent_message"]
     out = subprocess.run([sys.executable, HOOK], input="env", capture_output=True, text=True, check=True).stdout
     assert json.loads(out)["permission"] == "deny"
+
+
+def test_a_multi_line_value_in_the_environment_refuses_every_command_naming_only_the_variable():
+    """A multi-line secret prints whole through any name filter, so the VM does nothing until it's gone (10 Oct)."""
+    env = {k: v for k, v in os.environ.items() if "\n" not in v}
+    body = "MIIEowIBAAKCAQEAsecretbody"
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps({"command": "ls", "cwd": str(ROOT)}), capture_output=True,
+                         text=True, env={**env, "NEBIUS_SA_PRIVATE_KEY": f"-----BEGIN RSA PRIVATE KEY-----\n{body}\n"},
+                         check=True).stdout
+    doc = json.loads(out)
+    assert doc["permission"] == "deny" and "NEBIUS_SA_PRIVATE_KEY" in doc["agent_message"] and body not in out
+    assert verdict("ls", BASH_FUNC_f__="() {  echo\n}") == "allow"     # an exported function is code, not a value

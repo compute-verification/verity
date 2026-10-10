@@ -8,7 +8,10 @@ of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refu
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, and reading `/proc/*/environ`.
 `compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
 `/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
-`grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+`grep`/`rg`, and `pgrep -af PATTERN` pass. While any variable in the agent's environment holds a multi-line value, every
+command is refused, naming the variables and never their values: such a value prints whole through any name filter (`cut -d=
+-f1`, `tr '\\0' '\\n'` over `/proc/PID/environ`), which is how the Nebius key reached a transcript an eighth time on 10 Oct,
+so the VM must not work with it in its environment at all. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 """
 import json
 import os
@@ -33,6 +36,11 @@ REASON = ("this command would print environment variables' values (a multi-line 
           "`compgen -e` (filter with `compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. "
           "List processes with `ps -eo pid,stat,etimes,comm`, or filter full command lines with "
           "`ps -eo pid,args | grep \"[p]attern\"` or `pgrep -af PATTERN`.")
+
+
+def multiline() -> list[str]:
+    """The variables whose values span lines (an exported shell function, `BASH_FUNC_name%%`, is code, not a value)."""
+    return sorted(k for k, v in os.environ.items() if "\n" in v and not k.startswith("BASH_FUNC_"))
 
 
 def secret(name: str) -> bool:
@@ -178,6 +186,14 @@ def refused_text(text: str) -> bool:
 
 
 def main() -> int:
+    if names := multiline():
+        why = (f"this VM's environment holds a multi-line value in {', '.join(names)}, and such a value prints whole through any "
+               "name filter. Nothing runs until it's gone: ask Daniel to delete that Cursor secret (Dashboard -> Cloud Agents -> "
+               "Secrets) or store it as one line (`NAME_B64`, `base64 -w0`), then start a fresh agent VM. A variable Cursor "
+               "derives from the others (__CURSOR_SANDBOX_ENV_RESTORE) clears with them.")
+        print(json.dumps({"permission": "deny", "user_message": "Refused by tools/agent-guard/shell_hook.py: " + why,
+                          "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + why}))
+        return 0
     raw = sys.stdin.read()
     try:
         command = json.loads(raw).get("command") or ""

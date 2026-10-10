@@ -4,6 +4,13 @@
 # check fails, the env guard kept.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+multi=$(python3 -c 'import os; print(" ".join(sorted(k for k, v in os.environ.items() if "\n" in v and not k.startswith("BASH_FUNC_"))))')
+if [ -n "$multi" ]; then   # names only: a multi-line value prints whole through any name filter, so it must not be here at all
+  echo "agent-guard: this VM's environment holds a multi-line value in: $multi. Delete that Cursor secret (Dashboard -> Cloud" \
+       "Agents -> Secrets) or store it as one line (NAME_B64, base64 -w0), then start a fresh VM; every shell command is refused" \
+       "until then (shell_hook.py)" >&2
+  exit 1
+fi
 sudo install -m 755 "$here/env_guard.py" /usr/local/bin/env
 sudo ln -sf /usr/local/bin/env /usr/local/bin/printenv
 if ! bash "$here/test_env_guard.sh" /usr/local/bin/env >/dev/null; then
