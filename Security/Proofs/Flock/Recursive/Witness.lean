@@ -26,9 +26,9 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
 * `acceptsDescription_ok`: `Recursion.AcceptsDescription`, at each of the verifier's own registered reads;
 * `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, at every session.
 
-On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit@cec3e347`,
-the statement they were proved as before #1677 put the OS's masks in `verity/flock-circuit`'s `--zk` identity, which
-refuses them at S2/R7. So the gate is witnessed under `@cec3e347` until its sessions are proved again.
+On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
+verifier of record's `--zk` identity with the OS's masks #1677 put in it, which the gate's sessions were proved with. So
+the gate is witnessed under today's identity.
 -/
 
 namespace FlockSoundness.Discharge.Recursion.Witness
