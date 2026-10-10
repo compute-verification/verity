@@ -16,7 +16,7 @@ strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96-sha51
 
 * `candWeightK`: `candWeightZC` read off a session's law alone (`ZkOuter.candWeight_vb`);
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
-  finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackCR` where the session's
+  finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackIf` where the session's
   knowledge finders satisfy `cr/sha-512`, else `1`);
 * `execOS_full_mem`, `vCovers_full`: a stratum the live stratified law draws in full is in every draw, so units there
   cover their wires;
@@ -30,7 +30,10 @@ strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96-sha51
   a unit whose stratum the session's law draws in full;
 * `ReadW`, `VDecodesR`, `VFullR`: a wire some unit reads, and `VDecodes` and `VFull` at those wires alone
   (`Proofs.Flock.Recursive.StageRead`);
-* `zk_sessions_recursive_full`: `zk_sessions_recursive_upto` at `obS`, its transfer from `sessions_stage_le`.
+* `zk_sessions_recursive_full`: `zk_sessions_recursive_upto` at `obS`, its transfer from `sessions_stage_le`;
+* `zk_sessions_recursive_fork`: the same in fork form, a round's fork finder finding a collision (`RoundFork`), a
+  session's (`SessionFork`), or the bound with no finder budgets: the sessions' `ZkOuter.boundCR`, `r` times their
+  `ZkOuter.slackCR` (`ZkOuter.slackIf_le`) and the inner error.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -180,8 +183,27 @@ noncomputable def stageSlack (k Rw M : ℕ) (ρ t' qF qS : ℝ) (τ : Strategy (
 
 open Classical in
 /-- **A stage's slack where the strategy's knowledge finders satisfy `cr/sha-512`** (`TabCR`), else `1`. -/
-noncomputable def slackCR (k Rw M : ℕ) (ρ t' qF qS : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
+noncomputable def slackIf (k Rw M : ℕ) (ρ t' qF qS : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   if zo.TabCR dg N qF qS τ then zo.stageSlack dg N k Rw M ρ t' qF qS τ else 1
+
+/-- **A stage's slack in fork form**: the drawn units' statistical errors, the tables' (`tableErrZ`), the link's
+(`linkErrZC`) and the waits' (`waitErrZC`); `stageSlack` with no finder budgets and no SHA-512 evaluations to count. -/
+noncomputable def slackCR (k Rw M : ℕ) (ρ : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
+  tableErrZ (planZAt zo.dj zo.y₀) Lv k (reg (zo.sim dg N τ)) +
+    linkErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
+      (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw M ρ +
+    waitErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
+      (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw ρ
+
+/-- **With no fork, `slackIf` at no budgets is the fork-form slack.** -/
+theorem slackIf_le {k Rw M : ℕ} (ρ : ℝ) {τ : Strategy (zo.game dg N)} (h : ¬ zo.Fork dg N k Rw M τ) :
+    zo.slackIf dg N k Rw M ρ 0 0 0 τ ≤ zo.slackCR dg N k Rw M ρ τ := by
+  unfold slackIf
+  split_ifs with hc
+  · refine le_of_eq ?_
+    unfold stageSlack slackCR
+    rw [ksAvgStrictZ_zero, linkBoundZC_zero _ _ _ _ _ _ _ _ (zo.cr_of_not_fork dg N h).2, candSlackZC_eq]
+  · exact absurd (zo.cr_of_not_fork dg N h).1.1 hc
 
 /-- The value binding's commit string of each wire is `posK`'s. -/
 theorem vb_pos (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N) : zo.vb.pos g = posK c hU nv g := by
@@ -360,7 +382,7 @@ theorem trialS_le (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → B
       rwa [show (obS Vs).val ⟨j, o⟩ = some ⟨j, (obK (Vs j).c (Vs j).hU (Vs j).nv).val o⟩ from rfl, projV_mk] at h')⟩
 
 /-- **A stage's transfer at V*'s sessions**: when every layer agreeing with the values `wv` on the wires of the commit
-strings `Sk j` satisfies `Q`, the sessions accept with `Q` failing at most the sessions' expected `slackCR` plus, at
+strings `Sk j` satisfies `Q`, the sessions accept with `Q` failing at most the sessions' expected `slackIf` plus, at
 each session's commit string, its weight times the chance its trial opens the session's registered digest `cs j pos`
 off `wv j pos` (`ZkOuter.candTransfer` at each session, `prob_seqC_exists_le`). Every wire of `Sk j` is read at every
 draw (`hfull`, `vCovers_full`). -/
@@ -381,7 +403,7 @@ theorem sessions_stage_le
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
-      sumS zs dg N (fun j τ => (zs j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+      sumS zs dg N (fun j τ => (zs j).slackIf dg N k Rw M ρ t' qF qS τ) s +
         ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
@@ -402,7 +424,7 @@ theorem sessions_stage_le
           (zs j).layer dg N k Rw ((zs j).ofBase dg N τ₀) g ≠
             bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
         ((zs j).game dg N) ((zs j).ofBase dg N τ₀) ≤
-      (zs j).slackCR dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
+      (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
         ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
@@ -411,7 +433,7 @@ theorem sessions_stage_le
     by_cases hj : ∃ tr, AcceptsZKR (zs j).I (zs j).own tr
     swap
     · exact ((prob_mono (fun a ha => (hj ⟨a.2.2, ha.1⟩).elim) _ _).trans (prob_false _ _).le).trans (zero_le ..)
-    unfold ZkOuter.slackCR
+    unfold ZkOuter.slackIf
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
         (((zs j).candTransfer (Vs j).law.St (Vs j).law.Kd (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src dg N hk hRw
@@ -431,7 +453,7 @@ theorem sessions_stage_le
     (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧ ∃ g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j ∧
       (zs j).layer dg N k Rw ((zs j).ofBase dg N r.1) g ≠
         bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
-    (fun j τ₀ => (zs j).slackCR dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
+    (fun j τ₀ => (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
       ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
         prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
           ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
@@ -471,7 +493,7 @@ theorem outerV_stage_le
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
-      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s +
         ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
@@ -540,7 +562,7 @@ def VFullR (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).
 
 /-- **The recursive audit with V*'s `--zk --registered` sessions as the outer proof is sound, with its stages' transfer
 from V*'s sessions**: `zk_sessions_recursive_upto` at V*'s tagged openings `obS`, stage `i`'s trial for each tagged
-commit string `trialV`, its slack the sessions' expected `slackCR` and its weights `weightS` on `Sk i`, the transfer
+commit string `trialV`, its slack the sessions' expected `slackIf` and its weights `weightS` on `Sk i`, the transfer
 from `outerV_stage_le` on `VCommits`, `VDecodes` and `VFull`. -/
 theorem zk_sessions_recursive_full
     -- V*'s laws: their strata and A3
@@ -576,14 +598,14 @@ theorem zk_sessions_recursive_full
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
+              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   refine zk_sessions_recursive_upto hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
-    (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s)
+    (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
   refine (outerV_stage_le hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
     (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
@@ -593,5 +615,84 @@ theorem zk_sessions_recursive_full
   rw [Fintype.sum_sigma]
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
     mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
+
+/-- **A round fork**: at some round `i < r`, draw `ω` and tagged commit string `pos`, the fork finder of round `i`'s
+commitment (`forkAt`: two continuations of the prover's own strategy after its round-`i` commitment, each running the
+trial for `pos` at the outer proof) outputs a SHA-512 collision at an outcome it reaches. -/
+def RoundFork (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg) : Prop :=
+  ∃ i < I.r, ∃ ω pos,
+    (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).Finds H512
+
+/-- **A session fork**: at some leaf the prover reaches (a draw `ω`, a transcript `t` and its strategy `s` of V*'s outer
+proof there), at some outcome of V*'s sessions that `s` reaches, the strategy `s` names for some session `j` has a fork
+(`ZkOuter.Fork`). -/
+def SessionFork (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw M : ℕ)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Prop :=
+  ExAt σ fun ω t s => ∃ rs, Game.Outcome (sessions (zs σ.1 ω t s.1) dg N) (sessOf (zs σ.1 ω t) dg N s) rs ∧
+    ∃ j, (zs σ.1 ω t s.1 j).Fork dg N k Rw M ((zs σ.1 ω t s.1 j).ofBase dg N (rs j).1)
+
+/-- **The recursive audit with V*'s sessions as the outer proof is sound, in fork form**: a run of the prover's own
+strategy finds a SHA-512 collision at a round's commitment (`RoundFork`) or in a session (`SessionFork`), or the audit
+accepts a false statement with probability at most the sessions' expected statistical errors (`ZkOuter.boundCR`), `r`
+times their expected stage slack (`ZkOuter.slackCR`), and the inner error. `zk_sessions_recursive_full` at no finder
+budgets and no SHA-512 evaluations to count: with no fork, every finder satisfies `cr/sha-512` at budget `0` and every
+link finder `ecr/sha-512` at cost `0`. -/
+theorem zk_sessions_recursive_fork
+    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (hbr : VBridge zs dg N k Rw x wmsg)
+    (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
+    (hsame : ∀ y (ms ms' : List I.Msg) (ρs : List I.Coin), (∀ i < ρs.length, Option.Rel (same i ρs) ms[i]? ms'[i]?) →
+      I.accepts y (ms.zip ρs) → I.accepts y (ms'.zip ρs))
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (hcmt : VCommits zs Sk cmt) (hdec : VDecodes wmsg same Sk msg) (hfull : VFull I.r Sk)
+    {εin : ℝ≥0∞} (hin : InnerSound I εin) :
+    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
+  by_cases h1 : RoundFork zs dg N k Rw σ cmt
+  · exact Or.inl h1
+  by_cases h2 : SessionFork zs dg N k Rw M σ
+  · exact Or.inr (Or.inl h2)
+  refine Or.inr (Or.inr ?_)
+  have hno := allAt_of_not_exAt h2
+  have hB : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
+      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) := by
+    refine expAt_mono_all (hno.mono fun ω t s hs => ?_)
+    unfold sumV sumS
+    exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
+      ZkOuter.boundIf_le _ _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
+  have hsl : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ 0 0 0 τ) s) ≤
+      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) := by
+    refine expAt_mono_all (hno.mono fun ω t s hs => ?_)
+    unfold sumV sumS
+    exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
+      ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
+  refine (zk_sessions_recursive_full hS hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
+    hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
+    hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
+  simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,
+    mul_zero, add_zero]
+  rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
+  exact mul_le_mul' le_rfl hsl
 
 end FlockSoundness.Discharge.Recursion
