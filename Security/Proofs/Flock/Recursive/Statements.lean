@@ -35,6 +35,10 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   accepts every session while the registered private circuit's hidden statement fails with probability at most
   `RecursiveSound`'s bound. `RanRegisteredRun` is the one-session form, `PrivateCircuit.RanRegistered` with its
   `cr/sha-512` hypothesis replaced by the same kind of break.
+* `commitBytes`, `firewallPairs`, `firewallCommits`: the firewall's commit strings and commitments when the inner coins
+  are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the firewall reads
+  (`Proofs.Flock.Recursive.Firewall`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
+  each message fixed by the auditor's tape before any commitment.
 
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
