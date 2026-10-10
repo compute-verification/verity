@@ -136,7 +136,7 @@ def PublicAudit : Prop :=
     (_hr : ∀ R ω t R₂ j S₀
       (y₀ : DrawSetupZK (zr R ω t R₂ j).I (Vs j).mPts S₀ ((zr R ω t R₂ j).dj S₀)) S' R' i,
       rateZ (planZAt (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
-    -- obligation: V*'s circuits compute the inner verifier, at the typed sessions and the public statement
+    -- VBridge, a premise: V*'s circuits compute the inner verifier, at the typed sessions and the public statement
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
     prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
