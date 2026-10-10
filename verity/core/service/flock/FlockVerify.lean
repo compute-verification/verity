@@ -99,11 +99,13 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
-output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
-registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
-def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
-  Registered.check st.c st.pub registered (Registered.derived st.partition)
+/-- A recursive session's inner statement's registered reads (§16.16, a plain-leaves statement): with the verifier's own
+registered reads, its description read from the developer's registration (`Registered.checkDescription`); without, a
+statement that names registered reads is refused, as `Registered.check` refuses one. -/
+def checkDescription (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
+  match registered with
+  | some own => Registered.checkDescription st.c st.pub own
+  | none => Registered.check st.c st.pub none false
 
 /-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the
 verifier's own `--identifier F` (`own`, its RFC 8785 form) in RFC 8785 form: `canon`'s, on the domain where it is RFC 8785
@@ -131,7 +133,8 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   else if tags.hm96Rows then do
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
-    checkRegistered st registered
+    if tags.plainLeaves then checkDescription st registered else checkRegistered st registered
+    Registered.checkFull registered draw
     checkIdentifier st identifier
     return st
   else do
@@ -156,6 +159,7 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     for st in sts do
       checkRegistered st registered
       checkIdentifier st identifier
+    Registered.checkFull registered draw
     return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
