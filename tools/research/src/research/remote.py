@@ -1845,7 +1845,8 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
         return rec
     rec["observed_utc"] = utc_now_ms()
     st = _read_json(local_dir / "status.json") or {}
-    rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
+    waits = st.get("state") == "running" and (_read_json(local_dir / "slot.json") or {}).get("state") == "waiting"
+    rec["last_observed"] = {"state": "waiting" if waits else st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
     rec.pop("launcher_exited", None)
     rec.pop("runner_gone", None)
