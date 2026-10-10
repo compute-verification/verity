@@ -13,11 +13,12 @@ element of F = GF(2^128) is 8 words, its 16 bytes ``lo`` LE then ``hi`` LE, so i
 * ``row``: the opened row's LANES elements of F: the row's bytes as the inner prover hashes them
   (`verity_flock.rec_vstar.row_bytes`).
 * ``aux``: the opening's H siblings bottom up (64 bytes each, 32 words from word ``32 h``), then zero words up to
-  ``A(H) = 64 ⌈H / 2⌉``, a whole number of 64-word M0 rows.
+  ``A(H) = 64 max(1, ⌈H / 2⌉)``, a whole number of 64-word M0 rows and at least one (a circuit file's row is whole SHA-512
+  blocks, so ``H = 0``'s ``aux`` is one row of zero words, which the unit does not read).
 * ``acc``: the running sums before this opening, two elements of F (words 0 .. 15), and 48 words carried as they are.
 * ``coef``: the verifier's coefficients, ``c0[l]`` for each lane then ``c1[l]`` (8 words each).
-* ``dirs``: the position's low H bits (word 0, bit ``h`` the side at level ``h``, its other bits zero) and 63 zero words, one
-  M0 row (the unit reads word 0's low H bits).
+* ``dirs``: the position's low H bits (bit ``h`` the side at level ``h``: bit ``h % 16`` of word ``h // 16``, the other bits
+  of words 0 and 1 zero) and 62 zero words, one M0 row (the unit reads the low H of words 0 and 1's 32 bits).
 * ``out``: the node H levels up (32 words) and 32 zero words: one M0 row, the top node's own registered row
   (`expected`, `verity_flock.rec_live.top_rows`). The statement reads it from the prover's registration of the top the firewall
   committed under salts (`verity_flock.rec_outer`), so one registered output row checks the climb against the top
@@ -38,6 +39,10 @@ The leaf is plain SHA-512 of the row (the inner statement's ``flock-leaf/sha512-
 `verity_flock.circuit.LEAF_SCHEME_PLAIN`): the tops are what the firewall salts, so a leaf needs none. A node is
 ``SHA-512(left || right)`` (§14), the current digest on the side its bit names (``t = d AND (cur XOR sib)`` swaps them).
 Compressions: ``LANES / 8 + 1`` for the leaf and 2 a level.
+
+``H`` is 0 to 32. At ``H = 0`` the leaf is the top: ``out`` is the leaf itself, which the statement reads against the
+registered top as it reads any climb's node, and neither ``aux`` nor ``dirs`` is read. Above 16 the position's bits run into ``dirs``' word 1;
+an opening of ``H ≤ 16`` reads word 0 alone, so its gates are the same at either bound.
 
 `_steps` states the computation once over two interpreters: `forms` for the M0 unit (`unit_circuit`: constant blocks fold, the
 products are summed leaf by leaf as `rec_residuals.residual_forms` sums them) and the IR for the Definition (`RecOpen`'s body:
@@ -63,7 +68,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from .rec_residuals import residual_forms
 from .sha512_circuit import word_bit
 
-__all__ = ["ACC_WORDS", "DIRS_WORDS", "OUT_WORDS", "PORTS", "RecOpen", "RecSha512Compress", "acc_ref", "aux_words", "coef_words",
+__all__ = ["ACC_WORDS", "DIRS_BITS", "DIRS_WORDS", "OUT_WORDS", "PORTS", "RecOpen", "RecSha512Compress", "acc_ref", "aux_words", "coef_words",
            "compressions", "cons_structure", "definition", "dirs_words", "elements", "expected", "open_ref", "pack", "port_words",
            "row_words", "unit_circuit", "words"]
 
@@ -76,6 +81,7 @@ NODE_WORDS = 32
 OUT_WORDS = 64
 ACC_WORDS = 64
 DIRS_WORDS = 64
+DIRS_BITS = 32
 ROW_BLOCK = 64
 F_WORDS = 8
 
@@ -86,8 +92,8 @@ def _check(LANES: int, H: int) -> None:
             raise TypeError(f"RecOpen's {n} is an int, not {v!r}")
     if LANES < 8 or LANES % 8:
         raise ValueError(f"RecOpen's LANES is a positive multiple of 8 (whole SHA-512 blocks of row), not {LANES}")
-    if not 1 <= H <= 16:
-        raise ValueError(f"RecOpen's H is 1 to 16 (the position's bits are one word), not {H}")
+    if not 0 <= H <= DIRS_BITS:
+        raise ValueError(f"RecOpen's H is 0 to {DIRS_BITS} (the position's bits are dirs' first two words), not {H}")
 
 
 def row_words(LANES: int) -> int:
@@ -95,7 +101,7 @@ def row_words(LANES: int) -> int:
 
 
 def aux_words(H: int) -> int:
-    return -(-NODE_WORDS * H // ROW_BLOCK) * ROW_BLOCK
+    return max(1, -(-NODE_WORDS * H // ROW_BLOCK)) * ROW_BLOCK
 
 
 def coef_words(LANES: int) -> int:
@@ -153,8 +159,9 @@ def pack(row: Sequence[int], sibs: Sequence[bytes]) -> tuple[list[int], list[int
 
 
 def dirs_words(pos: int, H: int) -> list[int]:
-    """``dirs``: the position's low H bits, then zero words."""
-    return [pos & ((1 << H) - 1)] + [0] * (DIRS_WORDS - 1)
+    """``dirs``: the position's low H bits, 16 a word, then zero words."""
+    low = pos & ((1 << H) - 1)
+    return [low & 0xFFFF, low >> 16] + [0] * (DIRS_WORDS - 2)
 
 
 def expected(node: bytes) -> list[int]:
@@ -169,7 +176,7 @@ def open_ref(LANES: int, H: int, row: Sequence[int], aux: Sequence[int], acc: Se
     if (len(row), len(aux), len(acc), len(coef), len(dirs)) != port_words(LANES, H):
         raise ValueError(f"RecOpen{{{LANES}, {H}}} takes {row_words(LANES)} row, {aux_words(H)} aux, {ACC_WORDS} acc, "
                          f"{coef_words(LANES)} coef and {DIRS_WORDS} dirs words")
-    low = dirs[0] & ((1 << H) - 1)
+    low = (dirs[0] | dirs[1] << 16) & ((1 << H) - 1)
     cur = hashlib.sha512(bytes_of(row)).digest()
     for h in range(H):
         sib = bytes_of(aux[NODE_WORDS * h:NODE_WORDS * (h + 1)])
@@ -200,7 +207,7 @@ def _sha(ops, cv: Sequence[int], bits: list, prefix_len: int) -> list:
 def _steps(ops, LANES: int, H: int, row: list, aux: list, acc: list, coef: list, dirs: list) -> tuple[list, list]:
     """``out``'s and ``acc_out``'s bits (byte-string order) from the ports' (`RecOpen`'s, flattened)."""
     t = ops.residuals(cons_structure(LANES), row + acc[:256], coef)
-    return _climb(ops, H, row, aux, dirs[:16]), t + acc[256:]
+    return _climb(ops, H, row, aux, dirs[:DIRS_BITS]), t + acc[256:]
 
 
 def _climb(ops, H: int, row: list, aux: list, d: list) -> list:

@@ -476,9 +476,11 @@ def test_the_verifiers_part_nets_are_vstars_units(server):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
+#: `rec_open` also builds H = 0 and 17 .. 32, which `VStar.checkRecOpen` refuses until it reads `dirs`' word 1; the
+#: refused heights drawn here are ones both refuse.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
-                     st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([0, 17, -1, True])}),
+                     st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
                      st.dictionaries(st.sampled_from(["LANES", "H", "x"]), st.just(7), max_size=3), JSON)
 
 
@@ -513,7 +515,7 @@ def test_rec_open_circuit_refuses_as_compose_does(server):
     SHA-512 digest); `test_rec_open_file_is_byte_equal` compares a file it writes."""
     p = port("rec_open_circuit", rec_open_circuit, st.nothing())
     good = {"LANES": 8, "H": 1, "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
-    for bad in ({**good, "LANES": 7}, {**good, "LANES": True}, {**good, "H": 0}, {**good, "H": 17},
+    for bad in ({**good, "LANES": 7}, {**good, "LANES": True}, {**good, "H": -1}, {**good, "H": 33},
                 {k: v for k, v in good.items() if k != "program"}, {**good, "x": 0}, {**good, "partition": "A" * 128}):
         assert D.replay(p, bad, server)[0] == "reject", bad
 
