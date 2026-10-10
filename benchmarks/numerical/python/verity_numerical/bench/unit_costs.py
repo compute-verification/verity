@@ -11,9 +11,11 @@ committed rows are ``units x rows`` and its nonzeros ``units x (nnz_a + nnz_b + 
 units are its tensor-core steps, :func:`attention_steps` (checked against the lowering at :data:`ATTENTION_REG_T`),
 evaluated at the stratum's mean T and mean ceil(T / 16). Bindings the lowering refuses (its ``supports`` reason, or Hopper
 GEMM) and templates without one (token-select, MoE, FP8 GEMM, element-wise scalars) keep the generic count below, marked
-``source: generic``; every row also carries the generic count as ``nnz_generic``. token-select's ``nnz_step_model`` prices a
-cut scan at (V − 1) middle ArgmaxStep units (:func:`argmax_step`). :func:`reconcile` sets circuits' F3 unit figures beside
-these.
+``source: generic``; every row also carries the generic count as ``nnz_generic``. token-select is priced at
+``TokenSelect_v2``'s argmax tree (:func:`argmax_tree`, :func:`retree`, ``source: tree``), which supersedes its generic scan
+count (kept as ``nnz_superseded``) and its ``nnz_step_model``, a cut scan at (V − 1) middle ArgmaxStep units
+(:func:`argmax_step`); gumbel's rows carry their select's F32 tree as ``select_tree``. ``--retree JSON`` applies only that to
+an earlier inventory. :func:`reconcile` sets circuits' F3 unit figures beside these.
 
 **Gates and nonzeros (generic).** A unit type's subcircuit is its census template bound at the census parameters
 (``bench.templates.subcircuit``), and its circuit is that Definition lowered whole, piece by piece, by C-Flock's generic
@@ -255,6 +257,85 @@ def argmax_step() -> dict[str, Any]:
         C.output(f"out{j}", wires[o])
     c = ir_lower.layout(C, [f"in{j}" for j in range(len(ext))], [f"out{j}" for j in range(3)]).counts
     return {k: int(c[k]) for k in ("rows", "ands", "nnz_a", "nnz_b")}
+
+
+def _layout(d: Any) -> dict[str, int]:
+    """A Boolean Definition laid out whole as one unit (CSE'd forms Circuit): rows, ANDs, nnz_a, nnz_b."""
+    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity_flock import ir_lower
+    from verity_flock.gf2 import Circuit
+
+    d = resolve(d)
+    sig, _ = signature_of(d)
+    C = Circuit(cse=True)
+    ins = [C.input(f"in{j}", w) for j, w in enumerate(w for p in sig for w in p.leaf_widths())]
+    outs = ir_lower.lower(C, d, ins)
+    for j, o in enumerate(outs):
+        C.output(f"out{j}", o)
+    c = ir_lower.layout(C, [f"in{j}" for j in range(len(ins))], [f"out{j}" for j in range(len(outs))]).counts
+    return {k: int(c[k]) for k in ("rows", "ands", "nnz_a", "nnz_b")}
+
+
+#: the argmax trees: token-select-greedy's (`TokenSelect_v2{V}`, bf16 keys) and gumbel's select (f32 keys)
+TREES = {"token-select-greedy": "TokenSelectStage", "gumbel-top-p-token-select": "F32ArgmaxStage"}
+
+
+def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
+    """The argmax tree over V logits (``sampling_boolean.stages``): each stage is separable
+    (``verity.ml.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
+    laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
+    from verity.ml.circuits.cut import separable
+    from verity.ml.circuits.evaluation.reference import resolve
+    from verity_vllm.program.registry import sampling_boolean as SB
+
+    members: list[dict[str, Any]] = []
+    memo: dict[str, dict[str, int]] = {}
+    for st in SB.stages(V, getattr(SB, stage)):
+        sep = separable(resolve(st))
+        if sep is None:
+            raise ValueError(f"{stage}{{V={V}}} has a stage that is not separable")
+        for callee, m in sep:
+            u = memo.get(callee.id) or memo.setdefault(callee.id, _layout(callee))
+            members.append({"member": callee.id, "n": int(m), **u, "nnz": u["nnz_a"] + u["nnz_b"] + u["rows"]})
+    tot = {k: sum(x["n"] * x[k] for x in members) for k in ("rows", "ands", "nnz_a", "nnz_b", "nnz")}
+    return {"stage": stage, "V": V, "members": members, "units": sum(x["n"] for x in members), **tot,
+            "nnz_per_logit": tot["nnz"] / V}
+
+
+def retree(inv: dict[str, Any], trees: Mapping[tuple[str, int], Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    """Prices token-select-greedy's rows at its argmax tree (``TokenSelect_v2``, :func:`argmax_tree`) in place: the tree's
+    members become the row's units (``source: tree``), and the generic count it replaces is kept as ``nnz_superseded``.
+    gumbel's rows keep their registered lane and carry their select's F32 tree as ``select_tree``. Idempotent."""
+    trees = dict(trees or {})
+    for r in inv["rows"]:
+        if r["template"] not in TREES:
+            continue
+        V = int(r["subcircuit_parameters"]["V"])
+        key = (r["template"], V)
+        if key not in trees:
+            trees[key] = argmax_tree(V, TREES[r["template"]])
+        t = trees[key]
+        summary = {k: t[k] for k in ("stage", "V", "units", "rows", "ands", "nnz", "nnz_per_logit")}
+        if r["template"] == "gumbel-top-p-token-select":
+            r["select_tree"] = summary
+            continue
+        if r.get("source") == "tree":
+            continue
+        r["source"], r["tree"] = "tree", {**summary, "members": t["members"]}
+        for gran in ("vu", "subcircuit"):
+            g = r[gran]
+            mult = r["subcircuits_per_vu"] if gran == "vu" else 1
+            old = g.get("per_unit") or {}
+            c = {"units": t["units"] * mult, "committed": t["rows"] * mult, "ands": t["ands"] * mult, "lookups": 0,
+                 "nnz_AB": (t["nnz_a"] + t["nnz_b"]) * mult, "nnz_C": t["rows"] * mult, "nnz": t["nnz"] * mult,
+                 "nnz_generic": old.get("nnz_generic"), "nnz_superseded": old.get("nnz")}
+            if "generic" in old:
+                c["generic"] = old["generic"]
+            g.update(per_unit=c, audit_nnz_mean=g["sampled_mean"] * c["nnz"], audit_nnz_q=g["sampled_q"] * c["nnz"])
+            g.pop("nnz_range", None)
+    inv["token_select"] = ("TokenSelect_v2's argmax tree: each stage separable, its members' layouts times their "
+                           "multiplicities; the generic scan count is superseded (nnz_superseded)")
+    return inv
 
 
 #: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893,
@@ -797,6 +878,7 @@ def _si(v: float | None) -> str:
 
 
 METHOD_MARK = {"exact": "E", "affine": "A", "scan law": "S", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
+SOURCE_MARK = {"registered": "R", "generic": "G", "tree": "T"}
 
 
 def render(inv: Mapping[str, Any]) -> str:
@@ -821,7 +903,19 @@ def render(inv: Mapping[str, Any]) -> str:
             lines.append(f"| {r['unit']} | {r['circuits']:,} | {r.get('unit_nnz_AB', 0):,} | {r.get('units', '–')} | "
                          f"{_si(s)} | {_si(g)} | {f'{g / s:.3f}' if g and s else '–'} | {r['what']} |")
         lines.append("")
-    if inv.get("argmax_step"):
+    trees = {(r["template"], r["subcircuit_parameters"]["V"]): r.get("tree") or r.get("select_tree") for r in inv["rows"]
+             if r.get("tree") or r.get("select_tree")}
+    if trees:
+        lines += ["token-select (src T) is priced at `TokenSelect_v2`'s argmax tree: every stage is separable, so it costs its "
+                  "members' layouts (`ArgmaxLeaf_v1`, `ArgmaxMerge_v1`) times their multiplicities. The generic scan count "
+                  "(quadratic in V) is superseded; nnz_generic still shows it. gumbel keeps its registered lane; its select's "
+                  "F32 tree is listed for comparison.", "",
+                  "| template | V | tree | members | rows | ANDs | nnz | nnz per logit |", "|---|---|---|---|---|---|---|---|"]
+        for (tm, V), t in sorted(trees.items()):
+            lines.append(f"| {tm} | {V:,} | {t['stage']} | {t['units']:,} | {_si(t['rows'])} | {_si(t['ands'])} | {_si(t['nnz'])} | "
+                         f"{t['nnz_per_logit']:.1f} |")
+        lines.append("")
+    elif inv.get("argmax_step"):
         lines += [f"token-select has no registered lowering: its rows use the generic count (quadratic in V; the running "
                   f"best is never re-committed). A cut lowering's middle ArgmaxStep unit is {inv['argmax_step']}, so "
                   f"about (V − 1) x {inv['argmax_step']['nnz_a'] + inv['argmax_step']['nnz_b'] + inv['argmax_step']['rows']:,} "
@@ -840,7 +934,7 @@ def render(inv: Mapping[str, Any]) -> str:
                 g = r[gran]
                 c = g.get("per_unit") or {}
                 lines.append("| " + " | ".join([
-                    r["unit_type"], METHOD_MARK.get(r["method"], r["method"]), "R" if r.get("source") == "registered" else "G",
+                    r["unit_type"], METHOD_MARK.get(r["method"], r["method"]), SOURCE_MARK.get(r.get("source"), "G"),
                     f"{g['units']:,}", f"{g['share']:.2%}",
                     _si(c.get("ands")), _si(c.get("committed")), _si(c.get("lookups")), _si(c.get("nnz_AB")), _si(c.get("nnz")),
                     _si(c.get("nnz_generic")), f"{g['sampled_mean']:.1f}", str(g["sampled_q"]), _si(g.get("audit_nnz_mean")),
@@ -878,14 +972,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--workload", action="append", default=[], help="only workloads whose id contains this (repeatable)")
     ap.add_argument("--attention-t", default=",".join(map(str, ATTENTION_T)), help="attention's key counts within the first block")
     ap.add_argument("--reuse", help="an earlier run's unit-costs.json: take its subcircuit results instead of building")
+    ap.add_argument("--retree", help="an earlier run's unit-costs.json: only re-price its samplers at the argmax tree (retree)")
     a = ap.parse_args(argv)
     from pathlib import Path
 
-    workloads = [w for w in census.raw("workloads") if not a.workload or any(s in w["id"] for s in a.workload)]
-    inv = inventory(workloads, a.exact_nnz, a.jobs, tuple(int(x) for x in a.attention_t.split(",")), log=lambda m: print(m, flush=True),
-                    subs=reuse(a.reuse) if a.reuse else None)
-    if a.reuse:
-        inv["reused"] = a.reuse
+    if a.retree:
+        inv = json.loads(Path(a.retree).read_text())
+        inv["retreed"] = a.retree
+    else:
+        workloads = [w for w in census.raw("workloads") if not a.workload or any(s in w["id"] for s in a.workload)]
+        inv = inventory(workloads, a.exact_nnz, a.jobs, tuple(int(x) for x in a.attention_t.split(",")),
+                        log=lambda m: print(m, flush=True), subs=reuse(a.reuse) if a.reuse else None)
+        if a.reuse:
+            inv["reused"] = a.reuse
+    retree(inv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "unit-costs.json").write_text(json.dumps(inv, indent=1, default=str) + "\n")

@@ -449,7 +449,7 @@ noncomputable abbrev layShHJ :
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
 
 /-- **`rs` at the public plan**: `keyRowsH` at `sitesShHJ`, with `hsite` from `sitesShHJ_bcSite`. -/
-noncomputable abbrev rsShHJ : Binding.HmRows (layShHJ dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
+noncomputable abbrev rsShHJ : Binding.HmRowsX (layShHJ dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShHJ_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShHJ_bcSite dj y₀ ht hc hscope hU hpub hpt)
@@ -491,12 +491,12 @@ noncomputable abbrev layZHJ :
   LayoutZ.ofShadow (planZHJ_S dj y₀) (layShHJ dj y₀ ht hc hscope hU (pub := pub)) (decAgreeHJ dj y₀ ht hc hscope hU)
 
 /-- **`rs` at the hidden-output `--zk` tables of `J` tables**: `rsShHJ` moved along `planZHJ_S`. -/
-noncomputable abbrev rsZHJ : HmRowsZ (layZHJ dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
-  HmRowsZ.ofShadow (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) (rsShHJ dj y₀ ht hc hscope hU hpub hpt)
+noncomputable abbrev rsZHJ : HmRowsZX (layZHJ dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
+  HmRowsZX.ofShadow (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) (rsShHJ dj y₀ ht hc hscope hU hpub hpt)
 
 /-- **`hHm` at the hidden-output `--zk` tables' rows, at `J` tables** (`rsShHJ_computes`, moved along). -/
 theorem rsZHJ_computes : (rsZHJ dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
-  HmRowsZ.ofShadow_computes (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) _
+  HmRowsZX.ofShadow_computes (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) _
     (rsShHJ_computes dj y₀ ht hc hscope hU hpub hpt)
 
 end Shadow

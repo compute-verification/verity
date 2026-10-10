@@ -33,10 +33,10 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- `rs`'s scope gives `sitesAtH`'s rows: on a circuit an untyped statement's `HmOut.parse` accepts, `scopeOkH`'s rows
-fit, of one kind (`rowsFit_of_scope`). -/
+are each fit or `sha512/row-seg/v1`, the output rows fit (`rowsFit_of_scope`). -/
 theorem rowsFit_of_scopeH {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (ht : tags.typed = false) (hc : HmOut.parse tags cf tables = .ok c) (hscope : Layout.scopeOkH c = true) :
-    Hidden.RowsFit c :=
+    Hidden.Any.RowsFitS c :=
   rowsFit_of_scope (parse_untyped ht hc).1 (parse_untyped ht hc).2 hscope
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -103,7 +103,7 @@ noncomputable abbrev layAtH :
 /-- **`rs` at the hidden tables**: `keyRowsH` at `sitesAtH`, its circuit conditions from `scopeOkH`
 (`Layout.scopeOkH_spec`, `rowsFit_of_scopeH`, `Layout.keysRow_of_parse`), with `hsite` from `sitesAtH_bcSite` at a
 public file without shared-row tables (`hpt`). -/
-noncomputable abbrev rsAtH : Binding.HmRows (layAtH ht hc hscope dj x₀ hU (pub := pub) (Reg := Reg)) :=
+noncomputable abbrev rsAtH : Binding.HmRowsX (layAtH ht hc hscope dj x₀ hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesAtH_parse ht hc (rowsFit_of_scopeH ht hc hscope) dj x₀) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesAtH_bcSite ht hc hscope dj x₀ hU hpub hpt)
@@ -132,8 +132,8 @@ on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere
 `miss(K) + ε_ks + δ_link`.
 
 Its hypotheses, past the session's inputs, are #828's `flock_headline_exec`'s at the hidden tables:
-* the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: #828's, or its rows all `sha512/row/v2` rows
-  that fit;
+* the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: #828's, or its rows each a `sha512/row/v2` row
+  that fits or a `sha512/row-seg/v1` row, of any mix, the output rows fit;
 * `hdec` (`DecodesOn`, R11b, at the law's draws only), open, at the hidden tables `tablesAtH`: at a draw flock-verify
   accepts under hidden outputs whose record carries the challenger's draw `dj S`, proving `S`, with link points
   `mPts`, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted (`tableAtH_of_accepts`);
