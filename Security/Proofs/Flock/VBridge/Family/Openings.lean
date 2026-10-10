@@ -529,14 +529,16 @@ def HOneOpen : Prop :=
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sessO ℓ)).c (F.Vs (F.sessO ℓ)).hU (F.Vs (F.sessO ℓ)).nv)
         (F.unO ℓ r j)) = true
 
-/-- **The registered `coef` is the verifier's** (`rec_outer.coefficients`, rec_outer.py:159-161): at every accepted
+/-- Obligation: discharged by a verifier check that the registered `coef` is its own (`rec_outer.coefficients`).
+**The registered `coef` is the verifier's** (`rec_outer.coefficients`, rec_outer.py:159-161): at every accepted
 outer proof, the `coef` each opening's unit reads in the layer is `coef`, computed from the rep's coins. -/
 def HCoefCols : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, F.coefCols (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ j =
       F.coef R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ j
 
-/-- **The openings read and write `rec-acc`'s rows `V`** (rec_outer.py:31, 237-238): at every accepted outer proof,
+/-- Obligation: discharged by the openings' reads and writes of `rec-acc`'s registered rows (rec_outer.py:31, 237-238).
+**The openings read and write `rec-acc`'s rows `V`** (rec_outer.py:31, 237-238): at every accepted outer proof,
 opening `j` of level `ℓ` of rep `r`, at chain position `p` (`getElem?_chainOf`), reads row `p` as its `acc` and writes
 row `p + 1` as its `acc_out`, on their first two elements, in the layer. `V` is the rows the registration registers as
 `rec-acc`; `accIn_of_regBit` and `accOut_of_regOut` give each fact from the opening's registered columns. -/
@@ -548,7 +550,8 @@ def HAccRows (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ �
         (F.accOut (layers F.zs dg N k Rw R ω t R₂ τ) (r, ℓ, j))[i]! =
           (V R ω t R₂ (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j + 1))[i]!
 
-/-- **V*'s algebra reads `rec-acc`'s rows `V` at each rep's ends** (`Chain.rep_ends`; `readsEnds_of_regBits` gives it
+/-- Obligation: discharged by V*'s algebra's reads of `rec-acc`'s registered rows at each rep's ends.
+**V*'s algebra reads `rec-acc`'s rows `V` at each rep's ends** (`Chain.rep_ends`; `readsEnds_of_regBits` gives it
 from the algebra unit's registered bits). -/
 def HEnds (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r,

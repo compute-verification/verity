@@ -441,7 +441,8 @@ theorem nOpen_pos : 0 < F.nOpen := by
   rw [hk, List.range_succ_eq_map, List.map_cons, List.sum_cons]
   exact Nat.lt_of_lt_of_le hq (Nat.le_add_right _ _)
 
-/-- **The circuit of a level's statement names its unit as the statement**, `RecOpen.unitName LANES H`: `circuitFile`
+/-- Obligation: discharged by `circuitFile`'s emit and parse round trip.
+**The circuit of a level's statement names its unit as the statement**, `RecOpen.unitName LANES H`: `circuitFile`
 writes the unit of `recOpenUnit LANES H` under `Stmt.name` (`Stage.lean:44`, `Compose.lean:217,233`) and `HmRow.parse`
 reads it as the circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile`, as `HUnitName`
 for the parts (the lane that proves `hfile`). -/
@@ -465,7 +466,9 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
   exact ⟨upv_pos hc (F.Vs _).hscope, unitLog_le (F.Vs _).hscope, _,
     params_of_check (parse_facts hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)⟩
 
-/-- **The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
+/-- Obligation: discharged by the verifier's check 6 (`cursor/rec-vstar-checks-741b`), whose pass is `ps.size =
+gs.size`.
+**The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
 `k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,
 `VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:51-100`), and its own, `groups (structureOf sh) (portSizes sh)`
 (`partsOf`, `RecResiduals.lean:119-139`), and refuses when they number differently. Both are the same first-fit packing,

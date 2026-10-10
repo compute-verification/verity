@@ -274,7 +274,9 @@ def bc (cOf : Cm → List UInt8) (j : Fin F.stmts.size) (e : Cm) (_ : PosK (F.Vs
 
 theorem selRounds_sel : SelRounds F.sel := selRounds_selOf F.n₀ F.kc
 
-/-- **The verifier's reads files are V*'s**: at every history, the reads file the verifier reads for session `j`
+/-- Obligation: discharged by the verifier's check 7 (`cursor/rec-vstar-checks-741b`): the registered reads'
+message-round ports are the statement's.
+**The verifier's reads files are V*'s**: at every history, the reads file the verifier reads for session `j`
 (`ZkOuter.own`, `registeredInput`, `FlockVerify.lean:228-242`) has `own j`'s message-round ports (`SameMsg`). V*'s
 staging writes them (`rec_vstage.messages`, `rec_vstage.py:156-168`; `rec_residuals.write`, `rec_residuals.py:452-454`);
 no check of the verifier's compares a file's port names with the statement's. The check that establishes it: at

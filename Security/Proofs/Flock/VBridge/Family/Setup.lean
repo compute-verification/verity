@@ -473,7 +473,9 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 noncomputable def innerSetup (R : Reg) (ω : L.Ω) : Setup :=
   modelSetup ((F.x R ω).toStatement regs) cls.ptLocal cls.mPts
 
-/-- **V*'s shape is the class's** (the verifier's gap `vsh`, with `ClaimsAt`): `vsh`'s `m` and `k_log` are the hidden
+/-- Obligation: discharged by a verifier check of V*'s shape against the inner statement (`vsh`'s `m`, `k_log` and
+schedule).
+**V*'s shape is the class's** (the verifier's gap `vsh`, with `ClaimsAt`): `vsh`'s `m` and `k_log` are the hidden
 class's (`rec_vstage.shape`), and the inner session's schedule is `fast100`'s at that `m`. -/
 def ShapeAt : Prop := F.vsh.m = cls.m ∧ F.vsh.kLog = cls.kLog ∧ Flock.fast100 cls.m = some sch
 

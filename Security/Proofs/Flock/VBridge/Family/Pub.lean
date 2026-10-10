@@ -252,7 +252,9 @@ theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs
     rw [hat] at h
     exact ⟨reg, x, path, _, _, h⟩
 
-/-- **The public file's round-commitment rows are the `c_k`'s**: at every history `t`, where session `j`'s circuit port
+/-- Obligation: discharged by a verifier check that `pub.bin`'s rows at its `rec-c<k>` reads are the `c_k` it holds (not
+run today).
+**The public file's round-commitment rows are the `c_k`'s**: at every history `t`, where session `j`'s circuit port
 `q` is a port of its reads file registering `rec-c<k>` and unit `u` reads it at row `x`, the public file's `b ‖ c` of
 `u`'s row `q` is the `b ‖ c` (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k`. The check that establishes it:
 the verifier compares `pub.bin`'s rows at its `rec-c<k>` reads with the `c_k` it holds (`rec_vstage.py:164`), rather

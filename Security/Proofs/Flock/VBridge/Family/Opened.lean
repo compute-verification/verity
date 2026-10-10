@@ -560,7 +560,9 @@ theorem hOpenParams_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpen
   rw [F.hsessO ℓ ⟨ℓ, hj⟩ ⟨_, _, _, hst⟩]
   exact params_of_check (parse_facts (F.zs R ω [] R₂ ⟨ℓ, hj⟩).hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)
 
-/-- **The `dirs` the openings read are the verifier's positions** (`rec_outer.stage`: `dirs` registered, rec_outer.py:
+/-- Obligation: discharged by a verifier check that the `dirs` V* registers are its own positions, as `HCoefCols` for
+`coef` (not run today).
+**The `dirs` the openings read are the verifier's positions** (`rec_outer.stage`: `dirs` registered, rec_outer.py:
 239-242): at every accepted outer proof, the `dirs` columns of rep `r`'s opening `j` of level `ℓ` spell, bit `h` at
 column `h`, the position the verifier's Ligerito run draws for the query (`posOf`). The verifier's gap: the check that
 the registered `dirs` are its own `positions`, as `HCoefCols`' for `coef`. -/
@@ -578,7 +580,9 @@ def LigOpens : Prop :=
   F.AtAccepted dg N k Rw fun _ _ _ l => ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     openAt (lig l r) (F.sh.sched.levels.size - 1) ℓ = (F.rowsOf l r ℓ, F.sibsFlat l r ℓ, #[])
 
-/-- **The openings climb to the caps** (rec_outer.py: each opening's `out` registered as a read of its level's cap row,
+/-- Obligation: discharged by each opening's `out` registered as a read of its level's cap row, whose bytes are the cap
+message's (route not built).
+**The openings climb to the caps** (rec_outer.py: each opening's `out` registered as a read of its level's cap row,
 at the query's cap index): at every accepted outer proof, the first 512 output columns of rep `r`'s opening `j` of
 level `ℓ`, in the layer, are entry `pos >>> depth` of the level's cap (`capAt`). The registration lane's (`out` an
 output column, as `HZeroL`'s) with the lig lane's `cap` and `lig`. -/

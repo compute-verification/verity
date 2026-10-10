@@ -444,7 +444,8 @@ lane), or by a verifier check that a session per part `p<j>` of `groups` is pres
 def HCover : Prop :=
   ∀ p < (partsOf F.sh).size, ∃ (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt
 
-/-- **The circuit of a part's statement names its unit as the statement.** `circuitFile` writes the unit of
+/-- Obligation: discharged by `circuitFile`'s emit and parse round trip.
+**The circuit of a part's statement names its unit as the statement.** `circuitFile` writes the unit of
 `innerUnit S nm` under `nm` (`metaHead`, `emitSections`, `Compose.lean:217,233`) and `HmRow.parse` reads it as the
 circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile` (the lane that proves `hfile`). -/
 def HUnitName : Prop :=
@@ -478,7 +479,8 @@ def HOne : Prop :=
     layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r)) = true
 
-/-- **The registered `v` is the verifier's at the rep's coins** (a verifier gap). At an accepted outer proof, the `v`
+/-- Obligation: discharged by a verifier check recomputing the registered `v` from the rep's coins (not run today).
+**The registered `v` is the verifier's at the rep's coins** (a verifier gap). At an accepted outer proof, the `v`
 port of rep `r`'s copy of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims
 and comb (`vOf`), at the part's `V`; established by a verifier check that recomputes the registered `v` from its coins
 (not run today). -/

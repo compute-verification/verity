@@ -134,7 +134,9 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- **No two sessions' registrant records collide at one registered root and position.** At every accepted outer
+/-- Obligation: open. A colliding pair across two sessions' records is fixed by the history, and no finder behind the
+transfer's `cr/sha-512` term prices it: each sees one session's record.
+**No two sessions' registrant records collide at one registered root and position.** At every accepted outer
 proof, where two sessions' registered reads name one root and one position, neither their openings
 (`TwoOpenings.pair`) nor their hm96 leaves (`hm96Pair`) are a SHA-512 collision. The pair is fixed by the history (each
 record is a field of the session the family builds there), not by a session's run, so no finder of the transfer's
@@ -153,7 +155,9 @@ def NoRegistrantCollision : Prop :=
         ((F.zs R ω t R₂ s).rd.ws (.inl (u, q))) (rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
-/-- **Two sessions' registrant records at one registered root and position hold one row's bytes.** At every accepted
+/-- Obligation: discharged by the family taking each registrant opening at a registered root and position once, else by
+`NoRegistrantCollision`.
+**Two sessions' registrant records at one registered root and position hold one row's bytes.** At every accepted
 outer proof, where two sessions' registered reads name one root and one position, the registrants' values there have
 one `rowEnc`. It holds where the family's sessions take the registrant's opening at a root and position from one
 choice, the same in every session; `sharedRows_of` gives it from `NoRegistrantCollision` otherwise. -/

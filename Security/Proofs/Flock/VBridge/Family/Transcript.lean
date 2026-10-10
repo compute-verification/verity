@@ -580,7 +580,10 @@ noncomputable def tableMsgs (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
   cut ((tableSteps (F.woven spec st cap lig R ω t l)).map kindOf)
     ((tableSteps (F.woven spec st cap lig R ω t l)).filterMap Sum.getLeft?)
 
-/-- **V*'s sessions accept only at a whole history**: at every accepted outer proof, the history has a coin for each of
+/-- Obligation: false as `VBridge` is quantified, at every history (`t = []`: no inner message is sent, yet V*'s
+sessions can accept); discharged once `VBridge` is stated at whole histories, as `recGame` reads it, or the family's
+sessions refuse a short history.
+**V*'s sessions accept only at a whole history**: at every accepted outer proof, the history has a coin for each of
 the inner protocol's rounds. `VBridge` reads every history, and the inner transcript of a history with fewer coins than
 rounds (`zip` stops at the last coin) leaves the openings unsent, so the inner verifier cannot accept it; the recursive
 game reads `VBridge` only at its leaves, whose histories are whole (`recGame`'s `rounds … I.r`). -/
@@ -652,7 +655,9 @@ noncomputable def coinFamily : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
 
 variable (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
 
-/-- **The table's round-`i` messages are read from stage `i`'s commit strings**: two accepted outer proofs whose layers
+/-- Obligation: discharged from the stage files (`rec_vstage`'s staging): round `i`'s table messages read only stage
+`i`'s masked commit-string wires.
+**The table's round-`i` messages are read from stage `i`'s commit strings**: two accepted outer proofs whose layers
 agree on the read wires of stage `i`'s commit strings (`maskOf` at `skOf own sel`) have the same round-`i` messages
 (`tableMsgs`, at the coins' family). Round `i`'s messages are the values w, the cap and the openings hold in the rows V*
 registers for round `i` (`sel i`), which `skOf` makes stage `i`'s commit strings. -/
