@@ -759,6 +759,16 @@ class RemoteQuickTier(QuickTier):
             status = _json_file(d / "status.json")
             if status.get("state") in R.TERMINAL:
                 return status, None
+            if rec.get("launcher_exited") or rec.get("runner_gone"):
+                # a fetch copies status.json before it probes the runner, which can record its end and exit in between
+                # (r20261010-134738-7625 passed and read as gone): fetch once more before calling the run lost
+                try:
+                    fetch(d)
+                except Exception:  # noqa: BLE001
+                    pass
+                status = _json_file(d / "status.json")
+                if status.get("state") in R.TERMINAL:
+                    return status, None
             if gone := rec.get("launcher_exited"):
                 return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
             if gone := rec.get("runner_gone"):
