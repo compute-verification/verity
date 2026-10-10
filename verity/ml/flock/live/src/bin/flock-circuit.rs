@@ -3985,7 +3985,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst)))));
+    let s = Arc::new(Mutex::new(server(st, &vinst)));
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
