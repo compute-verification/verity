@@ -69,6 +69,23 @@ theorem loads_of_check {t₀ : Flock.Tags} {stmts : Array VStar.Stmt} {bind : Fi
   rw [zkTags_vstar hT x.hTags.2.2.2, htab, hp] at hZ
   exact ⟨(Except.ok.inj hZ).symm, hn.trans hnv.symm⟩
 
+/-- **A session the verifier of record accepts as V*'s statement `j`, under the family's bindings for it, loads
+`Vs j`**, where its inputs pass the statement check, at V*'s tags and no lookup tables: `--rec-part j` makes the
+session's statement `stmts[j]` and `--rec-bindings` makes its file `circuitFile stmts[j] (bind j)`
+(`vstarFile_of_accepts`), and `loads_of_check` at the obligation. The tags and the tables are taken until the verifier
+refuses a session at other tags or with lookup tables. -/
+theorem loads_of_verifiesV {t₀ : Flock.Tags} {i : RecVStar.Inner} {stmts : Array VStar.Stmt}
+    {bind : Fin stmts.size → VStar.Bindings} {Vs : Fin stmts.size → VStmt} (hob : VStarParses t₀ stmts bind Vs)
+    (hss : RecVStar.statements i = .ok stmts) (j : Fin stmts.size) {Reg' : Type} (x : (Vs j).OuterR Reg')
+    (t : Exec.Transcript) (hacc : AcceptsZKV i j (bind j) x.I x.own t) (hck : ScopeZR x.I) (hT : x.I.tags = t₀)
+    (htab : x.I.tables = []) : (Vs j).Loads x.I := by
+  obtain ⟨ss, s, hss', hj, -, hn, hf, -⟩ := vstarFile_of_accepts x t hacc hck
+  rw [hss] at hss'
+  cases hss'
+  rw [Array.getElem?_eq_getElem j.2] at hj
+  cases hj
+  exact loads_of_check hob j x hck hT htab hf hn
+
 /-- **Open (gap 8): a session the verifier of record accepts, at inputs that pass the statement check, loads V*'s
 statement.** The one place `VStmt.Loads` enters the recursive audit's proof. No check of the verifier reads V*'s
 statement yet, so this is a named gap and not a theorem of the executable; the verifier's check that a session's circuit
