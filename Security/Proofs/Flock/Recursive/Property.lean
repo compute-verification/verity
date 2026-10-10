@@ -24,8 +24,8 @@ private circuit registered by hm96 leaves. It is a conjunction:
   as its inner term;
 * (ii) zero knowledge with circuit privacy, stated about the firewall's code (`Flock.Firewall.run`) and V*'s outer
   sessions run by the honest prover's code (`Recursion.OuterZK.proverExe`), `RecursiveFirewallPrivate`'s form
-  (`Proofs.Flock.Recursive.Firewall`): a simulator that reads only the class, the schedule's transcript and the owed
-  outputs, `hash-derived-key` its one premise and what it takes of the code each an obligation.
+  (`Proofs.Flock.Recursive.Firewall`), the inner coins live: a simulator that reads only the class, the schedule's
+  transcript and the owed outputs, `hash-derived-key` its one premise and what it takes of the code each an obligation.
 
 Its premises are the list in `Proofs.Flock.Recursive.Premises`. Its proof (`Flock.SecurityProofs.RecursiveAudit`,
 `Proofs.Flock.Recursive.Audit`) rests on the open lemmas that file names.
@@ -172,8 +172,9 @@ slack, and the compiled table's error.
 bytes, and V*'s outer sessions `V` run by the honest prover's code `OuterZK.proverExe`) and the simulated one
 (`fwSimPr`: `p₀` registered, the schedule's transcript `T` on ideal commit strings, V*'s simulator at the public
 context `pubS` reads), which reads only the class, `T` and the owed outputs, give every event probabilities within
-`2 n_r·2^-193 + ε_V + n_h·2^-193` both ways, `ε_V` V*'s sessions' error (`OuterZK.Sessions.err`). What it takes of the
-code is each an obligation: the requests run through the firewall to `T` with the messages' salted commit strings in
+`2 n_r·2^-193 + ε_V + n_h·2^-193` both ways, `ε_V` V*'s sessions' error (`OuterZK.Sessions.err`). The inner coins are
+live: the auditor draws each after the commit strings before it, and each message `msgs … i` and the requests `reqs`
+read those strings (`firewallStrings`, `firewallCommits`). What it takes of the code is each an obligation: the requests run through the firewall to `T` with the messages' salted commit strings in
 it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
 `hz`, `hR`, `hS`). -/
 def RecursiveAudit : Prop :=
@@ -245,9 +246,10 @@ def RecursiveAudit : Prop :=
     -- the registration: the private circuit's rows, and what the auditor sees of their leaves
     (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop)
-    -- the honest worker's requests to the firewall, the messages they commit, and the schedule's transcript
-    (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → List ByteArray)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    -- the honest worker's requests to the firewall and the messages they commit, each reading the commit strings the
+    -- firewall sent before it (the inner coins live), and the schedule's transcript
+    (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
     -- V*'s outer sessions, the public context their simulator reads, and what a stopped run sends
     (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub)
