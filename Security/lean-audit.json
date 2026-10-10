@@ -11990,14 +11990,14 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveRanRegistered", "Flock.SecurityProofs.RecursiveSound"]
   },
   "Proofs.Flock.Recursive.Stage": {
-   "digest": "12835a7121496e41848cc270a370b26379d65073f7c77e1c4bdbfd4a26e3f33f",
+   "digest": "54fe1d86f0e2f87e1009fe3066df9a03bbbc800601deaa6a68483a7c43018f4e",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.Openings.sigma": "f27e1c3c377262da02cc867376cb3e03c8c173960b0b5bf2a6b0894a8944c42f",
     "FlockSoundness.Discharge.Recursion.PosK": "53d9ed266468b8504b5d54a59d6f58c88f857a0c3d57dbe091d965e4df556332",
     "FlockSoundness.Discharge.Recursion.ReadW": "81560b23656f8dc8058c0d1888d20dd4b5649f904990001833c8fa18677dfed3",
     "FlockSoundness.Discharge.Recursion.RoundFork": "9e201c3cb9fe9268c9a22083fda5e8efc89e8f5ca95de712777c132ce314e4e9",
     "FlockSoundness.Discharge.Recursion.SessionFork": "0dc1f235ad781826061b99704c6ae9b12e9a1fb865c878b0b8bc88e08c5092fd",
-    "FlockSoundness.Discharge.Recursion.VCommits": "90feec3cb9c89c3cc1fe41a409e9150966b249413b35ae3360b9674a70166e1c",
+    "FlockSoundness.Discharge.Recursion.VCommits": "af933bc2263e3438b0fe8db465e861c1949f01c36d4097c55758b6780e4da29c",
     "FlockSoundness.Discharge.Recursion.VDecodesR": "5c802974a3d13d4d6aa5cf940a52ff2f4a53c97a16ac355abe5662b5d5add80f",
     "FlockSoundness.Discharge.Recursion.VFullR": "d309fd0c33bf5f26a0fc3bf895d407fc413bc822a2e61cabb4e4c72c11fdd637",
     "FlockSoundness.Discharge.Recursion.ValK": "8195cd44a3add667689eea3a12f40b2615263218a0e898343751d8f7af5ab5ac",
