@@ -30,7 +30,7 @@ theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Arra
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (hTags : TagsOkH I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKR I own o)
-    (rd : FlockSoundness.Registered.Reads (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    (rd : FlockSoundness.Registered.ReadsX (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHS dj y₀ ht hc hscope hU hpub))
     (hown : OwnReadsH own c pub o.2.2 rd.isRead rd.port rd.readAt) :
     rd.Checked o.1 (regPathsH c pub o.2.2 rd.port) := by
