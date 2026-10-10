@@ -368,8 +368,8 @@ def final (o : Open) (code : Nat) (transcript records : Array ByteArray) : ByteA
   envelope FINAL (o.epoch ++ o.audit ++ ⟨#[if code == SUCCESS then 1 else 0, code.toUInt8]⟩ ++ r ++ be o.delta 8
     ++ be o.rtt 8 ++ th ++ r ++ records.foldl (· ++ ·) .empty)
 
-/-- What the verifier holds besides the frames: its secret, round `j`'s beacon value in mode 1, every `(epoch, audit id)`
-pair it has used, the root it built from `W` itself (which a private setup's declared root must be), and the `W` it holds
+/-- What the verifier holds besides the frames: its secret, round `j`'s beacon value in mode 1 (the last pair for `j`, as
+the Python's dict of the pairs holds it), every `(epoch, audit id)` pair it has used, the root it built from `W` itself (which a private setup's declared root must be), and the `W` it holds
 (which flag bit 1 compares each decoded payload with). -/
 structure Verifier where
   source : Option ByteArray
@@ -403,7 +403,7 @@ def rounds (setup : Setup) (o : Open) (frames : Array ByteArray) (cursor : Nat) 
     match key with
     | some k => expected := ((Challenge.index k q.blocks j).getD 0, Challenge.nonce k j)
     | none =>
-      match (v.beacons.getD #[]).find? (·.1 == j) with
+      match (v.beacons.getD #[]).findRev? (·.1 == j) with
       | some (_, beacon) =>
         if beacon.size != S then return final o IDENTITY transcript records
         expected := ((Challenge.index (Challenge.roundKey beacon o.audit o.epoch setup.root j) q.blocks j).getD 0, beacon)
