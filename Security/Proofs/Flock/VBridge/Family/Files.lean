@@ -338,6 +338,13 @@ def SetupRealizes (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (ptL
     Flock.fast100 st.m = some sch ∧ 14 ≤ st.m ∧ st.kLog ≤ st.m ∧ st.fold.kLog = st.kLog ∧
     ∀ pts, ∃ P, PointsOK st S ptLocal mPts pts P
 
+/-- **`SetupRealizes`' scheme is the one the recursion's inner statements name**: the executable's plain leaf
+(`Tags.withPlainLeaves`, `leafSchemePlain`), as `Setup.ofCircuit` finds it (`MerkleScheme.find?`). A change to the
+executable's plain leaf fails this theorem rather than leaving G at another leaf. -/
+theorem setupRealizes_scheme_of_tags (t : Tags) :
+    MerkleScheme.find? (Tags.withPlainLeaves t).merkleLeaf = some (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") :=
+  rfl
+
 /-- **V*'s shape is the setup's** (the verifier's gap `vsh`): its `m`, `k_log` and schedule. -/
 def ShapeIs (sh : Shape) (st : Setup) (sch : Flock.Schedule) : Prop :=
   sh.m = st.m ∧ sh.kLog = st.kLog ∧ sh.sched = sch

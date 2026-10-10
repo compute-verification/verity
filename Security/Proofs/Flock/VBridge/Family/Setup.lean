@@ -11,7 +11,7 @@ executable statement `Stmt` stands behind it, so the setup the table files are r
 
 * `modelSetup S ptLocal mPts`: `m` and `k_log` the statement's, the fold `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` computed
   from `S`'s matrices (`modelFold`), with `β` at the pin and halved at the round challenges as `Stmt.folded`'s fallback
-  (Statement.lean:332-336), the extra claims the model's at the link points (`claimOf`), and `hm96-sha512` rows;
+  (Statement.lean:332-336), the extra claims the model's at the link points (`claimOf`), and plain SHA-512 rows (`flock-leaf/sha512-unsalted`);
 * `modelSetup_realizes`: it realizes `S` (`SetupRealizes`) at any `fast100` schedule of `S.m`;
 * `foldsOk_modelSetup`: its fold returns 64 elements at the round challenges `residualLins` draws (`ts_size`), so
   `FoldsOk` holds;
@@ -53,7 +53,8 @@ def claimOf {m : ℕ} (c : Model.Claim 𝔽 m) : Flock.Claim :=
   ⟨toF128 c.value, Array.ofFn fun s => toF128 (c.skip s), Array.ofFn fun i => toF128 (c.x i)⟩
 
 /-- **The model statement's setup**: `S`'s `m`, `k_log` and fold, its extra claims at the link points the model's
-(`Model.extraClaims`, read through `ptsOf`), its rows `hm96-sha512`'s. -/
+(`Model.extraClaims`, read through `ptsOf`), its rows plain SHA-512's
+(`flock-leaf/sha512-unsalted`, the inner statement's leaf). -/
 noncomputable def modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) : Setup where
   m := S.m
   kLog := S.kLog
@@ -62,7 +63,7 @@ noncomputable def modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) : Setup 
   extra P := pure ((FlockSoundness.Model.extraClaims S ptLocal mPts (FlockSoundness.Refine.ptsOf mPts P)).toArray.map
     claimOf)
   publics _ := pure ()
-  merkle := MerkleScheme.hm96Sha512
+  merkle := MerkleScheme.sha512 "flock-leaf/sha512-unsalted"
   openedSalts := true
 
 theorem modelFold_realizes (S : Model.Statement) : FoldRealizes (modelFold S) S where
@@ -462,7 +463,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 
@@ -517,41 +518,44 @@ variable (spec : SessionSpec)
 `ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`. Without a history and registration
 (`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
 lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
-theorem vbridgeRead_model (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
+theorem vbridgeRead_model
     (hshape : F.ShapeAt) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
-    (hseen : F.HRowSeen) (hv : (F.assembled spec F.innerSetup cap lig own sel bc dec).HVCoins dg N k Rw)
+    (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)
     (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
-    (hcoef : (F.assembled spec F.innerSetup cap lig own sel bc dec).HCoefCols dg N k Rw)
+    (hcoef : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
-    (hE : (F.assembled spec F.innerSetup cap lig own sel bc dec).HEnds dg N k Rw V) (hcl : F.ClaimsAt)
+    (hE : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HEnds dg N k Rw V) (hcl : F.ClaimsAt)
     (hcapS : F.AtAccepted dg N k Rw fun R ω _ l => CapShaped (F.innerSetup R ω) sch (cap l))
     (hligS : F.AtAccepted dg N k Rw fun R ω _ l => ∀ r, LigShaped (F.innerSetup R ω) sch (lig l r))
     (hregs : ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48)
-    (htr : F.AtAccepted dg N k Rw fun R ω t l =>
-      ((F.assembled spec F.innerSetup cap lig own sel bc dec).tableSrc spec F.innerSetup cap lig R ω t l).TranscriptIs
-        T CT cls ((wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec l).zip (t.map Prod.snd)))
+    (hCT : CoinTys cls.mPts F.sh CT) (hleaf : F.HLeaf dg N k Rw)
+    (hread : F.MsgsRead dg N k Rw spec F.innerSetup cap lig own sel) (hT : TysIn T sch.ext)
     (hopen : F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
       OpenedAll (F.innerSetup R ω) sch F.sh
-        (((F.assembled spec F.innerSetup cap lig own sel bc dec).tableSrc spec F.innerSetup cap lig R ω t l).proofAt r)
-        ((F.assembled spec F.innerSetup cap lig own sel bc dec).rep R ω t l r))
-    (hpub : (F.assembled spec F.innerSetup cap lig own sel bc dec).PubCommits bc) (hsel : SelRounds sel)
+        (((F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).tableSrc spec F.innerSetup cap lig R ω t l).proofAt
+          r)
+        ((F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).rep R ω t l r))
+    (hpub : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).PubCommits bc) (hsel : SelRounds sel)
     (hS : F.LawsExec) {dj : Fin F.stmts.size → Lean.Json} {d : Fin F.stmts.size → Flock.Draw.UnitDraw}
     (hu4 : F.U4Passes own dj d) :
-    VBridgeRead (I := ℐ) F.zs dg N k Rw F.x (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec) (skOf F.Vs own sel)
-      (cmtOf F.Vs bc) (msgOf F.Vs (skOf F.Vs own sel) dec) := by
+    VBridgeRead (I := ℐ) F.zs dg N k Rw F.x
+      (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r (F.decOf dg N k Rw spec F.innerSetup cap lig own sel)) (skOf F.Vs own sel)
+      (cmtOf F.Vs bc) (msgOf F.Vs (skOf F.Vs own sel) (F.decOf dg N k Rw spec F.innerSetup cap lig own sel)) := by
   rcases isEmpty_or_nonempty (Reg × L.Ω × Reg₂) with he | hne
-  · refine ⟨?_, ?_, (F.assembled spec F.innerSetup cap lig own sel bc dec).vDecodesRead_of dec rfl rfl,
-      (F.assembled spec F.innerSetup cap lig own sel bc dec).vFullRead_of own sel rfl hsel hS hu4⟩
+  · refine ⟨?_, ?_, (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).vDecodesRead_of
+        (F.decOf dg N k Rw spec F.innerSetup cap lig own sel) rfl rfl,
+      (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).vFullRead_of own sel rfl hsel hS hu4⟩
     · intro R ω _ R₂
       exact (he.false (R, ω, R₂)).elim
     · intro _ R ω _ _ _ R₂
       exact (he.false (R, ω, R₂)).elim
   · obtain ⟨hsome, -, -, -⟩ := F.structure_of hne honame hcount
     obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome hname
-    exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc dec hne honame hcount hname hseen hv
+    exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc hne honame hcount hname hv
       hlay hrr hrck hsame hshared hz hcoef V hV hE (F.setupRealizes_of hshape) (F.shapeIs_of hshape) hcl
-      (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl) hcapS hligS hregs htr hopen hpub hsel hS hu4
+      (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl) hcapS hligS hregs hCT hleaf hread hT hopen hpub hsel hS
+      hu4
 
 end VStarFamily
 
@@ -572,33 +576,33 @@ variable (spec : SessionSpec) (own : Fin F.stmts.size → Array Flock.Registered
 
 /-- **`vbridgeRead_model` with the cap and openings read from the inner messages**: `cap := capW w` and
 `lig := ligW w`, whose `CapShaped` and `LigShaped` follow from the model setup's scheme (`hCapS_of`, `hLigS_of`). -/
-theorem vbridgeRead_model_msgs (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
+theorem vbridgeRead_model_msgs
     (hshape : F.ShapeAt) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
-    (hseen : F.HRowSeen)
-    (hv : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).HVCoins dg N k Rw)
+    (hv : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HVCoins dg N k Rw)
     (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
-    (hcoef : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).HCoefCols dg N k Rw)
+    (hcoef : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
-    (hE : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).HEnds dg N k Rw V)
+    (hE : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HEnds dg N k Rw V)
     (hcl : F.ClaimsAt) (hregs : ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48)
-    (htr : F.AtAccepted dg N k Rw fun R ω t l =>
-      ((F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).tableSrc spec F.innerSetup (F.capW w)
-        (F.ligW w) R ω t l).TranscriptIs T CT cls ((wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec l).zip (t.map Prod.snd)))
+    (hCT : CoinTys cls.mPts F.sh CT) (hleaf : F.HLeaf dg N k Rw)
+    (hread : F.MsgsRead dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel) (hT : TysIn T sch.ext)
     (hopen : F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
       OpenedAll (F.innerSetup R ω) sch F.sh
-        (((F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).tableSrc spec F.innerSetup (F.capW w)
-          (F.ligW w) R ω t l).proofAt r)
-        ((F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).rep R ω t l r))
-    (hpub : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).PubCommits bc)
+        (((F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).tableSrc spec F.innerSetup
+          (F.capW w) (F.ligW w) R ω t l).proofAt r)
+        ((F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).rep R ω t l r))
+    (hpub : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).PubCommits bc)
     (hsel : SelRounds sel) (hS : F.LawsExec) {dj : Fin F.stmts.size → Lean.Json}
     {d : Fin F.stmts.size → Flock.Draw.UnitDraw} (hu4 : F.U4Passes own dj d) :
-    VBridgeRead (I := ℐ) F.zs dg N k Rw F.x (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec) (skOf F.Vs own sel)
-      (cmtOf F.Vs bc) (msgOf F.Vs (skOf F.Vs own sel) dec) :=
-  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc dec hshape honame hcount hname hseen hv hlay hrr
+    VBridgeRead (I := ℐ) F.zs dg N k Rw F.x
+      (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r (F.decOf dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel))
+      (skOf F.Vs own sel) (cmtOf F.Vs bc)
+      (msgOf F.Vs (skOf F.Vs own sel) (F.decOf dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel)) :=
+  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc hshape honame hcount hname hv hlay hrr
     hrck hsame hshared hz hcoef V hV hE hcl
     (F.hCapS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w)
-    (F.hLigS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w) hregs htr hopen hpub hsel hS hu4
+    (F.hLigS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w) hregs hCT hleaf hread hT hopen hpub hsel hS hu4
 
 end VStarFamily
 

@@ -38,6 +38,7 @@ import Proofs.Flock.VBridge.Full
 import Proofs.Flock.VBridge.InnerAccepts
 import Proofs.Flock.VBridge.ResUnit
 import Proofs.Flock.VBridge.AlgHolds
+import Proofs.Flock.VBridge.ResLayer
 import Proofs.Flock.VBridge.Stages
 import Proofs.Flock.VBridge.Runs.ZcLc
 import Proofs.Flock.VBridge.Runs.Rs
@@ -65,6 +66,7 @@ import Proofs.Flock.VBridge.Family.Setup
 import Proofs.Flock.VBridge.Family.Opened
 import Proofs.Flock.VBridge.Family.Pub
 import Proofs.Flock.VBridge.Family.Registrants
+import Proofs.Flock.VBridge.Family.Ends
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
