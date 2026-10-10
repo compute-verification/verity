@@ -243,7 +243,7 @@ theorem algebraDecodes_of_decode (zs : Reg → L.Ω → List (Cm × I.Coin) → 
   intro R ω t R₂ τ o hacc r
   obtain ⟨v, info, kappa, hv, hvs⟩ := hvr R ω t R₂ τ o hacc r
   obtain ⟨hw, hc⟩ := hsz R ω t R₂ τ o hacc r
-  exact algebraHolds_of_decode (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (fun s => (hacc s).2) hS hbits hv hw hc
+  exact algebraHolds_of_decode (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (fun s => (hacc.1 s).2) hS hbits hv hw hc
     hvs hg sess un cp (h R ω t R₂ τ o hacc r)
 
 end outer

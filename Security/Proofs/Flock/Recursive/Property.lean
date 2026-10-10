@@ -180,8 +180,9 @@ opening `rt` at its row `r < rt.leaves` through the developer's path `path₀ r`
 that bounds every session's rate at each setup of its inputs, given V*'s bridge (VBridge) at the typed sessions and
 that hidden statement: the event below is empty; or at some row `st`'s commit string is not `p r`, and its opening of
 `rt` and the developer's give an explicit SHA-512 collision (`Flock.Registered.bcPair`); or the sessions type and
-there is a round fork, a session fork, or an inner fork of the transported prover's own runs whose decoded transcripts
-play the compiled table to outcomes that clash; or
+there is a registrant fork (one run of the transported prover reaching two sessions whose registrant records clash,
+`regFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs whose decoded
+transcripts play the compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \text{every session verifies as V*'s}
   \text{ statement of its index} \wedge
   \neg\,\text{the statement of } p \text{ holds}]$$
@@ -255,6 +256,7 @@ def RecursiveAudit : Prop :=
       Flock.Registered.Collides (Flock.Registered.bcPair rt r (Flock.Registered.rowsOf st.c st.pub rt r)
         (Flock.Registered.pathOf st.pub rt r) (p r) (path₀ r))) ∨
     ∃ h : Typed zr,
+      (regFinder (custodied zr _hCust h) dg N (transported zr _hCust h σ)).Finds Refine.H512 ∨
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (hiddenAt st rt stmt) wmsg

@@ -250,13 +250,14 @@ theorem RanRegisteredRun : Flock.Guarantees.RanRegisteredRun := by
 theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
   intro n L Reg I Cm S Vs Reg' Reg₂ hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
     Root Pos Row Op com hbind rt p op₀ hreg stmt reads row op hop hx
-  rcases RecursiveSound hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hb
+  rcases RecursiveSound hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
+  · exact Or.inr (Or.inr (Or.inl hf))
   · by_cases hc : ∃ o, Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
         AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ Binding.Collides ((com i).ext (op o i) (op₀ i))
-    · exact Or.inr (Or.inr (Or.inl hc))
+    · exact Or.inr (Or.inr (Or.inr (Or.inl hc)))
     · have hmono : prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
             (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
           prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
@@ -268,7 +269,7 @@ theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
             hbind i rt (row o i) (p i) (op o i) (op₀ i) (hop o h.1 i hi) (hreg i) fun he => hne he.symm⟩
         rw [hx o h.1 p hagree] at hh
         exact h.2 hh
-      exact Or.inr (Or.inr (Or.inr (hmono.trans hb)))
+      exact Or.inr (Or.inr (Or.inr (Or.inr (hmono.trans hb))))
 
 section Rows
 

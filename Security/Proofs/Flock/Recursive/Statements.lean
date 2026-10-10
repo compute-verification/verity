@@ -18,7 +18,7 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 (`Proofs.Flock.Recursive.Guarantees`).
 
 * `RecursiveSound`, for the auditor, in fork form: either a run of the prover's own strategy finds a SHA-512 collision
-  (at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
+  (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
   hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
   the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
@@ -59,8 +59,11 @@ history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is 
 `flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the
 registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's
 own). For every prover `σ` of the recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`) and the inner
-protocol's soundness at `ε_in`, one of three holds.
+protocol's soundness at `ε_in`, one of four holds.
 
+* A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
+  sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
+  collision), and outputs that collision. V*'s bridge reads off such outcomes (`VBridgeOff`).
 * A round fork (`RoundFork`): for some round `i < r`, draw `ω` and commit string `pos`, round `i`'s fork finder
   (`forkAt`: two continuations of `σ` after its round-`i` commitment, each running the trial for `pos`) outputs a
   SHA-512 collision at an outcome it reaches.
@@ -102,7 +105,7 @@ def RecursiveSound : Prop :=
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
     -- the inner protocol
     {εin : ℝ≥0∞} (_hin : InnerSound I εin),
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
@@ -355,9 +358,9 @@ read some of the rows, never necessarily all of them: on a run `o` whose session
 read row `i`, and `row o i` and `op o i` are the row and the opening of `rt` at `i` the run carries (`_hop`; the run's
 output holds the strategy the prover names for each session, and with it the registered reads), and the hidden
 statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
-(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of four holds.
+(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds.
 
-* `RecursiveSound`'s round fork (`RoundFork`) or session fork (`SessionFork`).
+* `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`).
 * A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting, having read at some
   position `i` a row other than the registered `p i`, and its opening of `rt` at `i` and the developer's collide
   (`Binding.Collides ((com i).ext (op o i) (op₀ i))`).
@@ -390,7 +393,7 @@ def RecursiveRanRegistered : Prop :=
     (_hop : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i → (com i).Opens rt (row o i) (op o i))
     (_hx : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : Pos → Row, (∀ i, reads o i → q i = row o i) →
       x o.1 o.2.1 = stmt q o.2.1),
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       (∃ o, FlockSoundness.Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
         AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((com i).ext (op o i) (op₀ i))) ∨

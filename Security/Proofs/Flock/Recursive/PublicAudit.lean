@@ -10,9 +10,9 @@ statement read from registered rows. It is a conjunction:
 
 * (i) soundness in fork form, at an inner statement `st` that Lean's verifier sets up from its own partition object
   `obj` and program `prog` (`AcceptsPublic`), its class, regions and schedule `execClassAt st` as in `RecursiveAudit`:
-  the event is empty, or the sessions type and there is a round fork, a session fork or an inner fork of the prover's
-  own runs, or Lean's verifier accepts `st` and the verifier of record every session while `st` fails with probability
-  at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
+  the event is empty, or the sessions type and there is a registrant fork (`regFinder`), a round fork, a session fork
+  or an inner fork of the prover's own runs, or Lean's verifier accepts `st` and the verifier of record every session
+  while `st` fails with probability at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
 * (ii) zero knowledge: `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
   registration rows, the simulator reading the public circuit and the owed outputs.
 
@@ -84,9 +84,10 @@ on our code), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
 `RecursiveAudit`. Taken: A3 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
 V*'s circuits compute the inner verifier at the typed sessions and the public statement (VBridge,
-`Flock.Premises.VBridge`): the event below is empty; or the sessions type and there is a round fork, a session fork,
-or an inner fork of the transported prover's own runs whose decoded transcripts play the compiled table to outcomes
-that clash; or
+`Flock.Premises.VBridge`): the event below is empty; or the sessions type and there is a registrant fork (one run of
+the transported prover reaching two sessions whose registrant records clash, `regFinder`), a round fork, a session
+fork, or an inner fork of the transported prover's own runs whose decoded transcripts play the compiled table to
+outcomes that clash; or
 $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{every session verifies as V*'s statement
   of its index} \wedge \neg\,st \text{ holds}]$$
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
@@ -143,6 +144,7 @@ def PublicAudit : Prop :=
           ¬ (innerAt T CT st).holds (publicHidden st))
         (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
+      (regFinder (custodied zr _hCust h) dg N (transported zr _hCust h σ)).Finds Refine.H512 ∨
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (fun _ _ => publicHidden st) wmsg

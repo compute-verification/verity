@@ -239,9 +239,8 @@ def SameRow : Prop :=
         (F.zs R ω t R₂ (F.sess p)).rd.readAt (.inl (F.un p r, q)) =
           (F.zs R ω t R₂ (F.sess p')).rd.readAt (.inl (F.un p' r, q'))
 
-/-- Obligation: discharged by `SharedRows` (`rowsShared_of_sharedRows`); the transfer's `cr/sha-512` term does not price
-it,
-since each of its finders sees one session's record.
+/-- Obligation: discharged by `SharedRows` (`rowsShared_of_sharedRows`, `rowsShared`); the transfer's `cr/sha-512` term
+does not price it, since each of its finders sees one session's record.
 **One registrant row per registered root and position.** At every accepted outer proof, two sessions' registered
 reads at the same registered root and position carry the same registrant bits. Acceptance does not give it: each
 session's `rd` is its own field, and `Reads.committed` makes both rows open one root at one position, which pins them
