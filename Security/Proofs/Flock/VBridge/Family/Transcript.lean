@@ -187,9 +187,9 @@ end sched
 /-- **A coin of `n` field elements, as `coinArr` types it**: one element, else a vector of `n`. -/
 def coinTy (n : ℕ) : Type := if n = 1 then 𝔽 else (Fin n → 𝔽)
 
-noncomputable instance (n : ℕ) : Fintype (coinTy n) := by unfold coinTy; split <;> infer_instance
+noncomputable instance instFintypeCoinTy (n : ℕ) : Fintype (coinTy n) := by unfold coinTy; split <;> infer_instance
 
-instance (n : ℕ) : Nonempty (coinTy n) := by unfold coinTy; split <;> exact ⟨0⟩
+instance instNonemptyCoinTy (n : ℕ) : Nonempty (coinTy n) := by unfold coinTy; split <;> exact ⟨0⟩
 
 /-- **The inner protocol's coin types are V*'s** at the shape `sh`: coin `0` is the link points (`mPts` coordinates
 each, `tableTape`'s first coin), and then each of both reps' rounds in turn is a coin of the size `verifierRows` takes
@@ -203,11 +203,11 @@ def CoinTys (mPts : ℕ) (sh : Shape) {nR : ℕ} (CT : Fin nR → Type) : Prop :
 noncomputable def vCT (mPts : ℕ) (sh : Shape) (k : Fin (1 + 2 * (roundSizes sh).length)) : Type :=
   if k.val = 0 then (Fin 2 → Fin mPts → 𝔽) else coinTy ((roundSizes sh).getD ((k.val - 1) % (roundSizes sh).length) 0)
 
-noncomputable instance (mPts : ℕ) (sh : Shape) (k : Fin (1 + 2 * (roundSizes sh).length)) :
+noncomputable instance instFintypeVCT (mPts : ℕ) (sh : Shape) (k : Fin (1 + 2 * (roundSizes sh).length)) :
     Fintype (vCT mPts sh k) := by
   unfold vCT; split <;> infer_instance
 
-instance (mPts : ℕ) (sh : Shape) (k : Fin (1 + 2 * (roundSizes sh).length)) : Nonempty (vCT mPts sh k) := by
+instance instNonemptyVCT (mPts : ℕ) (sh : Shape) (k : Fin (1 + 2 * (roundSizes sh).length)) : Nonempty (vCT mPts sh k) := by
   unfold vCT; split
   · exact ⟨fun _ _ => 0⟩
   · infer_instance
@@ -430,28 +430,43 @@ theorem kMsgs_tys (ext : ℕ) (p : LigeritoProof) (start k : ℕ) : AllTys ext (
 
 /- Reducible transparency throughout: unifying two of the table's types at default transparency unfolds `GF128` and
 `GF256`, which does not terminate in practice. -/
-local macro "tys" : tactic => `(tactic| repeat' (first
-  | with_reducible exact AllTys.nil
-  | with_reducible refine AllTys.append ?_ ?_
-  | with_reducible refine AllTys.cons ?_ ?_
-  | with_reducible refine AllTys.map fun _ => ?_
-  | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
-  | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
-  | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _))
 
 theorem recMsgs_tys (p : LigeritoProof) (ext : ℕ) :
     ∀ left i msg ood, AllTys ext (recMsgs p capDig ext left i msg ood)
   | 0, _, _, _ => by rw [recMsgs]; exact AllTys.nil
-  | 1, _, _, _ => by rw [recMsgs]; tys
+  | 1, _, _, _ => by
+    rw [recMsgs]
+    repeat' (first
+      | with_reducible exact AllTys.nil
+      | with_reducible refine AllTys.append ?_ ?_
+      | with_reducible refine AllTys.cons ?_ ?_
+      | with_reducible refine AllTys.map fun _ => ?_
+      | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
+      | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
+      | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _)
   | left + 2, i, msg, ood => by
       rw [recMsgs]
-      tys
+      repeat' (first
+        | with_reducible exact AllTys.nil
+        | with_reducible refine AllTys.append ?_ ?_
+        | with_reducible refine AllTys.cons ?_ ?_
+        | with_reducible refine AllTys.map fun _ => ?_
+        | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
+        | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
+        | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _)
       exact recMsgs_tys p ext (left + 1) (i + 1) (msg + 7) (ood + 2)
 
 theorem repMsgs_tys (st : Setup) (sch : Flock.Schedule) (n : ℕ) (p : Proof) :
     AllTys sch.ext (repMsgs st sch n p capDig) := by
   unfold repMsgs ligMsgs zcMsgs lcMsgs opMsgs
-  tys
+  repeat' (first
+    | with_reducible exact AllTys.nil
+    | with_reducible refine AllTys.append ?_ ?_
+    | with_reducible refine AllTys.cons ?_ ?_
+    | with_reducible refine AllTys.map fun _ => ?_
+    | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
+    | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
+    | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _)
   exact recMsgs_tys _ _ _ _ _ _
 
 theorem mem_cut : ∀ (σ : List Exec.Kind) (ms : List Msg) {g : List Msg}, g ∈ cut σ ms → ∀ m ∈ g, m ∈ ms
