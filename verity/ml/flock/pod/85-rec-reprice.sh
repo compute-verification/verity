@@ -664,7 +664,7 @@ lean)
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
     $LEAN_BIN rec-statements --rec-inner $O/lean/rec-inner.json > $O/lean/rec-statements.txt 2>&1 || { tail -5 $O/lean/rec-statements.txt; exit 1; }
     python3 - $O/lean $DD/v $DD/v-sess $INNER/public.json <<'EOF' || exit 1
-import json, sys
+import json, re, sys
 from pathlib import Path
 from verity_flock import rec_bindings as RB
 o, v, vs, transcript = map(Path, sys.argv[1:])
@@ -692,7 +692,7 @@ for s in sorted(p for p in vs.iterdir() if p.is_dir()):
         flags += ["--rec-bindings", str(o / f"bindings-{s.name}.json")]
     except ValueError as e:
         print(f"{s.name}: no bindings ({e}); Lean refuses it at setup")
-    if any(str(e.get("value", "")).startswith("rec-c") for e in ports.values()):
+    if any(re.fullmatch(r"rec-c[0-9]+", str(e.get("value", ""))) for e in ports.values()):
         flags += ["--rec-inner-transcript", str(transcript)]
     (o / f"own-{s.name}.txt").write_text(" ".join(flags))
     print(s.name, unit, " ".join(flags))
