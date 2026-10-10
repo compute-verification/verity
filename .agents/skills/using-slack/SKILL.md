@@ -253,7 +253,7 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
 Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
 
 ~~~bash
-research msg groups sync            # the plan: which user groups it would create, update or re-enable
+research msg groups sync            # the plan: which user groups it would create, update, re-enable, or disable (a retired name's)
 research msg groups sync --apply    # makes the changes; writes each group's id, and the bot's, into registry.json; commit that
 ~~~
 

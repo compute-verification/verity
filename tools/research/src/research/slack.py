@@ -90,7 +90,7 @@ BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also
 #: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
 BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
                   "reactions.add", "usergroups.list")
-DIRECT_ONLY = ("chat.update", "usergroups.create", "usergroups.enable", "usergroups.update")   # `retract`, `groups sync --apply`: the token itself
+DIRECT_ONLY = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update")   # `retract`, `groups sync --apply`: the token itself
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
@@ -1765,11 +1765,15 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                      "paused": sum((m.get("text") or "").startswith(("from router: paused", "from router, thread")) for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    dropped, stale = [], []
+    dropped, stale, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
+        lead = LEAD_RE.match(m.get("text") or "")
+        for _, gid, label in NAME_TOKEN_RE.findall(lead.group(1) if lead else ""):
+            if gid and not label and gid not in groups:              # a group no handle has: `lead_names` can't route it
+                dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
         is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
             not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
@@ -1785,13 +1789,13 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     for d in dropped:
         print(f"  DROPPED @{d['name']}: {d['ts']} by @{d['by']} (no inbox and no handle)")
     for s in stale:
-        print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to'])} ({both(s['ts'])})")
+        print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])})")
     return 0
 
 
 def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     """One user group per registry handle (`handle` = its handle, `name` = its handle, `description` = its remit), created,
-    re-enabled or updated; with --apply the groups' ids, and the bot's own id when the registry lacks it, are written back into
+    re-enabled or updated, and a retired name's group (no handle, its inbox closed) disabled; with --apply the groups' ids, and the bot's own id when the registry lacks it, are written back into
     the registry, which the caller commits. Existing groups keep their members."""
     api = client(ns)
     write = ns.apply and not ns.dry_run
@@ -1826,6 +1830,16 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
             print(f"record  @{name} -> {gid} in {path}")
             h["usergroup"] = gid
             changed = True
+    handles = {h["handle"] for h in reg["handles"]}
+    if extra := [g for n, g in live.items() if n not in handles and not g.get("date_delete")]:
+        routes = routes_of(ns)
+        for g in extra:
+            r = routes.get_route(g["handle"])
+            if r and r.get("closed"):                                # a retired name: tagging it would ring nobody
+                print(f"disable @{g['handle']} ({g['id']}): retired, its inbox closed {r['closed']}" +
+                      (f" and forwards to @{r['forward_to']}" if r.get("forward_to") else ""))
+                if write:
+                    api.call("usergroups.disable", usergroup=g["id"])
     if write and changed:
         path.write_text(json.dumps(reg, indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {path}: commit it")
