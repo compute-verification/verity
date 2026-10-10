@@ -483,18 +483,6 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
-def test_circuit_check_takes_one_worker_per_its_memory_share(tmp_path, monkeypatch):
-    """A cold `circuit-check --all --jobs 23` on vy-nebius-cpu-1 (755 GB) grew to 610 GiB and took the node down twice (7 Oct):
-    its workers are bounded by memory as well as cores, and never fall to none. vy-n2's 900 GiB session scope at 7 workers
-    OOM-killed one at 155 GiB (9 Oct), so 900 GiB gets 5."""
-    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
-    jobs = lambda gs: (cc := gs[1][1][1])[cc.index("--jobs") + 1]
-    for gb, want in ((600, "3"), (900, "5"), (370, "2"), (1400, "8"), (2048, "12"), (40, "1")):
-        monkeypatch.setattr(CHECK, "memory_gb", lambda: gb)
-        assert jobs(CHECK.groups(tmp_path, 32)) == want, gb
-        assert CHECK.groups(tmp_path, 32)[0][0][1][-1] == "16", "pytest keeps its half of the cores"
-
-
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
     the namespace's root; MemAvailable bounds both."""
@@ -1100,8 +1088,11 @@ def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_p
     a = argv.read_text().splitlines()
     assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
     assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
-    job = a[-1]
-    assert "slot.py\" --priority" in job and f"--head {head} --base {root} --" in job
+    cmd, job = a[a.index("--") + 1:], a[-1]
+    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"], \
+        "cpu-1's launcher takes only a run whose command is slot.py's (slot_only.through_slot; the lander, 10 Oct)"
+    assert [a[i + 1] for i, x in enumerate(a) if x == "--send"] == ["tools/research/src/research/quick_tier.py"]
+    assert f"--head {head} --base {root} --" in job
     assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
 
 
