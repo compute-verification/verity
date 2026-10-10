@@ -6,7 +6,7 @@ and level 3's recorded `pub.bin`, `registered.json` and outer session), with lev
 `verity/flock-circuit@b3727bd9`. What a recorded honest session meets is asserted; what none meets yet
 is asserted refused by name, so the change that closes it has to say so here: the inner description is not registered
 (no staging runs `inner_registered register`), and V*'s sessions hide their outputs where `ZkOuterR.hTags` (`TagsOk`)
-takes public ones. Staging the level takes about a minute and the session check sets up its 158 MB circuit, so the module
+takes public ones, so their shared-row public file fails `Typable`'s `ScopeZ`. Staging the level takes about a minute and the session check sets up its 158 MB circuit, so the module
 is slow; it catches what reading the theorems can't: a premise or event conjunct that no honest session meets."""
 from __future__ import annotations
 
@@ -83,11 +83,21 @@ def test_no_recorded_inner_description_is_registered(inner):
                         "opens no registered root")
 
 
-@pytest.mark.parametrize("check", ["scope_z", "scope_zr", "scope_ok", "full_draw", "accepts_zkr"])
+@pytest.mark.parametrize("check", ["scope_zr", "scope_ok", "full_draw", "accepts_zkr"])
 def test_the_recorded_level_meets(outer, check):
-    """`ScopeZ` and `ScopeZR` (the statement check without and with the registered reads), `VStmt.hscope`, the full draw
-    `RecordCustody` reads, and `AcceptsZKR`."""
+    """`ScopeZR` (the event's statement check, with the registered reads), `VStmt.hscope`, the full draw `RecordCustody`
+    reads, and `AcceptsZKR`."""
     assert outer[check]["ok"], outer[check].get("why")
+
+
+def test_the_recorded_level_is_not_typable(outer):
+    """`ZkOuterR.Typable` takes `ScopeZ`, the statement check without the registered reads, which refuses V*'s shared-row
+    public file. `ScopeZR` gives it only where outputs are public (`typable_of_accepts` reads `hTags`), so it closes with
+    `TagsOk`: `Typable` has to take `ScopeZR` once the chain takes hidden outputs."""
+    c = outer["scope_z"]
+    assert not c["ok"]
+    assert c["why"] == ("refused: a shared-row public file (header shared_rows): a statement form the soundness proof does "
+                        "not cover")
 
 
 def test_the_recorded_level_hides_its_outputs(outer):
