@@ -146,8 +146,8 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     monkeypatch.setattr(TG, "suite", lambda: SUITE)
     for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
         assert TG.definition(fid) is SUITE[fid]
-    [res] = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
-    assert TG.definition(res) is SUITE[res]
+    res = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
+    assert res and all(TG.definition(fid) is SUITE[fid] for fid in res)
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
 
