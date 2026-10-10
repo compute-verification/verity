@@ -194,9 +194,9 @@ theorem checkStmt_ok {i : RecVStar.Inner} {st : Flock.Stmt} {circuitB : ByteArra
   obtain ⟨ss, hss, hmem, hname, hn⟩ := check_ok hck
   exact ⟨ss, s, b, hss, hmem, hname, hn, hb, checkFile_ok hf, h⟩
 
-/-- **An undrawn statement's public file is the one `loadPublic` reads.** -/
 -- walking `Stmt.setupH`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
 set_option maxHeartbeats 2000000 in
+/-- **An undrawn statement's public file is the one `loadPublic` reads.** -/
 theorem setupH_undrawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Flock.Stmt} (h : Flock.Stmt.setupH tags circuitFile publicFile coins tables none partition program = .ok st) :
@@ -210,9 +210,9 @@ theorem setupH_undrawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins
     subst h
     assumption
 
-/-- **A loaded public file is a population, not a draw**: `loadPublic` records no population. -/
 -- walking `HmRow.loadPublic`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
 set_option maxHeartbeats 2000000 in
+/-- **A loaded public file is a population, not a draw**: `loadPublic` records no population. -/
 theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}
     (h : HmRow.loadPublic tags c file = .ok pop) : pop.population = none := by
   unfold HmRow.loadPublic at h
@@ -224,9 +224,9 @@ theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArra
     subst h
     rfl
 
-/-- **A drawn public file records its population's size**: the registered file's instance count. -/
 -- walking `HmRow.drawn`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
 set_option maxHeartbeats 2000000 in
+/-- **A drawn public file records its population's size**: the registered file's instance count. -/
 theorem drawn_population {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.Json}
     (h : HmRow.drawn c pop d = .ok pub) :
     pub.population.map (·.1) = some pop.n := by
