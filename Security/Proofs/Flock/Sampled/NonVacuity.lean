@@ -49,13 +49,14 @@ theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) where
     subst e'
     rfl
   count := by
-    have hall : ∀ p ∈ (Finset.univ : Finset (batch₁ k).Pos), ((batch₁ k).held p).isSome = true := fun _ _ => rfl
-    first
-      | (rw [Finset.filter_true_of_mem hall, Finset.card_univ, Finset.card_univ, Fintype.card_sigma]
-         simp [batch₁]
-         done)
-      | (simp [Batching.held, batch₁, Fintype.card_sigma]
-         done)
+    refine Finset.card_nbij' (fun p : (batch₁ k).Pos => p.1)
+      (fun b : Fin k => (⟨b, ⟨0, Nat.zero_lt_one⟩⟩ : (batch₁ k).Pos)) (fun _ _ => Finset.mem_univ _)
+      (fun _ _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩) ?_ (fun _ _ => rfl)
+    rintro ⟨b, c⟩ _
+    have hc : (c : ℕ) < 1 := c.isLt
+    have e : c = ⟨0, Nat.zero_lt_one⟩ := Fin.ext (show (c : ℕ) = 0 by omega)
+    subst e
+    rfl
 
 /-- A one-leaf root whose leaf is the record `bc`'s. -/
 def onePort (bc : ByteArray) : Flock.Registered.Port where
@@ -70,9 +71,7 @@ def onePort (bc : ByteArray) : Flock.Registered.Port where
 
 theorem climb_one (dom leaf path : ByteArray) (i : ℕ) :
     Flock.Registered.climb dom leaf i (Flock.log2ceil 1) path = leaf := by
-  first
-    | rfl
-    | simp [Flock.Registered.climb, Flock.Registered.sibs, Flock.Registered.climbL, Flock.log2ceil]
+  rfl
 
 theorem onePort_opens (bc : ByteArray) : Flock.Registered.opens (onePort bc) bc 0 ByteArray.empty = true := by
   simp only [Flock.Registered.opens, Flock.Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq]
