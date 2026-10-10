@@ -23,6 +23,8 @@ import Proofs.Flock.Recursive.ReadsOpen
 import Proofs.Flock.Recursive.OuterAbort
 import Proofs.Flock.Recursive.Sessions
 import Proofs.Flock.Recursive.OuterZK
+import Proofs.Flock.Recursive.Firewall
+import Proofs.Flock.Recursive.FirewallZK
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -34,4 +36,5 @@ strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at
 off an outcome, whose commit strings open the registration's root when every session verifies (`Reads`, `ReadsOpen`),
 V*'s outer sessions with the honest prover's self-check in them, which never stops (`OuterAbort`), and V*'s outer
 sessions (`Sessions`) and their zero knowledge, (ii)'s `_hOuter`, at the honest prover's code, its self-check included
-(`OuterZK`). -/
+(`OuterZK`), and (ii) stated about the firewall's code and V*'s, with no zero knowledge of V*'s sessions taken
+(`Firewall`), and its proof (`FirewallZK`). -/
