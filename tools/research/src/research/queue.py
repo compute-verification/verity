@@ -79,7 +79,6 @@ from typing import Callable, Iterable
 
 from . import quick_tier
 from .gates import git_env
-from .pods.nebius import slot_only
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -654,7 +653,8 @@ REMOTE_POLL_S = 30
 #: slot.py's exit when no check slot came within --wait-max (its NOT_STARTED): the tier never ran
 SLOT_NOT_STARTED = 75
 #: the remote tier's command, slot.py from the shipped tree as the launcher of a machine with /etc/vy/runs-via-slot accepts it
-SLOT = ("python3", slot_only.SLOT_PATHS[0])
+#: (pods/nebius/slot_only.py's `through_slot`, which the suites that read this module may not read)
+SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
 
