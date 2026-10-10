@@ -67,3 +67,29 @@ def test_the_menu_with_and_without_the_outer_input():
     assert e["total_h_public"] == pytest.approx(e["inner_h_public"] + e["outer_h_public"])
     assert m["models"][0]["totals"]["refused_entries"] == 0 and isinstance(e["options"]["16"], float)
     assert M.render(m) == M.render(M.menu(pl, 50, outer))
+
+
+def test_the_lean_menu_lists_each_model_s_entries():
+    mn = {"format": "verity/f6-menu/v1", "K": 50, "models": [
+        {"workload": "w1", "entries": [{"slots": 16, "bound": 3.0, "inner_m": 30, "k_log": 22, "unit_types": ["a", "b"]},
+                                       {"slots": 4, "bound": 7.0, "inner_m": 28, "k_log": 26, "unit_types": ["c"]}]},
+        {"workload": "w2", "entries": [{"slots": 1, "bound": 9.0, "inner_m": 26, "k_log": 24, "unit_types": ["d"]}]}]}
+    text = M.lean(mn, "SRC")
+    assert text.startswith("import VStar.Menu\n") and "\nSRC\n(verity/f6-menu/v1, K = 50); do not edit. -/" in text
+    assert ('def pinned : List (String × List Entry) := [\n  ("w1",\n    [⟨16, 3, 30, 22, 2⟩,\n     ⟨4, 7, 28, 26, 1⟩]),\n'
+            '  ("w2",\n    [⟨1, 9, 26, 24, 1⟩])]\n') in text
+    mn["models"][1]["entries"][0]["bound"] = 9.5
+    with pytest.raises(ValueError, match="not a whole number"):
+        M.lean(mn, "SRC")
+
+
+def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
+    """`VStar.Menu.Pinned` is `lean` of F6's pinned `menu.json` (`data/f6-menu.json`, the one in
+    art:2b16d554177e823e5d3d9fdb60501241a28b6f980359a1db19222ee6a82bd940), byte for byte."""
+    import json
+    from pathlib import Path
+
+    here = Path(__file__).resolve()
+    pinned = here.parents[4] / "verity/core/service/flock/VStar/Menu/Pinned.lean"
+    mn = json.loads((here.parent / "data/f6-menu.json").read_text())
+    assert M.lean(mn, "art:2b16d554177e823e5d3d9fdb60501241a28b6f980359a1db19222ee6a82bd940 (menu.json)") == pinned.read_text()
