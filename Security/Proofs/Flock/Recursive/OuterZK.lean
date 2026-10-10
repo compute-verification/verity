@@ -1,4 +1,5 @@
-import Proofs.Flock.Recursive.Audit
+import Proofs.Flock.Recursive.Sessions
+import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
 import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
@@ -9,22 +10,16 @@ import Proofs.Flock.Recursive.OuterAbort
 
 (ii) of `RecursiveAudit` takes V*'s sessions' zero knowledge as `_hOuter`: a simulator reading the owed outputs, the
 registration's view, the auditor's tape and the firewall's commitments, within `ε_o` of the auditor's view of V*'s
-sessions at every honest context. Here that view, its simulator and `ε_o`.
+sessions at every honest context. Here that view, its simulator and `ε_o`, at V*'s outer sessions as
+`Proofs.Flock.Recursive.Sessions` defines them (`Sessions`: the prover registers `R₂`, `n₂` hm96 commit strings under
+fresh salts, and runs `S` sessions, each one `--zk` table at the coin vector the auditor's tape fixes, Goldreich–Kahan's
+committed coins, which read the tape and what was public before the session).
 
-* `Sessions`: V*'s outer sessions as (ii) sees them. The prover registers `R₂`, `n₂` hm96 commit strings under fresh
-  salts (`commitStrs`), and runs `S` sessions, each one `--zk` table `C j pc l` at the public context `pc` and `R₂`'s
-  commit strings `l`, at the coin vector the auditor's tape fixes (`coin`: Goldreich–Kahan's committed coins, which
-  read the tape and what was public before the session), on the honest witness `wit` (which may read `R₂`'s salts).
-  Each session's randomness has as many values at every `pc` and `l` (`NR`, `NS`), so the view's randomness is one
-  type (`Ωo`, `Ωs`); `enc` encodes a table's output in the view.
-* `TableProver`, `honestOut`, `SelfCheckSilent`: the honest prover at one table. Where it refuses the coins
-  (`CoinedSetup.Admits`) it sends the prefix `Table.abort` cuts; elsewhere its code, self-check included.
-  `SelfCheckSilent` is the abort interface `Recursive/OuterAbort.lean` meets: at a table that passes `CoinedOK`, coins
-  the prover doesn't refuse and a valid witness whose registered values are the public ones, the code sends its view
-  (the self-check never stops it there). `honestOut_eq`: then the honest prover is `outExe`.
-* `proverExe`, `selfCheckSilent_exe`: the prover's code, which sends what a stopped run sends when its self-check stops
-  (`Table.Stops`) and its view otherwise, meets the abort interface whatever a stopped run sends (`Table.not_stops`
-  at `CoinedOK`'s inner relation, `OuterAbort`).
+* `honestOut_eq`: under the abort interface (`SelfCheckSilent`: at a table that passes `CoinedOK`, coins the prover
+  doesn't refuse and a valid witness whose registered values are the public ones, the code sends its view), the
+  honest prover is `outExe`.
+* `selfCheckSilent_exe`: the prover's code (`proverExe`) meets the abort interface whatever a stopped run sends
+  (`Table.not_stops` at `CoinedOK`'s inner relation, `OuterAbort`).
 * `table_close`: one table at its coins, in fixed randomness types (`coin_close`, which covers refused coins with
   `Table.table_abort_hm96`).
 * `Sessions.close`: the auditor's view of `R₂` and the sessions (`view`) and the simulator's (`sim`: ideal commit
@@ -52,36 +47,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- A table's prover randomness with its hidden leaves' salts, at coin vector `c`. -/
-abbrev RandAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)
-
-/-- The simulator's randomness with the hidden leaves' salts, at coin vector `c`. -/
-abbrev SimAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt)
-
-/-- What a table's prover outputs at coin vector `c`: its view, or the cut it stops at. -/
-abbrev OutAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.View ⊕ (C.T c).tab.Cut
-
-/-! ## The honest prover at one table, and the abort interface -/
-
-/-- **The honest prover's code at one table**: what it sends at a table, a coin vector, a witness and its randomness. -/
-abbrev TableProver : Type 1 :=
-  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → OutAt C c
-
-open Classical in
-/-- **The honest prover at one table**: where it refuses the coins (`CoinedSetup.Admits`, `refused_coins`), the prefix
-of its view `Table.abort` cuts; elsewhere its code `prover`. -/
-noncomputable def honestOut (prover : TableProver) (C : CoinedSetup) (c : CoinsZK C.Rest) (w : Witness C.S.m)
-    (p : RandAt C c) : OutAt C c :=
-  if C.Admits c then prover C c w p else Sum.inr ((C.T c).tab.abort (sentAt C c) ((C.T c).viewExe w p.1 p.2))
-
-/-- **The abort interface**: at a table that passes `CoinedOK`, a coin vector the prover doesn't refuse and a valid
-witness whose registered values are the public ones, the prover's code, self-check included, sends its view
-(`Recursive/OuterAbort.lean`: the self-check never stops it there). -/
-def SelfCheckSilent (prover : TableProver) : Prop :=
-  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest) (w : Witness C.S.m), CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C →
-    C.Admits c → C.Valid w → (∀ c', (C.T c').tab.sReg w = (C.T c').tab.pubReg) →
-      ∀ p : RandAt C c, prover C c w p = Sum.inl ((C.T c).viewExe w p.1 p.2)
-
 /-- **Under the abort interface, the honest prover is `outExe`.** -/
 theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : CoinedSetup}
     (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C) (c : CoinsZK C.Rest) {w : Witness C.S.m}
@@ -91,15 +56,6 @@ theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : C
   split_ifs with hA
   · exact hP C c w hC hA hv hreg p
   · rfl
-
-open Classical in
-/-- **The honest prover's code at one table** (`zk_veil.rs`'s `prove_inner` under `SelfCheck::Stop`): what a stopped
-run sends (`stopped`, any function of the table, the coins, the witness and the randomness) if its self-check stops
-(`Table.Stops`), else its view. -/
-noncomputable def proverExe
-    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut) :
-    TableProver := fun C c w p =>
-  if (C.T c).tab.Stops w p.1 then Sum.inr (stopped C c w p) else Sum.inl ((C.T c).viewExe w p.1 p.2)
 
 /-- **The prover's code meets the abort interface**, whatever a stopped run sends: at coins it doesn't refuse,
 `CoinedOK`'s inner relation holds at a valid witness with public registered values, so the self-check never stops
@@ -138,107 +94,9 @@ theorem table_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock
 
 /-! ## V*'s sessions -/
 
-/-- The commit strings of `m` under the salts `y`: hm96's `(SHA-512(m) ⊕ M·y, c(y))`, a firewall leaf's two halves. -/
-def commitStrs {n : ℕ} (m : Fin n → ByteArray) (y : Fin n → ZkView.Salt) : Fin n → ZkView.Bits × ByteArray :=
-  fun i => (ZkView.bitsOf (Sha512.hash (m i)) + ZkView.My (y i), ZkView.saltHash (y i))
-
-/-- Ideal commit strings: a uniform `U` beside the salt's own hash, reading no message. -/
-def idealStrs {n : ℕ} (u : Fin n → ZkView.Bits × ZkView.Salt) : Fin n → ZkView.Bits × ByteArray :=
-  fun i => ((u i).1, ZkView.saltHash (u i).2)
-
-/-- **V*'s outer sessions as (ii) sees them.** `Ctx` is what the honest prover holds and `Pub` what the simulator reads
-(`pubOf`). Before its sessions the prover registers `R₂`: `n₂` hm96 commit strings to `m₂` (rec-acc's running sums and
-the opened rows) under fresh salts. Session `j` of V*'s `S` is one `--zk` table, `C j pc l` at the public context
-`pc` and `R₂`'s commit strings `l`, at the coin vector `coin j pc l` the auditor's tape fixes, with sizes `z j` and
-`NR j` (the prover's) and `NS j` (the simulator's) randomness values at every `pc` and `l`; `enc` encodes a table's
-output in the view, at any coin vector. The honest witness `wit j x y₂` may read `R₂`'s salts `y₂`. -/
-structure Sessions (Ctx Pub : Type) : Type 1 where
-  pubOf : Ctx → Pub
-  n₂ : ℕ
-  m₂ : Ctx → Fin n₂ → ByteArray
-  S : ℕ
-  C : Fin S → Pub → (Fin n₂ → ZkView.Bits × ByteArray) → CoinedSetup
-  coin : (j : Fin S) → (pc : Pub) → (l : Fin n₂ → ZkView.Bits × ByteArray) → CoinsZK (C j pc l).Rest
-  z : Fin S → ZkView.Sizes
-  hz : ∀ j pc l, (C j pc l).z = z j
-  NR : Fin S → ℕ
-  NS : Fin S → ℕ
-  hR : ∀ j pc l, Fintype.card (RandAt (C j pc l) (coin j pc l)) = NR j
-  hS : ∀ j pc l, Fintype.card (SimAt (C j pc l) (coin j pc l)) = NS j
-  Vw : Fin S → Type
-  enc : (j : Fin S) → (pc : Pub) → (l : Fin n₂ → ZkView.Bits × ByteArray) → (c : CoinsZK (C j pc l).Rest) →
-    OutAt (C j pc l) c → Vw j
-  wit : (j : Fin S) → (x : Ctx) → (y₂ : Fin n₂ → ZkView.Salt) →
-    Witness (C j (pubOf x) (commitStrs (m₂ x) y₂)).S.m
-
-/-- The dummy witness, zero everywhere. -/
-def w0 (m : ℕ) : Witness m := fun _ => 0
-
 namespace Sessions
 
 variable {Ctx Pub : Type} (V : Sessions Ctx Pub)
-
-/-- Session `j`'s prover randomness, from `Fin (NR j)`. -/
-noncomputable def eR (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteArray) :
-    Fin (V.NR j) ≃ RandAt (V.C j pc l) (V.coin j pc l) :=
-  (Fintype.equivFinOfCardEq (V.hR j pc l)).symm
-
-/-- Session `j`'s simulator randomness, from `Fin (NS j)`. -/
-noncomputable def eS (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteArray) :
-    Fin (V.NS j) ≃ SimAt (V.C j pc l) (V.coin j pc l) :=
-  (Fintype.equivFinOfCardEq (V.hS j pc l)).symm
-
-/-- The view's randomness: `R₂`'s salts, then each session's. -/
-abbrev Ωo : Type := (Fin V.n₂ → ZkView.Salt) × ((j : Fin V.S) → Fin (V.NR j))
-
-/-- The simulator's randomness: each session's, then `R₂`'s ideal seeds. -/
-abbrev Ωs : Type := ((j : Fin V.S) → Fin (V.NS j)) × (Fin V.n₂ → ZkView.Bits × ZkView.Salt)
-
-/-- The view: `R₂`'s commit strings and each session's output. -/
-abbrev View : Type := (Fin V.n₂ → ZkView.Bits × ByteArray) × ((j : Fin V.S) → V.Vw j)
-
-/-- Session `j`'s honest output at the context `x`, `R₂`'s salts `y₂` and its randomness `ρ`. -/
-noncomputable def realAt (prover : TableProver) (x : Ctx) (y₂ : Fin V.n₂ → ZkView.Salt) (j : Fin V.S)
-    (ρ : Fin (V.NR j)) : V.Vw j :=
-  V.enc j (V.pubOf x) (commitStrs (V.m₂ x) y₂) (V.coin j (V.pubOf x) (commitStrs (V.m₂ x) y₂))
-    (honestOut prover (V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)) (V.coin j (V.pubOf x) (commitStrs (V.m₂ x) y₂))
-      (V.wit j x y₂) (V.eR j (V.pubOf x) (commitStrs (V.m₂ x) y₂) ρ))
-
-/-- Session `j`'s simulated output at the public context `pc` and `R₂`'s commit strings `l`: `simAll` on the dummy
-witness. -/
-noncomputable def simAt (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteArray) (j : Fin V.S) (σ : Fin (V.NS j)) :
-    V.Vw j :=
-  V.enc j pc l (V.coin j pc l) (simAll (V.C j pc l) (V.coin j pc l) (w0 _) (V.eS j pc l σ).1 (V.eS j pc l σ).2)
-
-/-- **The auditor's view of V*'s sessions**: `R₂`'s commit strings, then each session's honest output. -/
-noncomputable def view (prover : TableProver) (x : Ctx) (q : V.Ωo) : V.View :=
-  (commitStrs (V.m₂ x) q.1, fun j => V.realAt prover x q.1 j (q.2 j))
-
-/-- The sessions' simulated outputs beside the commit strings `l`. -/
-noncomputable def simOut (pc : Pub) (σ : (j : Fin V.S) → Fin (V.NS j)) (l : Fin V.n₂ → ZkView.Bits × ByteArray) :
-    V.View :=
-  (l, fun j => V.simAt pc l j (σ j))
-
-/-- **The simulator**: ideal commit strings for `R₂`, and each session's simulated output. It reads the public
-context only. -/
-noncomputable def sim (pc : Pub) (s : V.Ωs) : V.View := V.simOut pc s.1 (idealStrs s.2)
-
-/-- **The honest context's witnesses**: at each session and each of `R₂`'s salts, valid, their registered values the
-public ones at every coin vector. -/
-def Honest (x : Ctx) : Prop :=
-  ∀ j y₂, (V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)).Valid (V.wit j x y₂) ∧
-    ∀ c, ((V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)).T c).tab.sReg (V.wit j x y₂) =
-      ((V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)).T c).tab.pubReg
-
-/-- **Every session's table passes `CoinedOK`.** -/
-def TablesOK : Prop := ∀ j pc l, CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) (V.C j pc l)
-
-/-- The sessions' error, `Σ_j 2·|LeafPos z_j|·2^-193`. -/
-noncomputable def errS : ℝ≥0∞ :=
-  ∑ j, 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ)
-
-/-- **V*'s sessions' `ε_o`**: the sessions' error and `R₂`'s, `n₂·2^-193`. -/
-noncomputable def err : ℝ≥0∞ := V.errS + V.n₂ * (2 : ℝ≥0∞) ^ (-193 : ℤ)
 
 theorem nr_pos (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteArray) : 0 < V.NR j := by
   rw [← V.hR j pc l]
@@ -337,17 +195,6 @@ theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigPro
   rw [hC j pc l]
   exact (coinedOf_setup (Reg := Unit) P (D pc l j).I (D pc l j).dj (D pc l j).y₀ (D pc l j).ht
     (fun _ y' => FailClosed.DrawSetupZK.avoidsMask y') (draw j pc l) () (y j pc l)).2.2.2.2.2
-
-/-- What the honest prover holds in (ii): the private circuit, the witness, the registration's salts, the auditor's
-tape, the firewall's commitments, the inner prover's randomness and the firewall's salts. -/
-abbrev HCtx (Prog Wit Ωa Ωp : Type) (nr nh : ℕ) : Type :=
-  Prog × Wit × (Fin nr → ZkView.Salt) × Ωa × (Fin nh → ByteArray) × Ωp × (Fin nh → ZkView.Salt)
-
-/-- The honest context at the firewall's commitments to `msgs` under the salts `y`. -/
-abbrev hctxAt {Prog Wit Ωa Ωp : Type} {nr nh : ℕ}
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray) (P : Prog) (w : Wit)
-    (r : Fin nr → ZkView.Salt) (a : Ωa) (p : Ωp) (y : Fin nh → ZkView.Salt) : HCtx Prog Wit Ωa Ωp nr nh :=
-  (P, w, r, a, (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)), p, y)
 
 /-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = err`: the view `Sessions.view` at the honest context, the
 simulator `Sessions.sim` at the public context `pubS` reads (the owed outputs, the registration's view, the auditor's
