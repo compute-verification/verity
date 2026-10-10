@@ -19,6 +19,10 @@ SOURCE = """def buildStmt (st : Stmt) : V Stmt := do
   if st.ok then checkInIf st else pure ()
   Draw.check a b n
   return st
+
+theorem checkInRange_ok :
+    checkInRange k n m = .ok () ↔ k ≤ 27 := by
+  simp [checkInRange]
 """
 
 

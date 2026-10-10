@@ -3,11 +3,12 @@
     uv run python tools/verity/check/mutants.py FILE --build CMD --test CMD [--only TEXT] [--json OUT]
 
 A check here is a statement of a `do` block that is a bare call of a function named `check…` (`checkIdentifier st own`,
-`Registered.checkFull registered draw`): it returns nothing, and its only effect is to refuse. Each mutant replaces one such
-line of FILE with `pure ()` at its indentation, runs `--build` (the verifier's incremental build, e.g. `lake build
-flock-verify` from its package), then `--test`; a mutant whose test still exits 0 survived, which says no test refuses an
-input that only that check refuses. `--only` keeps the checks whose line holds TEXT. FILE is restored after each mutant, and
-`--build` runs once more at the end, so the build matches the source again; a stop (SIGINT) restores it too.
+`Registered.checkFull registered draw`): it returns nothing, and its only effect is to refuse. A line holding `:=` or `↔` is
+part of a declaration (a theorem's statement), not a call. Each mutant replaces one such line of FILE with `pure ()` at its
+indentation, runs `--build` (the verifier's incremental build, e.g. `lake build flock-verify` from its package), then
+`--test`; a mutant whose test still exits 0 survived, which says no test refuses an input that only that check refuses.
+`--only` keeps the checks whose line holds TEXT. FILE is restored after each mutant, and `--build` runs once more at the end,
+so the build matches the source again; a stop (SIGINT) restores it too.
 
 The test runs once on the unmutated source first, and a failure there exits 2: every mutant would be killed by it. A
 mutant whose build fails is `unbuilt`, neither killed nor survived. Exit 0 when every mutant was killed, 1 when one survived
@@ -29,6 +30,9 @@ from pathlib import Path
 #: a `do` statement that only calls a check: an optional namespace path, then `check` or `checkX…` (not `checked`), and its
 #: arguments
 CHECK = re.compile(r"^(?P<indent>[ \t]+)(?:[A-Z][\w']*\.)*check(?:[A-Z][\w']*)?(?:\s.*)?$")
+#: what a `do` statement that only calls a check never holds, and an indented line of a theorem's statement may
+#: (`checkInRange k n m = .ok () ↔ … := by`)
+DECLARATION = re.compile(r":=|↔")
 
 
 @dataclass
@@ -43,7 +47,7 @@ def mutants(text: str, only: str | None = None) -> list[Mutant]:
     out = []
     for i, line in enumerate(text.splitlines(), 1):
         code = line.split("--", 1)[0].rstrip()
-        if CHECK.match(code) and (only is None or only in line):
+        if CHECK.match(code) and not DECLARATION.search(code) and (only is None or only in line):
             out.append(Mutant(i, line.strip()))
     return out
 
