@@ -27,7 +27,7 @@ def adaptiveLeaves {n : ℕ} {B C D : Type} [Add B] (H : B × C → D) (x : (i :
     (π : Fin n → B × C) (i : Fin n) : D :=
   H (x i (fun j => adaptiveLeaves H x π (Fin.castLE i.isLt.le j)) + (π i).1, (π i).2)
 termination_by i.val
-decreasing_by all_goals first | exact j.isLt | (simp_wf; omega)
+decreasing_by exact j.isLt
 
 theorem adaptiveLeaves_eq {n : ℕ} {B C D : Type} [Add B] (H : B × C → D) (x : (i : Fin n) → (Fin i → D) → B)
     (π : Fin n → B × C) (i : Fin n) :
