@@ -21,6 +21,7 @@ import Proofs.Flock.VBridge.Algebra.Eval
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 import Proofs.Flock.VBridge.Algebra.Lincheck
+import Proofs.Flock.VBridge.Algebra.Holo
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.Ligerito
 import Proofs.Flock.VBridge.Algebra.LigeritoConverse
