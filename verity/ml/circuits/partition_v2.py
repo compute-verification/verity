@@ -501,7 +501,7 @@ def validate(st: Any) -> CutVerdict:
             fail("units", v)
     a = st.get("advice")
     if not (isinstance(a, Mapping) and set(a) == {"rows", "root"} and _is_int(a["rows"]) and a["rows"] >= 1
-            and (g is None or grid(a["rows"], g) == a["rows"]) and isinstance(a["root"], str) and _HEX512.match(a["root"])):
+            and (g is None or grid(a["rows"], g) == a["rows"]) and isinstance(a["root"], str) and _HEX512.fullmatch(a["root"])):
         fail("advice", a)
     return _verdict(bad)
 
