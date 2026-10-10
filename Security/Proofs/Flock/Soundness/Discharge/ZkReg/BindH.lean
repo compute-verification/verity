@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+import Proofs.Flock.Soundness.Registered.ReadsX
 
 set_option Elab.async false
 
@@ -8,7 +9,7 @@ set_option Elab.async false
 `ZkHidden.rsZH` takes `pub.tables = none`, as `ZkBind.rsZAt` does (`Bind.lean`), so here are `rsShH`, `rsZH`, their
 `Computes` and `zk_flock_countC_execOS_atH` without it: `sitesShH_bcSiteS` is `sitesShH_bcSite` from
 `HiddenExec.tableH_bcSiteS`. `layShH` is the shadow layout `layZH` moves to the `--zk` tables, where the registered reads
-(`Registered.Reads`) are read.
+(`Registered.ReadsX`) are read.
 -/
 
 namespace FlockSoundness.Discharge.ZkReg
@@ -50,7 +51,7 @@ theorem sitesShH_bcSiteS :
     exact absurd hM (hns _)
 
 /-- **`rs` at the public plan, with or without shared rows**: `rsShH` with `hsite` from `sitesShH_bcSiteS`. -/
-noncomputable abbrev rsShHS : Binding.HmRows (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
+noncomputable abbrev rsShHS : Binding.HmRowsX (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShH_bcSiteS dj y₀ ht hc hscope hU hpub)
@@ -65,12 +66,12 @@ theorem rsShHS_computes : (rsShHS dj y₀ ht hc hscope hU hpub (Reg := Reg)).Com
       (Layout.scopeOkH_spec hU hscope).2.2)
 
 /-- **`rs` at the hidden-output `--zk` tables, with or without shared rows**: `rsShHS` moved along `planAtZKH_S`. -/
-noncomputable abbrev rsZHS : HmRowsZ (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
-  HmRowsZ.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShHS dj y₀ ht hc hscope hU hpub)
+noncomputable abbrev rsZHS : HmRowsZX (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
+  HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShHS dj y₀ ht hc hscope hU hpub)
 
 /-- **`hHm` at the hidden-output `--zk` tables' rows, with or without shared rows** (`rsZH_computes`). -/
 theorem rsZHS_computes : (rsZHS dj y₀ ht hc hscope hU hpub (Reg := Reg)).Computes :=
-  HmRowsZ.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
+  HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
     (rsShHS_computes dj y₀ ht hc hscope hU hpub)
 
 /-- **The compiled `--zk` count curve at the hidden-output `--zk` tables, with or without shared rows**:

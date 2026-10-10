@@ -1223,7 +1223,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
   (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
-  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16`;
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16` (`rec_open` builds
+    `0 ≤ H ≤ 32`, reading the side bits above 16 from `dirs`' word 1 and giving `H = 0` one unread `aux` row; this verifier
+    refuses those heights until `Flock.RecOpen` does the same);
   - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
     verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
     allow;
@@ -1468,7 +1470,9 @@ statements define such a session; any other statement refuses `J > 1`.
 `@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows (Daniel, Oct 1); `+seed-injection` is the
 selftest build. Statements composed up to verity `b3727bd9` are `@b3727bd9` and `types@b3727bd9`: the same, but META
 `leaf_scheme.salt_source` names a ChaCha20 expansion of a per-proof OS key where the default's names the OS's bytes
-(§16.10's tags), and the identity carries that object. `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
+(§16.10's tags), and the identity carries that object. Statements composed up to verity `cec3e347` are `@cec3e347`
+and `types@cec3e347`: the default's, but their `--zk` identity names the pads and every table's draws ChaCha20 streams
+of the prover's seed where the default's names the OS's bytes (§16.14). `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
 `--zk` `zk_session_soundH` and `zk_session_soundHJ`, within the one theorem of §16.15) applies §16.10's definitions to every
 row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
 (`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
@@ -1523,7 +1527,9 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 
 `verify --zk` (the verifier's setting) checks `flock-circuit --zk` sessions (any `J`, draws, hidden outputs) by the live
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
-stays `NON_ZK_PROOF`. **Agreement:** README.
+stays `NON_ZK_PROOF`. Its `pads` (and `tables`, for `J > 1`) name the prover's randomness: the OS's bytes for the default
+statements (`Tags.osMasks`, Daniel's decision 4), ChaCha20 streams of the prover's seed for those pinned `@cec3e347` and
+earlier. **Agreement:** README.
 
 Each table's statement must have upstream's mask shape (`Zk.shapeOk`), and, which upstream does not check, its Δ and its
 regions avoid the mask slot (`Zk.maskFree`, D12): no pair of `da` or `db` has a row or a column in the mask range's
@@ -1555,11 +1561,16 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
    `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
    bits in at least one chunk`). Under hidden outputs (§16.13) the check is `Layout.scopeOkH`: the same unit, and every
-   row a `sha512/row/v1` row as above or every row an unsegmented `sha512/row/v2` row (§16.14) of `16 · words` bits whose
-   last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block (`128 · chunks ≤ 2 · words` and
-   `2 · words + 17 ≤ 128 · (chunks + 1)`), each output row holding one output port (`rows that are neither all
-   sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits
-   ending in their hm96 block, one output port each`). A segmented row (`sha512/row-seg/v1`) is outside both.
+   row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
+   `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
+   (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
+   row of `16 · words` bits segmented as `HmRow.segShape` cuts it, in its segments' and its outer message's compressions,
+   each segment's bytes and SHA-512's 17 bytes of padding ending in its last block (`ProvedScope.segRow`: a segment of
+   `b` bytes in `c` compressions has `128 · (c - 1) ≤ b`), the output rows unsegmented and each holding one output port
+   (`ProvedScope.bitRows`; refused as `rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one
+   chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
+   of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
+   PoUW tile's rows, row-seg A rows and v2 B rows, are such a mix (`ZkHidden.witnessMix_scope`).
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
 design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling

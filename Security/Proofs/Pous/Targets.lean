@@ -1,12 +1,12 @@
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 
 /-!
 # Open targets (untrusted)
 
-Nothing here is trusted, and nothing here is in the default build: it is the list of what to prove next. Every target
-is pinned in `Security/Models/Pous/Guarantees.lean`; `grade.sh` grades a proof of `Pous.Guarantees.X` given as
-`theorem solution`. The names below are the draft names the prover files use. The proved statements are in
-`Security/Proofs/Pous.lean`.
+Nothing here is trusted, and nothing here is in the default build: it is the list of what to prove next. Every target is
+stated in `Security/Proofs/Pous/Statements.lean` or `Security/Models/Pous/Guarantees.lean`; `grade.sh` grades a proof of
+`Pous.Guarantees.X` given as `theorem solution`. The names below are the draft names the prover files use. The proved
+statements are in `Security/Proofs/Pous.lean`.
 -/
 
 namespace PousTargets

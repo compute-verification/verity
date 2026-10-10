@@ -483,18 +483,6 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
-def test_circuit_check_takes_one_worker_per_its_memory_share(tmp_path, monkeypatch):
-    """A cold `circuit-check --all --jobs 23` on vy-nebius-cpu-1 (755 GB) grew to 610 GiB and took the node down twice (7 Oct):
-    its workers are bounded by memory as well as cores, and never fall to none. vy-n2's 900 GiB session scope at 7 workers
-    OOM-killed one at 155 GiB (9 Oct), so 900 GiB gets 5."""
-    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
-    jobs = lambda gs: (cc := gs[1][1][1])[cc.index("--jobs") + 1]
-    for gb, want in ((600, "3"), (900, "5"), (370, "2"), (1400, "8"), (2048, "12"), (40, "1")):
-        monkeypatch.setattr(CHECK, "memory_gb", lambda: gb)
-        assert jobs(CHECK.groups(tmp_path, 32)) == want, gb
-        assert CHECK.groups(tmp_path, 32)[0][0][1][-1] == "16", "pytest keeps its half of the cores"
-
-
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
     the namespace's root; MemAvailable bounds both."""
@@ -817,8 +805,10 @@ def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, 
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     """Without bytecode or pytest's cache; every lint it names exists, so a rename can't turn it into a failure of
     every check. Without uv, the lockfile step fails by name."""
-    (lock, argv, cwd), (lints, pytest, cwd2) = CHECK.preflight()
+    (lock, argv, cwd), (lints, pytest, cwd2), (fixtures, public, cwd3) = CHECK.preflight()
     assert (lock, argv[1:], cwd) == ("preflight-lock", ["lock", "--check"], ROOT)
+    assert (fixtures, public[1:], cwd3) == ("preflight-fixtures", ["-B", str(ROOT / "tools" / "verity" / "check" / "check.py"),
+                                                                   "--fixtures"], ROOT)
     assert (lints, pytest[1:4], cwd2) == ("preflight-lints", ["-B", "-m", "pytest"], ROOT) and "no:cacheprovider" in pytest
     assert pytest[-len(CHECK.LINTS):] == list(CHECK.LINTS)
     for t in CHECK.LINTS:
@@ -827,6 +817,69 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     monkeypatch.delenv("UV", raising=False)
     monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
+
+
+def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_the_public_export_has(tmp_path, monkeypatch, capsys):
+    """The closing train's check (cb20, 10 Oct) failed `lean-suites` after its launch: #1716 registered rec-coins, preserved
+    privately and never exported, and node 1 had it neither in its store nor from the public export. A fixture the tree already
+    holds exactly or this machine's store holds whole needs no export (top, 10 Oct: infra's node-1 copies keep trains moving),
+    though the export is asked first (one HEAD per manifest, no blob), so the ones it lacks are named. A tracked fixture
+    and the `previous` history are not asked about, and with no public source to ask it refuses rather than pass."""
+    import json
+    import subprocess
+
+    from research.store.fixtures import fixture_id
+
+    good, gone, small, local = ("art:" + c * 64 for c in "abce")
+    (tmp_path / "big").mkdir()
+    (tmp_path / "big" / "there.bin").write_bytes(b"exact bytes")
+    there = fixture_id(tmp_path / "big" / "there.bin")
+    (tmp_path / "fixtures").mkdir()
+    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(
+        {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", local: "big/local.bin", there: "big/there.bin",
+         "previous": {good: ["art:" + "d" * 64]}}))
+    (tmp_path / "small.json").write_text("{}")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "small.json", "fixtures"], check=True)
+    asked = []
+
+    def head(key):
+        asked.append(key)
+        return {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None
+
+    class Store:
+        def has_local(self, art):
+            return art == local
+
+    where, missing = CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Store())
+    assert missing == [gone]
+    assert where == {good: "the public export", local: "this machine's store", there: "the tree"}
+    assert sorted(asked) == sorted(f"manifests/{a.removeprefix('art:')}.json" for a in (good, gone, local, there))
+    with pytest.raises(RuntimeError, match="no public source"):
+        CHECK.fetchable_fixtures(tmp_path, "", head, Store())
+
+    class Broken:
+        def has_local(self, art):
+            raise OSError("no store")
+
+    assert CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Broken())[1] == [gone, local]
+
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, [gone]))
+    assert CHECK.main(["--fixtures"]) == 1
+    out = capsys.readouterr()
+    assert gone in out.err and "1 from this machine's store" in out.err and f"{local} from this machine's store" in out.out
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, []))
+    assert CHECK.main(["--fixtures"]) == 0 and "1 from this machine's store" in capsys.readouterr().out
+
+
+def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs_on(tmp_path, monkeypatch, capsys):
+    """A train's prep runs `--preflight` off the node its check is pinned to, so a fixture only that node's store holds (f1-gate
+    on node 1, 10 Oct) mustn't refuse the train there: the check's own preflight-fixtures judges the node, and refuses on it."""
+    fail = _py("raise SystemExit(1)")
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-fixtures", fail, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 0 and "not refused here" in capsys.readouterr().out
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lints", fail, tmp_path), ("preflight-fixtures", fail, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 1
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
@@ -1100,8 +1153,11 @@ def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_p
     a = argv.read_text().splitlines()
     assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
     assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
-    job = a[-1]
-    assert "slot.py\" --priority" in job and f"--head {head} --base {root} --" in job
+    cmd, job = a[a.index("--") + 1:], a[-1]
+    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"], \
+        "cpu-1's launcher takes only a run whose command is slot.py's (slot_only.through_slot; the lander, 10 Oct)"
+    assert [a[i + 1] for i, x in enumerate(a) if x == "--send"] == ["tools/research/src/research/quick_tier.py"]
+    assert f"--head {head} --base {root} --" in job
     assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
 
 

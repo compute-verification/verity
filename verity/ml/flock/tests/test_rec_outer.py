@@ -211,6 +211,26 @@ def test_a_forged_coef_or_dirs_row_does_not_open_the_verifiers_registration(stag
         assert RL.commit_rows([[row[0] ^ 1, *row[1:]]], [salt]) != [pub[at:at + 128]]
 
 
+@pytest.mark.slow
+def test_a_level_without_a_climb_reads_its_leaves_as_its_tops(tmp_path):
+    """H = 0 (a level whose cap is its leaves, as m = 23's level 2): ``aux`` is one row the unit does not read, and each
+    opening's ``out`` is its leaf, read against the registered top at its position. Three honest openings and one whose row
+    is another leaf's."""
+    rows, layers = _tree(1, 8)
+    q = lambda rep, j, p, row: V.Query(rep, 0, j, p, 1, 1, layers[0][p], row, None, [])
+    qs = [q(0, 0, 0, rows[0]), q(0, 1, 1, rows[1]), q(1, 0, 1, rows[1]), q(1, 1, 0, rows[1])]
+    (level,) = O.levels(qs)
+    coefs = _coefs(qs)
+    shared = _top(layers[0], 5)
+    tops = O.TopValue.build(PROGRAM, 0, {0: shared, 1: shared})
+    assert [tops.position(x) for x in qs] == [0, 1, 1, 0]
+    s = O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, coefs), coefs, tops)
+    assert s["template"] == "RecOpen_v4{LANES=8,H=0}" and s["instances"] == 4 and s["compressions"] == 2
+    assert s["opened"] == 3 and s["not_opened"] == [(1, 1)] and s["summed"] == 4
+    meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert [p[:2] for p in meta["ports"]][:5] == [["row", 64], ["aux", 64], ["acc", 64], ["coef", 128], ["dirs", 64]]
+
+
 def test_a_level_of_salted_leaves_is_refused(tmp_path):
     qs, layers = _queries()
     qs = [V.Query(**{**qs[0].__dict__, "salt": bytes(V.SALT)}), *qs[1:]]

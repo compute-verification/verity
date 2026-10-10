@@ -17,8 +17,11 @@ import hashlib
 import importlib.util
 import json
 import sys
+import threading
 from collections import Counter
 from pathlib import Path
+
+from verity.core.protocols.certifier import active
 
 LEAN = Path(__file__).resolve().parents[3] / "devices" / "certifier" / "lean"
 SCRIPT = LEAN / "scripts" / "difftest_vectors.py"
@@ -82,3 +85,15 @@ def test_the_generator_covers_what_it_says():
     assert any(e[3] == bucket(i) for i, e in ticks) and any(e[3] == 4 * bucket(i) for i, e in ticks)
     assert any(e[3] > 4 * bucket(i) for i, e in ticks)
     assert any([f[0] for f in r["frames"]] != sorted(f[0] for f in r["frames"]) for r in results)  # read out of order
+
+
+def test_the_proxys_shutdown_runs_on_the_harness_thread(monkeypatch):
+    """A run with a prover ends in the proxy's executor shutdown (`asyncio.to_thread`). On a real thread it finishes
+    when the host gets to it, possibly after `settle` has taken the loop as quiet, and the generator then raises "the
+    trace leaves ticks unrun" under load (r20261010-073331-ef9b). The harness runs it inline, on the loop's thread."""
+    threads = []
+    monkeypatch.setattr(active.InlineExecutor, "shutdown", lambda self, *a, **k: threads.append(threading.get_ident()),
+                        raising=False)
+    inst = next(i for i in map(vectors.instance, range(len(vectors.PATHS))) if i["config"]["prover"] is not None)
+    vectors.python_results(inst)
+    assert threads == [threading.get_ident()]
