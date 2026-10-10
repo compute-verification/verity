@@ -1,3 +1,4 @@
+import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Sampled.Statements
 
 /-!
@@ -11,7 +12,8 @@ and one session of one slot holding the unit (`batch₁`).
   `Bridge` at that instance, the draw being the one unit.
 * `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit, each staged over the inner shape
   `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` given that V* stages it (`menu₀.staged`, which `#guard` checks by
-  evaluation, not by proof: building V*'s algebra is beyond the kernel's evaluation), and `Menu.Room` by proof.
+  evaluation, not by proof: building V*'s algebra is beyond the kernel's evaluation), and `Menu.Room` by proof;
+  `menuComplete_nonvacuous`, `MenuComplete`'s hypotheses there, given the same.
 * `composition_nonvacuous`: `Composition`'s hypotheses at that instance, under a one-point law and a session that
   verifies at once, with an instance of F1's interface (`I₁`) whose break fires at no draw.
 -/
@@ -50,8 +52,10 @@ theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) where
     have hall : ∀ p ∈ (Finset.univ : Finset (batch₁ k).Pos), ((batch₁ k).held p).isSome = true := fun _ _ => rfl
     first
       | (rw [Finset.filter_true_of_mem hall, Finset.card_univ, Finset.card_univ, Fintype.card_sigma]
-         simp [batch₁])
-      | simp [Batching.held, batch₁, Fintype.card_sigma]
+         simp [batch₁]
+         done)
+      | (simp [Batching.held, batch₁, Fintype.card_sigma]
+         done)
 
 /-- A one-leaf root whose leaf is the record `bc`'s. -/
 def onePort (bc : ByteArray) : Flock.Registered.Port where
@@ -141,6 +145,13 @@ theorem menu₀_shapeMenu (h : menu₀.staged = true) : ShapeMenu menu₀ where
 theorem menu₀_room : menu₀.Room Ty₁ :=
   fun k _ => ⟨batch₁ k, rfl, batch₁_cover k, fun _ _ _ => rfl, fun _ => Nat.zero_le _⟩
 
+/-- **`MenuComplete`'s hypotheses hold together**, at `menu₀` given that V* stages it, `Ty₁`, and a nonempty draw whose
+units `X₁` holds. -/
+theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
+    ShapeMenu menu₀ ∧ menu₀.Room Ty₁ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧
+      ∀ i ∈ (Finset.univ : Finset (Fin 1)), (X₁ i).isSome = true :=
+  ⟨menu₀_shapeMenu h, menu₀_room, Finset.univ_nonempty, fun _ _ => rfl⟩
+
 /-- The one-point law over the one unit. -/
 def L₁ : Law 1 := { Ω := Unit, draw := fun _ => Finset.univ }
 
@@ -156,13 +167,9 @@ noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
   sound := fun S _ _ => by
     by_cases hS : S = Finset.univ
     · subst hS
-      right
-      have hp : ¬ ((fun _ : Unit => true) () = true ∧ ¬ Proves Ty₁ C₁ Finset.univ h₁) := fun h => h.2 h₁_proves
-      first
-        | exact (if_neg hp).le
-        | (change prob _ (Game.ret ()) _ ≤ _
-           simp only [prob]
-           exact (if_neg hp).le)
+      refine Or.inr (le_of_le_of_eq (prob_mono (q := fun _ => False) ?_ _ _) (prob_false _ _))
+      intro _ h
+      exact h.2 h₁_proves
     · exact Or.inl hS
 
 /-- **`Composition`'s hypotheses hold together**: at the one-point law, `session₁` and `I₁`, the records determine
