@@ -106,21 +106,7 @@ verifier's unit draw and, for zero knowledge, the commitments' salts.
   toolchain bump. What ties the statement to the verifier is `drawOS_def`: the live draw `Flock.Draw.drawOS` is
   `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`. The
   step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
-- **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
-  `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of
-  bytes `L` the model reads. The live verifier reads as many as its reruns need, and its acceptance probability is the
-  limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
-  uniform streams as their probability space, the same assumption.
-- **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
-  from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads), and the
-  recursive audit's firewall and a registrant read theirs the same way (`os.urandom`). A3 is that those reads, too, are
-  independent uniform bytes. Zero knowledge's hiding theorems are stated at uniform salts; `Discharge/ZkView/OsSalts.lean`
-  reads 192 bytes as one salt, one for one (`saltEquiv`; `leaf_os`: the executable's leaf at those bytes is the model's),
-  and takes them to the OS's salts: `hm96Hiding_os` and `hm96Sha512_os` (one leaf), `ideal_leaves_swap_os` (T1 for `n`
-  leaves), `hides_os` and `hides_leaves_os` (a registration's `PrivateCircuit.Hides`), and, for the recursive audit,
-  `Flock.SecurityProofs.recursiveZK_os` (`Recursive/OsSalts.lean`). So no premise on a stream generator is left on the
-  salts. The masks and the Reed–Solomon padding are still a ChaCha20 expansion of an OS seed (`ProverRng`), which the
-  zero-knowledge theorems draw uniformly; that step is a PRG's, not A3's, and no `Prop` states it.
+- **Where it is used, and the salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)): `assumption-notes/a3-uniform-bytes.md`.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
@@ -274,12 +260,7 @@ hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, b
 M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither), so zero knowledge
 takes only `hash-derived-key` for the pinned key. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
-Salted SHA-512's hiding is statistical, not computational: `hm96Hiding_gap` reads nothing of SHA-512, and the leftover
-hash lemma only that `c(y) = SHA-512(sp ‖ y)` takes at most `2^512` values, so no reduction to a property of SHA-512 is
-needed, and `cr/sha-512` enters binding, not hiding. The salts' uniformity is A3's (A3, the salts). `hash-derived-key`
-is the common-reference-string step for one public constant, which no reduction can take to a property of SHA-512 (there
-is no secret and no adversary); bounds stated at the gap itself take no premise (`CROnly.hm96Hiding_gap`,
-`Flock.SecurityProofs.recursiveZK_gap`).
+Why salted SHA-512's hiding needs no reduction to SHA-512: `assumption-notes/a3-uniform-bytes.md`.
 Zero knowledge's coverage (closed by the refusal): `Composed.zk_session_view` holds at every coin vector the honest
 prover doesn't refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank
 `128·k`, `ρ₀, ρ₁` independent over F128, and no zerocheck outer coin `1`; the verifier also checks `β` and `ρ`), and
