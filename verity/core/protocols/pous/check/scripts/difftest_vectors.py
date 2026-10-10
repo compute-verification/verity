@@ -628,8 +628,8 @@ def _vector_audits(py) -> list[dict]:
 def _unchecked_params(R, w: int, c0: int, payload_bytes: int, bps: int, segments: int, profile: str):
     """`reference.Params` without its refusals, for a store the wire must refuse."""
     q = object.__new__(R.Params)
-    for k, v in dict(w=w, c0=c0, payload_bytes=payload_bytes, blocks_per_segment=bps, segments=segments,
-                     profile=profile).items():
+    for k, v in {"w": w, "c0": c0, "payload_bytes": payload_bytes, "blocks_per_segment": bps, "segments": segments,
+                 "profile": profile}.items():
         object.__setattr__(q, k, v)
     return q
 
