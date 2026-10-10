@@ -134,6 +134,61 @@ theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedul
 
 /-! ## The inner transcript -/
 
+/-! ## The inner statement's leaf -/
+
+/-- **The inner statement's leaf**: SHA-512 of the row's encoding, its salt ignored (a recursive session's inner
+statement has `flock-leaf/sha512-unsalted` leaves, Tags.lean:333-345; `MerkleScheme.sha512`'s `leaf`, Merkle.lean:35). -/
+def leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 where
+  leaf c _ := H512 (enc512.col c)
+  bind _ _ _ _ hc h := ⟨_, _, fun e => hc (enc512.col_inj e), h⟩
+
+/-- **One table's accepted reps refine the compiled reps, for `flock-leaf/sha512-unsalted`**: `table_refines_hm96`
+(Tables.lean) with the unsalted path checks (`opensOK_of`), which at `leafPlain` are its salted ones. -/
+theorem table_refines_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+    (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
+    (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
+    (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
+    (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
+    ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+      decodeProof (shapeOf st sch extra.length) b₀ = .ok p₀ ∧
+      decodeProof (shapeOf st sch extra.length) b₁ = .ok p₁ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+      Plays fOf (Model.repC execArith 0 S (schedOf sch) hm extra)
+        (repMsgs st sch (2 + extra.length) p₀ capDig) (s₀.rounds.toList.map (·.coins)) pend₀ ∧
+      Plays fOf (Model.repC execArith 1 S (schedOf sch) hm extra)
+        (repMsgs st sch (2 + extra.length) p₁ capDig) (s₁.rounds.toList.map (·.coins)) pend₁ ∧
+      pend₀.verdict (opensOf p₀ p₁ sch) = true ∧ pend₁.verdict (opensOf p₀ p₁ sch) = true ∧
+      OpensOKL H512 enc512 leafPlain (capDig p₀.cap) 0 pend₀ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) ∧
+      OpensOKL H512 enc512 leafPlain (capDig p₀.cap) 1 pend₁ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) := by
+  have h15 : 15 ≤ S.m := by have := exec_fast100_ge hf; omega
+  obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
+  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
+    fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hα1 : ∀ i < sch.levels.size, Accounting.ceilLog2 (sch.levels.getD i default).q ≠ 1 := fun i hi =>
+    fast100_alpha st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hschm : sch.m = S.m := hsm.trans hmS
+  obtain ⟨s₀, p₀, hs₀, hp₀, hc₀, -, hsz₀, hw₀, hrest₀⟩ := rep_refines spec st S hm h15 sch hmS hkS hfold extra
+    sess hext hdim hlv hα1 hschm hwf i 0 _ _ h0
+  obtain ⟨s₁, p₁, hs₁, hp₁, hc₁, -, hsz₁, hw₁, hrest₁⟩ := rep_refines spec st S hm h15 sch hmS hkS hfold extra
+    sess hext hdim hlv hα1 hschm hwf i 1 _ _ h1
+  obtain ⟨pend₀, hpl₀, hcaps₀, hreqs₀, hver₀⟩ := hrest₀ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
+  obtain ⟨pend₁, hpl₁, hcaps₁, hreqs₁, hver₁⟩ := hrest₁ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
+  rw [hms] at hreqs₀ hreqs₁ hw₀ hw₁
+  have hok₀ : OpensOKL H512 enc512 leafPlain (capDig p₀.cap) 0 pend₀ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) :=
+    opensOK_of _ sch hlv p₀.cap p₀.ligerito 0 pend₀ (opensOf p₀ p₁ sch) hcaps₀ hreqs₀ fun ℓ j => rfl
+  have hok₁ : OpensOKL H512 enc512 leafPlain (capDig p₁.cap) 1 pend₁ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) :=
+    opensOK_of _ sch hlv p₁.cap p₁.ligerito 1 pend₁ (opensOf p₀ p₁ sch) hcaps₁ hreqs₁ fun ℓ j => rfl
+  have hcapeq : p₁.cap = p₀.cap := by
+    apply Array.ext'
+    refine entries_eq_of_flat _ _ (fun x hx => hw₁ x hx) (fun x hx => hw₀ x hx) (by simp [hsz₀, hsz₁]) ?_
+    have e := congrArg (fun b : ByteArray => b.data.toList) (hc₁.symm.trans hc₀)
+    simp only [← Array.foldl_toList, flat_data] at e
+    simpa using e
+  rw [hcapeq] at hok₁
+  exact ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hver₀, hver₁, hok₀, hok₁⟩
+
 /-- **The table's steps after the link points**, as `Plays.interleave_first` schedules them: rep 0's steps, each after
 the prover's choice `true`; then rep 1's; then the openings with their salts. -/
 def tableTape (ts₀ ts₁ : List Game.Step) (os : Opens 𝔽 Dig × Salts (List UInt8)) : List Game.Step :=
@@ -153,7 +208,8 @@ definitions accepts `t`. -/
 theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hS : M.toStatement regs = S)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (pts : Fin 2 → Fin cls.mPts → 𝔽) (sess : Session)
+    (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (pts : Fin 2 → Fin cls.mPts → 𝔽)
+    (sess : Session)
     (hext : ExtraRealizes st S sess.points (extraClaims S cls.ptLocal cls.mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
@@ -169,10 +225,10 @@ theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.
     (t : List (List (SMsg T) × ((k : Fin r) → CT k)))
     (ht : schedSteps T CT 0 t = .inl ⟨Cap Dig, capDig p₀.cap⟩ :: .inr ⟨Fin 2 → Fin cls.mPts → 𝔽, pts⟩ ::
       tableTape ts₀ ts₁ (opensOf p₀ p₁ sch, saltsOf p₀ p₁ sch)) :
-    (flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)).accepts M t := by
+    (flockInnerCL T CT execArith H512 enc512 leafPlain cls regs (schedOf sch)).accepts M t := by
   subst hS
   obtain ⟨p₀', p₁', s₀', s₁', pend₀, pend₁, hp₀', hp₁', hs₀', hs₁', hpl₀, hpl₁, hv₀, hv₁, hok₀, hok₁⟩ :=
-    table_refines_hm96 spec st (M.toStatement regs) cls.hm hmS hkS hfold hms
+    table_refines_plain spec st (M.toStatement regs) cls.hm hmS hkS hfold hms
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts pts) sess hext hwf sch hf i b₀ b₁ c h0 h1
   obtain rfl : p₀ = p₀' := Except.ok.inj (hp₀.symm.trans hp₀')
   obtain rfl : p₁ = p₁' := Except.ok.inj (hp₁.symm.trans hp₁')
@@ -181,11 +237,11 @@ theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.
   have hT₀ := playsT_of_tape 0 _ _ cls.hm _ hpl₀ ht₀.1 ht₀.2.1 ht₀.2.2
   have hT₁ := playsT_of_tape 1 _ _ cls.hm _ hpl₁ ht₁.1 ht₁.2.1 ht₁.2.2
   have hint := playsT_interleave_first hT₀ hT₁ (repC_ne_ret 1 _ _ cls.hm _)
-  refine (flockInnerCL_accepts T CT execArith H512 enc512 leaf512 cls regs (schedOf sch) M t).mpr
+  refine (flockInnerCL_accepts T CT execArith H512 enc512 leafPlain cls regs (schedOf sch) M t).mpr
     ⟨capDig p₀.cap, pts, _,
       ⟨pend₀.verdict (opensOf p₀ p₁ sch) && pend₁.verdict (opensOf p₀ p₁ sch) &&
-        decide (OpensOKL H512 enc512 leaf512 (capDig p₀.cap) 0 pend₀ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) ∧
-          OpensOKL H512 enc512 leaf512 (capDig p₀.cap) 1 pend₁ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch)),
+        decide (OpensOKL H512 enc512 leafPlain (capDig p₀.cap) 0 pend₀ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) ∧
+          OpensOKL H512 enc512 leafPlain (capDig p₀.cap) 1 pend₁ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch)),
         capDig p₀.cap, (pend₀, pend₁), opensOf p₀ p₁ sch, saltsOf p₀ p₁ sch⟩, ht, ?_, ?_⟩
   · unfold tableAfterL
     exact playsT_bind hint (.send (opensOf p₀ p₁ sch, saltsOf p₀ p₁ sch) (.ret _))

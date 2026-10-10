@@ -17,7 +17,8 @@ and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grindin
   `recursive_proofs`' length check, Proof.lean:130, refuses every file), digests of positive width, and a file that fits
   a `u64`.
 * `encodeProof_size_le`: the file is at most `fileBound sh` bytes; at hm96-sha512 and a `fast100` schedule that is at
-  most `2^32` bytes and `2064` per ring switch (`fast100_file`).
+  most `2^32` bytes and `2064` per ring switch (`fast100_file`), and at the inner statement's unsalted SHA-512, whose
+  salts are no larger, too (`shapeOf_plain`, `schedPart_plain`).
 * `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the setup
   (`SetupRealizes`), V*'s shape (`ShapeIs`, and its claims `2 + n`: `ClaimsAre`, from `HFit` and `ExtrasAre` by
   `claimsAre_of`), the shapes of the level-0 cap and the Ligerito openings the proof files carry (`CapShaped`,
@@ -358,9 +359,35 @@ theorem fast100_file (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some
     simpa using key ⟨m, hm⟩ s hs
   · rw [exec_fast100_none m (by omega)] at hs; cases hs
 
-theorem shapeOf_hm96 {st : Setup} {sch : Flock.Schedule} {n : ℕ} (h : st.merkle = MerkleScheme.hm96Sha512) :
-    (shapeOf st sch n).hashLen = 64 ∧ (shapeOf st sch n).saltLen = some 192 := by
-  simp [shapeOf, h, MerkleScheme.hm96Sha512]
+theorem sum_map_le {l : List ℕ} {f g : ℕ → ℕ} (h : ∀ i, f i ≤ g i) : (l.map f).sum ≤ (l.map g).sum := by
+  induction l with
+  | nil => simp
+  | cons a l ih => simp only [List.map_cons, List.sum_cons]; exact Nat.add_le_add (h a) ih
+
+/-- A file's schedule part grows with its salts. -/
+theorem schedPart_le {s : Flock.Schedule} {H : ℕ} {sl sl' : Option ℕ} (h : ∀ q, saltsSize sl q ≤ saltsSize sl' q) :
+    schedPart s H sl ≤ schedPart s H sl' := by
+  have hl : ∀ l w, levelSize H sl l w ≤ levelSize H sl' l w := fun l w => by
+    unfold levelSize; have := h l.q; omega
+  have hs := sum_map_le (l := List.range (s.levels.size - 1 - 1))
+    (f := fun i => levelSize H sl (s.levels.getD (i + 1) default) 16)
+    (g := fun i => levelSize H sl' (s.levels.getD (i + 1) default) 16) fun i => hl _ _
+  have h0 := hl (s.levels.getD 0 default) (2 ^ (s.levels.getD 0 default).lanes)
+  have hR := hl (s.levels.getD (s.levels.size - 1) default) 16
+  simp only [schedPart]
+  omega
+
+/-- **The inner statement's shape** at `flock-leaf/sha512-unsalted`: 64-byte digests and no salts (`none`, or `some 0`
+when the setup opens salts). -/
+theorem shapeOf_plain {st : Setup} {sch : Flock.Schedule} {n : ℕ}
+    (h : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") :
+    (shapeOf st sch n).hashLen = 64 ∧ ((shapeOf st sch n).saltLen = none ∨ (shapeOf st sch n).saltLen = some 0) := by
+  refine ⟨by simp [shapeOf, h, MerkleScheme.sha512], ?_⟩
+  cases ho : st.openedSalts <;> simp [shapeOf, h, MerkleScheme.sha512, ho]
+
+theorem schedPart_plain {s : Flock.Schedule} {sl : Option ℕ} (hsl : sl = none ∨ sl = some 0) :
+    schedPart s 64 sl ≤ schedPart s 64 (some 192) :=
+  schedPart_le fun q => by rcases hsl with rfl | rfl <;> simp [saltsSize]
 
 namespace TableSrc
 
@@ -381,7 +408,7 @@ verifier's setup refuses more than 1,024 (`checkInRange`, Statement.lean:114), s
 regions (`regionsFit_of_setupH`, Lig.lean). -/
 def RegionsFit : Prop := s.S.regions.length < 2 ^ 48
 
-/-- **`Encodes`** at `bytes r := encodeProof (shapeOf …) (proof r)`: the setup's (`SetupRealizes`: hm96-sha512 and a
+/-- **`Encodes`** at `bytes r := encodeProof (shapeOf …) (proof r)`: the setup's (`SetupRealizes`: plain SHA-512 and a
 `fast100` schedule), V*'s shape (`ShapeIs`, `ClaimsAre`), the cap's and the Ligerito openings' shapes, and the
 statement's region count. -/
 theorem encodes_of {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptLocal mPts) (hsh : ShapeIs s.sh s.st s.sch)
@@ -389,14 +416,15 @@ theorem encodes_of {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptL
     (hreg : s.RegionsFit) : s.Encodes := by
   obtain ⟨-, -, -, hms, hf, -, hkm, -, -⟩ := hset
   obtain ⟨hlv, hpart, hm35⟩ := fast100_file _ _ hf
-  obtain ⟨hH, hsl⟩ := shapeOf_hm96 (sch := s.sch) (n := 2 * s.S.regions.length) hms
+  obtain ⟨hH, hsl⟩ := shapeOf_plain (sch := s.sch) (n := 2 * s.S.regions.length) hms
+  have hpart' := (schedPart_plain (s := s.sch) hsl).trans hpart
   intro r
   have hlen := proofOf_lengths (params := pcsParams s.st.merkle s.sch) (d := s.d (fin2 r)) hsh hcl hcap (hlig (fin2 r))
   have hle := encodeProof_size_le _ _ hlen
   have hfit : (encodeProof (shapeOf s.st s.sch (2 * s.S.regions.length)) (s.proof r)).size < 2 ^ 64 := by
     refine lt_of_le_of_lt hle ?_
     unfold fileBound
-    rw [hH, hsl]
+    rw [hH]
     have e : (shapeOf s.st s.sch (2 * s.S.regions.length)).sched = s.sch := rfl
     have em : (shapeOf s.st s.sch (2 * s.S.regions.length)).m = s.st.m := rfl
     have ek : (shapeOf s.st s.sch (2 * s.S.regions.length)).kLog = s.st.kLog := rfl
@@ -453,7 +481,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 

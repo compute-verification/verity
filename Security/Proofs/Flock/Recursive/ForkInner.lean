@@ -354,8 +354,7 @@ def InnerAtLeavesV (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j 
 
 /-- **`zk_sessions_recursive_upto` with the inner term at the prover's own leaves** (`recursive_sound_on`). -/
 theorem zk_sessions_recursive_upto_on
-    -- V*'s laws: their strata and A3
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    -- V*'s laws: A3
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -398,7 +397,7 @@ theorem zk_sessions_recursive_upto_on
       (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
-  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hS hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
+  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
       qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd))) (hbr σ.1 ω t) _) _
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
@@ -406,8 +405,7 @@ theorem zk_sessions_recursive_upto_on
 
 /-- **`zk_sessions_recursive_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_full_on
-    -- V*'s laws: their strata and A3
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    -- V*'s laws: A3
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -424,8 +422,8 @@ theorem zk_sessions_recursive_full_on
     -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsameEq : ∀ i ρs a b, same i ρs a b → a = b)
-    -- the stages: their commit strings, commitments and messages, V*'s registration and decoding of them, the strata
-    -- V*'s laws draw in full, and cr/sha-512 for the fork finders
+    -- the stages: their commit strings, commitments and messages, V*'s registration and decoding of them, the units
+    -- they are read from, and cr/sha-512 for the fork finders
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
@@ -443,11 +441,11 @@ theorem zk_sessions_recursive_full_on
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto_on hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsameEq
+  refine zk_sessions_recursive_upto_on hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsameEq
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
-  refine (outerV_stage_le_read hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
+  refine (outerV_stage_le_read (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
     (fun j pos => cmt j e.1 pos) (fun R₂ j hacc pos hp R' => hcmt i σ.1 ω t e he R₂ j hacc pos hp R')
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
@@ -458,7 +456,6 @@ theorem zk_sessions_recursive_full_on
 
 /-- **`zk_sessions_recursive_fork_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_fork_on
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -503,7 +500,7 @@ theorem zk_sessions_recursive_fork_on
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_full_on hS hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsameEq Sk cmt
+  refine (zk_sessions_recursive_full_on hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsameEq Sk cmt
     msg hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
     hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
   simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,

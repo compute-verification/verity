@@ -50,8 +50,8 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
   wires of each `Sk i j` that some unit reads (`ReadW`) are those of the values `v j` hold `msg i v` as their round-`i`
   message (true at V* when every wire `wmsg` depends on is some unit's `io`, which is what VBridge G's
   `vbridgeRead_assembled` builds);
-* **their laws draw every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit whose stratum session
-  `j`'s law draws in full.
+* **their laws draw every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit session `j`'s law
+  draws. Every unit is drawn under the full draw, so this holds of every `Sk` (`vFullR_of_read`).
 
 Both read only the wires some unit reads: V*'s rows pad a port to whole words, and no unit reads the padding.
 

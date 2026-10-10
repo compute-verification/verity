@@ -63,10 +63,10 @@ abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
 abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96
 
 /-- **live-verifier** at every one of V*'s sessions: `Assumptions.Zk.RecordCustodyZK` at each session's inputs, draw
-files and record writer, under its law's executable strata over its own population `[0, pop)`. -/
+files and record writer, under the full draw of its units `[0, nv)` (`--draw subset:<units>`). -/
 abbrev RecordCustody {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') : Prop :=
   ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj
-    (zr R ω t R₂ j).wr (.stratified (Vs j).law.Kd (Array.ofFn (Vs j).law.St)) (Vs j).law.pop
+    (zr R ω t R₂ j).wr (.subset (Vs j).nv) (Vs j).nv
 
 end Flock.Premises
