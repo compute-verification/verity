@@ -96,3 +96,30 @@ def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape):
     v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
                         "verifier's rec-coef row 0")
+
+
+def _stage(d: Path, **kw) -> dict:
+    return S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d,
+                   pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", **kw)
+
+
+def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
+    """`HDirCols`' check (`RecCoins.checkOpen`'s `dirs`): level 3 staged with rep 0's opening 0 `dirs` registered one bit
+    off, the opening's climb aside, is refused at that opening by the position the verifier's coins give."""
+    honest = S.R.dirs_words
+    first = []
+
+    def dirs_words(pos, H):
+        w = honest(pos, H)
+        if not first:
+            first.append(pos)
+            w = [w[0] ^ 1, *w[1:]]
+        return w
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(S.R, "dirs_words", dirs_words)
+        _stage(tmp_path, levels=[LEVEL], algebra=False)
+    out = tmp_path / f"L{LEVEL}"
+    v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest")
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's dirs row is not the "
+                        "verifier's rec-dirs row 0"), v["why"]
