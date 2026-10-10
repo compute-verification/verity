@@ -55,12 +55,13 @@ theorem mod_tail_zero {a T : ℕ} (hT : 0 < T) : a - a % T = 0 ↔ a < T := by
 /-- A round's claim, with the round's coefficients against `r^{i+2} + r` (the `sc<j>` and `pre<j>` residuals' form). -/
 theorem degNext_eq {k : ℕ} (claim c0 r : 𝔽) (cs : Fin k → 𝔽) :
     degNext claim (c0, cs) r = c0 + ∑ i : Fin k, cs i * (r ^ (i.val + 2) + r) + claim * r := by
-  have e : ∑ i : Fin k, cs i * (r ^ (i.val + 2) + r) =
-      ∑ i : Fin k, cs i * r ^ (i.val + 2) + (∑ i : Fin k, cs i) * r := by
-    rw [Finset.sum_mul, ← Finset.sum_add_distrib]
-    exact Finset.sum_congr rfl fun i _ => mul_add _ _ _
+  have e1 : ∑ i : Fin k, cs i * (r ^ (i.val + 2) + r) = ∑ i : Fin k, (cs i * r ^ (i.val + 2) + cs i * r) :=
+    Finset.sum_congr rfl fun i _ => mul_add _ _ _
+  have e2 : ∑ i : Fin k, (cs i * r ^ (i.val + 2) + cs i * r) =
+      ∑ i : Fin k, cs i * r ^ (i.val + 2) + ∑ i : Fin k, cs i * r := Finset.sum_add_distrib
+  have e3 : ∑ i : Fin k, cs i * r = (∑ i : Fin k, cs i) * r := (Finset.sum_mul _ _ _).symm
   simp only [degNext]
-  rw [e]
+  rw [e1, e2, e3]
   ring
 
 theorem degNext_one (claim c0 c2 r : 𝔽) :
@@ -104,7 +105,8 @@ theorem vrow_size (c : SCoins) : (verifierRow sh c).size = nv sh := Array.size_o
 theorem out_eq (w : Array F128) (τ : Array ℕ) (c : SCoins) (hw : w.size = nw sh) :
     out sh w (verifierRow sh c) τ = .ok (outOf sh (resArr sh w (verifierRow sh c)) w (verifierRow sh c) τ) := by
   unfold out
-  rw [residuals_sparseS sh w _ hw (vrow_size sh c)] <;> rfl
+  rw [residuals_sparseS sh w _ hw (vrow_size sh c)]
+  rfl
 
 theorem ell_lt : 2 * sh.ell + 1 < 2 ^ sh.pLog := by
   unfold SparseShape.pLog
@@ -126,7 +128,7 @@ theorem yLo_cat6 {j : ℕ} (hj : j < sh.ell) : fOf (yLo c j) =
 
 theorem vget_uOf {i : ℕ} (hi : i < 2 ^ sh.pLog) : vget (uOf sh w) i = fOf w[wU sh + i]! := by
   unfold vget uOf
-  rw [dif_pos hi]
+  rw [dite_eq_left hi]
 
 /-! ### H1 and H2 -/
 
@@ -157,7 +159,8 @@ theorem h2_val (hc : nc sh ≤ c.cs.size) :
         (∑ s : Fin 64, eqAt (fun i : Fin 6 => fOf c.cs[6 + i.val]!) s.val * execArith.lagS (fOf c.z) s) *
           fOf w[wV2]! := by
   have h' := nc_le sh hc
-  rw [fOf_add, h2_chain sh w c (by omega), rget_eq sh _ _ (mem_wv sh), specVal_wv, v_what sh c (by omega)] <;> rfl
+  rw [fOf_add, h2_chain sh w c (by omega), rget_eq sh _ _ (mem_wv sh), specVal_wv, v_what sh c (by omega)]
+  rfl
 
 /-! ### H3 -/
 
@@ -165,13 +168,17 @@ theorem sc_step {j : ℕ} (hj : j < nR sh) {k : ℕ} (hk : k = deg sh j - 1) (x 
     fOf (rget sh (resArr sh w (verifierRow sh c)) (.sc j) + x * (verifierRow sh c)[vSc sh j]!) =
       degNext (fOf x) (msg3 sh w k j) (fOf c.cs[12 + j]!) := by
   have hd : 0 < deg sh j := by unfold deg; split_ifs <;> omega
-  have h0 := v_sc sh c hj hd
-  rw [Nat.add_zero, if_pos rfl] at h0
-  rw [fOf_add, fOf_mul, rget_eq sh _ _ (mem_sc sh hj), specVal_sc, h0, msg3, degNext_eq, ← hk, Finset.sum_range]
-  congr 2
-  refine Finset.sum_congr rfl fun i _ => ?_
-  rw [v_sc sh c hj (by have := i.isLt; omega), if_neg (by omega)]
-  ring
+  have h0 : fOf (verifierRow sh c)[vSc sh j]! = fOf c.cs[12 + j]! := by
+    have h := v_sc sh c hj hd
+    rwa [Nat.add_zero, ite_eq_left rfl] at h
+  have hs : ∑ i ∈ Finset.range (deg sh j - 1),
+      fOf w[wSc sh j + (i + 1)]! * fOf (verifierRow sh c)[vSc sh j + (i + 1)]! =
+        ∑ i : Fin k, fOf w[wSc sh j + (i.val + 1)]! * (fOf c.cs[12 + j]! ^ (i.val + 2) + fOf c.cs[12 + j]!) := by
+    rw [← hk, Finset.sum_range]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [v_sc sh c hj (by have := i.isLt; omega), ite_eq_right (by omega), show i.val + 1 + 1 = i.val + 2 from rfl]
+  rw [fOf_add, fOf_mul, rget_eq sh _ _ (mem_sc sh hj), specVal_sc, h0, hs]
+  exact (degNext_eq (fOf x) (fOf w[wSc sh j]!) (fOf c.cs[12 + j]!) fun i : Fin k => fOf w[wSc sh j + (i.val + 1)]!).symm
 
 theorem range_nR : List.range (nR sh) = List.range' 0 sh.nu ++ List.range' sh.nu sh.sLog := by
   rw [List.range_eq_range', nR, ← List.range'_append_1, Nat.zero_add]
@@ -242,13 +249,13 @@ theorem batch_val (hc : nc sh ≤ c.cs.size) :
       ∑ q : Fin (2 ^ sh.pLog), eqAt (fun i : Fin sh.pLog => fOf c.cs[12 + nR sh + i.val]!) q.val * uOf sh w q := by
   have h' := nc_le sh hc
   rw [Finset.sum_range]
-  exact Finset.sum_congr rfl fun q _ => by rw [v_eqp sh c (by omega) q.isLt] <;> rfl
+  exact Finset.sum_congr rfl fun q _ => by rw [v_eqp sh c (by omega) q.isLt]; rfl
 
 /-- **The plane batch's residual with `T = 1`**: the claim against `Σ_p eq(ζ_p, p)·u_p`. -/
 theorem bp_val (hc : nc sh ≤ c.cs.size) (ht : sh.tLog = 0) :
     fOf (rget sh (resArr sh w (verifierRow sh c)) .bp) = fOf w[wClaim sh]! +
       ∑ q : Fin (2 ^ sh.pLog), eqAt (fun i : Fin sh.pLog => fOf c.cs[12 + nR sh + i.val]!) q.val * uOf sh w q := by
-  rw [rget_eq sh _ _ (mem_bp sh), specVal_bp, if_pos ht, batch_val sh w c hc]
+  rw [rget_eq sh _ _ (mem_bp sh), specVal_bp, ite_eq_left ht, batch_val sh w c hc]
 
 theorem wt_val (τ : Array ℕ) (hc : nc sh ≤ c.cs.size) (ht : sh.tLog ≠ 0)
     (hτ : ∀ s < 2 ^ sh.sLog, τ[s]! < 2 ^ sh.tLog) (t : ℕ) :
@@ -273,11 +280,11 @@ theorem h4_val (τ : Array ℕ) (hc : nc sh ≤ c.cs.size) (ht : sh.tLog ≠ 0)
           if τ[σ.val]! = t.val then eqAt (fun i : Fin sh.sLog => fOf c.cs[12 + sh.nu + i.val]!) σ.val else 0) *
           vtOf sh w t := by
   unfold h4C
-  rw [fOf_foldl_sum, sum_range_list, rget_eq sh _ _ (mem_bp sh), specVal_bp, if_neg ht, zero_add,
+  rw [fOf_foldl_sum, sum_range_list, rget_eq sh _ _ (mem_bp sh), specVal_bp, ite_eq_right ht, zero_add,
     batch_val sh w c hc, Finset.sum_range]
   congr 1
   refine Finset.sum_congr rfl fun t _ => ?_
-  rw [fOf_mul, wt_val sh c τ hc ht hτ, vtOf, if_neg ht] <;> rfl
+  rw [fOf_mul, wt_val sh c τ hc ht hτ, vtOf, ite_eq_right ht]
 
 /-- **The claim's residual with `T > 1`**: the claim against `Σ_t eq(ρ_t, t)·vt_t`. -/
 theorem claim_val (hc : nc sh ≤ c.cs.size) (ht : sh.tLog ≠ 0) :
@@ -285,9 +292,8 @@ theorem claim_val (hc : nc sh ≤ c.cs.size) (ht : sh.tLog ≠ 0) :
       ∑ t : Fin (2 ^ sh.tLog), eqAt (fun i : Fin sh.tLog => fOf c.cs[12 + nR sh + sh.pLog + i.val]!) t.val *
         vtOf sh w t := by
   rw [rget_eq sh _ _ (mem_claim sh ht), specVal_claim, Finset.sum_range]
-  congr 1
-  refine Finset.sum_congr rfl fun t _ => ?_
-  rw [v_eqt sh c ht hc t.isLt, vtOf, if_neg ht] <;> rfl
+  refine congrArg (fOf w[wClaim sh]! + ·) (Finset.sum_congr rfl fun t _ => ?_)
+  rw [v_eqt sh c ht hc t.isLt, vtOf, ite_eq_right ht]
 
 /-! ## The model's verdict -/
 
@@ -307,20 +313,20 @@ theorem sparseVerdict_some_iff {F K : Type} [Field F] [Fintype F] [DecidableEq F
         val = ∑ t : Fin (2 ^ sh.tLog), eqAt ρ t.val * vt t) := by
   simp only [sparseVerdict]
   by_cases ht : sh.tLog = 0
-  · rw [if_pos ht, if_pos ht]
+  · rw [ite_eq_left ht, ite_eq_left ht]
     split
     · rename_i h
       simp only [Option.some.injEq, RegClaim.mk.injEq, eq_self_iff_true, and_true]
       exact ⟨fun e => ⟨h.1, h.2, e.symm⟩, fun e => e.2.2.symm⟩
     · rename_i h
-      exact ⟨fun e => by cases e, fun e => absurd ⟨e.1, e.2.1⟩ h⟩
-  · rw [if_neg ht, if_neg ht]
+      exact ⟨(fun e => nomatch e), fun e => absurd ⟨e.1, e.2.1⟩ h⟩
+  · rw [ite_eq_right ht, ite_eq_right ht]
     split
     · rename_i h
       simp only [Option.some.injEq, RegClaim.mk.injEq, eq_self_iff_true, and_true]
       exact ⟨fun e => ⟨h.1, h.2.1, h.2.2, e.symm⟩, fun e => e.2.2.2.symm⟩
     · rename_i h
-      exact ⟨fun e => by cases e, fun e => absurd ⟨e.1, e.2.1, e.2.2.1⟩ h⟩
+      exact ⟨(fun e => nomatch e), fun e => absurd ⟨e.1, e.2.1, e.2.2.1⟩ h⟩
 
 /-! ## The refinement -/
 
@@ -366,10 +372,10 @@ theorem accepts_iff (τ : Array ℕ) (hc : nc sh ≤ c.cs.size) :
       TypesIn sh τ ∧ verdictOf sh w τ c = some (sparseClaim sh w c) := by
   rw [verdictOf, sparseClaim, sparseVerdict_some_iff, outOf_eq]
   by_cases ht : sh.tLog = 0
-  · rw [if_pos ht, if_pos ht, accepts3, h2_val sh w c hc, h3_val sh w c hc, bp_val sh w c hc ht, char2_add_eq_zero,
-      char2_add_eq_zero, char2_add_eq_zero]
+  · rw [ite_eq_left ht, ite_eq_left ht, accepts3, h2_val sh w c hc, h3_val sh w c hc, bp_val sh w c hc ht,
+      char2_add_eq_zero, char2_add_eq_zero, char2_add_eq_zero]
     exact ⟨fun h => ⟨typesIn_of_zero sh τ ht, h⟩, fun h => h.2⟩
-  · rw [if_neg ht, if_neg ht, accepts4, tail_iff, typesIn_iff sh τ ht]
+  · rw [ite_eq_right ht, ite_eq_right ht, accepts4, tail_iff, typesIn_iff sh τ ht]
     constructor
     · rintro ⟨⟨h2, h3, h4, hcl⟩, hτ⟩
       rw [h2_val sh w c hc, char2_add_eq_zero] at h2
