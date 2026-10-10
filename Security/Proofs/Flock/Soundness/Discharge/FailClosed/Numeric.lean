@@ -307,8 +307,8 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
 
 /-- **`SoundExec` gives `SoundExec205`**: every table of the plan is in the wide range (`planAt_inRangeWide`). -/
 theorem SoundExec.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = false} (h : SoundExec I hh) : SoundExec205 I hh :=
-  @fun n mPts dj S₀ x₀ Reg m σs ks hks St hS Kd pop Ω _ _ Lb src hA3 k hk Rw M hRw hM ρ hρ hr t' ht' K wr dg N hwr hdraw τ
-      hCR qF qS hKS =>
+  @fun n mPts dj S₀ x₀ Reg m σs ks hks St hS Kd pop Ω _ _ Lb src hA3 k hk Rw M hRw hM ρ hρ hr _ ht' K wr dg N hwr hdraw τ
+      hCR _ _ hKS =>
     (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
       (iSup_mono fun hs => add_le_add (add_le_add le_rfl
         (StrictCR.ksAvgStrict_le_205 (planAt (Reg := Reg) hs.typed dj x₀) (planAt_inRangeWide hs.typed dj x₀) _ _ _ _ _))
@@ -383,10 +383,10 @@ def SoundExecH205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
 
 /-- **`SoundExecH` gives `SoundExecH205`**: every table of the plan is in the wide range (`planAtH_inRangeWide`). -/
 theorem SoundExecH.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} (h : SoundExecH I hh) : SoundExecH205 I hh :=
-  @fun n mPts dj S₀ x₀ Reg m σs ks hks St hS Kd pop Ω _ _ Lb src hA3 k hk Rw M hRw hM ρ hρ hr t' ht' K wr dg N hwr hdraw τ
-      hCR qF qS hKS =>
+  @fun n mPts dj S₀ x₀ Reg m σs ks hks St hS Kd pop Ω _ _ Lb src hA3 k hk Rw M hRw hM ρ hρ hr _ ht' K wr dg N hwr hdraw τ
+      hCR _ _ hKS =>
     (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
-      (iSup_mono fun hs => add_le_add (add_le_add le_rfl
+      (iSup_mono fun _ => add_le_add (add_le_add le_rfl
         (StrictCR.ksAvgStrict_le_205 (planAtH (Reg := Reg) dj x₀) (planAtH_inRangeWide dj x₀) _ _ _ _ _)) le_rfl)
 
 end
@@ -410,12 +410,12 @@ theorem flock_verify_sound_205 (I : Inputs) :
   refine ⟨?_, fun own t h => ((flock_verify_sound false I).2 own t h).resolve_left fun h' => Bool.false_ne_true h'.1⟩
   have h := (flock_verify_sound false I).1
   by_cases hh : I.tags.hiddenOutputs = true
-  · rw [dif_pos hh] at h ⊢
-    rw [if_neg Bool.false_ne_true] at h
-    exact SoundExecH.to205 h
-  · rw [dif_neg hh] at h ⊢
-    rw [if_neg Bool.false_ne_true] at h
-    exact SoundExec.to205 h
+  · rw [dite_eq_left hh] at h ⊢
+    rw [ite_eq_right Bool.false_ne_true] at h
+    exact @SoundExecH.to205 I hh h
+  · rw [dite_eq_right hh] at h ⊢
+    rw [ite_eq_right Bool.false_ne_true] at h
+    exact @SoundExec.to205 I (Bool.eq_false_of_ne_true hh) h
 
 end
 
