@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Statements
 import Proofs.Flock.Recursive.Premises
 import Proofs.Flock.Recursive.ExecClass
+import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.Description
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Flock.RecResiduals
@@ -21,8 +22,10 @@ private circuit registered by hm96 leaves. It is a conjunction:
   verifier accepts `st` and its description and the verifier of record every session while the registered private
   circuit's hidden statement fails with probability at most `RecursiveSound`'s bound with the compiled table's error
   as its inner term;
-* (ii) zero knowledge with circuit privacy, `RecursiveCircuitPrivateLeaves`' form: a simulator that reads only the
-  class and the owed outputs.
+* (ii) zero knowledge with circuit privacy, stated about the firewall's code (`Flock.Firewall.run`) and V*'s outer
+  sessions run by the honest prover's code (`Recursion.OuterZK.proverExe`), `RecursiveFirewallPrivate`'s form
+  (`Proofs.Flock.Recursive.Firewall`): a simulator that reads only the class, the schedule's transcript and the owed
+  outputs, `hash-derived-key` its one premise and what it takes of the code each an obligation.
 
 Its premises are the list in `Proofs.Flock.Recursive.Premises`. Its proof (`Flock.SecurityProofs.RecursiveAudit`,
 `Proofs.Flock.Recursive.Audit`) rests on the open lemmas that file names.
@@ -163,13 +166,16 @@ $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \tex
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and the compiled table's error.
 
-(ii) `RecursiveCircuitPrivateLeaves`: for the class's private circuits registered by hm96 leaves, when V*'s sessions
-are zero knowledge within `ε_o` with a simulator reading the owed outputs, the registration's view, the auditor's tape and the
-commitments, the auditor's whole view and the simulated one (reading only the class and the owed outputs) give every
-event probabilities within `2 n_r·δ_{K*} + ε_o + n_h·δ_{K*}` both ways, where `δ_{K*}` is the commitments' hiding gap at
-hm96-sha512's pinned key (`CROnly.hidingGap ZkView.My ZkView.saltHash`). It is below `2^-193` for all but `2^-64` of
-keys (`CROnly.hm96_sha512_tail`); that the pinned key is not one of the others is unproved, and no premise is taken on
-the key. -/
+(ii) `RecursiveFirewallPrivate`, under `hash-derived-key`: for the class's private circuits registered by hm96 leaves
+(`regLeaves rows pub`), the auditor's whole view (`fwRealPr`: the registration's, what the firewall sends,
+`Flock.Firewall.run` at the pinned schedule `s` on the honest worker's requests `reqs` and `nh` salts of 192 uniform
+bytes, and V*'s outer sessions `V` run by the honest prover's code `OuterZK.proverExe`) and the simulated one
+(`fwSimPr`: `p₀` registered, the schedule's transcript `T` on ideal commit strings, V*'s simulator at the public
+context `pubS` reads), which reads only the class, `T` and the owed outputs, give every event probabilities within
+`2 n_r·2^-193 + ε_V + n_h·2^-193` both ways, `ε_V` V*'s sessions' error (`OuterZK.Sessions.err`). What it takes of the
+code is each an obligation: the requests run through the firewall to `T` with the messages' salted commit strings in
+it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
+`hz`, `hR`, `hS`). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     {n : ℕ} {L : Law n} {Reg Cm : Type} {Reg' Reg₂ : Type}
@@ -232,25 +238,28 @@ def RecursiveAudit : Prop :=
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
-  (∀ {Out Prog Wit Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp] [Fintype Ωo]
-    [Inhabited Ωo] [Fintype Ωs] [Inhabited Ωs]
+  (∀ {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp]
+    (_hKey : Flock.Premises.HashDerivedKeyHm96)
+    -- the firewall's pinned schedule
+    (s : Flock.Firewall.Schedule)
     -- the registration: the private circuit's rows, and what the auditor sees of their leaves
     (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop)
-    (nh : ℕ) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
-    (view : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
-    (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
-    (_hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs =>
-            E (sim o (regLeaves rows pub P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit), honest o P w →
-    ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
-      recRealPr (regLeaves rows pub) nh msgs view P w E ≤ recSimPr (regLeaves rows pub) nh sim o p₀ E +
-          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) + εo +
-            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
-        recSimPr (regLeaves rows pub) nh sim o p₀ E ≤ recRealPr (regLeaves rows pub) nh msgs view P w E +
-          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) + εo +
-            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)))
+    -- the honest worker's requests to the firewall, the messages they commit, and the schedule's transcript
+    (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → List ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
+    -- V*'s outer sessions, the public context their simulator reads, and what a stopped run sends
+    (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub)
+    (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub) (stopped : OuterZK.Stopped)
+    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit)
+    -- what it takes of the code, each an obligation
+    (_hF : FirewallSends s reqs msgs T) (_hpub : SessionsPublic rows pub honest msgs V pubS) (_hC : SessionsCoined V)
+    (_hH : SessionsHonest honest msgs V), honest o P w →
+    ∀ E : Rv × Ωa × (Array Flock.Firewall.Sent × Bool) × V.View → Prop,
+      fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E ≤ fwSimPr rows pub T V pubS o p₀ E +
+          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+        fwSimPr rows pub T V pubS o p₀ E ≤ fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E +
+          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)))
 
 end Flock.Guarantees
