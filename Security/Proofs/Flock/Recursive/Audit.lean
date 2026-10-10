@@ -1,12 +1,14 @@
 import Proofs.Flock.Recursive.Property
 import Proofs.Flock.Recursive.Private
+import Proofs.Flock.Recursive.FirewallZK
 
 /-!
 # The recursive audit's property: its proof and what it rests on
 
 `Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_inner` at
 the compiled table, the registration break of `RecursiveRanRegistered`'s proof at the commit strings V* checks
-(`regBcCommit_binding`), and `RecursiveCircuitPrivateLeaves`. Its premises are `Proofs.Flock.Recursive.Premises`'.
+(`regBcCommit_binding`), and `RecursiveFirewallPrivate` (`Proofs.Flock.Recursive.FirewallZK`). Its premises are
+`Proofs.Flock.Recursive.Premises`'.
 
 In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`):
 * at a statement Lean's verifier refuses, the event is empty (`AcceptsStmt` is its first conjunct);
@@ -18,8 +20,9 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`)
 
 Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the read commit
 strings opening the root (`_hop`, gap 3a: `Recursion.zk_reads_open` discharges it where `hop` is used below) and the
-run's hidden statement being theirs (`_hx`), the law's field `L.nonempty`, and in (ii) V*'s sessions' zero knowledge
-(`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
+run's hidden statement being theirs (`_hx`), the law's field `L.nonempty`, and in (ii) the honest witnesses
+(`honest`) and the obligations on the firewall's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
+`SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`).
 -/
 
 namespace Flock.SecurityProofs
@@ -64,8 +67,7 @@ theorem outerStatementsAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf 
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
-  · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
-    exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
+  · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ st Vs zs₀ hCust dg N σ x wmsg Sk cmt msg rt stmt reads row op _ hA3 hop
     hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hacc : AcceptsStmt st
