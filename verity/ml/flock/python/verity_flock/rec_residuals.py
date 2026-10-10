@@ -96,15 +96,18 @@ def v_words(S: dict) -> int:
 
 def spec(sh) -> dict:
     """``InnerRepCheck``'s S for a `rec_algebra.Shape`: the structure, a port per round that absorbs elements, and the running
-    sums' two ports (w's layout, `rec_algebra.structure`)."""
+    sums' two ports (w's layout, `rec_algebra.structure`); an opening-only shape's then a port ``claim<k>`` per registered
+    claim (`rec_algebra.claim_names`)."""
     from . import rec_algebra as A
 
     gf, lay = A.structure(sh)
+    claims = A.claim_names(sh)
     ports = [[f"m{i}", len(r)] for i, r in enumerate(A.rounds(sh))] + [["acc0", 2], ["acc1", 2]]
+    ports += [[f"claim{k}", 1] for _, k in claims]
     S = {"gf": gf, "ports": ports}
     _check(S, whole=True)
-    if lay.w[-4:] != A.ACC_NAMES:
-        raise AssertionError("w does not end with the running sums")
+    if lay.w[len(lay.w) - len(claims) - 4:] != A.ACC_NAMES + claims:
+        raise AssertionError("w does not end with the running sums and the registered claims")
     return S
 
 

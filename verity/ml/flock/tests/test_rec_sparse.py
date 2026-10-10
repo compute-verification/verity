@@ -146,7 +146,8 @@ def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[in
     # H4: the plane batch, the types' values at (ζ_p, r_k), and the registered claim at ρ_t
     r_k = rounds[:sh.NU]
     zeta_p = [g.getrandbits(128) for _ in range(sh.P_LOG)]
-    vt = [_mle([_mle(P[p], r_k) for p in range(sh.PP)], zeta_p) for P in tables]
+    eqk, eqp = eq_table(r_k), eq_table(zeta_p)
+    vt = [RS._dot(eqp, [_xor(e for e, bit in zip(eqk, P[p]) if bit) for p in range(sh.PP)]) for P in tables]
     rho = [g.getrandbits(128) for _ in range(sh.T_LOG)]
     coins = RS.Coins(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
                      tuple(rho), tuple(U))
