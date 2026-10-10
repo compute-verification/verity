@@ -16,7 +16,9 @@ SHA-512 collision, in a pair fixed by the two records rather than by a run:
 * `SharedRows`, `rowsShared_of_sharedRows`: `RowsShared` where two sessions' registrant records at one root and
   position hold one row's bytes, as they do when the family takes them from one choice;
 * `NoRegistrantCollision`, `sharedRows_of`, `rowsShared_of`: `SharedRows`, and so `RowsShared`, where no two such
-  records give either collision.
+  records give either collision;
+* `noRegistrantCollision`, `sharedRows`, `rowsShared`: all three hold, since both collisions are `RegColl`'s
+  (`Recursive/Registrants.lean`), which `Accepted` excludes and the recursive audit prices once.
 -/
 
 namespace FlockVBridge.Family
@@ -134,14 +136,15 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- Obligation: open. A colliding pair across two sessions' records is fixed by the history, and no finder behind the
-transfer's `cr/sha-512` term prices it: each sees one session's record.
+/-- Obligation: discharged by `Accepted`'s `¬ RegColl` (`noRegistrantCollision`), which the recursive audit prices once
+(`regFinder`, `prob_regColl_le`); no finder behind the transfer's `cr/sha-512` term prices it, since each sees one
+session's record.
 **No two sessions' registrant records collide at one registered root and position.** At every accepted outer
 proof, where two sessions' registered reads name one root and one position, neither their openings
 (`TwoOpenings.pair`) nor their hm96 leaves (`hm96Pair`) are a SHA-512 collision. The pair is fixed by the history (each
 record is a field of the session the family builds there), not by a session's run, so no finder of the transfer's
 `cr/sha-512` terms (`ZkOuter.CR`: each session's tables, its registered values and its registered paths, each against
-that session's own record) outputs it. -/
+that session's own record) outputs it; `RegColl` is the pair at the history, two of its sessions' reads. -/
 def NoRegistrantCollision : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
     (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
@@ -155,8 +158,7 @@ def NoRegistrantCollision : Prop :=
         ((F.zs R ω t R₂ s).rd.ws (.inl (u, q))) (rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
-/-- Obligation: discharged by the family taking each registrant opening at a registered root and position once, else by
-`NoRegistrantCollision`.
+/-- Obligation: discharged by `NoRegistrantCollision` (`sharedRows`).
 **Two sessions' registrant records at one registered root and position hold one row's bytes.** At every accepted
 outer proof, where two sessions' registered reads name one root and one position, the registrants' values there have
 one `rowEnc`. It holds where the family's sessions take the registrant's opening at a root and position from one
@@ -186,6 +188,19 @@ theorem rowsShared_of_sharedRows (h : F.SharedRows dg N k Rw) : F.RowsShared dg 
 /-- **`RowsShared` where no two registrant records collide**. -/
 theorem rowsShared_of (h : F.NoRegistrantCollision dg N k Rw) : F.RowsShared dg N k Rw :=
   F.rowsShared_of_sharedRows dg N k Rw (F.sharedRows_of dg N k Rw h)
+
+/-- **No two sessions' registrant records collide** (`NoRegistrantCollision`): both collisions are `RegColl`'s, which
+`Accepted` excludes. -/
+theorem noRegistrantCollision : F.NoRegistrantCollision dg N k Rw := by
+  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' _ _
+  exact ⟨fun hc => ha.2 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
+    fun hc => ha.2 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
+
+/-- **`SharedRows`** (`noRegistrantCollision`). -/
+theorem sharedRows : F.SharedRows dg N k Rw := F.sharedRows_of dg N k Rw (F.noRegistrantCollision dg N k Rw)
+
+/-- **`RowsShared`** (`noRegistrantCollision`). -/
+theorem rowsShared : F.RowsShared dg N k Rw := F.rowsShared_of dg N k Rw (F.noRegistrantCollision dg N k Rw)
 
 end VStarFamily
 
