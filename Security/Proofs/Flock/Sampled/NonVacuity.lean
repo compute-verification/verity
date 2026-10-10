@@ -75,11 +75,12 @@ def batchOf {N : ℕ} (S : Finset (Fin N)) : Batching N Unit Unit where
   idx := fun b _ => some (S.orderEmbOfFin rfl b)
   val := fun _ _ => ()
 
-theorem batchOf_cover {N : ℕ} (S : Finset (Fin N)) : CoverCheck S (batchOf S) :=
-  ⟨S.card, route₁ S.card, le_rfl, fun j => by
-    show some (S.orderEmbOfFin rfl j) = drawOrder S j
+theorem batchOf_cover {N : ℕ} (S : Finset (Fin N)) : CoverCheck S (batchOf S) := by
+  refine ⟨S.card, route₁ S.card, le_rfl, fun j => ?_⟩
+  have h : drawOrder S j = some (S.orderEmbOfFin rfl j) := by
     unfold drawOrder
-    exact (dite_eq_left j.isLt).symm⟩
+    exact dite_eq_left j.isLt
+  exact h.symm
 
 /-- A one-leaf root whose leaf is the record `bc`'s. -/
 def onePort (bc : ByteArray) : Flock.Registered.Port where
