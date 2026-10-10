@@ -283,11 +283,12 @@ def render(mn: Mapping[str, Any]) -> str:
 
 def lean(mn: Mapping[str, Any], source: str) -> str:
     """The Lean module `VStar.Menu.Pinned` of the pinned menu ``mn`` (from ``source``): each model's entries as
-    `VStar.Menu.Entry` (slots, bound, inner m, k_log, unit types' count)."""
+    `VStar.Menu.Entry` (slots, bound, inner m, k_log, claims, unit types' count). An entry's ``claims`` are its inner
+    session's: 2 + 2 x (its unit's input ports + output ports); `VStar.Menu.inner` gives a shape its entries' most."""
     def entry(e: Mapping[str, Any]) -> str:
         if e["bound"] != int(e["bound"]):
             raise ValueError(f"bound {e['bound']} is not a whole number of nonzeros")
-        return f"⟨{e['slots']}, {int(e['bound'])}, {e['inner_m']}, {e['k_log']}, {len(e['unit_types'])}⟩"
+        return f"⟨{e['slots']}, {int(e['bound'])}, {e['inner_m']}, {e['k_log']}, {e['claims']}, {len(e['unit_types'])}⟩"
     models = ",\n".join(f"  ({json.dumps(M['workload'])},\n    [" + ",\n     ".join(entry(e) for e in M["entries"]) + "])"
                         for M in mn["models"])
     return "\n".join([
