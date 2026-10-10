@@ -1257,7 +1257,7 @@
     "outcome": "none"
    },
    "Properties.CertifierDevice.issuerVerifies": {
-    "function": "CertifierDevice.Issuer.certify",
+    "function": ["CertifierDevice.Issuer.certify", "Lms.Params.make", "Lms.key"],
     "outcome": "accept"
    },
    "Properties.CertifierDevice.linkSchedule": {
@@ -1894,10 +1894,6 @@
    "PousCheck.Properties.PublishesRoot": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": "restatable: As AcceptedRowsAreProgramRows, and make ss a definition of p.syncSet; move o's agreement with the device, its length, linkOf's range and the opened-frames condition into the conclusion.",
    "Proofs.NetworkCertifier.encardAcceptedObservationsLe": "restatable: Make ss a definition of p.syncSet and move linkOf's range into the conclusion; acceptance sits inside the counted set, as in a Pr statement (question for top).",
-   "Properties.CertifierDevice.completeRows": "frozen (scope,world-unlisted): It takes honest timing (each frame handed at the bucket the Program gives it, Security/Properties/CertifierDevice.lean:166) as a hypothesis; it leaves the list once the device refuses to mark a record complete after a late frame, which network-accounting is doing.",
-   "Properties.CertifierDevice.contentIndependent": "restatable: Move the tick-view equality into a named conclusion; it is also a corollary of LinkSchedule.",
-   "Properties.CertifierDevice.failClosed": "restatable: Move 'a fault is held' and 'a later egress tick of the same window', which pick out the event, into a named conclusion.",
-   "Properties.CertifierDevice.issuerVerifies": "restatable: Make ValidKey the subject: quantify over the keys Lms.key derives under Params.make, with certify ... = .ok (i', some cr) as the acceptance.",
    "Properties.NetworkCertifier.acceptedRowsAreProgramRows": "restatable: Make eg and ig definitions (the parameters digests of p, the rule's own example) instead of the ParamsDigests hypothesis; Honest p dev eg stays only if top lists it as trusted-nebius-host (question); the break disjuncts already follow the hash rule.",
    "Properties.NetworkCertifier.acceptsIff": "restatable: Split the iff: keep Accepts -> every link-window accepted; the converse is HonestAccepted's content and goes to Proofs.",
    "Properties.NetworkCertifier.answerAccepts": "restatable: Split the iff: keep accept -> the three decode and the check accepts; move the converse to Proofs as completeness.",
