@@ -132,6 +132,21 @@ def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, 
                         "verifier's rec-dirs row 0"), v["why"]
 
 
+def test_a_v_registered_one_element_off_is_refused_at_its_part(forged, shape, tmp_path):
+    """`HVCoins`' check (`RecCoins.checkResiduals`): the algebra staged with rep 0's first comb element of v one bit off
+    (`rec_vstage --forge comb`) is refused at the one part holding it, by the v the verifier's coins and fold give; every
+    other part passes setup (its session is level 3's, so the verdict is refused after setup)."""
+    _stage(tmp_path, levels=[], algebra=True, evaluate=False, forge="comb")
+    t = SET / "inner-honest" / "public.json"
+    whys = {p.name: _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t))["why"]
+            for p in sorted((tmp_path / "forged-comb" / "alg").iterdir())}
+    refused = {k: w for k, w in whys.items() if w.startswith("setup:")}
+    assert len(refused) == 1 and len(whys) > 1, whys
+    ((part, why),) = refused.items()
+    assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{part}: rep 0: part {part[1:]}'s \d+ elements of v: the "
+                        "statement's v row is not the verifier's rec-v row 0", why), why
+
+
 @pytest.fixture(scope="module")
 def algebra(forged, tmp_path_factory) -> Path:
     """V*'s algebra parts staged over the honest inner session: the first that reads the first message round, `rec-c0`."""
