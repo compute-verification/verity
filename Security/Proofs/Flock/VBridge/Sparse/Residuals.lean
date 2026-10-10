@@ -66,7 +66,8 @@ theorem opValue_opIx (w v : Array F128) {t : Term} (ht : t ∈ opTerms sh) :
   have hl : (opList sh).idxOf t < (opList sh).length := List.idxOf_lt_length_of_mem (List.mem_eraseDups.mpr ht)
   refine opValue_single w v ?_
   rw [sparseS_ops, opIx, List.getElem?_toArray, List.getElem?_map, List.getElem?_eq_getElem hl,
-    List.getElem_idxOf hl] <;> rfl
+    List.getElem_idxOf hl]
+  rfl
 
 theorem fOf_resOf (w v : Array F128) {nm : RName} (hnm : nm ∈ names sh) :
     fOf (resValue (sparseS sh) w v (resOf sh nm)) = specVal w v (spec sh nm) := by
@@ -252,7 +253,7 @@ theorem v_what (hc : 12 ≤ c.cs.size) : fOf (verifierRow sh c)[vWhat]! =
   have := vEqp_lt_nv sh
   unfold vWhat
   rw [vrow_get sh c (by omega), vAt, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_left rfl,
-    fOf_dot _ _ 64 (by rw [FlockLevel3.eqTable_size, slice_size c (show 6 + 6 ≤ c.cs.size by omega)] <;> norm_num)]
+    fOf_dot _ _ 64 (by rw [FlockLevel3.eqTable_size, slice_size c (show 6 + 6 ≤ c.cs.size by omega)]; norm_num)]
   refine Finset.sum_congr rfl fun s _ => ?_
   rw [eqTable_slice c 6 6 (by omega) s.val (lt_of_lt_of_le s.isLt (by norm_num))]
 

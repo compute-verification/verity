@@ -316,14 +316,14 @@ theorem sparseVerdict_some_iff {F K : Type} [Field F] [Fintype F] [DecidableEq F
   · rw [ite_eq_left ht, ite_eq_left ht]
     split
     · rename_i h
-      simp only [Option.some.injEq, RegClaim.mk.injEq, eq_self_iff_true, and_true]
+      simp only [Option.some.injEq, RegClaim.mk.injEq, and_true]
       exact ⟨fun e => ⟨h.1, h.2, e.symm⟩, fun e => e.2.2.symm⟩
     · rename_i h
       exact ⟨(fun e => nomatch e), fun e => absurd ⟨e.1, e.2.1⟩ h⟩
   · rw [ite_eq_right ht, ite_eq_right ht]
     split
     · rename_i h
-      simp only [Option.some.injEq, RegClaim.mk.injEq, eq_self_iff_true, and_true]
+      simp only [Option.some.injEq, RegClaim.mk.injEq, and_true]
       exact ⟨fun e => ⟨h.1, h.2.1, h.2.2, e.symm⟩, fun e => e.2.2.2.symm⟩
     · rename_i h
       exact ⟨(fun e => nomatch e), fun e => absurd ⟨e.1, e.2.1, e.2.2.1⟩ h⟩
