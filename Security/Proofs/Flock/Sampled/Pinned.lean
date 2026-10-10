@@ -30,12 +30,10 @@ theorem foldl_max_mem (e : Entry) (rest : List Entry) : rest.foldl Entry.max e �
   induction rest generalizing e with
   | nil => simp
   | cons x xs ih =>
-    have hm : Entry.max e x = e ∨ Entry.max e x = x := by unfold Entry.max; split <;> simp
-    have := ih (Entry.max e x)
-    simp only [List.foldl_cons, List.mem_cons] at this ⊢
-    rcases this with h | h
-    · rcases hm with hm | hm <;> simp [h, hm]
-    · exact Or.inr (Or.inr h)
+    rw [List.foldl_cons]
+    rcases List.mem_cons.1 (ih (Entry.max e x)) with h | h
+    · rw [h]; unfold Entry.max; split <;> simp
+    · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
 
 /-- A shape on the menu has the inner session of one of its entries. -/
 theorem Menu.ofEntries_inner {es : List Entry} {padded : ℕ → List Shape} {s : Shape}
