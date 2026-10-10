@@ -29,6 +29,7 @@ open FlockSoundness.Model FlockSoundness.Audit
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 
 local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
 
 /-! ## The woven table files -/
 
@@ -257,7 +258,7 @@ section coins
 
 variable {nR : ℕ} (CT : Fin nR → Type)
 
-theorem getElem?_coinSteps : ∀ (cs : List ((k : Fin nR) → CT k)) (j k n : ℕ) (hn : j + k = n) (h : n < nR)
+theorem getElem?_coinSteps : ∀ (cs : List ((k : Fin nR) → CT k)) (j k n : ℕ) (_ : j + k = n) (h : n < nR)
     (hk : k < cs.length), (coinSteps CT j cs)[k]? = some ⟨CT ⟨n, h⟩, cs[k] ⟨n, h⟩⟩
   | [], _, _, _, _, _, hk => absurd hk (by simp)
   | ρ :: cs, j, 0, n, hn, h, _ => by
@@ -361,7 +362,7 @@ theorem roundMsgs_toSs : ∀ (g : List Msg), (∀ m ∈ g, ∃ j, T j = m.1) →
       have ih := roundMsgs_toSs g fun m' hm' => h m' (List.mem_cons_of_mem _ hm')
       have e : toSs T (m :: g) = toS T m ++ toSs T g := rfl
       rw [e, toS, dif_pos hm]
-      simp only [roundMsgs, List.map_append, List.map_cons, List.map_nil, List.singleton_append] at ih ⊢
+      simp only [roundMsgs, List.map_cons, List.singleton_append] at ih ⊢
       rw [ih]
       exact congrArg (· :: g) (Sigma.ext (Classical.choose_spec hm) (cast_heq _ _))
 
@@ -377,6 +378,178 @@ theorem eq_singleton_of_roundMsgs {w : List (SMsg T)} {m : Msg} (h : roundMsgs T
   | _ :: _ :: _, h => simp [roundMsgs] at h
 
 end msgs
+
+/-! ## The table's message types -/
+
+/-- **The table's message types** at a schedule's extension `ext`: the level-0 cap, `tableTape`'s marker, the
+zerocheck's, lincheck's and ring switch's messages (`zcMsgs`, `lcMsgs`, `opMsgs`), the Ligerito messages (`fMsg`,
+`kMsg`, the recursive caps, the last level's `yr`, `recMsgs`), and the openings with their salts. -/
+def tableTys (ext : ℕ) : List Type :=
+  [Cap Dig, Bool, (Fin 64 → 𝔽) × (Fin 64 → 𝔽), 𝔽 × 𝔽, Fin 64 → 𝔽, Fin 128 → 𝔽, 𝔽, 𝕂 × 𝕂, Fin (2 ^ (ext + 1)) → 𝔽,
+    Opens 𝔽 Dig × Salts (List UInt8)]
+
+/-- Every message of `L` has one of the table's message types. -/
+def AllTys (ext : ℕ) (L : List Msg) : Prop := ∀ m ∈ L, m.1 ∈ tableTys ext
+
+theorem AllTys.nil {ext : ℕ} : AllTys ext [] := fun _ h => by simp at h
+
+theorem AllTys.cons {ext : ℕ} {m : Msg} {L : List Msg} (h : m.1 ∈ tableTys ext) (hL : AllTys ext L) :
+    AllTys ext (m :: L) := by
+  intro x hx
+  rcases List.mem_cons.1 hx with rfl | hx
+  exacts [h, hL x hx]
+
+theorem AllTys.append {ext : ℕ} {L L' : List Msg} (h : AllTys ext L) (h' : AllTys ext L') : AllTys ext (L ++ L') := by
+  intro x hx
+  rcases List.mem_append.1 hx with hx | hx
+  exacts [h x hx, h' x hx]
+
+theorem AllTys.map {ext : ℕ} {α : Type} {f : α → Msg} {l : List α} (h : ∀ a, (f a).1 ∈ tableTys ext) :
+    AllTys ext (l.map f) := by
+  intro x hx
+  obtain ⟨a, -, rfl⟩ := List.mem_map.1 hx
+  exact h a
+
+theorem tyAt (ext n : ℕ) (h : n < (tableTys ext).length) : (tableTys ext)[n] ∈ tableTys ext := List.getElem_mem h
+
+theorem ty_cap (ext : ℕ) : Cap Dig ∈ tableTys ext := tyAt ext 0 (by simp [tableTys])
+theorem ty_bool (ext : ℕ) : Bool ∈ tableTys ext := tyAt ext 1 (by simp [tableTys])
+theorem ty_vv (ext : ℕ) : ((Fin 64 → 𝔽) × (Fin 64 → 𝔽)) ∈ tableTys ext := tyAt ext 2 (by simp [tableTys])
+theorem ty_ff (ext : ℕ) : (𝔽 × 𝔽) ∈ tableTys ext := tyAt ext 3 (by simp [tableTys])
+theorem ty_v64 (ext : ℕ) : (Fin 64 → 𝔽) ∈ tableTys ext := tyAt ext 4 (by simp [tableTys])
+theorem ty_v128 (ext : ℕ) : (Fin 128 → 𝔽) ∈ tableTys ext := tyAt ext 5 (by simp [tableTys])
+theorem ty_f (ext : ℕ) : 𝔽 ∈ tableTys ext := tyAt ext 6 (by simp [tableTys])
+theorem ty_kk (ext : ℕ) : (𝕂 × 𝕂) ∈ tableTys ext := tyAt ext 7 (by simp [tableTys])
+theorem ty_yr (ext : ℕ) : (Fin (2 ^ (ext + 1)) → 𝔽) ∈ tableTys ext := tyAt ext 8 (by simp [tableTys])
+theorem ty_opens (ext : ℕ) : (Opens 𝔽 Dig × Salts (List UInt8)) ∈ tableTys ext := tyAt ext 9 (by simp [tableTys])
+
+theorem fMsg_ty (ext : ℕ) (a : F128) : (fMsg a).1 ∈ tableTys ext := ty_f ext
+theorem kMsg_ty (ext : ℕ) (m : F256 × F256) : (kMsg m).1 ∈ tableTys ext := ty_kk ext
+theorem kMsgs_tys (ext : ℕ) (p : LigeritoProof) (start k : ℕ) : AllTys ext (kMsgs p start k) :=
+  AllTys.map fun _ => kMsg_ty ext _
+
+/- Reducible transparency throughout: unifying two of the table's types at default transparency unfolds `GF128` and
+`GF256`, which does not terminate in practice. -/
+local macro "tys" : tactic => `(tactic| repeat' (first
+  | with_reducible exact AllTys.nil
+  | with_reducible refine AllTys.append ?_ ?_
+  | with_reducible refine AllTys.cons ?_ ?_
+  | with_reducible refine AllTys.map fun _ => ?_
+  | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
+  | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
+  | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _))
+
+theorem recMsgs_tys (p : LigeritoProof) (ext : ℕ) :
+    ∀ left i msg ood, AllTys ext (recMsgs p capDig ext left i msg ood)
+  | 0, _, _, _ => by rw [recMsgs]; exact AllTys.nil
+  | 1, _, _, _ => by rw [recMsgs]; tys
+  | left + 2, i, msg, ood => by
+      rw [recMsgs]
+      tys
+      exact recMsgs_tys p ext (left + 1) (i + 1) (msg + 7) (ood + 2)
+
+theorem repMsgs_tys (st : Setup) (sch : Flock.Schedule) (n : ℕ) (p : Proof) :
+    AllTys sch.ext (repMsgs st sch n p capDig) := by
+  unfold repMsgs ligMsgs zcMsgs lcMsgs opMsgs
+  tys
+  exact recMsgs_tys _ _ _ _ _ _
+
+theorem mem_cut : ∀ (σ : List Exec.Kind) (ms : List Msg) {g : List Msg}, g ∈ cut σ ms → ∀ m ∈ g, m ∈ ms
+  | [], _, g, hg, m, hm => by
+      rw [cut, List.mem_singleton] at hg
+      subst hg
+      simp at hm
+  | .msg _ :: σ, m' :: ms, g, hg, m, hm => by
+      have ih : ∀ {g : List Msg}, g ∈ cut σ ms → ∀ m ∈ g, m ∈ ms := mem_cut σ ms
+      rw [cut] at hg
+      cases hc : cut σ ms with
+      | nil =>
+          rw [hc, consHead, List.mem_singleton] at hg
+          subst hg
+          rw [List.mem_singleton] at hm
+          subst hm
+          exact List.mem_cons_self ..
+      | cons g0 gs =>
+          rw [hc, consHead, List.mem_cons] at hg
+          rcases hg with rfl | hg
+          · rcases List.mem_cons.1 hm with rfl | hm
+            · exact List.mem_cons_self ..
+            · exact List.mem_cons_of_mem _ (ih (by rw [hc]; exact List.mem_cons_self ..) m hm)
+          · exact List.mem_cons_of_mem _ (ih (by rw [hc]; exact List.mem_cons_of_mem _ hg) m hm)
+  | .msg _ :: _, [], g, hg, m, hm => by
+      rw [cut, List.mem_singleton] at hg
+      subst hg
+      simp at hm
+  | .coin _ :: σ, ms, g, hg, m, hm => by
+      rw [cut, List.mem_cons] at hg
+      rcases hg with rfl | hg
+      · simp at hm
+      · exact mem_cut σ ms hg m hm
+
+theorem mem_weave : ∀ (σ : List Exec.Kind) (ms cs : List Msg) {m : Msg}, Sum.inl m ∈ weave σ ms cs → m ∈ ms
+  | .msg _ :: σ, m' :: ms, cs, m, h => by
+      rw [weave, List.mem_cons] at h
+      rcases h with h | h
+      · cases h
+        exact List.mem_cons_self ..
+      · exact List.mem_cons_of_mem _ (mem_weave σ ms cs h)
+  | .coin _ :: σ, ms, c :: cs, m, h => by
+      rw [weave, List.mem_cons] at h
+      rcases h with h | h
+      · cases h
+      · exact mem_weave σ ms cs h
+  | [], _, _, _, h => by simp [weave] at h
+  | .msg _ :: _, [], _, _, h => by simp [weave] at h
+  | .coin _ :: _, _, [], _, h => by simp [weave] at h
+
+theorem mem_firstSteps {ts : List Step} {m : Msg} (h : Sum.inl m ∈ firstSteps ts) :
+    m = ⟨Bool, true⟩ ∨ Sum.inl m ∈ ts := by
+  obtain ⟨s, hs, h⟩ := List.mem_flatMap.1 h
+  rcases List.mem_cons.1 h with h | h
+  · cases h
+    exact Or.inl rfl
+  · rw [List.mem_singleton] at h
+    subst h
+    exact Or.inr hs
+
+/-- **The woven table's messages have the table's types** (`tableTys`): the cap, the marker and the openings
+(`tableSteps`, `tableTape`), and each rep's tape's messages, its proof file's (`weave`, `repMsgs`). -/
+theorem TableSrc.wovenAt_tys (s : TableSrc) (cls : HClass) (P : Fin 2 → Fin cls.mPts → 𝔽) :
+    ∀ g ∈ cut ((tableSteps (s.wovenAt cls P)).map kindOf) ((tableSteps (s.wovenAt cls P)).filterMap Sum.getLeft?),
+      AllTys s.sch.ext g := by
+  intro g hg m hm
+  obtain ⟨x, hx, he⟩ := List.mem_filterMap.1 (mem_cut _ _ hg m hm)
+  obtain ⟨rfl⟩ : x = Sum.inl m := by
+    cases x with
+    | inl y => cases he; rfl
+    | inr y => cases he
+  have hrep : ∀ r, Sum.inl m ∈ (s.wovenAt cls P).tape r → m.1 ∈ tableTys s.sch.ext := fun r h =>
+    repMsgs_tys s.st s.sch _ (s.proof r) m (mem_weave _ _ _ h)
+  rcases List.mem_cons.1 hx with h | hx
+  · cases h
+    exact ty_cap _
+  rcases List.mem_cons.1 hx with h | hx
+  · cases h
+  rcases List.mem_append.1 hx with hx | hx
+  · rcases List.mem_append.1 hx with hx | hx
+    · rcases mem_firstSteps hx with rfl | hx
+      · exact ty_bool _
+      · exact hrep 0 hx
+    · exact hrep 1 hx
+  · rw [List.mem_singleton] at hx
+    cases hx
+    exact ty_opens _
+
+/-- **The inner protocol's message types include the table's** (`tableTys`): each is some `T j`. A fact of the
+instantiation's `T`, as `CoinTys` is of its `CT`; `vT` is such a list. -/
+def TysIn {nT : ℕ} (T : Fin nT → Type) (ext : ℕ) : Prop := ∀ ty ∈ tableTys ext, ∃ j, T j = ty
+
+/-- **The table's message types, as a list `T`** (`TysIn`). -/
+def vT (ext : ℕ) (j : Fin (tableTys ext).length) : Type := (tableTys ext)[j]
+
+theorem tysIn_vT (ext : ℕ) : TysIn (vT ext) ext := fun _ h =>
+  let ⟨j, hj, e⟩ := List.getElem_of_mem h
+  ⟨⟨j, hj⟩, e⟩
 
 /-! ## At the family -/
 
@@ -497,6 +670,10 @@ def MsgTys : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
     ∀ g ∈ (F.coinFamily spec st cap lig).tableMsgs spec st cap lig R ω t (layers F.zs dg N k Rw R ω t R₂ τ),
       ∀ m ∈ g, ∃ j, T j = m.1
+
+/-- **`MsgTys` wherever the inner protocol's message types include the table's** (`TysIn`, `wovenAt_tys`). -/
+theorem msgTys_of (hT : TysIn T sch.ext) : F.MsgTys dg N k Rw spec st cap lig :=
+  fun _ _ _ _ _ _ _ g hg m hm => hT _ (TableSrc.wovenAt_tys _ cls _ g hg m hm)
 
 open Classical in
 /-- **The decoder**: round `i`'s message at the read wires `Xs` of stage `i`'s commit strings is the table's round-`i`

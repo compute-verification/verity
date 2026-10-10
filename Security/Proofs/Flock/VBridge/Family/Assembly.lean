@@ -270,7 +270,7 @@ theorem vbridgeRead_assembled
     (hligS : F.AtAccepted dg N k Rw fun R ω _ l => ∀ r, LigShaped (st R ω) sch (lig l r))
     (hregs : ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48)
     (hCT : CoinTys cls.mPts F.sh CT) (hleaf : F.HLeaf dg N k Rw)
-    (hread : F.MsgsRead dg N k Rw spec st cap lig own sel) (htys : F.MsgTys dg N k Rw spec st cap lig)
+    (hread : F.MsgsRead dg N k Rw spec st cap lig own sel) (hT : TysIn T sch.ext)
     (hopen : F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
       OpenedAll (st R ω) sch F.sh
         (((F.assembled dg N k Rw spec st cap lig own sel bc).tableSrc spec st cap lig R ω t l).proofAt r)
@@ -284,7 +284,8 @@ theorem vbridgeRead_assembled
     (F.decOf dg N k Rw spec st cap lig own sel) rfl rfl rfl rfl rfl rfl rfl rfl
     hne honame hcount hname hseen hv hlay hrr hrck hsame
     hshared hz hcoef V hV hE hset hshp hcl hfold hco hcapS hligS hregs hCT hleaf
-    (F.msgsAre_assembled dg N k Rw spec st cap lig own sel bc hread htys) hopen hpub hsel hS hu4
+    (F.msgsAre_assembled dg N k Rw spec st cap lig own sel bc hread (F.msgTys_of dg N k Rw spec st cap lig hT))
+    hopen hpub hsel hS hu4
 
 end VStarFamily
 
