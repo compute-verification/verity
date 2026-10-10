@@ -350,7 +350,7 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
     names = ["guarded", "mentions", "underForall", "family", "world", "event", "eventLate"]
     f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in names}}, tmp_path)
     entry = {"function": "Control.verify", "outcome": "accept"}
-    got = {n: [w.split(" : ")[0].split(" that")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"],
+    got = {n: [w.split(" : ")[0].split(" whose")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"],
                                                                         ["Control.ShapePrem"], events=["Control.prob"])]
            for n in names}
     assert got == {"guarded": ["takes _hop"], "mentions": ["takes _hm"], "underForall": [], "family": ["takes _Vs.hscope"],
@@ -1521,22 +1521,26 @@ def test_an_entry_may_name_each_conjuncts_own_function_and_outcome():
 
 
 def test_a_probability_statement_has_its_acceptance_in_the_event():
-    """`shape.events`: a conjunct bounding `prob (fun o => accepts o ∧ …)` takes premises only, so its hypotheses, an
-    acceptance outside the event among them, are each refused; an event of a constant not listed is not read, and one
-    that doesn't start with the acceptance, or whose first conjunct holds under a hypothesis, is refused."""
-    entry, prob = {"function": "P.check", "outcome": "accept"}, ["G.prob"]
-    event = lambda applies, guarded=False, head="G.prob": {"head": head, "applies": applies, "guarded": guarded}
+    """`shape.events`: a conjunct bounding `prob (fun o => accepts o ∧ … ∧ fails o)` takes premises only, so its
+    hypotheses, an acceptance outside the event among them, are each refused; an event of a constant not listed is not
+    read, and one with a conjunct before its last that isn't an acceptance (a hypothesis inside the event), one whose
+    acceptance holds under a hypothesis, or one with no conjunct after its acceptance, is refused."""
+    entry, prob = {"function": ["P.check", "P.verify"], "outcome": "accept"}, ["G.prob"]
+    c = lambda applies, guarded=False: {"applies": applies, "guarded": guarded}
+    event = lambda *cs, head="G.prob": {"head": head, "conjuncts": list(cs)}
     held = part([hyp("hA3", 0, ["W.Uniform"], module="W.Premises"), hyp("hk", 2, ["LE.le"]),
                  hyp("zr.hown", 1, ["P.check"], source="field"), ACCEPTS], inputs=[("zr", 1), ("k", 2)])
-    fits = held | {"events": [event(["P.check", "P.Accepts"]), event(["P.check"]), event(["P.Q"], head="Exists")]}
+    fits = held | {"events": [event(c(["P.check", "P.Accepts"]), c(["P.verify"]), c(["Not", "P.holds"])),
+                              event(c(["P.check"]), c(["P.check"])), event(c(["P.Q"]), head="Exists")]}
     assert [w.split(" : ")[0] for w in A.refusals(entry, [fits], ["W.Premises"], events=prob)] == \
         ["takes zr.hown", "takes h", "takes hk"]
     assert "its event's first conjunct" in A.refusals(entry, [fits], ["W.Premises"], events=prob)[0]
     assert A.refusals(entry, [part(inputs=[("x", 0)]) | {"events": fits["events"]}], [], events=prob) == []
     assert A.refusals(entry, [fits], ["W.Premises"]) == [], "not listed: the old rule, which takes zr.hown as the acceptance"
-    for bad in ([event(["P.check"]), event(["P.Q"])], [event(["P.check"], guarded=True)]):
+    for bad in ([event(c(["P.check"]), c(["P.Q"]), c(["P.holds"]))], [event(c(["P.check"], guarded=True), c(["P.holds"]))],
+                [event(c(["P.check"]))], [fits["events"][0], event(c(["P.Q"]), c(["P.holds"]))]):
         got = A.refusals(entry, [part(inputs=[("x", 0)]) | {"events": bad}], [], events=prob)
-        assert [w.split(" that")[0] for w in got] == ["bounds an event of G.prob", "takes no hypothesis"], bad
+        assert [w.split(" whose")[0].split(" that")[0] for w in got] == ["bounds an event of G.prob", "takes no hypothesis"], bad
         assert A.refusals(entry, [fits | {"events": bad}], ["W.Premises"], events=prob)[0].startswith("bounds an event")
 
 

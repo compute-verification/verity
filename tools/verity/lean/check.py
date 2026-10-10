@@ -1064,9 +1064,10 @@ def shape(policy: dict, facts: dict) -> list[str]:
     its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
-    acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose conclusion's
-    events of those constants all start with the acceptance (`prob (fun o => A o ∧ …) g σ ≤ …`) takes no acceptance
-    hypothesis, and each of its hypotheses that isn't a premise is refused. A guarantee under `shape.frozen` ({name: why it
+    acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
+    conclusion's events of those constants are each its acceptance and then what fails (`prob (fun o => A o ∧ B o) g σ ≤
+    …`, every conjunct before the last an acceptance) takes no acceptance hypothesis, and each of its hypotheses that
+    isn't a premise is refused. A guarantee under `shape.frozen` ({name: why it
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
@@ -1174,9 +1175,10 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
     conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A probability
     statement has its acceptance in the event (`shape.events`): when its conclusion has an event of one of those constants
-    (`prob (fun o => A o ∧ …) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and every one's first conjunct `A` is about the
-    function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance outside the event too;
-    an event of one of them that doesn't start with the acceptance is refused."""
+    (`prob (fun o => A₁ o ∧ … ∧ Aₙ o ∧ B o) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and in every one each conjunct before
+    the last is about the function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance
+    outside the event too.  An event of one of them that isn't so is refused: a conjunct before the last that isn't an
+    acceptance is a hypothesis inside the event (`Pr[A ∧ Q ∧ B]` bounds `B` only where `Q` holds)."""
     fns = [entry["function"]] if isinstance(entry["function"], str) else list(entry["function"])
     outcome, said = entry["outcome"], " or ".join(fns)
 
@@ -1190,16 +1192,17 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
 
     hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
     probs = [e for e in got.get("events", []) if e["head"] in events]
-    inevent = outcome != "none" and bool(probs) and all(map(about, probs))
+    inevent = outcome != "none" and bool(probs) and all(
+        len(e["conjuncts"]) > 1 and all(map(about, e["conjuncts"][:-1])) for e in probs)
     start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
         next(iter(hyps), None)
     ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
     taken = hyps if inevent else [h for h in hyps if ends is None or h["at"] < ends]
     out = []
     if outcome != "none" and probs and not inevent:
-        out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} that doesn't start with its "
-                   f"function returning {outcome} ({said}): a probability statement's acceptance is its event's first "
-                   f"conjunct, under no hypothesis of its own")
+        out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} whose conjuncts before its last "
+                   f"are not each its function returning {outcome} ({said}): a probability statement's event is its "
+                   f"acceptance, under no hypothesis of its own, and then what fails")
     if outcome != "none" and start is None and not inevent:
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
