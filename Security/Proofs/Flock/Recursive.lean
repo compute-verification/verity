@@ -22,6 +22,7 @@ import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Recursive.OuterAbort
 import Proofs.Flock.Recursive.Description
+import Proofs.Flock.Recursive.Witness
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -32,4 +33,5 @@ protocol with the compile lemma open (`Compile`), the compile premise at a class
 description read from its own rows, which are the registered ones or SHA-512 collides (`Description`), V*'s sessions
 as the prover supplies them, typed where they type and refusing elsewhere, with the prover's strategy carried across
 (`Raw`), where V*'s statement enters a session (`Loads`), and V*'s outer
-sessions zero knowledge with the honest prover's self-check in them, which never stops (`OuterAbort`). -/
+sessions zero knowledge with the honest prover's self-check in them, which never stops (`OuterAbort`), and
+`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/
