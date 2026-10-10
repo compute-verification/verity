@@ -8,5 +8,6 @@ import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.ZeroKnowledgeHidden
 import Proofs.Flock.Recursive
 import Proofs.Flock.VBridge
+import Proofs.Flock.VBridge.Family.RegistrantFinder
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
