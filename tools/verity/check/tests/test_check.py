@@ -1089,8 +1089,6 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
 def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_path):
     """`--against BASE` launches `suites.py --changed BASE` (no --quick) through the quick tier's job in a priority slot, as a
     `research run --cwd source`: the flag the 10:14Z hand-built launch lacked, so the suites ran outside the shipped tree."""
-    from research.pods.nebius import slot_only
-
     git, train, argv = _train_repo(tmp_path)
     root = git("rev-parse", "HEAD")
     (tmp_path / "repo" / "a").write_text("b\n")
@@ -1103,8 +1101,8 @@ def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_p
     assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
     assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
     cmd, job = a[a.index("--") + 1:], a[-1]
-    assert slot_only.through_slot(cmd), "cpu-1's launcher refuses a run whose command isn't slot.py's (the lander, 10 Oct)"
-    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"]
+    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"], \
+        "cpu-1's launcher takes only a run whose command is slot.py's (slot_only.through_slot; the lander, 10 Oct)"
     assert [a[i + 1] for i, x in enumerate(a) if x == "--send"] == ["tools/research/src/research/quick_tier.py"]
     assert f"--head {head} --base {root} --" in job
     assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
