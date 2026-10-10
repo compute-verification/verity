@@ -12,8 +12,8 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 The outer proof at a history `(R, ω, t)` (the registration, the draw of the hidden circuit's units, the rounds'
 commitments and coins) is `S` sessions in a row, session `j` one `flock-verify verify --zk --registered F` session of
 the public circuit `(Vs j).c` under its law `(Vs j).law` (`VStmt`), with hidden outputs and `(Vs j).J` tables, and with
-inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the coin server's record). The audit accepts when every session accepts (`Accepts`), and the decoded
-witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
+inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the coin server's record). The audit accepts when every
+session accepts (`Accepts`), and the decoded witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
 
 * `ZkOuter.Good`: a layer with no wrong unit whose every unit reads, at each of its registered reads, the registrant's
   value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
