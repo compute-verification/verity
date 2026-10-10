@@ -70,16 +70,22 @@ def shape(forged, tmp_path_factory) -> Path:
     return f
 
 
-def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None,
-            session: Path = SET / "outer-L3" / "session") -> dict:
+def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
+         session: Path = SET / "outer-L3" / "session") -> subprocess.CompletedProcess:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
                                     str(SET / inner / "session")]
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
-                        str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec,
+                        str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec, *extra,
                         "--session", str(session)], capture_output=True, text=True, check=False)
+    return p
+
+
+def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
+            session: Path = SET / "outer-L3" / "session") -> dict:
+    p = _run(level, public, registered, shape, inner, *extra, session=session)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
@@ -156,6 +162,45 @@ def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, u
     changed = [p for p in parts if (p / "registered.json").read_bytes() != (algebra / p.name / "registered.json").read_bytes()]
     assert len(changed) == 1 and len(parts) > 1, changed
     (p,) = changed
-    why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", session=undrawn)["why"]
+    t = SET / "inner-honest" / "public.json"
+    why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
+                  session=undrawn)["why"]
     assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
                         "the statement's v row is not the verifier's rec-v row 0", why), why
+
+
+def _transcript(dst: Path, change) -> Path:
+    t = json.loads((SET / "inner-honest" / "public.json").read_text())
+    change(next(r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"].endswith("/rep0") and r.get("commits")))
+    dst.write_text(json.dumps(t))
+    return dst
+
+
+def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape, undrawn, tmp_path):
+    """`HPubRows`' check (`RecVStar.checkPubRows`): the `pub.bin` rows of the first algebra part that reads `rec-c0` are,
+    at its `rec-c<k>` reads, the `c_k` the coin server recorded. The honest part passes setup with the inner transcript
+    (`undrawn`'s session is refused after it), is refused without it, and is refused at a transcript whose rep 0 `c_0` is
+    one bit off, or whose coins there are not the inner session's."""
+    reads = lambda p: {k: x["value"] for k, x in json.loads((p / "registered.json").read_text())["ports"].items()}
+    a = next(p for p in sorted(algebra.iterdir()) if "rec-c0" in reads(p).values())
+    (port,) = [k for k, x in reads(a).items() if x == "rec-c0"]
+    with (a / "circuit.txt").open() as f:
+        unit = f.readline().split()[1]
+    t = SET / "inner-honest" / "public.json"
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t), session=undrawn)
+    assert not v["why"].startswith("setup:"), v["why"]
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", session=undrawn)
+    assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
+
+    def flip(r):
+        c = bytearray.fromhex(r["commits"][0])
+        c[0] ^= 1
+        r["commits"] = [c.hex()]
+
+    bad = _transcript(tmp_path / "c0.json", flip)
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn)
+    assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not rep 0's c_0 \(inner round \d+\) "
+                        "of the inner transcript", v["why"]), v["why"]
+    bad = _transcript(tmp_path / "coins.json", lambda r: r.__setitem__("coins", ["00" * 16] * len(r["coins"])))
+    p = _run(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn)
+    assert p.returncode == 2 and "round" in p.stderr and "coins are not the inner session record's" in p.stderr, p.stderr
