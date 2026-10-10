@@ -63,6 +63,8 @@ import Proofs.Flock.VBridge.Family.Rounds
 import Proofs.Flock.VBridge.Family.Lig
 import Proofs.Flock.VBridge.Family.Setup
 import Proofs.Flock.VBridge.Family.Opened
+import Proofs.Flock.VBridge.Family.Pub
+import Proofs.Flock.VBridge.Family.Registrants
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
