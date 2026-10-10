@@ -484,6 +484,37 @@ def test_publish_against_fake_store_is_complete_and_idempotent(tmp_path):
     assert (len(st.artifacts), len(st.attempts)) == (n_art, n_att), "second publish is a no-op"
 
 
+def test_a_check_result_over_the_meta_cap_publishes_counts_with_its_result_json_as_payload(tmp_path):
+    """A check whose circuit-check step listed ~3,900 untraced targets wrote a result.json whose meta was over the 256 KiB cap,
+    and its publish failed (ef75 ... 64bd, 10 Oct)."""
+    from research.store.local import LocalStore
+    from research.store.model import META_MAX_BYTES
+
+    d = _run_copy(tmp_path)
+    untraced = [{"target": f"t{i:05d}", "why": "not traced: imported before the fork " * 2} for i in range(4000)]
+    doc = {"schema": "research/result/v0.1", "run_id": RUN_ID, "kind": "check/v1", "status": "passed",
+           "steps": [{"step": "pytest", "status": "passed", "cache": {"hits": ["s"] * 3}},
+                     {"step": "circuit-check", "status": "passed",
+                      "cache": {"hits": 7, "stored": 2, "untraced": untraced, "errors": [], "changed": ["a", "b"]}}]}
+    (d / "result.json").write_text(json.dumps(doc))
+    raw = (d / "result.json").read_bytes()
+    assert len(canon.dumps(doc)) > META_MAX_BYTES
+    st = LocalStore(tmp_path / "store")
+    out = A.publish(d, store=st)
+    assert out["published"] is True, out
+    m = st.get_manifest(out["outputs"]["result"])
+    cc = m.meta["steps"][1]
+    assert cc["cache"] == {"hits": 7, "stored": 2, "untraced": 4000, "errors": 0, "changed": 2}
+    assert m.meta["steps"][0] == doc["steps"][0], "only the circuit-check step's cache is counted"
+    assert m.meta["meta_derived"] == {"transform": "circuit-check-cache-counts", "from": "result.json",
+                                      "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+    assert m.payload.type == "file" and m.payload.sha256 == hashlib.sha256(raw).hexdigest(), "the result.json is kept byte for byte"
+    assert (d / "result.json").read_bytes() == raw, "the run dir is untouched"
+
+    small = _run_copy(tmp_path / "small")
+    assert A.result_meta(small, json.loads((small / "result.json").read_text()))[1] is None, "under the cap: no payload, nothing derived"
+
+
 def test_publish_explicit_conditions_and_tool_override_the_record(tmp_path):
     d = _run_copy(tmp_path)
     st = FakeStore(tmp_path / "store")

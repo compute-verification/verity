@@ -7,14 +7,15 @@
                               or {"published": False, "error": ...} with store_publish_error.json written beside the run's records.
                               Never raises into the runner.  Idempotent: an attempt already in the store is a no-op.
 
-Steps: result.json (valid) -> artifact of kind `result.kind` (default bench-result/v1), meta = the document minus its path lists,
-refs.run_files -> the ONE `run-files/v1` tree made of every path in `artifacts` + `measurement_files`; `outputs.json`
+Steps: result.json (valid) -> artifact of kind `result.kind` (default bench-result/v1), meta = the document minus its path lists
+(over the meta cap: `result_meta`'s derived meta, with the result.json as payload), refs.run_files -> the ONE `run-files/v1` tree made of every path in `artifacts` + `measurement_files`; `outputs.json`
 (schema research/outputs/v0.1, see `typed_outputs`) -> one named, typed artifact per entry; events.jsonl /
 resources.jsonl -> `telemetry/v1`; then `put_attempt` (write-once).  The local store is opened lazily (`research.store.local`,
 lane store-core); `store=` accepts any object with put_artifact / put_attempt / get_attempt.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -35,6 +36,7 @@ PUBLISH_ERROR_SCHEMA = "research/store-publish-error/v0.1"
 OUTPUTS_SCHEMA = "research/outputs/v0.1"
 TERMINAL = ("done", "failed", "cancelled")
 DEFAULT_RESULT_KIND = "bench-result/v1"
+META_TRANSFORM = "circuit-check-cache-counts"
 
 
 def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
@@ -196,6 +198,30 @@ def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, l
     return n, missing
 
 
+def _cache_counts(meta: dict[str, Any]) -> dict[str, Any]:
+    """`check.py`'s circuit-check step with its cache's per-target lists as their lengths (what #1712's `_step` records)."""
+    steps = [{**s, "cache": {k: len(v) if isinstance(v, list) else v for k, v in s["cache"].items()}}
+             if isinstance(s, dict) and s.get("step") == "circuit-check" and isinstance(s.get("cache"), dict) else s
+             for s in meta.get("steps") or []]
+    return {**meta, "steps": steps} if "steps" in meta else meta
+
+
+def result_meta(run_dir: Path, doc: dict[str, Any]) -> tuple[dict[str, Any], Path | None]:
+    """The result artifact's meta and payload: the document minus its path lists, no payload.  A meta over the store's cap
+    (model.META_MAX_BYTES) goes through META_TRANSFORM, says so in `meta_derived` (the transform, and the sha256 and size of the
+    result.json it came from), and the result.json is the payload byte for byte, so the meta can be recomputed from it."""
+    from . import canon
+    from .model import META_MAX_BYTES
+
+    meta = {k: v for k, v in doc.items() if k not in ("artifacts", "measurement_files")}
+    if len(canon.dumps(meta)) <= META_MAX_BYTES:
+        return meta, None
+    p = run_dir / "result.json"
+    raw = p.read_bytes()
+    derived = {"transform": META_TRANSFORM, "from": "result.json", "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+    return {**_cache_counts(meta), "meta_derived": derived}, p
+
+
 def _rel_under(run_dir: Path, rel: Any) -> Path:
     """A payload path from outputs.json: relative to the run dir, never absolute, never escaping it."""
     if not isinstance(rel, str) or not rel:
@@ -347,10 +373,10 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
                 n, missing = _stage_run_files(run_dir, rels, Path(tmp))
                 if n:
                     outputs["run_files"] = st.put_artifact("run-files/v1", {"run_id": run_id, "files": n, "listed": rels, "missing": missing}, tree=Path(tmp))
-        meta = {k: v for k, v in doc.items() if k not in ("artifacts", "measurement_files")}
+        meta, payload = result_meta(run_dir, doc)
         kind = doc.get("kind") if isinstance(doc.get("kind"), str) else DEFAULT_RESULT_KIND
         refs = {"run_files": outputs["run_files"]} if outputs["run_files"] else None
-        outputs["result"] = st.put_artifact(kind, meta, refs)
+        outputs["result"] = st.put_artifact(kind, meta, refs, file=payload)
     outputs.update(typed_outputs(run_dir, st, run_id))               # outputs.json: named, typed artifacts the workload declared
     if run_record:                                                   # the whole run dir, logs included (store.custody)
         from .custody import put_run_record

@@ -520,6 +520,9 @@ At completion or failure, in the runner (local and machine side alike), `store.a
 1. `result.json`, if valid, becomes an artifact of kind `result.kind` (default `bench-result/v1`; `tc_probe` writes
    `tc-evidence/v1`): `meta` = the result document minus `artifacts`/`measurement_files` paths, `refs.run_files` = the
    run-files artifact. Paths listed in `result.artifacts` + `measurement_files` become ONE `run-files/v1` tree artifact.
+   A `meta` over the 256 KiB cap (a check's circuit-check step listing every target it didn't cache) is derived instead: that
+   step's cache lists become their lengths (`circuit-check-cache-counts`), `meta.meta_derived` names the transform and the
+   sha256 and size of the `result.json`, and the `result.json` itself is the artifact's payload, byte for byte.
 2. `events.jsonl` / `resources.jsonl` become `telemetry/v1` file artifacts when present.
 3. The attempt manifest (§4) is written to `attempts/<run id>.json` and indexed.
 4. With a remote configured: blobs and manifests are uploaded and verified; `execution.preserved` is recorded per output.
