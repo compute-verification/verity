@@ -1,3 +1,4 @@
+import Mathlib.Data.Fintype.Card
 import Proofs.Flock.Sampled.Statements
 
 /-!
@@ -5,14 +6,14 @@ import Proofs.Flock.Sampled.Statements
 
 One instance for all of them: one padded index, one type, nothing in the values (`Ty₁`, `X₁`), a one-leaf root holding
 the unit's record (`onePort`: its root is the climb of the record's leaf, so the opening holds without computing SHA-512),
-and one session of one slot holding the unit (`batch₁`).
+and one session of one slot holding the unit (`batch₁`, its slots routed in session order, `route₁`).
 
 * `coverage_nonvacuous`, `slotBinding_nonvacuous`, `slotsSound_nonvacuous`: the hypotheses of `Coverage`, `SlotBinding`
   and `SlotsSound` at that instance, the draw being the one unit.
-* `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit, each staged over the inner shape
-  `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` given that V* stages it (`menu₀.staged`, which `#guard` checks by
-  evaluation, not by proof: building V*'s algebra is beyond the kernel's evaluation), and `Menu.Room` by proof;
-  `menuComplete_nonvacuous`, `MenuComplete`'s hypotheses there, given the same.
+* `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit, one type per shape, each staged over
+  the inner shape `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` and `Menu.Room` by proof; that V* stages it
+  (`menu₀.staged`, so `Menu.Staged`) is checked by `#guard`, by evaluation and not by proof: building V*'s algebra is
+  beyond the kernel's evaluation. `menuComplete_nonvacuous`: `MenuComplete`'s hypotheses there, given the same.
 * `composition_nonvacuous`: `Composition`'s hypotheses at that instance, under a one-point law and a session that
   verifies at once, with an instance of F1's interface (`I₁`) whose break fires at no draw.
 -/
@@ -30,32 +31,36 @@ def X₁ : Trace 1 Unit Unit := fun _ => some ((), ())
 
 /-- `k` sessions of one slot each, session `b` holding unit `b`. -/
 def batch₁ (k : ℕ) : Batching k Unit Unit where
-  B := k
+  sessions := k
   shape := fun _ => ⟨1, 0⟩
-  typ := fun _ => ()
+  typ := fun _ _ => ()
   idx := fun b _ => some b
   val := fun _ _ => ()
 
-theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) where
-  drawn := fun _ _ _ => Finset.mem_univ _
-  once := by
-    rintro ⟨b, j⟩ ⟨b', j'⟩ i h h'
-    have e : b = b' := Option.some.inj (h.trans h'.symm : some b = some b')
-    subst e
-    have hj : (j : ℕ) < 1 := j.isLt
-    have hj' : (j' : ℕ) < 1 := j'.isLt
-    have e' : j = j' := Fin.ext (by omega)
-    subst e'
-    rfl
-  count := by
-    refine Finset.card_nbij' (fun p : (batch₁ k).Pos => p.1)
-      (fun b : Fin k => (⟨b, ⟨0, Nat.zero_lt_one⟩⟩ : (batch₁ k).Pos)) (fun _ _ => Finset.mem_univ _)
-      (fun _ _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩) ?_ (fun _ _ => rfl)
-    rintro ⟨b, c⟩ _
+/-- `batch₁ k`'s slots in session order: position `j` is session `j`'s one slot. -/
+def route₁ (k : ℕ) : Fin k ≃ (batch₁ k).Pos where
+  toFun j := ⟨j, ⟨0, Nat.zero_lt_one⟩⟩
+  invFun p := p.1
+  left_inv _ := rfl
+  right_inv := by
+    rintro ⟨b, c⟩
     have hc : (c : ℕ) < 1 := c.isLt
     have e : c = ⟨0, Nat.zero_lt_one⟩ := Fin.ext (show (c : ℕ) = 0 by omega)
     subst e
     rfl
+
+/-- The draw of every unit, in order, is the identity. -/
+theorem drawOrder_univ {k : ℕ} (j : Fin k) : drawOrder (Finset.univ : Finset (Fin k)) j = some j := by
+  have hj : (j : ℕ) < (Finset.univ : Finset (Fin k)).card := lt_of_lt_of_eq j.isLt (Finset.card_fin k).symm
+  have hu := Finset.orderEmbOfFin_unique (s := (Finset.univ : Finset (Fin k))) rfl
+    (f := fun x => (⟨x.val, lt_of_lt_of_eq x.isLt (Finset.card_fin k)⟩ : Fin k)) (fun _ => Finset.mem_univ _)
+    (fun _ _ h => Fin.lt_iff_val_lt_val.2 (Fin.lt_iff_val_lt_val.1 h))
+  unfold drawOrder
+  rw [dif_pos hj]
+  exact congrArg some (congrFun hu ⟨j.val, hj⟩).symm
+
+theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) :=
+  ⟨k, route₁ k, (Finset.card_fin k).le, fun j => (drawOrder_univ j).symm⟩
 
 /-- A one-leaf root whose leaf is the record `bc`'s. -/
 def onePort (bc : ByteArray) : Flock.Registered.Port where
@@ -98,7 +103,7 @@ theorem h₁_bound : Bound X₁ h₁.β := fun _ _ _ => rfl
 theorem h₁_proves : Proves Ty₁ C₁ Finset.univ h₁ where
   cover := batch₁_cover 1
   opens := h₁_opens
-  fits := fun _ => Nat.zero_le _
+  fits := fun _ _ _ => Nat.zero_le _
   holds := fun _ _ _ => trivial
 
 /-- **`Coverage`'s hypotheses hold together**, at a nonempty draw. -/
@@ -116,10 +121,12 @@ theorem slotsSound_nonvacuous :
     (Finset.univ : Finset (Fin 1)).Nonempty ∧ C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧ Proves Ty₁ C₁ Finset.univ h₁ :=
   ⟨Finset.univ_nonempty, C₁_injective, C₁_committed, h₁_proves⟩
 
-/-- One-slot sessions of no nonzeros, one per drawn unit, over the inner shape `m = 22, k_log = 6`, two claims. -/
+/-- One-slot sessions of no nonzeros, one per drawn unit, one type per shape, over the inner shape `m = 22, k_log = 6`,
+two claims. -/
 def menu₀ : Menu where
   shapes := [⟨1, 0⟩]
   inner := fun _ => ⟨22, 6, 2⟩
+  types := fun _ => 1
   padded := fun k => (List.finRange k).map fun _ => ⟨1, 0⟩
 
 #guard menu₀.staged
@@ -127,28 +134,37 @@ def menu₀ : Menu where
 theorem isOk_iff {ε α : Type} (x : Except ε α) : isOk x = true ↔ ∃ a, x = .ok a := by
   cases x <;> simp [isOk]
 
-theorem Menu.staged_ok {M : Menu} (h : M.staged = true) : ∀ s ∈ M.shapes, ∃ vs, M.vstar s = .ok vs :=
+theorem Menu.staged_ok {M : Menu} (h : M.staged = true) : M.Staged :=
   fun s hs => (isOk_iff _).1 (List.all_eq_true.1 h s hs)
 
-/-- **`menu₀` is a shape menu**, given that V* stages it (`#guard menu₀.staged`, by evaluation). -/
-theorem menu₀_shapeMenu (h : menu₀.staged = true) : ShapeMenu menu₀ where
-  staged := Menu.staged_ok h
-  padded := by
-    intro k s hs
-    obtain ⟨_, _, e⟩ := List.mem_map.1 hs
-    cases e
-    exact List.mem_singleton_self _
+/-- **`menu₀` is a shape menu.** -/
+theorem menu₀_shapeMenu : ShapeMenu menu₀ := by
+  intro k s hs
+  obtain ⟨_, _, e⟩ := List.mem_map.1 hs
+  cases e
+  exact List.mem_singleton_self _
 
 /-- **`menu₀`'s padded sessions have room**, for `Ty₁`. -/
 theorem menu₀_room : menu₀.Room Ty₁ :=
-  fun k _ => ⟨batch₁ k, rfl, batch₁_cover k, fun _ _ _ => rfl, fun _ => Nat.zero_le _⟩
+  fun k _ _ _ hU hW => ⟨batch₁ k, rfl, batch₁_cover k,
+    fun _ i _ => ⟨rfl, (List.mem_singleton.1 (hW.1 _ (hU i)).1).symm⟩,
+    fun _ => le_of_le_of_eq (Finset.card_le_univ _) Fintype.card_unit⟩
 
-/-- **`MenuComplete`'s hypotheses hold together**, at `menu₀` given that V* stages it, `Ty₁`, and a nonempty draw whose
-units `X₁` holds. -/
+/-- The one type's placement, at `menu₀`'s one shape. -/
+def place₁ : Unit → Shape := fun _ => ⟨1, 0⟩
+
+theorem menu₀_within : menu₀.Within Ty₁ Finset.univ place₁ :=
+  ⟨fun _ _ => ⟨List.mem_singleton_self _, Nat.zero_le _⟩,
+    fun _ => le_of_le_of_eq (Finset.card_le_univ _) Fintype.card_unit⟩
+
+/-- **`MenuComplete`'s hypotheses hold together**, at `menu₀` given that V* stages it, `Ty₁` placed by `place₁`, and a
+nonempty draw whose units `X₁` holds. -/
 theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
-    ShapeMenu menu₀ ∧ menu₀.Room Ty₁ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧
-      ∀ i ∈ (Finset.univ : Finset (Fin 1)), (X₁ i).isSome = true :=
-  ⟨menu₀_shapeMenu h, menu₀_room, Finset.univ_nonempty, fun _ _ => rfl⟩
+    menu₀.Staged ∧ ShapeMenu menu₀ ∧ menu₀.Room Ty₁ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧
+      (∀ i ∈ (Finset.univ : Finset (Fin 1)), ∃ t v, X₁ i = some (t, v) ∧ t ∈ (Finset.univ : Finset Unit)) ∧
+      menu₀.Within Ty₁ Finset.univ place₁ :=
+  ⟨Menu.staged_ok h, menu₀_shapeMenu, menu₀_room, Finset.univ_nonempty,
+    fun _ _ => ⟨(), (), rfl, Finset.mem_univ _⟩, menu₀_within⟩
 
 /-- The one-point law over the one unit. -/
 def L₁ : Law 1 := { Ω := Unit, draw := fun _ => Finset.univ }
@@ -170,11 +186,12 @@ noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
       exact h.2 h₁_proves
     · exact Or.inl hS
 
-/-- **`Composition`'s hypotheses hold together**: at the one-point law, `session₁` and `I₁`, the records determine
-their contents, `X₁` is the trace committed, and the break of F1's interface fires at no draw of any prover. -/
+/-- **`Composition`'s hypotheses hold together**: at the one registration, the one-point law, `session₁` and `I₁`, the
+records determine their contents, `X₁` is the trace committed, and the break of F1's interface fires at no draw of any
+prover. -/
 theorem composition_nonvacuous :
-    (∀ _ : Unit, C₁.Injective) ∧ (∀ _ : Unit, C₁.Committed X₁ path₀₁) ∧
-      ∀ σ : Strategy (sampledAudit L₁ session₁), ¬ ∃ ω, I₁.Break (L₁.draw ω) (regOf σ) (contOf σ ω) :=
-  ⟨fun _ => C₁_injective, fun _ => C₁_committed, fun _ ⟨_, h⟩ => h rfl⟩
+    C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧
+      ∀ σ : Strategy (sampledAudit L₁ session₁ ()), ¬ ∃ ω, I₁.Break (L₁.draw ω) () (contOf σ ω) :=
+  ⟨C₁_injective, C₁_committed, fun _ ⟨_, h⟩ => h rfl⟩
 
 end FlockSampled
