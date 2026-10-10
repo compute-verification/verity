@@ -21,6 +21,7 @@ import Proofs.Flock.Recursive.Universal
 import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Recursive.OuterAbort
 import Proofs.Flock.Recursive.Description
@@ -34,5 +35,6 @@ strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at
 (`UniversalClass`), the class, regions and schedule of an executable statement (`ExecClass`), the inner statement's
 description read from its own rows, which are the registered ones or SHA-512 collides (`Description`), V*'s sessions
 as the prover supplies them, typed where they type and refusing elsewhere, with the prover's strategy carried across
-(`Raw`), where V*'s statement enters a session, with the law's population V*'s units (`Loads`), and V*'s outer
+(`Raw`), where V*'s statement enters a session, with the law's population V*'s units (`Loads`), the verifier's check
+that a session's circuit file is one of V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), and V*'s outer
 sessions zero knowledge with the honest prover's self-check in them, which never stops (`OuterAbort`). -/
