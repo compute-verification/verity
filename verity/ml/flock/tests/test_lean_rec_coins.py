@@ -58,30 +58,41 @@ def forged(tmp_path_factory) -> Path:
     return out
 
 
-def _verify(level: Path, public: Path, registered: Path, inner: str | None) -> dict:
+@pytest.fixture(scope="module")
+def shape(forged, tmp_path_factory) -> Path:
+    """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement."""
+    u = SET / "u" / "stage"
+    p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
+                        "--partition", str(u / "partition.json")], capture_output=True, text=True, check=True)
+    f = tmp_path_factory.mktemp("rec-inner") / "inner.json"
+    f.write_text(p.stdout)
+    return f
+
+
+def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None) -> dict:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
                                     str(SET / inner / "session")]
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
-                        str(level / "program.json"), "--registered", str(registered), *rec,
+                        str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec,
                         "--session", str(SET / "outer-L3" / "session")], capture_output=True, text=True, check=False)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
 
-def test_the_honest_level_is_accepted_at_the_honest_inner_session(forged):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", "inner-honest")
+def test_the_honest_level_is_accepted_at_the_honest_inner_session(forged, shape):
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
     assert v["accepted"], v.get("why")
 
 
-def test_the_honest_level_is_refused_without_the_inner_session(forged):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", None)
+def test_the_honest_level_is_refused_without_the_inner_session(forged, shape):
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, None)
     assert v["why"].startswith(f"setup: rec-coins: {UNIT}: the verifier holds no inner session"), v["why"]
 
 
-def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged):
-    v = _verify(forged, forged / "pub.bin", forged / "registered.json", "inner-honest")
+def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape):
+    v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
                         "verifier's rec-coef row 0")
