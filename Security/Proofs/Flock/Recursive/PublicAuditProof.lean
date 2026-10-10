@@ -58,13 +58,13 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   have hr' : ∀ R ω t R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg')
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).dj
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).y₀ S' R') i k ≤ ρ := by
-    intro R ω t R₂ j S' R' i
+    intro R ω t R₂ j S' R'
     dsimp only [Flock.Guarantees.custodied]
     by_cases hx' : (zr R ω t R₂ j).Typable
     · rw [zsOf_pos zr _ hT R ω t R₂ j hx']
-      exact hr R ω t R₂ j _ _ hx'.y₀ S' R' i
+      exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
-      exact hr _ _ _ _ j _ _ _ S' R' i
+      exact hr _ _ _ _ j _ _ _ S' R'
   rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (fun _ _ => Flock.Guarantees.publicHidden st) wmsg Sk cmt msg
     (hbr hT) Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
