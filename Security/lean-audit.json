@@ -510,12 +510,6 @@
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
   },
-  "Flock.SecurityProofs.RecursiveAudit": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit"],
-   "assumptions": [],
-   "type_hash": "b20765ad9e55e07c733436bb8f8b4b4e46b820d81b8a5f2050b3af098b6c7b8f"
-  },
   "Flock.SecurityProofs.RecursiveCircuitIndist": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist"],
@@ -3183,13 +3177,8 @@
   }
  },
  "shape": {
-  "premises": ["Proofs.Flock.Recursive.Premises"],
-  "properties": {
-   "Flock.SecurityProofs.RecursiveAudit": {
-    "function": ["Flock.ProvedScope.check", "Flock.Zk.verify"],
-    "outcome": "accept"
-   }
-  },
+  "premises": [],
+  "properties": {},
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -3199,11 +3188,11 @@
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
-   "Flock.SecurityProofs.RanRegisteredRun": "lemma: the one-session registration break, which RecursiveAudit's (i) uses at the commit strings V* checks; it leaves the list for RecursiveAudit, the one property.",
+   "Flock.SecurityProofs.RanRegisteredRun": "lemma: the one-session registration break at the commit strings a session reads; RecursiveAudit's (i) reads the hidden statement from the inner statement's own description rows instead (ofRows_eq_or_collides), and it leaves the list for RecursiveAudit, the one property.",
    "Flock.SecurityProofs.RecursiveCircuitIndist": "lemma: the two-circuit form of RecursiveCircuitPrivate; it leaves the list for RecursiveAudit, whose (ii) is RecursiveCircuitPrivateLeaves.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "lemma: the reduction RecursiveCircuitPrivateLeaves applies at a registration by hm96 leaves; it leaves the list for RecursiveAudit.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "lemma: RecursiveAudit's (ii), stated there; it leaves the list for RecursiveAudit, the one property.",
-   "Flock.SecurityProofs.RecursiveRanRegistered": "lemma: RecursiveAudit's (i) restates it at C-Flock's compiled table and the commit strings V* checks, with the inner fork; it leaves the list for RecursiveAudit.",
+   "Flock.SecurityProofs.RecursiveRanRegistered": "lemma: the registered private circuit's soundness at the rows V*'s sessions read; RecursiveAudit's (i) states it at C-Flock's compiled table with the inner fork and the hidden statement read from the inner statement's own description rows; it leaves the list for RecursiveAudit.",
    "Flock.SecurityProofs.RecursiveSound": "lemma: the recursive audit's soundness at an arbitrary inner protocol (InnerSound); RecursiveAudit's (i) states it at C-Flock's compiled table with the inner protocol in fork form, so it leaves the list for RecursiveAudit, the one property.",
    "Flock.SecurityProofs.RecursiveZK": "lemma: the recursive audit's zero knowledge without circuit privacy; RecursiveAudit's (ii) is its circuit-private form (RecursiveCircuitPrivateLeaves), so it leaves the list for RecursiveAudit, the one property.",
    "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (scope): It takes avoidsMask (_hdm) as a scope condition that the verifier doesn't refuse; Security/Proofs/Flock/Soundness/Discharge/FailClosed/Mask.lean:9-11 derives it from the setup, so restating on that removes the scope reason.",

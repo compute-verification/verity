@@ -175,7 +175,7 @@ theorem vbridge_exec
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
   vbridge_compiled T CT execArith H512 enc512 leaf512 cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
     halg hacc (stagesAccept_of_runs T CT cls regs sch zs dg N k Rw sh rep x wmsg files hsch hfiles hruns) hcm hdec
-    (FlockVBridge.Full.vFull_of_checkFull _ Sk hS own dj d hd hlaw hU4 hreads)
+    (vFullR_of_vFull (FlockVBridge.Full.vFull_of_checkFull _ Sk hS own dj d hd hlaw hU4 hreads))
 
 end outer
 

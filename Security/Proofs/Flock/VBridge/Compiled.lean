@@ -119,7 +119,7 @@ variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintyp
 protocol `flockInnerCL` (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins),
 from the pieces still open: the algebra decoded from V*'s layers (`AlgebraDecodes`), the running sums' chain
 (`AccChains`), the inner verifier's stages run from E's conclusions (`StagesAccept`), and V*'s files and laws
-(`VCommits`, `VDecodes`, `VFull`). -/
+(`VCommits`, `VDecodesR`, `VFullR`). -/
 theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule) {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
@@ -138,10 +138,9 @@ theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     (hst : StagesAccept zs dg N k Rw sh rep x wmsg)
     -- V*'s public files and laws (G item 6)
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
-    (hfull : VFull (flockInnerCL T CT A H E Lf cls regs sch).r Sk) :
+    (hfull : VFullR (flockInnerCL T CT A H E Lf cls regs sch).r Sk) :
     Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ τ o h => hst R ω t R₂ τ o h fun r => ⟨halg R ω t R₂ τ o h r, hacc R ω t R₂ τ o h r⟩, hcm, hdec,
-    fun i hi j g hg _ => hfull i hi j g hg⟩
+  ⟨fun R ω t R₂ τ o h => hst R ω t R₂ τ o h fun r => ⟨halg R ω t R₂ τ o h r, hacc R ω t R₂ τ o h r⟩, hcm, hdec, hfull⟩
 
 end target
 

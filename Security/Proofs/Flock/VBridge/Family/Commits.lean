@@ -139,10 +139,10 @@ and every registration, session `j`'s public file (`pub.bin`) holds at each row 
 there (`bc`). V* stages the verifier's `pub.bin` with the inner session's `c_k` at its message rows (`rec_vstage.stage`,
 `rec_vstage.py:353-366`; `rec_residuals.write`, `rec_residuals.py:441-445,464`). The verifier's `--registered` check
 (`Flock.Registered.check`) ties those rows to the entry `rec_residuals.commits_entry` rebuilds from the `c_k`
-(`rec_residuals.py:398-406`) only on an accepted run; `VCommits` reads every history, so the family's sessions (`zs`)
-give it. -/
+(`rec_residuals.py:398-406`) only on an accepted run, which is where `VCommits` reads it. -/
 def PubCommits (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8) : Prop :=
-  ∀ i R ω (t : List (Cm × (ℐ).Coin)) (e : Cm × (ℐ).Coin), t[i]? = some e → ∀ R₂ j (u : Fin (F.Vs j).nv)
+  ∀ i R ω (t : List (Cm × (ℐ).Coin)) (e : Cm × (ℐ).Coin), t[i]? = some e → ∀ R₂ j,
+    (∃ tr, ZkReg.AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) → ∀ (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), Sum.inl (u, q) ∈ F.Sk i j →
       ((F.zs R ω t R₂ j).pub.digest u.val q.val (F.Vs j).c.ports.size).data.toList = bc j e.1 (.inl (u, q))
 
@@ -151,12 +151,12 @@ registers the stages' commitments where its public files hold their `b ‖ c` (`
 theorem hCommits_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
     (hSk : F.Sk = skOf F.Vs own sel) (hcmt : F.cmt = cmtOf F.Vs bc) (hpub : F.PubCommits bc) : F.HCommits := by
-  intro i R ω t e he R₂ j _ pos hpos R'
+  intro i R ω t e he R₂ j hacc pos hpos R'
   rcases pos with ⟨u, q⟩ | g
   · rw [hcmt]
     exact (vb_cs_inl (F.zs R ω t R₂ j) R' u q).trans
       (congrArg (fun l => ((Sum.inl (u, q) : PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv),
-        Refine.H512 (Refine.K512.leafPrefix ++ l))) (hpub i R ω t e he R₂ j u q hpos))
+        Refine.H512 (Refine.K512.leafPrefix ++ l))) (hpub i R ω t e he R₂ j hacc u q hpos))
   · rw [hSk] at hpos
     exact absurd hpos (inr_not_mem_skOf g)
 
