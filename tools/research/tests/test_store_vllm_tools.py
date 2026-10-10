@@ -277,7 +277,7 @@ def no_dirty_digest(monkeypatch):
     """This checkout's source identity without its dirty digest, which reads every untracked file of the working tree: the
     derivations these tests compare don't depend on it, and a suite may not read files outside its inputs."""
     from research import env as E
-    monkeypatch.setattr(E, "_dirty_digest", lambda root: None)
+    monkeypatch.setattr(E, "_dirty_digest", lambda root, capture=None: None)
 
 
 PINNED = {"hw.family": "l40s", "torch": "2.9.0", "vllm": "0.11.0"}

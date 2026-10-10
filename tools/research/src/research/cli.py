@@ -364,6 +364,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
         a.cwd = str(run_dir)
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
+    _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     if ns.claimed and remote_info is not None:
         try:
@@ -721,6 +722,8 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env) is
     recorded as `params.env`, values redacted where the NAME matches SECRET_KEY; it is not part of the derivation (a Tool that
     depends on an environment variable declares it as a key param)."""
+    import tempfile
+
     from . import env as E
     from .store import attempt as A
     from .store import derivation as D
@@ -738,9 +741,11 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
-        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root, source_hint=hint)
+        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root,
+                             source_hint=hint, dirty_capture=capture)
         if tool is not None:
             conds.update(tool.tool_conditions(conds))
             params, key = tool.resolve_params(command, source_root)
@@ -784,7 +789,31 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         section = {"error": f"{type(e).__name__}: {e}", "tool": {"name": tool.name, "version": tool.version, "spec": tool.spec} if tool else None,
                    "campaign": ns.campaign}
         print(f"research run: store preparation failed ({section['error']}); running anyway, the attempt will be published from the records", file=sys.stderr)
-    return {"tool": tool, "conditions": conds, "section": section, "env": env_out}
+    return {"tool": tool, "conditions": conds, "section": section, "env": env_out, "dirty_capture": capture}
+
+
+def _place_dirty_capture(prep: dict, run_dir: Path) -> None:
+    """Move the dirty source's capture (env.DIRTY_CAPTURE) into the run dir, and name it in the store section with the digest it
+    reproduces; custody uploads it with the run's own files, and `evict_src` lets the tree go only once that record is preserved.
+    No capture (a clean source, `too-large`, any error) leaves the section without one, and the tree stays the run's source."""
+    import hashlib
+    import shutil
+
+    cap: Path = prep["dirty_capture"]
+    try:
+        conds = prep["section"].get("conditions") or {}
+        if cap.is_file() and conds.get("source.dirty"):
+            dest = run_dir / cap.name
+            shutil.move(cap, dest)
+            with open(dest, "rb") as f:
+                sha = hashlib.file_digest(f, "sha256").hexdigest()
+            prep["section"]["dirty_capture"] = {"path": cap.name, "bytes": dest.stat().st_size, "sha256": sha,
+                                                "dirty_digest": conds.get("source.dirty_digest")}
+    except OSError as e:
+        prep["section"].pop("dirty_capture", None)
+        print(f"research run: the dirty source was not captured ({type(e).__name__}: {e}); its tree stays its only copy", file=sys.stderr)
+    finally:
+        shutil.rmtree(cap.parent, ignore_errors=True)
 
 
 def _no_usable_remote() -> str | None:
