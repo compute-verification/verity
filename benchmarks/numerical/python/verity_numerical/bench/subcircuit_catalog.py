@@ -219,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     if st:
         art = put(st, a.out / "tree", meta, report_art)
         done = {"catalog": art, "circuit_check": report_art}
+        (a.out / "catalog.json").write_text(json.dumps(done, indent=1) + "\n")
         if a.preserve:
             for x in (report_art, art):
                 rep = st.push(x, preserve=True)
@@ -226,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"{x}: NOT preserved: {'; '.join(rep['errors'])}", file=sys.stderr)
                     return 1
             done["preserved"] = True
-        (a.out / "catalog.json").write_text(json.dumps(done, indent=1) + "\n")
+            (a.out / "catalog.json").write_text(json.dumps(done, indent=1) + "\n")
         print(json.dumps(done))
     return 0
 
