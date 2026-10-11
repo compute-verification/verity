@@ -1,7 +1,8 @@
 # The bandwidth audit, v0
 
 Status: v0, ready for a red team. The Python reference and verifier are `audit.py` and `tags.py`, pinned by
-`tests/vectors.json`. The guarantee's Lean statement and proof are lane `ra-bandwidth-lean`'s, under `Security/`'s
+`tests/vectors.json`; the GPU tagger is `benchmarks/bandwidth`, checked bit for bit against them and timed on the
+RTX PRO 6000 (§6). The guarantee's Lean statement and proof are lane `ra-bandwidth-lean`'s, under `Security/`'s
 `Accounting` area; until it lands, §5 is the statement that lane proves, not a proved one.
 
 ## 1. What a window certifies
@@ -90,11 +91,12 @@ words mod p, 96.9% of the block (§7, finding 1).
   `gf31-poly/v1` at `B = 2^19`, `δ_γ = 2^-40`. A prover that holds part of a block and guesses the rest is the
   compression argument the Lean lane makes; `bound` counts only all-or-nothing reads.
 - **On chip.** Whatever the chip holds when `σ` arrives, at most `S_chip` bytes: on the RTX PRO 6000, 128 MiB of L2
-  and 188 SMs × (256 KiB of registers + 128 KiB of L1 and shared memory), about 208 MB, 19% of `E`
-  (measured and recorded with the GPU tagger, `benchmarks/bandwidth`).
+  and 188 SMs × (256 KiB of registers + 128 KiB of L1 and shared memory), 208,142,336 bytes, 19.3% of `E`, from the
+  device's own properties (`device.json` of the run in §6).
 - **Side paths.** Every other path into the chip during `T + RTT`, at most `cap_side` bytes per second. Host RAM is
-  not part of the allowed hardware (Daniel, 3 Oct 2026), so the side paths are the GPU's PCIe Gen 5 x16 link
-  (about 63 GB/s raw, shared by host, NVMe, NIC and peer GPUs); the RTX PRO 6000 Server has no NVLink.
+  not part of the allowed hardware (Daniel, 3 Oct 2026), so the side paths are the GPU's PCIe Gen 5 x16 link,
+  shared by host, NVMe, NIC and peer GPUs; the RTX PRO 6000 Server has no NVLink. `cap_side` is the link's raw rate,
+  32 GT/s × 16 lanes at 128b/130b = 63.0 GB/s; the measured rates come close (§6).
 - **No rebuild.** `Params` refuses `T + RTT ≥ regen_floor_ns`, by default the fastest cooperating P2 root,
   `2 · ROOT_CALL_NS = 1,708,058 ns`; the fastest root measured on the RTX PRO 6000 takes 18.53 ms (floor 2.26 ms,
   art:f26f917e0605e2974f44a9b0f8ae7f4fe4a78b95181deaf8d8c457ce98c64ad3). One root, not two, so a prover holding a
@@ -107,9 +109,42 @@ and `S_chip` as measured for the device; a live verifier that keeps its secret u
 ## 6. Parameters
 
 `T` is set from the honest tag pass measured on the device, with headroom, and must leave `T + RTT` under the rebuild
-floor. The GPU tagger's measured pass times, the raw device read rate, and the PCIe rates that bound `cap_side` are
-recorded in the evidence store and cited in the PR and the lane report; `T` and `s` are fixed here once a red team has
-read this.
+floor. `T` and `s` are fixed here once a red team has read this; the proposal is `gf31-poly/v1`, `s = 459` and
+`T = 1.1 ms`, which leaves up to 0.6 ms for `RTT`.
+
+The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
+timed lease: run `r20261011-225829-61f9`, art:eb242aa584c8b60b7f36b63f6077d96893fd50049bc7d950bbb9c0be2e839d28. Its
+gates passed before anything was timed: both tags' roots over the full store (`B = 2^19`) and over the pinned vectors'
+37 blocks equal the reference's, with the output buffers poisoned, and a pass without the tag kernel does not match.
+Times are medians of 100 passes, each after a 512 MiB write that clears L2 (p99 in brackets).
+
+| | time | rate over `E` (1.078 GB) |
+|---|---|---|
+| raw device read of `E` | 0.730 ms | 1,476 GB/s |
+| `gf31-poly/v1` pass: tags and leaves, then the tree | 0.910 ms (0.921) = 0.767 + 0.141 | 1,185 GB/s |
+| `gf31-poly/v1` pass, host clock to the root on the host | 0.924 ms (0.938) | |
+| `gf31-poly/v1` whole window through `audit.Verifier`, 20 windows | 0.998 ms (max 1.030), all accepted | |
+| `ro-sha512/v1` pass: tags and leaves, then the tree | 1.728 ms (1.734) = 1.415 + 0.313 | 624 GB/s |
+| `ro-sha512/v1` whole window, 20 windows | 1.737 ms (max 1.780), all late | |
+| PCIe host to device, pinned copy / a kernel reading pinned host memory | | 56.6 / 51.4 GB/s |
+
+`gf31-poly/v1`'s tag kernel runs at 95% of the raw read rate; the rest of its pass is the tree, whose 15 levels of
+two dependent compressions each set its length. A prover that tags only a fraction `f` of the blocks saves about that
+fraction of the tag kernel: 0.906, 0.871, 0.835 and 0.552 ms at `f = 0, 5, 10, 50%`. With `s = 459`, a window that
+skips 1% is rejected with probability 99%, and one that skips 5% with probability 1 − 6·10^-11. Both skip windows
+run on the device were rejected.
+
+`bound` at `s = 459`, `δ_s = 1%`, `δ_γ = 2^-40`, `S_chip = 208,142,336` bytes and `cap_side = 63.0 GB/s`:
+
+| tag | `T`, `RTT` | `I` | share of `E` | `I / (T + RTT)` |
+|---|---|---|---|---|
+| `gf31-poly/v1` | 1.1 ms, 0 | 756,352,602 bytes | 70.2% | 688 GB/s |
+| `gf31-poly/v1` | 1.1 ms, 0.354 ms | 734,045,156 bytes | 68.1% | 505 GB/s |
+| `gf31-poly/v1` | 1.708 ms (the largest `Params` allows), 0 | 718,035,657 bytes | 66.6% | 420 GB/s |
+
+At `T = 1.1 ms` the certified rate is 47% of the raw read rate. The rest goes to the chip's storage (19.3% of `E`),
+the side path (6.4%), `gf31-poly/v1`'s binding (3.1%), the sampling error (1%), and the time the honest pass takes
+beyond a raw read.
 
 ## 7. Findings and open questions for the red team
 
@@ -126,6 +161,13 @@ read this.
    `γ` is over `g_j` alone, which is uniform on `[2, p − 1]` given everything but `σ`.
 5. **Openings disclose sampled blocks** of `C*` (an encoding of `W`) to the verifier; the memory challenger already
    holds `vk` and publishes only verdicts, so nothing leaves it.
+6. **`ro-sha512/v1` does not fit on the RTX PRO 6000.** Its honest pass takes 1.73 ms, past the 1.708 ms rebuild
+   floor, so no `T` that `Params` allows admits it (§6). It is SHA-512-bound (18 compressions per block), not
+   memory-bound. It remains the tag the proof treats first; deployment needs `gf31-poly/v1` or its injective
+   successor.
+7. **`S_chip` counts L2, the register files and L1/shared memory.** Smaller on-chip stores (instruction and
+   constant caches, copy-engine buffers) are left out. A red team should confirm that none of them can hold a useful
+   share of `E` across a window's start.
 
 ## 8. Code
 
@@ -135,3 +177,5 @@ read this.
   samples`, `verdict(openings) -> Verdict`), and `bound`.
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for both constructions, window seeds and
   samples, and a whole window over 37 blocks.
+- `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`), its harness API (`gpu.py`: `Tagger.tag_pass(tag, store, blocks,
+  σ, workspace)` returns the root; `open(j, store_tree)` gives the `Opening` this verifier checks), and the run of §6.
