@@ -43,7 +43,7 @@ theorem check_sparse {c : Circuit} (h : RecSparse.check c = .ok ()) {sh : RecSpa
         · rename_i g hg
           split at h
           · rename_i hcg
-            simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hb
+            simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hb
             exact ⟨by simpa using hv, hb.1, hb.2, by rw [hcg]; exact hg⟩
           · cases h
 
