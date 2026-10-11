@@ -186,4 +186,51 @@ theorem pr_passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n)
     funext fun x => propext (passes_iff session binding W A x)]
   exact pr_reindex splitAll fun ω hc I => Ev session binding W A ω (coinView session hc I) I
 
+/-! ### The budget and the ring game -/
+
+theorem budget : (2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130 + (2⁻¹ : ℝ≥0∞) ^ 131 ≤ Params.εMax := by
+  have hk : ∀ n : ℕ, (2⁻¹ : ℝ≥0∞) ^ (n + 1) + (2⁻¹ : ℝ≥0∞) ^ (n + 1) = (2⁻¹ : ℝ≥0∞) ^ n := by
+    intro n
+    rw [← two_mul, pow_succ, mul_comm ((2⁻¹ : ℝ≥0∞) ^ n), ← mul_assoc,
+      ENNReal.mul_inv_cancel (by norm_num) (by norm_num), one_mul]
+  have h31 : (2⁻¹ : ℝ≥0∞) ^ 131 ≤ (2⁻¹ : ℝ≥0∞) ^ 130 :=
+    pow_le_pow_of_le_one bot_le (ENNReal.inv_le_one.2 one_le_two) (by norm_num)
+  calc _ ≤ (2⁻¹ : ℝ≥0∞) ^ 129 + ((2⁻¹ : ℝ≥0∞) ^ 130 + (2⁻¹ : ℝ≥0∞) ^ 130) := by rw [add_assoc]; gcongr
+    _ = Params.εMax := by rw [hk 129, hk 128]; rfl
+
+set_option exponentiation.threshold 20000 in
+/-- Every session commitment `v` turns the server into a `SeqResponderOn` of `P2RingAuditSecure`'s game. -/
+def responder {S D Q L : ℕ} (session binding : ByteArray) (A : Server S D Q L) (v : ByteArray × ByteArray) :
+    SeqResponderOn sch S D Q L :=
+  ⟨A.step (commitmentOf session binding v), fun W pp j σ i => A.bounded _ W pp j σ i⟩
+
+theorem ev_some_le {S D Q L : ℕ} (hP : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hS : S = Pous.EndToEnd.S)
+    (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L) (v : ByteArray × ByteArray) :
+    pr (fun o : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × Unit × (Fin 105 → Fin (2 ^ 19)) =>
+        Ev session binding W A o.1 (some v) o.2.2) ≤
+      ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) := by
+  subst hS
+  have h := hP W A.pre (responder session binding A v)
+  refine le_trans (pr_mono ?_) h
+  rintro o ⟨v', hv, hs⟩
+  obtain rfl := Option.some.inj hv
+  exact hs
+
+set_option exponentiation.threshold 20000 in
+theorem endToEndRing : EndToEndRing := by
+  intro hH D Q L hP session binding W A
+  rw [pr_passes]
+  have h₁ := hH session (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω (Ev session binding W A)
+  have h₂ := pr_slice_le (Ω := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (C := HmCoins)
+    (I := Fin 105 → Fin (2 ^ 19)) (Ev session binding W A) (coinView session)
+    (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130))
+    (fun _ _ ⟨_, h, _⟩ => by cases h) (ev_some_le hP rfl session binding W A)
+  refine h₁.trans ((add_le_add h₂ le_rfl).trans ?_)
+  rw [add_assoc]
+  gcongr
+  exact budget
+
+set_option exponentiation.threshold 20000 in
+theorem endToEndRingDeployed : EndToEndRingDeployed := fun hH hP => endToEndRing hH _ _ _ hP
+
 end Pous.EndToEnd.SecurityProofs
