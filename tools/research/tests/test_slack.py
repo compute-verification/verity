@@ -546,11 +546,12 @@ def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_soc
     with pytest.raises(slack.SlackError, match="identity socket the Slack broker needs is unavailable"):
         slack.oidc_token(slack.BROKER, sleep=waits.append)
     assert len(identity_socket["seen"]) == 1 and identity_socket["drop"] == 0
-    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path / "absent.sock"))
-    waits.clear()
-    with pytest.raises(slack.SlackError, match="not a Cursor agent"):
-        slack.oidc_token(slack.BROKER, sleep=waits.append)
-    assert not waits
+    for absent in (tmp_path / "absent.sock", tmp_path / ("x" * 120) / "api.sock"):   # past AF_UNIX's ~108 bytes too
+        monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(absent))
+        waits.clear()
+        with pytest.raises(slack.SlackError, match="not a Cursor agent"):
+            slack.oidc_token(slack.BROKER, sleep=waits.append)
+        assert not waits
 
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
@@ -1276,6 +1277,27 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then
     assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 
 
+def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    infra, proofs, lean = (inbox(fake, routes_dirs, n) for n in ("infra", "proofs", "lean"))
+    root = fake.add(COORD, text=f"{slack.ANNOUNCE} *Announcement* from @top to every handle\nmerge thread: land outcomes go here",
+                    username="top", bot_id=BOT)
+    fake.add(COORD, text="#1590 rides r20261009-035518-dd21; 6350 is its suites run", username="proofs", bot_id=BOT, thread_ts=root["ts"])
+    fake.add(COORD, text="lean: #1601 waits on dd21 too", username="lean", bot_id=BOT, thread_ts=root["ts"])
+    fake.add(COORD, text="vy-nebius-1: the OOM killer took python of the run for #1600", username="vy-monitors", bot_id=BOT,
+             thread_ts=root["ts"])
+    body = ("@infra circuits, on your placement: yes, r20261011-044421-6350 is ours, launched before it reached us.\n"
+            "\u2022 Delete its scratch the moment 6350's pytest exits; nothing of ours needs it.\n"
+            "\u2022 Its next suites run goes on vy-cpu-2 after dd21, beside #1590, #1600 and #1601, with --basetemp under scratch.\n"
+            "\u2022 The tree is main + #1590, pushed as `cursor/sweep-2-tree-95d4`.\n\n"
+            "Nothing else changes; the rest is in the run's notes.")
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", body)
+    assert rc == 0 and "route @infra: rang" in err and "vy-monitors" not in err
+    assert len(bells(fake, infra)) == 1 and bells(fake, proofs) == [] and bells(fake, lean) == []
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", "#1600 and #1601 are on the next train")
+    assert rc == 0 and len(bells(fake, lean)) == 1 and "vy-monitors" not in err   # naming no one, a PR's namer is rung
+
+
 def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-worker", "1.0", closed="2026-10-01T18:00Z", forward_to="circuits")
@@ -1294,6 +1316,43 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     (routes_dirs[1] / "router.json").write_text(json.dumps({**router, "mode": "cli"}))   # switched back; the clone not pulled
     rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "once more")
     assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
+
+
+def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_and_alerts_its_owner(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    status = [405]
+
+    class Route(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(status[0])
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Route)
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
+    box, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z",
+              "url": f"http://127.0.0.1:{srv.server_address[1]}/api/agent-slack/events", "owner": "top"}
+    for d in routes_dirs[:2]:
+        (d / "router.json").write_text(json.dumps(router))
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "answered")
+    assert rc == 0 and "route: the router rings @circuits" in err and bells(fake, box) == [] and bells(fake, top) == []
+    status[0] = 404
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "not answered")
+    assert rc == 0 and "route @circuits: rang" in err and "route @top: alerted, the router's events route doesn't answer (HTTP 404)" in err
+    alert = bells(fake, top)
+    assert len(bells(fake, box)) == 1 and len(alert) == 1 and alert[0]["text"].startswith("from router (URGENT), thread ")
+    assert router["url"] in alert[0]["text"] and "routes.d/router.json" in alert[0]["text"]
+    status[0] = 503
+    rc, _, err = run(capsys, "send", "--as", "proofs", "--to", "@circuits", "--text", "still down")
+    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang; already alerted" in err
+    assert len(bells(fake, box)) == 2 and len(bells(fake, top)) == 1
+    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@circuits", "--text", "from its owner")
+    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang" in err
+    assert len(bells(fake, box)) == 3 and len(bells(fake, top)) == 1
+    srv.shutdown()
 
 
 def notes_clone(tmp_path) -> Path:

@@ -56,8 +56,8 @@ structure Shape where
   deriving DecidableEq, Repr
 
 /-- The menu, public and fixed per model, never per audit. `shapes`: the shapes a session may take; `inner s`: the inner
-session's shape V* is staged over for a session of shape `s` (a parameter until lean's map beside `VStar.statements`,
-over F6's menu as data, lands with F5); `types s`: the public bound on the types a session of shape `s` selects among
+session's shape V* is staged over for a session of shape `s` (a pinned menu's is `VStar.Menu.inner`, in
+`Menu.ofEntries`); `types s`: the public bound on the types a session of shape `s` selects among
 (its type table's size, the real count padded up to it); `padded k`: the sessions an audit of `k` drawn units runs, by
 shape and in order, a function of `k` and the menu alone. -/
 structure Menu where

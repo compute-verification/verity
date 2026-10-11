@@ -138,7 +138,7 @@ SHIP_CHUNK = 1 << 20                          # the launcher never holds more of
 STALE_PARTIAL_MIN = 30                        # a <root>/src/*.partial-* directory with nothing written for this long belongs to a dead ship
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
-SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
+SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl", "slot.json")
 TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
@@ -1845,7 +1845,8 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
         return rec
     rec["observed_utc"] = utc_now_ms()
     st = _read_json(local_dir / "status.json") or {}
-    rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
+    waits = st.get("state") == "running" and (_read_json(local_dir / "slot.json") or {}).get("state") == "waiting"
+    rec["last_observed"] = {"state": "waiting" if waits else st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
     rec.pop("launcher_exited", None)
     rec.pop("runner_gone", None)

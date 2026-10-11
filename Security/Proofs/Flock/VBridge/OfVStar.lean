@@ -199,7 +199,7 @@ theorem sound_climbRow (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.
   exact FlockVBridge.sound_climbRow ms hms H row aux d
 
 /-- **V*'s opening computes the climb and the consistency term** (`FlockVBridge.sound_recOpen`). -/
-theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (row aux acc coef dirs : List Lin) :
     Sound (VStar.recOpen LANES H row aux acc coef dirs) fun z o =>
       ∀ (r a c : Array F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray),
@@ -272,18 +272,17 @@ theorem recOpenUnit_ok {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit 
     simp only [recOpenOuts, recOpenNet_run, Nat.zero_add]
     refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
 
-theorem checkRecOpen_ok {LANES H : ℕ} (h : VStar.checkRecOpen LANES H = .ok ()) : 1 ≤ H ∧ H ≤ 16 := by
+theorem checkRecOpen_ok {LANES H : ℕ} (h : VStar.checkRecOpen LANES H = .ok ()) : H ≤ 32 := by
   unfold VStar.checkRecOpen at h
   by_cases h1 : (LANES < 8 || LANES % 8 != 0) = true
   · simp only [h1, ↓reduceIte] at h
     contradiction
-  · by_cases h2 : (H < 1 || 16 < H) = true
+  · by_cases h2 : 32 < H
     · simp only [h1, h2, ↓reduceIte] at h
       contradiction
-    · simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt] at h2
-      omega
+    · omega
 
-theorem recOpenUnit_H {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit LANES H = .ok U) : 1 ≤ H ∧ H ≤ 16 := by
+theorem recOpenUnit_H {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit LANES H = .ok U) : H ≤ 32 := by
   unfold VStar.recOpenUnit at h
   cases hc : VStar.checkRecOpen LANES H with
   | error e => simp [hc, bind, Except.bind] at h
@@ -381,7 +380,7 @@ theorem laid_recOpenUnit (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha51
       rfl
     omega
   rw [outStart_recOpenUnit hU]
-  exact laid_recOpen ms hms LANES H (recOpenUnit_H hU).2 (ports LANES H) (Array.replicate U.outWords 16) v hout'
+  exact laid_recOpen ms hms LANES H (recOpenUnit_H hU) (ports LANES H) (Array.replicate U.outWords 16) v hout'
     (laidRows_recOpenUnit hU hl h) r a c rest idx ss hr ha hss hrowN hauxN haccN hcoefN hdirsN hrow haux hacc hcoef hdir
 
 theorem inWords_laid {U : VStar.UnitC} {l : Laid} (hl : U.laid = .ok l) {name : String} {net : Flock.Net}

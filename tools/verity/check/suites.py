@@ -1323,6 +1323,21 @@ DIST = ["--dist", "worksteal"]
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
+#: each suite's pytest `--basetemp`, `<tmp>/<BASETEMP>-<suites.py's pid>-*`, removed when the suite ends: pytest's own keeps
+#: its last three runs, and a flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. The name is no
+#: longer than pytest's own `pytest-of-<user>/pytest-<n>`: a test's AF_UNIX socket under tmp_path has at most 107 bytes of path
+BASETEMP = "verity-suite"
+
+
+def sweep_basetemps(tmp: Path | None = None) -> list[Path]:
+    """Remove the `--basetemp`s whose suites.py is gone (killed before it could remove them); returns them."""
+    gone = []
+    for d in (tmp or Path(tempfile.gettempdir())).glob(f"{BASETEMP}-*"):
+        pid = d.name.removeprefix(f"{BASETEMP}-").split("-", 1)[0]
+        if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
+            shutil.rmtree(d, ignore_errors=True)
+            gone.append(d)
+    return gone
 
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
@@ -1348,11 +1363,13 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
+    own = not any(a == "--basetemp" or a.startswith("--basetemp=") for a in args)
+    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}-")) if own else None
     start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
         p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                              *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT,
-                             start_new_session=True)
+                              *spread, *([f"--basetemp={basetemp}"] if basetemp else []), *args], cwd=ROOT / suite.path, env=env,
+                             stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
         with _GROUPS_LOCK:
             _GROUPS.add(p.pid)
         expired = threading.Event()
@@ -1373,6 +1390,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
             with _GROUPS_LOCK:
                 _GROUPS.discard(p.pid)
             leftover = kill_group(p.pid)
+            if basetemp:
+                shutil.rmtree(basetemp, ignore_errors=True)
     rc = p.returncode = os.waitstatus_to_exitcode(status)
     seconds = time.monotonic() - start
     sig = signal.Signals(-rc).name if rc < 0 else ""
@@ -1522,6 +1541,9 @@ def _count(r: Result) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
+    # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     argv = sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv
@@ -1577,6 +1599,8 @@ def main(argv: list[str] | None = None) -> int:
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
     logs.mkdir(parents=True, exist_ok=True)
+    if not (a.list or a.explain):
+        sweep_basetemps()
     # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
     needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
     unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
