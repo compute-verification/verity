@@ -8,8 +8,8 @@
 //                 group's two leaves of 16 tags.
 //   ro-sha512/v1  one thread per block, the warp staging each 128-byte chunk of its 32 rows through shared memory
 //                 (coalesced), 17 compressions after the prefix's midstate, and the block's leaf fused (one leaf per tag).
-//   tree          bottom-up, an odd last node promoted, which is RFC 6962's shape: one launch per level down to 2,048
-//                 nodes, then one block for the rest.
+//   tree          bottom-up, an odd last node promoted, which is RFC 6962's shape: nine levels per launch, each block
+//                 reducing 512 nodes to one (`node_span`); every level stays in the workspace for openings.
 //
 // Built two ways from this file: `bwtag` (BW_MAIN: validate against the Python reference, then time) and `libbwtag.so`
 // (the C ABI at the end, for a harness that holds E in its own device buffer).
@@ -41,7 +41,6 @@ constexpr uint64_t BLOCK_BYTES = 2056;
 constexpr int ROW_U64 = 257;  // a block is 257 eight-byte words
 constexpr int TAG_GF31 = 0, TAG_RO = 1;
 constexpr unsigned FULL = 0xffffffffu;
-constexpr uint64_t FINAL_NODES = 2048;
 
 static const char* const TAG_NAMES[2] = {"gf31-poly/v1", "ro-sha512/v1"};
 static const char TAG_DOMAIN[] = "verity/bandwidth/tag/v1";        // + its NUL: 24 bytes
@@ -238,20 +237,15 @@ __device__ uint32_t gf31_point(const Mid& mid, uint64_t j) {
   }
 }
 
-// gf31-poly/v1's point for each block in [0, count).
-__global__ void gf31_points(uint64_t count, Mid tagmid, uint32_t* __restrict__ g) {
-  uint64_t j = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
-  if (j < count) g[j] = gf31_point(tagmid, j);
-}
-
-// gf31-poly/v1's tags of blocks [0, count): one warp per 32 consecutive blocks, each block's row read once as uint2.
-__global__ void __launch_bounds__(256) gf31_kernel(const uint2* __restrict__ E, uint64_t count,
-                                                   const uint32_t* __restrict__ gs, uint32_t* __restrict__ tags) {
+// gf31-poly/v1's tags of blocks [0, count): one warp per 32 consecutive blocks, each lane deriving its block's point
+// first, then each block's row read once as uint2.
+__global__ void __launch_bounds__(256) gf31_kernel(const uint2* __restrict__ E, uint64_t count, Mid tagmid,
+                                                   uint32_t* __restrict__ tags) {
   const int lane = threadIdx.x & 31;
   const uint64_t base = ((blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5) * 32;
   if (base >= count) return;
   const uint64_t jl = base + lane;
-  const uint32_t g_lane = jl < count ? gs[jl] : 2;
+  const uint32_t g_lane = jl < count ? gf31_point(tagmid, jl) : 2;
   const int nb = (int)(count - base < 32 ? count - base : 32);
   uint32_t my_y = 0;
   for (int b = 0; b < nb; ++b) {
@@ -398,18 +392,21 @@ __device__ __forceinline__ void level_step(const uint64_t* in, uint64_t n, uint6
     for (int k = 0; k < 8; ++k) out[8 * i + k] = in[16 * i + k];
 }
 
-__global__ void __launch_bounds__(128, 4) node_level(const uint64_t* __restrict__ in, uint64_t n, uint64_t* __restrict__ out) {
-  uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
-  if (i < (n + 1) / 2) level_step(in, n, out, i);
-}
+// Up to SPAN levels in one launch: block b of SPAN_THREADS threads takes nodes [b·2^SPAN, (b + 1)·2^SPAN) of the first
+// level and every node above them, one level per barrier.  Ranges stay aligned, so a block's inputs at each level are
+// its own outputs of the level below, and the odd last node of a level falls in the last block.
+constexpr int SPAN = 9, SPAN_THREADS = 1 << (SPAN - 1);
 
-__global__ void __launch_bounds__(512) node_final(uint64_t* levels, uint64_t off, uint64_t n) {
-  while (n > 1) {
-    const uint64_t nout = (n + 1) / 2;
-    for (uint64_t i = threadIdx.x; i < nout; i += blockDim.x) level_step(levels + off * 8, n, levels + (off + n) * 8, i);
+struct Span {
+  uint64_t off[SPAN + 1], n[SPAN + 1];  // in nodes; off[t], n[t] for t = 0..levels
+  int levels;
+};
+
+__global__ void __launch_bounds__(SPAN_THREADS) node_span(uint64_t* nodes, Span s) {
+  for (int t = 0; t < s.levels; ++t) {
+    const uint64_t i = blockIdx.x * (uint64_t)(SPAN_THREADS >> t) + threadIdx.x;
+    if (threadIdx.x < (SPAN_THREADS >> t) && i < s.n[t + 1]) level_step(nodes + s.off[t] * 8, s.n[t], nodes + s.off[t + 1] * 8, i);
     __syncthreads();
-    off += n;
-    n = nout;
   }
 }
 
@@ -460,16 +457,15 @@ struct Pass {
   int tag = TAG_GF31;
   uint64_t blocks = 0;
   Levels lv;
-  uint32_t* tags = nullptr;    // gf31 only
-  uint32_t* points = nullptr;  // gf31 only
-  uint64_t* nodes = nullptr;   // every level, contiguous
+  uint32_t* tags = nullptr;   // gf31 only
+  uint64_t* nodes = nullptr;  // every level, contiguous
 };
 
 static size_t u32_area(uint64_t blocks) { return ((blocks * 4 + 255) / 256) * 256; }
 
 static size_t workspace_bytes(int tag, uint64_t blocks) {
   Levels lv = levels_for(leaf_count(tag, blocks));
-  return (tag == TAG_GF31 ? 2 * u32_area(blocks) : 0) + lv.total * 64;
+  return (tag == TAG_GF31 ? u32_area(blocks) : 0) + lv.total * 64;
 }
 
 static Pass make_pass(int tag, uint64_t blocks, void* workspace) {
@@ -480,8 +476,7 @@ static Pass make_pass(int tag, uint64_t blocks, void* workspace) {
   char* ws = (char*)workspace;
   if (tag == TAG_GF31) {
     p.tags = (uint32_t*)ws;
-    p.points = (uint32_t*)(ws + u32_area(blocks));
-    ws += 2 * u32_area(blocks);
+    ws += u32_area(blocks);
   }
   p.nodes = (uint64_t*)ws;
   return p;
@@ -492,8 +487,7 @@ static void launch_tags(const Pass& p, const void* E, const uint8_t seed[32], ui
   Mid lm = prefix_midstate(LEAF_DOMAIN, TAG_NAMES[p.tag], seed);
   uint64_t warps = (count + 31) / 32;
   if (p.tag == TAG_GF31) {
-    gf31_points<<<(unsigned)((count + 127) / 128), 128, 0, st>>>(count, tm, p.points);
-    gf31_kernel<<<(unsigned)((warps * 32 + 255) / 256), 256, 0, st>>>((const uint2*)E, count, p.points, p.tags);
+    gf31_kernel<<<(unsigned)((warps * 32 + 255) / 256), 256, 0, st>>>((const uint2*)E, count, tm, p.tags);
     gf31_leaves<<<(unsigned)(((count + 15) / 16 + 127) / 128), 128, 0, st>>>(p.tags, p.blocks, count, lm, p.nodes);
   } else {
     unsigned grid = (unsigned)((warps + RO_WARPS - 1) / RO_WARPS);
@@ -502,14 +496,17 @@ static void launch_tags(const Pass& p, const void* E, const uint8_t seed[32], ui
 }
 
 static void launch_tree(const Pass& p, cudaStream_t st) {
-  size_t k = 0;
-  while (p.lv.n[k] > FINAL_NODES) {
-    uint64_t nout = (p.lv.n[k] + 1) / 2;
-    node_level<<<(unsigned)((nout + 127) / 128), 128, 0, st>>>(p.nodes + p.lv.off[k] * 8, p.lv.n[k],
-                                                               p.nodes + p.lv.off[k + 1] * 8);
-    ++k;
+  const size_t top = p.lv.n.size() - 1;
+  for (size_t k = 0; k < top;) {
+    Span s;
+    s.levels = (int)std::min<size_t>(SPAN, top - k);
+    for (int t = 0; t <= s.levels; ++t) {
+      s.off[t] = p.lv.off[k + t];
+      s.n[t] = p.lv.n[k + t];
+    }
+    node_span<<<(unsigned)((p.lv.n[k] + (2 * SPAN_THREADS) - 1) / (2 * SPAN_THREADS)), SPAN_THREADS, 0, st>>>(p.nodes, s);
+    k += s.levels;
   }
-  if (p.lv.n[k] > 1) node_final<<<1, 512, 0, st>>>(p.nodes, p.lv.off[k], p.lv.n[k]);
 }
 
 static int read_root(const Pass& p, uint8_t root[64], cudaStream_t st) {

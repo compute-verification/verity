@@ -271,6 +271,46 @@ def test_bottom_up_tree_is_rfc6962(n):
         assert gpu.path(sizes, lambda lv, ix: levels[lv][ix], i) == tree.path(i)
 
 
+SPAN = int(re.search(r"constexpr int SPAN = (\d+)", CU).group(1))
+
+
+def node_span_launches(n0: int) -> list[tuple[int, list[int], int]]:
+    """`launch_tree`'s launches over `n0` leaves: (first level, level sizes, grid)."""
+    sizes = [n0]
+    while sizes[-1] > 1:
+        sizes.append((sizes[-1] + 1) // 2)
+    out, k, top = [], 0, len(sizes) - 1
+    while k < top:
+        levels = min(SPAN, top - k)
+        out.append((k, sizes[k:k + levels + 1], -(-sizes[k] // (1 << SPAN))))
+        k += levels
+    return out
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 255, 256, 257, 511, 512, 513, 1000, 32_768, 70_001])
+def test_node_span_writes_every_node_once_from_its_own_block(n):
+    """`node_span`'s ranges: block b, step t writes node b·(T >> t) + tid of level k + t + 1 for tid < T >> t, reading
+    nodes 2i and 2i + 1 of level k + t, which the same block wrote at step t − 1 (or which are leaves)."""
+    threads = 1 << (SPAN - 1)
+    sizes = [n]
+    while sizes[-1] > 1:
+        sizes.append((sizes[-1] + 1) // 2)
+    writer: dict[tuple[int, int], int] = {(0, i): -1 for i in range(n)}
+    for k, lv, grid in node_span_launches(n):
+        for b in range(grid):
+            for t in range(len(lv) - 1):
+                for tid in range(threads >> t):
+                    i = b * (threads >> t) + tid
+                    if i >= lv[t + 1]:
+                        continue
+                    for src in (2 * i, 2 * i + 1):
+                        if src < lv[t]:
+                            assert writer[(k + t, src)] == b if t else (k + t, src) in writer
+                    assert (k + t + 1, i) not in writer
+                    writer[(k + t + 1, i)] = b
+    assert set(writer) == {(level, i) for level, size in enumerate(sizes) for i in range(size)}
+
+
 def test_reference_small_case_is_the_pinned_vectors():
     out = reference.small()
     vectors = json.loads(reference.VECTORS.read_text())
