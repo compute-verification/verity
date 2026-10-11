@@ -1,0 +1,382 @@
+"""The store's derived index (README §5.1): four generic tables built from the bucket's records by `index()`, their only writer.
+
+records(id, type, kind, time, doc)   type artifact | run | label; kind = an artifact's kind, a run's tool, a label's key;
+                                     time = when an artifact's manifest reached the bucket, a run's start, a label's ts;
+                                     doc = the record less `payload.files` and `closure`
+fields(id, path, value)              every scalar leaf of doc as `index.flatten` writes it (dotted path, text value); a value
+                                     longer than FIELD_MAX characters is left to doc (Postgres cannot index it)
+edges(src, name, dst)                refs.<name>, inputs.<name>, outputs.<name>, telemetry.<name>, and a label's `target`;
+                                     dst need not be a record (a drv: id, pr:<n>@<sha>)
+listings(prefix, listed_at, keys)    what the last listing of each prefix saw: the index is complete as of `listed_at`
+
+The index never names a field inside a record, so a new kind or field needs no migration: a schema change is a rebuild. It
+never lists `objects/` or opens a payload. A label's id is `label:` + the sha256 of its canonical assertion (its remote key);
+every record read is checked against its key, and one that fails is reported and left out.
+
+`index(remote, db)` lists the bucket, reads the records the index lacks and writes their rows (idempotent). Runs are listed from
+the newest indexed run id (`start-after`), and in full once `FULL_RUNS_EVERY` has passed, for a run whose custody published it
+late. `index(public_remote, db, policy=PUBLIC, private=private_db)` rebuilds the public tables from the private index: the
+artifacts whose manifests are in the public bucket, each run that produced one (its doc cut to `PUBLIC_RUN_FIELDS`) and the
+`PUBLIC_LABEL_KEYS` labels on those targets (cut to `PUBLIC_LABEL_FIELDS`). Both are whitelists.
+"""
+from __future__ import annotations
+
+import json
+import re
+import sqlite3
+import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Callable, Iterable
+
+from . import canon, ids
+from .index import flatten
+from .model import Label
+
+PRIVATE, PUBLIC = "private", "public"
+MANIFESTS, ATTEMPTS, LABELS = "manifests/", "attempts/", "labels/"
+RUNS_TAIL = "attempts/>"                                # the listings row of the start-after listing of runs
+FULL_RUNS_EVERY = timedelta(hours=1)
+FIELD_MAX = 1024
+ENVELOPE_ONLY = frozenset({"redteam-findings/v1"})     # meta (the findings' text) stays in the bucket
+EDGE_SECTIONS = {"artifact": ("refs",), "run": ("inputs", "outputs", "telemetry")}
+PUBLIC_LABEL_KEYS = ("verified", "verifier", "proof_class")
+PUBLIC_LABEL_FIELDS = ("schema", "target", "key", "value", "by", "ts")
+PUBLIC_RUN_FIELDS = (("schema",), ("id",), ("tool", "name"), ("status", "state"), ("execution", "start_utc"), ("execution", "wall_s"),
+                     ("conditions", "hw.sku"), ("conditions", "hw.count"), ("conditions", "rt.driver"), ("conditions", "rt.cuda"),
+                     ("source", "commit"))
+HEX_RE = re.compile(ids.HEX64)
+
+SQLITE_DDL = """
+CREATE TABLE IF NOT EXISTS records(id TEXT PRIMARY KEY, type TEXT NOT NULL, kind TEXT, time TEXT, doc TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS records_type_kind_time ON records(type, kind, time);
+CREATE TABLE IF NOT EXISTS fields(id TEXT NOT NULL, path TEXT NOT NULL, value TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS fields_id ON fields(id);
+CREATE INDEX IF NOT EXISTS fields_path_value ON fields(path, value);
+CREATE TABLE IF NOT EXISTS edges(src TEXT NOT NULL, name TEXT NOT NULL, dst TEXT NOT NULL, PRIMARY KEY(src, name, dst));
+CREATE INDEX IF NOT EXISTS edges_dst ON edges(dst, name);
+CREATE TABLE IF NOT EXISTS listings(prefix TEXT PRIMARY KEY, listed_at TEXT NOT NULL, keys INTEGER NOT NULL);
+"""
+
+POSTGRES_DDL = """
+CREATE TABLE IF NOT EXISTS {schema}.records(id text PRIMARY KEY, type text NOT NULL, kind text, time timestamptz, doc jsonb NOT NULL);
+CREATE INDEX IF NOT EXISTS records_type_kind_time ON {schema}.records(type, kind, time DESC);
+CREATE TABLE IF NOT EXISTS {schema}.fields(id text NOT NULL, path text NOT NULL, value text NOT NULL);
+CREATE INDEX IF NOT EXISTS fields_id ON {schema}.fields(id);
+CREATE INDEX IF NOT EXISTS fields_path_value ON {schema}.fields(path, value);
+CREATE TABLE IF NOT EXISTS {schema}.edges(src text NOT NULL, name text NOT NULL, dst text NOT NULL, PRIMARY KEY(src, name, dst));
+CREATE INDEX IF NOT EXISTS edges_dst ON {schema}.edges(dst, name);
+CREATE TABLE IF NOT EXISTS {schema}.listings(prefix text PRIMARY KEY, listed_at timestamptz NOT NULL, keys bigint NOT NULL);
+"""
+
+
+def iso(text: Any) -> str | None:
+    """`YYYY-MM-DDTHH:MM:SSZ` in UTC, or None for anything that is not a time."""
+    if not isinstance(text, str) or not text:
+        return None
+    try:
+        t = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@dataclass(frozen=True)
+class Row:
+    id: str
+    type: str
+    kind: str | None
+    time: str | None
+    doc: dict
+
+    def record(self) -> tuple:
+        return (self.id, self.type, self.kind, self.time, canon.dumps(self.doc).decode())
+
+    def fields(self) -> list[tuple[str, str, str]]:
+        return [(self.id, p, v) for p, v in flatten(self.doc) if len(v) <= FIELD_MAX]
+
+    def edges(self) -> list[tuple[str, str, str]]:
+        if self.type == "label":
+            return [(self.id, "target", self.doc["target"])]
+        out = set()
+        for sec in EDGE_SECTIONS[self.type]:
+            for name, v in (self.doc.get(sec) or {}).items():
+                for dst in (v if isinstance(v, list) else [v]):
+                    if isinstance(dst, str) and dst:
+                        out.add((self.id, f"{sec}.{name}", dst))
+        return sorted(out)
+
+
+def record_id(key: str) -> str | None:
+    """The id a key names, or None when only the content can say (a label under a non-content key, as a local store keeps them)."""
+    name = key.rsplit("/", 1)[-1].removesuffix(".json")
+    if key.startswith(MANIFESTS):
+        return f"art:{name}"
+    if key.startswith(ATTEMPTS):
+        return name
+    return f"label:{name}" if HEX_RE.fullmatch(name) else None
+
+
+def parse(key: str, data: bytes, modified: str | None) -> Row:
+    """The row of one record read from `key`, checked against the key; ValueError when it does not match."""
+    doc = json.loads(data)
+    if not isinstance(doc, dict):
+        raise ValueError(f"{key}: not a JSON object")
+    if key.startswith(MANIFESTS):
+        rid = "art:" + canon.sha256(doc)
+        if rid != record_id(key):
+            raise ValueError(f"{key}: manifest hashes to {rid}")
+        doc = dict(doc)
+        if isinstance(doc.get("payload"), dict):
+            doc["payload"] = {k: v for k, v in doc["payload"].items() if k != "files"}
+        if doc.get("kind") in ENVELOPE_ONLY:
+            doc.pop("meta", None)
+        return Row(rid, "artifact", doc.get("kind"), iso(modified), doc)
+    if key.startswith(ATTEMPTS):
+        if doc.get("id") != record_id(key):
+            raise ValueError(f"{key}: holds run {doc.get('id')!r}")
+        doc = {k: v for k, v in doc.items() if k != "closure"}
+        return Row(doc["id"], "run", (doc.get("tool") or {}).get("name"), iso((doc.get("execution") or {}).get("start_utc")), doc)
+    if key.startswith(LABELS):
+        lab = Label.from_doc(doc)
+        lab.validate()
+        rid = "label:" + canon.sha256(lab.to_doc())
+        if record_id(key) not in (None, rid):
+            raise ValueError(f"{key}: assertion hashes to {rid}")
+        return Row(rid, "label", lab.key, iso(lab.ts), lab.to_doc())
+    raise ValueError(f"{key}: not a record key")
+
+
+def public_run(row: Row) -> Row:
+    doc: dict = {}
+    for path in PUBLIC_RUN_FIELDS:
+        src, dst = row.doc, doc
+        for k in path[:-1]:
+            src = src.get(k) if isinstance(src, dict) else None
+            dst = dst.setdefault(k, {})
+        if isinstance(src, dict) and path[-1] in src:
+            dst[path[-1]] = src[path[-1]]
+    return Row(row.id, row.type, row.kind, row.time, doc)
+
+
+def public_label(row: Row) -> Row:
+    return Row(row.id, row.type, row.kind, row.time, {k: row.doc.get(k) for k in PUBLIC_LABEL_FIELDS})
+
+
+class SqliteIndex:
+    """The four tables in one SQLite file (a schema of its own: the private and the public index are two files)."""
+
+    def __init__(self, db: Path | str | sqlite3.Connection):
+        if isinstance(db, sqlite3.Connection):
+            self.db, self.path = db, None
+        else:
+            self.path = Path(db)
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.db = sqlite3.connect(self.path, timeout=60, isolation_level=None)
+        self.db.executescript(SQLITE_DDL)
+
+    def close(self) -> None:
+        if self.path is not None:
+            self.db.close()
+
+    def ids(self) -> set[str]:
+        return {r[0] for r in self.db.execute("SELECT id FROM records")}
+
+    def newest_run(self) -> str | None:
+        r = self.db.execute("SELECT max(id) FROM records WHERE type='run'").fetchone()
+        return r[0] if r else None
+
+    def listed_at(self, prefix: str) -> str | None:
+        r = self.db.execute("SELECT listed_at FROM listings WHERE prefix=?", (prefix,)).fetchone()
+        return r[0] if r else None
+
+    def row(self, rid: str) -> Row | None:
+        r = self.db.execute("SELECT id, type, kind, time, doc FROM records WHERE id=?", (rid,)).fetchone()
+        return Row(r[0], r[1], r[2], r[3], json.loads(r[4])) if r else None
+
+    def producers(self, art: str) -> list[str]:
+        return [r[0] for r in self.db.execute("SELECT DISTINCT src FROM edges WHERE dst=? AND name LIKE 'outputs.%' ORDER BY src", (art,))]
+
+    def labels_on(self, target: str, keys: Iterable[str]) -> list[str]:
+        keys = list(keys)
+        return [r[0] for r in self.db.execute(
+            "SELECT e.src FROM edges e JOIN records r ON r.id = e.src WHERE e.dst=? AND e.name='target' "
+            f"AND r.kind IN ({','.join('?' * len(keys))}) ORDER BY e.src", (target, *keys))]
+
+    def edges_of(self, rid: str) -> list[tuple[str, str, str]]:
+        return list(self.db.execute("SELECT src, name, dst FROM edges WHERE src=? ORDER BY name, dst", (rid,)))
+
+    def add(self, rows: list[Row], edges: Callable[[Row], list[tuple]] = Row.edges) -> int:
+        """Insert the rows not already present, in one transaction.  How many were new."""
+        n = 0
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            for row in rows:
+                if self.db.execute("INSERT OR IGNORE INTO records VALUES (?,?,?,?,?)", row.record()).rowcount:
+                    n += 1
+                    self.db.executemany("INSERT INTO fields VALUES (?,?,?)", row.fields())
+                    self.db.executemany("INSERT OR IGNORE INTO edges VALUES (?,?,?)", edges(row))
+        return n
+
+    def clear(self) -> None:
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            for t in ("records", "fields", "edges", "listings"):
+                self.db.execute(f"DELETE FROM {t}")
+
+    def set_listing(self, prefix: str, listed_at: str, keys: int) -> None:
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO listings VALUES (?,?,?)", (prefix, listed_at, keys))
+
+    def size(self) -> dict:
+        """Rows per table and the bytes the rows hold (doc text, field and edge text), for the measurement step 1 asks for."""
+        one = lambda q: self.db.execute(q).fetchone()  # noqa: E731
+        rec = one("SELECT count(*), coalesce(sum(length(CAST(doc AS BLOB))), 0) FROM records")
+        fld = one("SELECT count(*), coalesce(sum(length(CAST(id AS BLOB)) + length(CAST(path AS BLOB)) + length(CAST(value AS BLOB))), 0) FROM fields")
+        edg = one("SELECT count(*), coalesce(sum(length(CAST(src AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(dst AS BLOB))), 0) FROM edges")
+        by_type = {t: {"rows": n, "doc_bytes": b} for t, n, b in
+                   self.db.execute("SELECT type, count(*), sum(length(CAST(doc AS BLOB))) FROM records GROUP BY type ORDER BY type")}
+        return {"records": {"rows": rec[0], "doc_bytes": rec[1], "by_type": by_type}, "fields": {"rows": fld[0], "bytes": fld[1]},
+                "edges": {"rows": edg[0], "bytes": edg[1]},
+                "file_bytes": self.path.stat().st_size if self.path is not None and self.path.exists() else None}
+
+
+def _now(now: datetime | None) -> datetime:
+    return (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+
+
+def _stamp(t: datetime) -> str:
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _read(remote, keys: list[tuple[str, str | None]], jobs: int) -> tuple[list[Row], list[str]]:
+    """Read and check each key, `jobs` at a time.  (rows in key order, errors)."""
+    lock, rows, errors = threading.Lock(), {}, []
+    with tempfile.TemporaryDirectory(prefix="bucket-index-") as tmp:
+        def one(i_kv):
+            i, (key, modified) = i_kv
+            path = Path(tmp) / f"{i}.json"
+            try:
+                remote.get(key, path)
+                row = parse(key, path.read_bytes(), modified)
+            except Exception as e:  # noqa: BLE001 -- one bad record is reported and left out; the next pass reads it again
+                with lock:
+                    errors.append(f"{key}: {type(e).__name__}: {e}")
+                return
+            finally:
+                path.unlink(missing_ok=True)
+            with lock:
+                rows[i] = row
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+            list(ex.map(one, enumerate(keys)))
+    return [rows[i] for i in sorted(rows)], sorted(errors)
+
+
+def _private(remote, idx: SqliteIndex, *, jobs: int, full: bool, now: datetime, batch: int, log) -> dict:
+    stamp = _stamp(now)
+    have = idx.ids()
+    newest = idx.newest_run()
+    last_full = idx.listed_at(ATTEMPTS)
+    runs_full = full or newest is None or last_full is None or now - datetime.fromisoformat(last_full.replace("Z", "+00:00")) >= FULL_RUNS_EVERY
+    listings = {MANIFESTS: remote.list_times(MANIFESTS), LABELS: remote.list_times(LABELS)}
+    if runs_full:
+        listings[ATTEMPTS] = remote.list_times(ATTEMPTS)
+    else:
+        listings[RUNS_TAIL] = remote.list_times(ATTEMPTS, start_after=f"{ATTEMPTS}{newest}.json")
+    want = [(k, m) for keys in listings.values() for k, m in keys if k.endswith(".json") and record_id(k) not in have]
+    rep = {"listed": {p: len(v) for p, v in listings.items()}, "runs_listing": "full" if runs_full else "tail", "read": 0,
+           "added": {"artifact": 0, "run": 0, "label": 0}, "errors": []}
+    for i in range(0, len(want), batch):
+        rows, errors = _read(remote, want[i:i + batch], jobs)
+        rep["read"] += len(rows)
+        rep["errors"] += errors
+        new = [r for r in rows if r.id not in have]
+        idx.add(new)
+        for r in new:
+            have.add(r.id)
+            rep["added"][r.type] += 1
+        if log:
+            log(f"index: {min(i + batch, len(want))}/{len(want)} keys read, {sum(rep['added'].values())} records added")
+    for prefix, keys in listings.items():
+        idx.set_listing(prefix, stamp, len(keys))
+    return rep
+
+
+def _public(public_remote, idx: SqliteIndex, private: SqliteIndex, *, jobs: int, now: datetime) -> dict:
+    listed = public_remote.list_times(MANIFESTS)
+    arts, missing = {}, []
+    for key, modified in listed:
+        rid = record_id(key)
+        row = private.row(rid)
+        if row is None:
+            missing.append((key, modified))
+        else:
+            arts[rid] = row
+    fetched, errors = _read(public_remote, missing, jobs)
+    arts.update({r.id: r for r in fetched})
+    runs = {}
+    for art in sorted(arts):
+        for rid in private.producers(art):
+            if rid not in runs and (row := private.row(rid)) is not None:
+                runs[rid] = public_run(row)
+    labels = {}
+    for target in sorted(arts) + sorted(runs):
+        for lid in private.labels_on(target, PUBLIC_LABEL_KEYS):
+            if (row := private.row(lid)) is not None:
+                labels[lid] = public_label(row)
+    shown = set(arts) | set(runs)
+    idx.clear()
+    idx.add(list(arts.values()))
+    idx.add(list(runs.values()), edges=lambda r: [e for e in private.edges_of(r.id) if e[2] in shown])
+    idx.add(list(labels.values()))
+    idx.set_listing(MANIFESTS, _stamp(now), len(listed))
+    return {"listed": {MANIFESTS: len(listed)}, "read": len(fetched), "added": {"artifact": len(arts), "run": len(runs), "label": len(labels)},
+            "errors": errors}
+
+
+def index(remote, db: Path | str | sqlite3.Connection | SqliteIndex, *, policy: str = PRIVATE, private: Path | str | SqliteIndex | None = None,
+          jobs: int = 32, full: bool = False, now: datetime | None = None, batch: int = 2000,
+          log: Callable[[str], None] | None = None) -> dict:
+    """Bring the index at `db` up to what `remote` holds (module docstring).  `remote` needs `list_times` and `get`.  PRIVATE reads only
+    the records `db` lacks; PUBLIC rebuilds `db` from the private index `private` and the public bucket `remote`'s manifest listing.
+    {"policy", "listed": {prefix: keys}, "read", "added": {type: n}, "errors", "seconds"}; a record that fails its check is in
+    `errors` and is read again next pass."""
+    t0 = time.monotonic()
+    idx = db if isinstance(db, SqliteIndex) else SqliteIndex(db)
+    try:
+        if policy == PRIVATE:
+            rep = _private(remote, idx, jobs=jobs, full=full, now=_now(now), batch=max(1, batch), log=log)
+        elif policy == PUBLIC:
+            if private is None:
+                raise ValueError("index(policy=PUBLIC) derives from the private index: pass private=")
+            priv = private if isinstance(private, SqliteIndex) else SqliteIndex(private)
+            try:
+                rep = _public(remote, idx, priv, jobs=jobs, now=_now(now))
+            finally:
+                if priv is not private:
+                    priv.close()
+        else:
+            raise ValueError(f"policy must be {PRIVATE!r} or {PUBLIC!r}, got {policy!r}")
+    finally:
+        if idx is not db:
+            idx.close()
+    return {"policy": policy, **rep, "seconds": round(time.monotonic() - t0, 3)}
+
+
+def default_path(store_root: Path | str, policy: str = PRIVATE) -> Path:
+    return Path(store_root) / ("index.sqlite" if policy == PRIVATE else "index-public.sqlite")
+
+
+def dump(db: Path | str | SqliteIndex) -> dict[str, list[tuple]]:
+    """Every row of records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
+    idx = db if isinstance(db, SqliteIndex) else SqliteIndex(db)
+    try:
+        return {t: sorted(idx.db.execute(f"SELECT * FROM {t}")) for t in ("records", "fields", "edges")}
+    finally:
+        if idx is not db:
+            idx.close()
+
