@@ -218,9 +218,9 @@ def FoldsOk (st : Setup) (sh : Shape) : Prop :=
       .ok c ∧ c.size = 64
 
 /-- **`verifierRows`' rounds are the ones `verifyRep` draws** (Verify.lean:43-48, RecAlgebra.lean:824-829): the sizes
-`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` draws (`CoinsShaped`), for `n` extra claims and at least as
-many Ligerito rounds as any proof's frames (`ligFrames`) chunk into. A fact of the two programs at the shape, as
-`ShapeIs` is. -/
+`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` draws (`CoinsShaped`), for `n` extra
+claims and at least as many Ligerito rounds as any proof's frames (`ligFrames`) chunk into. A fact of the two programs
+at the shape, as `ShapeIs` is. -/
 def CoinsAgree (st : Setup) (sh : Shape) (sch : Flock.Schedule) (n : ℕ) : Prop :=
   ∃ L₀, CoinsShaped st.m st.fold.kLog n L₀ (zeroRounds (roundSizes sh)) ∧
     (∀ (T : F128) (cap : Array ByteArray) (lig : LigeritoProof), (chunks (ligFrames sch T cap lig)).1.length ≤ L₀) ∧

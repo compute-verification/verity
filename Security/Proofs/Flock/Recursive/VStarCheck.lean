@@ -57,9 +57,7 @@ theorem statements_holo {i : RecVStar.Inner} (h : i.holo = true) (ss : Array VSt
   dsimp only at h
   subst h
   intro hss
-  first
-  | cases hss
-  | simp [RecVStar.statements] at hss
+  cases hss
 
 /-- **flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the
 transcript**, at the inner shape `i`, as V*'s statement `j` under the verifier's own bindings `f`: `AcceptsZKR`, and each

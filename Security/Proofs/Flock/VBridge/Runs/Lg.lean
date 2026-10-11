@@ -70,8 +70,8 @@ theorem levelsLoop_count [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch 
       omega
 
 /-- V*'s Ligerito up to its final check records one consistency context per level (Structure.lean:436–450). -/
-theorem ligeritoRun_conss [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} {M : Messages F128} {T : F128} {k₀ k' : ℕ} {initCh : Array F256}
-    {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}
+theorem ligeritoRun_conss [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} {M : Messages F128} {T : F128}
+    {k₀ k' : ℕ} {initCh : Array F256} {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hrun : (RecAlgebra.ligeritoRun sch M).run
         { s := RecAlgebra.kofF T, q := ((RecAlgebra.Val.zero, RecAlgebra.Val.zero),
@@ -200,7 +200,7 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
   subst hsch
   obtain ⟨ext, stV, k', hl, hd, hmsg, hood, hlc, hfin⟩ :=
     ligerito_of_residuals_at (by omega) hpl hrows hS hw hc hacc hres hzero
-  haveI : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
+  have : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
   have hk' : k' = t.rounds.size := by
     have e : (k' == (d.rounds.filter (·.size ≠ 0)).size) = true := hd
     rw [RecAlgebra.filter_noEmpty hne, beq_iff_eq, hcoins, Array.size_map] at e
@@ -294,7 +294,7 @@ theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Fl
   subst hsch
   obtain ⟨ext, stV, k', hl, hd, hmsg, hood, hlc, hfin⟩ :=
     ligerito_of_residuals_at (by omega) hpl hrows hS hw hc hacc hres hzero
-  haveI : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
+  have : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
   have hk' : k' = t.rounds.size := by
     have e : (k' == (d.rounds.filter (·.size ≠ 0)).size) = true := hd
     rw [RecAlgebra.filter_noEmpty hne, beq_iff_eq, hcoins, Array.size_map] at e

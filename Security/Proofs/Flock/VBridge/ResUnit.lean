@@ -273,7 +273,7 @@ theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k 
   rw [e] at hpart
   exact ⟨S, ns, nv, hpart, hn⟩
 
-/-- Part `j`'s plain and holo nets differ (at (25,22,8), holo, part 1's are the same). -/
+/-- Part `j`'s plain and holo nets differ. They need not: at (25,22,8), part 1's holo net is its plain one. -/
 def NetsDiffer (m k cl j : ℕ) (sh : Flock.Shape) : Prop :=
   ∀ S ns nv S' ns' nv' g g', RecResiduals.part sh j = .ok (S, ns, nv) →
     RecResiduals.part { sh with holo := true } j = .ok (S', ns', nv') →

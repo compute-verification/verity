@@ -147,8 +147,8 @@ theorem run_of_frames (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hac
     (gamma := info.rs.gamma) (by rw [hsz, hxs]) hT hSws hd hne hwf ht hpl (k₁ := t.k + 3 + (st.m - 6))
     (k₂ := t.k + 3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 1) rfl rfl (fun i hi => by rw [hsz]; exact hfr i hi)
   refine ⟨⟨t.rounds, t.rounds.size, P'⟩, prog_of_algebra sh d ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩
-    hacc st sch p extras t ht hd hne hm hm14 hkL hkS hkm hxs hext hzp hlp hpl hrsw hfoldPts hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂ har
-    hlc
+    hacc st sch p extras t ht hd hne hm hm14 hkL hkS hkm hxs hext hzp hlp hpl hrsw hfoldPts hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂
+    har hlc
     hrn hra hgn hga ?_, rfl⟩
   intro v' info' kappa' h'
   rw [hrows] at h'
