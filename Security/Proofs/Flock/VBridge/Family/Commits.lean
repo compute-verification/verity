@@ -189,8 +189,8 @@ theorem hDecodes_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) �
   F.vDecodesRead_of dec hw hm
 
 /-- **The stage selector names round commitments**: every value whose row holds a round's message is a round's
-commitment (`rec-c<k>` or `rec-top-L<l>`, `Flock.Registered.roundCommitment`, `Registered.lean:180-182`), the values
-U4 checks. -/
+commitment (`Flock.Registered.roundCommitment`, `Registered.lean:182-193`: V*'s `rec-c<k>` and `rec-top-L<l>`, and R's
+and the sparse phase's), the values U4 checks. -/
 def SelRounds (sel : ℕ → String → ℕ → Prop) : Prop :=
   ∀ i v x, sel i v x → Flock.Registered.roundCommitment v = true
 
