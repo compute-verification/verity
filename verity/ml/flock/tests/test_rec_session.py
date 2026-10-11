@@ -10,6 +10,7 @@ full fold (``InnerFold.lean --hide``) is the pod's (``pod/88-rec-c3-inner.sh``, 
 from __future__ import annotations
 
 import json
+import os
 import queue
 import random
 import socket
@@ -27,6 +28,7 @@ from verity_flock import rec_residuals as RR
 from verity_flock import rec_session as RS
 from verity_flock import rec_sparse as SP
 from verity_flock import rec_vstage as S
+from verity_flock import rec_vstar as V
 
 HERE = Path(__file__).resolve().parent
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
@@ -403,14 +405,14 @@ def _toy_circuit(d: Path, seed: int) -> tuple[Path, dict]:
     return d / f"circuit-{seed}.txt", rng
 
 
-def _sparse_relay(circuit: Path, phase_of=lambda ph: ph):
+def _sparse_relay(circuit: Path, phase_of=lambda ph: ph, stacked: dict | None = None):
     sp, statement = SP.Shape(9, 7, 2, 0), {"dense_m": 22, "k_log": 10, "nbl": 12, "regions": 0}
     nets, ranges, _ = RS.hidden_circuits(circuit)
     phase = phase_of((sp, SP.entries(sp, nets["unit"]["a"], nets["unit"]["b"]), ranges[0]))
-    sch = RL.schedule_for(statement, holo=True, sparse=sp)
+    sch = RL.schedule_for(statement, holo=True, sparse=sp, stacked=stacked and SP.table_m(sp))
     salts = random.Random(4)
     proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), lambda: salts.randbytes(192), schedule=sch)
-    relay = RS.Relay(proxy, 22, 10, lambda p: RS.hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, 2)
+    relay = RS.Relay(proxy, 22, 10, lambda p: RS.hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, 2, stacked)
     resp = _stacked_session(relay, {"circuit": random.Random(1).randbytes(64 << 7)}, (22, 10, 2), None,
                             order=("circuit/rep0", "circuit/rep1"), prover=True)
     return relay, sch, resp
@@ -468,3 +470,79 @@ def test_rec_vstage_stages_the_relays_sparse_phase_as_rec_sparse(sparse_session,
     regs, own = S.messages(program, S.message_rounds(ss.public, ss.private, ss.vf.sh))
     st = S.stage_sparse(ss.public, ss.private, ss.vf, program, regs, own, ss.relay.sparse[0], ss.rng, tmp_path, evaluate=False)
     assert st["holds"] == [True, True] and st["nonzero_residuals"] == [[], []]
+
+
+BIN = os.environ.get("FLOCK_CIRCUIT", "")
+
+
+@pytest.fixture(scope="module")
+def stacked_session(tmp_path_factory):
+    if not (BIN and Path(BIN).exists()):
+        pytest.skip("FLOCK_CIRCUIT names no flock-circuit build")
+    d = tmp_path_factory.mktemp("stacked")
+    circuit, rng = _toy_circuit(d, 8)
+    relay, sch, resp = _sparse_relay(circuit, stacked={"bin": BIN, "dir": d / "stacked"})
+    return SimpleNamespace(d=d, circuit=circuit, rng=rng, relay=relay, sch=sch, resp=resp, read=_opening(d / "inner", relay, rng))
+
+
+def _opening(d: Path, relay, rng) -> SimpleNamespace:
+    """The session written to ``d``, read as the verifier reads R's opening (`rec_vstage.stacked_reads`), its opening-only
+    residuals at the verifier's points and the sparse phase's claims, and `rec_vstar`'s check of R's openings."""
+    relay.proxy.write(d)
+    public, private = (json.loads((d / f).read_text()) for f in ("public.json", "private.json"))
+    sp = relay.sparse[0]
+    vf = SimpleNamespace(sh=A.Shape(22, 10, 2, holo=True), reps=[SimpleNamespace(rounds=S.rep_coins(public, r)) for r in (0, 1)])
+    sr = S.stacked_reads(d, public, private, vf, sp, rng)
+    rounds = [[G.of_hex(c) for c in r["coins"]] for r in public["rounds"] if r["stream"] == "stacked/rep0"]
+    pts = [SP.registered_claim(sp, c, r) for r, (c, _) in enumerate(sr.reps)]
+    proof = V.load(d, RL.STACKED)[2][0]
+    res = A.residuals(sr.sh, A.decode(sr.sh, proof), rounds, [], pts, claims=[m["claim"] for _, m in sr.reps])[0]
+    return SimpleNamespace(public=public, private=private, vf=vf, sr=sr, residuals=[i for i, x in enumerate(res) if x],
+                           vstar=V.check(public, private, {0: proof}, RL.STACKED))
+
+
+def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_session(stacked_session, tmp_path):
+    """With ``flock-circuit stacked`` (P5) the relay adds ``stacked`` to the prover's Hello and R's root (`rec_sparse.table`
+    of the hidden circuit's entries, ``--root-out``) to its Commit, and once both reps' sparse streams have run opens R at
+    their registered claims (P.json) on a connection of its own into the same session, answering its Finish itself: the
+    record is `schedule_for(..., sparse=, stacked=table_m)`'s, R's stream last, its binding round binding ROOT.json's cap;
+    `rec_vstar` accepts R's openings, and the opening-only model's residuals at the verifier's points and the sparse
+    phase's claims are zero; the prover's own record keeps its Hello and Commit. R committed with cell 0 flipped fails both
+    claims' ring switches; rep 0's point one bit off in P.json (in ``x[1:]``, which the prover's ring switch reads) fails
+    rep 0's and Ligerito's c0 and c1, whose batched sums are at the verifier's points: each session runs to its Finish."""
+    ss = stacked_session
+    proxy = ss.relay.proxy
+    assert proxy.stopped is None and json.loads(ss.resp[-1][1])["accepted"] is None
+    rec = proxy.coins.record()
+    order = ["circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"]
+    assert RL.schedule_of(rec) == ss.sch and ss.sch["streams"]["stacked/rep0"]["rounds"] == len(RL.stacked_rounds(22))
+    assert [r["stream"] for r in rec["rounds"]] == sorted((r["stream"] for r in rec["rounds"]), key=order.index)
+    assert proxy.streams["stacked/rep0"]["cap"].hex() == json.loads((ss.d / "stacked" / "ROOT.json").read_text())["cap"]
+    pr = ss.relay.prover_record()
+    assert json.loads(pr["hello"])["tables"] == ["circuit"] and list(pr["link"]["root_b"]) == ["circuit"]
+    assert pr["config"]["tables"] == [{"name": "circuit", "binding": pr["config"]["tables"][0]["binding"]}]
+    assert ss.read.vstar["accepted"] and ss.read.residuals == []
+    for forge, bad in [("cell", [0, 1]), ("point", [0, 2, 3])]:
+        relay, _, resp = _sparse_relay(ss.circuit, stacked={"bin": BIN, "dir": tmp_path / forge, "forge": forge})
+        assert relay.proxy.stopped is None and json.loads(resp[-1][1])["accepted"] is None, relay.proxy.stopped
+        got = _opening(tmp_path / forge / "inner", relay, ss.rng)
+        assert got.vstar["accepted"] and got.residuals == bad, (forge, got.residuals)
+
+
+@pytest.mark.slow
+def test_rec_vstage_stages_rs_openings_and_its_registered_opening(stacked_session, tmp_path):
+    """`rec_vstage.stage_stacked` on the relay's session: R's levels as RecOpen statements on the chain (R's openings after
+    both reps', its tops under their own value) and its registered opening reading the stacked stream's messages, the
+    chain's rows either side of R's openings and RecSparse's ``rec-claim``; every opening opens and sums, and the opening
+    holds. What the residual check of the cheaper test can't: the statements V* stages from a live record. About 3
+    minutes, most of it building the opening's statement."""
+    ss, r = stacked_session, stacked_session.read
+    sp = ss.relay.sparse[0]
+    program = O.session_program((ss.d / "inner" / "public.json").read_bytes())
+    chain = O.Chain.build(program, r.sr.qs, r.sr.coefs)
+    inst = SP.session_rows(sp, [m for _, m in r.sr.reps], [SP.verifier_row(sp, c) for c, _ in r.sr.reps])
+    claim = SP.registrations(sp, program, inst)["claim"]
+    st = S.stage_stacked(r.public, r.private, program, r.sr, chain, r.sr.coefs, claim, tmp_path, evaluate=False)
+    assert st["m"] == 22 and st["openings"] == len(r.sr.qs) and st["levels"]
+    assert all(not lv["not_opened"] and not lv["not_summed"] for lv in st["levels"].values()), st["levels"]
+    assert [p["holds"] for p in st["opening"]] == [[True]] * len(st["opening"])
