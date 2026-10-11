@@ -1,0 +1,14 @@
+# The resource-accounting benchmarks: the matmul chain under the joint protocol. Not a package: chain.py runs on node 2 under a
+# GPU lease (torch, Pearl-C's device path); its plan, the certified columns and the renderer run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/resource_accounting`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# certified.py looks γ up from the PoUW harness's price twins (price_twins.py, loaded by path, and its table) and prices the
+# credited cells with verity.core.protocols.pouw; the rest of `verity` listed is what that package imports.
+inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/price_twins.json",
+          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/ml/__init__.py", "verity/ml/circuits",
+          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/randomness"]

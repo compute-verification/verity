@@ -1,0 +1,615 @@
+"""The matmul chain on one RTX PRO 6000 (sm_120), native and under Pearl-C, rep by rep: what `run.sh` runs under its lease.
+
+  python chain.py --out OUT/chain.json [--shapes o,qkv,gate_up,down,cube8192] [--batches 1,8,32,128,512,2048] [--lengths 32]
+      [--arms native-bf16,native-fp8,pearl-c,...] [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
+      [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25]
+  python chain.py --plan ...      the points and their weights' bytes, without a GPU
+
+A point (`sweep.Point`) is L dependent calls y_{i+1} = act(W_i · y_i) at one (n, k) and batch B, every W_i its own BF16
+weight (randn / √k) in device memory.  `act` maps call i's n outputs onto call i+1's k inputs (the first k, or the n
+repeated when n < k), then SiLU and an RMS norm, so every call sees inputs of one scale.  The arms (`sweep.ARMS`):
+
+* ``native-bf16``, ``native-fp8``: torch's cuBLAS GEMM (`torch.nn.functional.linear` in BF16; `torch._scaled_mm` on E4M3
+  weights with a per-tensor scale and E4M3 activations at scale 1), the whole chain, act included, as one CUDA graph.  Their
+  GEMMs alone (the chain's L GEMMs on one input, also one graph) give the native GEMM rate at the shape.
+* ``pearl-c``: `pouw_pearl_c_device.PearlCDeviceRun` (`pearl-c-sm120-v1-h3`, the served runtime as is) on the chain's
+  weights, one install per shape (its weight side and epoch), one pass per item, serial schedule.  Calls of B rows run as
+  fast as the runtime allows: the chain captured whole into one CUDA graph (`whole_capture_begin`; B a multiple of 16 and
+  at most `GRAPH_ROWS`), each call its own graph (B < 16), or eager (B > `GRAPH_ROWS`).
+* ``pearl-c-deferred``: the same with each call's tile hashing beside the next call (whole captures: ``whole_defer``;
+  otherwise the ``deferred`` schedule, which runs eagerly).
+* ``pearl-c-nohash``: ``pearl-c`` without hashing, for the time split.
+
+Gates, before any timing at a shape, refusing the shape's Pearl-C arms when one fails: at m = 32 and the largest batch, y
+against the float product x·Wᵀ (relative RMS under 8%, `e2e.ERR`), the call twice from poisoned passes giving one
+commitment, and the call with its tile leaves omitted giving another (`e2e.gate`'s).  At each point, every Pearl-C arm's
+first pass (one chain, poisoned) must commit what an eager pass commits (the deferred one the serial one's), and every
+timed pass the same as the other reps.
+
+Timing: each item is R chains (one graph replay each, or one Pearl-C pass over R chains), R chosen so an item takes at least
+`ITEM_S`; the arms take turns within each rep, starting one later each rep, and each rep records the SM clock.  With
+``--retain``, one point's chain (``--verify-at``) is kept as a poisoned retained pass, its commitment held to the gate's,
+with a no-write control beside it, for `verify_run.py` after the lease.  The JSON is rewritten after every point.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import statistics
+import sys
+import time
+import traceback
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import sweep as S
+
+SCHEMA = "ra-matmul-chain/v1"
+SCHEME = "pearl-c-sm120-v1-h3"
+ERR = 0.08
+ITEM_S = 0.04
+NAME, CC = "RTX PRO 6000 Blackwell", (12, 0)
+#: the no-write control's omitted steps (`e2e.CONTROL_OMITS`): every write of the commitment
+CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
+KEEP = ("transcript_root", "activation_roots", "units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
+SEED = 20261011
+
+
+# ---- the device -------------------------------------------------------------------------------------------------------
+
+class Clocks:
+    """NVML by the lease's UUID (NVML ignores CUDA_VISIBLE_DEVICES)."""
+
+    def __init__(self, uuid: str | None):
+        self.h = None
+        try:
+            import pynvml as N
+            N.nvmlInit()
+            self.N, self.h = N, N.nvmlDeviceGetHandleByUUID(uuid) if uuid else None
+        except Exception as ex:  # noqa: BLE001 - recorded, not fatal
+            self.error = f"{type(ex).__name__}: {ex}"
+
+    def read(self) -> dict:
+        if self.h is None:
+            return {"error": getattr(self, "error", "no GPU_LEASE_UUID")}
+        N, h = self.N, self.h
+        try:
+            reasons = getattr(N, "nvmlDeviceGetCurrentClocksEventReasons", None) or N.nvmlDeviceGetCurrentClocksThrottleReasons
+            return {"sm_mhz": N.nvmlDeviceGetClockInfo(h, N.NVML_CLOCK_SM), "mem_mhz": N.nvmlDeviceGetClockInfo(h, N.NVML_CLOCK_MEM),
+                    "watts": N.nvmlDeviceGetPowerUsage(h) / 1000, "temp_c": N.nvmlDeviceGetTemperature(h, N.NVML_TEMPERATURE_GPU),
+                    "reasons": hex(reasons(h))}
+        except Exception as ex:  # noqa: BLE001
+            return {"error": f"{type(ex).__name__}: {ex}"}
+
+
+def identity(uuid: str | None) -> dict:
+    import torch
+    p = torch.cuda.get_device_properties(0)
+    out = {"name": p.name, "cc": [p.major, p.minor], "sms": p.multi_processor_count, "memory_bytes": p.total_memory,
+           "l2_bytes": p.L2_cache_size, "uuid": uuid, "torch": torch.__version__, "cuda": torch.version.cuda,
+           "visible": os.environ.get("CUDA_VISIBLE_DEVICES")}
+    try:
+        import pynvml as N
+        N.nvmlInit()
+        out["driver"] = N.nvmlSystemGetDriverVersion()
+        if uuid:
+            out["nvml_name"] = N.nvmlDeviceGetName(N.nvmlDeviceGetHandleByUUID(uuid))
+    except Exception as ex:  # noqa: BLE001
+        out["driver_error"] = f"{type(ex).__name__}: {ex}"
+    return out
+
+
+def read_rate(reps: int = 10) -> dict:
+    """The device-memory read rate: torch's sum over 4 GiB of FP32, by CUDA events, the median of `reps` after a warm-up."""
+    import torch
+    buf = torch.ones(1 << 30, dtype=torch.float32, device="cuda")
+    out = torch.empty((), dtype=torch.float32, device="cuda")
+    for _ in range(3):
+        torch.sum(buf, out=out)
+    times = []
+    for _ in range(reps):
+        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        a.record()
+        torch.sum(buf, out=out)
+        b.record()
+        b.synchronize()
+        times.append(a.elapsed_time(b) / 1e3)
+    n = buf.numel() * buf.element_size()
+    del buf
+    torch.cuda.empty_cache()
+    return {"kernel": "torch.sum over 4 GiB of FP32", "bytes": n, "seconds": times, "bytes_per_s": n / statistics.median(times)}
+
+
+# ---- the chain --------------------------------------------------------------------------------------------------------
+
+class Act:
+    """call i's y (m x n) onto call i+1's x (m x k): the first k outputs, or the n repeated; SiLU; an RMS norm."""
+
+    def __init__(self, n: int, k: int, device):
+        import torch
+        self.k, self.idx = k, None if n >= k else torch.arange(k, device=device) % n
+
+    def __call__(self, y, dtype):
+        import torch
+        z = y[:, :self.k] if self.idx is None else y.index_select(1, self.idx)
+        z = torch.nn.functional.silu(z.float())
+        z = z * torch.rsqrt(z.pow(2).mean(1, keepdim=True) + 1e-6)
+        return z.to(dtype)
+
+
+def rel_rms(a, b) -> float:
+    a, b = a.float(), b.float()
+    return float(((a - b).pow(2).sum() / b.pow(2).sum().clamp_min(1e-30)).sqrt())
+
+
+class Weights:
+    """One shape's L weights: BF16 (every arm's source), and E4M3 with a per-tensor scale for the FP8 arm."""
+
+    def __init__(self, n: int, k: int, length: int, fp8: bool, seed: int):
+        import torch
+        gen = torch.Generator(device="cuda").manual_seed(seed)
+        self.n, self.k, self.length = n, k, length
+        self.bf16 = [torch.randn(n, k, generator=gen, device="cuda").div_(math.sqrt(k)).to(torch.bfloat16) for _ in range(length)]
+        self.fp8, self.scale = [], []
+        if fp8:
+            for w in self.bf16:
+                s = w.float().abs().amax() / 448.0
+                self.fp8.append((w.float() / s).to(torch.float8_e4m3fn))
+                self.scale.append(s.reshape(()).float())
+        self.one = torch.ones((), dtype=torch.float32, device="cuda")
+
+    def mm(self, arm: str, i: int, x):
+        import torch
+        if arm == "native-bf16":
+            return torch.nn.functional.linear(x, self.bf16[i])
+        return torch._scaled_mm(x, self.fp8[i].t(), self.one, self.scale[i], out_dtype=torch.bfloat16)
+
+
+class Native:
+    """A native arm at one batch: the chain, act included, and its GEMMs alone, each one CUDA graph over a fixed input."""
+
+    def __init__(self, arm: str, W: Weights, act: Act, x0):
+        import torch
+        self.arm, self.W, self.act = arm, W, act
+        self.dtype = torch.bfloat16 if arm == "native-bf16" else torch.float8_e4m3fn
+        self.x0 = x0.to(self.dtype)
+        self.x = self.x0.clone()
+        self.chain, self.gemms, self.eager = self._graph(self._chain), self._graph(self._gemms), None
+
+    def _chain(self):
+        self.x.copy_(self.x0)
+        x = self.x
+        for i in range(self.W.length):
+            y = self.W.mm(self.arm, i, x)
+            x = self.act(y, self.dtype)
+        return y
+
+    def _gemms(self):
+        return [self.W.mm(self.arm, i, self.x0) for i in range(self.W.length)][-1]
+
+    def _graph(self, body):
+        import torch
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            for _ in range(2):
+                body()
+        torch.cuda.current_stream().wait_stream(side)
+        g = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(g):
+            out = body()
+        return g, out
+
+    def gates(self) -> dict:
+        import torch
+        eager = self._chain().clone()
+        self.chain[0].replay()
+        torch.cuda.synchronize()
+        ref = self.x0.float() @ (self.W.bf16[0].float().T)
+        first = self.W.mm(self.arm, 0, self.x0)
+        err = rel_rms(first, ref)
+        self.eager = eager
+        return {"check": "native", "arm": self.arm, "rel_rms_first_call": err, "graph_equals_eager": bool(torch.equal(eager, self.chain[1])),
+                "ok": err < ERR}
+
+    def item(self, reps: int, which: str = "chain") -> dict:
+        import torch
+        g = (self.chain if which == "chain" else self.gemms)[0]
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        for _ in range(reps):
+            g.replay()
+        torch.cuda.synchronize()
+        return {"seconds": (time.perf_counter() - t) / reps}
+
+    def final(self):
+        return self.chain[1]
+
+
+class PearlC:
+    """One shape's Pearl-C install: the served runtime on the chain's weights, its epoch's coins, and its passes."""
+
+    def __init__(self, kernel, W: Weights, act: Act, epoch: int, coins_out: Path | None):
+        import torch
+        from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+        from verity.core.protocols.pouw.audit import weights_root
+        from verity.core.protocols.pouw.coins import Challenger
+        self.PPD, self.W, self.act = PPD, W, act
+        self.weights = dict(enumerate(W.bf16))
+        bad = PPD.refusals(SCHEME, {w: tuple(t.shape) for w, t in self.weights.items()})
+        if bad:
+            raise ValueError("; ".join(bad))
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        salt_key = PPD.new_salt_key(SCHEME)
+        roots = PPD.weight_roots(kernel, self.weights, SCHEME, salt_key=salt_key)
+        challenger = Challenger(epoch)
+        opening = challenger.open("salt", weights_root(roots))
+        self.run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, self.weights, roots, challenger.commitment,
+                                       opening, graphs=True, salt_key=salt_key)
+        torch.cuda.synchronize()
+        self.install_s = time.perf_counter() - t
+        self.coins = None
+        if coins_out is not None:
+            coins_out.parent.mkdir(parents=True, exist_ok=True)
+            coins_out.write_text(json.dumps(challenger.commitment.to_json()) + "\n")
+            self.coins = str(coins_out)
+        self.wholes: dict[tuple, tuple] = {}
+
+    def capacity(self, batch: int) -> int:
+        """The most chains one pass holds at `batch` (its leaves, calls and screened rows)."""
+        PPD, R = self.PPD, self.run.kernel.run
+        m16 = -(-batch // PPD.ROW_ALIGN) * PPD.ROW_ALIGN
+        tiles = self.W.length * R.cdiv(m16, R.TILE) * (self.W.n // R.TILE)
+        return max(1, min(self.run.capacity // tiles, PPD.CALL_CAPACITY // self.W.length, len(self.run.flag_buf) // (self.W.length * batch)))
+
+    def mode(self, arm: str, batch: int) -> str:
+        """How `arm`'s calls of `batch` rows run: ``whole`` (the chain one CUDA graph), ``per-call`` (each call its own),
+        ``eager``, or ``deferred`` (eager under the deferred schedule, which graphs don't run)."""
+        from verity_vllm.protocol_options.pouw_pearl_c_graphs import GRAPH_ROWS
+        base = "eager" if batch > GRAPH_ROWS else "whole" if batch % self.PPD.ROW_ALIGN == 0 else "per-call"
+        return "deferred" if arm == "pearl-c-deferred" and base != "whole" else base
+
+    def forward(self, x0):
+        import torch
+        x = x0
+        for i in range(self.W.length):
+            y = self.run.gemm(i, x, self.W.bf16[i], None)
+            x = self.act(y, torch.bfloat16)
+        return y
+
+    def _set(self, arm: str, mode: str) -> str:
+        """The run's switches for `arm` in `mode` (`mode`, or ``reference``: eager and serial); returns the schedule."""
+        run = self.run
+        run.hashing, run.omit = arm != "pearl-c-nohash", frozenset()
+        run.graphs = mode in ("whole", "per-call")
+        run.whole_defer = arm == "pearl-c-deferred" and mode == "whole"
+        return "deferred" if mode == "deferred" else "serial"
+
+    def gates(self, batches: tuple[int, ...]) -> list[dict]:
+        """`e2e.gate`'s: y against the float product, with hashing and without, and with hashing the commitment twice from
+        poisoned passes and the call with its leaves omitted."""
+        import torch
+        out, run = [], self.run
+        gen = torch.Generator(device="cuda").manual_seed(SEED + 1)
+        W = self.W.bf16[0]
+        for m in sorted({32, max(batches)}):
+            x = torch.randn(m, self.W.k, device="cuda", generator=gen).to(torch.bfloat16)
+            ref = x.float() @ W.float().T
+            for hashing in (True, False):
+                commits, served = [], None
+                self._set("pearl-c" if hashing else "pearl-c-nohash", "reference")
+                for omit in (((), (), ("hash_leaf",)) if hashing else ((),)):
+                    run.begin(schedule="serial")
+                    run.poison()
+                    run.omit = frozenset(omit)
+                    y = run.gemm(0, x, W, None)
+                    served = y.clone() if served is None else served
+                    commits.append({k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots")})
+                run.omit = frozenset()
+                err = rel_rms(served, ref)
+                same = len(commits) == 1 or commits[0] == commits[1]
+                control = len(commits) == 1 or commits[2]["transcript_root"] != commits[0]["transcript_root"]
+                out.append({"check": "call", "m": m, "hashing": hashing, "rel_rms": err, "commitment_repeats": same,
+                            "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+        run.details["passes"].clear()
+        return out
+
+    def reference(self, arm: str, x0, retain: str | None = None, omit: frozenset = frozenset()) -> tuple[dict, object]:
+        """One chain as an eager pass from poisoned buffers, serial: the commitment every graphed or deferred pass of `arm`
+        must give (the deferred arm's is the serial one's)."""
+        import torch
+        self._set("pearl-c-nohash" if arm == "pearl-c-nohash" else "pearl-c", "reference")
+        run = self.run
+        run.begin(retain=retain, run=os.environ.get("RESEARCH_RUN_ID"), schedule="serial")
+        if not retain:
+            run.poison()
+        run.omit = omit
+        try:
+            y = self.forward(x0).clone()
+            c = run.end()
+        finally:
+            run.omit = frozenset()
+        torch.cuda.synchronize()
+        return c, y
+
+    def prepare(self, arm: str, x0, batch: int) -> None:
+        """A whole capture of the chain for `arm` at `batch`, after a warm-up pass that makes each call's graph."""
+        import torch
+        if self.mode(arm, batch) != "whole":
+            return
+        run, schedule = self.run, self._set(arm, "whole")
+        run.begin(schedule=schedule)
+        self.forward(x0)
+        run.end()
+        run.begin(schedule=schedule)
+        x = x0.clone()
+        graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        run.whole_capture_begin()
+        try:
+            with torch.cuda.graph(graph, stream=side):
+                x.copy_(x0)
+                y = self.forward(x)
+        finally:
+            calls = run.whole_capture_end()
+        run.end()
+        self.wholes[(arm, batch)] = (graph, calls, y)
+
+    def item(self, arm: str, x0, batch: int, chains: int, poison: bool = False) -> dict:
+        """One pass of `chains` chains of `arm`, timed from its begin to its end's commitment on the host."""
+        import torch
+        run, schedule = self.run, self._set(arm, self.mode(arm, batch))
+        whole = self.wholes.get((arm, batch))
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        run.begin(schedule=schedule)
+        if poison:
+            run.poison()
+        if whole is not None:
+            graph, calls, y = whole
+            for _ in range(chains):
+                run.whole_replay(calls)
+                graph.replay()
+                run.whole_replayed(calls)
+        else:
+            for _ in range(chains):
+                y = self.forward(x0)
+        c = run.end()
+        torch.cuda.synchronize()
+        out = {"seconds": (time.perf_counter() - t) / chains, **{k: v for k, v in c.items() if k in KEEP}}
+        out["y"] = y
+        return out
+
+    def close(self) -> None:
+        self.wholes.clear()
+        self.run.cur = None
+
+
+# ---- a point ----------------------------------------------------------------------------------------------------------
+
+def chains_for(probe_s: float, cap: int) -> int:
+    return max(1, min(cap, math.ceil(ITEM_S / max(probe_s, 1e-9))))
+
+
+def chain_input(p: S.Point, act: Act):
+    """The point's x_0: act of a seeded normal y, so the first call sees what every later one does."""
+    import torch
+    gen = torch.Generator(device="cuda").manual_seed(SEED + p.batch)
+    return act(torch.randn(p.batch, p.n, device="cuda", generator=gen), torch.bfloat16)
+
+
+def run_point(p: S.Point, arms: tuple[str, ...], W: Weights, act: Act, pc: PearlC | None, reps: int, clocks: Clocks) -> dict:
+    import torch
+    x0 = chain_input(p, act)
+    out = {"key": p.key, "shape": p.shape, "n": p.n, "k": p.k, "batch": p.batch, "length": p.length, "macs": p.macs,
+           "arms": {}, "gates": [], "refused": {}}
+    items: dict[str, object] = {}
+    finals: dict[str, object] = {}
+    for arm in (a for a in arms if a in S.NATIVE):
+        try:
+            nat = Native(arm, W, act, x0)
+            gate = nat.gates()
+        except Exception as ex:  # noqa: BLE001 - the arm is refused at this point, recorded
+            out["refused"][arm] = f"{type(ex).__name__}: {ex}"
+            continue
+        out["gates"].append(gate)
+        if not gate["ok"]:
+            out["refused"][arm] = f"its first call's error {gate['rel_rms_first_call']:.3g} is over {ERR}"
+            continue
+        items[arm] = items[arm + "-gemm"] = nat
+        finals[arm] = nat.eager
+    refs: dict[str, tuple] = {}
+    for arm in (a for a in arms if a in S.POUW and pc is not None):
+        try:
+            ref_arm = "pearl-c-nohash" if arm == "pearl-c-nohash" else "pearl-c"
+            if ref_arm not in refs:
+                refs[ref_arm] = pc.reference(ref_arm, x0)
+            want, y_ref = refs[ref_arm]
+            pc.prepare(arm, x0, p.batch)
+            got = pc.item(arm, x0, p.batch, 1, poison=True)
+            same = (got["transcript_root"] == want["transcript_root"] and got["activation_roots"] == want["activation_roots"]
+                    if arm != "pearl-c-nohash" else bool(torch.equal(got["y"], y_ref)))
+            out["gates"].append({"check": "pass", "arm": arm, "mode": pc.mode(arm, p.batch), "equals_eager": same, "ok": same})
+            if not same:
+                out["refused"][arm] = "its first pass doesn't commit what the eager pass commits"
+                continue
+            items[arm] = pc
+            finals[arm] = y_ref
+        except Exception as ex:  # noqa: BLE001 - the arm is refused at this point, recorded
+            out["refused"][arm] = f"{type(ex).__name__}: {ex}"
+            out["gates"].append({"check": "pass", "arm": arm, "ok": False, "error": traceback.format_exc(limit=4)})
+    if "native-bf16" in finals:
+        out["chain_rel_rms_vs_bf16"] = {a: rel_rms(y, finals["native-bf16"]) for a, y in finals.items()}
+    order = list(items)
+    plan = {}
+    for name in order:
+        if isinstance(items[name], Native):
+            which = "gemm" if name.endswith("-gemm") else "chain"
+            probe = items[name].item(1, which)["seconds"]
+            plan[name] = chains_for(probe, 1 << 12)
+        else:
+            probe = pc.item(name, x0, p.batch, 1)["seconds"]
+            plan[name] = chains_for(probe, pc.capacity(p.batch))
+        out["arms"][name] = {"chains": plan[name], "seconds": [], "roots": []}
+        if not isinstance(items[name], Native):
+            out["arms"][name]["mode"] = pc.mode(name, p.batch)
+    for rep in range(reps):
+        turn = order[rep % len(order):] + order[:rep % len(order)]
+        out.setdefault("clocks", []).append(clocks.read())
+        for name in turn:
+            rec = out["arms"][name]
+            if isinstance(items[name], Native):
+                r = items[name].item(plan[name], "gemm" if name.endswith("-gemm") else "chain")
+            else:
+                r = pc.item(name, x0, p.batch, plan[name])
+                r.pop("y")
+                if "transcript_root" in r:
+                    rec["roots"].append(r["transcript_root"])
+                for key in ("screened_rows", "failing_rows", "unsure_rows", "units", "tiles"):
+                    if key in r:
+                        rec[key] = r[key]
+            rec["seconds"].append(r["seconds"])
+    for name, rec in out["arms"].items():
+        rec["median_s"] = statistics.median(rec["seconds"])
+        if rec["roots"]:
+            rec["roots_repeat"] = len(set(rec["roots"])) == 1
+            rec["roots"] = sorted(set(rec["roots"]))
+    del items, finals, refs
+    return out
+
+
+# ---- the run ----------------------------------------------------------------------------------------------------------
+
+def save(path: Path, doc: dict) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    tmp.replace(path)
+
+
+def retain_pass(pc: PearlC, p: S.Point, act: Act, retain: Path, point: dict) -> dict:
+    """`p`'s chain as a retained pass (poisoned, eager) and its no-write control.  The retained pass must commit what the
+    point's eager pass of one chain commits, which its graphed first pass committed too (the point's ``pass`` gate)."""
+    x0 = chain_input(p, act)
+    want, _ = pc.reference("pearl-c", x0)
+    kept, _ = pc.reference("pearl-c", x0, retain=str(retain / "pass"))
+    control, _ = pc.reference("pearl-c", x0, retain=str(retain / "control"), omit=CONTROL_OMITS)
+    same = all(kept[x] == want[x] for x in ("transcript_root", "activation_roots"))
+    gated = any(g.get("arm") == "pearl-c" and g.get("ok") for g in point.get("gates", []))
+    return {"point": p.key, "pass": kept.get("manifest"), "control": control.get("manifest"), "coins": pc.coins,
+            "equals_reference": same, "graphed_pass_gated": gated, "transcript_root": kept["transcript_root"],
+            "control_root": control.get("transcript_root"), "ok": same and gated}
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", type=Path)
+    ap.add_argument("--shapes", default="o,qkv,gate_up,down,cube8192")
+    ap.add_argument("--batches", default=",".join(map(str, S.BATCHES)))
+    ap.add_argument("--lengths", default=str(S.LENGTH))
+    ap.add_argument("--arms", default=",".join(S.ARMS))
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--kernel", help="the Pearl-C kernel directory (benchmarks/pouw/pearl_c_sm120); without it no Pearl-C arm")
+    ap.add_argument("--cubin")
+    ap.add_argument("--retain", type=Path, help="where the verify point's retained pass and control go (outside $OUT)")
+    ap.add_argument("--verify-at", default="o:32", help="SHAPE:BATCH, the point whose chain is retained")
+    ap.add_argument("--coins-dir", type=Path)
+    ap.add_argument("--budget-min", type=float, default=25.0, help="start no point after this many minutes")
+    ap.add_argument("--l2-bytes", type=int, default=128 << 20, help="--plan's L2 (the device's own when it runs)")
+    ap.add_argument("--plan", action="store_true", help="print the points and each shape's weight bytes, and exit")
+    a = ap.parse_args(argv)
+    arms = tuple(x for x in a.arms.split(",") if x)
+    if set(arms) - set(S.ARMS):
+        ap.error(f"unknown arms {sorted(set(arms) - set(S.ARMS))}")
+    shapes, batches, lengths = S.parse_shapes(a.shapes), S.parse_ints(a.batches), S.parse_ints(a.lengths)
+    if a.plan:
+        pts = S.points(shapes, batches, lengths, a.l2_bytes, arms)
+        lens = {(p.shape, p.length) for p in pts}
+        print(json.dumps({"points": [p.key for p in pts],
+                          "weight_bytes": {f"{s}-L{n}": S.weight_bytes(*shapes[s], n, arms) for s, n in sorted(lens)}}, indent=1))
+        return 0
+    if a.out is None:
+        ap.error("--out is required")
+    import torch
+    start = time.perf_counter()
+    uuid = (os.environ.get("GPU_LEASE_UUID") or "").split(",")[0] or None
+    ident = identity(uuid)
+    if NAME not in ident["name"] or tuple(ident["cc"]) != CC:
+        print(f"chain: {ident['name']} cc {ident['cc']} is not an {NAME} at cc {CC}", file=sys.stderr)
+        return 3
+    pts = S.points(shapes, batches, lengths, ident["l2_bytes"], arms)
+    doc = {"schema": SCHEMA, "run": os.environ.get("RESEARCH_RUN_ID"), "scheme": SCHEME, "identity": ident,
+           "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()}, "item_s": ITEM_S,
+           "points": [], "shapes": {}, "verify": None, "status": "running"}
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    clocks = Clocks(uuid)
+    over = lambda: (time.perf_counter() - start) / 60 > a.budget_min
+    with torch.inference_mode():
+        doc["read_rate"] = read_rate()
+        save(a.out, doc)
+        kernel = None
+        if a.kernel and any(x in S.POUW for x in arms):
+            from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+            kernel = PPD.Kernel.load(a.kernel, a.cubin)
+            doc["kernel"] = {"cubin_sha256": kernel.cubin_sha256, "source_sha256": kernel.source_sha256}
+        vshape, vbatch = a.verify_at.split(":")
+        by_shape: dict[tuple[str, int], list[S.Point]] = {}
+        for p in pts:
+            by_shape.setdefault((p.shape, p.length), []).append(p)
+        for epoch, ((name, length), group) in enumerate(by_shape.items(), start=1):
+            if over():
+                doc["shapes"][f"{name}-L{length}"] = {"skipped": f"over the {a.budget_min}-minute budget"}
+                continue
+            n, k = shapes[name]
+            rec = doc["shapes"][f"{name}-L{length}"] = {"n": n, "k": k, "length": length,
+                                                        "weight_bytes": S.weight_bytes(n, k, length, arms)}
+            W = Weights(n, k, length, "native-fp8" in arms, SEED + epoch)
+            act = Act(n, k, "cuda")
+            pc = None
+            if kernel is not None:
+                try:
+                    coins = a.coins_dir / f"{name}-L{length}.json" if a.coins_dir else None
+                    pc = PearlC(kernel, W, act, epoch, coins)
+                    rec["install_s"] = pc.install_s
+                    rec["gates"] = pc.gates(tuple(p.batch for p in group))
+                    if not all(g["ok"] for g in rec["gates"]):
+                        rec["refused"] = "a Pearl-C gate failed"
+                        pc.close()
+                        pc = None
+                except Exception:  # noqa: BLE001 - the shape's Pearl-C arms are refused, recorded
+                    rec["refused"] = traceback.format_exc(limit=6)
+                    pc = None
+            for p in group:
+                if over():
+                    doc["points"].append({"key": p.key, "skipped": f"over the {a.budget_min}-minute budget"})
+                    continue
+                try:
+                    doc["points"].append(run_point(p, arms, W, act, pc, a.reps, clocks))
+                except Exception:  # noqa: BLE001 - one point's failure is recorded and the sweep goes on
+                    doc["points"].append({"key": p.key, "error": traceback.format_exc(limit=8)})
+                if pc is not None and a.retain and name == vshape and p.batch == int(vbatch) and doc["verify"] is None:
+                    try:
+                        doc["verify"] = retain_pass(pc, p, act, a.retain, doc["points"][-1])
+                    except Exception:  # noqa: BLE001
+                        doc["verify"] = {"point": p.key, "error": traceback.format_exc(limit=6), "ok": False}
+                save(a.out, doc)
+            if pc is not None:
+                pc.close()
+            del pc, W, act
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+    doc["status"] = "complete"
+    doc["elapsed_s"] = time.perf_counter() - start
+    save(a.out, doc)
+    bad = [p["key"] for p in doc["points"] if "error" in p] + [s for s, r in doc["shapes"].items() if "refused" in r]
+    print(f"chain: {len(doc['points'])} points in {doc['elapsed_s']:.0f} s" + (f"; failed or refused: {', '.join(bad)}" if bad else ""))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
