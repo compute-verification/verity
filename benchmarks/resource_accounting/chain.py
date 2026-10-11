@@ -2,7 +2,7 @@
 
   python chain.py --out OUT/chain.json [--shapes o,qkv,gate_up,down,cube8192] [--batches 1,8,32,128,512,2048] [--lengths 32]
       [--arms native-bf16,native-fp8,pearl-c,...] [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
-      [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25] [--beside DIR --beside-cmd CMD [--beside-log F] [--beside-cpus V,R]]
+      [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25] [--beside DIR --beside-cmd CMD [--beside-log F] [--beside-cpus V,R] [--beside-idle]]
   python chain.py --plan ...      the points and their weights' bytes, without a GPU
 
 A point (`sweep.Point`) is L dependent calls y_{i+1} = act(W_i · y_i) at one (n, k) and batch B, every W_i its own BF16
@@ -533,7 +533,9 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
     """The shape's chains beside the PoUS harness (``--beside-cmd``), started once they were measured alone: from its honest
     audit's ``ready-<tag>.json`` to its ``audit-<tag>.json`` (`band_gpu.harness.audit_round`), the points' arms take turns
     with the alone phase's items, each item's monotonic start kept, so the chain's slowdown and the audit's answers share
-    one window.  The harness runs to its end after the window (its controls and SeqRoot) and its exit code is kept."""
+    one window.  With ``--beside-idle`` the chain waits out the same window instead, its weights and graphs still resident:
+    the control, the same harness on the same lease with nothing beside it.  The harness runs to its end after the window
+    (its controls and SeqRoot) and its exit code is kept."""
     import subprocess
 
     import torch
@@ -558,7 +560,11 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
             rec["window_start_ns"] = time.monotonic_ns()
             turns = [(p, arm, m) for p in pts for arm, m in plans[p.key]["arms"].items() if not arm.endswith("-gemm")]
             i = 0
+            rec["idle"] = bool(a.beside_idle)
             while not done.exists() and proc.poll() is None and not over():
+                if a.beside_idle:
+                    time.sleep(0.05)
+                    continue
                 p, arm, m = turns[i % len(turns)]
                 i += 1
                 t = time.monotonic_ns()
@@ -608,6 +614,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--beside-tag", default="p2-honest", help="the audit round the window spans")
     ap.add_argument("--beside-log", type=Path, help="the harness's output")
     ap.add_argument("--beside-cpus", help="the harness's memory challenger and responder CPUs (its VCPU,RCPU), left to it")
+    ap.add_argument("--beside-idle", action="store_true", help="the control: run nothing in the audit's window")
     a = ap.parse_args(argv)
     if bool(a.beside) != bool(a.beside_cmd):
         ap.error("--beside and --beside-cmd go together")

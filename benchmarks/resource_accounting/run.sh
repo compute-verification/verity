@@ -15,7 +15,8 @@
 # pod.sh IMPL=p2-v3-mc-gpu (P2's timed audit: the GPU responder and the memory challenger, signed with the PoUS lanes' LMS key
 # through pod.sh's own --mc-lms-key, under their WORK) with no load of its own, and runs the chain beside its honest audit,
 # off the memory challenger's and responder's CPUs.
-# The harness's outputs go to $OUT/pous. POUS_WS, POUS_AUDITS and POUS_SEGMENTS pick its weight set, audits and segments.
+# The harness's outputs go to $OUT/pous. POUS_WS, POUS_AUDITS and POUS_SEGMENTS pick its weight set, audits and segments;
+# POUS_IDLE=1 is the control, the chain idle through the audit's window.
 # Scratch (the ship's check fixture, the retained passes) is a mktemp -d under /workspace/tmp, deleted on exit.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}/out}; mkdir -p "$OUT"
@@ -53,6 +54,7 @@ if [ -n "${POUS:-}" ]; then
     > "$OUT/pous-prepare.log" 2>&1 || { stamp "RUN_FAIL_POUS_PREPARE"; tail -20 "$OUT/pous-prepare.log"; exit 13; }
   # pod.sh's own choice of the memory challenger's and responder's CPUs (record_host), named so the chain leaves them
   read -r VCPU RCPU <<< "$(lscpu -p=CPU,CORE | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
+  [ -z "${POUS_IDLE:-}" ] || KERNEL+=(--beside-idle)
   KERNEL+=(--beside "$OUT/pous/bench" --beside-log "$OUT/pous.log" --beside-cpus "$VCPU,$RCPU" --beside-cmd
            "bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR=$OUT/pous IMPL=p2-v3-mc-gpu WORK=$POUS_WORK WS=$POUS_WS AUDITS=$POUS_AUDITS MAX_SEGMENTS=$POUS_SEGMENTS LOAD_TOKENS=0 TOKENS=1 WORKERS=8 VCPU=$VCPU RCPU=$RCPU")
 fi

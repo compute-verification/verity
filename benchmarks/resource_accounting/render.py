@@ -126,7 +126,7 @@ def pous(doc: dict, result: dict | None) -> dict | None:
     beside = [{"key": key, "arm": arm, "items": len(r["items"]), "alone_ms": r["alone_median_s"] * 1e3,
                "beside_ms": r["median_s"] * 1e3, "slowdown": r["slowdown"]}
               for key, by_arm in (b.get("points") or {}).items() for arm, r in by_arm.items()]
-    return {"error": b.get("error"), "window_closed_by": b.get("window_closed_by"), "harness_rc": b.get("harness_rc"),
+    return {"error": b.get("error"), "idle": b.get("idle"), "window_closed_by": b.get("window_closed_by"), "harness_rc": b.get("harness_rc"),
             "harness_stopped": b.get("harness_stopped"), "left_cpus": b.get("left_cpus"),
             "window_s": (b["window_end_ns"] - b["window_start_ns"]) / 1e9 if b.get("window_end_ns") else None,
             "passed": result.get("passed"), "failed_gates": sorted(g for g, v in (result.get("gates") or {}).items()
@@ -152,9 +152,11 @@ def _gb(v) -> str:
 
 
 def pous_lines(p: dict) -> list[str]:
+    under = "the idle chain (the control)" if p["idle"] else "the chain"
     lines = ["", ("PoUS beside the chain: P2's timed audit (benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu: the GPU responder and the "
                   "memory challenger, signed with S1's LMS key), with no load of its own, on the same GPU in its own process; "
-                  f"the chain's items ran from its honest audit's start to its end ({_f(p['window_s'], '.1f')} s, closed by "
+                  + ("the chain, resident, ran nothing (the control) " if p["idle"] else "the chain's items ran ")
+                  + f"from its honest audit's start to its end ({_f(p['window_s'], '.1f')} s, closed by "
                   f"{p['window_closed_by'] or '–'}), off CPUs {p['left_cpus'] or '–'}; harness exit {p['harness_rc']}"
                   + (f" ({p['harness_stopped']})" if p["harness_stopped"] else "") + ", gates "
                   + ("passed" if p["passed"] else "failed: " + ", ".join(p["failed_gates"]) if p["passed"] is not None
@@ -162,11 +164,11 @@ def pous_lines(p: dict) -> list[str]:
     if p["error"]:
         lines.append("Beside failed: " + p["error"].strip().splitlines()[-1])
     if p["audits"] is not None:
-        lines.append(f"Honest audit under the chain: {p['accepted']} of {p['audits']} audits accepted, {p['answers']} answers, "
+        lines.append(f"Honest audit beside {under}: {p['accepted']} of {p['audits']} audits accepted, {p['answers']} answers, "
                      f"{p['late']} late, {p['wrong']} wrong; limit {_f(p['limit_ns'] and p['limit_ns'] / 1e3, '.0f')} µs, "
                      f"fixed before load {p['limit_fixed_before_load']} (calibrated while the chain waited); answer time "
                      f"p50 / p99.9 / max {_us(p['elapsed_s'], 'p50', 'p99.9', 'max')} µs, least margin "
-                     f"{_us(p['margin_s'], 'min')} µs; RTT under the chain p50 / p99.9 {_us(p['rtt_s'], 'p50', 'p99.9')} µs.")
+                     f"{_us(p['margin_s'], 'min')} µs; RTT beside {under} p50 / p99.9 {_us(p['rtt_s'], 'p50', 'p99.9')} µs.")
     st, cap = p["storage"], p["capacity"]
     if st["s_cert"] is not None:
         lines.append(f"S_cert {_gb(st['s_cert'])} GB: a server holding fewer than ⌊ρ·|C|⌋ bits passes the audit of record's "

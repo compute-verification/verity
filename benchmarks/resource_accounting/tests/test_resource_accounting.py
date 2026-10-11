@@ -164,6 +164,8 @@ def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
     md = R.markdown(doc, {}, "fixture", _pous_result())
     assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md and "| +50.0% | 2 |" in md
     assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
+    doc["beside"] = {**doc["beside"], "idle": True, "points": {}}
+    assert "Honest audit beside the idle chain (the control): 19 of 20" in R.markdown(doc, {}, "fixture", _pous_result())
 
 
 def test_the_plan_needs_no_gpu(capsys):
