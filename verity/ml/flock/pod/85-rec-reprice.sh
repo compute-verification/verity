@@ -26,7 +26,8 @@
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
 #                firewall's negative controls on that statement
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
-#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
+#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
+#                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
 #                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
 #                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
@@ -654,9 +655,53 @@ lean)
   # session STEP=vstage staged every statement from, a forgery's too
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
   REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session"
+  # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
+  # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
+  # partition object and program), the shared rows (the honest algebra's row ports but v and out; without the algebra,
+  # the level's acc as acc0), and the inner transcript for a statement that reads a rec-c<k> (RecVStar.checkPubRows)
+  if [ -d $DD/v-sess ]; then
+    $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
+      --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
+    $LEAN_BIN rec-statements --rec-inner $O/lean/rec-inner.json > $O/lean/rec-statements.txt 2>&1 || { tail -5 $O/lean/rec-statements.txt; exit 1; }
+    python3 - $O/lean $DD/v $DD/v-sess $INNER/public.json <<'EOF' || exit 1
+import json, re, sys
+from pathlib import Path
+from verity_flock import rec_bindings as RB
+o, v, vs, transcript = map(Path, sys.argv[1:])
+(line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
+names = [s[0] for s in line["statements"]]
+shared = {}
+for f in sorted(v.glob("alg/*/registered.json")):
+    for nm, e in json.loads(f.read_text())["ports"].items():
+        if nm not in ("v", "out") and shared.setdefault(nm, e) != e:
+            sys.exit(f"{f}: its row port {nm} is not the other parts'")
+for s in sorted(p for p in vs.iterdir() if p.is_dir()):
+    c = Path((vs / f"{s.name}.stmt").read_text().strip())
+    with (c / "circuit.txt").open() as f:
+        unit = f.readline().split()[1]
+    ports = json.loads((c / "registered.json").read_text())["ports"]
+    rows = o / f"rows-{s.name}.json"
+    rows.write_text(json.dumps({"format": "verity/registered-reads/v0",
+                                "ports": shared or ({"acc0": ports["acc"]} if "acc" in ports else {})}))
+    flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(rows)]
+    if unit in names:
+        flags += ["--rec-part", str(names.index(unit))]
+    try:
+        b = RB.bindings(json.loads((c / "partition.json").read_text()), json.loads((c / "program.json").read_text()))
+        (o / f"bindings-{s.name}.json").write_text(json.dumps(b))
+        flags += ["--rec-bindings", str(o / f"bindings-{s.name}.json")]
+    except ValueError as e:
+        print(f"{s.name}: no bindings ({e}); Lean refuses it at setup")
+    if any(re.fullmatch(r"rec-c[0-9]+", str(e.get("value", ""))) for e in ports.values()):
+        flags += ["--rec-inner-transcript", str(transcript)]
+    (o / f"own-{s.name}.txt").write_text(" ".join(flags))
+    print(s.name, unit, " ".join(flags))
+EOF
+  fi
   for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
+    OWN=$(cat $O/lean/own-$l.txt)
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $OWN $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \

@@ -184,10 +184,11 @@ def spec(v) -> dict:
 def parts(v) -> list:
     """`rec_residuals.parts` on a checked S: it reads S's terms through their ports unchecked, so past `check_structure`
     its lookups fail."""
-    o = _obj(v, ("S", "max_regions", "max_slots"))
+    o = _obj(v, ("S", "max_regions", "max_slots", "max_lone_slots"))
     S = _reps(o["S"])
     G.check_structure(S["gf"])
-    return [{"S": p.S, "res": p.res, "v": p.v} for p in RR.parts(S, _nat(o["max_regions"]), _nat(o["max_slots"]))]
+    return [{"S": p.S, "res": p.res, "v": p.v}
+            for p in RR.parts(S, _nat(o["max_regions"]), _nat(o["max_slots"]), _nat(o["max_lone_slots"]))]
 
 
 def statements(v) -> list:
@@ -376,22 +377,26 @@ def _many(draw) -> dict:
     return {**S, "gf": {**S["gf"], "res": res}}
 
 
-#: S cut under limits it fits (64 regions, 160 slots), limits few residuals fit (3 regions: one port a part; 1 or 2 slots),
-#: S of more residuals than a part holds, and S or limits that refuse
-MAX = {"max_regions": st.just(RR.MAX_REGIONS), "max_slots": st.just(RR.MAX_SLOTS)}
+#: S cut under limits it fits (64 regions, 160 slots, 223 alone), limits few residuals fit (3 regions: one port a part; 1 or
+#: 2 slots, alone 1 to 3 or more than packed), S of more residuals than a part holds, and S or limits that refuse
+MAX = {"max_regions": st.just(RR.MAX_REGIONS), "max_slots": st.just(RR.MAX_SLOTS), "max_lone_slots": st.just(RR.MAX_LONE_SLOTS)}
 PARTS = st.one_of(
     st.fixed_dictionaries({"S": rep_s(), "max_regions": st.sampled_from([3, 4, RR.MAX_REGIONS]),
-                           "max_slots": st.sampled_from([1, 2, RR.MAX_SLOTS])}),
+                           "max_slots": st.sampled_from([1, 2, RR.MAX_SLOTS]),
+                           "max_lone_slots": st.sampled_from([0, 1, 2, 3, RR.MAX_LONE_SLOTS])}),
     st.fixed_dictionaries({"S": rep_s(big=True), "max_regions": st.sampled_from([3, RR.MAX_REGIONS]),
-                           "max_slots": st.sampled_from([2, RR.MAX_SLOTS])}),
+                           "max_slots": st.sampled_from([2, RR.MAX_SLOTS]), "max_lone_slots": st.sampled_from([2, 3, RR.MAX_LONE_SLOTS])}),
     _one(st.fixed_dictionaries({"S": _many(), **MAX})),
-    _one(st.fixed_dictionaries({"S": rep_s(valid=False) | rep_s(), "max_regions": _near(0, 3), "max_slots": _near(0, 3)}),
+    _one(st.fixed_dictionaries({"S": rep_s(valid=False) | rep_s(), "max_regions": _near(0, 3), "max_slots": _near(0, 3),
+                                "max_lone_slots": _near(0, 3)}),
          st.fixed_dictionaries({"S": rep_s(valid=False), **MAX}), JSON))
 
 REPS = st.one_of(rep_s(), rep_s(valid=False), JSON)
 DIGEST = st.text(HEX, min_size=128, max_size=128)
-BINDING = st.one_of(DIGEST, st.sampled_from(["a" * 128, "A" * 128, "a" * 127, "a" * 129, "g" * 128]))
 DIGESTS = st.dictionaries(st.text(max_size=12), st.text(HEX, max_size=64), max_size=2) | JSON
+#: `compose`'s inputs under bindings that are digests (`test_inner_circuit_agrees` replays ones that are not)
+INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, "program": DIGEST,
+                               "program_digests": DIGESTS})
 
 
 def port(fn: str, reference, inputs) -> D.Port:
@@ -453,12 +458,13 @@ def test_parts_agree(server):
 
 @pytest.mark.slow
 def test_statements_agree(server):
-    """Drawn shapes, the universal unit's inner shape (17 residuals, two parts), and the largest whose widest residual fits
-    MAX_SLOTS (14 claims: 151 slots; 15 claims' 162 refuse)."""
+    """Drawn shapes, the universal unit's inner shape (17 residuals, two parts), llama32-1b/b1/i256's 2^29 bucket (16 claims:
+    its batched T alone, 172 slots), and the largest whose widest residual stands alone within MAX_LONE_SLOTS (20 claims:
+    215 slots; 21 claims' 226 refuse)."""
     p = port("statements", statements, _shapes(14))
-    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 32, "claims": 14}):
+    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 27, "claims": 16}, {"m": 35, "k_log": 32, "claims": 20}):
         assert D.replay(p, sh, server)[0] == "output"
-    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 15}, server)[0] == "reject"
+    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 21}, server)[0] == "reject"
     stats = D.run(p, examples=32, seed=SEED, server=server)
     assert stats.outputs >= 8 and stats.rejects >= 4, stats
 
@@ -476,9 +482,10 @@ def test_the_verifiers_part_nets_are_vstars_units(server):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
-                     st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([0, 17, -1, True])}),
+                     st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
                      st.dictionaries(st.sampled_from(["LANES", "H", "x"]), st.just(7), max_size=3), JSON)
 
 
@@ -491,7 +498,13 @@ def test_inner_unit_agrees(server):
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    stats = D.run(port("rec_open_unit", rec_open_unit, REC_OPEN), examples=30, seed=SEED, server=server)
+    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
+    takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
+    p = port("rec_open_unit", rec_open_unit, REC_OPEN)
+    for h in (0, 17):
+        assert D.replay(p, {"LANES": 8, "H": h}, server)[0] == "output", h
+    stats = D.run(p, examples=30, seed=SEED, server=server)
     assert stats.outputs >= 1 and stats.rejects >= 10, stats
 
 
@@ -499,11 +512,18 @@ def test_rec_open_unit_agrees(server):
 
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
-    """`compose` on small InnerRepCheck units under drawn bindings, invalid ones included: META, the zero instance's
-    outputs and `b ‖ c`, the slot ranges and the block size."""
-    inputs = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": BINDING, "program": BINDING,
-                                    "program_digests": DIGESTS})
-    stats = D.run(port("inner_circuit", inner_circuit, inputs), examples=5, seed=SEED, server=server)
+    """`compose` on small InnerRepCheck units under drawn bindings: META, the zero instance's outputs and `b ‖ c`, the slot
+    ranges and the block size. A binding that is not a digest is replayed in each place, not drawn: drawn, it refused
+    most of the five units, and which ones moved with the source of modules the reference loads (Hypothesis draws their
+    constants too)."""
+    p = port("inner_circuit", inner_circuit, INNER)
+    good = {"S": {"gf": {"nv": 1, "nw": 1, "ops": [], "res": []}, "ports": [["row0", 1]]}, "name": "row0",
+            "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
+    assert D.replay(p, good, server)[0] == "output"
+    for key in ("partition", "program"):
+        for bad in ("A" * 128, "a" * 127, "a" * 129, "g" * 128):
+            assert D.replay(p, {**good, key: bad}, server)[0] == "reject", (key, bad)
+    stats = D.run(p, examples=5, seed=SEED, server=server)
     assert stats.outputs >= 2 and stats.rejects >= 1, stats
 
 
@@ -513,7 +533,7 @@ def test_rec_open_circuit_refuses_as_compose_does(server):
     SHA-512 digest); `test_rec_open_file_is_byte_equal` compares a file it writes."""
     p = port("rec_open_circuit", rec_open_circuit, st.nothing())
     good = {"LANES": 8, "H": 1, "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
-    for bad in ({**good, "LANES": 7}, {**good, "LANES": True}, {**good, "H": 0}, {**good, "H": 17},
+    for bad in ({**good, "LANES": 7}, {**good, "LANES": True}, {**good, "H": -1}, {**good, "H": 33},
                 {k: v for k, v in good.items() if k != "program"}, {**good, "x": 0}, {**good, "partition": "A" * 128}):
         assert D.replay(p, bad, server)[0] == "reject", bad
 
