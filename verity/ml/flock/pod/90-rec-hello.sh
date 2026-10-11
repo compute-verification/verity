@@ -4,7 +4,9 @@
 # commitment on stacked/rep0), then over its inner session: the two records' Hellos, rec-transcript (innerCommits), rec-coins
 # (check 5) on the relay's record and on the prover's, L3 staged (c3_e2e.py stage level3), proved by C-Flock --zk under the
 # verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify under --rec-inner (plain) with check 5's
-# inputs on the prover's record (option (b)), with and without the inner transcript. Outputs under out/: honest/ (88's), e2e/, exits.txt.
+# inputs on the prover's record (option (b)), with and without the inner transcript, the transcript with R's registered top
+# (inner/registration.json, --rec-inner-registration) and refused without it or with one a bit off. Outputs under out/: honest/
+# (88's), e2e/ (fixture/: the inner session's files as rec-c3-inner holds them, with registration.json), exits.txt.
 #   research run --on vy-cpu-1 --mem-gb 40 --source . --cwd source --declared-output 'out/*' -- \
 #     python3 tools/verity/check/slot.py --by rec-hello -- bash $0
 set -uxo pipefail
@@ -34,14 +36,29 @@ pub = json.loads((d / "public.json").read_text())
 print(json.dumps({"same_bytes": v["hello"] == p["hello"], "canonical": p["hello"] == RL.canonical(json.loads(p["hello"])),
                   "tables": json.loads(v["hello"])["tables"], "roots": sorted(pub["link"]["roots"]), "hello": v["hello"],
                   "stacked_round0_tops": [len(t) for t in next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0")["tops"]],
-                  "zero_coin_rounds": [[s["stream"], r["k"]] for s in v["streams"] for r in s["rounds"] if not r["n"]]}))
+                  "zero_coin_rounds": [[s["stream"], r["k"]] for s in v["streams"] for r in s["rounds"] if not r["n"]],
+                  "registration": (reg := json.loads((d / "registration.json").read_text())) | {"registered": sorted(reg["registered"])},
+                  "registered_top_is_r_binding_round_top": reg["registered"]["stacked"]["top"]
+                  == next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)["tops"][0]}))
 EOF
 echo "hello exit $?" | tee -a $X
 
+REG=$H/inner/registration.json; BADREG=$E/registration-bad.json
+python3 -c '
+import json, sys
+r = json.load(open(sys.argv[1])); t = r["registered"]["stacked"]["top"]; c = bytearray.fromhex(t[0]); c[-1] ^= 1; t[0] = c.hex()
+print(json.dumps(r))' $REG > $BADREG
+mkdir -p $E/fixture && cp -r $H/inner/public.json $H/inner/private.json $H/inner/prover $H/inner/session $REG $H/fold.json $H/points.json $E/fixture/
 for s in prover session; do
-  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s > $E/rec-transcript-$s.txt 2>&1
+  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s --rec-inner-registration $REG \
+    > $E/rec-transcript-$s.txt 2>&1
   echo "rec-transcript $s exit $?" | tee -a $X
 done
+$LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/prover > $E/rec-transcript-noreg.txt 2>&1
+echo "rec-transcript prover-noreg exit $? (refused: 1)" | tee -a $X
+$LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/prover --rec-inner-registration $BADREG \
+  > $E/rec-transcript-badreg.txt 2>&1
+echo "rec-transcript prover-badreg exit $? (refused: 1)" | tee -a $X
 for s in session prover; do
   $LEAN_BIN rec-coins --rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/$s \
     > $E/rec-coins-$s.json 2> $E/rec-coins-$s.err
@@ -101,9 +118,11 @@ v() {  # v NAME ARGS...: Lean verify on the drawn session
   /usr/bin/time -v -o $D/time-lean-$n.txt $LEAN_BIN verify "${LV[@]}" "$@" --session $SESS > $D/lean-$n.log 2>&1
   echo "lean $n exit $?" | tee -a $X
 }
-v prover-transcript "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json
+v prover-transcript "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json --rec-inner-registration $REG
+v prover-transcript-noreg "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json
+v prover-transcript-badreg "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json --rec-inner-registration $BADREG
 v prover "${IN[@]}" --rec-inner-session $H/inner/prover
 cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt | cut -c1-300 > $D/unit.txt; du -sb $C/* > $D/sizes.txt
-grep -h "^VERDICT" $D/lean-*.log | cut -c1-600 > $E/verdicts.txt
+for f in $D/lean-*.log; do echo "$(basename $f): $(grep -h '^VERDICT' $f | cut -c1-600)"; done > $E/verdicts.txt
 for f in $D/lean-*.log; do echo "== $f"; grep -v "^VERDICT" $f | tail -3; done >> $E/verdicts.txt
 cat $X
