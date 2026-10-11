@@ -54,7 +54,10 @@ message `memoryChallengerMessage(I, session, message(commitment, ended, rounds))
 The model takes the device's clock readings and the answers it receives as they came, and assumes nothing of them: a
 round's times are the device's own readings, whatever its clock did. It does not model what refuses a session before
 it starts (a limit or answer size that is not positive, a clock coarser than a microsecond): those restrict the runs, not
-what a run signs. The device may run any number of sessions under a key, each signed once.
+what a run signs. The device may run any number of sessions under a key, each signed once. A key signs only its
+sessions' messages, one role per key: `Signed` is all the model's key signs, so a key also used for another role
+(`lms.ROLES` has `network-certificate` too) is outside the model, and the third disjunct is an EUF-CMA break only
+under that one-role reading.
 
 Nothing is assumed of SHA-512 or LMS. `VerdictSigned` holds, or the run's own data carries a break: two distinct
 strings of `runStrings`, the strings the session and the device's sessions under its key hash, with one SHA-512 digest
@@ -177,7 +180,10 @@ def VerdictSigned : Prop :=
     (c : SessionCommitment) (openings : Array CoinOpening) (dev : Device),
     (verdict schemes trusted expected s c openings).accepted = true → SignedByDevice schemes trusted s dev
 
-/-- `VerdictSigned` for `Judge.judge` on a record as its caller holds it, under the schemes the record names. -/
+/-- `VerdictSigned` for `Judge.judge` on a record as its caller holds it, under the schemes the record names. The
+forgery disjunct is at the record's own scheme parameters: a reader cites `euf-cma/lms-sha512-n64` only when the
+record's scheme is `LMS` (`lms-sha512/n64-w1-h20/v0`) at its deployed parameters (`Lms.deployed`, Python
+`lms.DEPLOYED`). -/
 def JudgeSigned : Prop :=
   ∀ (r : Judge.Record) (dev : Device), Verdict.accepted <$> Judge.judge r = .ok true →
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧ SignedByDevice schemes r.trusted.toList r.signed dev
