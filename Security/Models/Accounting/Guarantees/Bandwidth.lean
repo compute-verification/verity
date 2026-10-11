@@ -54,4 +54,28 @@ def HonestPasses : Prop :=
   ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
     ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
 
+/-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
+sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,
+and every bit the chip reads from it counts against `c`. For every `m`, the probability that the verifier accepts while
+the device's ingress, plus `S + c + m·b + G·b + λ`, falls short of `k·b` is at most
+
+  `((k − 1)/N)^s + C(N, m)·2^c/2^(h·m) + C(q, k − m)/2^λ`.
+
+`m` is the number of blocks charged to the side sources' tags. The middle term bounds the chance that the chip
+committed the right tag for `m` blocks it never queried: for a fixed store, the run depends on the oracle off its
+queries only through the side bits it read, at most `2^c` strings, and those `m` tags are `h·m` uniform bits. Since
+`C(N, m) ≤ N^m`, choosing `m·(h − log₂ N) ≥ c + μ` makes it at most `2^-μ`. The side sources then cost
+`c + m·b ≈ c·(1 + b/(h − log₂ N))` bits of the deficit, `c` as information about the store and `m·b` as relayed tags,
+so relay is covered inside the side budget rather than excluded. The other two terms are `AuditRO`'s, with the
+compression at `k − m` blocks. Proof: `Bandwidth.SecurityProofs.AuditRelay`.
+
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the bandwidth audit's code computes. -/
+def AuditRelay : Prop :=
+  ∀ (N b h S c G q s k m lam : ℕ) (A : RelayDevice N b h S c G q),
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
+        + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
+
 end Bandwidth.Guarantees
