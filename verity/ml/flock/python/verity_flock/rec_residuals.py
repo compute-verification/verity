@@ -66,8 +66,8 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
-           "opening_rows", "residual_forms", "residual_words", "slots", "spec", "stage_opening",
+__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words",
+           "regions", "opening_rows", "residual_forms", "residual_words", "slots", "spec", "stage_opening",
            "statement", "unit_circuit", "write", "write_rows"]
 
 U16 = Array(16, BL.BIT)
