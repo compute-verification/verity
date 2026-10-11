@@ -8,7 +8,8 @@ top. Its hashing part, which this module states over plain Python:
 * **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the coin server
   received each node's salted commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
-  commitments is refused (``FIREWALL-REFUSED: tree top``).
+  commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
+  its binding round's top, which must be the top registered before the session (`registered`, ``registration.json``).
 * **Openings** (PROTOCOL.md §13.3, §13.5). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
   ``j``'s position is ``pos_j = (s_j << (d - c_j)) | (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins,
   its leaf ``SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE: the statement's
@@ -263,6 +264,18 @@ def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> li
     return out
 
 
+def registered(public: dict, registration: dict | None, table: str = RL.STACKED) -> None:
+    """A table with no root at ``Commit`` (R) is bound by its registration alone (`rec_live.register_top`): its stream's
+    binding round's salted top must be the registered top, ``b || c`` for ``b || c``; refused by name otherwise."""
+    stream = f"{table}/rep0"
+    first = next((r for r in _stream_rounds(public, stream) if r["k"] == 0), None)
+    reg = ((registration or {}).get("registered") or {}).get(table) if (registration or {}).get("kind") == RL.REGISTRATION_KIND else None
+    if reg is None or (registration or {}).get("tops") != RL.TOPS:
+        raise ValueError(RL.refused(f"registration: {table} has no root at Commit and no registered top"))
+    if first is None or not first["tops"] or first["tops"][0] != reg["top"]:
+        raise ValueError(RL.refused(f"registration: {stream}'s binding round's top is not {table}'s registered top"))
+
+
 def reps(public: dict) -> list[int]:
     """The reps the session's ``hello`` declares; each has a stream and a proof, or V* refuses the session."""
     return list(range(public["hello"]["reps"]))
@@ -341,6 +354,8 @@ def main(argv=None) -> int:
         public, private, proofs = load(Path(a.inner))
         res = check(public, private, proofs)
         if f"{RL.STACKED}/rep0" in public["streams"]:
+            reg = Path(a.inner) / RL.REGISTRATION
+            registered(public, json.loads(reg.read_text()) if reg.exists() else None)
             res["stacked"] = check(public, private, load(Path(a.inner), RL.STACKED)[2], RL.STACKED)
             res["accepted"] = res["accepted"] and res["stacked"]["accepted"]
     except ValueError as e:

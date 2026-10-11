@@ -18,12 +18,14 @@ and weighted by ``Σ_q eq(ρ[sl − 6 ..], q)·eq(r[sl − 6 ..], q)`` over the 
 The copies between slots (Δ) and the pin stay public: the verifier's comb is the fold of everything else (``InnerFold.lean
 --hide``), and comb + h is the circuit's whole fold (`check_fold`).
 
-**The sparse phase and R** (``--sparse``, ``--stacked``): at the prover's Finish the relay runs each rep's sparse phase as a
-stream of its own (`Relay.sparse_phase`), then commits the stacked table R and opens it at both reps' registered claims with
-``flock-circuit stacked`` on a connection of its own into the same session (`Relay.stacked_phase`), and only then passes the
-prover's Finish on. The prover's Hello and Commit pass as they are, the circuit table's alone: R's root is the salted top of
-its stream's binding round (`rec_live.stacked_rounds`), so the verifier's record has the statement's Hello, the bytes of the
-prover's own record.
+**The sparse phase and R** (``--sparse``, ``--stacked``): R depends on the hidden circuit alone, so it is registered with it,
+before the session and any coin (`register_stacked`: R's cells, its root, and the root's top salted once, written to
+``registration.json``). At the prover's Finish the relay runs each rep's sparse phase as a stream of its own
+(`Relay.sparse_phase`), then opens the registered R at both reps' registered claims with ``flock-circuit stacked`` on a
+connection of its own into the same session (`Relay.stacked_phase`), and only then passes the prover's Finish on. The prover's
+Hello and Commit pass as they are, the circuit table's alone: R's root is the salted top of its stream's binding round
+(`rec_live.stacked_rounds`), which the firewall holds to the registered top, so the verifier's record has the statement's
+Hello, the bytes of the prover's own record.
 
 `serve` writes the proxy's directory (`rec_live.Proxy.write`: ``public.json``, ``private.json`` and ``session/``, whose rounds
 are the verifier's, z_partial's of no coins then h's) and ``prover/``: ``session.json``, the session as the prover ran it
@@ -187,6 +189,31 @@ def check_fold(fold: dict, private: dict) -> dict:
     return {"hidden": fold.get("hidden"), "comb_plus_h_is_full": ok, "h_nonzero": [any(h) for h in hs]}
 
 
+# --- R's registration ------------------------------------------------------------------------------------------------------------
+
+def register_stacked(st: dict, phase: tuple, fresh_salt: Callable[[], bytes] | None = None) -> dict:
+    """The stacked table R registered with the private circuit, before its session: R's cells from the hidden circuit's
+    entries (``phase``: the bucket's shape and the entries, `rec_sparse.table`; with ``forge`` ``cell``, cell 0 flipped: a
+    prover registering an R that is not its circuit's) in ``R.bin``, its root by ``flock-circuit stacked --root-out``
+    (``ROOT.json``), and the root's top salted once (`rec_live.register_top`, salts from ``fresh_salt``, default the
+    operating system's). Kept in ``st`` (``raw``, ``registered``) and returned: the `rec_live.Proxy`'s ``registered``
+    under `rec_live.STACKED`."""
+    from . import rec_sparse as SP
+
+    d = Path(st["dir"])
+    d.mkdir(parents=True, exist_ok=True)
+    raw = bytearray(SP.table(*phase[:2]))
+    if st.get("forge") == "cell":
+        raw[0] ^= 1
+    st["raw"] = bytes(raw)
+    (d / "R.bin").write_bytes(st["raw"])
+    subprocess.run([str(st["bin"]), "stacked", "--table", str(d / "R.bin"), "--root-out", str(d / "ROOT.json")], check=True,
+                   capture_output=True)
+    cap = bytes.fromhex(json.loads((d / "ROOT.json").read_text())["cap"])
+    st["registered"] = RL.register_top(cap, *([fresh_salt] if fresh_salt else []))
+    return st["registered"]
+
+
 # --- the relay -------------------------------------------------------------------------------------------------------------------
 
 class Relay:
@@ -208,7 +235,8 @@ class Relay:
         #: per rep, its sparse phase's coins and messages (`rec_sparse.prove`)
         self.sparse_out: dict[int, tuple] = {}
         #: the stacked table R (`stacked_phase`): ``bin`` (flock-circuit), ``dir`` (R.bin, ROOT.json, P.json and its logs),
-        #: ``forge`` (None, ``cell``: R committed with cell 0 flipped, or ``point``: rep 0's point off by one bit)
+        #: ``forge`` (None, ``cell``: R registered with cell 0 flipped, ``late``: R's cell 0 flipped after its registration,
+        #: or ``point``: rep 0's point off by one bit), and once `register_stacked` has run, ``raw`` and ``registered``
         self.stacked = stacked
 
     def _refuse(self, why: str) -> bytes:
@@ -284,23 +312,23 @@ class Relay:
             self.proxy.stop(f"rec session: sparse phase: {type(e).__name__}: {e}")
 
     def stacked_phase(self) -> None:
-        """R's cells from the hidden circuit's entries (`rec_sparse.table`, its root by ``flock-circuit stacked --root-out``),
-        opened at both reps' registered claims (`rec_sparse.registered_claim`, each checked to be R's value there, the sparse
-        phase's claim) by ``flock-circuit stacked --points P.json --verifier`` on a connection of its own into the same
-        session, whose binding round commits R's root; its Finish is answered here, the prover's goes on to the proxy."""
+        """The registered R (`register_stacked`) opened at both reps' registered claims (`rec_sparse.registered_claim`, each
+        checked to be R's value there, the sparse phase's claim) by ``flock-circuit stacked --points P.json --verifier`` on a
+        connection of its own into the same session, whose binding round commits R's root, the registered top; its Finish is
+        answered here, the prover's goes on to the proxy."""
         from . import rec_sparse as SP
 
         sh, st = self.sparse[0], self.stacked
         d = Path(st["dir"])
         try:
-            d.mkdir(parents=True, exist_ok=True)
-            raw = bytearray(SP.table(*self.sparse[:2]))
-            if st.get("forge") == "cell":
+            if "registered" not in st:
+                raise AssertionError("R was never registered")
+            table = d / "R.bin"
+            if st.get("forge") == "late":
+                raw = bytearray(st["raw"])
                 raw[0] ^= 1
-            st["raw"] = bytes(raw)
-            (d / "R.bin").write_bytes(st["raw"])
-            subprocess.run([str(st["bin"]), "stacked", "--table", str(d / "R.bin"), "--root-out", str(d / "ROOT.json")], check=True,
-                           capture_output=True)
+                table = d / "R-late.bin"
+                table.write_bytes(bytes(raw))
             x = []
             for r in range(RL.REPS):
                 c, msgs = self.sparse_out[r]
@@ -315,7 +343,7 @@ class Relay:
             (d / "P.json").write_text(json.dumps({"x": [[RL.f128_hex(v) for v in xs] for xs in x]}))
             with socket.create_server(("127.0.0.1", 0)) as srv, open(d / "open.log", "w") as log:
                 host, port = srv.getsockname()[:2]
-                proc = subprocess.Popen([str(st["bin"]), "stacked", "--table", str(d / "R.bin"), "--points", str(d / "P.json"),
+                proc = subprocess.Popen([str(st["bin"]), "stacked", "--table", str(table), "--points", str(d / "P.json"),
                                          "--verifier", f"{host}:{port}"], stdout=log, stderr=subprocess.STDOUT)
 
                 def wake():
@@ -376,8 +404,9 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     ``out/schedule.json`` first), through a `Relay` whose h is the ``hidden`` circuits' fold in ``circuit``; written into
     ``out`` (`Relay.write`), or, when it stops, the coin server's record alone. ``sparse``: the bucket's `rec_sparse.Shape`,
     whose sparse phase (`Relay.sparse_phase`, on ``workers`` processes) the one hidden circuit's entries run. ``stacked``
-    (with ``sparse``): flock-circuit, which commits R and opens it at the sparse claims (`Relay.stacked_phase`, under
-    ``out/stacked``; ``forge`` its forgery). Returns its summary."""
+    (with ``sparse``): flock-circuit, which registers R before the session (`register_stacked`, ``out/registration.json``)
+    and opens it at the sparse claims (`Relay.stacked_phase`, under ``out/stacked``; ``forge`` its forgery). Returns its
+    summary."""
     m, k_log = statement["dense_m"], statement["k_log"]
     nets, ranges, meta = hidden_circuits(Path(circuit), hidden)
     if meta["k_log"] != k_log:
@@ -399,7 +428,10 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "schedule.json").write_text(json.dumps(schedule, indent=1))
-    proxy = RL.Proxy(RL.CoinServer(rand), schedule=schedule)
+    registered = {} if st is None else {RL.STACKED: register_stacked(st, phase)}
+    if registered:
+        (out / RL.REGISTRATION).write_text(json.dumps(RL.registration_record(registered), indent=1))
+    proxy = RL.Proxy(RL.CoinServer(rand), schedule=schedule, registered=registered)
     relay = Relay(proxy, m, k_log, lambda p: hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, workers, st)
     host, port = listen.rsplit(":", 1)
     with socket.create_server((host, int(port))) as srv:
@@ -426,7 +458,8 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
             "message_rows": rec["message_rows"], "coins": sum(r["n"] for r in rec["rounds"]), "hidden": list(hidden),
             "h_round": relay.zp + 1, "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()},
             "sparse": None if sparse is None else {"shape": [sparse.NU, sparse.ELL, sparse.S_LOG, sparse.T_LOG], "reps": len(relay.sparse_out)},
-            "stacked": None if st is None else {"m": SP.table_m(sparse), "forge": forge, "root": json.loads((st["dir"] / "ROOT.json").read_text())}}
+            "stacked": None if st is None else {"m": SP.table_m(sparse), "forge": forge, "root": json.loads((st["dir"] / "ROOT.json").read_text()),
+                                                "registration": str(out / RL.REGISTRATION)}}
 
 
 def main(argv=None) -> int:
@@ -444,7 +477,8 @@ def main(argv=None) -> int:
     ap.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="each rep's sparse phase at this RecSparse shape (the bucket's)")
     ap.add_argument("--workers", type=int, help="--sparse: processes sharing each rep's H3 (default: the cores it may run on)")
     ap.add_argument("--stacked", metavar="FLOCK_CIRCUIT", help="--sparse: commit R and open it at the sparse claims with this build")
-    ap.add_argument("--forge", choices=("cell", "point"), help="--stacked: R committed with cell 0 flipped, or rep 0's point off")
+    ap.add_argument("--forge", choices=("cell", "late", "point"),
+                    help="--stacked: R registered with cell 0 flipped, R's cell 0 flipped after its registration, or rep 0's point off")
     a = ap.parse_args(argv)
     if a.check_fold:
         if not a.inner:
