@@ -1747,7 +1747,7 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.frameInjective": {
-    "function": ["PouwCommit.frameBytes", "PouwCommit.frameHash"],
+    "function": "PouwCommit.frameHash?",
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.frameSizes": {
@@ -1901,8 +1901,7 @@
    "Properties.NetworkCertifier.honestAccepted": "completeness: Move to Proofs with its honest case as written; no Lean instance (the network difftest's accepted transcripts could supply one); it pairs with AcceptsIff's forward half.",
    "Properties.NetworkCertifier.malformedEvidenceRejects": "restatable: State the contrapositive: an outcome other than reject -> EvidenceFits.",
    "Properties.NetworkCertifier.undecidedIff": "restatable: Split the iff: keep undecided -> the link-window conditions (other-outcome); move the converse to Proofs.",
-   "Properties.NetworkCertifier.undigestedParamsReject": "restatable: State the contrapositive: an outcome other than reject -> some ParamsDigests p eg ig.",
-   "Properties.Pouw.Commit.frameInjective": "frozen (scope): It takes |tag| < 2^32 and every |part| < 2^64 as hypotheses, which the Lean frameBytes doesn't refuse (it wraps the length; Python's frame refuses), so it leaves the list once the port refuses them and the bounds come from acceptance."
+   "Properties.NetworkCertifier.undigestedParamsReject": "restatable: State the contrapositive: an outcome other than reject -> some ParamsDigests p eg ig."
   }
  },
  "reads": {
