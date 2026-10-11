@@ -234,7 +234,7 @@ theorem demuxVal_range (tb : ℕ → ℕ → Bool) (m S : ℕ) (X : ℕ → F128
   refine List.ext_getElem (by simp) fun i h1 h2 => ?_
   simp [List.getElem_zipIdx, splits_range]
 
-theorem wt_val (tb : ℕ → ℕ → Bool) (τ : ℕ → ℕ) (m S : ℕ) (X : ℕ → F128)
+theorem demux_column (tb : ℕ → ℕ → Bool) (τ : ℕ → ℕ) (m S : ℕ) (X : ℕ → F128)
     (h : ∀ s < S, ∀ j < m, tb s j = (τ s).testBit j) {t : ℕ} (ht : t < 2 ^ m) :
     ((List.range S).map fun s => (List.range (2 ^ m)).map fun t => if low (tb s) m = t then X s else 0).map
       (·.getD t 0) = (List.range S).map fun s => if τ s % 2 ^ m = t then X s else 0 := by
@@ -422,7 +422,7 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
           rw [List.length_map, List.length_range]
           exact ht)
         (by simpa using hne)
-      rwa [wt_val _ τ sh.tLog sh.S _ htb ht] at this
+      rwa [demux_column _ τ sh.tLog sh.S _ htb ht] at this
     have H4 := holds_xorAllL (.cons (HR "bp" (Or.inr (Or.inr (Or.inr (Or.inl rfl)))))
       (hsel _ (forall₂_zip (forall₂_range _ _ sh.T HWT) (forall₂_range _ _ sh.T fun t ht => hin.hvt hst t ht))))
       (List.cons_ne_nil _ _)
