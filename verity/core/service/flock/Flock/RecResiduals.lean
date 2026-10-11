@@ -318,8 +318,8 @@ unification against it builds the net. -/
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
     else pure ()
 
-/-- `check` reads a circuit's name, unit and META only. -/
-theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hm : c.metaJ = c'.metaJ) :
+/-- `check` reads a circuit's name, unit and META only (`hm` by `rfl` where the two share META). -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hm : c.metaJ = c'.metaJ := by rfl) :
     check c = check c' := by
   unfold check holoOf
   rw [hn, hu, hm]
