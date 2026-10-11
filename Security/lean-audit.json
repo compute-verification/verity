@@ -211,8 +211,6 @@
   "Definitions.NetworkCertifier",
   "Models.NetworkCertifier.Assumptions",
   "Models.NetworkCertifier.Guarantees",
-  "Definitions.Accounting",
-  "Models.Accounting.Guarantees",
   "Models.Flock.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
@@ -227,7 +225,9 @@
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
   "Proofs.Flock.ZeroKnowledgeHidden",
-  "Proofs.Pouw.PearlC.FlockTile"
+  "Proofs.Pouw.PearlC.FlockTile",
+  "Definitions.Accounting",
+  "Models.Accounting.Guarantees"
  ],
  "layers": {
   "Definitions.Core": {
@@ -395,25 +395,20 @@
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
-  "Definitions.Accounting": {
-   "imports": ["Mathlib", "Definitions.Accounting"],
-   "except": ["Definitions.Accounting.Tag.Sketch"],
-   "why": "resource accounting's definitions are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Accounting.Tag.Sketch": {
-   "imports": ["Mathlib", "Definitions.Accounting", "Definitions.Pouw.Fp8Atom", "Definitions.Pouw.PearlC.Sm120"],
+  "Models.Flock.Guarantees": {
+   "imports": ["Mathlib", "Models.Flock.Guarantees"],
    "except": [],
-   "why": "the tensor-core sketch is stated over the sm_120 E4M3 step's trusted definitions (Fp8Atom, Sm120), and imports no proof"
+   "why": "a guarantee is a Prop over Mathlib, never over a proof"
+  },
+  "Definitions.Accounting": {
+   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting"],
+   "except": [],
+   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), and they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": ["Mathlib", "Definitions.Accounting", "Models.Accounting.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over resource accounting's definitions, never over a proof"
-  },
-  "Models.Flock.Guarantees": {
-   "imports": ["Mathlib", "Models.Flock.Guarantees"],
-   "except": [],
-   "why": "a guarantee is a Prop over Mathlib, never over a proof"
   }
  },
  "reads_exempt": {
@@ -430,7 +425,7 @@
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
- "four_names": ["Nci", "NetTiming"],
+ "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
