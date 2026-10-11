@@ -27,7 +27,8 @@ registered as the others' are; z_partial's round draws no coins, which `rec_alge
 
 **The sparse phase and R** (``--sparse``, with ``--circuit``): RecSparse over both reps' sparse streams (`stage_sparse`) and,
 when the session committed the stacked table R, R's levels as RecOpen statements, its openings on the chain after both
-reps' (rep `STACKED_REP`), and its registered opening (`stage_stacked`), which reads the ``rec-claim`` RecSparse reads.
+reps' (rep `STACKED_REP`), and its registered opening (`stage_stacked`), which reads the ``rec-claim`` RecSparse reads and
+the stream's messages as ``rec-opening-c<i>`` in the verifier's round order (`opening_messages`).
 
 **Forgeries** (``--forge``), staged under ``OUT/forged-<kind>/``, each beside the verifier's files of the honest session:
 
@@ -260,17 +261,31 @@ def stacked_reads(inner: Path, public: dict, private: dict, vf: SimpleNamespace,
     return SimpleNamespace(sh=sh, reps=reps_, qs=qs, coefs=coefs, tops=V.tops(public, private, stream, RL.STACKED), v=v)
 
 
+def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> tuple[dict, dict]:
+    """R's registered opening's messages (`messages`), port ``m<i>`` reading ``rec-opening-c<i>``: round i of
+    `rec_algebra.rounds` at the opening-only shape ``sh`` (``Flock/RecOpening.lean``'s ``rounds``, which its unit's row ports
+    follow: each claim's ring switch, then Ligerito's), the i-th round of ``stacked/rep0`` that commits a message. Each must sit
+    at a round `rec_live.stacked_rounds` absorbs a message in, so that the coin server recorded its ``c_k`` before it drew
+    that round's coins and every later one."""
+    stream = f"{RL.STACKED}/rep0"
+    ks = sorted(r["k"] for r in public["rounds"] if r["stream"] == stream and r["commits"])
+    want = [k for k, r in enumerate(RL.stacked_rounds(sh.m)) if r[3]]
+    if ks != want:
+        raise ValueError(f"{stream}: its messages are committed at rounds {ks}, not at {want}, the rounds that absorb them")
+    mrs = message_rounds(public, private, sh, [stream])
+    return messages(program, mrs, [(f"m{i}", f"rec-opening-c{i}") for i in range(len(mrs))])
+
+
 def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace, chain: O.Chain, coefs: dict, claim, out: Path,
                   evaluate: bool = True) -> dict:
     """R's levels as RecOpen statements on the chain (their tops ``rec-top-stacked-L<level>``) and its registered opening
-    (`rec_residuals.stage_opening`): the stacked stream's messages (``rec-stacked-c<i>``), ``claim`` the prover's
+    (`rec_residuals.stage_opening`): the stacked stream's messages (`opening_messages`), ``claim`` the prover's
     ``rec-claim``, which RecSparse reads too, and the chain's rows either side of R's openings."""
     levels = {}
     for lv in O.levels(sr.qs):
         tops = O.TopValue.build(program, lv["level"], {STACKED_REP: sr.tops[lv["level"]]}, f"rec-top-stacked-L{lv['level']}")
         levels[f"L{lv['level']}"] = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops)
-    mrs = message_rounds(public, private, sr.sh, [f"{RL.STACKED}/rep0"])
-    regs, own = messages(program, mrs, [(f"m{i}", f"rec-stacked-c{i}") for i in range(len(mrs))])
+    regs, own = opening_messages(public, private, sr.sh, program)
     acc = (chain.reg, *chain.rep_ends(STACKED_REP))
     opening = RR.stage_opening(sr.sh, {**regs, "claim": claim}, acc, sr.v, out / "open", evaluate, own)
     return {"m": sr.sh.m, "openings": len(sr.qs), "levels": levels, "opening": opening}

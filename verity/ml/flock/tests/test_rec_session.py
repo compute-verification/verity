@@ -529,6 +529,44 @@ def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_sessi
         assert got.vstar["accepted"] and got.residuals == bad, (forge, got.residuals)
 
 
+def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_session):
+    """`rec_vstage.opening_messages`: port ``m<i>`` reads ``rec-opening-c<i>``, round i of ``Flock/RecOpening.lean``'s
+    ``rounds`` (each claim's ring switch, then Ligerito's), which is the i-th round of ``stacked/rep0`` that commits a message,
+    at a round `rec_live.stacked_rounds` absorbs one in; the verifier's own entry of each is its round's ``c_k``, which every
+    prover row opens. A prover that exchanges c0 and c1 (the two claims' ring switches, equal in size) registers round 1's row
+    as c0 and round 0's as c1, and the verifier's per-row check refuses both; a record whose message sits at a round that
+    absorbs none is refused before anything is registered."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+
+    r = stacked_session.read
+    program = O.session_program((stacked_session.d / "inner" / "public.json").read_bytes())
+    regs, own = S.opening_messages(r.public, r.private, r.sr.sh, program)
+    rounds = A.rounds(r.sr.sh)
+    assert list(regs) == [f"m{i}" for i in range(len(rounds))] and rounds[0] == [("rs", 0, v) for v in range(128)]
+    msgs = sorted((x for x in r.public["rounds"] if x["stream"] == "stacked/rep0" and x["commits"]), key=lambda x: x["k"])
+    assert [x["k"] for x in msgs] == [k for k, x in enumerate(RL.stacked_rounds(22)) if x[3]]
+
+    def opens(i: int, reg) -> bool:
+        e = own[f"m{i}"]
+        dom = RG.domain(program, f"rec-opening-c{i}", reg.words, 1)
+        return e["domain"] == dom.domain_id.hex() and RG.verify_read(dom, bytes.fromhex(e["root"]), 0, reg.bcs[0], reg.path(0))
+
+    for i, x in enumerate(msgs):
+        reg = regs[f"m{i}"]
+        assert reg.value == f"rec-opening-c{i}" and reg.bcs[0].hex() == x["commits"][0] and opens(i, reg)
+        assert own[f"m{i}"] == RR.commits_entry(program, f"rec-opening-c{i}", reg.words, [bytes.fromhex(x["commits"][0])])
+    def swap(i: int, j: int):
+        return RG.Registered.commit(program, f"rec-opening-c{i}", regs[f"m{j}"].rows, regs[f"m{j}"].salts)
+
+    assert opens(0, swap(0, 0)) and opens(1, swap(1, 1))
+    assert not opens(0, swap(0, 1)) and not opens(1, swap(1, 0))
+    moved = json.loads(json.dumps(r.public))
+    by = {x["k"]: x for x in moved["rounds"] if x["stream"] == "stacked/rep0"}
+    by[2]["commits"], by[1]["commits"] = by[1]["commits"], []
+    with pytest.raises(ValueError, match=r"committed at rounds \[0, 2,"):
+        S.opening_messages(moved, r.private, r.sr.sh, program)
+
+
 @pytest.mark.slow
 def test_rec_vstage_stages_rs_openings_and_its_registered_opening(stacked_session, tmp_path):
     """`rec_vstage.stage_stacked` on the relay's session: R's levels as RecOpen statements on the chain (R's openings after
