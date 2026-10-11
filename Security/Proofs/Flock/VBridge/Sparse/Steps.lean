@@ -37,6 +37,10 @@ theorem bit_append_left (z : Var → Bool) {a : List Lin} (b : List Lin) {i : �
 theorem bit_append_right (z : Var → Bool) (a b : List Lin) (i : ℕ) : bit z (a ++ b) (a.length + i) = bit z b i := by
   simp only [bit, List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left]
 
+theorem bit_append_len (z : Var → Bool) (a b : List Lin) {n : ℕ} (h : a.length = n) (i : ℕ) :
+    bit z (a ++ b) (n + i) = bit z b i := by
+  subst h; exact bit_append_right z a b i
+
 /-- Element `i` of `bits` carries `x` when its 128 bits are `x`'s. -/
 theorem holds_elem {z : Var → Bool} {bits : List Lin} {i : ℕ} {x : F128} (hl : 128 * i + 128 ≤ bits.length)
     (h : ∀ k < 128, bit z bits (128 * i + k) = bitOf x k) : Holds z (elem bits.toArray i) x := by
@@ -199,8 +203,7 @@ theorem chunk_bits (z : Var → Bool) (tau : List Lin) (t s : ℕ) (ht : t ≤ 1
   · rw [bit_append_left z _ (by simpa using hb')]
     simp [bit, hb', Nat.not_le.2 hb']
   · obtain ⟨c, rfl⟩ : ∃ c, b = t + c := ⟨b - t, by omega⟩
-    conv_lhs => rw [show t = (List.replicate t Lin.zero).length by simp]
-    rw [bit_append_right]
+    rw [bit_append_len z _ _ (by simp : (List.replicate t Lin.zero).length = t) c]
     have hc : c < 16 - t := by omega
     have hc' : c < 16 * s + 16 - (16 * s + t) := by omega
     simp [bit, List.getElem?_take, List.getElem?_drop, hc, hc', Nat.add_assoc]
@@ -221,8 +224,7 @@ theorem tail_bits (z : Var → Bool) (tau : List Lin) (t : ℕ) (ht : t ≤ 16) 
       rcases Nat.lt_succ_iff_lt_or_eq.1 hs with hs | rfl
       · rw [bit_append_left z _ (by rw [ihl]; omega)]
         exact ihb s hs b hb
-      · conv_lhs => rw [← ihl]
-        rw [bit_append_right]
+      · rw [bit_append_len z _ _ ihl]
         exact hcb b hb
 
 /-! ## The demultiplexer's values -/
@@ -241,8 +243,8 @@ theorem demux_column (tb : ℕ → ℕ → Bool) (τ : ℕ → ℕ) (m S : ℕ) 
   rw [List.map_map]
   refine List.map_congr_left fun s hs => ?_
   rw [List.mem_range] at hs
-  simp only [Function.comp_apply, List.getD_eq_getElem _ _ (by simpa using ht), List.getElem_map, List.getElem_range,
-    low_congr (h s hs), low_testBit]
+  simp only [Function.comp_apply, low_congr (h s hs), low_testBit]
+  rw [List.getD_eq_getElem _ _ (by simpa using ht), List.getElem_map, List.getElem_range]
 
 /-! ## The ports -/
 
@@ -377,8 +379,9 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
   · rename_i hst
     simp only [bind_assoc, pure_bind]
     refine Sound.bind' (sound_demux _ _ _) fun lists => ?_
-    refine Sound.bind' (sound_mapM_rel _ (fun z p e => Holds z p.1 e.1 ∧ Holds z p.2 e.2) (fun _ e => e.1 * e.2)
-      (fun z r y => Holds z r y) (fun x => ?_) _) fun sel => ?_
+    refine Sound.bind' (sound_mapM_rel _ (fun z (p : List Lin × List Lin) (e : F128 × F128) =>
+      Holds z p.1 e.1 ∧ Holds z p.2 e.2) (fun _ (e : F128 × F128) => e.1 * e.2) (fun z r y => Holds z r y)
+      (fun x => ?_) _) fun sel => ?_
     · obtain ⟨a, b⟩ := x
       exact Sound.mono (sound_mulF a b) fun z c h e he => h _ _ he.1 he.2
     refine Sound.pure' fun z hsel hlists hphi hc4 hc2 hres w v τ hin => ?_
