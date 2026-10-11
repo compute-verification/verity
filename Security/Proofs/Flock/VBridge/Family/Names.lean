@@ -441,6 +441,7 @@ theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × B
   (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w'', hrec, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w''', hres, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hL : lines = linesOf text := rfl
