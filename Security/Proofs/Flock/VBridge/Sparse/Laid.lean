@@ -187,6 +187,7 @@ theorem stepVals_outOf (R : String → F128) (rs wA vA : Array F128) (τA : Arra
     refine congrArg₂ (· * ·) ?_ rfl
     rw [fOf_sumVal, fOf_foldl_sum, fOf_zero, zero_add, List.map_map]
     · simp only [Function.comp_def, heqs]
+      rfl
     · rw [Ne, List.map_eq_nil_iff, List.range_eq_nil]
       exact (Nat.two_pow_pos _).ne'
 
