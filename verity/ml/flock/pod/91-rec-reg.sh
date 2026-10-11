@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Scratch job (cursor/rec-hello-integration-8c79, never a PR): main + #1770 + #1786 + cursor/rec-session-hello-8c79.
-# 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 with the relay that keeps the prover's Hello (R's root a round
-# commitment on stacked/rep0), then over its inner session: the two records' Hellos, rec-transcript (innerCommits), rec-coins
+# Scratch job (cursor/rec-reg-integration-b8d8, never a PR): main + #1798 (R's top registered) + #1793 + #1786.
+# 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 with the relay that keeps the prover's Hello and registers R's salted top
+# before the session (registration.json; the proxy holds stacked/rep0's binding round to it), then over its inner session:
+# the registration against the record, the two records' Hellos, rec-transcript (innerCommits) on each record, rec-coins
 # (check 5) on the relay's record and on the prover's, L3 staged (c3_e2e.py stage level3), proved by C-Flock --zk under the
 # verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify under --rec-inner (plain) with check 5's
 # inputs, with and without the inner transcript, on each record. Outputs under out/: honest/ (88's), e2e/, exits.txt.
 #   research run --on vy-cpu-1 --mem-gb 40 --source . --cwd source --declared-output 'out/*' -- \
-#     python3 tools/verity/check/slot.py --by rec-hello -- bash $0
+#     python3 tools/verity/check/slot.py --by r-reg -- bash $0
 set -uxo pipefail
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 R0=$RESEARCH_RUN_DIR; RID=${RESEARCH_RUN_ID:-local-$$}; mkdir -p $R0/out
-K=/workspace/jobs/rec-hello/$RID; mkdir -p $K || exit 1
+K=/workspace/jobs/r-reg/$RID; mkdir -p $K || exit 1
 RESEARCH_RUN_DIR=$R0/out/honest RESEARCH_RUN_ID=$RID-honest KEEP=$K/honest bash verity/ml/flock/pod/88-rec-c3-inner.sh N=16 \
   SPARSE=18,13,6,0 STACKED=1 > $R0/out/88.log 2>&1
 echo "88 exit $?" | tee -a $R0/out/exits.txt
@@ -38,8 +39,28 @@ print(json.dumps({"same_bytes": v["hello"] == p["hello"], "canonical": p["hello"
 EOF
 echo "hello exit $?" | tee -a $X
 
-$LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/session > $E/rec-transcript.txt 2>&1
-echo "rec-transcript session exit $?" | tee -a $X
+python3 - $H/inner > $E/registration.json <<'EOF2'
+import json, sys
+from pathlib import Path
+from verity_flock import rec_live as RL, rec_vstar as V
+d = Path(sys.argv[1])
+reg, pub = (json.loads((d / f).read_text()) for f in (RL.REGISTRATION, "public.json"))
+first = next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)
+V.registered(pub, reg)
+cap = json.loads((d / "stacked" / "ROOT.json").read_text())["cap"]
+priv = json.loads((d / "private.json").read_text())
+opening = next(p for p in priv["rounds"] if p["stream"] == "stacked/rep0" and p["k"] == 0)["tops"][0]
+print(json.dumps({"kind": reg["kind"], "top_nodes": len(reg["registered"]["stacked"]["top"]),
+                  "binding_round_top_is_registered": first["tops"][0] == reg["registered"]["stacked"]["top"],
+                  "opening_is_root_json_cap": "".join(opening["nodes"]) == cap, "end": pub["end"],
+                  "mtime_ns": {f: (d / f).stat().st_mtime_ns for f in ("schedule.json", RL.REGISTRATION, "public.json")}}))
+EOF2
+echo "registration exit $?" | tee -a $X
+
+for s in session prover; do
+  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s > $E/rec-transcript-$s.txt 2>&1
+  echo "rec-transcript $s exit $?" | tee -a $X
+done
 for s in session prover; do
   $LEAN_BIN rec-coins --rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/$s \
     > $E/rec-coins-$s.json 2> $E/rec-coins-$s.err
