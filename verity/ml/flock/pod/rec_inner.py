@@ -3,7 +3,8 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
 ``verity_flock.rec_live``'s proxy and coin server.
 
     python rec_inner.py stage --n N --sets DIR --out DIR [--plain-leaves]
-                                                             circuit.txt, inst-N.bin, pub-N.bin; prints the statement's shape
+                                                             circuit.txt, inst-N.bin, pub-N.bin, and the verifier's partition.json
+                                                             and program.json; prints the statement's shape
                                                              (--plain-leaves: the trees' leaves plain SHA-512, circuit.LEAF_SCHEME_PLAIN)
     python rec_inner.py forge --what challenge|query --inner DIR
                                                              flips one coin of rep 0 in DIR's session.json and public.json
@@ -26,13 +27,24 @@ STREAM = "circuit/rep0"
 
 
 def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
+    """The inner statement, bound to the `verity/partition/v1` object `Q_template_instance` v0 over `population_program` of
+    the set's template at ``n`` (instance i is unit i), which every verifier of the inner statement holds (``--partition``,
+    ``--rec-inner-partition``), written beside it as ``partition.json`` with its program, ``program.json``."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_numerical.bench import templates as TM
     from verity_numerical.bench.generate import generate
     from verity_numerical.bench.input_sets import InputSet
 
     s = InputSet.open(generate(TM.rope_head(64), n, SEED, sets)["path"])
     low = FC.lowering_for_set(s)
-    FC.stage(low, s, 0, n, out, leaf_scheme=FC.LEAF_SCHEME_PLAIN if plain_leaves else None)
+    template = s.subcircuit.definition(**FC.set_statics(s))
+    program = P.population_program(template, n)
+    part = P.partition(program, P.template_instance_query(template))
+    FC.stage(low, s, 0, n, out, partition=P.digest(part), program=part["program"],
+             leaf_scheme=FC.LEAF_SCHEME_PLAIN if plain_leaves else None)
+    (out / "partition.json").write_text(json.dumps(part))
+    (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     text = (out / "circuit.txt").read_text()
     meta = json.loads(text.split("\n", 2)[1][5:])
     G = meta["vus_per_block"]
@@ -41,7 +53,8 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
             "units_per_vu": meta["units_per_vu"], "unit_log": meta["unit_log"], "unit_rows": low.layout.useful,
             "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "blocks": blocks,
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "leaf_scheme": meta["leaf_scheme"]["id"],
-            "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+            "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text), "partition_digest": P.digest(part),
+            "program_sha512": part["program"]}
 
 
 def forge(what: str, inner: Path, level: int = 0) -> dict:
