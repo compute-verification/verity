@@ -408,6 +408,10 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
     registration = json.loads((tmp_path / RL.REGISTRATION).read_text())
     assert registration == RL.registration_record({RL.STACKED: reg}) and registration["registered"]["stacked"]["top"] == first["tops"][0]
     V.registered(public, registration)
+    other = RL.registration_record({RL.STACKED: RL.register_top(binds["stacked"], lambda g=random.Random(9): g.randbytes(192))})
+    (tmp_path / RL.REGISTRATION).write_text(json.dumps(other))
+    with pytest.raises(ValueError, match="a registration other than the one this session was held to"):
+        proxy.write(tmp_path)
 
     for kw, why in [({"binds": {**roots, "stacked": roots["circuit"]}}, "stacked/rep0: the binding round's cap is not stacked's registered top"),
                     ({"binds": {**roots, "stacked": random.Random(7).randbytes(64 << 7)}},
