@@ -109,12 +109,12 @@ def read_rate(reps: int = 10) -> dict:
     buf = torch.ones(1 << 30, dtype=torch.float32, device="cuda")
     out = torch.empty((), dtype=torch.float32, device="cuda")
     for _ in range(3):
-        torch.sum(buf, out=out)
+        torch.sum(buf, dim=0, out=out)
     times = []
     for _ in range(reps):
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         a.record()
-        torch.sum(buf, out=out)
+        torch.sum(buf, dim=0, out=out)
         b.record()
         b.synchronize()
         times.append(a.elapsed_time(b) / 1e3)
@@ -590,8 +590,12 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 try:
                     doc["points"].append(run_point(p, arms, W, act, pc, a.reps, clocks))
+                    pt = doc["points"][-1]
+                    print(f"chain: {p.key} " + " ".join(f"{x}={r['median_s'] * 1e3:.3f}ms" for x, r in pt["arms"].items())
+                          + "".join(f" {x} refused" for x in pt["refused"]), flush=True)
                 except Exception:  # noqa: BLE001 - one point's failure is recorded and the sweep goes on
                     doc["points"].append({"key": p.key, "error": traceback.format_exc(limit=8)})
+                    print(f"chain: {p.key} failed: {doc['points'][-1]['error'].splitlines()[-1]}", flush=True)
                 if pc is not None and a.retain and name == vshape and p.batch == int(vbatch) and doc["verify"] is None:
                     try:
                         doc["verify"] = retain_pass(pc, p, act, a.retain, doc["points"][-1])
