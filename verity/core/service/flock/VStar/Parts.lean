@@ -5,7 +5,8 @@ import VStar.Compose
 # V*'s algebra cut into statements (`verity_flock.rec_residuals.parts`)
 
 A rep's `InnerRepCheck` S, of any number of residuals, is cut into parts of at most `MAX_REGIONS` public regions,
-`MAX_SLOTS` sha512x3 slots and 16 residuals each, each residual in the first part it fits, in S's order. A part reads the row ports its residuals touch (in
+`MAX_SLOTS` sha512x3 slots and 16 residuals each, each residual in the first part it fits, in S's order; a residual that fits
+no part, not even alone, is a part of its own if it reads at most `MAX_LONE_SLOTS` slots. A part reads the row ports its residuals touch (in
 S's order) and the v elements they touch (in v's order), w and v renumbered. `parts` reads S's terms through their ports
 without checking them, so its domain is a checked S (`checkS`): past it, Python's slices and lookups fail.
 -/
@@ -14,6 +15,8 @@ namespace VStar
 
 def MAX_REGIONS : Nat := 64
 def MAX_SLOTS : Nat := 160
+/-- `rec_residuals.MAX_LONE_SLOTS`: a lone residual's part beside hm96's 2^23 and a 2^23 unit, within a 2^27 block. -/
+def MAX_LONE_SLOTS : Nat := 223
 
 /-- `rec_residuals.regions`: a digest region per row port, `v`'s and `out`'s. -/
 def regions (ports : Nat) : Nat := ports + 2
@@ -47,17 +50,20 @@ def touched (S : RepS) (starts : Array Nat) (r : Res) : Array Nat × Array Nat :
     | .v i => V := V.push i
   return (sortDedup P, sortDedup V)
 
-/-- `rec_residuals.parts(S, maxRegions, maxSlots)`. -/
-def parts (S : RepS) (maxRegions := MAX_REGIONS) (maxSlots := MAX_SLOTS) : Except String (Array Part) := do
+/-- `rec_residuals.parts(S, maxRegions, maxSlots, maxLoneSlots)`. -/
+def parts (S : RepS) (maxRegions := MAX_REGIONS) (maxSlots := MAX_SLOTS) (maxLoneSlots := MAX_LONE_SLOTS) :
+    Except String (Array Part) := do
   checkRepS S (whole := true)
   checkS S.gf
   let ports := S.ports.toArray
   let mut starts : Array Nat := #[0]
   for p in ports do starts := starts.push (starts.back! + p.2)
-  let fit (g : Array Nat × Array Nat × Array Nat) (P V : Array Nat) : Bool :=
+  let lone := max maxSlots maxLoneSlots
+  let fitN (n : Nat) (g : Array Nat × Array Nat × Array Nat) (P V : Array Nat) : Bool :=
     let ps := Algebra.union g.2.1 P
-    regions ps.size ≤ maxRegions && slots (ps.toList.map (ports[·]!)) (Algebra.union g.2.2 V).size ≤ maxSlots
+    regions ps.size ≤ maxRegions && slots (ps.toList.map (ports[·]!)) (Algebra.union g.2.2 V).size ≤ n
       && 8 * (g.1.size + 1) ≤ RES_OUT_WORDS
+  let fit := fitN maxSlots
   let mut groups : Array (Array Nat × Array Nat × Array Nat) := #[]
   let res := S.gf.res.toArray
   for i in [0:res.size] do
@@ -67,8 +73,8 @@ def parts (S : RepS) (maxRegions := MAX_REGIONS) (maxSlots := MAX_SLOTS) : Excep
       let (R, P0, V0) := groups[gi]!
       groups := groups.set! gi (R.push i, Algebra.union P0 P, Algebra.union V0 V)
     | none =>
-      unless fit (#[], #[], #[]) P V do
-        throw s!"residual {i} alone reads more than {maxRegions} regions or {maxSlots} sha512x3 slots"
+      unless fitN lone (#[], #[], #[]) P V do
+        throw s!"residual {i} alone reads more than {maxRegions} regions or {lone} sha512x3 slots"
       groups := groups.push (#[i], P, V)
   let ops := S.gf.ops.toArray
   let mut out : Array Part := #[]

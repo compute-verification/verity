@@ -2,6 +2,7 @@
 fixed per model (F2's menu, merge thread 1791629248.978729).
 
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR [--outer proofs_c3_multiblock.json]
+        [--positions proofs-rows/buckets.json]
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR --rows VSTAR_DIR
 
 **Buckets** (:func:`buckets`): :mod:`unit_costs_prover`'s dp4t at its CPU cap (``workload``'s cap: the largest power of two
@@ -22,6 +23,21 @@ log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR (art:4e9ff8
 :data:`~unit_costs_prover.NODE_GIB`), has D within the law's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
 fits one node, the least public inner + outer hours (ties to the smaller B). Without ``--outer`` it chooses on the public
 inner hours alone, and the output says so. Openings are not batched across sessions.
+
+**One session per shape** (:func:`one_session_per_shape`; top's ruling, merge thread 1791664434.225959): a model's
+entries that share a shape, (slots, bound), all take the largest inner session among them (a smaller entry's units are
+costed in it by the law) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
+whose entries had different sessions would tell which entry a session holds. B is still chosen per bucket, before the
+shapes are merged.
+
+**Claims per shape** (top, 1791665463.640949): a shape's regions are the largest among its entries (an entry with fewer
+is padded up), its claims 2 + 2 regions, both in ``menu.json``. With ``--outer``, each entry's outer proof gains V*'s
+check of the inner session's two reps' algebra at those claims (:func:`inner_algebra`), which the input's rows leave out,
+and carries V*'s refusal where ``rec_residuals.parts`` refuses the shape.
+
+**Positions per shape** (lean's #1734, ``FlockSampled.Shape``): an entry's unit positions per slot are its bucket's
+``instances_max`` in the ``--rows`` output (``--positions``), and a shape's are the largest among its entries, as its
+claims are.
 """
 from __future__ import annotations
 
@@ -33,8 +49,9 @@ import math
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
+from . import templates as TM
 from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 
@@ -77,7 +94,7 @@ def inner(N: int, K: int, b: Mapping[str, Any], B: int, rho: Mapping[str, float]
     return {"slots": B, "k_log": s["k_log"], "in_range": s["in_range"], "D": s["D"], "inner_m": round(math.log2(s["D"])),
             "peak_gib": s["peak_gib"], "session_s": s["total_s"], "sessions_mean": sh["sessions_mean"],
             "sessions_public": sh["sessions_public"], "inner_h_mean": sh["prover_s_mean"] / 3600,
-            "inner_h_public": sh["prover_s_public"] / 3600}
+            "inner_h_public": sh["prover_s_public"] / 3600, "rho": s["rho"]}
 
 
 def excluded(o: Mapping[str, Any], gib: float = U.NODE_GIB) -> str | None:
@@ -102,11 +119,21 @@ def pick(options: Mapping[int, Mapping[str, Any]], gib: float = U.NODE_GIB) -> i
     return min(ok, key=lambda B: (options[B]["inner_h_public"] + (options[B].get("outer_h_public") or 0.0), B))
 
 
+def regions(row: Mapping[str, Any]) -> int:
+    """A unit type's regions in its sampled inner statement (proofs, note:proofs/20261010T2112Z-finding-c3-claims-per-shape):
+    one digest region per row, a row per input port and per output port, so its subcircuit's ports."""
+    sub = TM.subcircuit(row["template"], **row["subcircuit_parameters"])
+    return len(sub.inputs) + len(sub.outputs)
+
+
 def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHECK,
          b_menu: Sequence[int] = B_MENU) -> list[dict[str, Any]]:
-    """Every workload's cap, buckets and each bucket's :func:`inner` at every B."""
+    """Every workload's cap, buckets (each with its :func:`regions`, the largest of its types') and each bucket's
+    :func:`inner` at every B, with ``at_rho(B, r)``: its :func:`inner`
+    at B with every unit at ρ = r (:func:`one_session_per_shape` sizes a smaller entry's session to its shape's)."""
     coef = U.fit()["coef"]
     K = int(inv["K"])
+    by = {(r["workload"], r["unit_type"]): r for r in inv["rows"]}
     out = []
     for w in dict.fromkeys(r["workload"] for r in inv["rows"]):
         N, units, _skipped = P.units_of(inv, w)
@@ -115,7 +142,10 @@ def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHEC
         cap = U.cap(r0, coef, U.NODE_GIB, nets=[nets[u.label]["bytes"] for u in units if u.label in nets], slot=slot)
         bs = buckets(N, K, units, nets, cap if cap is not None and any(u.z > cap for u in units) else None)
         for b in bs:
+            b["regions"] = max(regions(by[(w, u.label)]) for u in b["units"])
             b["by_B"] = {B: inner(N, K, b, B, rho, coef, nets=nets, slot=slot) for B in b_menu}
+            b["at_rho"] = lambda B, r, N=N, b=b, nets=nets: inner(N, K, b, B, {u.label: r for u in b["units"]}, coef,
+                                                                 nets=nets, slot=slot)
         out.append({"workload": w, "N": N, "cap": cap, "buckets": bs})
     return out
 
@@ -160,10 +190,111 @@ TOTALS = ("sessions_mean", "sessions_public", "inner_h_mean", "inner_h_public", 
           "total_h_mean", "total_h_public")
 
 
+SESSION = ("k_log", "inner_m", "inner_peak_gib", "inner_session_s")
+#: the inner session's reps, each checked by V* at the session's claims
+REPS = 2
+#: rows of V*'s GF(2^128) algebra per product (rec-reprice, 10,440,705 rows over 4,281 products; proofs' vstar_c3.py)
+ROWS_PER_PRODUCT = 10_440_705 / 4_281
+
+
+def one_session_per_shape(entries: Sequence[dict[str, Any]],
+                          own: Sequence[tuple[float, Callable[[float], Mapping[str, Any]]]] | None = None,
+                          gib: float = U.NODE_GIB) -> None:
+    """Size every entry of a shape (slots, bound) to the shape's largest inner session (largest k_log) and give it the
+    shape's largest outer session and RSS, with every outer refusal among them; reprice its hours at them. ``own[i]``:
+    entry i's ρ and its :func:`inner` at a given ρ, so a smaller entry is costed as its own units in the larger session
+    (the larger entry's ρ gives its k_log); without it, the smaller entry takes the larger's session costs."""
+    shapes: dict[tuple[int, float], list[int]] = {}
+    for i, e in enumerate(entries):
+        shapes.setdefault((e["slots"], e["bound"]), []).append(i)
+    for ix in shapes.values():
+        es = [entries[i] for i in ix]
+        t = max(ix, key=lambda i: (entries[i]["k_log"], entries[i]["inner_session_s"]))
+        top = entries[t]
+        has = es[0]["outer_session_s"] is not None
+        out_s = max(e["outer_session_s"] for e in es) if has else None
+        rss = max(e["outer_rss_gib"] for e in es) if has else None
+        refused = sorted({r for e in es for r in e["outer_refused"]}) if has else None
+        regions = max(e["regions"] for e in es) if all(e.get("regions") is not None for e in es) else None
+        positions = max(e["positions"] for e in es) if all(e.get("positions") is not None for e in es) else None
+        for i in ix:
+            e = entries[i]
+            if e["k_log"] < top["k_log"]:
+                if own is None:
+                    e.update({k: top[k] for k in SESSION})
+                else:
+                    o = own[i][1](own[t][0])
+                    assert (o["k_log"], o["inner_m"]) == (top["k_log"], top["inner_m"]), (o["k_log"], top["k_log"])
+                    if why := excluded(o, gib):
+                        raise ValueError(f"entry {i} cannot run at its shape's session: {why}")
+                    e.update(k_log=o["k_log"], inner_m=o["inner_m"], inner_peak_gib=o["peak_gib"],
+                             inner_session_s=o["session_s"])
+            e.update(outer_session_s=out_s, outer_rss_gib=rss, outer_refused=refused, regions=regions,
+                     claims=None if regions is None else 2 + 2 * regions, positions=positions)
+            _reprice(e)
+
+
+def _reprice(e: dict[str, Any]) -> None:
+    for m in ("mean", "public"):
+        e[f"inner_h_{m}"] = e[f"sessions_{m}"] * e["inner_session_s"] / 3600
+        e[f"outer_h_{m}"] = e[f"sessions_{m}"] * e["outer_session_s"] / 3600 if e["outer_session_s"] is not None else None
+        e[f"total_h_{m}"] = e[f"inner_h_{m}"] + (e[f"outer_h_{m}"] or 0.0)
+
+
+def block_costs(outer: Mapping[str, Any]) -> dict[int, tuple[float, float]]:
+    """The outer input's one-block, one-session statements: k_log -> (prove seconds, RSS GiB), the largest seen."""
+    out: dict[int, tuple[float, float]] = {}
+    for r in outer.get("buckets", []):
+        for st in r.get("split", []):
+            if st["blocks"] == 1 and st["sessions"] == 1:
+                p, g = out.get(st["k_log"], (0.0, 0.0))
+                out[st["k_log"]] = (max(p, st["prove_s"]), max(g, st["rss_gib"]))
+    return out
+
+
+def rep_algebra(inner_m: int, k_log: int, claims: int) -> tuple[int, str | None]:
+    """The inner session's rep algebra at its claims: its GF(2^128) products (``rec_algebra.structure``'s ``nv``), and
+    why V* can't stage it (``rec_residuals.parts``' refusal), or None."""
+    from verity_flock import rec_residuals as RR
+    from verity_flock.rec_algebra import Shape
+
+    S = RR.spec(Shape(inner_m, k_log, claims))
+    try:
+        RR.parts(S)
+    except ValueError as e:
+        return S["gf"]["nv"], f"V* parts: {e}"
+    return S["gf"]["nv"], None
+
+
+def inner_algebra(entries: Sequence[dict[str, Any]], blocks: Mapping[int, tuple[float, float]],
+                  algebra: Callable[[int, int, int], tuple[int, str | None]] = rep_algebra) -> None:
+    """Add V*'s check of the inner session's two reps' algebra, at the shape's claims, to each entry's outer proof: one
+    statement of :data:`REPS` x products x :data:`ROWS_PER_PRODUCT` rows, at circuits' size rule (2^max(22, ceil(log2
+    rows) + 2)) and priced at the input's one-block statement of that k_log; and V*'s refusal, if any. Reprices."""
+    for e in entries:
+        if e["claims"] is None or e["outer_session_s"] is None:
+            continue
+        products, why = algebra(e["inner_m"], e["k_log"], e["claims"])
+        rows = REPS * products * ROWS_PER_PRODUCT
+        k = max(22, math.ceil(math.log2(rows + 1)) + 2)
+        if k not in blocks:
+            raise ValueError(f"the outer input has no one-block statement at k_log {k} to price {rows:.3g} rows by")
+        s, gib = blocks[k]
+        e.update(inner_algebra_rows=rows, inner_algebra_k_log=k, inner_algebra_s=s,
+                 outer_session_s=e["outer_session_s"] + s, outer_rss_gib=max(e["outer_rss_gib"], gib),
+                 outer_refused=sorted({*e["outer_refused"], *([why] if why else [])}))
+        _reprice(e)
+
+
 def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | None = None,
-         outer_sha512: str | None = None) -> dict[str, Any]:
-    """Each workload's pinned menu: every bucket at its :func:`pick`, and the totals per audit."""
+         outer_sha512: str | None = None,
+         algebra: Callable[[int, int, int], tuple[int, str | None]] = rep_algebra,
+         positions: Mapping[str, int] | None = None) -> dict[str, Any]:
+    """Each workload's pinned menu: every bucket at its :func:`pick`, one session per shape, V*'s check of the inner
+    reps' algebra at the shape's claims (with the outer input), and the totals per audit. ``positions``: each (bucket, B)
+    row id's unit positions per slot (the ``--rows`` output's ``instances_max``)."""
     rows = {r["workload"]: r for r in (outer or {}).get("buckets", [])}
+    blocks = block_costs(outer) if outer is not None else {}
     models = []
     for W in pl:
         entries = []
@@ -181,7 +312,9 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
             has = outer is not None
             entries.append({
                 "part": b["part"], "class": b["class"], "bound": b["Z"], "slots": B, "pieces": b["pieces"],
-                "unit_types": [u.label for u in b["units"]], "k_log": c["k_log"], "inner_m": c["inner_m"],
+                "unit_types": [u.label for u in b["units"]], "regions": b.get("regions"), "claims": None,
+                "positions": None if positions is None else positions[row_id(W["workload"], i, B)],
+                "k_log": c["k_log"], "inner_m": c["inner_m"],
                 "inner_peak_gib": c["peak_gib"], "inner_session_s": c["session_s"],
                 "outer_session_s": c["outer_s"] if has else None, "outer_rss_gib": c["outer_rss_gib"] if has else None,
                 "outer_refused": c["outer_refused"] if has else None,
@@ -190,6 +323,11 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
                 **{f"total_h_{m}": c[f"inner_h_{m}"] + (c[f"outer_h_{m}"] if has else 0.0) for m in ("mean", "public")},
                 "options": {str(x): excluded(o) or round(o["inner_h_public"] + (o.get("outer_h_public") or 0.0), 6)
                             for x, o in opts.items()}})
+        own = [(b["by_B"][e["slots"]]["rho"], lambda r, b=b, B=e["slots"]: b["at_rho"](B, r))
+               for b, e in zip(W["buckets"], entries)] if all("at_rho" in b for b in W["buckets"]) else None
+        one_session_per_shape(entries, own)
+        if outer is not None:
+            inner_algebra(entries, blocks, algebra)
         tot = {k: sum(e[k] or 0.0 for e in entries) for k in TOTALS}
         if outer is None:
             tot["outer_h_mean"] = tot["outer_h_public"] = None
@@ -199,7 +337,11 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
             "k_log_max": U.K_LOG_MAX, "d_fit_log": D_FIT_LOG,
             "chosen_on": ("public inner + outer hours (outer per (bucket, B) from the input)" if outer is not None else
                           "public inner hours alone: no outer input, so the outer proof's cost and memory are not counted"),
-            "outer_sha512": outer_sha512, "openings_batched": False, "models": models}
+            "outer_sha512": outer_sha512, "openings_batched": False,
+            "inner_per_shape": "the largest among the shape's entries",
+            "claims": "2 + 2 regions, a shape's regions the largest of its entries' unit types' input + output ports",
+            "positions": "unit positions per slot, a shape's the largest of its entries' instances_max",
+            "models": models}
 
 
 def _h(x: float | None) -> str:
@@ -228,21 +370,49 @@ def render(mn: Mapping[str, Any]) -> str:
     return "\n".join(L) + "\n"
 
 
+def lean(mn: Mapping[str, Any], source: str) -> str:
+    """The Lean module `VStar.Menu.Pinned` of the pinned menu ``mn`` (from ``source``): each model's entries as
+    `VStar.Menu.Entry` (slots, bound, inner m, k_log, claims, positions, unit types' count). An entry's ``claims`` are its inner
+    session's: 2 + 2 x (its unit's input ports + output ports); `VStar.Menu.inner` gives a shape its entries' most."""
+    def entry(e: Mapping[str, Any]) -> str:
+        if e["bound"] != int(e["bound"]):
+            raise ValueError(f"bound {e['bound']} is not a whole number of nonzeros")
+        return f"⟨{e['slots']}, {int(e['bound'])}, {e['inner_m']}, {e['k_log']}, {e['claims']}, {e['positions']}, {len(e['unit_types'])}⟩"
+    models = ",\n".join(f"  ({json.dumps(M['workload'])},\n    [" + ",\n     ".join(entry(e) for e in M["entries"]) + "])"
+                        for M in mn["models"])
+    return "\n".join([
+        "import VStar.Menu", "",
+        "/-! Generated by `benchmarks/numerical/python/verity_numerical/bench/unit_costs_menu.py --lean` from", source,
+        f"({mn['format']}, K = {mn['K']}); do not edit. -/", "", "namespace VStar.Menu", "",
+        "/-- F6's pinned menu of each model, by workload. -/", "def pinned : List (String × List Entry) := [",
+        models + "]", "", "end VStar.Menu", ""])
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--inventory", required=True, help="unit_costs' unit-costs.json")
-    ap.add_argument("--out", required=True, help="directory for menu.json and menu.md (or proofs-rows/)")
+    ap.add_argument("--inventory", help="unit_costs' unit-costs.json")
+    ap.add_argument("--out", required=True, help="directory for menu.json and menu.md (or proofs-rows/, or Pinned.lean)")
+    ap.add_argument("--lean", nargs=2, metavar=("MENU_JSON", "SOURCE"),
+                    help="write MENU_JSON's menus as the Lean module VStar.Menu.Pinned (Pinned.lean), citing SOURCE")
     ap.add_argument("--outer", default=None, help="circuits' nonzero_cost.py --proofs-c3 output on the --rows rows")
     ap.add_argument("--rows", default=None, metavar="VSTAR_DIR",
                     help="write proofs-rows/ (buckets.json, k2.py, units.json) from proofs' vstar_c3.py and buckets.py")
+    ap.add_argument("--positions", default=None, metavar="ROWS_JSON",
+                    help="the --rows output's buckets.json: each entry's positions, its row's instances_max")
     a = ap.parse_args(argv)
     from .unit_costs import retree
 
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    if a.lean:
+        (out / "Pinned.lean").write_text(lean(json.loads(Path(a.lean[0]).read_text()), a.lean[1]))
+        print(f"wrote {out / 'Pinned.lean'}")
+        return 0
+    if not a.inventory:
+        ap.error("--inventory is required unless --lean")
     inv = json.loads(Path(a.inventory).read_text())
     if "token_select" not in inv:
         retree(inv)
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
     pl = plan(inv)
     if a.rows:
         d = out / "proofs-rows"
@@ -256,7 +426,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.outer:
         raw = Path(a.outer).read_bytes()
         outer, sha = json.loads(raw), hashlib.sha512(raw).hexdigest()
-    mn = menu(pl, int(inv["K"]), outer, sha)
+    pos = ({r["workload"]: r["instances_max"] for r in json.loads(Path(a.positions).read_text())}
+           if a.positions else None)
+    mn = menu(pl, int(inv["K"]), outer, sha, positions=pos)
     (out / "menu.json").write_text(json.dumps(mn, indent=1) + "\n")
     (out / "menu.md").write_text(render(mn))
     print(f"wrote {out / 'menu.json'} and {out / 'menu.md'}")

@@ -1,5 +1,6 @@
 import VStar.Compose
 import VStar.Json
+import VStar.Menu.Pinned
 import VStar.Stage
 
 /-!
@@ -9,6 +10,8 @@ import VStar.Stage
     vstar inner S NAME BINDINGS OUT         InnerRepCheck{S}'s, S a JSON file ({"gf", "ports"}), its unit named NAME
     vstar statements M K_LOG CLAIMS         V*'s statements over an inner session of that shape, as JSON (stdout)
     vstar stage M K_LOG CLAIMS BINDINGS OUT every statement's circuit, OUT/<dir>/circuit.txt
+    vstar menu [M K_LOG CLAIMS ...]         V* over every pinned menu's inner session (`VStar.Menu.sessions`), or over
+                                            the shapes given; one JSON line each, exit 1 if V* refuses any
 
 A statement's bindings are `{"partition", "program", "program_digests"}`: its `verity/partition/v1` digest, its Program's
 SHA-512 and its `program_digests` (`circuit.program_digests`: the program digest keyed by the descriptor id core's codec
@@ -62,6 +65,21 @@ def stmtJson : Stmt → Json
       ("res", Json.arr (p.res.toArray.map fun (i : Nat) => (i : Json))),
       ("v", Json.arr (p.v.toArray.map fun (i : Nat) => (i : Json)))]
 
+/-- The pinned menus' inner sessions, each once, with the models whose menus hold it. -/
+def menuSessions : Array (Algebra.Shape × Array String) := Id.run do
+  let mut out : Array (Algebra.Shape × Array String) := #[]
+  for (w, es) in Menu.pinned do
+    for sh in Menu.sessions es do
+      match out.findIdx? fun (o, _) => (o.m, o.kLog, o.claims) == (sh.m, sh.kLog, sh.claims) with
+      | some i => out := out.modify i fun (o, ws) => (o, if ws.contains w then ws else ws.push w)
+      | none => out := out.push (sh, #[w])
+  pure out
+
+def shapes : List String → IO (Array (Algebra.Shape × Array String))
+  | [] => pure #[]
+  | m :: k :: c :: rest => do pure (#[(← shape m k c, #[])] ++ (← shapes rest))
+  | _ => throw (IO.userError "menu: shapes are M K_LOG CLAIMS triples")
+
 def cmd (args : List String) : IO UInt32 := do
   match args with
   | ["rec-open", L, H, b, out] =>
@@ -90,9 +108,22 @@ def cmd (args : List String) : IO UInt32 := do
       res := res.push (j.mergeObj (Json.mkObj [("name", s.name), ("dir", s.dir)]))
     IO.println (Json.arr res).compress
     pure 0
+  | "menu" :: given =>
+    let mut refused := false
+    let todo ← if given.isEmpty then pure menuSessions else shapes given
+    let runs := todo.map fun (sh, ws) => (sh, ws, Task.spawn fun _ => statements sh)
+    for (sh, ws, t) in runs do
+      let base := [("m", (sh.m : Json)), ("k_log", (sh.kLog : Json)), ("claims", (sh.claims : Json)),
+        ("models", Json.arr (ws.map Json.str))]
+      match t.get with
+      | .ok st => IO.println (Json.mkObj (base ++ [("statements", (st.size : Json))])).compress
+      | .error e =>
+        refused := true
+        IO.println (Json.mkObj (base ++ [("refused", (e : Json))])).compress
+    pure (if refused then 1 else 0)
   | _ =>
     IO.eprintln ("usage: vstar rec-open LANES H BINDINGS OUT | vstar inner S NAME BINDINGS OUT | "
-      ++ "vstar statements M K_LOG CLAIMS | vstar stage M K_LOG CLAIMS BINDINGS OUT")
+      ++ "vstar statements M K_LOG CLAIMS | vstar stage M K_LOG CLAIMS BINDINGS OUT | vstar menu [M K_LOG CLAIMS ...]")
     pure 2
 
 end VStar.Cli

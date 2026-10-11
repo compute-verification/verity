@@ -125,10 +125,11 @@ def specFn (j : Json) : Except String Json := do
   pure (Json.mkObj (("S", ← jsonSha256 S.toJson) :: ("ports", Json.arr (S.ports.toArray.map fun (nm, n) =>
     Json.arr #[(nm : Json), (n : Json)])) :: (← gfSummary S.gf)))
 
-/-- `rec_residuals.parts(S, max_regions, max_slots)`, each part whole. -/
+/-- `rec_residuals.parts(S, max_regions, max_slots, max_lone_slots)`, each part whole. -/
 def partsFn (j : Json) : Except String Json := do
-  let o ← input' j ["S", "max_regions", "max_slots"]
+  let o ← input' j ["S", "max_regions", "max_slots", "max_lone_slots"]
   let ps ← parts (← RepS.ofJson (o "S")) (← jNat (o "max_regions") "max_regions") (← jNat (o "max_slots") "max_slots")
+    (← jNat (o "max_lone_slots") "max_lone_slots")
   pure (Json.arr (ps.map fun p => Json.mkObj [("S", p.S.toJson), ("res", natsJson p.res), ("v", natsJson p.v)]))
 
 /-- `rec_vstage.stage`'s statements over an inner session of shape `(m, k_log, claims)`: each level's `RecOpen` and each
