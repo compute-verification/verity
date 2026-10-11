@@ -568,7 +568,13 @@ def main(argv: list[str] | None = None) -> int:
             n, k = shapes[name]
             rec = doc["shapes"][f"{name}-L{length}"] = {"n": n, "k": k, "length": length,
                                                         "weight_bytes": S.weight_bytes(n, k, length, arms)}
-            W = Weights(n, k, length, "native-fp8" in arms, SEED + epoch)
+            try:
+                W = Weights(n, k, length, "native-fp8" in arms, SEED + epoch)
+            except torch.OutOfMemoryError:
+                rec["refused"] = traceback.format_exc(limit=2)
+                print(f"chain: {name}-L{length} refused: its weights don't fit", flush=True)
+                torch.cuda.empty_cache()
+                continue
             act = Act(n, k, "cuda")
             pc = None
             if kernel is not None:
