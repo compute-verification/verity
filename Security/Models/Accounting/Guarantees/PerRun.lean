@@ -66,4 +66,31 @@ def ComputeOfPouwPerRun : Prop :=
       r.ComputeSoundPerRun p ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
         ((1 - εs) ^ t + ε (d.rate .oracle * (r.win .compute).len) U.layout.N)
 
+/-- **The joint guarantee, per run.** On any device and any run of a joint audit on it whose compute, bandwidth and
+capacity audits have their per-run guarantees at certificates `W`, `Q` and `S` with errors `εW`, `εQ` and `εS`, the
+probability over the three audits' coins that every audit accepts and, on that run, the compute account's work is below
+`W`, the bandwidth account read fewer than `Q` bits, or the capacity account held fewer than `S` bits on average, is at
+most `εW + εQ + εS`. -/
+def JointPerRun : Prop :=
+  ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW] [Nonempty ΩQ]
+    [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (W Q S εW εQ εS : ℝ),
+    r.ComputeSoundPerRun p W εW → r.BandwidthSoundPerRun Q εQ → r.CapacitySoundPerRun S εS →
+    pr (fun ω => r.Accepted ω ∧
+        ((r.work p ω : ℝ) < W ∨ (r.read ω : ℝ) < Q ∨ (r.held ω : ℝ) < S * (r.win .capacity).len))
+      ≤ εW + εQ + εS
+
+/-- **The covert residual, per run.** Under `JointPerRun`'s hypotheses, the probability that every audit accepts and,
+on that run, the other accounts did more than `F·T − W` of work over the compute window, read more than `BW·T − Q` bits
+over the bandwidth window, or held more than `M − S` bits of device memory on average over the capacity window, is at
+most `εW + εQ + εS`. -/
+def CovertResidualPerRun : Prop :=
+  ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
+    [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (W Q S εW εQ εS : ℝ),
+    r.ComputeSoundPerRun p W εW → r.BandwidthSoundPerRun Q εQ → r.CapacitySoundPerRun S εS →
+    pr (fun ω => r.Accepted ω ∧
+        (((d.priced p * (r.win .compute).len : ℕ) : ℝ) - W < r.othersWork p ω ∨
+          ((d.bw * (r.win .bandwidth).len : ℕ) : ℝ) - Q < r.othersRead ω ∨
+          ((d.mem : ℝ) - S) * (r.win .capacity).len < r.othersHeld ω))
+      ≤ εW + εQ + εS
+
 end Accounting.Guarantees
