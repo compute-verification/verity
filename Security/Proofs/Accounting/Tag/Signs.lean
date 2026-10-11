@@ -7,7 +7,8 @@ import Models.Accounting.Guarantees.Sketch
 For a nonzero integer vector `d`, flipping the sign of one row entry where `d` is nonzero moves the row's inner product
 with `d` by `±2 d_j ≠ 0`. The flip is an involution, so it maps the rows of any one inner product into the rest: at most
 half the rows have a given inner product (`card_level_le`), and `k` independent rows all hit given values with probability
-at most `2^-k` (`card_rows_le`). `nonCollision` is `Accounting.Guarantees.Sketch.NonCollision`.
+at most `2^-k` (`card_rows_le`). `nonCollision` is `Accounting.Guarantees.Sketch.NonCollision`; `commitThenProject`
+(`Accounting.Guarantees.Sketch.CommitThenProject`) applies the same bound to a column where `C` and `A·B` differ.
 -/
 
 namespace Accounting.TagProofs
@@ -105,5 +106,28 @@ theorem nonCollision : Accounting.Guarantees.Sketch.NonCollision := by
       simp only [project, mul_sub, Finset.sum_sub_distrib, sub_eq_zero]
     rw [hset]
     exact card_rows_le (fun r : Fin n → Bool => ∑ l, sgn (r l) * (x l - y l)) _ hf hne _
+
+theorem commitThenProject : Accounting.Guarantees.Sketch.CommitThenProject := by
+  intro k m n p A B C
+  classical
+  apply prob_uniform_le_inv_pow
+  by_cases hC : C = A * B
+  · have : (univ.filter fun S : Signs k m => C ≠ A * B ∧ signMatrix S * C = signMatrix S * A * B) = ∅ := by
+      ext S
+      simp [hC]
+    rw [this, card_empty, mul_zero]
+    exact Nat.zero_le _
+  · obtain ⟨r, q, hrq⟩ : ∃ r q, (C - A * B) r q ≠ 0 := by
+      by_contra h
+      push Not at h
+      exact hC (sub_eq_zero.1 (Matrix.ext h))
+    obtain ⟨hf, hne⟩ := flip_moves (fun j => (C - A * B) j q) r hrq
+    refine le_trans (Nat.mul_le_mul_left _ (card_le_card fun S hS => ?_))
+      (card_rows_le (fun row : Fin m → Bool => ∑ j, sgn (row j) * (C - A * B) j q) _ hf hne fun _ => 0)
+    simp only [mem_filter, mem_univ, true_and] at hS ⊢
+    have h0 : signMatrix S * (C - A * B) = 0 := by
+      rw [Matrix.mul_sub, hS.2, Matrix.mul_assoc, sub_self]
+    intro i
+    simpa [Matrix.mul_apply, signMatrix] using congrFun (congrFun h0 i) q
 
 end Accounting.TagProofs

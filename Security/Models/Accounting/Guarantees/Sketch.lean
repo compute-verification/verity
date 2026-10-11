@@ -15,6 +15,8 @@ product with a block's elements, computed exactly on the tensor cores.
   `2^15 − 1` steps from `+0`, with ±1 codes against data codes of `−16 … 16`, writes the exact integer sum: no step
   rounds or truncates, since every partial sum stays below `2^24`.
 * `TensorCoreNonCollision`: the two together, for the words the tensor cores write.
+* `CommitThenProject`: a wrong product `C ≠ A·B`, committed before the signs, passes the check `S·C = (S·A)·B` with
+  probability at most `2^-k`, however `C` was computed.
 * `LittlewoodOfford`: one row is weak against partial reads. Whatever the row, `u` unread elements that each take one of
   two values leave its inner product guessable with probability up to `C(u, ⌊u/2⌋)/2^u ≈ √(2/(π u))`, and no more.
 
@@ -53,6 +55,17 @@ def TensorCoreNonCollision : Prop :=
   ∀ (k : ℕ) (T : Fin (2 ^ 15)) (x y : Fin T → Fin 32 → Fin 33),
     prob (PMF.uniformOfFintype (Fin k → Fin T → Fin 32 → Bool))
         (fun S => x ≠ y ∧ ∀ i, sketchWord (S i) x = sketchWord (S i) y) ≤ (2 ^ k : ℝ≥0∞)⁻¹
+
+/-- **Commit, then project (Freivalds's check with ±1 rows).** For integer matrices `A`, `B` and a claimed product `C`
+fixed before the signs are drawn, `C ≠ A·B` and `S·C = (S·A)·B` hold together with probability at most `2^-k` over
+`k` uniform ±1 rows `S`: a column where `C` and `A·B` differ is a nonzero vector that every row must miss. `C` may have
+been computed after the job's own seed, as PoUW's tile outputs are; what the bound needs is that a binding commitment
+fixed it before `S` was drawn. The verifier's work is `S·A` and then `(S·A)·B` and `S·C`, `k(mn + np + mp)`
+multiply-adds against `A·B`'s `mnp`. -/
+def CommitThenProject : Prop :=
+  ∀ (k m n p : ℕ) (A : Matrix (Fin m) (Fin n) ℤ) (B : Matrix (Fin n) (Fin p) ℤ) (C : Matrix (Fin m) (Fin p) ℤ),
+    prob (PMF.uniformOfFintype (Signs k m))
+        (fun S => C ≠ A * B ∧ signMatrix S * C = signMatrix S * A * B) ≤ (2 ^ k : ℝ≥0∞)⁻¹
 
 /-- **Anti-concentration under partial reads (Erdős's Littlewood–Offord bound).** For nonzero integer weights `v` and
 `u` uniform independent bits `ε`, any guess `t` of `unreadSum v ε = Σ_j [ε_j] · v_j` succeeds with probability at most
