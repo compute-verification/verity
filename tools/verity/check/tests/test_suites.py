@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parents[1]
 
 
@@ -947,8 +949,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-def test_an_interrupted_run_keeps_what_finished(tmp_path):
-    """A stop (check.py's SIGINT to the step's processes) mid-suite: the tests that passed before it are kept."""
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
+    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -960,14 +964,17 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
     (tests / "test_z_block.py").write_text(f"import signal\n\ndef test_block():\n    with open({str(gate)!r}, 'w') as f:\n"
                                            "        f.write('x')\n    signal.pause()\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
-    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+    (tmp := tmp_path / "tmp").mkdir()
+    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(tmp))
     p = subprocess.Popen([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
                          cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
-    os.killpg(p.pid, signal.SIGINT)
+    assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
+    os.killpg(p.pid, getattr(signal, stop))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
+    assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
     assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))) == 1
 
 
