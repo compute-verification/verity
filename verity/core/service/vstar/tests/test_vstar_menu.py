@@ -20,7 +20,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 
 LEAN = Path(__file__).resolve().parents[1]
-#: an inner session whose batched-T residual alone needs 300 sha512x3 slots, under `MAX_REGIONS`
+#: an inner session whose batched-T residual alone needs 300 sha512x3 slots (past `MAX_LONE_SLOTS`), under `MAX_REGIONS`
 CONTROL = (26, 24, 28)
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
@@ -47,4 +47,4 @@ def test_v_star_refuses_a_session_past_the_parts_limit():
     with pytest.raises(ValueError) as e:
         RR.parts(S)
     assert rows[0]["refused"] == str(e.value)
-    assert RR.parts(S, max_slots=300) and RR.MAX_SLOTS < 300
+    assert RR.parts(S, max_lone_slots=300) and RR.MAX_LONE_SLOTS < 300
