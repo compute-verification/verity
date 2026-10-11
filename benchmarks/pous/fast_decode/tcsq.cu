@@ -309,12 +309,20 @@ extern "C" int fd_config(int *out) {
   return (int)cudaGetLastError();
 }
 
+// grid 0: every CTA the device holds; grid 1: one CTA decodes every block in turn (the latency of one block on one SM)
+extern "C" int fd_decode_grid(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
+                              int mode, void *stream, int grid) {
+  if (n == 0) return 0;
+  const int g = grid > 0 ? grid : grid_for(n);
+  occupancy();
+  decode_kernel<<<g, 64, SMEM, (cudaStream_t)stream>>>((const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k,
+                                                       (const uint32_t *)t, n, c0, (uint32_t *)flags, mode);
+  return (int)cudaGetLastError();
+}
+
 extern "C" int fd_decode(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
                          int mode, void *stream) {
-  if (n == 0) return 0;
-  decode_kernel<<<grid_for(n), 64, SMEM, (cudaStream_t)stream>>>((const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k,
-                                                                 (const uint32_t *)t, n, c0, (uint32_t *)flags, mode);
-  return (int)cudaGetLastError();
+  return fd_decode_grid(c, m, k, t, n, c0, flags, mode, stream, 0);
 }
 
 extern "C" int fd_keys_version() { return 4; }

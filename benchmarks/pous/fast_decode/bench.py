@@ -12,7 +12,9 @@ For each library, in this order, nothing timed before its gate passed:
   equals the first library's at the width, and no flag is raised; a failing pick records which limbs differ and whether the
   output is the expected value's negation, its unreduced form or the square without the parity negation;
 - `keys_s` (once a width): the counter-mode SHA-512 expansion of every block's K and t; `sq_s`: mode 1 (one squaring with
-  its fold, loads and stores); `kernel_s`: mode 0 on keys expanded beforehand; `decode_s`: keys, then mode 0.
+  its fold, loads and stores); `kernel_s`: mode 0 on keys expanded beforehand; `decode_s`: keys, then mode 0;
+  `one_cta_square_ns` (prototypes): mode 1 on 256 blocks by a single CTA, per block, which bounds from above the latency of
+  one squaring mod p on one SM (what a sequential root would pay there), its output checked against the full grid's.
 GB/s is payload bytes over the median time.
 
 `--contend NAME` runs that library's mode 0 beside a BF16 GEMM (8192^3, on another stream) and records each one's time
@@ -40,6 +42,7 @@ from p2_v1 import reference as R  # noqa: E402
 
 SALT = hashlib.sha256(b"verity-pous/bench/fast-decode/salt").digest()
 MODEL = hashlib.sha512(b"verity-pous/bench/fast-decode/model").digest()
+LATENCY_BLOCKS = 256
 CONFIG_FIELDS = ("per", "depth", "limbs", "bytes", "q", "nt", "qb", "nops", "smem", "mmas_per_square", "ctas_per_sm",
                  "registers")
 
@@ -71,6 +74,7 @@ class Lib:
             self.config = dict(zip(CONFIG_FIELDS, list(cfg)))
             self.per = self.config["per"]
             self.so.fd_decode.argtypes = [v, v, v, v, u, u, v, ctypes.c_int, v]
+            self.so.fd_decode_grid.argtypes = [v, v, v, v, u, u, v, ctypes.c_int, v, ctypes.c_int]
             self.has_keys = hasattr(self.so, "fd_keys")
             if self.has_keys:
                 self.so.fd_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
@@ -90,6 +94,12 @@ class Lib:
         else:
             assert mode == 0
             rc = self.so.p2v1_decode(c.data_ptr(), m.data_ptr(), k.data_ptr(), t.data_ptr(), n, c0, flags.data_ptr(), stream)
+        if rc:
+            raise RuntimeError(f"{self.name}: decode error {rc}")
+
+    def decode_one_cta(self, c, m, k, t, n: int, c0: int, flags, mode: int, stream: int) -> None:
+        rc = self.so.fd_decode_grid(c.data_ptr(), m.data_ptr(), k.data_ptr(), t.data_ptr(), n, c0, flags.data_ptr(), mode,
+                                    stream, 1)
         if rc:
             raise RuntimeError(f"{self.name}: decode error {rc}")
 
@@ -180,9 +190,11 @@ def run_lib(torch, lib: Lib, W: Width, reps: int) -> dict:
     r: dict = {"name": lib.name, "kind": lib.kind, "path": lib.path, "config": lib.config, "per": lib.per, "w": P.w,
                "blocks": n}
     bad1, bad0 = {}, {}
+    m1 = None
     if lib.mode1:
         lib.decode(W.c, m, W.k, W.t, n, P.c0, flags, 1, stream())
         torch.cuda.synchronize()
+        m1 = m[:LATENCY_BLOCKS].clone()
         for i in W.picks:
             got = row(i)
             if int.from_bytes(got, "big") != W.ref[i][0]:
@@ -222,6 +234,12 @@ def run_lib(torch, lib: Lib, W: Width, reps: int) -> dict:
         macs = 2 * lib.config["mmas_per_square"] * 16 * 8 * 32
         r["tc_macs_per_block"] = macs
         r["tc_int8_tops_used"] = 2 * macs * n / r["kernel_s"] / 1e12
+    if m1 is not None:
+        nl = LATENCY_BLOCKS
+        lat = timed(torch, lambda: lib.decode_one_cta(W.c, m, W.k, W.t, nl, P.c0, flags, 1, stream()), reps)
+        r["one_cta_square_ns"] = statistics.median(lat) / nl * 1e9
+        r["one_cta_square_reps_s"] = lat
+        r["one_cta_output_equal"] = bool(torch.equal(m[:nl], m1))
     return r
 
 
@@ -308,7 +326,8 @@ def result_doc(doc: dict, run_id: str, run_dir: Path, out: Path, argv: list[str]
     files = [str(p.relative_to(run_dir)) for p in [out / "fast-decode.json"] if p.is_relative_to(run_dir)]
     ms = []
     for r in doc["results"]:
-        for key, unit in (("sq_GBps", "GB/s"), ("kernel_GBps", "GB/s"), ("decode_GBps", "GB/s"), ("keys_GBps", "GB/s")):
+        for key, unit in (("sq_GBps", "GB/s"), ("kernel_GBps", "GB/s"), ("decode_GBps", "GB/s"), ("keys_GBps", "GB/s"),
+                          ("one_cta_square_ns", "ns")):
             if key in r:
                 ms.append({"name": f"{r['name']}.{key}", "value": r[key], "unit": unit})
     for key, value in doc["calibration"].items():
@@ -366,7 +385,8 @@ def main() -> int:
         r = run_lib(torch, lib, widths[lib.per], a.reps)
         results.append(r)
         print(json.dumps({x: r.get(x) for x in ("name", "w", "sq_GBps", "kernel_GBps", "decode_GBps", "keys_GBps",
-                                                "tc_int8_tops_used")} | {"gate": r["gate"]["passed"]}), flush=True)
+                                                "tc_int8_tops_used", "one_cta_square_ns", "one_cta_output_equal")}
+                         | {"gate": r["gate"]["passed"]}), flush=True)
         if not r["gate"]["passed"]:
             print(json.dumps({"gate_failure": r["name"], "gate": r["gate"]}), flush=True)
         elif lib.name in a.contend:

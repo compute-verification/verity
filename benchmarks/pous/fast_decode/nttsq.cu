@@ -205,15 +205,22 @@ extern "C" int fd_config(int *out) {
   return (int)cudaGetLastError();
 }
 
-extern "C" int fd_decode(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
-                         int mode, void *stream) {
+// grid 0: every CTA the device holds; grid 1: one CTA decodes every block in turn (the latency of one block on one SM)
+extern "C" int fd_decode_grid(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
+                              int mode, void *stream, int grid) {
   if (n == 0) return 0;
   const Twiddles tw = twiddles();
   int dev = 0, sms = 0;
   cudaGetDevice(&dev);
   cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
-  const int grid = (int)std::max<uint64_t>(1, std::min<uint64_t>(n, (uint64_t)std::max(occupancy(), 1) * std::max(sms, 1)));
-  decode_kernel<<<grid, TPB, SMEM, (cudaStream_t)stream>>>((const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k,
-                                                           (const uint32_t *)t, n, c0, (uint32_t *)flags, mode, tw);
+  const int occ = occupancy();
+  const int g = grid > 0 ? grid : (int)std::max<uint64_t>(1, std::min<uint64_t>(n, (uint64_t)std::max(occ, 1) * std::max(sms, 1)));
+  decode_kernel<<<g, TPB, SMEM, (cudaStream_t)stream>>>((const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k,
+                                                        (const uint32_t *)t, n, c0, (uint32_t *)flags, mode, tw);
   return (int)cudaGetLastError();
+}
+
+extern "C" int fd_decode(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
+                         int mode, void *stream) {
+  return fd_decode_grid(c, m, k, t, n, c0, flags, mode, stream, 0);
 }

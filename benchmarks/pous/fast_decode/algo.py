@@ -12,7 +12,7 @@ fragment and bound the kernels rely on before a GPU runs them.
   chunks), D = |x0 - x1| exact, every base square added into the output tiles at its offsets with its sign.
 - `fold`: the kernels' reduction of the coefficients mod p (limb sums V, carry-save W, the fold by c0, the bias 2^30 p).
 - `ntt_square`: the square by a 2048-point cyclic NTT over Goldilocks (2^64 - 2^32 + 1) on 16-bit limbs, the seven
-  coefficients past 2048 recomputed and taken out of the wrap.
+  coefficients past 2048 recomputed and taken out of the wrap; `limb_sums16` its limb sums for `fold`.
 """
 from __future__ import annotations
 
@@ -316,41 +316,64 @@ def ntt_root(n: int = NTT_N) -> int:
     return pow(7, (GOLDILOCKS - 1) // n, GOLDILOCKS)
 
 
-def ntt(a: list[int], root: int) -> list[int]:
-    """Cyclic NTT, decimation in time, bit-reversed input order, as `nttsq.cu` runs it."""
-    n, P = len(a), GOLDILOCKS
-    bits = n.bit_length() - 1
-    x = [a[int(format(i, f"0{bits}b")[::-1], 2)] for i in range(n)]
-    span = 1
-    while span < n:
-        wl = pow(root, n // (2 * span), P)
-        for s in range(0, n, 2 * span):
-            w = 1
-            for j in range(span):
-                u, v = x[s + j], x[s + j + span] * w % P
-                x[s + j], x[s + j + span] = (u + v) % P, (u - v) % P
-                w = w * wl % P
-        span *= 2
+def brev(i: int, bits: int) -> int:
+    return int(format(i, f"0{bits}b")[::-1], 2)
+
+
+def _butterflies(n: int, s: int):
+    """Stage s's butterflies as the kernel indexes them: b -> (i0, i1, twiddle index j << (log n - 1 - s))."""
+    logn = n.bit_length() - 1
+    for b in range(n // 2):
+        j = b & ((1 << s) - 1)
+        i0 = ((b >> s) << (s + 1)) + j
+        yield i0, i0 + (1 << s), j << (logn - 1 - s)
+
+
+def ntt_forward(x: list[int], root: int) -> list[int]:
+    """Cyclic NTT by decimation in time: bit-reversed in, natural out (`nttsq.cu`'s `forward`)."""
+    x, P, n = list(x), GOLDILOCKS, len(x)
+    tw = [pow(root, j, P) for j in range(n // 2)]
+    for s in range(n.bit_length() - 1):
+        for i0, i1, k in _butterflies(n, s):
+            u, v = x[i0], x[i1] * tw[k] % P
+            x[i0], x[i1] = (u + v) % P, (u - v) % P
+    return x
+
+
+def ntt_inverse(x: list[int], root: int) -> list[int]:
+    """The unnormalized transform at root^-1 by decimation in frequency: natural in, bit-reversed out (`inverse`)."""
+    x, P, n = list(x), GOLDILOCKS, len(x)
+    itw = [pow(root, -j, P) for j in range(n // 2)]
+    for s in reversed(range(n.bit_length() - 1)):
+        for i0, i1, k in _butterflies(n, s):
+            u, v = x[i0], x[i1]
+            x[i0], x[i1] = (u + v) % P, (u - v) * itw[k] % P
     return x
 
 
 def ntt_square(z: int, nbytes: int) -> list[int]:
-    """z^2's 16-bit-limb convolution coefficients (length 2 * nbytes / 2 - 1) by the 2048-point cyclic NTT, with the wrap
-    of the coefficients past 2047 recomputed directly and taken out."""
+    """z^2's 16-bit-limb convolution coefficients (length 2 * nbytes / 2 - 1) by the 2048-point cyclic NTT as the kernel
+    runs it (limbs placed bit-reversed, forward, pointwise square times N^-1, inverse, read bit-reversed), with the wrap of
+    the coefficients past 2047 recomputed directly and taken out."""
     limbs = [(z >> 16 * i) & 0xFFFF for i in range(nbytes // 2)]
     if len(limbs) > NTT_N:
         raise ValueError("too wide for one 2048-point NTT")
-    a = limbs + [0] * (NTT_N - len(limbs))
-    w = ntt_root()
-    f = ntt(a, w)
-    sq = [v * v % GOLDILOCKS for v in f]
-    inv = ntt(sq, pow(w, -1, GOLDILOCKS))
-    ninv = pow(NTT_N, -1, GOLDILOCKS)
-    cyc = [v * ninv % GOLDILOCKS for v in inv]
+    bits = NTT_N.bit_length() - 1
+    x = [0] * NTT_N
+    for i, v in enumerate(limbs):
+        x[brev(i, bits)] = v
+    w, ninv = ntt_root(), pow(NTT_N, -1, GOLDILOCKS)
+    f = ntt_forward(x, w)
+    y = ntt_inverse([v * v % GOLDILOCKS * ninv % GOLDILOCKS for v in f], w)
     out_len = 2 * len(limbs) - 1
-    out = cyc + [0] * max(0, out_len - NTT_N)
-    for k in range(NTT_N, out_len):
-        top = sum(limbs[i] * limbs[k - i] for i in range(k - len(limbs) + 1, len(limbs)))
-        out[k] = top
-        out[k - NTT_N] -= top
+    wrap = [sum(limbs[i] * limbs[k - i] for i in range(k - len(limbs) + 1, len(limbs))) for k in range(NTT_N, out_len)]
+    out = [y[brev(k, bits)] for k in range(NTT_N)] + wrap
+    for k, top in enumerate(wrap):
+        out[k] -= top
     return out[:out_len]
+
+
+def limb_sums16(c: list[int], width: Width) -> list[int]:
+    """V_x = c[2x] + c[2x + 1] 2^16 for x < 2 L, from 16-bit-limb coefficients (the NTT kernel's limb sums)."""
+    cc = list(c) + [0] * (4 * width.limbs - len(c))
+    return [cc[2 * x] + (cc[2 * x + 1] << 16) for x in range(2 * width.limbs)]
