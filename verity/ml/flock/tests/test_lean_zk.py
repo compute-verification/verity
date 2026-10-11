@@ -178,3 +178,25 @@ def test_tampered_sessions_meet_their_checks(zk, tmp_path):
     for name, v in verdicts.items():
         e = expect[name]
         assert _passes(v) if e["accepted"] else not _passes(v) and v["why"].startswith(e["why"]), (name, v["why"], e)
+
+
+@pytest.mark.slow
+def test_an_initial_cap_other_than_the_commitments_is_refused(zk, tmp_path):
+    """One bit of rep 0's `initial_cap` flipped in its proof file alone, with the rep's `proof_sha512` rebuilt and no retained
+    round edited, is refused by `ZkLigerito.ligerito`'s cap check. Nothing else reads the field, so a `zk_mutants.py` proof
+    edit can't stand in: it carries the new bytes into round 0, and both verifiers then refuse at R2."""
+    sys.path.insert(0, str(VERIFIER))
+    import redigest
+    import zk_mutants
+
+    s = shutil.copytree(zk / "sessions" / "selftest" / "honest", tmp_path / "icap")
+    rec = json.loads((s / "session.json").read_text())
+    table = rec["config"]["tables"][0]["name"]
+    f = s / f"{table}.rep0.bin"
+    b = bytearray(f.read_bytes())
+    b[redigest.layout(bytes(b), zk=True)["lig.icap"][0]] ^= 1
+    f.write_bytes(b)
+    zk_mutants.set_proof_digest(rec, f"{table}/rep0", b)
+    (s / "session.json").write_text(json.dumps(rec))
+    [v] = _verify(zk, s)
+    assert v["why"] == "ligerito: initial_cap differs from the commitment's cap", v["why"]
