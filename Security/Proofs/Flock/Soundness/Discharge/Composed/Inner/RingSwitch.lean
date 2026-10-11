@@ -292,7 +292,8 @@ On a run of `ringSwitch` on well-formed rounds (each round's coins as many as it
 of the switched claims (`OpenRel.b`'s form), at each claim's point beyond the packed bits `z_k`. -/
 theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (rs : Array (Array F128))
     {t t' : Flock.Transcript} {T : F128} {sws : Array Switched} (hwf : RoundsWF t.rounds)
-    (hrun : ringSwitch m claims rs t = .ok ((T, sws), t')) (z : Witness m) (f : Fin (2 ^ (m - 7)) → 𝔽) (hz : ∀ y v, z (addr128 hm y v) = execArith.unpack (f y) v)
+    (hrun : ringSwitch m claims rs t = .ok ((T, sws), t')) (hx : ∀ k < claims.size, claims[k]!.x.size = m - 6)
+    (z : Witness m) (f : Fin (2 ^ (m - 7)) → 𝔽) (hz : ∀ y v, z (addr128 hm y v) = execArith.unpack (f y) v)
     (hs : ∀ k < claims.size, ∀ v : Fin 128, fOf (rs[k]!)[v.val]! = shat hm (claimOf m claims[k]!) z v) :
     sws.size = claims.size ∧
       (∀ k < claims.size, (sws[k]!).z = claims[k]!.x.extract 1 ∧ (sws[k]!).z.size = m - 7 ∧
@@ -301,14 +302,12 @@ theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) 
         phi execArith (vecOf 7 (sws[k.val]!).rpp) (eqAt (vecOf (m - 7) (sws[k.val]!).z) y.val) := by
   unfold ringSwitch at hrun
   obtain ⟨t₁, k₁, h⟩ := label_bind hrun
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨s, t₂, hloop, h⟩ := bind_ok h
   obtain ⟨cγ, t₃, -, h⟩ := bind_ok h
   obtain ⟨hTs, -⟩ := pure_ok h
   rw [forIn_range_eq] at hloop
   obtain ⟨-, -, hQ, hs'⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck m claims rs) (by
       intro k st tt b tt' hb
-      obtain ⟨hshape, hb⟩ := check_bind hb
       obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
       obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb
       obtain ⟨hval, hb⟩ := check_bind hb
@@ -316,19 +315,14 @@ theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) 
       obtain ⟨rfl, rfl⟩ := pure_ok hb
       have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
       have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
-      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hshape, hval⟩
+      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hval⟩
       rw [← e1, ← e2]
       rfl) claims.size 0 t₁.k _ t₁ t₂ s (by omega) hloop
   obtain ⟨hT, hsws⟩ := Prod.mk.inj hTs
   set C : ℕ → Array F128 := fun i => (t₁.rounds[t₁.k + i]!).coins with hC
   have hwf₁ : RoundsWF t₁.rounds := k₁.2 ▸ hwf
-  have hQk : ∀ k < claims.size, RsCheck m claims rs k := fun k hk => (hQ k (by simp; omega)).2
   have hC7 : ∀ k < claims.size, (C k).size = 7 := fun k hk => by
     rw [hC]; simp only; rw [RoundsWF.get hwf₁, (hQ k (by simp; omega)).1]
-  have hx : ∀ k < claims.size, claims[k]!.x.size = m - 6 := fun k hk => by
-    have := (hQk k hk).1
-    simp only [Bool.and_eq_true, beq_iff_eq] at this
-    exact this.2
   obtain ⟨hs1, hs2⟩ := oStep_fold claims rs C (List.range' 0 claims.size) (#[], #[])
   rw [← hs'] at hs1 hs2
   have hs1size : s.1.size = claims.size := by rw [hs1]; simp

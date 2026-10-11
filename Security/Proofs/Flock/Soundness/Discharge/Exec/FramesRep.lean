@@ -137,12 +137,10 @@ theorem ringSwitch_emitted (m : ℕ) (claims : Array Flock.Claim) (rs : Array (A
   unfold ringSwitch at h
   obtain ⟨_, t₁, h₁, h⟩ := bind_ok h
   have e₁ := label_emitted h₁
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨s, t₂, hloop, h⟩ := bind_ok h
   rw [forIn_range_eq] at hloop
   have eL := forIn_emitted _ (fun k => [.label "flock-ring-switch-v0".toUTF8, .vec (rs[k]!).toList, .sq 2 7]) (by
     intro k st tt b tt' hrt hb
-    obtain ⟨-, hb⟩ := check_bind hb
     obtain ⟨_, u₁, k₁, hb⟩ := bind_ok hb
     have f₁ := label_emitted k₁
     obtain ⟨_, u₂, k₂, hb⟩ := bind_ok hb

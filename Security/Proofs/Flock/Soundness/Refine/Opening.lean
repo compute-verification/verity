@@ -226,10 +226,9 @@ theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) 
       · simp [List.range'_succ]
       · simp [List.range'_succ]
 
-/-- The check of one ring switch (O2, O4): the shapes, and `Σ_v w[v]·ŝ[v] = value`. -/
+/-- The check of one ring switch (O4): `Σ_v w[v]·ŝ[v] = value`. -/
 def RsCheck (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array F128)) (k : ℕ) : Prop :=
-  (rs[k]!.size == 128 && claims[k]!.skip.size == 64 && claims[k]!.x.size == m - 6) = true ∧
-    (dot (wOf claims[k]!) rs[k]! == claims[k]!.value) = true
+  (dot (wOf claims[k]!) rs[k]! == claims[k]!.value) = true
 
 theorem getD_zipIdx_map {α β : Type} (l : List α) (f : α × ℕ → β) (k : ℕ) (hk : k < l.length) (d : β) :
     ((l.zipIdx 0).map f).getD k d = f (l[k], k) := by
@@ -247,14 +246,12 @@ theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (c
           (some op) ∧ OpenRel m claims.size T sws op := by
   unfold ringSwitch at h
   obtain ⟨t₁, k₁, h⟩ := label_bind h
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨s, t₂, hloop, h⟩ := bind_ok h
   obtain ⟨lt₂, n₂, t₃, r₃, kk₃, h⟩ := sampleVec_bind (by omega) h
   obtain ⟨hTs, rfl⟩ := pure_ok h
   rw [forIn_range_eq] at hloop
   obtain ⟨hr₂, hk₂, hQ, hs⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck m claims rs) (by
       intro k st tt b tt' hb
-      obtain ⟨hshape, hb⟩ := check_bind hb
       obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
       obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb
       obtain ⟨hval, hb⟩ := check_bind hb
@@ -262,7 +259,7 @@ theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (c
       obtain ⟨rfl, rfl⟩ := pure_ok hb
       have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
       have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
-      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hshape, hval⟩
+      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hval⟩
       rw [← e1, ← e2]
       rfl) claims.size 0 t₁.k _ t₁ t₂ s (by omega) hloop
   obtain ⟨hT, hsws⟩ := Prod.mk.inj hTs
@@ -305,7 +302,7 @@ theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (c
       rw [List.getElem_zipIdx, Nat.zero_add]
       rw [List.length_zipIdx] at hk
       simp only [decide_eq_true_eq]
-      have hval := (hQ k (by simp; omega)).2.2
+      have hval := (hQ k (by simp; omega)).2
       rw [← packedWeight_eq hm claims[k]! cs'[k] (hcs k hk) rs[k]!, eq_of_beq hval, (hcs k hk).value]
   case rel =>
     have hL : ∀ (k : ℕ) (hk : k < cs'.length) d,
