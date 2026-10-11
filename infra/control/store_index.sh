@@ -11,7 +11,7 @@ while :; do
     STORE_INDEXER_DATABASE_URL=$(sed -n 's/^STORE_INDEXER_DATABASE_URL=//p' /root/.config/verity/store-index.env | tr -d "\"'")
     export STORE_INDEXER_DATABASE_URL
     cd /data/infra/store-index-src && PYTHONPATH=src LC_ALL=C.UTF-8 timeout 3000 \
-      python3.12 -m research data index --store /root/store-index-store --postgres --jobs 16
+      python3.12 -m research data index --store /root/store-index-store --postgres --jobs 48
   ) >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) pass rc=$? $(cat /data/infra/store-index-src/COMMIT 2>/dev/null)" >> "$LOG"
   sleep 300
