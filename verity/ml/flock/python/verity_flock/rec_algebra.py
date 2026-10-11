@@ -605,8 +605,8 @@ class Messages:
 
 
 def _registered(sh: Shape, M: Messages, extras: Sequence) -> list[Claim]:
-    """An opening-only shape's claims: claim k at ``extras[k]``'s point (rep k's `rec_sparse.RegisteredClaim`, row k), its
-    value ``M.claims[k]``, the row the opening reads."""
+    """An opening-only shape's claims: claim k at ``extras[k]``'s point (rep k's `rec_sparse.RegisteredClaim`, row k, its
+    padded coordinates zero), its value ``M.claims[k]``, the row the opening reads."""
     if len(extras) != sh.claims or M.claims is None or len(M.claims) != sh.claims:
         raise ValueError(f"an opening of {sh.claims} registered claims: {len(extras)} points, "
                          f"{'no' if M.claims is None else len(M.claims)} values")
@@ -617,6 +617,9 @@ def _registered(sh: Shape, M: Messages, extras: Sequence) -> list[Claim]:
             raise ValueError(f"claim {k} is rep {k}'s, row {k} of rec-claim, not row {e.row}")
         if len(e.skip) != 64 or len(e.x) != sh.m - 6:
             raise ValueError(f"claim {k}: {len(e.skip)} skip weights and {len(e.x)} coordinates, the shape wants 64 and {sh.m - 6}")
+        pad = getattr(e, "pad", 0)
+        if not 0 <= pad <= len(e.x) or any(e.x[len(e.x) - pad:]):
+            raise ValueError(f"claim {k}: its {pad} padded coordinates are the shape's, fixed at zero")
     return [Claim(M.claims[k], tuple(e.skip), tuple(e.x)) for k, e in enumerate(extras)]
 
 

@@ -48,10 +48,11 @@ def test_the_verifiers_opening_algebra_is_rec_residuals_spec_and_parts(m, c):
 
 
 def test_an_opening_whose_residual_fits_no_part_is_refused_as_parts_refuses_it():
-    """At 16 claims a ring switch's residual alone reads more sha512x3 slots than a part holds, in Python and in Lean."""
+    """At 21 claims a ring switch's residual alone reads more sha512x3 slots than even a lone part holds (`MAX_LONE_SLOTS`), in
+    Python and in Lean."""
     with pytest.raises(ValueError) as e:
-        RR.parts(RR.spec(_shape(30, 16)))
-    rc, [line] = _run("structure", "30", "16")
+        RR.parts(RR.spec(_shape(30, 21)))
+    rc, [line] = _run("structure", "30", "21")
     assert rc == 1 and str(e.value) in line["stderr"], line
 
 
