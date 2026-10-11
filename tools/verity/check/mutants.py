@@ -89,10 +89,10 @@ def _sh(cmd: str, log) -> int:
     return subprocess.run(cmd, shell=True, stdout=log, stderr=subprocess.STDOUT).returncode
 
 
-def sweep(path: Path, build: str, test: str, only: str | None, log) -> list[Mutant]:
+def sweep(path: Path, build: str, test: str, only: str | None, log, lines=None) -> list[Mutant]:
     """Run every mutant of ``path`` (`mutants`) through ``build`` and ``test``; each with its outcome."""
     original = path.read_text()
-    found = mutants(original, only)
+    found = [m for m in mutants(original, only) if lines is None or m.line in lines]
     try:
         for m in found:
             path.write_text(mutate(original, m.line, m.last))
