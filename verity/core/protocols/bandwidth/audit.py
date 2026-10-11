@@ -13,7 +13,8 @@
 A window is used once: a second start or commitment, or a window number used before, is refused, and nothing is redrawn.
 The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
-(SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it.
+(SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it, for a certified tag
+only (`tags.Tag.certified`).
 """
 
 from __future__ import annotations
@@ -243,53 +244,59 @@ class Window:
         return Verdict(True, elapsed)
 
 
-def epsilon(samples: int, delta: float) -> float:
-    """`ε_s = 1 − δ^(1/s)`: a commitment with at least this fraction of wrong tags passes `s` samples with probability
-    at most `δ`."""
-    return 1 - delta ** (1 / samples)
+EPSILON = Fraction(1, 64)
+SAMPLES = 1849
+QUERIES_LOG2 = 40
+SLACK_LOG2 = 41
+"""The proof's deployed point: `ε_s = 1/64`, `s = 1,849`, at most `2^40` oracle queries in a window, and
+`λ = 40·k + 41`, which together keep the error under `2^-40` at `N = 2^19`."""
 
 
-def samples_for(eps: float, delta: float) -> int:
-    """The fewest samples with `ε_s ≤ eps` at `δ`."""
-    return math.ceil(math.log(delta) / math.log1p(-eps))
+def certified_blocks(blocks: int, epsilon: Fraction = EPSILON) -> int:
+    """`k = ⌈(1 − ε_s)·N⌉`."""
+    return math.ceil((1 - Fraction(epsilon)) * blocks)
 
 
-def guess_slack(guess: Fraction, blocks: int, delta: float) -> int:
-    """The least `k` with `C(blocks, k + 1) · γ^(k + 1) ≤ δ`: more than `k` of the unread blocks' tags are right with
-    probability at most `δ` when each is right with probability at most `γ`, independently."""
-    k = 0
-    while math.comb(blocks, k + 1) * guess ** (k + 1) > Fraction(delta):
-        k += 1
-    return k
+def samples_for(blocks: int, error_log2: int, epsilon: Fraction = EPSILON) -> int:
+    """The fewest `s` with `((k − 1)/N)^s ≤ 2^error_log2`, the sampling term of the error."""
+    k = certified_blocks(blocks, epsilon)
+    return math.ceil(error_log2 * math.log(2) / math.log((k - 1) / blocks))
 
 
 @dataclass(frozen=True, slots=True)
 class Bound:
-    """What an accepted window certifies, failing with probability at most `delta_samples + delta_guess`."""
+    """`Bandwidth.Guarantees.AuditRO` for one device and window: an accepted window read at least `ingress_bytes` of
+    device memory, except with probability at most `error`, the sum of its three terms."""
 
-    epsilon: float
-    guess_slack: int
     blocks: int
-    info_bytes: Fraction
+    certified_blocks: int
+    block_bytes: int
     chip_bytes: int
     side_bytes: int
+    slack_bits: int
     ingress_bytes: int
+    error_samples: float
+    error_guess: float
+    error_compression_log2: int
 
     @property
-    def certified_blocks(self) -> int:
-        return self.blocks - math.floor(self.epsilon * self.blocks) - self.guess_slack
+    def error(self) -> float:
+        return self.error_samples + self.error_guess + 2.0 ** self.error_compression_log2
 
 
 def bound(params: Params, blocks: int, block_bytes: int, *, chip_bytes: int, side_bytes_per_s: float,
-          delta_samples: float, delta_guess: float) -> Bound:
-    """`ingress ≥ ((1 − ε_s)·B − k)·info − S_chip − cap_side·(T + RTT)` bytes, PROTOCOL.md §5's shape: every block
-    whose tag is right was read from device memory in the window, held on chip at its start, brought over the side
-    channel, or guessed (at most `k` of them).  `info` is the bytes of a block the tag binds."""
+          epsilon: Fraction = EPSILON, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2) -> Bound:
+    """`ingress ≥ k·b − S − c − G·b − λ` bits with `k = ⌈(1 − ε_s)·N⌉`, except with probability
+    `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` (`Bandwidth.Guarantees.AuditRO`, PROTOCOL.md §5).  `S` is the chip's storage,
+    `c = cap_side·(T + RTT)`, `G = 0` because `Params` refuses a window as long as a rebuild, `q ≤ 2^queries_log2` and
+    `λ = queries_log2·k + slack_log2`, so `C(q, k)/2^λ ≤ q^k/2^λ = 2^-slack_log2`.  Only a certified tag has a bound."""
     tag = tags.get(params.tag)
-    eps = epsilon(params.samples, delta_samples)
-    k = guess_slack(tag.guess(block_bytes), blocks, delta_guess)
-    info = Fraction(tag.info_bits(block_bytes), 8)
+    if not tag.certified:
+        raise ValueError(f"{tag.name} is an uncertified fast check: nothing bounds a device's ingress through it")
+    k = certified_blocks(blocks, epsilon)
+    lam = queries_log2 * k + slack_log2
     side = math.ceil(side_bytes_per_s * params.limit_ns / 1e9)
-    certified = blocks - math.floor(eps * blocks) - k
-    ingress = max(0, math.floor(certified * info) - chip_bytes - side)
-    return Bound(eps, k, blocks, info, chip_bytes, side, ingress)
+    ingress_bits = k * 8 * block_bytes - 8 * chip_bytes - 8 * side - lam
+    error_samples = math.exp(params.samples * math.log((k - 1) / blocks)) if k > 1 else 0.0
+    return Bound(blocks, k, block_bytes, chip_bytes, side, lam, max(0, ingress_bits // 8), error_samples,
+                 float(params.samples * tag.guess(block_bytes)), queries_log2 * k - lam)

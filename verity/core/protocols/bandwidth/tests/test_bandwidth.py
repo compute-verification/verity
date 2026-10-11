@@ -15,6 +15,8 @@ import bandwidth_vectors as bv
 from verity.core.protocols.bandwidth import audit, tags
 from verity.core.protocols.pous import protocol, schemes
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS, P2Params
+from verity.ml.crypto import blake3
+from verity.ml.randomness import frame
 
 TAGS = sorted(tags.TAGS)
 P = tags.MERSENNE31
@@ -79,6 +81,27 @@ def test_random_oracle_tag_is_its_formula() -> None:
     assert tags.get("ro-sha512/v1").keyed(bv.SEED)(5, block) == want.digest()
 
 
+def test_blake3_tag_is_its_formula() -> None:
+    block = bv.block(5)
+    key = hashlib.sha512(tags.prefix(tags.TAG_DOMAIN, "ro-blake3/v1", bv.SEED)).digest()[:32]
+    assert tags.get("ro-blake3/v1").key(bv.SEED) == key
+    assert tags.get("ro-blake3/v1").keyed(bv.SEED)(5, block) == blake3.keyed(key, (5).to_bytes(8, "big") + block)
+
+
+@pytest.mark.parametrize("name", TAGS)
+def test_every_tag_is_seed_first(name: str) -> None:
+    """`H(σ, j, E_j)`: σ is framed inside the first 128 bytes the tag hashes (the SHA-512 prefix, or the input of the
+    BLAKE3 key every compression starts from), ahead of `j` and the block, and the tag changes with σ alone."""
+    head = tags.prefix(tags.TAG_DOMAIN, name, bv.SEED)
+    assert len(head) == 128 and frame(bv.SEED) in head and head.index(frame(bv.SEED)) + len(frame(bv.SEED)) <= 128
+    block, other = bv.block(2), bytes(range(32, 64))
+    assert tags.get(name).keyed(bv.SEED)(2, block) != tags.get(name).keyed(other)(2, block)
+
+
+def test_only_the_random_oracle_tags_are_certified() -> None:
+    assert {n for n in TAGS if tags.get(n).certified} == {"ro-blake3/v1", "ro-sha512/v1"}
+
+
 def test_polynomial_tag_is_the_polynomial_at_the_block_point() -> None:
     t = tags.get("gf31-poly/v1")
     block = bv.block(3)
@@ -138,7 +161,7 @@ def test_tag_tree_packs_a_leaf_of_tags(name: str) -> None:
     ys = [t.keyed(bv.SEED)(j, bv.block(j, 16)) for j in range(37)]
     leaves = tags.leaves(t, bv.SEED, ys)
     per = tags.tags_per_leaf(t)
-    assert per * t.tag_bytes == 64 and len(leaves) == -(-37 // per)
+    assert per == t.per_leaf and len(leaves) == -(-37 // per)
     head = tags.prefix(tags.LEAF_DOMAIN, name, bv.SEED)
     last = len(leaves) - 1
     assert leaves[last] == hashlib.sha512(head + last.to_bytes(8, "big") + b"".join(ys[last * per:])).digest()
@@ -297,25 +320,27 @@ def test_verifier_refuses_a_tag_the_store_cannot_carry() -> None:
 # --- the bound -------------------------------------------------------------------------------------------------------
 
 
-def test_samples_and_epsilon() -> None:
-    assert audit.samples_for(0.01, 0.01) == 459
-    assert audit.epsilon(459, 0.01) <= 0.01 < audit.epsilon(458, 0.01)
-
-
-def test_guess_slack() -> None:
+def test_the_deployed_samples_are_the_proofs() -> None:
+    """`s = 1,849` is the fewest samples whose sampling term `((k − 1)/N)^s` is at most `2^-42` at `ε_s = 1/64`."""
     blocks = 1 << 19
-    assert audit.guess_slack(tags.get("ro-sha512/v1").guess(2056), blocks, 2.0 ** -40) == 0
-    k = audit.guess_slack(tags.get("gf31-poly/v1").guess(2056), blocks, 2.0 ** -40)
-    gamma = Fraction(513, P - 2)
-    assert math.comb(blocks, k + 1) * gamma ** (k + 1) <= Fraction(2.0 ** -40) < math.comb(blocks, k) * gamma ** k
+    k = audit.certified_blocks(blocks)
+    assert k == 516_096 == math.ceil(Fraction(63, 64) * blocks)
+    assert audit.samples_for(blocks, -42) == audit.SAMPLES == 1849
+    assert ((k - 1) / blocks) ** 1849 <= 2.0 ** -42 < ((k - 1) / blocks) ** 1848
 
 
-@pytest.mark.parametrize("name", TAGS)
-def test_bound_at_the_certificate_store(name: str) -> None:
-    params = audit.Params(name, 459, 1_000_000, rtt_allowance_ns=100_000)
-    b = audit.bound(params, 1 << 19, 2056, chip_bytes=208_000_000, side_bytes_per_s=63e9,
-                    delta_samples=0.01, delta_guess=2.0 ** -40)
-    assert b.side_bytes == 69_300_000
-    assert b.certified_blocks == (1 << 19) - int(b.epsilon * (1 << 19)) - b.guess_slack
-    assert b.ingress_bytes == int(b.certified_blocks * b.info_bytes) - 208_000_000 - 69_300_000
-    assert 0.7e9 < b.ingress_bytes < (1 << 19) * 2056
+@pytest.mark.parametrize("name", ["ro-blake3/v1", "ro-sha512/v1"])
+def test_bound_is_the_guarantee_at_the_proofs_point(name: str) -> None:
+    params = audit.Params(name, audit.SAMPLES, 1_000_000, rtt_allowance_ns=100_000)
+    b = audit.bound(params, 1 << 19, 2056, chip_bytes=208_000_000, side_bytes_per_s=63e9)
+    k = 516_096
+    assert b.side_bytes == 69_300_000 and b.slack_bits == 40 * k + 41
+    assert b.ingress_bytes == (k * 2056 * 8 - 8 * 208_000_000 - 8 * 69_300_000 - (40 * k + 41)) // 8
+    assert b.error_compression_log2 == -41 and b.error_guess <= 1849 * 2.0 ** -256
+    assert b.error < 2.0 ** -40 and 0.7e9 < b.ingress_bytes < (1 << 19) * 2056
+
+
+def test_the_fast_check_has_no_bound() -> None:
+    with pytest.raises(ValueError, match="uncertified"):
+        audit.bound(audit.Params("gf31-poly/v1", audit.SAMPLES, 1_000_000), 1 << 19, 2056, chip_bytes=0,
+                    side_bytes_per_s=0)

@@ -3,22 +3,28 @@
 ~~~text
 Z(x)           x zero-padded to whole 128-byte blocks (one SHA-512 block here, so a device starts from its midstate)
 prefix(D, σ)   Z(D ‖ frame(name) ‖ frame(σ)),  D = "verity/bandwidth/tag/v1\0", or "verity/bandwidth/tag-leaf/v1\0" for leaves
+ro-blake3/v1   y_j = BLAKE3-keyed(K, u64be j ‖ E_j),  K = SHA512(prefix)[0:32]            32 bytes
 ro-sha512/v1   y_j = SHA512(prefix ‖ u64be j ‖ E_j)                                   64 bytes
 gf31-poly/v1   y_j = Σ_i (w_i mod p) g_j^(W−1−i) mod p,  p = 2^31 − 1                   4 bytes, u32be
                w_0 … w_(W−1) the block's little-endian u32 words, evaluated by Horner (`benchmarks/pous/hbm_audit/digest.py`)
                g_j = 2 + x, x the first 31-bit value below p − 2 among the u32be words of
                      SHA512(prefix ‖ u64be j ‖ u32be c) shifted right by one, for c = 0, 1, …
-leaf_c         SHA512(prefix(leaf) ‖ u64be c ‖ y_(cL) ‖ … ‖ y_(cL+L−1)),  L = 64 / tag bytes (16 or 1); the last may be short
+leaf_c         SHA512(prefix(leaf) ‖ u64be c ‖ y_(cL) ‖ … ‖ y_(cL+L−1)),  L = `per_leaf` (1 for ro-sha512/v1, else 16);
+               the last leaf may be short
 root           the RFC 6962 SHA-512 tree over the leaves (`pous.verifier`: node = SHA512(0x01 ‖ l ‖ r))
 ~~~
 
-`frame` is `verity.ml.randomness.frame`.  σ comes before the block, so no midstate over a block exists before σ does.
+`frame` is `verity.ml.randomness.frame`.  Every tag is seed-first, `H(σ, j, E_j)`: σ is in the first SHA-512 block,
+or in the BLAKE3 key every compression starts from, before `j` and any byte of `E_j`, so no state over a block can be
+computed before σ is known.
 
-`ro-sha512/v1` is the tag the Lean lane proves first: modeled as a random oracle, a tag is right without `E_j` with
-probability 2^-512.  `gf31-poly/v1` is the deployed candidate, `hbm_audit`'s polynomial hash with a fresh point per block
-derived from σ and `j`: two blocks whose words differ mod p collide with probability at most (W − 1) / (p − 2) over
-`g_j`.  Its word map is not injective (`w`, `w + p` and `w + 2p` agree mod p), so it binds only the block's words mod
-p, `⌈W·log2 p⌉` bits: 15,934 of a 2,056-byte block's 16,448 (`info_bits`).
+`ro-blake3/v1` and `ro-sha512/v1` are certified: modeled as a random oracle at the fresh seed, they are the tag of
+`Bandwidth.Guarantees.AuditRO`, and a tag is right without `E_j` with probability `2^-h`.  `ro-blake3/v1` is the one
+that fits the deadline on the RTX PRO 6000.  `gf31-poly/v1` (`hbm_audit`'s polynomial hash with a fresh point per
+block) is an uncertified fast check: a polynomial evaluated at a point is not unpredictable per block, and a device
+with spare memory can keep a structure per block that evaluates it at any point without reading the block's words
+(Kedlaya–Umans), so no ingress bound holds for it.  Two blocks whose words differ mod p collide with probability at
+most (W − 1) / (p − 2) over `g_j`, and its word map binds only the words mod p, `⌈W·log2 p⌉` bits (`info_bits`).
 """
 
 from __future__ import annotations
@@ -31,6 +37,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Protocol
 
+from verity.ml.crypto import blake3
 from verity.ml.randomness import frame
 
 TAG_DOMAIN = b"verity/bandwidth/tag/v1\0"
@@ -57,6 +64,8 @@ class Keyed(Protocol):
 class Tag(Protocol):
     name: str
     tag_bytes: int
+    per_leaf: int
+    certified: bool
 
     def keyed(self, seed: bytes) -> Keyed: ...
 
@@ -81,9 +90,41 @@ def _index(j: int) -> bytes:
 
 
 @dataclass(frozen=True, slots=True)
+class Blake3Tag:
+    name: str = "ro-blake3/v1"
+    tag_bytes: int = 32
+    per_leaf: int = 16
+    certified: bool = True
+
+    def key(self, seed: bytes) -> bytes:
+        """`K`, the window's BLAKE3 key."""
+        return hashlib.sha512(prefix(TAG_DOMAIN, self.name, seed)).digest()[:blake3.KEY_LEN]
+
+    def keyed(self, seed: bytes) -> Keyed:
+        key = self.key(seed)
+
+        def tag(j: int, block: bytes) -> bytes:
+            return blake3.keyed(key, _index(j) + block)
+
+        return tag
+
+    def check_block(self, block_bytes: int) -> None:
+        if block_bytes < 1:
+            raise ValueError("a block has at least one byte")
+
+    def guess(self, block_bytes: int) -> Fraction:
+        return Fraction(1, 1 << 256)
+
+    def info_bits(self, block_bytes: int) -> int:
+        return 8 * block_bytes
+
+
+@dataclass(frozen=True, slots=True)
 class RandomOracleTag:
     name: str = "ro-sha512/v1"
     tag_bytes: int = 64
+    per_leaf: int = 1
+    certified: bool = True
 
     def keyed(self, seed: bytes) -> Keyed:
         head = hashlib.sha512(prefix(TAG_DOMAIN, self.name, seed))
@@ -111,6 +152,8 @@ class RandomOracleTag:
 class PolynomialTag:
     name: str = "gf31-poly/v1"
     tag_bytes: int = 4
+    per_leaf: int = 16
+    certified: bool = False
     p: int = MERSENNE31
 
     def point(self, seed: bytes, j: int) -> int:
@@ -162,7 +205,7 @@ def horner(block: bytes, g: int, p: int = MERSENNE31) -> int:
     return acc
 
 
-TAGS: dict[str, Tag] = {t.name: t for t in (RandomOracleTag(), PolynomialTag())}
+TAGS: dict[str, Tag] = {t.name: t for t in (Blake3Tag(), RandomOracleTag(), PolynomialTag())}
 
 
 def get(name: str) -> Tag:
@@ -173,7 +216,7 @@ def get(name: str) -> Tag:
 
 
 def tags_per_leaf(tag: Tag) -> int:
-    return DIGEST_BYTES // tag.tag_bytes
+    return tag.per_leaf
 
 
 def leaf_count(tag: Tag, blocks: int) -> int:

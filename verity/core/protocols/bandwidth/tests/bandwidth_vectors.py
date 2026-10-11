@@ -50,6 +50,8 @@ def _tag_vectors() -> list[dict]:
                  "prefix": tags.prefix(tags.TAG_DOMAIN, name, SEED).hex(), "y": keyed(j, block(j)).hex()}
             if isinstance(t, tags.PolynomialTag):
                 v["g"] = t.point(SEED, j)
+            if isinstance(t, tags.Blake3Tag):
+                v["key"] = t.key(SEED).hex()
             out.append(v)
     return out
 
