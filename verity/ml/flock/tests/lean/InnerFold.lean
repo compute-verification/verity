@@ -56,7 +56,7 @@ def run (st : Setup) (pts : Json) (hide : Option (String × CircuitFold) := none
       let comb ← pub.folded alpha beta lw rho ts
       if comb.size != 64 then throw "the public fold has the wrong width"
       reps := reps.push (Json.mkObj [("comb", hxs comb), ("full", hxs full)])
-  let out := [("m", .num st.m), ("k_log", .num st.kLog), ("extras", .arr (extras.map claimJson)), ("reps", .arr reps)]
+  let out : List (String × Json) := [("m", .num st.m), ("k_log", .num st.kLog), ("extras", .arr (extras.map claimJson)), ("reps", .arr reps)]
   return Json.mkObj (match hide with
     | none => out
     | some (net, _) => out ++ [("hidden", Json.arr #[.str net])])
