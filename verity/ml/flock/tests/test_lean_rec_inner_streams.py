@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -158,3 +159,63 @@ def test_the_plain_session_is_read_as_before(tmp_path):
     rc, line, err = _read(PLAIN, f)
     assert (rc, line, err) == (1, None, "rec inner transcript: its message rounds' streams [circuit/rep0] are not one "
                                         "table's rep0 and rep1")
+
+
+#: the bucket's RecSparse shape b907 ran its sparse phase at, and META's range of its inner statement's hidden circuit
+#: (`pod/rec_inner.py stage --n 16 --plain-leaves`, circuit_sha512 e1148161…, which `rec_vstage stage --circuit` reads)
+SPARSE = (18, 13, 6, 0)
+RANGE = {"count": 64, "net": "unit", "pos0": 256, "slot_log": 13, "type": "unit"}
+
+
+@pytest.fixture(scope="module")
+def sparse(tmp_path_factory) -> Path:
+    """b907's sparse phase staged as its RecSparse statement over both reps, as `rec_vstage stage --sparse` stages it: its
+    message ports read as the firewall committed them (`rec_vstage.sparse_messages`), h as the algebra's h round."""
+    from verity_flock import rec_sparse as SP
+    from verity_flock import rec_vstage as VS
+
+    d = _fixture(C3)
+    public_b = (d / "public.json").read_bytes()
+    public, private = json.loads(public_b), json.loads((d / "private.json").read_text())
+    vf = VS.verifier(public, json.loads((d / "fold.json").read_text()), json.loads((d / "points.json").read_text()))
+    program = VS.O.session_program(public_b)
+    regs, own = VS.messages(program, VS.message_rounds(public, private, vf.sh))
+    out = tmp_path_factory.mktemp("rec-sparse")
+    VS.stage_sparse(public, private, vf, program, regs, own, SP.Shape(*SPARSE), RANGE, out, evaluate=False)
+    return out
+
+
+def _statement(d: Path, transcript: Path | None = None) -> subprocess.CompletedProcess:
+    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "session")]
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                           "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
+                           str(d / "program.json"), "--registered", str(d / "registered.json"), *rec],
+                          capture_output=True, text=True, check=False)
+
+
+@pytest.mark.slow
+def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse, tmp_path):
+    """`RecVStar.checkPubRows` on RecSparse (`fixedRow`'s `rec-sparse-<p>`): b907's statement, about 300 MB at
+    n18-e13-s6-t0, is the only RecSparse statement whose message rows a coin server recorded, so nothing smaller shows
+    the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
+    (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
+    `c_k` of `u` is one bit off; without the transcript it sets up as before."""
+    unit = f"rec-sparse/n{SPARSE[0]}-e{SPARSE[1]}-s{SPARSE[2]}-t{SPARSE[3]}"
+    ports = {k: x["value"] for k, x in json.loads((sparse / "registered.json").read_text())["ports"].items()}
+    assert {"rec-sparse-u", "rec-sparse-v"} <= set(ports.values()), ports
+    (port,) = [k for k, v in ports.items() if v == "rec-sparse-u"]
+    for t in (None, _fixture(C3) / "public.json"):
+        p = _statement(sparse, t)
+        assert p.returncode == 0, p.stdout + p.stderr
+
+    def flip(t):
+        r = [r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"] == "sparse/rep1" and r["commits"]][-1]
+        c = bytearray.fromhex(r["commits"][0])
+        c[0] ^= 1
+        r["commits"] = [c.hex()]
+        flip.k = r["k"]
+
+    p = _statement(sparse, _changed(tmp_path, flip))
+    assert p.returncode == 1, p.stdout + p.stderr
+    assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not sparse/rep1's c_31 \(u, inner "
+                        rf"round {flip.k}\) of the inner transcript", p.stdout.strip()), p.stdout
