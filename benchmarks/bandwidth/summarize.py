@@ -1,5 +1,5 @@
 """One run's summary (`run.sh`'s `summary.json`): the gates, the honest pass against the raw device read, the skip curve,
-the side channel, the windows through `audit.Verifier`, and `audit.bound` at the measured numbers.
+the side channel, the windows through `audit.Verifier`, and `audit.bound` at the measured numbers for the certified tags.
 
     python summarize.py OUT_DIR
 """
@@ -12,9 +12,9 @@ import sys
 from pathlib import Path
 
 from verity.core.protocols.bandwidth import audit
+from verity.core.protocols.bandwidth import tags as tag_set
 
-DELTA = 0.01
-DELTA_GUESS = 2.0 ** -40
+SHORT = {"gf31": "gf31-poly/v1", "ro": "ro-sha512/v1", "b3": "ro-blake3/v1"}
 PCIE_GEN5_X16 = 32e9 * 16 / 8 * 128 / 130
 """The side paths' cap: the link's raw rate (32 GT/s on 16 lanes, 128b/130b), an upper bound the measured rates
 approach."""
@@ -44,7 +44,9 @@ def summarize(out: Path) -> dict:
     side = PCIE_GEN5_X16
     s["pcie_measured_max_gbs"] = measured / 1e9
     tags = {}
-    for key, name in (("gf31", "gf31-poly/v1"), ("ro", "ro-sha512/v1")):
+    for key, name in SHORT.items():
+        if f"{key}_cold" not in timing:
+            continue
         cold, warm = timing[f"{key}_cold"], timing[f"{key}_warm"]
         t = {"cold_device_ms_p50": cold["device_ms"]["p50"], "cold_device_ms_p99": cold["device_ms"]["p99"],
              "cold_tags_ms_p50": cold["tags_ms"]["p50"], "cold_tree_ms_p50": cold["tree_ms"]["p50"],
@@ -53,6 +55,10 @@ def summarize(out: Path) -> dict:
         t["pass_gbs"] = store / (t["cold_device_ms_p50"] * 1e-3) / 1e9
         t["pass_over_raw_read"] = t["cold_device_ms_p50"] / raw
         t["skip_device_ms_p50"] = {f"{r['f']:.2f}": r["device_ms"]["p50"] for r in timing[f"{key}_skip"]}
+        t["certified"] = tag_set.get(name).certified
+        if not t["certified"]:
+            tags[name] = t
+            continue
         bounds = {}
         deadlines = {"largest": audit.REGEN_FLOOR_NS - 1,
                      "measured_p99": 50_000 * math.ceil(t["cold_host_e2e_ms_p99"] * 1e6 / 50_000)}
@@ -60,12 +66,13 @@ def summarize(out: Path) -> dict:
             if deadline >= audit.REGEN_FLOOR_NS:
                 bounds[label] = {"deadline_ns": deadline, "refused": "at or past the rebuild floor"}
                 continue
-            p = audit.Params(name, audit.samples_for(DELTA, DELTA), deadline)
-            b = audit.bound(p, timing["blocks"], 2056, chip_bytes=int(device["s_chip_bytes"]), side_bytes_per_s=side,
-                            delta_samples=DELTA, delta_guess=DELTA_GUESS)
-            bounds[label] = {"deadline_ns": deadline, "samples": p.samples, "epsilon": b.epsilon,
-                             "guess_slack": b.guess_slack, "side_bytes": b.side_bytes, "ingress_bytes": b.ingress_bytes,
-                             "ingress_over_store": b.ingress_bytes / store}
+            p = audit.Params(name, audit.SAMPLES, deadline)
+            b = audit.bound(p, timing["blocks"], 2056, chip_bytes=int(device["s_chip_bytes"]), side_bytes_per_s=side)
+            bounds[label] = {"deadline_ns": deadline, "samples": p.samples, "certified_blocks": b.certified_blocks,
+                             "side_bytes": b.side_bytes, "slack_bits": b.slack_bits, "ingress_bytes": b.ingress_bytes,
+                             "ingress_over_store": b.ingress_bytes / store,
+                             "ingress_gbs": b.ingress_bytes / (deadline * 1e-9) / 1e9,
+                             "error_log2": math.log2(b.error)}
         t["bound"] = bounds
         tags[name] = t
     s["tags"] = tags
@@ -78,6 +85,7 @@ def summarize(out: Path) -> dict:
             el = sorted(r["elapsed_ns"] for r in honest)
             w[name] = {"honest": len(honest), "accepted": sum(r["accepted"] for r in honest),
                        "elapsed_ns_p50": el[len(el) // 2] if el else None, "elapsed_ns_max": el[-1] if el else None,
+                       "samples": windows.get("samples"),
                        "deadline_ns": honest[0]["deadline_ns"] if honest else None,
                        "failures": sorted({r["failure"] for r in honest if r["failure"]}),
                        "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}

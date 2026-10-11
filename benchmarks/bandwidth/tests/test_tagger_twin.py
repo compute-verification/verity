@@ -1,7 +1,7 @@
 """The GPU tagger's arithmetic and message layouts, transcribed from `tagger.cu` into Python and held to the core reference.
 
 Each twin follows its kernel line by line (word order, byte swaps, padding words, the warp's lanes and shuffles), with the
-SHA-512 constants read out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then
+SHA-512 and BLAKE3 constants read out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then
 `gpu.py windows` through `audit.Verifier`); these catch a layout or arithmetic slip before a GPU is leased.
 """
 
@@ -24,11 +24,12 @@ import gpu  # noqa: E402
 import reference  # noqa: E402
 from verity.core.protocols.bandwidth import audit, tags  # noqa: E402
 from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E402
+from verity.ml.crypto import blake3  # noqa: E402
 
 CU = (HERE / "tagger.cu").read_text()
-M64 = (1 << 64) - 1
+M64, M32 = (1 << 64) - 1, (1 << 32) - 1
 P = tags.MERSENNE31
-GF31, RO = tags.get("gf31-poly/v1"), tags.get("ro-sha512/v1")
+GF31, RO, B3 = tags.get("gf31-poly/v1"), tags.get("ro-sha512/v1"), tags.get("ro-blake3/v1")
 
 
 def _consts(name: str) -> list[int]:
@@ -235,6 +236,163 @@ def test_gf31_leaves_full_and_short():
     for n in range(1, 17):
         ys = [rng.randrange(P) for _ in range(n)]
         assert gf31_leaf(leafmid, 9, ys) == tags.leaf_hash(head, 9, [y.to_bytes(4, "big") for y in ys])
+
+
+B3_IV = [int(x, 16) for x in re.findall(r"#define B3_IV\d 0x([0-9A-Fa-f]+)u", CU)]
+B3_PERM = [int(x) for x in re.findall(r"m\[(\d+)\]", re.search(r"const uint32_t t\[16\] = \{([^}]*)\}", CU).group(1))]
+B3_FLAG = {k: int(v) for k, v in re.findall(r"\bB3_([A-Z_]+) = (\d+)",
+                                             re.search(r"constexpr uint32_t B3_CHUNK_START.*", CU).group(0))}
+B3S = int(re.search(r"constexpr int B3S = (\d+);", CU).group(1))
+
+
+def test_blake3_constants_are_the_specifications():
+    assert B3_IV == list(blake3.IV[:4])
+    assert B3_PERM == list(blake3.MSG_PERMUTATION)
+    assert B3_FLAG == {"CHUNK_START": blake3.CHUNK_START, "CHUNK_END": blake3.CHUNK_END, "PARENT": blake3.PARENT,
+                       "ROOT": blake3.ROOT, "KEYED": blake3.KEYED_HASH}
+
+
+def bswap32(x: int) -> int:
+    return int.from_bytes(x.to_bytes(4, "little"), "big")
+
+
+def b3_rotr(x: int, n: int) -> int:
+    return ((x >> n) | (x << (32 - n))) & M32
+
+
+def b3_compress(cv: list[int], m: list[int], counter: int, length: int, flags: int) -> list[int]:
+    """`b3_compress`: seven rounds of `B3_G` over columns then diagonals, the message permuted between rounds."""
+    v = [*cv, *B3_IV, counter, 0, length, flags]
+    m = list(m)
+
+    def g(a: int, b: int, c: int, d: int, x: int, y: int) -> None:
+        v[a] = (v[a] + v[b] + x) & M32
+        v[d] = b3_rotr(v[d] ^ v[a], 16)
+        v[c] = (v[c] + v[d]) & M32
+        v[b] = b3_rotr(v[b] ^ v[c], 12)
+        v[a] = (v[a] + v[b] + y) & M32
+        v[d] = b3_rotr(v[d] ^ v[a], 8)
+        v[c] = (v[c] + v[d]) & M32
+        v[b] = b3_rotr(v[b] ^ v[c], 7)
+
+    for r in range(7):
+        g(0, 4, 8, 12, m[0], m[1])
+        g(1, 5, 9, 13, m[2], m[3])
+        g(2, 6, 10, 14, m[4], m[5])
+        g(3, 7, 11, 15, m[6], m[7])
+        g(0, 5, 10, 15, m[8], m[9])
+        g(1, 6, 11, 12, m[10], m[11])
+        g(2, 7, 8, 13, m[12], m[13])
+        g(3, 4, 9, 14, m[14], m[15])
+        if r < 6:
+            m = [m[i] for i in B3_PERM]
+    return [v[i] ^ v[i + 8] for i in range(8)]
+
+
+def test_b3_selftest_is_blake3s_vector():
+    """`bwtag`'s gate: keyed BLAKE3 of the empty input, one compression, against the constants written in `tagger.cu`."""
+    body = CU[CU.index("int b3_selftest()"):]
+    body = body[:body.index("\n}\n")]
+    key = [int(x, 16) for x in re.findall(r"0x([0-9a-f]+)u", body[:body.index("want")])]
+    want = [int(x, 16) for x in re.findall(r"0x([0-9a-f]+)u", body[body.index("want"):])]
+    raw = b"whats the Elvish word for friend"
+    assert key == list(struct.unpack("<8I", raw))
+    assert want == list(struct.unpack("<8I", blake3.keyed(raw, b"")))
+    f = B3_FLAG
+    assert b3_compress(key, [0] * 16, 0, 0, f["KEYED"] | f["CHUNK_START"] | f["CHUNK_END"] | f["ROOT"]) == want
+
+
+def b3_key(seed: bytes) -> list[int]:
+    """`b3_key`: the first four SHA-512 digest words of the tag prefix, each half byte-swapped to a little-endian word."""
+    d = be_words(sha512(prefix_bytes(TAG_DOMAIN, B3.name, seed)))
+    return [bswap32((d[i // 2] if i & 1 else d[i // 2] >> 32) & M32) for i in range(8)]
+
+
+def test_b3_key_is_the_cores():
+    for seed in (SEED, bytes(32), b"\xff" * 32):
+        assert b3_key(seed) == list(struct.unpack("<8I", B3.key(seed)))
+
+
+def test_b3_staging_gives_each_lane_its_row():
+    """`b3_kernel`'s staging: lane l writes word wd = l & 7 of rows 4i + (l >> 3) at stride `B3S`, then reads words
+    0..7 of row l; every slot is written once per message block."""
+    assert B3S >= 8
+    for g in (0, 1, 31):
+        sm: dict[int, tuple[int, int]] = {}
+        for lane in range(32):
+            sub, wd = lane >> 3, lane & 7
+            for i in range(8):
+                r = 4 * i + sub
+                assert r * B3S + wd not in sm
+                sm[r * B3S + wd] = (r, 8 * g - 1 + wd)
+        for lane in range(32):
+            assert [sm[lane * B3S + i] for i in range(8)] == [(lane, 8 * g - 1 + i) for i in range(8)]
+
+
+def b3_tag(key: list[int], j: int, block: bytes) -> list[int]:
+    """`b3_kernel` for one lane: 32 message blocks of E's words 8g − 1 .. 8g + 6 (word −1 is u64be j), two chunks of
+    16, then words 255 and 256 as the third chunk (16 bytes), the parent of the first two and the root."""
+    e8 = struct.unpack("<257Q", block)
+    f = B3_FLAG
+    cv: list[int] = []
+    cv0: list[int] = []
+    for g in range(32):
+        words = [e8[8 * g - 1 + wd] if 8 * g - 1 + wd >= 0 else 0 for wd in range(8)]
+        m = [h for x in words for h in (x & M32, x >> 32)]
+        if g == 0:
+            m[0], m[1] = bswap32(j >> 32), bswap32(j & M32)
+        t = g & 15
+        if t == 0:
+            cv = list(key)
+        cv = b3_compress(cv, m, g >> 4, 64,
+                         f["KEYED"] | (f["CHUNK_START"] if t == 0 else 0) | (f["CHUNK_END"] if t == 15 else 0))
+        if g == 15:
+            cv0 = cv
+    m = [e8[255] & M32, e8[255] >> 32, e8[256] & M32, e8[256] >> 32] + [0] * 12
+    cv2 = b3_compress(key, m, 2, 16, f["KEYED"] | f["CHUNK_START"] | f["CHUNK_END"])
+    p = b3_compress(key, cv0 + cv, 0, 64, f["KEYED"] | f["PARENT"])
+    return b3_compress(key, p + cv2, 0, 64, f["KEYED"] | f["PARENT"] | f["ROOT"])
+
+
+def test_b3_kernel_layout():
+    key, keyed = b3_key(SEED), B3.keyed(SEED)
+    for j in (0, 5, (1 << 19) - 1, (1 << 40) + 3):
+        b = reference.block(j % (1 << 19))
+        assert struct.pack("<8I", *b3_tag(key, j, b)) == keyed(j, b)
+
+
+def b3_leaf(leafmid: list[int], leaf: int, ys: list[list[int]]) -> bytes:
+    """`b3_leaves`: u64be leaf, then each tag's 32 bytes as four big-endian words (pairs of byte-swapped little-endian
+    words), the padding byte and the length in the last word, over `nb` compressions."""
+    n = len(ys)
+    T = [x for y in ys for x in y]
+    data = 1 + 4 * n
+    nb = (8 * data + 17 + 127) // 128
+    s = list(leafmid)
+    for blk in range(nb):
+        w = []
+        for i in range(16):
+            q = 16 * blk + i
+            v = 0
+            if q == 0:
+                v = leaf
+            elif q < data:
+                v = (bswap32(T[2 * (q - 1)]) << 32) | bswap32(T[2 * (q - 1) + 1])
+            elif q == data:
+                v = 0x80 << 56
+            if q == 16 * nb - 1:
+                v = (128 + 8 + 32 * n) * 8
+            w.append(v)
+        s = compress(s, w)
+    return digest(s)
+
+
+def test_b3_leaves_full_and_short():
+    leafmid, head = midstate(LEAF_DOMAIN, B3.name, SEED), tags.leaf_head(B3, SEED)
+    rng = random.Random(5)
+    for n in range(1, 17):
+        ys = [[rng.randrange(1 << 32) for _ in range(8)] for _ in range(n)]
+        assert b3_leaf(leafmid, 11, ys) == tags.leaf_hash(head, 11, [struct.pack("<8I", *y) for y in ys])
 
 
 def tree_node(left: bytes, right: bytes) -> bytes:

@@ -7,16 +7,16 @@
     window.verdict([commitment.open(j, store_tree) for j in samples])
 
 `tag_pass` is the honest prover's timed step (`audit.tag_pass` on the GPU): it returns once the root is on the host.
-`open` is untimed: the block is read back from the device, the tags of its leaf come from the device (`gf31-poly/v1`) or
-are recomputed from the block (`ro-sha512/v1`, whose kernel keeps only the leaves), and the tag path is RFC 6962's
+`open` is untimed: the block is read back from the device, the tags of its leaf come from the device (`gf31-poly/v1`,
+`ro-blake3/v1`) or are recomputed from the block (`ro-sha512/v1`, whose kernel keeps only the leaves), and the tag path is RFC 6962's
 `PATH(c)` read from the tree levels the pass left in the workspace.  `store_tree` is the store's own tree under `vk`
 (`pous.verifier.MerkleTree`), which the prover keeps from setup.  The checks are the core verifier's (`audit.Window`).
 
     python gpu.py windows --lib libbwtag.so --leaves store_leaves.bin --blocks N --out windows.json
 
-runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at the
-largest deadline `audit.Params` allows, negative controls that tag only part of the store, and one window per tag at a
-deadline no certificate allows, which checks the openings of a tag whose honest pass is late.
+runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
+`--deadline-ns` (default the largest `audit.Params` allows), negative controls that tag only part of the store, and one
+window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from reference import SALT, geometry
 from verity.core.protocols.bandwidth import audit, tags
 from verity.core.protocols.pous.verifier import DIGEST_BYTES, MerkleTree, VerifierKey
 
-TAG_IDS = {"gf31-poly/v1": 0, "ro-sha512/v1": 1}
+TAG_IDS = {"gf31-poly/v1": 0, "ro-sha512/v1": 1, "ro-blake3/v1": 2}
 BLOCK_BYTES = 2056
 MAX_LEVELS = 65
 LOOSE_NS = 100_000_000
@@ -72,7 +72,7 @@ class Tagger:
         L.bw_workspace_bytes.argtypes, L.bw_workspace_bytes.restype = [i32, u64], ctypes.c_size_t
         L.bw_tag_pass.argtypes = [i32, vp, u64, ctypes.c_char_p, vp, ctypes.c_char_p, vp]
         L.bw_tag_pass_prefix.argtypes = [i32, vp, u64, u64, ctypes.c_char_p, vp, ctypes.c_char_p, vp]
-        L.bw_read_tags.argtypes = [u64, vp, u64, u64, ctypes.POINTER(ctypes.c_uint32)]
+        L.bw_read_tags.argtypes = [i32, u64, vp, u64, u64, vp]
         L.bw_read_node.argtypes = [i32, u64, vp, ctypes.c_uint32, u64, ctypes.c_char_p]
         L.bw_levels.argtypes, L.bw_levels.restype = [i32, u64, ctypes.POINTER(u64)], ctypes.c_uint32
         L.bw_fill_test_store.argtypes = [vp, u64]
@@ -151,10 +151,17 @@ class Commitment:
     def leaf_tags(self, c: int) -> tuple[bytes, ...]:
         per = tags.tags_per_leaf(self.tag)
         first, count = c * per, min(per, self.blocks - c * per)
+        tag_id = TAG_IDS[self.tag.name]
         if isinstance(self.tag, tags.PolynomialTag):
             out = (ctypes.c_uint32 * count)()
-            self.tagger._ok(self.tagger.lib.bw_read_tags(self.blocks, self.workspace, first, count, out), "read tags")
+            self.tagger._ok(self.tagger.lib.bw_read_tags(tag_id, self.blocks, self.workspace, first, count, out),
+                            "read tags")
             return tuple(int(y).to_bytes(4, "big") for y in out)
+        if isinstance(self.tag, tags.Blake3Tag):
+            raw = ctypes.create_string_buffer(count * self.tag.tag_bytes)
+            self.tagger._ok(self.tagger.lib.bw_read_tags(tag_id, self.blocks, self.workspace, first, count, raw),
+                            "read tags")
+            return tuple(raw.raw[i * self.tag.tag_bytes:(i + 1) * self.tag.tag_bytes] for i in range(count))
         keyed = self.tag.keyed(self.seed)
         return tuple(keyed(j, self.tagger.read_block(self.store, j)) for j in range(first, first + count))
 
@@ -179,7 +186,7 @@ def _windows(a: argparse.Namespace) -> dict:
     for name in a.tags:
         ws = t.alloc(t.workspace_bytes(name, a.blocks))
         t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)  # loads the kernels, untimed
-        p = audit.Params(name, a.samples, audit.REGEN_FLOOR_NS - 1)
+        p = audit.Params(name, a.samples, a.deadline_ns)
         verifier = audit.Verifier(vk, p, source)
         for n, f in enumerate([0.0] * a.windows + a.skip):
             w = verifier.window(n)
@@ -219,7 +226,8 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--lib", type=Path, required=True)
     w.add_argument("--leaves", type=Path, required=True)
     w.add_argument("--blocks", type=int, required=True)
-    w.add_argument("--samples", type=int, default=audit.samples_for(0.01, 0.01))
+    w.add_argument("--samples", type=int, default=audit.SAMPLES)
+    w.add_argument("--deadline-ns", type=int, default=audit.REGEN_FLOOR_NS - 1)
     w.add_argument("--windows", type=int, default=20)
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))

@@ -1,11 +1,15 @@
 // The bandwidth audit's GPU tagger (verity/core/protocols/bandwidth/PROTOCOL.md §3-4): every block's tag over the store E
-// in device memory, the tags' leaves and the RFC 6962 root, for both tag constructions.
+// in device memory, the tags' leaves and the RFC 6962 root, for the three tag constructions.
 //
+//   ro-blake3/v1  one thread per block, the warp staging each 64-byte message block of its 32 rows through shared memory
+//                 (coalesced) while the next one is loaded into registers: the message u64be j ‖ E_j is three chunks
+//                 (16, 16 and 1 compressions under the window's key K), then two parent compressions.  A second kernel
+//                 hashes the leaves of 16 tags (`b3_leaves`, five SHA-512 compressions each).
 //   gf31-poly/v1  one warp per 32 blocks: lane l derives g for block base + l (one SHA-512 compression from the tag
 //                 prefix's midstate), then for each block the warp reads the row as 257 uint2 (u_q = w_2q·g + w_2q+1),
 //                 lane l runs Horner in H = g^64 over q = 32k + l (lane 0 also takes q = 256), and the lanes combine with
-//                 h^(32 − l), h = g², from a warp scan of powers.  Mersenne folding, no division.  Lanes 0 and 1 hash the
-//                 group's two leaves of 16 tags.
+//                 h^(32 − l), h = g², from a warp scan of powers.  Mersenne folding, no division.  A second kernel
+//                 hashes the leaves of 16 tags (`gf31_leaves`).
 //   ro-sha512/v1  one thread per block, the warp staging each 128-byte chunk of its 32 rows through shared memory
 //                 (coalesced), 17 compressions after the prefix's midstate, and the block's leaf fused (one leaf per tag).
 //   tree          bottom-up, an odd last node promoted, which is RFC 6962's shape: one launch per level while a level
@@ -40,10 +44,11 @@ namespace bw {
 constexpr uint32_t P31 = 0x7fffffffu;
 constexpr uint64_t BLOCK_BYTES = 2056;
 constexpr int ROW_U64 = 257;  // a block is 257 eight-byte words
-constexpr int TAG_GF31 = 0, TAG_RO = 1;
+constexpr int TAG_GF31 = 0, TAG_RO = 1, TAG_B3 = 2, TAGS = 3;
 constexpr unsigned FULL = 0xffffffffu;
 
-static const char* const TAG_NAMES[2] = {"gf31-poly/v1", "ro-sha512/v1"};
+static const char* const TAG_NAMES[TAGS] = {"gf31-poly/v1", "ro-sha512/v1", "ro-blake3/v1"};
+static const char* const TAG_SHORT[TAGS] = {"gf31", "ro", "b3"};
 static const char TAG_DOMAIN[] = "verity/bandwidth/tag/v1";        // + its NUL: 24 bytes
 static const char LEAF_DOMAIN[] = "verity/bandwidth/tag-leaf/v1";  // + its NUL: 29 bytes
 
@@ -132,6 +137,67 @@ __device__ __forceinline__ uint32_t red64(uint64_t x) {
 
 __device__ __forceinline__ uint32_t mulmod(uint32_t a, uint32_t b) { return red64((uint64_t)a * b); }
 
+// BLAKE3 (the specification's reference implementation, as `verity.ml.crypto.blake3`).
+#define B3_IV0 0x6A09E667u
+#define B3_IV1 0xBB67AE85u
+#define B3_IV2 0x3C6EF372u
+#define B3_IV3 0xA54FF53Au
+constexpr uint32_t B3_CHUNK_START = 1, B3_CHUNK_END = 2, B3_PARENT = 4, B3_ROOT = 8, B3_KEYED = 16;
+
+struct Key3 {
+  uint32_t k[8];
+};
+
+__host__ __device__ __forceinline__ uint32_t rotr32(uint32_t x, int n) {
+#ifdef __CUDA_ARCH__
+  return __funnelshift_r(x, x, n);
+#else
+  return (x >> n) | (x << (32 - n));
+#endif
+}
+
+#define B3_G(a, b, c, d, x, y) \
+  a += b + (x);                \
+  d = rotr32(d ^ a, 16);       \
+  c += d;                      \
+  b = rotr32(b ^ c, 12);       \
+  a += b + (y);                \
+  d = rotr32(d ^ a, 8);        \
+  c += d;                      \
+  b = rotr32(b ^ c, 7)
+
+// One compression of the message words `m` (permuted in place) from chaining value `cv`; `out` gets the first 8 words of
+// the output, the next chaining value (or, under ROOT, the hash).  Counters here are below 2^32.
+__host__ __device__ __forceinline__ void b3_compress(const uint32_t cv[8], uint32_t m[16], uint32_t counter, uint32_t len,
+                                                     uint32_t flags, uint32_t out[8]) {
+  uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
+  uint32_t v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
+#pragma unroll
+  for (int r = 0; r < 7; ++r) {
+    B3_G(v0, v4, v8, v12, m[0], m[1]);
+    B3_G(v1, v5, v9, v13, m[2], m[3]);
+    B3_G(v2, v6, v10, v14, m[4], m[5]);
+    B3_G(v3, v7, v11, v15, m[6], m[7]);
+    B3_G(v0, v5, v10, v15, m[8], m[9]);
+    B3_G(v1, v6, v11, v12, m[10], m[11]);
+    B3_G(v2, v7, v8, v13, m[12], m[13]);
+    B3_G(v3, v4, v9, v14, m[14], m[15]);
+    if (r < 6) {
+      const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = t[i];
+    }
+  }
+  out[0] = v0 ^ v8;
+  out[1] = v1 ^ v9;
+  out[2] = v2 ^ v10;
+  out[3] = v3 ^ v11;
+  out[4] = v4 ^ v12;
+  out[5] = v5 ^ v13;
+  out[6] = v6 ^ v14;
+  out[7] = v7 ^ v15;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Host: SHA-512 of short messages, and the prefixes' midstates.
 
@@ -162,12 +228,32 @@ static void append_frame(std::vector<uint8_t>& out, char tag, const uint8_t* bod
   out.insert(out.end(), body, body + n);
 }
 
-// The midstate after Z(domain ‖ NUL ‖ frame(name) ‖ frame(seed)), one 128-byte block.
-static Mid prefix_midstate(const char* domain, const char* name, const uint8_t seed[32]) {
+// Z(domain ‖ NUL ‖ frame(name) ‖ frame(seed)), one 128-byte block.
+static std::vector<uint8_t> prefix_block(const char* domain, const char* name, const uint8_t seed[32]) {
   std::vector<uint8_t> p(domain, domain + strlen(domain) + 1);
   append_frame(p, 's', (const uint8_t*)name, strlen(name));
   append_frame(p, 'b', seed, 32);
   p.resize(128, 0);
+  return p;
+}
+
+// ro-blake3/v1's key K: the first 32 bytes of SHA512(prefix), as BLAKE3's little-endian key words.
+static Key3 b3_key(const uint8_t seed[32]) {
+  std::vector<uint8_t> p = prefix_block(TAG_DOMAIN, TAG_NAMES[TAG_B3], seed);
+  uint64_t d[8];
+  sha512_host(p.data(), p.size(), d);
+  Key3 k;
+  for (int i = 0; i < 8; ++i) {
+    const uint64_t w = d[i / 2];
+    const uint32_t be = (uint32_t)(i & 1 ? w : w >> 32);
+    k.k[i] = (be >> 24) | ((be >> 8) & 0xff00u) | ((be << 8) & 0xff0000u) | (be << 24);
+  }
+  return k;
+}
+
+// The midstate after the prefix block.
+static Mid prefix_midstate(const char* domain, const char* name, const uint8_t seed[32]) {
+  std::vector<uint8_t> p = prefix_block(domain, name, seed);
   Mid m;
   memcpy(m.h, IV_HOST, sizeof m.h);
   uint64_t w[16];
@@ -364,6 +450,124 @@ __global__ void __launch_bounds__(RO_WARPS * 32, 4) ro_kernel(const uint64_t* __
     for (int i = 0; i < 8; ++i) leaves[j * 8 + i] = ls[i];
 }
 
+__device__ __forceinline__ uint32_t bswap32(uint32_t x) { return __byte_perm(x, 0, 0x0123); }
+
+constexpr int B3_WARPS = 4;
+constexpr int B3S = 9;  // shared-memory row stride, in u64
+
+// ro-blake3/v1 over blocks [0, count): each tag as 8 little-endian words.  Message block g (0..31) of u64be j ‖ E_j is
+// E's u64 words 8g − 1 .. 8g + 6 (word −1 is j's): the warp loads them 4 rows × 64 bytes per instruction, one block ahead.
+__global__ void __launch_bounds__(B3_WARPS * 32, 4) b3_kernel(const uint64_t* __restrict__ E8, uint64_t count, Key3 key,
+                                                           uint32_t* __restrict__ tags) {
+  __shared__ uint64_t sm[B3_WARPS][32 * B3S];
+  const int lane = threadIdx.x & 31, sub = lane >> 3, wd = lane & 7;
+  const uint64_t base = ((blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5) * 32;
+  if (base >= count) return;
+  uint64_t* my = sm[threadIdx.x >> 5];
+  const uint64_t j = base + lane;
+  uint64_t pre[8];
+  auto load = [&](int g) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const int r = 4 * i + sub, e = 8 * g - 1 + wd;
+      pre[i] = base + r < count && e >= 0 ? __ldcs(E8 + (base + r) * ROW_U64 + e) : 0;
+    }
+  };
+  load(0);
+  uint32_t cv[8], cv0[8];
+#pragma unroll 1
+  for (int g = 0; g < 32; ++g) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) my[(4 * i + sub) * B3S + wd] = pre[i];
+    __syncwarp();
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const uint64_t x = my[lane * B3S + i];
+      m[2 * i] = (uint32_t)x;
+      m[2 * i + 1] = (uint32_t)(x >> 32);
+    }
+    __syncwarp();
+    if (g < 31) load(g + 1);
+    if (g == 0) {
+      m[0] = bswap32((uint32_t)(j >> 32));
+      m[1] = bswap32((uint32_t)j);
+    }
+    const int t = g & 15;
+    if (t == 0)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+    b3_compress(cv, m, (uint32_t)(g >> 4), 64, B3_KEYED | (t == 0 ? B3_CHUNK_START : 0) | (t == 15 ? B3_CHUNK_END : 0), cv);
+    if (g == 15)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) cv0[i] = cv[i];
+  }
+  uint32_t m[16], cv2[8], p[8], y[8];
+  uint64_t e255 = 0, e256 = 0;
+  if (j < count) {
+    e255 = __ldcs(E8 + j * ROW_U64 + 255);
+    e256 = __ldcs(E8 + j * ROW_U64 + 256);
+  }
+#pragma unroll
+  for (int i = 0; i < 16; ++i) m[i] = 0;
+  m[0] = (uint32_t)e255;
+  m[1] = (uint32_t)(e255 >> 32);
+  m[2] = (uint32_t)e256;
+  m[3] = (uint32_t)(e256 >> 32);
+  b3_compress(key.k, m, 2, 16, B3_KEYED | B3_CHUNK_START | B3_CHUNK_END, cv2);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    m[i] = cv0[i];
+    m[8 + i] = cv[i];
+  }
+  b3_compress(key.k, m, 0, 64, B3_KEYED | B3_PARENT, p);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    m[i] = p[i];
+    m[8 + i] = cv2[i];
+  }
+  b3_compress(key.k, m, 0, 64, B3_KEYED | B3_PARENT | B3_ROOT, y);
+  if (j < count) {
+    uint4* o = (uint4*)(tags + j * 8);
+    o[0] = make_uint4(y[0], y[1], y[2], y[3]);
+    o[1] = make_uint4(y[4], y[5], y[6], y[7]);
+  }
+}
+
+// ro-blake3/v1's leaves over the tags of blocks [0, count) of B: 16 tags (u64be leaf ‖ 512 bytes, five compressions after
+// the leaf prefix's midstate) each, the last of B's leaves short.
+__global__ void b3_leaves(const uint32_t* __restrict__ tags, uint64_t B, uint64_t count, Mid leafmid,
+                          uint64_t* __restrict__ leaves) {
+  const uint64_t leaf = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x, first = leaf * 16;
+  if (first >= count) return;
+  const int n = (int)(B - first < 16 ? B - first : 16);
+  const int data = 1 + 4 * n, nb = (8 * data + 17 + 127) / 128;
+  const uint32_t* T = tags + first * 8;
+  uint64_t s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = leafmid.h[i];
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+    uint64_t w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      uint64_t v = 0;
+      if (q == 0)
+        v = leaf;
+      else if (q < data)
+        v = ((uint64_t)bswap32(T[2 * (q - 1)]) << 32) | bswap32(T[2 * (q - 1) + 1]);
+      else if (q == data)
+        v = 0x80ULL << 56;
+      if (q == 16 * nb - 1) v = (uint64_t)(128 + 8 + 32 * n) * 8;
+      w[i] = v;
+    }
+    compress(s, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) leaves[leaf * 8 + i] = s[i];
+}
+
 // SHA512(0x01 ‖ L ‖ R), 129 bytes from the IV: two compressions.  The message is L ‖ R shifted right by one byte.
 __device__ __forceinline__ void node_hash(const uint64_t* L, const uint64_t* R, uint64_t* out) {
   uint64_t w[16], s[8], prev = 1;
@@ -438,6 +642,13 @@ __global__ void sha512_selftest(const uint64_t* w_in, uint64_t* out) {
   for (int i = 0; i < 8; ++i) out[i] = s[i];
 }
 
+// BLAKE3 keyed over the empty input: one compression, CHUNK_START | CHUNK_END | ROOT.
+__global__ void b3_selftest(Key3 key, uint32_t* out) {
+  uint32_t m[16] = {}, y[8];
+  b3_compress(key.k, m, 0, 0, B3_KEYED | B3_CHUNK_START | B3_CHUNK_END | B3_ROOT, y);
+  for (int i = 0; i < 8; ++i) out[i] = y[i];
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // One store's tag pass: the workspace and the launches.
 
@@ -460,21 +671,24 @@ static Levels levels_for(uint64_t leaves) {
   return L;
 }
 
-static uint64_t leaf_count(int tag, uint64_t blocks) { return tag == TAG_GF31 ? (blocks + 15) / 16 : blocks; }
+static uint64_t leaf_count(int tag, uint64_t blocks) { return tag == TAG_RO ? blocks : (blocks + 15) / 16; }
+
+// The bytes of one tag the workspace keeps (gf31 as a native u32, b3 as its 32 bytes); ro keeps none, only its leaves.
+static size_t tag_bytes(int tag) { return tag == TAG_GF31 ? 4 : tag == TAG_B3 ? 32 : 0; }
 
 struct Pass {
   int tag = TAG_GF31;
   uint64_t blocks = 0;
   Levels lv;
-  uint32_t* tags = nullptr;   // gf31 only
+  uint32_t* tags = nullptr;   // gf31 and b3
   uint64_t* nodes = nullptr;  // every level, contiguous
 };
 
-static size_t u32_area(uint64_t blocks) { return ((blocks * 4 + 255) / 256) * 256; }
+static size_t tag_area(int tag, uint64_t blocks) { return ((blocks * tag_bytes(tag) + 255) / 256) * 256; }
 
 static size_t workspace_bytes(int tag, uint64_t blocks) {
   Levels lv = levels_for(leaf_count(tag, blocks));
-  return (tag == TAG_GF31 ? u32_area(blocks) : 0) + lv.total * 64;
+  return tag_area(tag, blocks) + lv.total * 64;
 }
 
 static Pass make_pass(int tag, uint64_t blocks, void* workspace) {
@@ -483,21 +697,28 @@ static Pass make_pass(int tag, uint64_t blocks, void* workspace) {
   p.blocks = blocks;
   p.lv = levels_for(leaf_count(tag, blocks));
   char* ws = (char*)workspace;
-  if (tag == TAG_GF31) {
+  if (tag_bytes(tag)) {
     p.tags = (uint32_t*)ws;
-    ws += u32_area(blocks);
+    ws += tag_area(tag, blocks);
   }
   p.nodes = (uint64_t*)ws;
   return p;
 }
 
 static void launch_tags(const Pass& p, const void* E, const uint8_t seed[32], uint64_t count, cudaStream_t st) {
-  Mid tm = prefix_midstate(TAG_DOMAIN, TAG_NAMES[p.tag], seed);
   Mid lm = prefix_midstate(LEAF_DOMAIN, TAG_NAMES[p.tag], seed);
   uint64_t warps = (count + 31) / 32;
+  const unsigned leaf_grid = (unsigned)(((count + 15) / 16 + 127) / 128);
+  if (p.tag == TAG_B3) {
+    unsigned grid = (unsigned)((warps + B3_WARPS - 1) / B3_WARPS);
+    b3_kernel<<<grid, B3_WARPS * 32, 0, st>>>((const uint64_t*)E, count, b3_key(seed), p.tags);
+    b3_leaves<<<leaf_grid, 128, 0, st>>>(p.tags, p.blocks, count, lm, p.nodes);
+    return;
+  }
+  Mid tm = prefix_midstate(TAG_DOMAIN, TAG_NAMES[p.tag], seed);
   if (p.tag == TAG_GF31) {
     gf31_kernel<<<(unsigned)((warps * 32 + 255) / 256), 256, 0, st>>>((const uint2*)E, count, tm, p.tags);
-    gf31_leaves<<<(unsigned)(((count + 15) / 16 + 127) / 128), 128, 0, st>>>(p.tags, p.blocks, count, lm, p.nodes);
+    gf31_leaves<<<leaf_grid, 128, 0, st>>>(p.tags, p.blocks, count, lm, p.nodes);
   } else {
     unsigned grid = (unsigned)((warps + RO_WARPS - 1) / RO_WARPS);
     ro_kernel<<<grid, RO_WARPS * 32, 0, st>>>((const uint64_t*)E, count, tm, lm, p.nodes);
@@ -543,9 +764,9 @@ static int tag_pass(const Pass& p, const void* E, const uint8_t seed[32], uint8_
 }  // namespace bw
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The C ABI: `tag` is 0 for gf31-poly/v1 and 1 for ro-sha512/v1; `store` is E in device memory, 2,056 bytes per block,
-// 8-byte aligned; `workspace` is `bw_workspace_bytes` of device memory, which keeps the tags (gf31) and every tree level
-// after the pass, for openings.
+// The C ABI: `tag` is 0 for gf31-poly/v1, 1 for ro-sha512/v1 and 2 for ro-blake3/v1; `store` is E in device memory, 2,056
+// bytes per block, 8-byte aligned; `workspace` is `bw_workspace_bytes` of device memory, which keeps the tags (gf31, b3)
+// and every tree level after the pass, for openings.
 
 extern "C" {
 
@@ -566,10 +787,12 @@ int bw_tag_pass_prefix(int tag, const void* store, uint64_t blocks, uint64_t tag
   return bw::tag_pass(p, store, seed, root, (cudaStream_t)stream, tagged);
 }
 
-// The `count` gf31 tags (u32 values) from block `first` on, after a pass.
-int bw_read_tags(uint64_t blocks, const void* workspace, uint64_t first, uint64_t count, uint32_t* out) {
-  bw::Pass p = bw::make_pass(bw::TAG_GF31, blocks, (void*)workspace);
-  CK(cudaMemcpy(out, p.tags + first, count * 4, cudaMemcpyDeviceToHost));
+// The `count` tags from block `first` on, after a pass, as the workspace keeps them (gf31: native u32 values; b3: 32
+// bytes each); -1 for ro, whose tags are not kept.
+int bw_read_tags(int tag, uint64_t blocks, const void* workspace, uint64_t first, uint64_t count, void* out) {
+  if (!bw::tag_bytes(tag) || first + count > blocks) return -1;
+  bw::Pass p = bw::make_pass(tag, blocks, (void*)workspace);
+  CK(cudaMemcpy(out, (const char*)p.tags + first * bw::tag_bytes(tag), count * bw::tag_bytes(tag), cudaMemcpyDeviceToHost));
   return 0;
 }
 
@@ -711,19 +934,35 @@ int selftest() {
   return memcmp(host, want, 64) == 0 && memcmp(dev, want, 64) == 0 ? 0 : 1;
 }
 
+int b3_selftest() {
+  // BLAKE3's test vectors: keyed_hash of the empty input under "whats the Elvish word for friend".
+  const bw::Key3 key = {{0x74616877u, 0x68742073u, 0x6c452065u, 0x68736976u, 0x726f7720u, 0x6f662064u, 0x72662072u,
+                         0x646e6569u}};
+  const uint32_t want[8] = {0x56b7b292u, 0x763ced04u, 0x626f9d1fu, 0x928a2c39u,
+                            0xa30ead27u, 0xe77395f0u, 0x8a49f183u, 0x260dd64eu};
+  uint32_t m[16] = {}, host[8], dev[8];
+  bw::b3_compress(key.k, m, 0, 0, bw::B3_KEYED | bw::B3_CHUNK_START | bw::B3_CHUNK_END | bw::B3_ROOT, host);
+  uint32_t* d;
+  CK(cudaMalloc(&d, 32));
+  bw::b3_selftest<<<1, 1>>>(key, d);
+  CK(cudaMemcpy(dev, d, 32, cudaMemcpyDeviceToHost));
+  cudaFree(d);
+  return memcmp(host, want, 32) == 0 && memcmp(dev, want, 32) == 0 ? 0 : 1;
+}
+
 struct Validation {
   std::string name;
   std::string got, want;
   bool ok;
 };
 
-// One store's two tag passes against the expected roots, with the output buffers poisoned first, and a control that
-// skips the tag kernel (the tree over poison) and must not match.
-int validate(uint64_t blocks, const uint8_t seed[32], const std::string want[2], std::vector<Validation>& out) {
+// One store's tag passes against the expected roots, with the output buffers poisoned first, and a control that skips
+// the tag kernel (the tree over poison) and must not match.
+int validate(uint64_t blocks, const uint8_t seed[32], const std::string want[bw::TAGS], std::vector<Validation>& out) {
   void* E;
   CK(cudaMalloc(&E, blocks * bw::BLOCK_BYTES));
   if (bw_fill_test_store(E, blocks)) return 1;
-  for (int tag = 0; tag < 2; ++tag) {
+  for (int tag = 0; tag < bw::TAGS; ++tag) {
     size_t wsb = bw::workspace_bytes(tag, blocks);
     void* ws;
     CK(cudaMalloc(&ws, wsb));
@@ -753,8 +992,11 @@ int main(int argc, char** argv) {
   const int reps = atoi(arg(argc, argv, "reps", "100").c_str());
   uint8_t seed[32], small_seed[32];
   if (!unhex(arg(argc, argv, "seed"), seed, 32) || !unhex(arg(argc, argv, "small-seed"), small_seed, 32)) return 64;
-  const std::string want[2] = {arg(argc, argv, "expect-gf31"), arg(argc, argv, "expect-ro")};
-  const std::string small_want[2] = {arg(argc, argv, "small-expect-gf31"), arg(argc, argv, "small-expect-ro")};
+  std::string want[bw::TAGS], small_want[bw::TAGS];
+  for (int tag = 0; tag < bw::TAGS; ++tag) {
+    want[tag] = arg(argc, argv, (std::string("expect-") + bw::TAG_SHORT[tag]).c_str());
+    small_want[tag] = arg(argc, argv, (std::string("small-expect-") + bw::TAG_SHORT[tag]).c_str());
+  }
 
   cudaDeviceProp prop;
   CK(cudaGetDeviceProperties(&prop, 0));
@@ -781,6 +1023,8 @@ int main(int argc, char** argv) {
   std::vector<Validation> checks;
   const int st = selftest();
   checks.push_back({"sha512('abc') host and device", st ? "mismatch" : "match", "match", st == 0});
+  const int b3 = b3_selftest();
+  checks.push_back({"blake3 keyed('') host and device", b3 ? "mismatch" : "match", "match", b3 == 0});
   if (validate(37, small_seed, small_want, checks)) return 1;
   if (validate(blocks, seed, want, checks)) return 1;
   bool all = true;
@@ -840,8 +1084,8 @@ int main(int argc, char** argv) {
     fprintf(f, " \"raw_read_ms\": %s,\n \"raw_read_gbs\": %s,\n", js(stats(t)).c_str(), js(stats(gbs)).c_str());
   }
 
-  for (int tag = 0; tag < 2; ++tag) {
-    const char* nm = tag == bw::TAG_GF31 ? "gf31" : "ro";
+  for (int tag = 0; tag < bw::TAGS; ++tag) {
+    const char* nm = bw::TAG_SHORT[tag];
     void* ws;
     CK(cudaMalloc(&ws, bw::workspace_bytes(tag, blocks)));
     Pass p = bw::make_pass(tag, blocks, ws);

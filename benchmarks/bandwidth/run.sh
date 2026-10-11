@@ -7,12 +7,13 @@
 #
 # Outside the lease: build `bwtag` and `libbwtag.so` (refused on any register spill), and compute with the core reference
 # the expected roots over the full store and over the pinned vectors' 37 blocks, and the store's PoUS leaves.  Under
-# `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's known answer; both tags' roots against the reference with
-# the output buffers poisoned; a control without the tag kernel that must not match), then its timing; a failed gate
-# times nothing (exit 3).  Then `gpu.py windows`: honest windows through `audit.Verifier` at the largest deadline it
-# allows, and windows that tag only part of the store.  After the lease: `summarize.py`.
+# `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's and keyed BLAKE3's known answers; every tag's roots
+# against the reference with the output buffers poisoned; a control without the tag kernel that must not match), then its
+# timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: honest windows through `audit.Verifier` at
+# DEADLINE_NS (default the largest it allows), and windows that tag only part of the store.  After the lease:
+# `summarize.py`.
 # Env: BLOCKS (default 524,288, the certificate's store), SEED (hex, default 00..1f), REPS (default 100), WINDOWS (20),
-# WORKERS (the reference's processes, default 32), TIMED.
+# DEADLINE_NS, WORKERS (the reference's processes, default 32), TIMED.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, expect.json, gpu.txt, env.txt, smi.csv, device.json, validation.json,
 # timing.json, windows.json, summary.json.
 set -euo pipefail
@@ -37,16 +38,17 @@ if [ "${1:-}" = leased ]; then
 import json, sys
 d = json.load(open(sys.argv[1]))
 f, s = d["full"], d["small"]
-print(f["blocks"], f["seed"], s["seed"], f["roots"]["gf31-poly/v1"], f["roots"]["ro-sha512/v1"],
-      s["roots"]["gf31-poly/v1"], s["roots"]["ro-sha512/v1"], sep="\n")
+print(f["blocks"], f["seed"], s["seed"], sep="\n")
+for short, name in (("gf31", "gf31-poly/v1"), ("ro", "ro-sha512/v1"), ("b3", "ro-blake3/v1")):
+    print(f"--expect-{short}", f["roots"][name], f"--small-expect-{short}", s["roots"][name], sep="\n")
 EOF
   )
   rc=0
   "$S/bwtag" --out "$O" --blocks "${A[0]}" --reps "${REPS:-100}" --seed "${A[1]}" --small-seed "${A[2]}" \
-    --expect-gf31 "${A[3]}" --expect-ro "${A[4]}" --small-expect-gf31 "${A[5]}" --small-expect-ro "${A[6]}" || rc=$?
+    "${A[@]:3}" || rc=$?
   [ $rc = 0 ] || { echo "bwtag exited $rc: nothing more runs"; exit $rc; }
   "$PY" gpu.py windows --lib "$S/libbwtag.so" --leaves "$S/store_leaves.bin" --blocks "${A[0]}" \
-    --windows "${WINDOWS:-20}" --out "$O/windows.json" > "$O/windows.jsonl"
+    --windows "${WINDOWS:-20}" ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"} --out "$O/windows.json" > "$O/windows.jsonl"
   exit 0
 fi
 

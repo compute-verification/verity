@@ -3,7 +3,7 @@
     python reference.py --blocks 524288 --seed HEX --out expect.json [--leaves store_leaves.bin] [--workers 32]
 
 The store is the generated test store of `bandwidth_vectors.py` (`block`), which `tagger.cu`'s `fill_store` writes on the
-device.  `expect.json` holds both tags' roots over `--blocks` blocks under `--seed`, and the same over 37 blocks under the
+device.  `expect.json` holds every tag's roots over `--blocks` blocks under `--seed`, and the same over 37 blocks under the
 pinned vectors' window-0 seed, recomputed here and checked against `vectors.json` before anything is written.  `--leaves`
 also writes the store's PoUS leaf digests (64 bytes each, block order) under `geometry(blocks)` and `SALT`, from which
 `gpu.py windows` builds `vk` and the store's audit paths.
@@ -50,7 +50,7 @@ def geometry(blocks: int) -> P2Params:
     return P2Params(w, c0, per, blocks // per)
 
 
-def _chunk(args: tuple[int, int, int, bytes, bool]) -> tuple[list[bytes], list[bytes], list[bytes]]:
+def _chunk(args: tuple[int, int, int, bytes, bool]) -> tuple[dict[str, list[bytes]], list[bytes]]:
     lo, hi, blocks, seed, want_leaves = args
     keyed = {name: tags.get(name).keyed(seed) for name in tags.TAGS}
     params = geometry(blocks) if want_leaves else None
@@ -62,18 +62,18 @@ def _chunk(args: tuple[int, int, int, bytes, bool]) -> tuple[list[bytes], list[b
             ys[name].append(keyed[name](j, b))
         if want_leaves:
             store_leaves.append(leaf_hash(params, SALT, j, b))
-    return ys["gf31-poly/v1"], ys["ro-sha512/v1"], store_leaves
+    return ys, store_leaves
 
 
 def roots(blocks: int, seed: bytes, workers: int, leaves_out: Path | None = None) -> dict[str, str]:
-    """Both tags' roots over the first `blocks` generated blocks under `seed`; `leaves_out` gets the store's leaves."""
-    ys: dict[str, list[bytes]] = {"gf31-poly/v1": [], "ro-sha512/v1": []}
+    """Every tag's root over the first `blocks` generated blocks under `seed`; `leaves_out` gets the store's leaves."""
+    ys: dict[str, list[bytes]] = {name: [] for name in tags.TAGS}
     store_leaves: list[bytes] = []
     jobs = [(lo, min(lo + CHUNK, blocks), blocks, seed, leaves_out is not None) for lo in range(0, blocks, CHUNK)]
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        for gf, ro, sl in pool.map(_chunk, jobs):
-            ys["gf31-poly/v1"] += gf
-            ys["ro-sha512/v1"] += ro
+        for part, sl in pool.map(_chunk, jobs):
+            for name, v in part.items():
+                ys[name] += v
             store_leaves += sl
     if leaves_out is not None:
         leaves_out.write_bytes(b"".join(store_leaves))
