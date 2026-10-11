@@ -189,7 +189,7 @@ def test_late_commitment_is_rejected_and_draws_nothing(big_store) -> None:
 
 
 def test_malformed_root_is_rejected(big_store) -> None:
-    store, vk = big_store
+    _, vk = big_store
     w = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", clock=_ticks(1)).window(0)
     w.start()
     assert w.commit(b"\0" * 63) == () and w.verdict().failure == "malformed"

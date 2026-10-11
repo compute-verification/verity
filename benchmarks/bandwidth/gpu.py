@@ -15,7 +15,8 @@ are recomputed from the block (`ro-sha512/v1`, whose kernel keeps only the leave
     python gpu.py windows --lib libbwtag.so --leaves store_leaves.bin --blocks N --out windows.json
 
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at the
-largest deadline `audit.Params` allows, and negative controls that tag only part of the store.
+largest deadline `audit.Params` allows, negative controls that tag only part of the store, and one window per tag at a
+deadline no certificate allows, which checks the openings of a tag whose honest pass is late.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from verity.core.protocols.pous.verifier import DIGEST_BYTES, MerkleTree, Verifi
 TAG_IDS = {"gf31-poly/v1": 0, "ro-sha512/v1": 1}
 BLOCK_BYTES = 2056
 MAX_LEVELS = 65
+LOOSE_NS = 100_000_000
 
 
 def bottom_up(leaves: Sequence[bytes], node: Callable[[bytes, bytes], bytes]) -> list[list[bytes]]:
@@ -172,16 +174,15 @@ def _windows(a: argparse.Namespace) -> dict:
     store = t.alloc(a.blocks * BLOCK_BYTES)
     t.fill_test_store(store, a.blocks)
     source = bytes.fromhex(a.source)
-    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "results": []}
+    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "results": [],
+                 "openings_check": []}
     for name in a.tags:
         ws = t.alloc(t.workspace_bytes(name, a.blocks))
         t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)  # loads the kernels, untimed
         p = audit.Params(name, a.samples, audit.REGEN_FLOOR_NS - 1)
         verifier = audit.Verifier(vk, p, source)
-        n = 0
-        for f in [0.0] * a.windows + a.skip:
+        for n, f in enumerate([0.0] * a.windows + a.skip):
             w = verifier.window(n)
-            n += 1
             tagged = a.blocks - round(f * a.blocks)
             if f:
                 t.memset(ws, 0xA5, t.workspace_bytes(name, a.blocks))
@@ -194,10 +195,18 @@ def _windows(a: argparse.Namespace) -> dict:
             o1 = time.perf_counter_ns()
             v = w.verdict(openings)
             o2 = time.perf_counter_ns()
-            out["results"].append({"tag": name, "window": n - 1, "skipped_fraction": f, "tagged": tagged,
+            out["results"].append({"tag": name, "window": n, "skipped_fraction": f, "tagged": tagged,
                                    "deadline_ns": p.deadline_ns, "elapsed_ns": v.elapsed_ns, "accepted": v.accepted,
                                    "failure": v.failure, "index": v.index, "open_ms": (o1 - o0) / 1e6,
                                    "verdict_ms": (o2 - o1) / 1e6})
+        # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
+        # honest pass is late still has its openings checked by the verifier.
+        loose = audit.Params(name, a.samples, LOOSE_NS, regen_floor_ns=LOOSE_NS + 1)
+        w = audit.Verifier(vk, loose, source + b"/openings-check").window(0)
+        commitment = t.tag_pass(name, store, a.blocks, w.start(), ws)
+        v = w.verdict([commitment.open(j, store_tree) for j in w.commit(commitment.root)])
+        out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
+                                      "elapsed_ns": v.elapsed_ns, "accepted": v.accepted, "failure": v.failure})
         t.free(ws)
     t.free(store)
     return out

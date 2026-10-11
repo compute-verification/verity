@@ -81,7 +81,9 @@ def summarize(out: Path) -> dict:
                        "deadline_ns": honest[0]["deadline_ns"] if honest else None,
                        "failures": sorted({r["failure"] for r in honest if r["failure"]}),
                        "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}
-                                 for r in rows if r["skipped_fraction"]]}
+                                 for r in rows if r["skipped_fraction"]],
+                       "openings_check": [{"accepted": r["accepted"], "failure": r["failure"]}
+                                          for r in windows.get("openings_check", []) if r["tag"] == name]}
         s["windows"] = w
     return s
 
