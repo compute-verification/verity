@@ -152,10 +152,10 @@ def CoinBinding : Prop :=
 
 /-- The trees' framing separates them: frame-v3 messages with different tags or parts differ, so equal digests of
 different domain ids, leaves, nodes, pads or empty roots are a collision of the frame's hash on the two framed messages. A
-tag's length is framed in 32 bits and a part's in 64, which bound them (Python's frame refuses longer ones). -/
+tag's length is framed in 32 bits and a part's in 64, and the frame refuses longer ones (`frameHash?`, as Python's does):
+two frames it accepts with one digest `d`. -/
 def FrameInjective : Prop :=
-  ∀ h tag tag' (parts parts' : List ByteArray), tag.toUTF8.size < 2 ^ 32 → tag'.toUTF8.size < 2 ^ 32 →
-    (∀ p ∈ parts, p.size < 2 ^ 64) → (∀ p ∈ parts', p.size < 2 ^ 64) → frameHash h tag parts = frameHash h tag' parts' →
+  ∀ h tag tag' (parts parts' : List ByteArray) d, frameHash? h tag parts = .ok d → frameHash? h tag' parts' = .ok d →
     (tag = tag' ∧ parts = parts') ∨
       (frameBytes tag parts ≠ frameBytes tag' parts' ∧ h.run (frameBytes tag parts) = h.run (frameBytes tag' parts'))
 
