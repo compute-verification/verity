@@ -45,9 +45,10 @@ holds each event until its planned bucket, never before vLLM sent it, and `windo
 windows whose declared sync is not the honest run's; under `covert` the shim delays each stream's first event as
 `covert.LiveSender` says: the covert sender on a live server, which can only delay what the model writes. The audit also
 counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
-have met, and `mismatches_from_late_frames`: the mismatched egress windows whose record is the shaper's rule on the
-frames as read: a frame read after its hand time under the declared sync, which an online rule's honest miss and a
-sender's held frames both give.
+have met. A frame read after its hand time under the declared sync, which an online rule's honest miss and a sender's
+held frames both give, faults the window it is handed in `coverage-never-established`; `mismatches_from_late_frames`
+counts the mismatched egress windows whose record is the shaper's rule on the frames as read: windows that closed
+before such a frame was handed.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...

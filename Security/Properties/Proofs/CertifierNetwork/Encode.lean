@@ -1,4 +1,4 @@
-import Properties.CertifierNetwork
+import Properties.Proofs.CertifierNetwork.Defs
 import Properties.Proofs.CertifierDevice.Issuer
 import Properties.Proofs.CertifierDevice.Basic
 import Properties.Proofs.NetworkCertifier.Grid

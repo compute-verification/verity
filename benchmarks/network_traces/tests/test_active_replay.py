@@ -169,7 +169,7 @@ def test_a_session_held_past_every_sync_is_rejected(runs):
     _, results = runs
     run, audit = results["late"]
     egress = [(r["window"], r["raw"], r["committed"]) for r in audit["rows"] if r["link"] == "responses"]
-    assert egress[0] == (0, "mismatch", "mismatch")
+    assert egress[0] == (0, "status:coverage-never-established", "status:coverage-never-established")
     assert all(raw == committed for _, raw, committed in egress)
     assert all(r["raw"] is None for r in audit["rows"] if r["link"] == "requests")
     assert not ar.against_honest(run, results["honest"][0])["wire_is_honests"]
@@ -269,18 +269,18 @@ def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, resp
     assert audit["comparisons"]["frames_log_is_the_programs"]
 
 
-def test_a_window_its_online_declaration_misses_is_a_mismatch_from_late_frames(setup, tmp_path):
+def test_a_window_its_online_declaration_misses_fails_closed(setup, tmp_path):
     """Under `last`, a 110 ms stall after window 0's first release perturbs what the prover read of window 0, and it
-    declares window 1 a δ the Program's frames don't meet. Window 1's record is the shaper's rule on the frames as read
-    but not the Program's grid: a `mismatch` of an honest run, from frames read after their hand times."""
+    declares window 1 a δ the Program's frames don't meet. Frames read after their hand times are handed late, which
+    faults window 1 `coverage-never-established`: an honest run's miss fails closed instead of a `mismatch`."""
     doc, report, s = setup
     plan = ar.plan_configuration(doc["configurations"][0], s, syncs="last")
     ar.run_virtual(plan, report, tmp_path, stalls=[(1, 0.11)])
     audit = ar.audit_configuration(plan, report, tmp_path)
     assert [(r["link"], r["window"], r["raw"]) for r in audit["rows"] if r["raw"]] == \
-        [("responses", 0, "status:delivery-refused"), ("responses", 1, "mismatch"),
+        [("responses", 0, "status:delivery-refused"), ("responses", 1, "status:coverage-never-established"),
          ("requests", 0, "status:delivery-refused")]
-    assert audit["comparisons"]["mismatches"] == audit["comparisons"]["mismatches_from_late_frames"] == 1
+    assert audit["comparisons"]["mismatches"] == 0
 
 
 TOKENS = 4

@@ -18,7 +18,8 @@ in which the ingress certifier released its stream's `LAST` frame (the request i
 is its position in its stream. A frame read at time s is ready at bucket ⌊s/τ_b⌋ + 1, the first that starts after it.
 At bucket t the shaper hands, in canonical order, each frame whose `max(h(k), ready(k), last)` is at most t, where
 `h(k) = max(eligible(k), h(k−1))` under the declared sync of its anchor's window (`run_shaper`'s rule). `Certifier.tick`
-then releases min(queue, r) of them, left-packed, and the proxy writes those and r − n padding frames.
+then releases min(queue, r) of them, left-packed, and the proxy writes those and r − n padding frames. A frame handed at
+a bucket after h(k) is late: the declared sync didn't cover it, and the window it is handed in fails closed.
 
 **Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ (`calibration.size_ingress_ms`'s
 model) and released by the ingress `Certifier` at r_in into its stream's server connection.
@@ -50,6 +51,11 @@ closes faulted while its queue would still hold frames faults the next one too, 
   arrived before its end is handed;
 - an advice violation: a window's declared sync outside Σ_sync (`coverage-never-established`), checked at the window's
   start; the grid still follows the declared sync, as the audit's expected grid does;
+- a late frame (`coverage-never-established`): a frame handed at a bucket t after its h(k), because its bytes were
+  ready after h(k), a frame before it was handed late (`last`), or it was read after bucket h(k)'s tick. The sync
+  declared for its anchor's window didn't cover the response, so the Program's grid holds the frame earlier than the
+  certifier could: the window of bucket t is faulted, and the frame is dropped with the queue. A window closed before
+  the frame was handed can't be faulted any more; its record is the Program's on the frames handed by its close;
 - a malformed frame (`malformed`): an event longer than a frame, without a position or with one already seen, on a
   stream with no released request, or bytes left unframed at the stream's end.
 """
@@ -128,7 +134,8 @@ class Shaper:
 
     `arrive` takes a frame at its canonical position with its ready bucket; `tick` hands what is due at the current
     bucket by `run_shaper`'s rule, ticks the certifier and returns its row, with the window's record at its last bucket.
-    Fed every frame at its ready bucket, the records equal `run_shaper`'s and `hands` its hand times.
+    Fed every frame at its ready bucket, `hands` is `run_shaper`'s hand times, and the records are `run_shaper`'s while
+    no frame is late. A frame handed after its h(k) faults the window it is handed in `coverage-never-established`.
 
     `queued` is what the certifier's queue would hold had no fault dropped it. A window that closes faulted with frames
     still queued faults the next one too, with the same reason: the Program's grid carries them over.
@@ -184,6 +191,8 @@ class Shaper:
             if hand > self.t:
                 break
             del self.pending[self.next]
+            if self.t > h:
+                self.certifier.fault(Reason.COVERAGE_NEVER_ESTABLISHED)
             self.h, self.last, self.next = h, hand, self.next + 1
             self.hands.append(hand)
             self.certifier.enqueue(frame.payload)
