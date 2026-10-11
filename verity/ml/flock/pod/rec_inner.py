@@ -2,7 +2,9 @@
 statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the unmodified prover against
 ``verity_flock.rec_live``'s proxy and coin server.
 
-    python rec_inner.py stage --n N --sets DIR --out DIR      circuit.txt, inst-N.bin, pub-N.bin; prints the statement's shape
+    python rec_inner.py stage --n N --sets DIR --out DIR [--plain-leaves]
+                                                             circuit.txt, inst-N.bin, pub-N.bin; prints the statement's shape
+                                                             (--plain-leaves: the trees' leaves plain SHA-512, circuit.LEAF_SCHEME_PLAIN)
     python rec_inner.py forge --what challenge|query --inner DIR
                                                              flips one coin of rep 0 in DIR's session.json and public.json
     python rec_inner.py forge --what top|unsalted --inner DIR
@@ -23,14 +25,14 @@ SEED = 20261004
 STREAM = "circuit/rep0"
 
 
-def stage(n: int, sets: Path, out: Path) -> dict:
+def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
     from verity_numerical.bench import templates as TM
     from verity_numerical.bench.generate import generate
     from verity_numerical.bench.input_sets import InputSet
 
     s = InputSet.open(generate(TM.rope_head(64), n, SEED, sets)["path"])
     low = FC.lowering_for_set(s)
-    FC.stage(low, s, 0, n, out)
+    FC.stage(low, s, 0, n, out, leaf_scheme=FC.LEAF_SCHEME_PLAIN if plain_leaves else None)
     text = (out / "circuit.txt").read_text()
     meta = json.loads(text.split("\n", 2)[1][5:])
     G = meta["vus_per_block"]
@@ -38,7 +40,8 @@ def stage(n: int, sets: Path, out: Path) -> dict:
     return {"subcircuit": s.subcircuit.id, "unit": low.name, "n": n, "vus_per_block": G, "k_log": meta["k_log"],
             "units_per_vu": meta["units_per_vu"], "unit_log": meta["unit_log"], "unit_rows": low.layout.useful,
             "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "blocks": blocks,
-            "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+            "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "leaf_scheme": meta["leaf_scheme"]["id"],
+            "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
 def forge(what: str, inner: Path, level: int = 0) -> dict:
@@ -81,12 +84,13 @@ def main(argv=None) -> int:
     st.add_argument("--n", type=int, required=True)
     st.add_argument("--sets", required=True)
     st.add_argument("--out", required=True)
+    st.add_argument("--plain-leaves", action="store_true")
     fg = sp.add_parser("forge")
     fg.add_argument("--what", choices=("challenge", "query", "top", "unsalted"), required=True)
     fg.add_argument("--inner", required=True)
     fg.add_argument("--level", type=int, default=0)
     a = ap.parse_args(argv)
-    res = stage(a.n, Path(a.sets), Path(a.out)) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
+    res = stage(a.n, Path(a.sets), Path(a.out), a.plain_leaves) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
     json.dump(res, sys.stdout, sort_keys=True)
     print()
     return 0

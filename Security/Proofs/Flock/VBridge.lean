@@ -21,6 +21,7 @@ import Proofs.Flock.VBridge.Algebra.Eval
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 import Proofs.Flock.VBridge.Algebra.Lincheck
+import Proofs.Flock.VBridge.Algebra.Holo
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.Ligerito
 import Proofs.Flock.VBridge.Algebra.LigeritoConverse
@@ -72,6 +73,10 @@ import Proofs.Flock.VBridge.Family.Ends
 import Proofs.Flock.VBridge.Family.MsgsRead
 import Proofs.Flock.VBridge.Family.AccRows
 import Proofs.Flock.VBridge.Family.RegistrantFinder
+import Proofs.Flock.VBridge.Sparse.Defs
+import Proofs.Flock.VBridge.Sparse.Residuals
+import Proofs.Flock.VBridge.Sparse.Plays
+import Proofs.Flock.VBridge.Sparse.Refine
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/

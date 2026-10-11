@@ -62,9 +62,9 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
+__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
            "residual_forms", "residual_words", "slots", "spec",
-           "statement", "unit_circuit", "write"]
+           "statement", "unit_circuit", "write", "write_rows"]
 
 U16 = Array(16, BL.BIT)
 OUT_WORDS = 128
@@ -84,6 +84,13 @@ MAX_REGIONS = 64
 # compressions (about nv / 8) put its first part at 2^27. A shape's widest residual reads about 10.75 slots a claim, so 160
 # holds up to 14 claims (12 claims: 130)
 MAX_SLOTS = 160
+# a residual that fits no part alone under MAX_SLOTS stands alone up to this many: no other residual joins it (slots only
+# grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged, and the bound reaches only residuals
+# MAX_SLOTS refuses. The widest, the batched T, reads 172 slots at 16 claims (llama32-1b/b1/i256's 2^29 bucket), 194 at 18
+# and 215 at 20, beside hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask (one): 191 fill a 2^26 block, so past
+# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (runs r20261010-212155-f5ab, r20261010-223054-2894: 172 at
+# k_log 26, 194 to 215 at 27). 21 claims' 226 refuse
+MAX_LONE_SLOTS = 223
 
 
 def port_words(n: int) -> int:
@@ -121,9 +128,11 @@ def slots(ports: list, nv: int) -> int:
     return -(-sum(p.comps for p in rows) // FC.PER_SLOT)
 
 
-def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -> list[SimpleNamespace]:
+def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS,
+          max_lone_slots: int = MAX_LONE_SLOTS) -> list[SimpleNamespace]:
     """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions (`regions`), ``max_slots`` sha512x3
-    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order. A part
+    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order; a residual
+    that fits no part, not even alone, is a part of its own if it reads at most ``max_lone_slots`` slots. A part
     reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
     w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
     holds exactly when every part does."""
@@ -148,16 +157,17 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
 
     groups: list[tuple[list, set, set]] = []
     for i, (P, V) in enumerate(map(touched, gf["res"])):
-        def fit(g):
+        def fit(g, n=max_slots):
             ports = [S["ports"][p] for p in g[1] | P]
-            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= max_slots
+            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= n
                     and F_WORDS * (len(g[0]) + 1) <= OUT_WORDS)
 
         g = next((g for g in groups if fit(g)), None)
         if g is None:
             g = ([], set(), set())
-            if not fit(g):
-                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or {max_slots} sha512x3 slots")
+            if not fit(g, max(max_slots, max_lone_slots)):
+                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or "
+                                 f"{max(max_slots, max_lone_slots)} sha512x3 slots")
             groups.append(g)
         g[0].append(i)
         g[1].update(P)
@@ -425,8 +435,11 @@ def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     low = lowering(S, name)
     sub = subcircuit(S, name)
     text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    names = [nm for nm, _ in S["ports"]]
+    ref = lambda rows, vw: residual_words(S, [rows[nm] for nm in names], elements(vw, S["gf"]["nv"]))
     return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,
-                           build_s=round(time.perf_counter() - t0, 1))
+                           names=names, v_words=v_words(S), out_words=OUT_WORDS, v_value=V_VALUE, zero_value=ZERO_VALUE,
+                           ref=ref, build_s=round(time.perf_counter() - t0, 1))
 
 
 def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evaluate: bool = True, own: dict | None = None) -> dict:
@@ -437,28 +450,43 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
     instance's row of it; ``vs``: each instance's v (F elements), which the verifier registers as `V_VALUE` (`verifier_value`),
     instance i reading row i. ``own``: per row port the verifier's own entry (default the registration's), which its reads file
     names; the outputs are the verifier's zero rows, registered under its own salts."""
+    gf = st.S["gf"]
+    s = write_rows(st, reads, [words(v, st.v_words) for v in vs], out_dir, evaluate, own)
+    nonzero = [[i for i in range(len(gf["res"])) if any(x[8 * i:8 * i + 8])] for x in s.pop("ref")]
+    return {"template": st.defn.id, "instances": st.n, "ports": len(st.names), "nw": gf["nw"], "nv": gf["nv"],
+            "products": sum(len(r["mul"]) for r in gf["res"]), "residuals": len(gf["res"]), "holds": s.pop("holds"),
+            "nonzero_residuals": nonzero, **s}
+
+
+def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir, evaluate: bool = True,
+               own: dict | None = None) -> dict:
+    """`write` for any statement of its form: ``st`` names its row ports (``names``, each read through ``reads``), the words
+    of its ``v`` row (``v_words``; ``vrows``, which the verifier registers as ``st.v_value``) and of its one output row
+    (``out_words``, the verifier's zero rows under ``st.zero_value``), and its reference ``st.ref(rows by name, v's words)``.
+    Returns what every such statement costs and holds, with each instance's reference output (``ref``)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
-    S, n, low, sub, text = st.S, st.n, st.low, st.sub, st.text
-    names = [nm for nm, _ in S["ports"]]
-    if set(reads) != set(names) or len(vs) != n or any(len(pos) != n for _, pos in reads.values()):
-        raise ValueError(f"reads of {sorted(reads)} and {len(vs)} v rows for the row ports {names} of {n} instances")
+    n, low, sub, text, names = st.n, st.low, st.sub, st.text, st.names
+    if set(reads) != set(names) or len(vrows) != n or any(len(pos) != n for _, pos in reads.values()):
+        raise ValueError(f"reads of {sorted(reads)} and {len(vrows)} v rows for the row ports {names} of {n} instances")
     tables, salts, registered, entries = {}, {}, {}, {}
-    for nm, (reg, pos) in reads.items():
+    for nm in names:
+        reg, pos = reads[nm]
         rows, ss, e = reg.statement(pos)
         tables[nm], salts[nm], registered[nm] = np.array(rows, np.uint16), ss, e
         entries[nm] = {**((own or {}).get(nm) or reg.entry()), "word_bits": 16, "reads": [int(p) for p in pos]}
-    vreg = verifier_value(st.prog, V_VALUE, [words(v, v_words(S)) for v in vs])
+    vreg = verifier_value(st.prog, st.v_value, [list(r) for r in vrows])
     vrows_, salts["v"], registered["v"] = vreg.statement(range(n))
-    tables["v"] = vrows = np.array(vrows_, np.uint16)
+    tables["v"] = vt = np.array(vrows_, np.uint16)
     entries["v"] = {**vreg.entry(), "word_bits": 16, "reads": list(range(n))}
-    ref = [residual_words(S, [tables[nm][i].tolist() for nm in names], vs[i]) for i in range(n)]
+    ref = [st.ref({nm: tables[nm][i].tolist() for nm in names}, vt[i].tolist()) for i in range(n)]
     agrees = None
     if evaluate:
-        got, _cut, ok = low.evaluate(np.concatenate([tables[nm] for nm in names] + [vrows], axis=1).astype(np.uint64))
+        got, _cut, ok = low.evaluate(np.concatenate([tables[nm] for nm in names] + [vt], axis=1).astype(np.uint64))
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i] for i in range(n)]
-    zero = RG.Registered.commit(st.prog, ZERO_VALUE, [[0] * OUT_WORDS for _ in range(n)], salts=zero_salts(ZERO_VALUE, n))
+    zero = RG.Registered.commit(st.prog, st.zero_value, [[0] * st.out_words for _ in range(n)],
+                                salts=zero_salts(st.zero_value, n))
     out_rows, salts["out"], registered["out"] = zero.statement(range(n))
     entries["out"] = {**zero.entry(), "word_bits": 16, "reads": list(range(n))}
     d = Path(out_dir)
@@ -467,15 +495,11 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
     (d / "program.json").write_bytes(canonical_json(encode_program(st.program)))
     (d / "partition.json").write_text(json.dumps(st.part))
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
-    FC.write(text, SimpleNamespace(name=ZERO_VALUE, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
+    FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables=tables, refs={nm: list(range(n)) for nm in tables},
              salts=salts, registered=registered)
-    gf = S["gf"]
     meta = json.loads(text.split("\n", 2)[1][5:])
-    return {"template": st.defn.id, "instances": n, "ports": len(names), "nw": gf["nw"], "nv": gf["nv"],
-            "products": sum(len(r["mul"]) for r in gf["res"]), "residuals": len(gf["res"]), "holds": [not any(x) for x in ref],
-            "nonzero_residuals": [[i for i in range(len(gf["res"])) if any(x[8 * i:8 * i + 8])] for x in ref],
-            "unit_agrees": agrees, "unit_rows": low.layout.useful, "unit_log": meta["unit_log"], "k_log": meta["k_log"],
-            "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"], "circuit_sha512": FC.digest(text),
-            "circuit_bytes": len(text), "program_sha512": st.prog, "partition_digest": P.digest(st.part),
-            "zero_root": zero.root.hex(), "build_s": st.build_s}
+    return {"holds": [not any(x) for x in ref], "ref": ref, "unit_agrees": agrees, "unit_rows": low.layout.useful,
+            "unit_log": meta["unit_log"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"],
+            "circuit_sha512": FC.digest(text), "circuit_bytes": len(text), "program_sha512": st.prog,
+            "partition_digest": P.digest(st.part), "zero_root": zero.root.hex(), "build_s": st.build_s}
