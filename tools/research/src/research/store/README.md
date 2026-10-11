@@ -63,7 +63,7 @@ lives only remotely). `meta` may contain `art:` strings too; only `refs` is inde
 
 Manifest identity excludes producer, time, labels. The manifest file is `manifests/<sha256 hex>.json` (canonical bytes).
 
-Kinds are strings `<name>/v<int>`. The store validates only the envelope; kind-specific validation is the producer's
+Kinds are strings `<name>/v<int>`, the name one or more `/`-separated segments (`verity/subcircuit-catalog/v1`). The store validates only the envelope; kind-specific validation is the producer's
 (`kinds.py` holds the known kinds and a one-line description each; `put` warns on an unknown kind, never refuses).
 
 ## 3. Layout
@@ -570,6 +570,9 @@ run-files/v1             the files a result.json pointed at, as one tree
 run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
+verity/subcircuit-catalog/v1  one build of the subcircuit catalog (`verity_numerical.bench.subcircuit_catalog`): payload tree, one
+                         Boolean export per census subcircuit; meta one entry per subcircuit; refs.circuit_check, the
+                         circuit-check-report/v1 its counts cite
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
 trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
