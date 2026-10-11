@@ -71,21 +71,24 @@ def holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (
 /-- **One holographic table's session** (§1.4): the prover commits the level-0 table `C₀`, the verifier draws the link
 points, and the prover runs two reps with hidden units in any interleaving. If both hand on a registered claim, the two
 are opened together, once, and Ligerito at the registered schedule `rsch` checks them against the registered word
-`Creg`. Returns whether all of it accepted, and the committed table. -/
+`Creg`. A registered table of fewer than the opening's 7 variables is refused. Returns whether all of it accepted, and
+the committed table. -/
 def holoTable (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
-    (hreg : 7 ≤ sh.mReg) (Creg : Oracle F) : Game (Bool × Oracle F) := do
+    (Creg : Oracle F) : Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)                               -- Commit: the level-0 table (root_B)
   let pts ← draw (Fin 2 → Fin mPts → F)                  -- the link points
   let extra := extraClaims S ptLocal mPts pts
   let regs ← interleave (holoRep A S sch hm C₀ extra sh units τ) (holoRep A S sch hm C₀ extra sh units τ)
   match regs with
   | (some c₁, some c₂) =>
-    match ← opening A hreg [c₁.toClaim, c₂.toClaim] with
-    | none => pure (false, C₀)
-    | some op => do
-      let ok ← ligerito A rsch op.T op.b Creg
-      pure (ok, C₀)
+    if hreg : 7 ≤ sh.mReg then
+      match ← opening A hreg [c₁.toClaim, c₂.toClaim] with
+      | none => pure (false, C₀)
+      | some op => do
+        let ok ← ligerito A rsch op.T op.b Creg
+        pure (ok, C₀)
+    else pure (false, C₀)
   | _ => pure (false, C₀)
 
 end FlockSoundness.Model
