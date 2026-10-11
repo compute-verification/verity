@@ -107,16 +107,16 @@ def test_a_smaller_entry_is_costed_as_its_own_units_in_the_shape_session():
 
 def test_the_lean_menu_lists_each_model_s_entries():
     mn = {"format": "verity/f6-menu/v1", "K": 50, "models": [
-        {"workload": "w1", "entries": [{"slots": 16, "bound": 3.0, "inner_m": 30, "k_log": 22, "claims": 8,
+        {"workload": "w1", "entries": [{"slots": 16, "bound": 3.0, "inner_m": 30, "k_log": 22, "claims": 8, "positions": 3,
                                         "unit_types": ["a", "b"]},
-                                       {"slots": 4, "bound": 7.0, "inner_m": 28, "k_log": 26, "claims": 6,
+                                       {"slots": 4, "bound": 7.0, "inner_m": 28, "k_log": 26, "claims": 6, "positions": 1,
                                         "unit_types": ["c"]}]},
-        {"workload": "w2", "entries": [{"slots": 1, "bound": 9.0, "inner_m": 26, "k_log": 24, "claims": 16,
+        {"workload": "w2", "entries": [{"slots": 1, "bound": 9.0, "inner_m": 26, "k_log": 24, "claims": 16, "positions": 2,
                                         "unit_types": ["d"]}]}]}
     text = M.lean(mn, "SRC")
     assert text.startswith("import VStar.Menu\n") and "\nSRC\n(verity/f6-menu/v1, K = 50); do not edit. -/" in text
-    assert ('def pinned : List (String × List Entry) := [\n  ("w1",\n    [⟨16, 3, 30, 22, 8, 2⟩,\n     ⟨4, 7, 28, 26, 6, 1⟩]),\n'
-            '  ("w2",\n    [⟨1, 9, 26, 24, 16, 1⟩])]\n') in text
+    assert ('def pinned : List (String × List Entry) := [\n  ("w1",\n    [⟨16, 3, 30, 22, 8, 3, 2⟩,\n     ⟨4, 7, 28, 26, 6, 1, 1⟩]),\n'
+            '  ("w2",\n    [⟨1, 9, 26, 24, 16, 2, 1⟩])]\n') in text
     mn["models"][1]["entries"][0]["bound"] = 9.5
     with pytest.raises(ValueError, match="not a whole number"):
         M.lean(mn, "SRC")

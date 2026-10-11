@@ -5,7 +5,7 @@ import VStar.Menu.Pinned
 # F6's pinned menus as `Menu`s
 
 A pinned menu's entries (`VStar.Menu.Pinned`, generated from F6's `menu.json`) give a `Menu`: its shapes are the
-entries' (slots, nonzero bound), a shape's inner session is `VStar.Menu.inner`'s (the largest of its entries', at their
+entries' (slots, nonzero bound, the most unit positions among the entries at them), a shape's inner session is `VStar.Menu.inner`'s (the largest of its entries', at their
 most claims), and its type bound `VStar.Menu.types`'s. The padded sessions of an audit of `k` draws stay a parameter:
 `menu.json` gives the session counts at its own `K` only.
 
@@ -23,7 +23,7 @@ open VStar.Menu (Entry)
 
 /-- The menu of the entries `es`, with padded sessions `padded`. -/
 def Menu.ofEntries (es : List Entry) (padded : ℕ → List Shape) : Menu where
-  shapes := (es.map fun e => (⟨e.slots, e.bound⟩ : Shape)).dedup
+  shapes := (es.map fun e => (⟨e.slots, e.bound, VStar.Menu.positions es e.slots e.bound⟩ : Shape)).dedup
   inner s := (VStar.Menu.inner es s.slots s.nnz).getD default
   types s := VStar.Menu.types es s.slots s.nnz
   padded := padded
@@ -51,6 +51,7 @@ theorem Menu.ofEntries_inner {es : List Entry} {padded : ℕ → List Shape} {s 
     (hs : s ∈ (Menu.ofEntries es padded).shapes) :
     ∃ e ∈ es, ∃ l ⊆ es, VStar.Menu.inner es s.slots s.nnz = some ⟨e.m, e.kLog, VStar.Menu.claims l⟩ := by
   obtain ⟨e, he, rfl⟩ := List.mem_map.1 (List.mem_dedup.1 hs)
+  dsimp only
   have hat : e ∈ VStar.Menu.at_ es e.slots e.bound := List.mem_filter.2 ⟨he, by simp⟩
   unfold VStar.Menu.inner
   generalize hl : VStar.Menu.at_ es e.slots e.bound = l at hat
