@@ -426,6 +426,7 @@ requirement.
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `run` | the composed check of a recorded run: `check(setup, digests, session)` over the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests and one `Session` (signed session, commitment, openings, trusted keys), at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -682,8 +683,8 @@ category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-aud
 transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
-The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict` are in
-`Security/Properties/Pous/`.
+The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
+`PousCheck.Run.check`, are in `Security/Properties/Pous/`.
 
 | Statements | What | Status |
 |---|---|---|
@@ -721,10 +722,16 @@ column at a time, where whole-label pebbling charges it a whole label. N10′, t
 
 Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
 
-- `Pous.EndToEnd.RunCertifies`, about the deployed code, deterministic and with no assumption: when setup and the
-  memory challenger's verdict accept a run (`Accepted`), `C*` decodes to the committed `W`, its root is published, and
-  every one of the device's 105 recorded answers was the challenged block of `C*` on time on the device's own clock; or
-  the run holds a SHA-512 collision or an LMS forgery. It is a statement no theorem proves yet (`unstated`).
+- `Pous.EndToEnd.RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and with no assumption.
+  When the composed check (`run.check`, Lean's `PousCheck.Run.check`) accepts the setup's public outputs, the memory
+  challenger's table and its signed session, the session audits that setup at the deployed point (`AuditsSetup`: every
+  block, `k = 105`, within `Δ + RTT`, 2,056-byte answers, bound to the published root) under a trusted key, and for
+  every `C*` of the point's shape whose leaves have the published root, every one of the device's 105 recorded answers
+  was the challenged block of `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS
+  forgery. `RunCheckAccepts` is proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
+  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It follows from
+  `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot` (`runCertifies_of`), which are open, so it is a
+  statement no guarantee states yet (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
   commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
@@ -759,16 +766,20 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   uniform ω;
 - `prf/sha-512`: the memory challenger's derived index streams are as good as uniform bytes.
 
-Nothing may cite either statement as covering the deployed verifier until two gaps are fixed in code:
+Nothing may cite either statement as covering the deployed verifier until G-1 is fixed in code:
 
-- G-1, one session per audit. Every session now names its setup: a `SessionCommitment`'s `binding` has no default, the
+- G-1, one session per audit, open. Every session now names its setup: a `SessionCommitment`'s `binding` has no default, the
   `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory challenger
   (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the `C*` its
   digests describe (`VerifierKey.from_row_digests`). What is still open is that a device may sign several sessions
   under one root (the harness runs the honest audit and four controls against one setup, each of several sessions), so
   "one session per audit" still rests on `pous-ring-device` until the device refuses a second session under a root it
   has signed one for.
-- G-2, there is no composed setup-to-challenger check, and `Accepted` restates the glue by hand.
+- G-2, the composed setup-to-challenger check, fixed: `run.check` (`PousCheck.Run.check`, `pous-run SETUP.json
+  DIGESTS.bin SESSION.json`) refuses a run unless the setup published `2^19` blocks under a 24-byte salt, the table's
+  leaves have the published root, the session audits that setup at the deployed point and is bound to that root, and the
+  verdict accepts it against the table. `check/tests/test_run.py` holds the two to one another, and `Accepted` is now
+  setup's acceptance and this check's.
 
 ## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
 
