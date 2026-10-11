@@ -124,14 +124,14 @@ def test_the_lean_menu_lists_each_model_s_entries():
 
 def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
     """`VStar.Menu.Pinned` is `lean` of F6's pinned `menu.json` (`data/f6-menu.json`, the one in
-    art:ce914239d538ca64c33981c81d7631b4188397aac6c19c4066fd6f39d0d54197), byte for byte."""
+    art:bb9b72df0377d54ad001bb52a9d24b6152e83cdefb896d02fbbce26bc281dffa), byte for byte."""
     import json
     from pathlib import Path
 
     here = Path(__file__).resolve()
     pinned = here.parents[4] / "verity/core/service/flock/VStar/Menu/Pinned.lean"
     mn = json.loads((here.parent / "data/f6-menu.json").read_text())
-    assert M.lean(mn, "art:ce914239d538ca64c33981c81d7631b4188397aac6c19c4066fd6f39d0d54197 (menu.json)") == pinned.read_text()
+    assert M.lean(mn, "art:bb9b72df0377d54ad001bb52a9d24b6152e83cdefb896d02fbbce26bc281dffa (menu.json)") == pinned.read_text()
 
 
 def _entry(slots, regions, m=35, k=27, outer_s=100.0, sessions=1):
