@@ -5596,12 +5596,12 @@
    "guarantees": ["PousCheck.Properties.SecurityProofs.deployed", "PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
   },
   "Properties.Pous.EndToEnd": {
-   "digest": "197b654adf72b21d71f4ac75bf75ff6857738d5de4d22353265c868779e9ebb0",
+   "digest": "172aadb101046cbee307c8f1e7c76e47bcbb2276edfa24f082e38a1c5fd2fb96",
    "definitions": {
     "Pous.EndToEnd.Bytes": "9aa452329501006f98b36b457f3d66a29927a48138d9151293a78432ab9c7629",
     "Pous.EndToEnd.DrawExact": "5716557793355b6e4cabb514d914e4325abb236dbd92568b421bd184076e23be",
     "Pous.EndToEnd.EndToEndRing": "cedede4e8de6c0160cf0f8e90c61e9216f937557ed998f527f3298e8ddcecb2a",
-    "Pous.EndToEnd.EndToEndRingDeployed": "7226caae2560fadd1b6e551770324a59e979d2a6e092ed79a3e943e6c26f7d48",
+    "Pous.EndToEnd.EndToEndRingDeployed": "b145fabd33d90e5e91b01394178c689a87da518abb8e909a329ff97a73e663c9",
     "Pous.EndToEnd.FULL": "d6d58a4b6fef14c6a7da026ead94ffdf7194838c4e02d5681b0e41068b6d74f0",
     "Pous.EndToEnd.HmCoins": "9cc2b3d73fb1a88f92eb44225361d5e138cea7c92b48db4656c899cb48beb066",
     "Pous.EndToEnd.HonestPassesAccepts": "a11053b253a40ba0f87be185f5214c6f9cc2ac19775130020067b8179cc9683b",
