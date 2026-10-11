@@ -140,7 +140,8 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
           simp only [pure, Except.pure, Except.ok.injEq] at h
           refine ⟨⟨⟨⟨_, ‹pub.fv3Bytes "domain_ids" _ = _›, ?_⟩,
             ⟨_, _, ‹pub.frameV3 = _›, ‹J.get _ "schemas" _ = _›, ?_⟩⟩, ?_⟩, _, h.symm⟩
-          · rw [‹pub.fv3Bytes "roots" _ = _›, ← bytes_of_not_bne ‹¬ (FV3.root _ _ _ != _) = true›]
+          · have hr := bytes_of_not_bne ‹¬ (FV3.root _ _ _ != _) = true›
+            rw [‹pub.fv3Bytes "roots" _ = _›, ← hr]
             simp only [inRoot, inRows, rowSchema, ht, hpop]
           · exact ok_of_not_bne ‹J.str _ c.ports[p]!.name "public file" = _› ‹¬ ((_ : String) != _) = true›
           · exact (bytes_of_not_bne ‹¬ (_ != c.dummyDigests.getD p ByteArray.empty) = true›).symm.trans
@@ -174,7 +175,8 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
                repeat' walk_step
                simp only [pure, Except.pure, Except.ok.injEq] at h
                refine ⟨⟨_, ‹pub.fv3Bytes "domain_ids" _ = _›, ?_⟩, h.symm⟩
-               rw [‹pub.fv3Bytes "roots" _ = _›, ← bytes_of_not_bne ‹¬ (FV3.root _ _ _ != _) = true›]
+               have hr := bytes_of_not_bne ‹¬ (FV3.root _ _ _ != _) = true›
+               rw [‹pub.fv3Bytes "roots" _ = _›, ← hr]
                simp only [outRoot, hpop]) _ _ _ hl2 j (by simpa using hj)
            simp only [Nat.zero_add, Array.getElem_toList] at this
            exact this) }
