@@ -111,7 +111,7 @@ def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
 @pytest.mark.slow
 def test_verdict_agrees(server):
     """The whole verdict on drawn records under the test signers' keys: accepted ones, every rejection reason, refusals."""
-    stats = D.run(port(records()), examples=400, server=server)
+    stats = D.run(port(records()), examples=500, server=server)
     assert stats.outputs > 250 and stats.rejects > 20, stats
 
 

@@ -20,15 +20,20 @@
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
-#                JOBS at once
+#                JOBS at once; the job fails if one does not stage
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
 #                firewall's negative controls on that statement
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
-#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
+#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
+#                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
 #                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
+#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
+#                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
+#                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
+#                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py; the
+#                inner's session is not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -40,7 +45,7 @@
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
-#      MODES=dev  REPLAY=1  CONTROLS= (oprove)
+#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|oprove|oreplay|lean}
@@ -179,8 +184,13 @@ EOF
 loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
+  # the verifier's draw on a --zk session (Lean refuses a session without one, D12), as rec-private-outer.sh's:
+  # LOOPBACK_DRAW=all (default) every unit; none: no draw
+  local DRAW=()
+  [ -n "$zk" ] && [ "${LOOPBACK_DRAW:-all}" = all ] \
+    && DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $pub))
   taskset -c $VCPU $B serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $pub --circuit $circ --pin $PIN \
-    --operator loopback --concurrency $((NS + 1)) > $O/$STEP/$name/serve.log 2>&1 &
+    "${DRAW[@]}" --operator loopback --concurrency $((NS + 1)) > $O/$STEP/$name/serve.log 2>&1 &
   local SP=$!
   wait_serving $O/$STEP/$name/serve.log $SP || { tail -20 $O/$STEP/$name/serve.log; return 1; }
   prove_live $name 127.0.0.1:$PORT $inst $circ $zk; local rc=$?
@@ -273,7 +283,13 @@ def replay(p):
 def lean(p):
     at = text(p).find("VERDICT ")
     if at < 0:
-        return text(p)[-600:]
+        # `flock-verify statement`'s line, read as lean_verdicts.py reads it
+        st = next((json.loads(l) for l in text(p).splitlines() if l.startswith("{") and '"partition_check"' in l), None)
+        if st is None:
+            return text(p)[-600:]
+        pc = st.get("partition_check") or {}
+        return {"accepted": pc.get("units") == "derived", "why": pc.get("note", ""), "partition_check": pc,
+                **{k: st.get(k) for k in ("statement_digest", "sigma", "circuit_sha512", "class_sha512")}}
     v = json.JSONDecoder(strict=False).raw_decode(text(p)[at + 8:])[0]
     # Main's stderr: inputs (from start), setup (from the session's start), then the session's whole time (setup included)
     ms = [int(x) for x in re.findall(r"^(?:inputs|setup|/\S+): (\d+) ms$", text(p.with_suffix(".err")), re.M)]
@@ -322,7 +338,7 @@ elif step == "vstage":
                  "wall": tv(d / "time-fold.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / "time-fold.txt")}
     s["statements"] = {}
     for f in sorted(d.glob("*.json")):
-        if f.stem in ("points", "fold", "partition"):
+        if f.stem in ("points", "fold", "partition", "program"):
             continue
         s["statements"][f.stem] = {"stage": json.loads(text(f).splitlines()[0]) if text(f).strip() else text(d / f"{f.stem}.err")[-1500:],
                                    "wall": tv(d / f"time-{f.stem}.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / f"time-{f.stem}.txt")}
@@ -527,10 +543,12 @@ vstage)
     fi
   ) > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
   mkdir -p $O/vstage
-  # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program
-  python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt <<'EOF' || exit 1
+  # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program, and
+  # that program (STEP=lean's statement check reads both)
+  python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt $DD/stage/program.json <<'EOF' || exit 1
 import json, sys
 from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
 program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
@@ -541,13 +559,19 @@ with open(sys.argv[3]) as f:
     meta = json.loads(f.readline()[5:])
 assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
 open(sys.argv[2], "w").write(json.dumps(obj, sort_keys=True))
-print("partition", PO.digest(obj), "program", obj["program"])
+desc = encode_program(units.program)
+assert program_digest(desc) == obj["program"], "the program file is not the partition's program"
+open(sys.argv[4], "wb").write(canonical_json(desc))
+print("partition", PO.digest(obj), "program", obj["program"], "template", *meta["program_digests"])
 EOF
-  cp $DD/stage/partition.json $O/vstage/
+  cp $DD/stage/partition.json $DD/stage/program.json $O/vstage/
   V=$DD/v; rm -rf $V; mkdir -p $V
   /usr/bin/time -v -o $O/vstage/time-points.txt python3 -m verity_flock.rec_vstage points $INNER $DD/stage/circuit.txt \
     $DD/stage/pub-$N.bin > $V/points.json 2> $O/vstage/points.err || { tail -20 $O/vstage/points.err; exit 1; }
-  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json verity/flock-circuit \
+  # an inner statement whose description is registered (stage/registered.json, verity_flock.inner_registered) is folded
+  # against that registration (--registered)
+  REG=(); [ -s $DD/stage/registered.json ] && REG=(--registered $DD/stage/registered.json)
+  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json "${REG[@]}" verity/flock-circuit \
     $DD/stage/circuit.txt $DD/stage/pub-$N.bin $V/points.json os > $V/fold.json 2> $O/vstage/fold.err
   rc=$?; echo "fold exit $rc"; [ $rc = 0 ] || { tail -20 $O/vstage/fold.err; exit 1; }
   cp $V/points.json $V/fold.json $O/vstage/
@@ -559,7 +583,7 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
     local name=$1; shift
     /usr/bin/time -v -o $O/vstage/time-$name.txt python3 -m verity_flock.rec_vstage stage $INNER $V/fold.json $V \
       --points $V/points.json --salts $V/acc-salts.bin "$@" > $O/vstage/$name.json 2> $O/vstage/$name.err
-    echo "$name exit $?"
+    local rc=$?; echo "$name exit $rc"; return $rc
   }
   export -f vjob; export O V INNER
   vjob verifier --levels none --no-algebra
@@ -567,6 +591,7 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
   { want alg && echo alg --levels none
     for f in ${FORGE-message sum comb top top-salt coef dirs}; do echo forged-$f --forge $f; done
     for l in $ALL; do want L$l && echo L$l --levels $l --no-algebra; done; } | xargs -P ${JOBS:-4} -L 1 bash -c 'vjob "$@"' _
+  [ ${PIPESTATUS[1]} = 0 ] || { echo "vstage: a statement did not stage (out/vstage/<name>.err)"; exit 1; }
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
 oprove)
@@ -626,9 +651,57 @@ oreplay)
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
+  # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
+  # session STEP=vstage staged every statement from, a forgery's too
+  INNER=${INNER:-$DD/inner/s$((NS - 1))}
+  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session"
+  # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
+  # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
+  # partition object and program), the shared rows (the honest algebra's row ports but v and out; without the algebra,
+  # the level's acc as acc0), and the inner transcript for a statement that reads a rec-c<k> (RecVStar.checkPubRows)
+  if [ -d $DD/v-sess ]; then
+    $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
+      --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
+    $LEAN_BIN rec-statements --rec-inner $O/lean/rec-inner.json > $O/lean/rec-statements.txt 2>&1 || { tail -5 $O/lean/rec-statements.txt; exit 1; }
+    python3 - $O/lean $DD/v $DD/v-sess $INNER/public.json <<'EOF' || exit 1
+import json, re, sys
+from pathlib import Path
+from verity_flock import rec_bindings as RB
+o, v, vs, transcript = map(Path, sys.argv[1:])
+(line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
+names = [s[0] for s in line["statements"]]
+shared = {}
+for f in sorted(v.glob("alg/*/registered.json")):
+    for nm, e in json.loads(f.read_text())["ports"].items():
+        if nm not in ("v", "out") and shared.setdefault(nm, e) != e:
+            sys.exit(f"{f}: its row port {nm} is not the other parts'")
+for s in sorted(p for p in vs.iterdir() if p.is_dir()):
+    c = Path((vs / f"{s.name}.stmt").read_text().strip())
+    with (c / "circuit.txt").open() as f:
+        unit = f.readline().split()[1]
+    ports = json.loads((c / "registered.json").read_text())["ports"]
+    rows = o / f"rows-{s.name}.json"
+    rows.write_text(json.dumps({"format": "verity/registered-reads/v0",
+                                "ports": shared or ({"acc0": ports["acc"]} if "acc" in ports else {})}))
+    flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(rows)]
+    if unit in names:
+        flags += ["--rec-part", str(names.index(unit))]
+    try:
+        b = RB.bindings(json.loads((c / "partition.json").read_text()), json.loads((c / "program.json").read_text()))
+        (o / f"bindings-{s.name}.json").write_text(json.dumps(b))
+        flags += ["--rec-bindings", str(o / f"bindings-{s.name}.json")]
+    except ValueError as e:
+        print(f"{s.name}: no bindings ({e}); Lean refuses it at setup")
+    if any(re.fullmatch(r"rec-c[0-9]+", str(e.get("value", ""))) for e in ports.values()):
+        flags += ["--rec-inner-transcript", str(transcript)]
+    (o / f"own-{s.name}.txt").write_text(" ".join(flags))
+    print(s.name, unit, " ".join(flags))
+EOF
+  fi
   for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
+    OWN=$(cat $O/lean/own-$l.txt)
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $OWN $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
@@ -642,7 +715,22 @@ lean)
       --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
   fi
+  # the inner statement with the verifier's partition object and program (the setup AcceptsPublic states): Lean derives its
+  # units from the program, each an activation of the circuit's template
+  if [ -f $DD/stage/circuit.txt ]; then
+    /usr/bin/time -v -o $O/lean/time-inner-statement.txt $LEAN_BIN statement --statement verity/flock-circuit+plain-leaves \
+      --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
+      --program $DD/stage/program.json --coins os > $O/lean/inner-statement.log 2> $O/lean/inner-statement.err
+    echo "inner-statement lean exit $?"
+  fi
+  # fail closed: every statement vstage staged or oprove kept a session of, ZK_LEAN's, and the inner statement's
+  PARTS=$( { [ -d $DD/v ] && (cd $DD/v && find . -name inst.bin -printf '%h\n' | sed 's:^\./::; s:/:-:g')
+    for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do basename $S; done; } | sort -uV | while read -r l; do want $l && echo $l; done)
+  [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
+  [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
+  if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
+  else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary
-true
+exit ${LEAN_RC:-0}

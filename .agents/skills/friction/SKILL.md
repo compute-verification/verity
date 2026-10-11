@@ -122,19 +122,17 @@ Newest first. Each is Daniel's unless it names the coordinator.
     coins) after the key, never before it. A key on a wire stays the fallback: hm96's key is a GF(2) Hankel multiplier,
     XORs as a constant and an AND per product as a wire.
 - 2026-10-09 (4:48–5:00 PM PDT, relayed by top): a key that hides a commitment is drawn by the party the hiding
-  protects, and fixed in the commitment before use: the developer's for its leaves, the ZK server's for its commitments,
-  the challenger's for coin commitments. One key per registration is enough (replaced at 7:08 PM by one key per party,
-  drawn once at setup). hm96's pinned key stays only where the key is wired into a circuit (the row gadget), as a named
-  exception. The inner phase's coins are sent live, because the
-  auditor sees only hiding commitments that are never opened; committed coins are for V\*'s outer sessions. "The
-  verifier accepts the inner statement" in a soundness event means the statement-level checks the auditor runs, never
-  acceptance of the inner transcript, which VBridge derives.
+  protects, and fixed in the commitment before use (which party's key, and when it is drawn: 7:08 PM, above). hm96's
+  pinned key stays only where the key is wired into a circuit (the row gadget), as a named exception. The inner phase's
+  coins are sent live, because the auditor sees only hiding commitments that are never opened; committed coins are for
+  V\*'s outer sessions. "The verifier accepts the inner statement" in a soundness event means the statement-level checks
+  the auditor runs, never acceptance of the inner transcript, which VBridge derives.
 - 2026-10-09 (9:01 AM PDT, relayed by top): a part's verdict in `check` is keyed on the code that decides that verdict (a
   suite's runner and harness), not on every line of the check tool; that is what the 7 Oct ruling's "the check's code" means.
   The other half of reuse is declared inputs narrowed to what each suite reads, and since the guard fails a suite that
   reads outside its inputs, narrowing fails closed. The same day:
   - Raising `maxHeartbeats` is not banned. The kernel checks a proof the same way at any limit, so an override is a
-    question of cost, not soundness. The Lean audit records each override (file, value, reason, measured time) and the
+    question of cost, not soundness. The Lean check records each override (file, value, reason, measured time) and the
     nightly report lists them; nothing blocks on one.
   - A premise is listed only if it is a fact about the world. Anything the code could check, or that could be proved,
     becomes a check or a proof instead.
@@ -146,6 +144,11 @@ Newest first. Each is Daniel's unless it names the coordinator.
     and the OS's randomness, a listed premise.
   - A public constant that sets how many statements a proof has (V\*'s `MAX_SLOTS`) appears in the soundness bound,
     whose sum depends on it.
+- 2026-10-08 (11:02 PM PDT, relayed by top): parallel proof work runs against fixed statements. The final theorem's
+  statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
+  integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
+  (`.agents/skills/lean-proofs/SKILL.md`). The same night: say "private circuit" or "the circuit's description", never
+  "netlist" (the README's Glossary).
 - 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
@@ -171,8 +174,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   on. A ready PR whose head is in a queued or running check, or in a train the lander holds, doesn't count, and counts
   again if that check fails, so a slow check never holds a lane's next PR.
 - 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
-  or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
-  Oct below.
+  or a statement reviewer's: `research merge` and `research queue` read none. It retired the grant-carry rulings of 6 and
+  7 Oct.
 - 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. It ends in a break tied to the run, such as
   two distinct inputs the run itself hashed with one SHA-512 digest, and an input condition becomes the verifier's
   refusal rather than a hypothesis. The form is in `.agents/skills/lean-proofs/SKILL.md`.
@@ -184,7 +187,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
     and Daniel approves or edits them in one pass. The coordinator's reports lead with which outcomes moved and what
     blocked the rest, not with landing counts;
   - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
-    back only if the PR fails. A lane holds at most two open PRs;
+    back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
+    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived;
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -199,9 +203,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   check. Before an expensive step (a full check, a move window), rehearse the cheap one after it: `research merge
   --dry-run` against a scratch `main` would have shown on 7 Oct, ten hours earlier, that main's gate could accept no
   check of the moved tree.
-- 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
-  rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
-  This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
 - 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
   `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
   question.
@@ -228,8 +229,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   definition.
 - 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
   applications so far:
-  - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
-    `lean-audit.json` included;
   - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
@@ -243,8 +242,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained (BLAKE3 in `schemes/pearl_kw.py`), with
   `cr/blake3` its assumption alone.
 - 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
-  owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
-  Grants are still required.
+  owner's `ready` label at the PR's head, which a train member still needs (8 Oct, 7:16 AM PDT), may be written by hand
+  (`research data label pr:N@SHA ready true --by LANE`).
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than

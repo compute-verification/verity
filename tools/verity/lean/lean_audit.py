@@ -140,8 +140,10 @@ FLAGS = ["--build"]
 
 
 def tool_files(files: list[str]) -> list[str]:
-    """The auditor's files: `tools/verity/lean/` less its tests and docs, and the helpers it imports."""
-    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
+    """The auditor's files: `tools/verity/lean/` less its tests, its docs and `lean-deps.json` (the dependency bundles' pins,
+    which preflight reads and the audit doesn't), and the helpers it imports."""
+    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
+            and f != LEAN_TOOL + "lean-deps.json"]
     return sorted({*tool, "tools/verity/check/common.py"})
 
 
@@ -475,13 +477,25 @@ def build_key(pkg: str, root: Path) -> str:
     return h.hexdigest()
 
 
+def source_dirs(pkg: Path) -> list[Path]:
+    """The directories a package's module names are relative to: its lakefile's `srcDir` and each `lean_lib`'s under it
+    (Lake's default `.` for each), as `move_check`'s `source_dirs` reads them. `Security/Proofs` has `srcDir = ".."`, so its sources
+    sit beside it, not in it."""
+    lake = pkg / "lakefile.toml"
+    cfg = tomllib.loads(lake.read_text()) if lake.is_file() else {}
+    top = pkg / cfg.get("srcDir", ".")
+    return [top, *(top / lib.get("srcDir", ".") for lib in cfg.get("lean_lib", []))]
+
+
 def prune(pkg: Path) -> int:
-    """Remove the kept outputs of modules whose source is gone, so no `.olean` outlives its `.lean`; the number removed."""
-    n = 0
+    """Remove the kept outputs of modules whose source is gone, so no `.olean` outlives its `.lean`; the number removed. A
+    module's source is looked for under each of the package's `source_dirs`."""
+    n, srcs = 0, source_dirs(pkg)
     for sub in ("lib/lean", "ir"):
         base = pkg / ".lake" / "build" / sub
         for f in sorted(base.rglob("*")) if base.is_dir() else ():
-            if f.is_file() and not (pkg / f.relative_to(base).parent / (f.name.split(".")[0] + ".lean")).is_file():
+            src = f.relative_to(base).parent / (f.name.split(".")[0] + ".lean")
+            if f.is_file() and not any((d / src).is_file() for d in srcs):
                 f.unlink()
                 n += 1
     return n

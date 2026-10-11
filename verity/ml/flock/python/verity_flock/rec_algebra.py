@@ -15,18 +15,26 @@ coefficient inputs. Merkle openings, caps and the transcript's framing are rec-v
 (`verity_flock.rec_residuals`) gathers from its ports:
 
     w   the rep's message elements by round (`rounds`: zerocheck's round1_ab, round1_c, rounds, v_A, v_B; lincheck's rounds,
-        z_partial; each claim's ring switch s; Ligerito's T, its OOD values, messages (u0, u2) and yr, as they are absorbed),
+        z_partial; a holo shape's h; each claim's ring switch s; Ligerito's T, its OOD values, messages (u0, u2) and yr, as they are absorbed),
         then the running sums of the rep's consistency terms before its first opening and after its last (`ACC_NAMES`: two
-        F elements each, `verity_flock.rec_open`)
-    v   per residual, its coefficients in its terms' order and its constant, then the comb (64)
+        F elements each, `verity_flock.rec_open`), then an opening-only shape's registered claims (`claim_names`)
+    v   per residual, its coefficients in its terms' order and its constant, then the comb (64; none when opening-only)
     out zerocheck, lincheck, one per claim (its ring switch), Ligerito's final check (two: K's c0, c1), and T
+
+**The registered opening** (``Shape.opening_only``, F4 candidate 3, `note:proofs/20261010T1820Z-draft-c3-claim-layout`): two
+registered claims at `rec_sparse.registered_claim`'s points, no zerocheck or lincheck. Claim k's value is a w element, rep k's
+row of ``rec-claim``, added to its ring switch's residual ``dot(w_k, s_k) + claim_k`` as the running sums are added to the
+final check: no coefficient slot and no product, so the claims cost no AND. The points enter v through the coefficients.
 
 **The consistency sums** (per Ligerito level, per lane l, Σ_j eq(α)[j] · row_j[l] over the level's opened rows) enter only the
 final check, linearly, with coin-derived coefficients κ (`verifier_rows`' ``kappa``). The openings add ``Σ_l κ_{r, l} eq(α)[j]
 row_j[l]`` to a running sum (`verity_flock.rec_open`), so the final check's component r adds the rep's last running sum and
 its first in their place.
 
-``z_partial``'s comb is the circuit fold of §10 at the rep's coins, which the verifier computes from the inner statement. The
+``z_partial``'s comb is the circuit fold of §10 at the rep's coins, which the verifier computes from the inner statement. With
+hidden unit circuits (``Shape.holo``) it is the public part's fold and the prover absorbs the hidden part's, h, in a round of
+its own (`h_round`, which `rec_sparse.RecSparse`'s H1 reads too): the lincheck's operand is ``comb[l] + h[l]``, an XOR of a v
+and a w term, so its 64 products are unchanged. The
 zerocheck's ``v_C`` is never absorbed: V* takes it as ``Σ_s L_s(z) round1_c[s]``, the value the inner verifier requires it to
 equal (`CEvalMismatch`). Ligerito's ``T`` is the verifier's own value (the batched sum of the ring switches), which the prover
 absorbs: V* reads the absorbed T, uses it as the inner verifier uses its own, and its last residual is the absorbed T minus
@@ -42,8 +50,8 @@ from typing import Any, Callable, Sequence
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import XINV, inv, kmul, mul, phi8
 
-__all__ = ["ACC_NAMES", "Claim", "Coins", "Layout", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fold_points",
-           "free_names", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",
+__all__ = ["ACC_NAMES", "Claim", "Coins", "claim_names", "H_ROUND", "Layout", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fold_points",
+           "free_names", "h_round", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",
            "verifier_rows", "witness"]
 
 
@@ -108,6 +116,18 @@ class Shape:
     claims: int
     hash_len: int = 64
     salt_len: int = 192
+    #: hidden unit circuits (F4 candidate 3): the prover absorbs h, the folded hidden comb's 64 values, in a round of its own
+    #: after z_partial, and the lincheck checks Σ (comb[l] + h[l]) z_partial[l] (L4′), comb being the public part's fold;
+    #: the same 64 products, h an XOR term of the comb's operand
+    holo: bool = False
+    #: F4 candidate 3's registered opening: ``claims`` registered claims (`rec_sparse.registered_claim`'s points, each value
+    #: a witness element ``("claim", k)``, rep k's row of ``rec-claim``, added to its ring switch's residual) opened by ring
+    #: switching and Ligerito, with no zerocheck or lincheck (``k_log`` unread); `fold_only`'s complement
+    opening_only: bool = False
+
+    def __post_init__(self):
+        if self.opening_only and self.holo:
+            raise ValueError("an opening-only shape has no lincheck, so no h")
 
     @property
     def sched(self) -> Schedule:
@@ -159,25 +179,29 @@ class _Reader:
 
 
 def decode(sh: Shape, data: bytes) -> Proof:
-    """The proof container (`decodeProof`); bytes after it are ignored (§8.1)."""
+    """The proof container (`decodeProof`); bytes after it are ignored (§8.1). An opening-only shape's is a rep's with an empty
+    zerocheck and lincheck (``flock-circuit stacked``)."""
     s = sh.sched
     R = len(s.levels) - 1
     r = _Reader(data)
     h = lambda: r.take(sh.hash_len)
     salts = lambda q: r.vec(q if sh.salt_len else 0, lambda: r.take(sh.salt_len), "opened_salts")
     pair = lambda: (r.f(), r.f())
+    piop = not sh.opening_only
     r.vec(1 << s.levels[0].cap, h, "cap")
     r.take(8 * 3 + 4)
     if r.take(1)[0]:
         r.u64()
     r.take(4)
-    ab = r.vec(64, r.f, "round1_ab")
-    c = r.vec(64, r.f, "round1_c")
-    zc = r.vec(sh.m - 6, pair, "multilinear_rounds")
+    ab = r.vec(64 * piop, r.f, "round1_ab")
+    c = r.vec(64 * piop, r.f, "round1_c")
+    zc = r.vec((sh.m - 6) * piop, pair, "multilinear_rounds")
     fa, fb, fc = r.f(), r.f(), r.f()
+    if not piop and (fa or fb or fc):
+        raise ValueError("an opening-only container's zerocheck evaluations are not empty")
     r.vec(0, r.u64, "zerocheck grinding_nonces")
-    lc = r.vec(sh.k_log - 6, pair, "lincheck rounds")
-    zp = r.vec(64, r.f, "z_partial")
+    lc = r.vec((sh.k_log - 6) * piop, pair, "lincheck rounds")
+    zp = r.vec(64 * piop, r.f, "z_partial")
     for _ in range(r.u64()):
         pair()
     r.vec(0, r.u64, "lincheck grinding_nonces")
@@ -228,10 +252,11 @@ def rep_rounds(record: dict, stream: str) -> list[list[int]]:
 
 
 class Coins:
-    """The rep's coins in the order the verifier draws them (§6.2: a draw of n coins is one round of n; none is no round)."""
+    """The rep's coins in the order the verifier draws them (§6.2: a draw of n coins is one round of n; none is no round, so
+    a recorded round of no coins, z_partial's in a holo session's `verity_flock.rec_live.holo_rounds`, is skipped)."""
 
     def __init__(self, rounds: Sequence[Sequence[int]]):
-        self.rounds, self.k = list(rounds), 0
+        self.rounds, self.k = [list(r) for r in rounds if r], 0
 
     def vec(self, n: int) -> list[int]:
         if n == 0:
@@ -575,16 +600,53 @@ class Messages:
     symbolic: bool = False
     #: Ligerito's T as the prover absorbed it (an atom, symbolically); None: the verifier's own, the batched sum
     t_atom: Any = None
+    #: a holo shape's h (ints); symbolically the comb's atoms are ``("combh", l)``, comb[l] + h[l] as one operand
+    h: Any = None
+    #: an opening-only shape's registered claims' values (ints; symbolically the atoms ``("claim", k)``)
+    claims: Any = None
+
+
+def _registered(sh: Shape, M: Messages, extras: Sequence) -> list[Claim]:
+    """An opening-only shape's claims: claim k at ``extras[k]``'s point (rep k's `rec_sparse.RegisteredClaim`, row k, its
+    padded coordinates zero), its value ``M.claims[k]``, the row the opening reads."""
+    if len(extras) != sh.claims or M.claims is None or len(M.claims) != sh.claims:
+        raise ValueError(f"an opening of {sh.claims} registered claims: {len(extras)} points, "
+                         f"{'no' if M.claims is None else len(M.claims)} values")
+    for k, e in enumerate(extras):
+        if e.value is not None:
+            raise TypeError("a registered opening's claims are registered rows: a public value is never handed to it")
+        if getattr(e, "row", k) != k:
+            raise ValueError(f"claim {k} is rep {k}'s, row {k} of rec-claim, not row {e.row}")
+        if len(e.skip) != 64 or len(e.x) != sh.m - 6:
+            raise ValueError(f"claim {k}: {len(e.skip)} skip weights and {len(e.x)} coordinates, the shape wants 64 and {sh.m - 6}")
+        pad = getattr(e, "pad", 0)
+        if not 0 <= pad <= len(e.x) or any(e.x[len(e.x) - pad:]):
+            raise ValueError(f"claim {k}: its {pad} padded coordinates are the shape's, fixed at zero")
+    return [Claim(M.claims[k], tuple(e.skip), tuple(e.x)) for k, e in enumerate(extras)]
 
 
 def run(sh: Shape, coins: Coins, M: Messages, extras: Sequence[Claim], fold_only: bool = False) -> tuple[list, dict]:
     """The rep's residuals (zerocheck, lincheck, one per claim, Ligerito's c0 and c1, the absorbed T minus the batched sum)
-    and the coin-derived points beside them; ``fold_only``: the zerocheck's and lincheck's alone (``extras`` unread)."""
+    and the coin-derived points beside them; ``fold_only``: the zerocheck's and lincheck's alone (``extras`` unread). An
+    opening-only shape's are the claims', Ligerito's and T's, its claims at ``extras``' points (`_registered`)."""
     cst = (lambda v: Lin(c=v)) if M.symbolic else (lambda v: v)
     m, k_log, sch = sh.m, sh.k_log, sh.sched
+    if sh.opening_only:
+        if fold_only:
+            raise ValueError("an opening-only shape has no zerocheck or lincheck to fold")
+        out: list = []
+        claims = _registered(sh, M, extras)
+        info: dict[str, Any] = {"claims": claims}
+        return _opening(sh, coins, M, claims, out, info)
     if not fold_only and sh.claims != 2 + len(extras):
         raise ValueError(f"{sh.claims} claims, {2 + len(extras)} given")
-    info: dict[str, Any] = {}
+    if not fold_only and any(not isinstance(e.value, int) for e in extras):
+        raise TypeError("an extra claim's value is public: a registered claim (`rec_sparse.RegisteredClaim`) is read from "
+                        "its row by the registered opening, never handed to the algebra as an extra claim")
+    if sh.holo and not M.symbolic and M.h is None:
+        raise ValueError("a holo shape's messages need h")
+    folded = M.comb if not sh.holo or M.symbolic else [c ^ x for c, x in zip(M.comb, M.h, strict=True)]
+    info = {}
     # §9.2 zerocheck
     coins.vec(6)
     r = PINNED + coins.vec(m - 13)
@@ -609,7 +671,7 @@ def run(sh: Shape, coins: Coins, M: Messages, extras: Sequence[Claim], fold_only
         e0 = claim ^ q1
         claim = sm(mul(t, t), qinf) ^ sm(t, e0 ^ q1 ^ qinf) ^ e0
     acc = 0
-    for cl, zl in zip(M.comb, M.zp, strict=True):
+    for cl, zl in zip(folded, M.zp, strict=True):
         acc = acc ^ mv(cl, zl)
     out.append(acc ^ claim)
     r_prime = coins.one()
@@ -621,6 +683,13 @@ def run(sh: Shape, coins: Coins, M: Messages, extras: Sequence[Claim], fold_only
     # §11, §12.2-§12.3 ring switching
     claims = [Claim(w, tuple(skip_weights(r_prime)), tuple(ts[::-1] + rho[k_log - 6:m - 6])),
               Claim(pc, tuple(skip_weights(z)), tuple(r))] + [Claim(cst(e.value), e.skip, e.x) for e in extras]
+    info["claims"] = claims
+    return _opening(sh, coins, M, claims, out, info)
+
+
+def _opening(sh: Shape, coins: Coins, M: Messages, claims: list[Claim], out: list, info: dict) -> tuple[list, dict]:
+    """`run` from the claims on: their ring switches, then Ligerito."""
+    sch = sh.sched
     betas, sws = [], []
     for k, cl in enumerate(claims):
         x0 = cl.x[0]
@@ -730,20 +799,33 @@ def _transpose(s: Sequence[int]) -> list[int]:
     return [sum(((s[v] >> u) & 1) << v for v in range(128)) for u in range(128)]
 
 
-def messages(sh: Shape, p: Proof, comb: Sequence[int], t: int | None = None) -> Messages:
-    """The rep's messages as ints, the consistency sums from its opened rows; ``t``: Ligerito's T as absorbed (None: the
-    verifier's own)."""
-    def cons(level: int, ea: list[int]) -> list[int]:
+def messages(sh: Shape, p: Proof, comb: Sequence[int], t: int | None = None, h: Sequence[int] | None = None,
+             claims: Sequence[int] | None = None, cons: Callable[[int, list[int]], list[int]] | None = None) -> Messages:
+    """The rep's messages as ints, the consistency sums from its opened rows (``cons``: given, `Messages.cons`); ``t``:
+    Ligerito's T as absorbed (None: the verifier's own); ``h``: a holo shape's h; ``claims``: an opening-only shape's
+    registered claims' values."""
+    def rows_cons(level: int, ea: list[int]) -> list[int]:
         rows = p.rows[level]
         return [dot(ea, [row[l] for row in rows]) for l in range(len(rows[0]))]
 
     return Messages(p.ab, p.c, p.zc, p.fa, p.fb, p.lc, p.zp, p.rs, [_transpose(s) for s in p.rs], p.ood, p.msgs, p.yr,
-                    list(comb), cons, t_atom=t)
+                    list(comb), cons or rows_cons, t_atom=t, h=None if h is None else list(h),
+                    claims=None if claims is None else list(claims))
 
 
 T_NAME = ("T",)
 #: the running sums' elements w reads: (before the rep's first opening, after its last) x (the final check's c0, c1)
 ACC_NAMES = [("acc0", 0), ("acc0", 1), ("acc1", 0), ("acc1", 1)]
+#: a holo shape's round of h, absorbed after z_partial and before r′ is drawn
+H_ROUND = [("h", l) for l in range(64)]
+
+
+def h_round(sh: Shape) -> int:
+    """The index in `rounds` of a holo shape's h round: the row port ``m<i>`` (the value ``rec-c<i>``) that `InnerRepCheck`
+    and `rec_sparse.RecSparse` both read at row r."""
+    if not sh.holo:
+        raise ValueError(f"{sh} has no h")
+    return rounds(sh).index(H_ROUND)
 
 
 def rounds(sh: Shape) -> list[list[tuple]]:
@@ -752,9 +834,13 @@ def rounds(sh: Shape) -> list[list[tuple]]:
     element (a cap alone, or nothing) are not listed."""
     s = sh.sched
     R = len(s.levels) - 1
-    out = [[("ab", i) for i in range(64)] + [("c", i) for i in range(64)]]
-    out += [[("g1", i), ("ginf", i)] for i in range(sh.m - 6)] + [[("fa",), ("fb",)]]
-    out += [[("q1", j), ("qinf", j)] for j in range(sh.k_log - 6)] + [[("zp", l) for l in range(64)]]
+    out = []
+    if not sh.opening_only:
+        out = [[("ab", i) for i in range(64)] + [("c", i) for i in range(64)]]
+        out += [[("g1", i), ("ginf", i)] for i in range(sh.m - 6)] + [[("fa",), ("fb",)]]
+        out += [[("q1", j), ("qinf", j)] for j in range(sh.k_log - 6)] + [[("zp", l) for l in range(64)]]
+    if sh.holo:
+        out.append(H_ROUND)
     out += [[("rs", k, v) for v in range(128)] for k in range(sh.claims)]
     mi, oi = iter(range(10 ** 6)), iter(range(10 ** 6))
 
@@ -804,14 +890,20 @@ def symbolic(sh: Shape) -> Messages:
     msgs = [tuple((var(("msg", i, h, 0)), var(("msg", i, h, 1))) for h in range(2)) for i in range(n_msgs)]
     ood = [var(("ood", i)) for i in range(1 + 2 * R)]
     yr = [var(("yr", j)) for j in range(2 << s.ext)]
-    comb = [var(("comb", l)) for l in range(64)]
+    comb = [var(("combh" if sh.holo else "comb", l)) for l in range(64)]
     cons = lambda level, ea: [var(("cons", level, l)) for l in range(1 << s.levels[level].lanes)]
     return Messages(ab, c, zc, var(("fa",)), var(("fb",)), lc, zp, rs, rs_t, ood, msgs, yr, comb, cons, symbolic=True,
-                    t_atom=var(T_NAME))
+                    t_atom=var(T_NAME), claims=[var(k) for k in claim_names(sh)] if sh.opening_only else None)
+
+
+def claim_names(sh: Shape) -> list[tuple]:
+    """An opening-only shape's registered claims' w elements, after the running sums: claim k's value, the port
+    ``claim<k>`` `InnerRepCheck` reads at row k of ``rec-claim``."""
+    return [("claim", k) for k in range(sh.claims)] if sh.opening_only else []
 
 
 def _w_names(sh: Shape) -> list[tuple]:
-    return [x for r in rounds(sh) for x in r] + ACC_NAMES
+    return [x for r in rounds(sh) for x in r] + ACC_NAMES + claim_names(sh)
 
 
 def _order(sh: Shape) -> dict:
@@ -819,7 +911,7 @@ def _order(sh: Shape) -> dict:
     out = {k: i for i, k in enumerate(names)}
     base = len(names)
     out.update({("rs.t", k, u): base + 128 * k + u for k in range(sh.claims) for u in range(128)})
-    out.update({("comb", l): base + 128 * sh.claims + l for l in range(64)})
+    out.update({(c, l): base + 128 * sh.claims + l for l in range(64) for c in ("comb", "combh")})
     return out
 
 
@@ -834,7 +926,7 @@ def _build(sh: Shape, lins: list[Lin]) -> tuple[dict, Layout, list[int], list]:
     names = _w_names(sh)
     wi = {k: i for i, k in enumerate(names)}
     order = _order(sh)
-    fin = 2 + sh.claims
+    fin = (0 if sh.opening_only else 2) + sh.claims
     ops: list[list] = []
     op_of: dict = {}
     v_names: list[tuple] = []
@@ -845,7 +937,8 @@ def _build(sh: Shape, lins: list[Lin]) -> tuple[dict, Layout, list[int], list]:
         if k not in op_of:
             op_of[k] = len(ops)
             # the comb's slots are placed after every coefficient's
-            ops.append([["wt", wi[("rs", k[1], 0)], k[2]]] if k[0] == "rs.t" else [["v", None]] if k[0] == "comb" else [["w", wi[k]]])
+            ops.append([["wt", wi[("rs", k[1], 0)], k[2]]] if k[0] == "rs.t" else [["v", None]] if k[0] == "comb"
+                       else [["v", None], ["w", wi[("h", k[1])]]] if k[0] == "combh" else [["w", wi[k]]])
         return op_of[k]
 
     res = []
@@ -858,7 +951,13 @@ def _build(sh: Shape, lins: list[Lin]) -> tuple[dict, Layout, list[int], list]:
             for k in cons:
                 kappa[k[1]][ri - fin][k[2]] = f.t[k]
             add += [["w", wi[("acc1", ri - fin)]], ["w", wi[("acc0", ri - fin)]]]
-        for k in sorted((k for k in f.t if k[0] != "cons"), key=order.__getitem__):
+        # a registered claim enters its ring switch's residual as the running sums enter the final check: an added
+        # witness term, no coefficient slot and no product
+        for k in sorted(k for k in f.t if k[0] == "claim"):
+            if ri != 2 * (not sh.opening_only) + k[1] or f.t[k] != 1:
+                raise AssertionError(f"residual {ri}: registered claim {k[1]} with coefficient {f.t[k]:#x}")
+            add.append(["w", wi[k]])
+        for k in sorted((k for k in f.t if k[0] not in ("cons", "claim")), key=order.__getitem__):
             slot = len(v_names)
             v_names.append(("coef", ri, k))
             v_vals.append(f.t[k])
@@ -874,9 +973,10 @@ def _build(sh: Shape, lins: list[Lin]) -> tuple[dict, Layout, list[int], list]:
             add.append(["v", len(v_names) - 1])
         res.append({"mul": mulp, "add": add})
     comb0 = len(v_names)
-    v_names += [("comb", l) for l in range(64)]
+    if not sh.opening_only:
+        v_names += [("comb", l) for l in range(64)]
     for k, i in op_of.items():
-        if k[0] == "comb":
+        if k[0] in ("comb", "combh"):
             ops[i][0][1] = comb0 + k[1]
     S = {"nw": len(names), "nv": len(v_names), "ops": ops, "res": res}
     return S, Layout(names, v_names, wi), v_vals, kappa
@@ -906,6 +1006,9 @@ def _extras_like(sh: Shape) -> list[Claim]:
     import random
 
     g = random.Random(1)
+    if sh.opening_only:
+        return [Claim(None, tuple(g.getrandbits(128) for _ in range(64)), tuple(g.getrandbits(128) for _ in range(sh.m - 6)))
+                for _ in range(sh.claims)]
     return [Claim(g.getrandbits(128), tuple(g.getrandbits(128) for _ in range(64)), tuple(g.getrandbits(128) for _ in range(sh.m - 6)))
             for _ in range(sh.claims - 2)]
 
@@ -932,7 +1035,10 @@ def fold_points(sh: Shape, rounds: Sequence[Sequence[int]]) -> dict:
 def verifier_rows(sh: Shape, rounds: Sequence[Sequence[int]], extras: Sequence[Claim], comb: Sequence[int]) -> tuple[list[int], dict]:
     """``GfResiduals``' v port at the rep's coins (the comb last), and the coin-derived points (`run`'s info: the fold's
     points, each Ligerito level's query positions and eq(α), and ``kappa[level][r][l]``, the final check's coefficients on
-    the level's consistency sums, which give each opening its `verity_flock.rec_open` coefficients)."""
+    the level's consistency sums, which give each opening its `verity_flock.rec_open` coefficients). An opening-only shape
+    has no comb (``comb`` empty)."""
+    if sh.opening_only and len(comb):
+        raise ValueError("an opening-only shape has no lincheck, so no comb")
     lins, info = _residual_lins(sh, Coins(rounds), extras)
     S, lay, vals, kappa = _build(sh, lins)
     if S != structure(sh)[0]:
@@ -946,23 +1052,26 @@ def query_rows(info: dict) -> list[tuple[list[int], list[int]]]:
     return info["queries"]
 
 
-def consistency(sh: Shape, p: Proof, info: dict) -> list[int]:
+def consistency(sh: Shape, p: Proof, info: dict, cons: Callable[[int, list[int]], list[int]] | None = None) -> list[int]:
     """The final check's share of the rep's consistency sums, ``Σ_level Σ_l κ_{r, l} Σ_j eq(α)[j] row_j[l]`` for r = 0, 1:
-    what the rep's openings add to the running sums (`verifier_rows`' info)."""
+    what the rep's openings add to the running sums (`verifier_rows`' info); ``cons``: the sums given (`Messages.cons`),
+    not from ``p``'s opened rows."""
     out = [0, 0]
     for level, (_, ea) in enumerate(info["queries"]):
-        rows = p.rows[level]
-        for l in range(len(rows[0])):
-            s = dot(ea, [row[l] for row in rows])
+        sums = cons(level, ea) if cons else [dot(ea, [row[l] for row in p.rows[level]]) for l in range(len(p.rows[level][0]))]
+        for l, s in enumerate(sums):
             for r in range(2):
                 out[r] ^= mul(info["kappa"][level][r][l], s)
     return out
 
 
 def witness(sh: Shape, p: Proof, rounds: Sequence[Sequence[int]], extras: Sequence[Claim], t: int | None = None,
-            acc0: Sequence[int] = (0, 0), info: dict | None = None) -> list[int]:
-    """``GfResiduals``' w port: the message elements by round (``t``: the absorbed T, None: the verifier's own), and the
-    running sums ``acc0`` before the rep's openings and after them (``info``: `verifier_rows`' at these coins)."""
+            acc0: Sequence[int] = (0, 0), info: dict | None = None, h: Sequence[int] | None = None,
+            claims: Sequence[int] | None = None, cons: Callable[[int, list[int]], list[int]] | None = None) -> list[int]:
+    """``GfResiduals``' w port: the message elements by round (``t``: the absorbed T, None: the verifier's own; ``h``: a holo
+    shape's h), the running sums ``acc0`` before the rep's openings and after them (``info``: `verifier_rows`' at these
+    coins; ``cons``: the consistency sums given, not from ``p``'s rows), and an opening-only shape's registered claims'
+    values ``claims``."""
     val: dict[tuple, int] = {}
     val.update({("ab", i): x for i, x in enumerate(p.ab)})
     val.update({("c", i): x for i, x in enumerate(p.c)})
@@ -976,17 +1085,27 @@ def witness(sh: Shape, p: Proof, rounds: Sequence[Sequence[int]], extras: Sequen
     val.update({("msg", i, h, c): mm[h][c] for i, mm in enumerate(p.msgs) for h in range(2) for c in range(2)})
     val.update({("ood", i): x for i, x in enumerate(p.ood)})
     val.update({("yr", j): x for j, x in enumerate(p.yr)})
+    if sh.holo:
+        if h is None or len(h) != 64:
+            raise ValueError("a holo shape's witness needs h's 64 values")
+        val.update({("h", l): x for l, x in enumerate(h)})
+    comb = [] if sh.opening_only else [0] * 64
     if info is None:
-        _, info = verifier_rows(sh, rounds, extras, [0] * 64)
-    val[T_NAME] = run(sh, Coins(rounds), messages(sh, p, [0] * 64), extras)[1]["T"] if t is None else t
-    cs = consistency(sh, p, info)
+        _, info = verifier_rows(sh, rounds, extras, comb)
+    M = messages(sh, p, comb, h=[0] * 64 if sh.holo else None, claims=claims, cons=cons)
+    val[T_NAME] = run(sh, Coins(rounds), M, extras)[1]["T"] if t is None else t
+    cs = consistency(sh, p, info, cons)
     val.update({("acc0", r): acc0[r] for r in range(2)})
     val.update({("acc1", r): acc0[r] ^ cs[r] for r in range(2)})
+    if sh.opening_only:
+        val.update({k: x for k, x in zip(claim_names(sh), claims, strict=True)})
     return [val[k] for k in _w_names(sh)]
 
 
 def residuals(sh: Shape, p: Proof, rounds: Sequence[Sequence[int]], comb: Sequence[int], extras: Sequence[Claim],
-              t: int | None = None) -> tuple[list[int], dict]:
+              t: int | None = None, h: Sequence[int] | None = None, claims: Sequence[int] | None = None,
+              cons: Callable[[int, list[int]], list[int]] | None = None) -> tuple[list[int], dict]:
     """The reference: the rep's residuals on its proof at its coins (all zero iff the inner verifier's algebra accepts), with
-    ``t`` the absorbed T (None: the verifier's own, so the last residual is zero)."""
-    return run(sh, Coins(rounds), messages(sh, p, comb, t), extras)
+    ``t`` the absorbed T (None: the verifier's own, so the last residual is zero); an opening-only shape's with its
+    registered claims' values ``claims``."""
+    return run(sh, Coins(rounds), messages(sh, p, comb, t, h, claims, cons), extras)

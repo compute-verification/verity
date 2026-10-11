@@ -9,7 +9,8 @@ source that keeps every salt it hands out (`Tape`), and every answer the firewal
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
 items, one a node of a salted top or a message row, each with the message the firewall's own records say it commits to;
 a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
-the challenger's coins and the coins the workers received (``coins``). A salt any answer to the workers contains is
+the challenger's coins, the salt it sent with them to open its commitment (when it committed to them), and the coins the
+workers received (``coins``). A salt any answer to the workers contains is
 exposed. Nothing here trusts the firewall's checks: a call it should have refused is in the transcript as it was made.
 """
 from __future__ import annotations
@@ -27,12 +28,16 @@ PUBLIC_FORMAT = "verity/firewall-public/v0"
 INST = hm96.SHA512
 
 
-def public(schedule, relations=(), statement=None, computes=()) -> dict:
+def public(schedule, relations=(), statement=None, computes=(), coins=None) -> dict:
     """The verifier's public input `flock-firewall contract --public` reads (`Flock.Firewall.Contract.PublicInput`): the
     session's schedule (or ``None``), the relations the verifier checks on masked values, the values the public statement
-    fixes (name to bytes), and the names of the values the firewall fixes by its own computation."""
-    return {"kind": PUBLIC_FORMAT, "schedule": schedule, "relations": list(relations),
-            "statement": {k: v.hex() for k, v in (statement or {}).items()}, "computes": list(computes)}
+    fixes (name to bytes), the names of the values the firewall fixes by its own computation, and the challenger's
+    commitments to its coins, if it made any (`rec_live.CoinServer.commit_coins`: hex, per stream and round)."""
+    out = {"kind": PUBLIC_FORMAT, "schedule": schedule, "relations": list(relations),
+           "statement": {k: v.hex() for k, v in (statement or {}).items()}, "computes": list(computes)}
+    if coins is not None:
+        out["coins"] = {s: list(cs) for s, cs in coins.items()}
+    return out
 
 
 def canon(v) -> bytes:
@@ -80,6 +85,7 @@ class RecordingCoins(RL.CoinServer):
     def commit(self, roots):
         c = {"call": "roots", "roots": dict(roots), "coins": None}
         c["coins"] = self._call(c, super().commit, roots)
+        c["opening"] = self.openings.get((RL.LINK_COINS, 0))
         return c["coins"]
 
     def y(self, y):
@@ -93,18 +99,24 @@ class RecordingCoins(RL.CoinServer):
         c = {"call": "round", "stream": stream, "k": st["rounds"] if st else None, "tops": [list(t) for t in tops],
              "level0": level0, "commits": list(commits), "n": n, "coins": None}
         c["coins"] = self._call(c, super().round, stream, tops, commits, n, level0)
+        c["opening"] = self.openings.get((stream, c["k"]))
         return c["coins"]
 
 
 class Session:
     """One inner session through a firewall: ``handle`` answers the workers' requests as the firewall does and keeps what
-    the transcript needs. ``proxy`` is the firewall under test (`rec_live.Proxy` or a subclass)."""
+    the transcript needs. ``proxy`` is the firewall under test (`rec_live.Proxy` or a subclass). The challenger's coins are
+    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the session
+    (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
+    firewall's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
 
-    def __init__(self, schedule: dict, rand=None, fresh: Callable[[], bytes] = INST.fresh_salt, proxy=RL.Proxy):
+    def __init__(self, schedule: dict, rand=None, fresh: Callable[[], bytes] = INST.fresh_salt, proxy=RL.Proxy,
+                 coin_salt: Callable[[], bytes] = INST.fresh_salt, commit: bool = False, coins=None):
         self.schedule = schedule
-        self.coins = RecordingCoins(rand)
+        self.coins = (coins or RecordingCoins)(rand)
         self.tape = Tape(fresh)
-        self.proxy = proxy(self.coins, self.tape, schedule=schedule)
+        self.commitments = self.coins.commit_coins(schedule, coin_salt) if commit else None
+        self.proxy = proxy(self.coins, self.tape, schedule=schedule, commitments=self.commitments)
         self.answers: list[bytes] = []
         #: per coin-issuing call (by its index in ``coins.calls``), the coins the workers received
         self.relayed: dict[int, list[int]] = {}
@@ -132,9 +144,10 @@ class Session:
         return self.coins.end == "finish" and self.proxy.stopped is None
 
     def public(self) -> dict:
-        """The inner session's public input: its schedule, and no relation, statement value or value of the firewall's
-        own (the inner phase masks nothing and fixes everything it sends by the schedule)."""
-        return public(self.schedule)
+        """The inner session's public input: its schedule and the challenger's commitments to its coins, if it committed to
+        them, and no relation, statement value or value of the firewall's own (the inner phase masks nothing and fixes
+        everything it sends by the schedule)."""
+        return public(self.schedule, coins=self.commitments)
 
     def transcript(self) -> dict:
         tape = {s: i for i, s in reversed(list(enumerate(self.tape.salts)))}
@@ -149,8 +162,10 @@ class Session:
                 items.append({"commit": {"msg": msg.hex(), "salt": sid, "sent": ch.hex()}})
 
         def coins(stream: str, k: int, i: int, c: dict):
-            items.append({"coins": {"stream": stream, "round": k, "coins": hexs(c["coins"] or []),
-                                    "relayed": hexs(self.relayed.get(i, []))}})
+            item = {"stream": stream, "round": k, "coins": hexs(c["coins"] or []), "relayed": hexs(self.relayed.get(i, []))}
+            if c.get("opening") is not None:
+                item["opening"] = c["opening"].hex()
+            items.append({"coins": item})
 
         priv = iter(self.proxy.private)
         for i, c in enumerate(self.coins.calls):
@@ -163,7 +178,7 @@ class Session:
                 for t, r in sorted(c["roots"].items()):
                     mine = c.get("mine", self.proxy.roots).get(t, {})
                     commits(r, RL.top_rows(bytes.fromhex("".join(mine["nodes"]))) if mine else [], mine.get("salts", []))
-                coins("link", 0, i, c)
+                coins(RL.LINK_COINS, 0, i, c)
             elif kind == "y":
                 items.append({"fixed": {"what": "link.y", "by": "schedule", "sent": b"".join(RL.f128_bytes(v) for v in c["y"]).hex()}})
             elif kind == "open":

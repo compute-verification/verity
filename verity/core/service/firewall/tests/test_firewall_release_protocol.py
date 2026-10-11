@@ -70,11 +70,15 @@ def pool() -> tuple[list, list, list, list]:
     """(transcripts the contract accepts under the honest public input, the others, public inputs, ones that don't
     decode): the honest public input first."""
     FA = R.firewall_agree()
-    sessions = [(FA.run_case(n, r, p, f), e) for n, r, p, f, e in FA.cases()]
+    # every case on the honest case's coins and challenger's salts, so that the committed cases share one public input
+    sessions = [(FA.run_case(n, r, p, f, rand=FA._rand(b"honest"), coin_salt=FA._salts(b"challenger:honest"), challenger=c), e)
+                for n, r, p, f, e, c in FA.cases()]
     leaks = FA.leaks()
-    honest = [s.transcript() for s, e in sessions if e["lean"]]
-    others = [s.transcript() for s, e in sessions if not e["lean"]] + [t for _, t, _, _ in leaks]
-    h, pub = honest[0], sessions[0][0].public()
+    pub = sessions[0][0].public()
+    accepted = [e["lean"] and s.public() == pub for s, e in sessions]
+    honest = [s.transcript() for (s, _), a in zip(sessions, accepted) if a]
+    others = [s.transcript() for (s, _), a in zip(sessions, accepted) if not a] + [t for _, t, _, _ in leaks]
+    h = honest[0]
     others += [{"kind": "nope"}, {k: v for k, v in h.items() if k != "items"}, h | {"items": [7]},
                h | {"tape": {"pads": [], "salts": ["zz"]}}, 7, []]
     pubs = list({D.canonical(p): p for p in [pub] + [p for _, _, p, _ in leaks]}.values())
@@ -247,15 +251,20 @@ def test_a_record_its_slot_leaves_unreadable_releases_nothing(server, contract):
 
 @pytest.mark.slow
 def test_a_reference_without_the_slots_rule_is_caught(server, contract, monkeypatch):
-    """Rule 2's orphan: a reference whose slot doesn't stop the session of a holder that died admits it again."""
+    """Rule 2's orphan: a reference whose slot doesn't stop the session of a holder that died admits it again, on the
+    orphan itself and among drawn cases (at this seed the first orphan the draw reaches is past its 600th case)."""
+    orphan = _case([["open", "s", ["L0", "L1"], None, None], ["finish", "r0000"], ["slot", "r0000", "L0"]], "r0000", "L0", 0)
+
     @contextmanager
     def slot(self, session, part, waiting=None):
         yield
 
     monkeypatch.setattr(FW.Firewall, "slot", slot)
-    with pytest.raises(D.Mismatch) as e:
-        D.run(port(reference(contract)), examples=600, seed=SEED, server=server)
-    assert (e.value.lean[0], e.value.python[0]) == ("reject", "accept")
+    for run in (lambda: D.replay(port(reference(contract)), orphan, server),
+                lambda: D.run(port(reference(contract)), examples=1500, seed=SEED, server=server)):
+        with pytest.raises(D.Mismatch) as e:
+            run()
+        assert (e.value.lean[0], e.value.python[0]) == ("reject", "accept")
 
 
 @pytest.mark.slow

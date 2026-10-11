@@ -75,8 +75,10 @@ doesn't name:
     circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
-                    `circuit-check --all --jobs` the other half, at most one per 128 GB of memory (`circuit_check_jobs`):
-                    every registered Definition and template (`tools/verity/circuit_check`),
+                    `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
+                    (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
+                    slot.py's CHECK_SLOT_MEM_GB): every registered Definition and template
+                    (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
@@ -631,17 +633,6 @@ def memory_gb(root: Path = Path("/")) -> int:
     return max(0, min(left)) >> 30 if left else 0
 
 
-#: the memory circuit-check counts on per worker: a cold `--all` on vy-nebius-cpu-1 (755 GB) at 23 workers grew six of them to
-#: 136, 84, 80, 54, 51 and 40 GiB and took the node down twice (7 Oct,
-#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1)
-CIRCUIT_CHECK_GB_PER_JOB = 128
-
-
-def circuit_check_jobs(b: int) -> int:
-    """circuit-check's `--jobs`: its share ``b`` of the cores, at most one per `CIRCUIT_CHECK_GB_PER_JOB` of this process's memory."""
-    return max(1, min(b, memory_gb() // CIRCUIT_CHECK_GB_PER_JOB))
-
-
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
 #: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
 #: (tip 38's shard 2/3, 6 Oct)
@@ -984,8 +975,9 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
+    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
+          *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
+          *(["--mem-gb", m] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1208,18 +1200,88 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree). Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = os.environ.get("UV") or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT)]
+            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
+
+
+#: preflight steps that judge the machine the check runs on, so `--preflight` elsewhere (a train's prep) only reports them
+ON_NODE = ("preflight-fixtures",)
+
+
+def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
+    """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
+    from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
+    train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
+    never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
+    store keeps a train moving before the export (top, 10 Oct).  Raises when the public export is needed and there is none."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from research.store.fetchset import public_url
+    from research.store.fixtures import _is_tracked, entries, fixture_id, load_map, tracked
+    from research.store.local import LocalStore, manifest_key
+    from research.store.remote import HttpRemote
+
+    git = tracked(root)
+    arts = {a: path for a, path in entries(load_map(root)).items() if not _is_tracked(path, git)}
+    ask = sorted(arts)
+    if not ask:
+        return {}, []
+    base = public_url(url)
+    if not base:
+        raise RuntimeError(f"no public source (RESEARCH_PUBLIC_URL is empty) to ask for {len(ask)} fixture(s)")
+    head = head or HttpRemote(base).head
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        found = list(ex.map(lambda a: head(manifest_key(a.removeprefix("art:"))), ask))
+    where = {a: "the public export" for a, h in zip(ask, found) if h is not None}
+    where |= {a: "the tree" for a in ask if a not in where and (root / arts[a]).is_file() and fixture_id(root / arts[a]) == a}
+    rest = [a for a in ask if a not in where]
+    try:
+        if rest:
+            store = store or LocalStore()
+            where |= {a: "this machine's store" for a in rest if store.has_local(a)}
+    except Exception as e:                              # noqa: BLE001: a store that can't be read holds nothing
+        print(f"check: fixtures: this machine's store can't be read ({type(e).__name__}: {e})", file=sys.stderr)
+    return where, [a for a in rest if a not in where]
+
+
+def fixtures_only() -> int:
+    """`--fixtures`: 0 when every fetched fixture can come from somewhere on this machine (`fetchable_fixtures`), saying from
+    where; else 1 naming the ids that can't."""
+    from collections import Counter
+
+    try:
+        where, missing = fetchable_fixtures()
+    except Exception as e:                              # noqa: BLE001: a source that can't be asked shows nothing
+        print(f"check: fixtures: could not ask the public export ({type(e).__name__}: {e})", file=sys.stderr)
+        return 1
+    by = Counter(where.values())
+    found = ", ".join(f"{n} from {w}" for w, n in sorted(by.items()))
+    for a, w in sorted(where.items()):
+        if w != "the public export":
+            print(f"check: fixtures: {a} from {w}, not the public export")
+    if missing:
+        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json are in neither this "
+              f"machine's store nor the public export ({found or 'none found'}): {' '.join(missing)}; run `research data "
+              f"export` for each, or put it in this machine's store", file=sys.stderr)
+        return 1
+    print(f"check: fixtures: every fetched fixture fixtures/artifacts.json registers can be fetched here ({found or 'none'})")
+    return 0
 
 
 def preflight_only() -> int:
-    """`--preflight`: every preflight step, its output here; 0 when all pass."""
+    """`--preflight`: every preflight step, its output here; 0 when all pass but those that judge another machine (`ON_NODE`),
+    which only report: a train's prep can't see the node its check runs on, whose own preflight refuses there."""
     failed = []
     for name, argv, cwd in preflight():
         ok = not isinstance(argv, str) and subprocess.run(argv, cwd=cwd).returncode == 0
+        if not ok and name in ON_NODE:
+            print(f"check: {name}: not refused here: it judges the machine the check runs on, which refuses there", flush=True)
+            continue
         print(f"check: {name}: {'passed' if ok else argv if isinstance(argv, str) else 'FAILED'}", flush=True)
         failed += [] if ok else [name]
     return 1 if failed else 0
@@ -1523,6 +1585,8 @@ def main(argv: list[str]) -> int:
         os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
     if argv == ["--preflight"]:
         return preflight_only()
+    if argv == ["--fixtures"]:
+        return fixtures_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
     if "--record" in argv:

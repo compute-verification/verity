@@ -6,8 +6,8 @@ import Proofs.Flock.Soundness.Registered.Defs
 
 `flock-verify verify --zk --registered F` (`Main.verifyCmd`) checks a `--zk` session as `ZkExec.AcceptsZK` does, and
 holds every table's statement to the verifier's own registered reads `own` (F's ports, `Registered.ofJson`): after
-`Stmt.setupTables` and before `Zk.shapeOk`, `Main.buildSession` runs `checkRegistered` on each statement. `AcceptsZKR`
-is that verdict; it implies `AcceptsZK`.
+`Stmt.setupTables` and before `Zk.shapeOk`, `Main.buildSession` runs `Flock.checkRegistered` on each statement, the
+library's definition, which `AcceptsZKR` reads as it is. `AcceptsZKR` is that verdict; it implies `AcceptsZK`.
 
 What the registered check reads at a drawn statement over a shared-row population `pub` (`Registered.check`): the
 statement's units, as its header names them (`Registered.unitIndices`, which `HmRow.drawn` sets to the population's
@@ -28,14 +28,7 @@ open Flock
 open FlockSoundness.Discharge.Exec (Inputs recordDraw setupOf)
 open FlockSoundness.Discharge.ZkExec (zkInputs)
 
-/-- An hm96 statement's registered reads: `Main.checkRegistered`, which the executable's root module defines and no
-library exports. -/
-def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit := do
-  if st.tags.hiddenOutputs then
-    let outRows := (st.c.ports.extract (HmOut.nIn st.c) st.c.ports.size).map (·.name)
-    if let some reg := (registered.getD #[]).find? (outRows.contains ·.name) then
-      throw s!"registered reads: {reg.name} is an output row, its instance's own, never a registered value's"
-  Registered.check st.c st.pub registered (Registered.derived st.partition)
+export Flock (checkRegistered)
 
 /-- **flock-verify `--zk --registered F` accepts the transcript**, `own` F's ports: the session's statements set up from
 `zkInputs I` and the record's draw, each passes the registered check against `own`, each passes `Zk.shapeOk`, and

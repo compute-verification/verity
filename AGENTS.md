@@ -33,7 +33,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
-    - `private_circuits`: the universal unit, one public Definition that runs any hidden netlist of a size class.
+    - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
@@ -269,7 +269,9 @@ Never print a secret's value.
 - List environment variable names with `compgen -e`, never `env | cut`, `env | grep` or `printenv | …`: a multi-line
   value's later lines print as if they were names.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
-  (`tools/agent-guard/shell_hook.py`).
+  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
+  environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs
+  `install.sh`.
 - A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
   on the VM.
 

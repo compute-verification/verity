@@ -39,8 +39,9 @@ at most `tableError(fast100 m, shape)`:
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
-  - **At #123's values** (`8d621454`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, `t = 2q₀`, and a pair of extra lanes per
-    rep. The bound is at most **2^-205 per table** (`table_sound_pad_m1`).
+  - **At C-Flock ZK's values** (§7 item 6, `Zk.queries0`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31`
+    and 218 at `m = 32..35`, `t = 2q₀`, and a pair of extra lanes per rep. At every `m` the verifier serves the bound is
+    at most **2^-205 per table** (`table_sound_pad_m1`).
   - **The committed values** are the witness lanes' messages `a − c₀·pad` of lane families within the padded radius
     (`CommittedPad`).
   - **The model is M1 in the clear.** The verifier computes the restarted claim `s + Σ_i ρ_i·e_i` itself. M1 masks the
@@ -172,7 +173,7 @@ link term per audit.
 | Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
 | M1's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
-| The padded bound at #123's values: 2^-205 per table at m = 25–27 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
+| The padded bound at C-Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
@@ -438,7 +439,8 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
   every completed first run (`V*` picks them) are hypotheses.
 
 **Not in Lean:** the link from `flock-circuit --zk` to the model (the Lean reference prover and its differential test,
-DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness.
+DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness for the masks and
+padding. The leaf salts are the operating system's bytes, uniform under A3 (`Discharge/ZkView/OsSalts.lean`).
 
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
@@ -454,16 +456,18 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 
 - **It rests on** special honest-verifier ZK of masked Flock: a simulator for every fixed coin sequence, which is VEIL's
   notion and the first zero-knowledge lemma to prove. The lemma is statistical. Its only caveat is ChaCha20 standing in
-  for uniform prover randomness. The simulations of a session's tables compose, because their masks are independent.
+  for uniform masks and padding; the leaf salts are the operating system's (A3). The simulations of a session's tables compose, because their masks are independent.
 - **Serialized sessions** then compose sequentially (Goldreich–Oren 1994).
 - **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
   (DESIGN.md §11.2).
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
-- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they are
-  ChaCha20 output under a seed from the operating system. Treating that output as uniform is the one caveat to the
-  lemma's statistical zero knowledge, and the seed's quality is trusted.
+- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production the
+  leaf salts are the operating system's bytes, 192 a leaf (`getrandom`; Daniel, 9 Oct, decision 4(a)), which A3 makes
+  uniform (`Discharge/ZkView/OsSalts.lean`), and the masks and padding are ChaCha20 output under a seed from the
+  operating system. Treating that output as uniform is the one caveat to the lemma's statistical zero knowledge, and
+  the operating system's randomness is A3.
 - **Leaf hiding.** Halevi–Micali leaves are statistically hiding in the standard model, by the leftover hash lemma, with
   no random oracle (`N·2^-256` for N leaves with a fresh key, §4). They are binding under collision resistance of their
   hash, SHA-512 in the adopted variant.

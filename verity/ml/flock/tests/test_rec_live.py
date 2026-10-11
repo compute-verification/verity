@@ -162,9 +162,14 @@ def _session(proxy, n=1):
     return [RL.decode_resp(b) for b in out]
 
 
+def _proxy(schedule=SCHEDULE, coins=None):
+    """A proxy held to ``schedule``, on live coins."""
+    return RL.Proxy(coins or RL.CoinServer(_counter_rand()), _salts(), schedule=schedule)
+
+
 def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):
     coins = RL.CoinServer(_counter_rand())
-    proxy = RL.Proxy(coins, _salts(), schedule=SCHEDULE)
+    proxy = _proxy(coins=coins)
     resp = _session(proxy)
     assert resp[0] == (RL.RESP_DRAW, "null") and resp[1] == (RL.RESP_OK,)
     assert resp[2][0] == RL.RESP_COINS and len(resp[2][1]) == 8
@@ -200,7 +205,7 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
 
 
 def test_a_records_schedule_is_the_one_it_was_held_to():
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    proxy = _proxy()
     _session(proxy)
     sched = RL.schedule_of(proxy.coins.record())
     assert sched == SCHEDULE and "sigma" not in json.dumps(sched)
@@ -208,7 +213,7 @@ def test_a_records_schedule_is_the_one_it_was_held_to():
 
 def test_a_binding_round_whose_cap_is_not_root_b_is_refused():
     """The firewall commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    proxy = _proxy()
     for req in ((RL.REQ_HELLO, HELLO), (RL.REQ_COMMIT, b"rf", [("circuit", CAP1 + CAP1)], []), (RL.REQ_LINK, bytes(32)),
                 (RL.REQ_OPEN, "circuit/rep0", "", b"d", 0)):
         assert RL.decode_resp(proxy.handle(RL.encode_req(*req)))[0] in (RL.RESP_OK, RL.RESP_COINS)
@@ -222,7 +227,7 @@ def _refusal(resp):
 
 
 def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_sees_it():
-    assert _session(RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE))[-1][0] == RL.RESP_VERDICT
+    assert _session(_proxy())[-1][0] == RL.RESP_VERDICT
     cases = {
         "Hello": lambda s: s["hello"].update(reps=1),
         "Commit's roots": lambda s: s["roots"].update(circuit=1),
@@ -235,18 +240,18 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
     for what, edit in cases.items():
         s = json.loads(json.dumps(SCHEDULE))
         edit(s)
-        proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=s)
+        proxy = _proxy(s)
         why = next(r[1] for r in _session(proxy) if r[0] == RL.RESP_REFUSED)
         assert why.startswith(f"rec proxy: FIREWALL-REFUSED: {what}: "), (what, why)
     s = json.loads(json.dumps(SCHEDULE))
     s["rounds"][1]["n"] = 2
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=s)
+    proxy = _proxy(s)
     _session(proxy)
     assert len(proxy.coins.rounds) == 1, "the off-schedule round never reached the coin server"
 
 
 def test_a_link_whose_y_is_not_zero_is_refused():
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    proxy = _proxy()
     proxy.handle(RL.encode_req(RL.REQ_HELLO, HELLO))
     assert RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], [])))[0] == RL.RESP_COINS
     y = bytearray(32)
@@ -296,7 +301,7 @@ def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
 
 
 def test_coins_follow_the_link_exchange():
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    proxy = _proxy()
     proxy.handle(RL.encode_req(RL.REQ_HELLO, HELLO))
     proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], []))
     proxy.handle(RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"d", 0))

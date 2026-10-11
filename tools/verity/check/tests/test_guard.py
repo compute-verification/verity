@@ -59,6 +59,69 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", [], [], 4), r.log.read_text()
 
 
+def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp_path, tmp_path_factory, monkeypatch):
+    """pytest keeps its last three base temps (a flock suite's is ~45 GB: vy-cpu-1 and vy-cpu-2 filled on 11 Oct); each suite gets
+    its own `--basetemp`, removed when it ends, unless the caller passed one, and a killed suites.py's are swept by the next."""
+    import os
+    import tempfile
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    tmp = tmp_path_factory.mktemp("tmp")                         # outside the suite's tree, as /tmp is
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-"))
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "import os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
+        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs")
+    assert (r.status, r.counts["passed"]) == ("passed", 1), r.log.read_text()
+    assert list(tmp.iterdir()) == []
+    mine = tmp_path_factory.mktemp("mine")
+    monkeypatch.setenv("EXPECT", str(mine))
+    r = S.run(suite, ["pkg"], [f"--basetemp={mine}"], tmp_path / "logs")
+    assert r.status == "passed" and (mine / "test_tmp0" / "big").exists() and list(tmp.iterdir()) == []
+    dead, live = tmp / f"{S.BASETEMP}-999999999-pkg-x", tmp / f"{S.BASETEMP}-{os.getppid()}-pkg-y"
+    dead.mkdir()
+    live.mkdir()
+    assert S.sweep_basetemps() == [dead] and live.exists()
+
+
+@pytest.mark.parametrize("listed", [False, True])
+def test_markdown_inside_the_inputs_is_outside_them_unless_the_suite_lists_markdown(tmp_path, monkeypatch, listed):
+    """A suite's keys leave `*.md` out of its directories unless it lists a `.md` (`suites.markdown`), so a test that reads one
+    unlisted fails, even under the suite's own directory; one that lists it passes."""
+    S, _ = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "pkg" / "README.md").write_text("prose\n")
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "from pathlib import Path\n\ndef test_prose():\n    (Path(__file__).resolve().parents[1] / 'README.md').read_text()\n")
+    suite = S.Suite("pkg", "pkg", (), ("pkg/README.md",) if listed else ())
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs")
+    assert (r.status, r.outside) == (("passed", []) if listed else ("failed", ["pkg/README.md"])), r.log.read_text()
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_every_test_starts_without_the_machines_markers_caches_and_slot(tmp_path, monkeypatch, workers):
+    """Host-dependent tests failed five full checks in 16 h, each fixed one test at a time: cpu-1's /etc/vy/runs-via-slot, node 1's
+    real check caches, a slot's CHECK_SLOT. In every suite a test module sees, at import and in each test, every marker the
+    guard names pointed at a path that doesn't exist, each cache an empty directory of its own and no CHECK_SLOT."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    monkeypatch.delenv("VERITY_SUITE_REPORT", raising=False)
+    G = _load(monkeypatch, "guard_under_test", HERE / "guard" / "verity_suite_guard.py")
+    for k in (*G.HOST_FILES, *G.HOST_CACHES, *G.HOST_SLOT):
+        monkeypatch.setenv(k, str(tmp_path / "pkg" / "data.txt"))
+    names = sorted({*G.HOST_FILES, *G.HOST_CACHES, *G.HOST_SLOT})
+    (tmp_path / "pkg" / "tests" / "test_host.py").write_text(
+        f"import os\nAT_IMPORT = {{k: os.environ.get(k) for k in {names!r}}}\n\n"
+        "def _host(env):\n"
+        f"    for k in {sorted(G.HOST_FILES)!r}:\n        assert not os.path.exists(env[k]), k\n"
+        f"    for k in {sorted(G.HOST_CACHES)!r}:\n        assert os.listdir(env[k]) == [], k\n"
+        f"    assert {list(G.HOST_SLOT)!r} and all(env.get(k) is None for k in {list(G.HOST_SLOT)!r})\n\n"
+        "def test_at_import():\n    _host(AT_IMPORT)\n\n"
+        "def test_in_the_test():\n    _host(os.environ)\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    assert (r.status, r.counts["passed"]) == ("passed", 6), r.log.read_text()
+
+
 @pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize("required", [False, True])
 def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, monkeypatch, workers, required):

@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Exec.E2EL
 import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
 import Proofs.Flock.Soundness.Binding.E2E
+import Proofs.Flock.Soundness.Binding.RowsX
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
@@ -66,6 +67,32 @@ theorem flock_e2e_count_hm96L
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
     (zeros : Finset (Fin C.N)) (hZero : P.ZeroCols plan tab dp.place zeros)
     (lay : Layout P plan tab (P.placeDecoder plan tab dp.place)) (rs : HmRows lay) (hHm : rs.Computes)
+    {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
+    (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
+    (hCR : LinkCRL P H E Lf plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
+    {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H E Lf (plan (L.draw ω) (reg σ)) j
+      (batchStratL H E Lf plan (cont σ ω)) qF qS)
+    (tr : StrictCR.TreeRewind H (audit L Reg (batchedSessionL H E Lf plan)) σ fun o => execAccept o ∧ o.1 = false)
+    {qT : ℝ} (hT : tr.finder.CR H qT) :
+    prob (fun o => execAccept o ∧
+        K ≤ (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
+      L.miss K + StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
+        P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ t' + ENNReal.ofReal (tr.bound qT) :=
+  (prob_split_accept _ σ execAccept _).trans (add_le_add
+    ((flock_e2e_countL P H E Lf plan tab (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1) dp ones
+      hConst zeros hZero (rs.binding hHm) hk hRw hM hρ hr ht K σ hCR).trans
+      (add_le_add (add_le_add le_rfl (ksAvgBE_le_strictL H E Lf plan k (reg σ) (cont σ) hKS)) le_rfl))
+    (tr.le hT))
+
+/-- `flock_e2e_count_hm96L` at rows each under its own encoding (`HmRowsX`), `vb := HmRowsX.binding rs hHm`. -/
+theorem flock_e2e_count_hm96LX
+    {execAccept : Bool × Finset (Fin n) → Prop}
+    {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
+    (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
+    (zeros : Finset (Fin C.N)) (hZero : P.ZeroCols plan tab dp.place zeros)
+    (lay : Layout P plan tab (P.placeDecoder plan tab dp.place)) (rs : HmRowsX lay) (hHm : rs.Computes)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))

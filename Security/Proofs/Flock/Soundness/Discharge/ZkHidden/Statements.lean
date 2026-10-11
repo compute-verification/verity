@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 /-!
 # The statements: flock-verify `--zk`'s acceptance and its tables under hidden outputs
@@ -59,7 +60,7 @@ def AcceptsZKRetainedAny : Prop :=
 and at any regions there is an `AcceptedH` of `st` under the `--zk` tags on the session's files, coins and tables. -/
 def AcceptsZKAcceptedH : Prop :=
   ∀ (I : Inputs) (t : Exec.Transcript), I.tags.hiddenOutputs = true → I.tags.typed = false → ∀ {c : Flock.Circuit},
-    HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c → (∀ p ∈ c.ports.toList, p.v2 = false) →
+    HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c → Hidden.Any.RowsFitS c →
     I.count ≤ 1 → AcceptsZK I t →
     ∃ st, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw t.record)
         I.partition I.program = .ok st ∧ Flock.Zk.shapeOk st = .ok () ∧

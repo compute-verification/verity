@@ -475,6 +475,32 @@ def test_silu_unit_covers_the_whole_table():
     assert [int(x) for x in out] == [P.SiluMulBf16.evaluate(*v) for v in vecs]
 
 
+@pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
+def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
+    """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
+    pairs of every row of the unit's ``flock-ir-unit/v2`` text, which the block places in the unit's slot, each below
+    ``useful``."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+    from verity_flock import circuit as FC
+
+    if which == "gemm-tc-step":
+        low = IL.lowering(bind(G.GemmCoordinate, K=64, DOT=P.AmpereBF16TcDot16), "gemm-coordinate/k64/tc-step", unit_fn=IL.tc_units)
+    else:
+        low = REG.module("silu-mul").lowering(TM.subcircuit("silu-mul", I=4))
+    lay = low.layout
+    a, b = lay.nonzeros()
+    assert (len(a), len(b)) == (lay.counts["nnz_a"], lay.counts["nnz_b"])
+    assert all(x.dtype == np.int64 and x.shape[1] == 2 and x.min() >= 0 and x.max() < lay.useful for x in (a, b))
+    assert lay.useful < 1 << FC._slot_log(lay.useful)
+    got = {"a": [[] for _ in range(lay.useful)], "b": [[] for _ in range(lay.useful)]}
+    for side, x in (("a", a), ("b", b)):
+        for r, c in x.tolist():
+            got[side][r].append(c)
+    rows = low.text.splitlines()[1:1 + lay.useful]
+    assert rows == [" ".join(map(str, [len(ra), *ra, len(rb), *rb])) for ra, rb in zip(got["a"], got["b"])]
+
+
 def _check_set(s: InputSet) -> int:
     sub = s.subcircuit
     low = REG.module(sub.template.id).lowering(sub)

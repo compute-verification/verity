@@ -1,7 +1,8 @@
 """`verity_flock.rec_open`, V*'s opening check: its reference agrees with `rec_vstar`'s plain leaf and climb on a real tree and
 gives the top node's registered row, its running sums add up to the consistency sums the inner verifier's final check reads,
 and the M0 unit and the Definition agree with the reference on an honest opening of either side and on forged ones (a
-sibling, the public side bits)."""
+sibling, the public side bits), at every height from H = 0 (the leaf is the top) to H = 22 (the side bits run into dirs'
+second word)."""
 from __future__ import annotations
 
 import hashlib
@@ -86,21 +87,75 @@ def test_the_running_sums_add_the_levels_consistency_sums_at_the_verifiers_coeff
     assert R.elements(acc[:16]) == want and acc[16:] == tail
 
 
-@pytest.mark.parametrize(("bad", "error"), [((8, 0), ValueError), ((12, 1), ValueError), ((8, 17), ValueError),
-                                            ((8.0, 1), TypeError), ((True, 1), TypeError)])
+@pytest.mark.parametrize(("bad", "error"), [((0, 1), ValueError), ((12, 1), ValueError), ((8, 33), ValueError),
+                                            ((8, -1), ValueError), ((8.0, 1), TypeError), ((True, 1), TypeError),
+                                            ((8, 1.0), TypeError)])
 def test_the_shape_is_checked(bad, error):
     with pytest.raises(error):
         R.open_ref(*bad, [], [], [], [], [])
 
 
-def _cases():
-    """Both sides of an honest opening, then a forged sibling and forged side bits (the honest node is their ``want``)."""
-    rows, layers = _tree(1, 8)
-    honest = [(*_opening(rows, layers, pos, 1), *_acc_coef(8, pos)) for pos in (0, 1)]
+HEIGHTS = (0, 1, 16, 17, 22)
+
+
+def _path(H: int, pos: int, seed: int, lanes: int = 8):
+    """An opening of a tree we never build: a random row and H random siblings climb from position ``pos`` to the top
+    `rec_vstar.climb` gives. ``(row, sibs, top)``."""
+    g = random.Random(seed)
+    row = [g.getrandbits(128) for _ in range(lanes)]
+    sibs = [g.randbytes(64) for _ in range(H)]
+    return row, sibs, V.climb(V.leaf(row), pos, sibs)
+
+
+def _flip(dirs: list[int], h: int) -> list[int]:
+    out = list(dirs)
+    out[h // 16] ^= 1 << (h % 16)
+    return out
+
+
+@pytest.mark.parametrize("H", HEIGHTS)
+def test_every_height_climbs_by_its_side_bits_and_no_other(H):
+    """From H = 0, where the leaf is the top and ``dirs`` is not read, to H = 22, whose side bits 16 .. 21 are ``dirs``' word
+    1: the honest opening gives its top's row and `rec_vstar.opens` agrees; each side bit below H flipped, a sibling or the
+    row forged gives another; a side bit at or above H, and ``aux`` past its H siblings (all of it at H = 0), is not read."""
+    pos = 0x2DB6A5 & ((1 << H) - 1)
+    rowv, sibs, top = _path(H, pos, H)
+    row, aux = R.pack(rowv, sibs)
+    dirs = R.dirs_words(pos, H)
+    acc, coef = _acc_coef(8, H)
+    want = R.expected(top)
+    assert len(aux) == R.aux_words(H) == 64 * max(1, (H + 1) // 2) and len(dirs) == R.DIRS_WORDS
+    assert dirs[0] == pos & 0xFFFF and dirs[1] == pos >> 16 and not any(dirs[2:])
+    assert R.compressions(8, H) == 2 + 2 * H
+    assert V.opens(V.Query(0, 0, 0, pos, H, 0, top, rowv, None, sibs))
+    assert R.open_ref(8, H, row, aux, acc, coef, dirs)[0] == want
+    if H == 0:
+        assert want == R.expected(V.leaf(rowv))
+    for h in range(H):
+        assert R.open_ref(8, H, row, aux, acc, coef, _flip(dirs, h))[0] != want, h
+    for h in {H, 31}:
+        assert R.open_ref(8, H, row, aux, acc, coef, _flip(dirs, h))[0] == want, h
+    for at in (0, 32 * H - 1, len(aux) - 1):
+        bad = list(aux)
+        bad[at % len(aux)] ^= 1
+        assert (R.open_ref(8, H, row, bad, acc, coef, dirs)[0] == want) == (at % len(aux) >= 32 * H), at
+    assert R.open_ref(8, H, [row[0] ^ 1] + row[1:], aux, acc, coef, dirs)[0] != want
+    assert R.dirs_words(pos | 1 << H, H) == dirs
+
+
+def _cases(H: int):
+    """Two honest openings (side bit 0 of either value, and above 16 bit 16 of either), then forgeries whose ``want`` is the
+    honest node: a sibling (the row at H = 0), side bit 0 and, above 16, side bit 16, which is ``dirs``' word 1."""
+    m = (1 << H) - 1
+    honest = []
+    for t, pos in enumerate((0x15555 & m, 0x0AAAA & m)):
+        rowv, sibs, top = _path(H, pos, 100 + t)
+        honest.append((*R.pack(rowv, sibs), R.dirs_words(pos, H), R.expected(top), *_acc_coef(8, t)))
     row, aux, dirs, want, acc, coef = honest[0]
-    sib = (row, [aux[0] ^ 0x8000] + aux[1:], dirs, want, acc, coef)
-    side = (row, aux, [dirs[0] ^ 1] + dirs[1:], want, acc, coef)
-    return honest + [sib, side]
+    forged = [(row, [aux[0] ^ 0x8000] + aux[1:], dirs, want, acc, coef) if H else
+              ([row[0] ^ 0x8000] + row[1:], aux, dirs, want, acc, coef)]
+    forged += [(row, aux, _flip(dirs, h), want, acc, coef) for h in (0, 16) if h < H]
+    return honest + forged
 
 
 def _bits(words):
@@ -108,10 +163,12 @@ def _bits(words):
 
 
 @pytest.mark.slow
-def test_the_m0_unit_computes_the_reference():
-    """The unit (`forms`, 8 lanes, one level) on both sides of an honest opening and on the forged ones, bit-sliced."""
-    cases = _cases()
-    C, ins, outs = R.unit_circuit(8, 1)
+@pytest.mark.parametrize("H", [0, 1, 17])
+def test_the_m0_unit_computes_the_reference(H):
+    """The unit (`forms`, 8 lanes) on two honest openings and on the forged ones, bit-sliced: at H = 0 (no climb, no
+    ``aux``), one level, and 17 (the first height whose side bits reach ``dirs``' word 1)."""
+    cases = _cases(H)
+    C, ins, outs = R.unit_circuit(8, H)
     vals = {nm: [0] * 16 for nm in ins}
     for t, (row, aux, dirs, _, acc, coef) in enumerate(cases):
         for nm, w in zip(ins, row + aux + acc + coef + dirs, strict=True):
@@ -121,25 +178,26 @@ def test_the_m0_unit_computes_the_reference():
     assert fail == 0
     for t, (row, aux, dirs, want, acc, coef) in enumerate(cases):
         words = [sum(((got[nm][j] >> t) & 1) << j for j in range(16)) for nm in outs]
-        out, acc_out = R.open_ref(8, 1, row, aux, acc, coef, dirs)
+        out, acc_out = R.open_ref(8, H, row, aux, acc, coef, dirs)
         assert words == out + acc_out
         assert (out == want) == (t < 2)
 
 
 @pytest.mark.slow
-def test_the_definition_computes_the_reference():
-    """`RecOpen{8, 1}` evaluated bit-sliced from its descriptor, on the same cases as the unit."""
+@pytest.mark.parametrize("H", [0, 1, 17])
+def test_the_definition_computes_the_reference(H):
+    """`RecOpen{8, H}` evaluated bit-sliced from its descriptor, on the same cases as the unit."""
     from verity.ml.circuits.evaluation import evaluate_batch
 
-    cases = _cases()
-    d = R.definition(8, 1)
-    assert d.id == "RecOpen_v4{LANES=8,H=1}"
+    cases = _cases(H)
+    d = R.definition(8, H)
+    assert d.id == f"RecOpen_v4{{LANES=8,H={H}}}"
     port = lambda i: np.array([np.array(_bits(c[i]), dtype=np.uint8).reshape(-1, 16) for c in cases])
     res = np.asarray(evaluate_batch(d, port(0), port(1), port(4), port(5), port(2)))
     res = res.reshape(len(cases), R.OUT_WORDS + R.ACC_WORDS, 16)
     out, acc_out = res[:, :R.OUT_WORDS], res[:, R.OUT_WORDS:]
     word = lambda w: int(sum(int(b) << j for j, b in enumerate(w)))
     for t, (r, a, dirs, want, acc, coef) in enumerate(cases):
-        ref = R.open_ref(8, 1, r, a, acc, coef, dirs)
+        ref = R.open_ref(8, H, r, a, acc, coef, dirs)
         assert [word(w) for w in out[t]] == ref[0] and [word(w) for w in acc_out[t]] == ref[1]
         assert (ref[0] == want) == (t < 2)

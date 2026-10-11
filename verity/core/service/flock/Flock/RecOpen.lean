@@ -191,10 +191,10 @@ def consStructure (LANES : Nat) : GfS where
     { mul := (List.range LANES).map fun l => (LANES + r * LANES + l, l), add := [Term.w (LANES + r)] }
 
 /-- `rec_open._steps` (`RecOpen_v3`'s and `RecOpen_v4`'s): the residuals `t` over `row + acc[:256]` and `coef` first, then
-`_climb` at `dirs[:16]`; the result is `(out, t + acc[256:])`. -/
+`_climb` at `dirs[:32]`, `dirs`' words 0 and 1; the result is `(out, t + acc[256:])`. -/
 def recOpen (LANES H : Nat) (row aux acc coef dirs : List Lin) : M (List Lin × List Lin) := do
   let t ← residualForms (consStructure LANES) (row ++ acc.take 256) coef
-  let out ← climbRow H row aux (dirs.take 16)
+  let out ← climbRow H row aux (dirs.take 32)
   pure (out, t ++ acc.drop 256)
 
 /-- The widths of the opening's five input ports, in bits. -/
@@ -222,9 +222,9 @@ def recOpenOuts (LANES H : Nat) (p : Ports) : List Lin :=
 
 /-! ## M0's unit -/
 
-/-- `RecOpen_v4{LANES, H}`'s ports (`rec_open.port_words`, 16 bits a word): `row` 8 LANES words, `aux` `64 ⌈H / 2⌉`,
-`acc` 64, `coef` 16 LANES, `dirs` 64. -/
-def ports (LANES H : Nat) : Ports := ⟨128 * LANES, 1024 * ((H + 1) / 2), 1024, 256 * LANES, 1024⟩
+/-- `RecOpen_v4{LANES, H}`'s ports (`rec_open.port_words`, 16 bits a word): `row` 8 LANES words, `aux`
+`64 max(1, ⌈H / 2⌉)` (at `H = 0` one row the unit does not read), `acc` 64, `coef` 16 LANES, `dirs` 64. -/
+def ports (LANES H : Nat) : Ports := ⟨128 * LANES, 1024 * max 1 ((H + 1) / 2), 1024, 256 * LANES, 1024⟩
 
 /-- One 16-bit port per word of `bits` bits (`rec_outer.lowering`'s `in{j}` and `out{j}`). -/
 def wordPorts (bits : Nat) : Array Nat := Array.replicate (bits / 16) 16
@@ -249,8 +249,8 @@ def params (name : String) : Option (Nat × Nat) :=
     | _ => none
   | _ => none
 
-/-- `rec_open._check`: `LANES` a positive multiple of 8, `1 ≤ H ≤ 16`. -/
-def valid (LANES H : Nat) : Bool := 8 ≤ LANES && LANES % 8 == 0 && 1 ≤ H && H ≤ 16
+/-- `rec_open._check`: `LANES` a positive multiple of 8, `H ≤ 32`. -/
+def valid (LANES H : Nat) : Bool := 8 ≤ LANES && LANES % 8 == 0 && H ≤ 32
 
 /-- The verifier's unit net at `LANES` and `H`. -/
 def unitNet (LANES H : Nat) : V Net := netOf (unitName LANES H) (unitLaid LANES H)
@@ -268,7 +268,7 @@ net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (L, H) =>
-    if !valid L H then throw s!"circuit {c.name}: rec-open's LANES is a positive multiple of 8 and H is 1 to 16"
+    if !valid L H then throw s!"circuit {c.name}: rec-open's LANES is a positive multiple of 8 and H is 0 to 32"
     else if inBits c.unit != (ports L H).bits.foldl (· + ·) 0 || outBits c.unit != 2048 then
       throw (s!"circuit {c.name}: unit {c.unit.name} has {inBits c.unit} input and {outBits c.unit} output bits, " ++
         s!"not rec-open's {(ports L H).bits.foldl (· + ·) 0} and 2048")
@@ -316,7 +316,7 @@ theorem foldl_wordPorts (bits : Nat) : (wordPorts bits).foldl (· + ·) 0 = bits
   rw [wordPorts, ← Array.foldl_toList, Array.toList_replicate, foldl_add_replicate, Nat.zero_add]
 
 theorem foldl_ports (LANES H : Nat) :
-    (ports LANES H).bits.foldl (· + ·) 0 = 128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + 1024 := by
+    (ports LANES H).bits.foldl (· + ·) 0 = 128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + 1024 := by
   simp [ports, Ports.bits] <;> omega
 
 /-- The cap refuses no unit the comparison would accept: the verifier's own net has `ports`' input bits and 2048 output

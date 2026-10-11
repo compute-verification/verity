@@ -55,7 +55,8 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        "benchmarks/judge.py"
+        "benchmarks/judge.py",
+        ".cursor/"
       ]
     },
     {
@@ -68,6 +69,7 @@
       "owns": [
         "verity/",
         "verity/core/protocols/sampled_proofs/",
+        "archive/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
         "archive/sp1/benchmarks/dot_product/",
@@ -89,6 +91,7 @@
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
+        "benchmarks/load_time/",
         "verity/ml/circuits/ops/"
       ]
     },
@@ -108,6 +111,7 @@
         "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/numerical/",
         ".agents/skills/kernel-engineering/"
       ]
     },
@@ -120,6 +124,7 @@
       "linear": "MEM",
       "owns": [
         "verity/core/protocols/pous/",
+        "verity/core/devices/memory_challenger/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
@@ -135,6 +140,7 @@
       "linear": "NET",
       "owns": [
         "verity/core/protocols/certifier/",
+        "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
@@ -150,6 +156,8 @@
       "linear": "CI",
       "owns": [
         "tools/verity/check/",
+        "tools/verity/cli/",
+        "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
@@ -164,6 +172,7 @@
       "linear": "LEAN",
       "owns": [
         "tools/verity/lean/",
+        "tools/lean/",
         ".agents/skills/lean-proofs/",
         "Security/"
       ]

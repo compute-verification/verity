@@ -45,9 +45,10 @@ holds each event until its planned bucket, never before vLLM sent it, and `windo
 windows whose declared sync is not the honest run's; under `covert` the shim delays each stream's first event as
 `covert.LiveSender` says: the covert sender on a live server, which can only delay what the model writes. The audit also
 counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
-have met, and `mismatches_from_late_frames`: the mismatched egress windows whose record is the shaper's rule on the
-frames as read: a frame read after its hand time under the declared sync, which an online rule's honest miss and a
-sender's held frames both give.
+have met. A frame read after its hand time under the declared sync, which an online rule's honest miss and a sender's
+held frames both give, faults the window it is handed in `coverage-never-established`; `mismatches_from_late_frames`
+counts the mismatched egress windows whose record is the shaper's rule on the frames as read: windows that closed
+before such a frame was handed.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
@@ -96,7 +97,7 @@ from verity.core.protocols.certifier.active import (
     encode_frame,
     worker,
 )
-from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import CommittedRecord, commit
 from verity.core.protocols.certifier.grid import (
@@ -1193,8 +1194,9 @@ def live_comparisons(plan: dict, setup: Setup, frames: Sequence[LogicalFrame], r
     return {"model_syncs_met_windows": sum(w not in late for w in range(windows)), "hindsight": hindsight}
 
 
-def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
-    """The audit of one run's published records, and the comparisons with the reference and the model."""
+def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dict:
+    """The audit of one run's published records, and the comparisons with the reference and the model. The verifier
+    is `audit`, a class with `audit.Audit`'s interface."""
     setup = Setup(report)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
@@ -1215,7 +1217,7 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
     committed = read_committed(run / "committed.jsonl")
     verdicts = []
     for kind, records in (("raw", in_records + out_records), ("committed", committed)):
-        a = Audit()
+        a = audit()
         v = a.check_link(setup.egress_link, records, frames, syncs, setup.sync_set, e)
         v += a.check_ingress_link(setup.ingress_link, records, windows)
         verdicts.append(v)

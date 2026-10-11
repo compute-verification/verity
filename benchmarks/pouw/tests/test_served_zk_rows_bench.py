@@ -1,9 +1,9 @@
 """served_zk's GPU row commitments (`served_zk/rows_bench.py`, and the served path's `served_zk/statement.py`), the host side
-their gates rest on: the salt stream is ChaCha20 (RFC 7539's block vector, in sha512.cuh's counter and nonce layout) under
-the bench's key or a given one, the node and leaf heads it hands the device are the messages merkle's frame-v3-sha512 tree
+their gates rest on: each commitment's salts are the OS's, 192 bytes a row, the ones its reference reads, the node and leaf heads it hands the device are the messages merkle's frame-v3-sha512 tree
 hashes, and the statement's stages give each weight its own slot of its k's rows."""
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import sys
 from pathlib import Path
@@ -17,19 +17,42 @@ import rows_bench as RB  # noqa: E402
 import statement as ST  # noqa: E402
 
 
-def test_chacha20_is_rfc7539s_block():
-    key = bytes(range(32))
-    # RFC 7539 2.3.2: counter 1, nonce 00:00:00:09:00:00:00:4a:00:00:00:00 = state words 12..15 (1, 0x09000000, 0x4a000000, 0)
-    out = RB.chacha20_block(key, 1 | 0x09000000 << 32, 0x4A000000)
-    assert out[:16].hex() == "10f1e7e4d13b5915500fdd1fa32071c4"
-    assert out[-16:].hex() == "b5129cd1de164eb9cbd083e8a2503c4e"
+class _Host:
+    """The device calls a `Commit` makes outside its launches, on host memory."""
+
+    def __init__(self):
+        self.mem, self.next, self.stream = {}, 4096, None
+
+    def alloc(self, n):
+        p, self.next = self.next, self.next + n + 4096
+        self.mem[p] = bytearray(n)
+        return p
+
+    def put(self, data):
+        p = self.alloc(len(data))
+        self.mem[p][:] = data
+        return p
+
+    def launch(self, *a, **k):
+        pass
+
+    def ck(self, fn, dst, src, n, *stream):
+        assert fn in ("cuMemcpyHtoD_v2", "cuMemcpyHtoDAsync_v2")
+        base = max(p for p in self.mem if p <= dst.value)
+        self.mem[base][dst.value - base:dst.value - base + n] = ctypes.string_at(src, n)
 
 
-def test_salts_are_three_blocks_a_leaf():
-    assert RB.salt(5, 2) == b"".join(RB.chacha20_block(RB.SALT_KEY, 6 + j, 5) for j in range(3))
-    assert len(RB.salt(0, 0)) == 192
-    key = hashlib.sha256(b"k").digest()
-    assert RB.salt(5, 2, key) == b"".join(RB.chacha20_block(key, 6 + j, 5) for j in range(3)) != RB.salt(5, 2)
+def test_salts_are_the_oss_per_row_and_the_references():
+    h = _Host()
+    cm = RB.Commit(h, h, {}, "t", 0, 5, 32, 32, RB.V2)
+    first = cm.salts
+    assert len(first) == 192 * 5 and bytes(h.mem[cm.d_salts]) == first
+    cm.fresh_salts()
+    assert cm.salts != first and bytes(h.mem[cm.d_salts]) == cm.salts
+    assert RB.Commit(h, h, {}, "t", 0, 5, 32, 32, RB.V2).salts not in (first, cm.salts)
+    want = cm.reference([bytes(32)] * 5)
+    assert want["bc"] == b"".join(RB.INST.commit_string(RB.KEY, RL.sha512_row_v2_digest(bytes(32), 256), cm.salts[192 * i:192 * (i + 1)])
+                                  for i in range(5))
 
 
 def test_each_weight_has_its_own_slot_of_its_ks_stage():
