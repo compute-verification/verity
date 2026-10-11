@@ -512,8 +512,8 @@ theorem frameHash?_ok {h : PouwCommit.Hash} {tag : String} {parts : List ByteArr
   · simp [throw, throwThe, MonadExceptOf.throw] at hok
   rename_i ht hp
   refine ⟨by omega, fun p hm => ?_, Except.ok.inj hok⟩
-  by_contra hc
-  exact hp (List.any_eq_true.2 ⟨p, hm, by simpa using hc⟩)
+  have := mt (fun hc : 2 ^ 64 ≤ p.size => List.any_eq_true.2 ⟨p, hm, decide_eq_true hc⟩) hp
+  omega
 
 theorem frameInjective : FrameInjective := by
   intro h tag tag' parts parts' d hd hd'
