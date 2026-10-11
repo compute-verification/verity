@@ -134,9 +134,10 @@ class TopValue:
     first: dict[int, int]
 
     @classmethod
-    def build(cls, program: str, level: int, tops: dict[int, V.Top]) -> "TopValue":
+    def build(cls, program: str, level: int, tops: dict[int, V.Top], value: str | None = None) -> "TopValue":
         """``tops``: each rep's top at the level (`rec_vstar.tops`); a top two reps share (level 0's ``root_B``) is one run of
-        rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit."""
+        rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit. ``value``: another
+        table's name for it (default `top_value_name`)."""
         from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
         runs: list[V.Top] = []
@@ -145,7 +146,7 @@ class TopValue:
             if t not in runs:
                 runs.append(t)
             first[rep] = sum(len(u.nodes) for u in runs[:runs.index(t)])
-        value = top_value_name(level)
+        value = value or top_value_name(level)
         rows = [r for t in runs for r in RL.top_rows(b"".join(t.nodes))]
         reg = G.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
         own = RR.commits_entry(program, value, R.OUT_WORDS, [b for t in runs for b in t.bcs])
