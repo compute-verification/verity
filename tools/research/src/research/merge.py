@@ -1336,8 +1336,8 @@ def _resolve_run(remote, run: str) -> str | None:
 
 def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print) -> bool:
     """Write a `landed` label on each check run a landing over ``start``..``tip`` names (`landed_runs`): its value main's merge
-    commit, its ts the commit's time, by LANDED_BY, so a rerun writes the same assertions (the store README's landed merge
-    train); then push them.  True when every label reached the remote; nothing raises, since the landings stand."""
+    commit, its ts the later of the commit's time and the run's start (its id's), by LANDED_BY, so a rerun anywhere writes the
+    same assertions (the store README's landed merge train); then push them.  True when every label reached the remote; nothing raises, since the landings stand."""
     try:
         from .store import labels_sync as LS
         from .store.local import LocalStore
@@ -1351,6 +1351,8 @@ def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print) -> 
             if (rid := _resolve_run(st.remote, run)) is None:
                 unresolved.append(run)
                 continue
+            d = rid[1:16]
+            ts = max(ts, f"{d[:4]}-{d[4:6]}-{d[6:8]}T{d[9:11]}:{d[11:13]}:{d[13:15]}Z")    # the lander's commits carry a fixed date
             if not any(lab.key == "landed" and lab.value == commit and lab.by == LANDED_BY for lab in st.labels(rid)):
                 st.add_label(rid, "landed", commit, LANDED_BY, ts=ts)
             done.append(rid)

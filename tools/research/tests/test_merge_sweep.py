@@ -545,7 +545,7 @@ def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_reru
     assert M.label_landed(repo, start, second, store=st, log=said.append), said
     for rid, commit in (("r20261010-104434-7273", first), ("r20261010-110000-9827", first), ("r20261011-010203-abcd", second)):
         lab, = st.labels(rid, "landed")
-        assert (lab.value, lab.by) == (commit, M.LANDED_BY) and lab.ts.endswith("Z")
+        assert (lab.value, lab.by) == (commit, M.LANDED_BY) and lab.ts >= f"2026-10-1{rid[8]}T"
         assert list((vault / "labels").rglob("*.json")), "pushed"
     pushed = sorted((vault / "labels").rglob("*.json"))
     assert len(pushed) == 3
@@ -558,6 +558,10 @@ def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_reru
     assert not M.label_landed(repo, start, first, store=st2, log=said.append)
     assert "no `landed` label on r20261010-*-9827: the id names no single run on the remote" in said[-2]
     assert st2.labels("r20261010-104434-7273", "landed")[0].value == first
+    monkeypatch.setattr(M, "landed_runs", lambda *_a: [("r20261011-010203-abcd", second, "2026-09-28T23:00:00Z")])
+    st3 = LocalStore(tmp_path / "third")
+    assert M.label_landed(repo, start, second, store=st3, log=said.append)
+    assert st3.labels("r20261011-010203-abcd", "landed")[0].ts == "2026-10-11T01:02:03Z", "the lander's fixed date: the run's start"
 
 
 def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_them_standing(tmp_path, capsys):
