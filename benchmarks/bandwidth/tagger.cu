@@ -8,8 +8,9 @@
 //                 group's two leaves of 16 tags.
 //   ro-sha512/v1  one thread per block, the warp staging each 128-byte chunk of its 32 rows through shared memory
 //                 (coalesced), 17 compressions after the prefix's midstate, and the block's leaf fused (one leaf per tag).
-//   tree          bottom-up, an odd last node promoted, which is RFC 6962's shape: nine levels per launch, each block
-//                 reducing 512 nodes to one (`node_span`); every level stays in the workspace for openings.
+//   tree          bottom-up, an odd last node promoted, which is RFC 6962's shape: one launch per level while a level
+//                 has more than 2^15 nodes, then nine levels per launch, each block reducing 512 nodes to one
+//                 (`node_span`); every level stays in the workspace for openings.
 //
 // Built two ways from this file: `bwtag` (BW_MAIN: validate against the Python reference, then time) and `libbwtag.so`
 // (the C ABI at the end, for a harness that holds E in its own device buffer).
@@ -392,6 +393,14 @@ __device__ __forceinline__ void level_step(const uint64_t* in, uint64_t n, uint6
     for (int k = 0; k < 8; ++k) out[8 * i + k] = in[16 * i + k];
 }
 
+// One level, a thread per output node: for the wide levels, where throughput rather than latency counts.
+constexpr uint64_t WIDE = 1 << 15;
+
+__global__ void __launch_bounds__(128, 4) node_level(const uint64_t* __restrict__ in, uint64_t n, uint64_t* __restrict__ out) {
+  uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
+  if (i < (n + 1) / 2) level_step(in, n, out, i);
+}
+
 // Up to SPAN levels in one launch: block b of SPAN_THREADS threads takes nodes [b·2^SPAN, (b + 1)·2^SPAN) of the first
 // level and every node above them, one level per barrier.  Ranges stay aligned, so a block's inputs at each level are
 // its own outputs of the level below, and the odd last node of a level falls in the last block.
@@ -497,7 +506,13 @@ static void launch_tags(const Pass& p, const void* E, const uint8_t seed[32], ui
 
 static void launch_tree(const Pass& p, cudaStream_t st) {
   const size_t top = p.lv.n.size() - 1;
-  for (size_t k = 0; k < top;) {
+  size_t k = 0;
+  for (; k < top && p.lv.n[k] > WIDE; ++k) {
+    const uint64_t nout = p.lv.n[k + 1];
+    node_level<<<(unsigned)((nout + 127) / 128), 128, 0, st>>>(p.nodes + p.lv.off[k] * 8, p.lv.n[k],
+                                                               p.nodes + p.lv.off[k + 1] * 8);
+  }
+  while (k < top) {
     Span s;
     s.levels = (int)std::min<size_t>(SPAN, top - k);
     for (int t = 0; t <= s.levels; ++t) {

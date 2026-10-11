@@ -272,31 +272,41 @@ def test_bottom_up_tree_is_rfc6962(n):
 
 
 SPAN = int(re.search(r"constexpr int SPAN = (\d+)", CU).group(1))
+WIDE = 1 << int(re.search(r"constexpr uint64_t WIDE = 1 << (\d+);", CU).group(1))
 
 
-def node_span_launches(n0: int) -> list[tuple[int, list[int], int]]:
-    """`launch_tree`'s launches over `n0` leaves: (first level, level sizes, grid)."""
+def tree_launches(n0: int) -> tuple[int, list[tuple[int, list[int], int]]]:
+    """`launch_tree` over `n0` leaves: the levels done one launch each, then the `node_span` launches (first level,
+    level sizes, grid)."""
     sizes = [n0]
     while sizes[-1] > 1:
         sizes.append((sizes[-1] + 1) // 2)
-    out, k, top = [], 0, len(sizes) - 1
+    top, k = len(sizes) - 1, 0
+    while k < top and sizes[k] > WIDE:
+        k += 1
+    wide, out = k, []
     while k < top:
         levels = min(SPAN, top - k)
         out.append((k, sizes[k:k + levels + 1], -(-sizes[k] // (1 << SPAN))))
         k += levels
-    return out
+    return wide, out
 
 
-@pytest.mark.parametrize("n", [1, 2, 3, 255, 256, 257, 511, 512, 513, 1000, 32_768, 70_001])
-def test_node_span_writes_every_node_once_from_its_own_block(n):
-    """`node_span`'s ranges: block b, step t writes node b·(T >> t) + tid of level k + t + 1 for tid < T >> t, reading
-    nodes 2i and 2i + 1 of level k + t, which the same block wrote at step t − 1 (or which are leaves)."""
+@pytest.mark.parametrize("n", [1, 2, 3, 255, 256, 257, 511, 512, 513, 1000, 32_768, 32_769, 70_001, 1 << 19])
+def test_tree_launches_write_every_node_once_from_their_own_block(n):
+    """`node_level` writes the wide levels; then `node_span`'s ranges: block b, step t writes node b·(T >> t) + tid of
+    level k + t + 1 for tid < T >> t, reading nodes 2i and 2i + 1 of level k + t, which the same block wrote at step
+    t − 1 (or an earlier launch did)."""
     threads = 1 << (SPAN - 1)
     sizes = [n]
     while sizes[-1] > 1:
         sizes.append((sizes[-1] + 1) // 2)
     writer: dict[tuple[int, int], int] = {(0, i): -1 for i in range(n)}
-    for k, lv, grid in node_span_launches(n):
+    wide, launches = tree_launches(n)
+    for k in range(wide):
+        assert sizes[k] > WIDE
+        writer.update({(k + 1, i): -1 for i in range(sizes[k + 1])})
+    for k, lv, grid in launches:
         for b in range(grid):
             for t in range(len(lv) - 1):
                 for tid in range(threads >> t):

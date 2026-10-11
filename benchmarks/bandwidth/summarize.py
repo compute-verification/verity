@@ -15,6 +15,9 @@ from verity.core.protocols.bandwidth import audit
 
 DELTA = 0.01
 DELTA_GUESS = 2.0 ** -40
+PCIE_GEN5_X16 = 32e9 * 16 / 8 * 128 / 130
+"""The side paths' cap: the link's raw rate (32 GT/s on 16 lanes, 128b/130b), an upper bound the measured rates
+approach."""
 
 
 def _load(out: Path, name: str):
@@ -35,7 +38,11 @@ def summarize(out: Path) -> dict:
     s["store_bytes"], s["raw_read_ms_p50"], s["raw_read_gbs_p50"] = store, raw, timing["raw_read_gbs"]["p50"]
     s["pcie_h2d_gbs_p50"] = timing["pcie_h2d_gbs"]["p50"]
     s["pcie_zero_copy_read_gbs_p50"] = timing["pcie_zero_copy_read_gbs"]["p50"]
-    side = max(timing["pcie_h2d_gbs"]["max"], timing["pcie_zero_copy_read_gbs"]["max"]) * 1e9
+    measured = max(timing["pcie_h2d_gbs"]["max"], timing["pcie_zero_copy_read_gbs"]["max"]) * 1e9
+    if measured > PCIE_GEN5_X16:
+        raise SystemExit(f"a measured PCIe rate {measured / 1e9:.1f} GB/s exceeds the link's raw rate")
+    side = PCIE_GEN5_X16
+    s["pcie_measured_max_gbs"] = measured / 1e9
     tags = {}
     for key, name in (("gf31", "gf31-poly/v1"), ("ro", "ro-sha512/v1")):
         cold, warm = timing[f"{key}_cold"], timing[f"{key}_warm"]
