@@ -197,8 +197,8 @@ theorem sound_split (t : Lin) (x : List Lin) :
     · simp only [Bool.false_eq_true, ↓reduceIte]
       rw [FlockLevel3.F128.poly_zero, ← polyOf_replicate_zero z 128]
       exact polyOf_congr (by rw [hl, hx.1, List.length_replicate]) fun i hi' => by
-        rw [hb i (by rw [List.length_replicate] at hi'; omega)]
-        simp [ht]
+        rw [hb i (by rw [List.length_replicate, ← hx.1] at hi'; exact hi'), List.getElem_replicate, ht, ev_zero,
+          Bool.false_and]
     · simp only [↓reduceIte]
       rw [← hx.2]
       exact polyOf_congr hl fun i hi' => by
