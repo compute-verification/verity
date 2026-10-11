@@ -412,15 +412,30 @@ def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], in
     return out
 
 
-def schedule_for(statement: dict) -> dict:
+def zp_round(m: int, k_log: int) -> int:
+    """The index in `rep_rounds` of the round that absorbs z_partial (64 elements) and squeezes r′."""
+    return m + k_log - 7
+
+
+def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:
+    """`rep_rounds` with hidden unit circuits (`rec_algebra.Shape.holo`): z_partial's round squeezes nothing (its frames end
+    in a squeeze of no coins, `verity_flock.rec_session`; `rec_algebra.Coins` skips it), and a round of its own absorbs h (64
+    elements) and squeezes r′ (`rec_algebra.h_round`)."""
+    out, k = rep_rounds(m, k_log, claims), zp_round(m, k_log)
+    if out[k] != (1, [], 0, 64):
+        raise AssertionError(f"round {k} is not z_partial's")
+    return out[:k] + [(0, [], 0, 64), (1, [], 0, 64)] + out[k + 1:]
+
+
+def schedule_for(statement: dict, holo: bool = False) -> dict:
     """The schedule of a flock-circuit statement's inner session (one table, fast100's two reps, live OS coins) from the
     statement's public shape alone: ``dense_m``, ``k_log``, ``nbl`` and ``regions`` of ``flock-circuit statement``'s
     ``STATEMENT`` record (`statement_of`), the four numbers the schedule reveals anyway. Each region adds one extra claim a
-    link point."""
+    link point. ``holo``: hidden unit circuits' rounds (`holo_rounds`)."""
     m, k_log, nbl, regions = (statement.get(k) for k in ("dense_m", "k_log", "nbl", "regions"))
     if not all(type(v) is int and v >= 0 for v in (m, k_log, nbl, regions)):
         raise ValueError("a STATEMENT record names dense_m, k_log, nbl and regions")
-    rep = rep_rounds(m, k_log, 2 + LINK_POINTS * regions)
+    rep = (holo_rounds if holo else rep_rounds)(m, k_log, 2 + LINK_POINTS * regions)
     streams = [f"{TABLE}/rep{r}" for r in range(REPS)]
     return {"kind": KIND + "/schedule",
             "hello": {"digests": "sha512", "flavor": "rs", "link": {"m": PT_LOCAL + nbl, "points": LINK_POINTS}, "profile": "fast100",
@@ -923,6 +938,7 @@ def main(argv=None) -> int:
     ap.add_argument("--schedule", help="the schedule every session is held to (required to serve: --schedule-for's)")
     ap.add_argument("--schedule-for", metavar="STATEMENT",
                     help="print the schedule of a statement (flock-circuit statement's output, or its STATEMENT record) and exit")
+    ap.add_argument("--holo", action="store_true", help="--schedule-for: hidden unit circuits' rounds (h after z_partial)")
     ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
     ap.add_argument("--firewall", metavar="DIR", help="the firewall's state: each session opens a recursive session on it")
     ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
@@ -934,7 +950,7 @@ def main(argv=None) -> int:
                          "plus W0 + ... + Wj (--firewall)")
     a = ap.parse_args(argv)
     if a.schedule_for:
-        print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text())), indent=1))
+        print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text()), a.holo), indent=1))
         return 0
     if a.schedule_of:
         print(json.dumps(schedule_of(json.loads(Path(a.schedule_of).read_text())), indent=1))
