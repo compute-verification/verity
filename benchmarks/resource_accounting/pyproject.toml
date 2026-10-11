@@ -7,8 +7,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # certified.py looks γ up from the PoUW harness's price twins (price_twins.py, loaded by path, and its table) and prices the
-# credited cells with verity.core.protocols.pouw; the rest of `verity` listed is what that package imports.
+# credited cells with verity.core.protocols.pouw, and reads |C| from verity.core.protocols.pous's registered schemes; the rest
+# of `verity` listed is what those packages import.
 inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/price_twins.json",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/ml/__init__.py", "verity/ml/circuits",
+          "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/pous", "verity/core/claims",
+          "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/randomness"]

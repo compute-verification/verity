@@ -148,21 +148,24 @@ def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
     assert st["stored"] == stored and st["s_cert"] == (1 << 19) * 16448 * 18 // 19 / 8
     assert st["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond" and st["unproved"] is None
     assert "operating point" in C.storage(_pous_result(certified=False))["unproved"]
-    assert C.storage({**_pous_result(), "profile": None})["unproved"] == "no profile: 19 of 20 honest audits accepted"
+    bare = C.storage({**_pous_result(), "profile": None, "blocks": 1 << 19, "segments": 8, "scheme": "p2-16448/v4"})
+    assert bare["unproved"] == "no profile: 19 of 20 honest audits accepted" and bare["stored"] == stored
     assert C.storage(None)["unproved"] == C.NO_POUS
     doc = _doc()
     doc["beside"] = {"window_start_ns": 0, "window_end_ns": 3_000_000_000, "window_closed_by": "audit", "harness_rc": 1,
                      "left_cpus": [2, 3], "points": {"o-n4096-k4096-b1-L32": {"native-fp8": {
-                         "items": [[1, 0.0005], [2, 0.0007]], "median_s": 0.0006, "alone_median_s": 0.0004, "slowdown": 0.5}}}}
+                         "items": [[1, 0.0005], [2, 0.0007]], "median_s": 0.0006, "alone_median_s": 0.0004, "slowdown": 0.5,
+                         "after": [0.0005] * 10, "after_median_s": 0.0005}}}}
     p = R.pous(doc, _pous_result())
     cap, memory = p["capacity"], 96 << 30
     assert cap["residual"] == pytest.approx(memory - st["s_cert"])
     assert cap["honest_overhead"] == pytest.approx(memory - stored) and cap["soundness_slack"] == pytest.approx(stored - st["s_cert"])
     assert (p["accepted"], p["audits"], p["late"], p["window_s"], p["failed_gates"]) == (19, 20, 1, 3.0, ["timed_audit"])
     assert p["beside"] == [{"key": "o-n4096-k4096-b1-L32", "arm": "native-fp8", "items": 2, "alone_ms": 0.4, "beside_ms": 0.6,
-                            "slowdown": 0.5}]
+                            "slowdown": 0.5, "after_ms": 0.5, "slowdown_after": pytest.approx(0.2)}]
     md = R.markdown(doc, {}, "fixture", _pous_result())
-    assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md and "| +50.0% | 2 |" in md
+    assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md
+    assert "| 0.400 | 0.600 | 0.500 | +50.0% | +20.0% | 2 |" in md
     assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
     doc["beside"] = {**doc["beside"], "idle": True, "points": {}}
     assert "Honest audit beside the idle chain (the control): 19 of 20" in R.markdown(doc, {}, "fixture", _pous_result())

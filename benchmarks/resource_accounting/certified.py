@@ -131,6 +131,15 @@ def capacity(memory_bytes: int | None, s_cert: float | None = None, why: str = N
             **residual(None if memory_bytes is None else float(memory_bytes), stored, s_cert)}
 
 
+def stored(result: dict) -> float | None:
+    """|C| in bytes from the result's blocks at its registered scheme's block bits, for a result with no profile."""
+    from verity.core.protocols.pous import schemes
+    try:
+        return result["blocks"] * schemes.get(result["scheme"], segments=result["segments"]).params.m / 8
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def storage(result: dict | None) -> dict:
     """S_cert from the PoUS harness's ``bench-result.json``: its storage profile's ``state_bound_bits`` as bytes when the
     harness issued a profile (every honest audit accepted) and it is certified; |C| is the profile's blocks at their bits."""
@@ -139,7 +148,7 @@ def storage(result: dict | None) -> dict:
     prof = result.get("profile") or {}
     sp = prof.get("storage_profile") or {}
     cert = sp.get("certificate") or {}
-    out = {"s_cert": None, "unproved": None, "stored": sp["blocks"] * sp["block_bits"] / 8 if sp.get("blocks") else None,
+    out = {"s_cert": None, "unproved": None, "stored": sp["blocks"] * sp["block_bits"] / 8 if sp.get("blocks") else stored(result),
            "theorem": cert.get("theorem"), "delta": cert.get("delta"), "eps_log2": cert.get("eps_log2"),
            "k": sp.get("k"), "limit_ns": sp.get("limit_ns"), "gaps": prof.get("gaps") or [],
            "experimental": prof.get("experimental")}

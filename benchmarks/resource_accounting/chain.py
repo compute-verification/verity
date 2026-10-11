@@ -58,6 +58,7 @@ SCHEMA = "ra-matmul-chain/v1"
 SCHEME = "pearl-c-sm120-v1-h3"
 ERR = 0.08
 ITEM_S = 0.04
+AFTER_ITEMS = 10
 NAME, CC = "RTX PRO 6000 Blackwell", (12, 0)
 #: the no-write control's omitted steps (`e2e.CONTROL_OMITS`): every write of the commitment
 CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
@@ -535,7 +536,8 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
     with the alone phase's items, each item's monotonic start kept, so the chain's slowdown and the audit's answers share
     one window.  With ``--beside-idle`` the chain waits out the same window instead, its weights and graphs still resident:
     the control, the same harness on the same lease with nothing beside it.  The harness runs to its end after the window
-    (its controls and SeqRoot) and its exit code is kept."""
+    (its controls and SeqRoot) and its exit code is kept; then each arm runs `AFTER_ITEMS` items alone again, so the chain's
+    time beside the audit sits between its time alone before and after it."""
     import subprocess
 
     import torch
@@ -547,6 +549,13 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
                and arm in plans[p.key]["arms"]}
     rec: dict = {"tag": a.beside_tag, "cmd": a.beside_cmd, "points": {p.key: {} for p in pts}}
     over = lambda: left() < 0
+    turns = [(p, arm, m) for p in pts for arm, m in plans[p.key]["arms"].items() if not arm.endswith("-gemm")]
+
+    def item(p: S.Point, arm: str, m: dict) -> float:
+        if arm in S.NATIVE:
+            return natives[(p.key, arm)].item(m["chains"])["seconds"]
+        return pc.item(arm, x0s[p.key], p.batch, m["chains"])["seconds"]
+
     torch.cuda.synchronize()
     with open(a.beside_log or os.devnull, "w") as log:
         rec["started_ns"] = time.monotonic_ns()
@@ -558,7 +567,6 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
             rec["error"] = f"no {ready.name}: the harness exited {proc.poll()} or the budget ran out first"
         else:
             rec["window_start_ns"] = time.monotonic_ns()
-            turns = [(p, arm, m) for p in pts for arm, m in plans[p.key]["arms"].items() if not arm.endswith("-gemm")]
             i = 0
             rec["idle"] = bool(a.beside_idle)
             while not done.exists() and proc.poll() is None and not over():
@@ -568,28 +576,29 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
                 p, arm, m = turns[i % len(turns)]
                 i += 1
                 t = time.monotonic_ns()
-                if arm in S.NATIVE:
-                    r = natives[(p.key, arm)].item(m["chains"])
-                else:
-                    r = pc.item(arm, x0s[p.key], p.batch, m["chains"])
-                    r.pop("y")
-                rec["points"][p.key].setdefault(arm, []).append([t, r["seconds"]])
+                rec["points"][p.key].setdefault(arm, []).append([t, item(p, arm, m)])
             rec["window_end_ns"] = time.monotonic_ns()
             rec["window_closed_by"] = "audit" if done.exists() else "harness exit" if proc.poll() is not None else "budget"
-        for key, by_arm in rec["points"].items():
-            for arm, items in by_arm.items():
-                alone = plans[key]["arms"][arm]["median_s"]
-                during = statistics.median(s for _, s in items)
-                by_arm[arm] = {"items": items, "median_s": during, "alone_median_s": alone, "slowdown": during / alone - 1}
-        del natives
-        torch.cuda.synchronize()
-        torch.cuda.empty_cache()
         try:
             rec["harness_rc"] = proc.wait(timeout=max(1.0, left() + 90))
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGTERM)
             rec["harness_rc"] = proc.wait()
             rec["harness_stopped"] = "still running at the budget: its process group was sent SIGTERM"
+    after: dict[tuple[str, str], list[float]] = {}
+    if rec.get("window_end_ns") and not a.beside_idle:
+        for _ in range(AFTER_ITEMS):
+            for p, arm, m in turns:
+                after.setdefault((p.key, arm), []).append(item(p, arm, m))
+    for key, by_arm in rec["points"].items():
+        for arm, items in by_arm.items():
+            alone, later = plans[key]["arms"][arm]["median_s"], after.get((key, arm))
+            during = statistics.median(s for _, s in items)
+            by_arm[arm] = {"items": items, "median_s": during, "alone_median_s": alone, "slowdown": during / alone - 1,
+                           "after": later, "after_median_s": statistics.median(later) if later else None}
+    natives.clear()
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
     return rec
 
 

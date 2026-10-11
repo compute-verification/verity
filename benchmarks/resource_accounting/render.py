@@ -124,7 +124,9 @@ def pous(doc: dict, result: dict | None) -> dict | None:
     st = C.storage(result or None)
     memory = (doc.get("identity") or {}).get("memory_bytes")
     beside = [{"key": key, "arm": arm, "items": len(r["items"]), "alone_ms": r["alone_median_s"] * 1e3,
-               "beside_ms": r["median_s"] * 1e3, "slowdown": r["slowdown"]}
+               "beside_ms": r["median_s"] * 1e3, "slowdown": r["slowdown"],
+               "after_ms": None if r.get("after_median_s") is None else r["after_median_s"] * 1e3,
+               "slowdown_after": None if not r.get("after_median_s") else r["median_s"] / r["after_median_s"] - 1}
               for key, by_arm in (b.get("points") or {}).items() for arm, r in by_arm.items()]
     return {"error": b.get("error"), "idle": b.get("idle"), "window_closed_by": b.get("window_closed_by"), "harness_rc": b.get("harness_rc"),
             "harness_stopped": b.get("harness_stopped"), "left_cpus": b.get("left_cpus"),
@@ -180,9 +182,10 @@ def pous_lines(p: dict) -> list[str]:
                  f"{_gb(cap['honest_overhead'])} GB + soundness slack |C| − S_cert {_gb(cap['soundness_slack'])} GB "
                  f"(|C| = {_gb(st['stored'])} GB).")
     if p["beside"]:
-        lines += ["", "| point | arm | alone ms | beside the audit ms | slowdown | items |", "|---|---|---|---|---|---|"]
-        lines += [f"| {r['key']} | {r['arm']} | {r['alone_ms']:.3f} | {r['beside_ms']:.3f} | {r['slowdown']:+.1%} | {r['items']} |"
-                  for r in p["beside"]]
+        lines += ["", ("| point | arm | alone before ms | beside the audit ms | alone after ms | slowdown vs before | "
+                       "vs after | items |"), "|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {r['key']} | {r['arm']} | {r['alone_ms']:.3f} | {r['beside_ms']:.3f} | {_f(r['after_ms'], '.3f')} | "
+                  f"{r['slowdown']:+.1%} | {_f(r['slowdown_after'], '+.1%')} | {r['items']} |" for r in p["beside"]]
     return lines
 
 
