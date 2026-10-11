@@ -166,6 +166,22 @@ def test_the_public_index_is_the_published_artifacts_their_runs_summarised_and_w
     assert BI.dump(public) == rows
 
 
+def test_the_public_pass_reads_the_private_index_in_batches_and_builds_what_one_batch_builds(tmp_path, monkeypatch):
+    b, pub = tmp_path / "bucket", tmp_path / "public"
+    arts = [artifact(b, kind="fixture/v1", meta={"i": i}) for i in range(5)]
+    for i, a in enumerate(arts):
+        run(b, f"r20261011-17000{i}-0001", outputs={"result": a}, inputs={"golden": arts[(i + 1) % 5]})
+        label(b, a, "verified", "accepted")
+        _put(pub, f"manifests/{ids.hex_of(a)}.json", json.loads((b / f"manifests/{ids.hex_of(a)}.json").read_bytes()))
+    priv = tmp_path / "i.sqlite"
+    BI.index(FsRemote(b), priv, now=T0)
+    BI.index(FsRemote(pub), tmp_path / "one.sqlite", policy=BI.PUBLIC, private=priv, now=T0)
+    monkeypatch.setattr(BI, "IN_BATCH", 2)
+    rep = BI.index(FsRemote(pub), tmp_path / "two.sqlite", policy=BI.PUBLIC, private=priv, now=T0)
+    assert rep["read"] == 0 and rep["added"] == {"artifact": 5, "run": 5, "label": 5}
+    assert BI.dump(tmp_path / "two.sqlite") == BI.dump(tmp_path / "one.sqlite")
+
+
 @pytest.fixture
 def s3(tmp_path):
     objects = {"attempts/r1.json": b"1", "attempts/r2.json": b"2", "attempts/r3.json": b"3", "labels/x.json": b"x"}
@@ -283,8 +299,9 @@ def postgres(tmp_path):
         subprocess.run([f"{bindir}/pg_ctl", "-D", str(data), "-w", "-m", "fast", "stop"], check=True, capture_output=True)
 
 
-def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_grants(tmp_path, postgres):
+def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_grants(tmp_path, postgres, monkeypatch):
     url, reader = postgres
+    monkeypatch.setattr(BI, "IN_BATCH", 1)
     b, pub = tmp_path / "bucket", tmp_path / "public"
     fixture = artifact(b, kind="fixture/v1", meta={"weird": "a\tb\nc\\d", "n": [1, 2.5, None]})
     proof = artifact(b, kind="proof/v1", refs={"inputs": [fixture]})
@@ -294,10 +311,14 @@ def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_
     _put(pub, f"manifests/{ids.hex_of(fixture)}.json", json.loads((b / f"manifests/{ids.hex_of(fixture)}.json").read_bytes()))
     lite, lite_pub = tmp_path / "i.sqlite", tmp_path / "p.sqlite"
     pg, pg_pub = BI.PostgresIndex(url, "store_private"), BI.PostgresIndex(url, "store_public")
+    calls = []
+    monkeypatch.setattr(pg, "run", lambda script, run=pg.run: calls.append(script) or run(script))
     for _ in range(2):
         assert BI.index(FsRemote(b), lite, now=T0)["errors"] == [] and BI.index(FsRemote(b), pg, now=T0)["errors"] == []
         BI.index(FsRemote(pub), lite_pub, policy=BI.PUBLIC, private=lite, now=T0)
+        calls.clear()
         BI.index(FsRemote(pub), pg_pub, policy=BI.PUBLIC, private=pg, now=T0)
+        assert len(calls) <= 6
     assert BI.dump(pg) == BI.dump(lite) and BI.dump(pg_pub) == BI.dump(lite_pub)
     assert pg.listed_at(BI.MANIFESTS) == "2026-10-11T18:00:00Z" and pg.newest_run() == "r20261011-170000-0001"
     assert pg.size()["records"]["rows"] == 5
