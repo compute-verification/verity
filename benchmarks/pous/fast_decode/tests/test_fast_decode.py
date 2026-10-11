@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import algo as A  # noqa: E402
+import model as M  # noqa: E402
 from p2_v1 import reference as R  # noqa: E402
 
 SMALL_PRIMES = [p for p in range(3, 2000) if all(p % d for d in range(2, int(p ** 0.5) + 1))]
@@ -183,6 +184,25 @@ def test_fold_of_the_ntt_square():
 def test_ntt_root_has_order_2048():
     w = A.ntt_root()
     assert pow(w, 2048, A.GOLDILOCKS) == 1 and pow(w, 1024, A.GOLDILOCKS) == A.GOLDILOCKS - 1
+
+
+@pytest.mark.parametrize("alpha", [1.585, 1.404])
+def test_seqroot_model_is_the_specs_at_16448(alpha: float):
+    s = M.seqroot(16_448, alpha)
+    assert s["root_call_ns"] == 854_029 and s["rtt_cap_us"] == 354 and round(s["root_us"], 1) == 5960.5
+
+
+@pytest.mark.parametrize("w", [8_256, 4_160, 2_112])
+def test_narrower_widths_leave_no_room_for_delta(w: int):
+    for alpha in (1.585, 1.404):
+        s = M.seqroot(w, alpha)
+        assert s["rtt_cap_us"] is None and s["root_call_ns"] < 200_000
+
+
+def test_route_ceilings():
+    assert 75 < M.tc_ceiling_gbps(1188) < 76 and M.tc_ceiling_gbps(486) < 2 * M.MEASURED["keys_GBps"]
+    assert M.full_pass_gbps(M.tc_ceiling_gbps(486)) < 0.07 * M.MEASURED["read_GBps"]
+    assert round(M.partial_fraction(), 3) == 0.036
 
 
 def test_decode_is_the_references():
