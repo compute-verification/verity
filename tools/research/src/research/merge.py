@@ -1512,7 +1512,8 @@ def main(argv: list[str]) -> int:
     if a.label_landed:
         if len(a.ref) > 1 or a.train or a.sweep or a.mirror:
             ap.error("--label-landed takes at most one ref and no other mode")
-        return 0 if label_landed(repo, a.ref[0] if a.ref else "", f"refs/heads/{a.into}", store=LocalStore(a.store)) else 1
+        tip = _git(repo, "rev-parse", "--verify", f"refs/heads/{a.into}^{{commit}}").stdout.strip()
+        return 0 if label_landed(repo, a.ref[0] if a.ref else "", tip, store=LocalStore(a.store)) else 1
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)
     if a.mirror:
