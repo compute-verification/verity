@@ -30,8 +30,11 @@ import Flock.RecOpen
 import Flock.RecAlgebra
 import Flock.RecResiduals
 import Flock.HmRow
+import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.Registered
+import Flock.Keccak
+import Flock.RecCoins
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll

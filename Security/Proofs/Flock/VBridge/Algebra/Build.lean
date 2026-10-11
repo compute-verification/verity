@@ -14,7 +14,7 @@ residual's coefficients on the consistency sums into `kappa`, and only Ligerito'
 * `kapSum kappa r cons` is the final check's component `r` on the levels' consistency sums `cons`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
@@ -619,4 +619,4 @@ theorem kapSum_zero {K : Array (Array (Array F128))}
 
 end Build
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra
