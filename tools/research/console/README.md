@@ -14,9 +14,9 @@ on a host.
   derives `/workspace/usage/held-idle-hourly.jsonl` from. Each pool's lease ends that pool's idle before a shrink, read from its
   running `n1_lease.py loop` in `/proc` (three variables of its environment, nothing else), so the console runs as the loops'
   user, `research`; when it can't read them, node 1's hours wait for a pass that can.
-- **`--group store`** runs on the control pod every 10 minutes, from its `console-loop.sh`. It builds the evidence-store panels
-  (build, PoUW overhead, coverage, merge trains). It needs `ovd.py`, a copy of the Project store's
-  `scripts/overnight-dashboard.py`, and the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
+- **`--group store`** runs on the control pod every 10 minutes, from its `console-loop.sh`. It builds `verity/merge-checks`, the
+  last day's `check` Attempts with the main commit each landed as (its `landed` label); the site's Results view reads every
+  other store result from the store's index. It needs the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
   `/post_start.sh`; it reads the R2 credentials from `/root/.config/verity/r2.env` and the store from `/workspace/steward/store`.
 
 Deploy to vy-nebius-1 with `research deploy` (`tools/research/src/research/pods/nebius/deploy.toml` lists the two scripts, the `cluster` tree and both
@@ -31,7 +31,7 @@ Deploy to the control pod (`vy-control-verity`, `nv7h6w1pairkcu`). The loop runs
 run picks up a copied file without a restart:
 
 ~~~sh
-for f in verity_console.py ovd.py console-loop.sh; do
+for f in verity_console.py console-loop.sh; do
   research pods ssh nv7h6w1pairkcu -- "cat > /workspace/console/$f" < tools/research/console/$f
 done
 ~~~

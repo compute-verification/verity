@@ -2,12 +2,11 @@
 """Verity's panels for the site's live console (`/admin/live`), recomputed from their live sources and sent in the site's panel
 format (Project store `internal/live-console/panel-format.md`; the inventory is `internal/live-console/verity-panels.md`).
 
-    verity_console.py --group store [--store DIR] [--git DIR] [--research-src DIR] [--out DIR] [--key FILE] [--no-refresh]
+    verity_console.py --group store [--store DIR] [--research-src DIR] [--out DIR] [--key FILE] [--no-refresh]
     verity_console.py --group node1 [--out DIR] [--key FILE]
 
-- `store`, on the control pod: the evidence store's `ov.*` labels and the campaign's coverage records, read with the overnight
-  dashboard's own loaders (`ovd.py` is a copy of the Project store's `scripts/overnight-dashboard.py`), and the merge trains on
-  `main` (a commits-only clone, `--git`) with their `check` Attempts.
+- `store`, on the control pod: the evidence store's `check` Attempts of the last day and their `landed` labels. The rest of the
+  store's results are the site's Results view, which reads the store's index.
 - `node1`, on vy-nebius-1: its Prometheus (DCGM and node-exporter, with the steward's definitions from `util_collect.py`, a copy of
   `internal/lanes/nebius-infra/tools/util_collect.py`) and the Kueue samples `vy-usage` appends to /workspace/usage/queues.jsonl;
   and vy-nebius-2's POUS sampler, read over `ssh vy-n2` and reduced to per-minute rows there.
@@ -31,7 +30,7 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -42,7 +41,6 @@ REQUIRED = {"id", "title", "kind", "updated_at", "source", "columns", "rows"}
 MAX_BODY = 64 * 1024
 ID = re.compile(r"[a-z0-9-]+/[a-z0-9-]+")
 ISO = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)")
-STATUS_ORDER = ("pass", "finding", "short replay", "unsupported", "not run")
 GPUS, CORES = 8, 192
 GPU_TARGET, CPU_TARGET = 60, 70  # Daniel's node-1 targets (docs/gpu-utilization-postmortem.md)
 PROM = "/api/v1/namespaces/skypilot/services/skypilot-prometheus-server:80/proxy/api/v1"
@@ -174,8 +172,7 @@ def write(out: Path, p: dict) -> None:
 # ---------------------------------------------------------------------------------------------------------------- store group
 
 def store_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
-    sys.path[:0] = [str(ns.research_src), str(HERE)]
-    import ovd  # noqa: PLC0415  the overnight dashboard's loaders
+    sys.path[:0] = [str(ns.research_src)]
     from research.store.local import LocalStore  # noqa: PLC0415
 
     store = LocalStore(ns.store) if ns.store else LocalStore()
@@ -186,149 +183,11 @@ def store_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
             info["refresh"] = f"+{rep['attempts']} attempts, +{rep['labels']} labels, {len(rep['errors'])} errors, {rep['seconds']:.0f} s"
         except Exception as e:  # noqa: BLE001  a stale catalog still renders; the run line says so
             info["refresh"] = f"failed: {type(e).__name__}: {e}"
-    idx = store.index
-    probs = ovd.Problems()
-    points, cov_labels, _, _ = ovd.load(idx, probs)
-    bench = ovd.BENCHMARK["build"]
-    series = {k: s for k, s in ovd.build_series(points).items()
-              if s.ws != "build" or (s.config or "").split(" @ ")[0] in bench}
-    src = "evidence store (`research data`), ov.* labels: ov.ws {ws}, ov.metric {metric}"
-    out = []
-
-    def attempt_chart(name, title, ws, metric, phases, unit, note, y_scale=None):
-        mine = sorted((s for s in series.values() if s.ws == ws and s.metric == metric and s.phase in phases and s.path),
-                      key=lambda s: (s.config or "", s.rank, s.line))[:19]
-        cols, by_col = ["attempt"], []
-        for s in mine:
-            label = " ".join(x for x in (s.config, s.sub or (s.phase if len(phases) > 1 else None), s.line) if x)[:60]
-            while label in cols:
-                label = label[:57] + "'"
-            cols.append(label)
-            by_col.append({p.attempt: p.value for p in s.path})
-        attempts = sorted({a for c in by_col for a in c})
-        rows = [[a, *[sig(c.get(a)) for c in by_col]] for a in attempts]
-        when = max((p.labelled for s in mine for p in s.points), default=None)
-        return panel(name, title, "line", cols, rows, unit=unit, note=note, updated_at=isoz(when) or iso(now),
-                     source=src.format(ws=ws, metric=metric), y_scale=y_scale)
-
-    how = ("x is the optimization attempt. A line's last point is its quiet-hour re-measurement when it has one; noisy runs are "
-           "included as measured and gate failures are left out.")
-    build = [
-        ("build-throughput", "Build throughput: circuit gates emitted per wall-clock second", "throughput", ovd.PHASES, "gates/s",
-         f"Per benchmark config, phase and optimization line; higher is better; log scale. {how}", "log"),
-        ("build-peak-mem", "Build peak memory: peak RSS", "peak-rss", ovd.PHASES, "GiB",
-         f"Per benchmark config, phase and optimization line; lower is better. {how}", None),
-        ("build-commit-time", "Commit time on the RTX PRO 6000", "commit-time", (ovd.COMMIT,), "s",
-         f"Commit stage seconds per benchmark config and phase; lower is better. {how}", None),
-    ]
-    for name, title, metric, phases, unit, note, y_scale in build:
-        out.append(attempt_chart(name, title, "build", metric, phases, unit, note, y_scale))
-    out.append(attempt_chart("pouw-overhead", "PoUW overhead (POUS): verifier-accepted PoUW panel rows", "pouw", "overhead",
-                             ovd.PHASES, "× native", f"POUS's measured rows as labelled in Verity's evidence store; log scale. {how}",
-                             "log"))
-    out.append(build_speedups(ovd, series, now, src))
-    cov = ovd.load_coverage(store, idx, cov_labels, probs)
-    out += coverage_panels(ovd, cov, now)
     try:
-        out += merge_panels(idx, ns, now)
-    except Exception as e:  # noqa: BLE001  the store panels still go out
-        errors.append(f"merge: {type(e).__name__}: {e}")
-    info["points"], info["coverage_configs"] = len(points), len(cov)
-    return out, info
-
-
-def at0(s):
-    return next((p for p in s.path if p.attempt == 0), None) if s else None
-
-
-def measured(p) -> str:
-    return "quiet re-measure" if p.remeasure else "noisy" if p.noisy else "quiet"
-
-
-def build_speedups(ovd, series, now, src) -> dict:
-    thr = {(s.config, s.phase, s.line): s for s in series.values()
-           if s.ws == "build" and s.metric == "throughput" and s.phase in ovd.PHASES and s.path}
-    mem = {(s.config, s.phase, s.line): s for s in series.values()
-           if s.ws == "build" and s.metric == "peak-rss" and s.phase in ovd.PHASES and s.path}
-    rows, when = [], []
-    for (cfg, ph, line), s in sorted(thr.items(), key=lambda kv: (kv[0][0], ovd.PHASES.index(kv[0][1]), kv[0][2])):
-        base = at0(s) or at0(thr.get((cfg, ph, "build-v1")))
-        last, best = s.latest, s.best
-        m = mem.get((cfg, ph, line))
-        mbase, mlast = at0(m) or at0(mem.get((cfg, ph, "build-v1"))), m.latest if m else None
-        mg = lambda p: sig(p.value / 1e6) if p else None  # noqa: E731
-        rows.append([cfg, ph, line, mg(base), mg(last), last.attempt, measured(last), ratio(last.value, base.value if base else None),
-                     mg(best), best.attempt if best else None, ratio(best.value if best else None, base.value if base else None),
-                     sig(mbase.value, 3) if mbase else None, sig(mlast.value, 3) if mlast else None])
-        when += [p.labelled for p in s.points]
-    cols = ["Config", "Phase", "Line", "Baseline (Mgates/s)", "Latest (Mgates/s)", "Latest attempt", "Latest measured",
-            "Speedup, latest (×)", "Best (Mgates/s)", "Best attempt", "Speedup, best (×)", "Peak GiB, baseline", "Peak GiB, latest"]
-    return panel("build-speedups", "Build speedups against the baseline", "table", cols, rows,
-                 updated_at=isoz(max(when, default=None)) or iso(now), source=src.format(ws="build", metric="throughput, peak-rss"),
-                 note="Throughput is gates per wall-clock second at 32 vCPU on vy-nebius-1. The baseline is attempt 0 of the same line "
-                      "(build-v1's when the line has none). The morning report's two inflated baselines (Llama prefill's first-run "
-                      "bytecode compile, OLMoE decode's ~290 s lock wait) are not corrected here.")
-
-
-PREMERGE = re.compile(r"^pre-merge( #\d+)* @ [0-9a-f]+;\s*")
-
-
-def cause_of(why: str) -> str:
-    """A coverage cell's cause with its run-specific parts dropped, so cells with one cause group together."""
-    text = PREMERGE.sub("", why or "no cause named").split(";", 1)[0].strip()
-    return re.sub(r"\b\d+\b", "N", text)[:140] or "no cause named"
-
-
-def coverage_panels(ovd, cov: list[dict], now: datetime) -> list[dict]:
-    when = isoz(max((r.get("_when") or "" for r in cov), default="")) or iso(now)
-    src = "evidence store: campaign overnight-sep30 config records (config_record.json, sweep.json) and ov.ws coverage labels"
-    gate = (f"pass = built, committed and {ovd.GATE_K} of {ovd.GATE_K} drawn units replayed bit-exact; short replay = passed "
-            f"with fewer than {ovd.GATE_K}; not run = stopped before any stage failed. One row per config: its latest record.")
-    gpus = sorted({str(r["config"].get("gpu") or "?") for r in cov})
-    tally = []
-    for g in gpus + ["all"]:
-        here = [r for r in cov if g == "all" or str(r["config"].get("gpu") or "?") == g]
-        c = Counter(r["status"] for r in here)
-        tally.append([g, *[c.get(k, 0) for k in STATUS_ORDER], len(here)])
-    tally.sort(key=lambda r: (r[0] == "all", -r[1], r[0]))
-    out = [panel("coverage-tally", "vLLM coverage: configs by GPU and status", "table",
-                 ["GPU", "Pass", "Finding", "Short replay", "Unsupported", "Not run", "Configs"], tally,
-                 updated_at=when, source=src, note=gate)]
-    groups: dict[str, list[dict]] = defaultdict(list)
-    for r in cov:
-        if r["status"] != "pass":
-            groups[cause_of(r["why"])].append(r)
-    causes = []
-    for cause, rs in sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0])):
-        st = Counter(r["status"] for r in rs)
-        latest = max(rs, key=lambda r: r.get("_when") or "")
-        causes.append([cause, len(rs), ", ".join(f"{st[k]} {k}" for k in STATUS_ORDER if st[k]),
-                       ", ".join(sorted({str(r["config"].get("gpu") or "?") for r in rs})), latest["run"]])
-    out.append(panel("coverage-causes", "vLLM coverage: why configs don't pass", "table",
-                     ["Cause", "Configs", "Status", "GPUs", "Latest run"], causes, updated_at=when, source=src,
-                     note="Every config that doesn't pass, grouped by its recorded cause (the pre-merge prefix and the text after "
-                          "the first ';' dropped, standalone numbers shown as N). Fixes and owners are in the morning report."))
-    fams = sorted({ovd.family(r["config"].get("model")) for r in cov})
-    frows = []
-    for fam in fams:
-        cells = []
-        for g in gpus:
-            c = Counter(r["status"] for r in cov if ovd.family(r["config"].get("model")) == fam
-                        and str(r["config"].get("gpu") or "?") == g)
-            cells.append(", ".join(f"{c[k]} {k}" for k in STATUS_ORDER if c[k]) or None)
-        frows.append([fam, *cells])
-    out.append(panel("coverage-families", "vLLM coverage by model family and GPU", "table", ["Family", *gpus], frows,
-                     updated_at=when, source=src, note=gate))
-    crow = [[r["row"], str(r["config"].get("gpu") or ""), r["status"], r["why"][:200] or None, r["run"], isoz(r.get("_when"))]
-            for r in sorted(cov, key=lambda r: (STATUS_ORDER.index(r["status"]) if r["status"] in STATUS_ORDER else 9, r["row"]))]
-    out.append(fit(panel("coverage-configs", "vLLM coverage: every config", "table",
-                         ["Config", "GPU", "Status", "Cause", "Run", "Recorded (UTC)"], crow, updated_at=when, source=src,
-                         note=gate + " The config id is model__dtype__gpu__tp__batch__input__output__arrivals__sampler__engine.")))
-    return out
-
-
-def git(gitdir: Path, *args: str) -> str:
-    return subprocess.run(["git", f"--git-dir={gitdir}", *args], check=True, capture_output=True, text=True, timeout=300).stdout
+        return [check_panel(store.index, now)], info
+    except Exception as e:  # noqa: BLE001  the run line names it
+        errors.append(f"merge-checks: {type(e).__name__}: {e}")
+        return [], info
 
 
 def machine_of(doc: dict) -> str | None:
@@ -336,61 +195,24 @@ def machine_of(doc: dict) -> str | None:
     return ex.get("machine") or (ex.get("remote") or {}).get("machine") or ex.get("host")
 
 
-def merge_panels(idx, ns, now: datetime) -> list[dict]:
-    if not ns.no_fetch:
-        git(ns.git, "fetch", "-q", "origin", f"+refs/heads/{ns.branch}:refs/heads/{ns.branch}")
-    log = git(ns.git, "log", ns.branch, "--first-parent", "--merges", "-n", "600", "--format=%H%x1f%P%x1f%s%x1f%b%x1e")
-    trains = []
-    for rec in log.split("\x1e"):
-        parts = rec.strip("\n").split("\x1f")
-        if len(parts) < 4:
-            continue
-        h, parents, subj, body = parts
-        m = re.match(r"Merge train (\S+) \(([0-9a-f]+)\)", subj)
-        ps = parents.split()
-        if m and len(ps) > 1:
-            run = re.search(r"^Check: (r\d{8}-\d{6}-[0-9a-f]{4})", body, re.M)
-            trains.append({"name": m[1], "merged": h, "first": ps[0], "head": ps[1], "run": run[1] if run else None})
-    head_of = {t["head"]: t for t in trains}
-
-    def attempt(run):
-        rows = idx.sql("SELECT start_utc, wall_s, rc, state, manifest_json FROM attempts WHERE id = ?", (run,)) if run else []
-        return rows[0] if rows else None
-
-    rows, ends = [], []
-    for t in trains[:30]:
-        subjects = git(ns.git, "log", "--no-merges", "--format=%s", f"{t['first']}..{t['head']}").splitlines()
-        prs = list(dict.fromkeys(re.findall(r"#(\d{2,4})\b", "\n".join(subjects))))
-        a = attempt(t["run"])
-        start, wall = (a[0], a[1]) if a else (None, None)
-        if start and wall:
-            ends.append(datetime.fromisoformat(start.replace("Z", "+00:00")) + timedelta(seconds=wall))
-        rows.append([t["name"], " ".join(f"#{n}" for n in prs)[:200] or None, len(subjects), t["head"][:8], t["merged"][:9], t["run"],
-                     isoz(start), sig(wall / 60, 3) if wall else None, machine_of(json.loads(a[4])) if a and a[4] else None])
-    when = iso(max(ends)) if ends else iso(now)
-    out = [panel("merge-trains", "Merge trains landed on main, newest first", "table",
-                 ["Train", "PRs named in its commits", "Commits", "Head", "Merged as", "Check run", "Check started (UTC)",
-                  "Check minutes", "Checked on"], rows, updated_at=when,
-                 source=f"git: main's `Merge train` commits and their Check trailers; evidence store: those check Attempts",
-                 note="The latest 30 trains. PRs are the #numbers in the carried commits' subjects, so a PR whose commits don't "
-                      "name it is missing. main's commit dates are normalized, so the check's start stands in for when a train ran.")]
+def check_panel(idx, now: datetime) -> dict:
+    """Every `check` Attempt of the last 24 hours, with the main commit that landed it from its `landed` label (`research merge`)."""
     since = iso(now - timedelta(hours=24))
-    crows, cends = [], []
+    landed = dict(idx.sql("SELECT target, value FROM labels WHERE key = 'landed' AND by = 'research-merge' ORDER BY ts"))
+    rows, ends = [], []
     for run, start, wall, rc, state, commit, mj in idx.sql(
             "SELECT id, start_utc, wall_s, rc, state, source_commit, manifest_json FROM attempts WHERE tool = 'check' AND start_utc >= ? "
             "ORDER BY start_utc DESC", (since,)):
         result = "pass" if state == "done" and rc == 0 else state if state in ("running", "cancelled") else f"fail (rc {rc})"
-        t = head_of.get(commit or "")
-        crows.append([run, isoz(start), sig(wall / 60, 3) if wall else None, result, (commit or "")[:8] or None,
-                      t["name"] if t else None, machine_of(json.loads(mj)) if mj else None])
+        rows.append([run, isoz(start), sig(wall / 60, 3) if wall else None, result, (commit or "")[:8] or None,
+                     (landed.get(run) or "")[:9] or None, machine_of(json.loads(mj)) if mj else None])
         if start and wall:
-            cends.append(datetime.fromisoformat(start.replace("Z", "+00:00")) + timedelta(seconds=wall))
-    out.append(panel("merge-checks", "Every `check` in the last 24 hours", "table",
-                     ["Run", "Started (UTC)", "Minutes", "Result", "Commit", "Landed as train", "Machine"], crows,
-                     updated_at=iso(max(cends)) if cends else iso(now), source="evidence store: tool=check Attempts; git: main's trains",
-                     note="A check whose commit is a train's head on main shows that train; the others are checks of branches or of "
-                          "trains that didn't land. Attempts are published when a check ends, so one in progress isn't listed."))
-    return out
+            ends.append(datetime.fromisoformat(start.replace("Z", "+00:00")) + timedelta(seconds=wall))
+    return panel("merge-checks", "Every `check` in the last 24 hours", "table",
+                 ["Run", "Started (UTC)", "Minutes", "Result", "Commit", "Landed as", "Machine"], rows,
+                 updated_at=iso(max(ends)) if ends else iso(now), source="evidence store: tool=check Attempts and their landed labels",
+                 note="Landed as is main's commit whose Check: trailer names the run (its `landed` label); the others are checks of "
+                      "branches or of trains that didn't land. Attempts are published when a check ends, so one in progress isn't listed.")
 
 
 # ---------------------------------------------------------------------------------------------------------------- node1 group
@@ -1568,10 +1390,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--url", default=os.environ.get("PANELS_URL", URL))
     ap.add_argument("--store", type=Path, help="the evidence store's local root (default: $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--research-src", type=Path, default=HERE / "research-src", help="a directory holding the `research` package")
-    ap.add_argument("--git", type=Path, default=HERE / "verity.git", help="a clone of Verity whose BRANCH is read for merge trains")
-    ap.add_argument("--branch", default="main")
     ap.add_argument("--no-refresh", action="store_true", help="read the store's catalog as it is")
-    ap.add_argument("--no-fetch", action="store_true", help="read the clone's BRANCH as it is")
     ns = ap.parse_args(argv)
     t0, now, errors = time.time(), datetime.now(timezone.utc).replace(microsecond=0), []
     ns.out.mkdir(parents=True, exist_ok=True)
