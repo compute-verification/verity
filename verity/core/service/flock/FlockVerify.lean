@@ -752,41 +752,6 @@ def netCheckCmd (paths : List String) : IO UInt32 := do
     IO.println s!"NETCHECK {(Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool ok), ("error", Lean.Json.str err)]).compress}"
   return (if all then 0 else 1)
 
-/-- `rec-sparse net NAME`: the verifier's unit named `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` (`RecSparse.unitLaid`) as
-`flock-ir-unit/v2` text on stdout. `rec-sparse check FILE NAME...`: the circuit file through `HmRow.parse`, then
-`RecSparse.check` on it and on it with its unit renamed to each `NAME`; one `RECSPARSE {"unit", "ok", "error"}` line each. -/
-def recSparseCmd : List String → IO UInt32
-  | ["net", name] => match RecSparse.params name with
-    | some sh => do
-      if !sh.valid then
-        IO.eprintln s!"{name}: not a valid rec-sparse shape"
-        return 2
-      IO.print (RecSparse.netlist name (RecSparse.unitLaid sh))
-      return 0
-    | none => do
-      IO.eprintln s!"{name} is not rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>"
-      return 2
-  | "check" :: path :: names => do
-    let report := fun (unit : String) (res : V Unit) => do
-      let err := match res with
-        | .ok () => []
-        | .error e => [("error", Lean.Json.str e)]
-      IO.println s!"RECSPARSE {(Lean.Json.mkObj ([("unit", Lean.Json.str unit), ("ok", Lean.Json.bool res.toBool)] ++ err)).compress}"
-    match HmRow.parse Tags.circuit (← IO.FS.readBinFile path) [] with
-    | .error e =>
-      report "" (.error e)
-      return 1
-    | .ok c =>
-      let mut all := true
-      for nm in c.unit.name :: names do
-        let res := RecSparse.check { c with nets := c.nets.modify c.unitNet fun (k, n) => (k, { n with name := nm }) }
-        all := all && res.toBool
-        report nm res
-      return (if all then 0 else 1)
-  | _ => do
-    IO.eprintln "usage: flock-verify rec-sparse net NAME | rec-sparse check FILE NAME..."
-    return 2
-
 /-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file; a cut with
 `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
@@ -1153,7 +1118,6 @@ def main (args : List String) : IO UInt32 := do
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths
-  | "rec-sparse" :: rest => recSparseCmd rest
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest

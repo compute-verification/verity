@@ -1,5 +1,5 @@
 """`Flock.RecSparse`, the Lean verifier's own `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` unit: at the staged shapes its
-`flock-ir-unit/v2` text (`flock-verify rec-sparse net`) is `rec_sparse.lowering`'s (`ir_lower.netlist`) byte for byte, and
+`flock-ir-unit/v2` text (`flock-rec-sparse net`) is `rec_sparse.lowering`'s (`ir_lower.netlist`) byte for byte, and
 `RecSparse.check` accepts the composed circuit file and refuses it with a row, the name or the shape changed."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
 from verity_flock import rec_sparse as RS
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-rec-sparse"
 
 #: the staged shapes: the binding's, one template and one slot, two slots of one template, four of two templates
 SHAPES = [(2, 6, 1, 1), (2, 6, 0, 0), (1, 6, 2, 0), (2, 6, 0, 1)]
@@ -34,7 +34,7 @@ def test_the_verifiers_net_is_the_lowerings_byte_for_byte(shape):
     sh = RS.Shape(*shape)
     low = RS.lowering(sh)
     want = IL.netlist(low.layout, low.name)
-    p = subprocess.run([str(BIN), "rec-sparse", "net", RS.unit_name(sh)], capture_output=True, check=False)
+    p = subprocess.run([str(BIN), "net", RS.unit_name(sh)], capture_output=True, check=False)
     assert p.returncode == 0, p.stderr.decode()
     assert hashlib.sha256(p.stdout).hexdigest() == hashlib.sha256(want.encode()).hexdigest(), _first_diff(p.stdout.decode(), want)
 
@@ -48,10 +48,10 @@ def _first_diff(got: str, want: str) -> str:
 
 
 def _check(path: Path, *names: str) -> list[dict]:
-    """`rec-sparse check` on the file's unit and on it renamed to each name, in an address space of 8 GiB."""
-    p = subprocess.run([str(BIN), "rec-sparse", "check", str(path), *names], capture_output=True, text=True, check=False,
+    """`flock-rec-sparse check` on the file's unit and on it renamed to each name, in an address space of 8 GiB."""
+    p = subprocess.run([str(BIN), "check", str(path), *names], capture_output=True, text=True, check=False,
                        preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
-    got = [json.loads(ln.split(" ", 1)[1]) for ln in p.stdout.splitlines() if ln.startswith("RECSPARSE ")]
+    got = [json.loads(ln) for ln in p.stdout.splitlines() if ln.startswith("{")]
     assert len(got) == 1 + len(names), p.stdout + p.stderr
     return got
 
