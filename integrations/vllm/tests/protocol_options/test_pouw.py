@@ -335,6 +335,56 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
     assert hooks.live("pouw:ncp-v1") == () and hooks.live("pous:band-chain/d12/v1") == ()
 
 
+def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeypatch):
+    """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
+    registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
+    from verity.core.protocols.pouw import registration
+    from verity.core.protocols.pouw.schemes import pearl_c
+    s, seen = PPD.scheme_of("pearl-c-sm120-v1-h3"), []
+    assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
+    monkeypatch.setattr(pearl_c, "check_registration", lambda *a: seen.append(a) or registration.check_registration(*a))
+    claim = pouw.weights_claim(s)
+    assert seen == [((), False, False)]
+    assert claim == {"transforms": [], "curated": False, "registered": False, "claims": pouw.UNREGISTERED,
+                     "refused": claim["refused"]} and "must be on the curated list" in claim["refused"]
+    assert pouw.weights_claim(s, curated=True) == {"transforms": [], "curated": True, "registered": True}
+    folded = pouw.weights_claim(s, curated=True, needs_gamma_fold=True)
+    assert not folded["registered"] and "only with γ folded" in folded["refused"]
+
+
+def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_claims_nothing_about_the_weights(monkeypatch):
+    """Install doesn't raise on an unregistered checkpoint: the epoch's salt is still the challenger's salt coin, opened
+    after the weights' root, and the commitment's registration says it claims nothing about which weights were served.
+    The device run is a stand-in (no GPU here)."""
+    scheme = "pearl-c-sm120-v1-h3"
+    roots = {0: b"\x05" * 64}
+    started = []
+
+    class Run:
+        def __init__(self, s, entry, kernel, weights, roots, coins, opening, **kw):
+            started.append(Epoch.start(Workload((Matmul(0, Shape(16, 1024, 128), 0),)), roots, coins, opening))
+            self.commits = {"scheme": s.name, "salt": started[-1].salt.hex(), "coins": coins.to_json(),
+                            "salt_opening": opening.to_json()}
+            self.details = {}
+
+        def gemm(self, w, x, weight, bias):
+            return x
+
+        def finish(self):
+            pass
+
+    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
+    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
+    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), Challenger(0)
+    settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
+    with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:
+        c = comp.get("pouw").commitment()
+        assert c["registration"]["registered"] is False and c["registration"]["claims"] == pouw.UNREGISTERED
+        assert c["salt"] == started[0].salt.hex() and started[0].coins == coins.commitment
+        assert coin_reason(coins.commitment, CoinOpening.from_json(c["salt_opening"]), "salt", weights_root(roots)) is None
+
+
 def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
     scheme, on = "pearl-c-sm120-v1-h3", {"coins": Challenger(0), "device": "cuda", "kernel": "k"}
     for name in ("serial", "deferred", "deferred-caller"):

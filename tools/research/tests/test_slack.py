@@ -1276,6 +1276,27 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then
     assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 
 
+def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    infra, proofs, lean = (inbox(fake, routes_dirs, n) for n in ("infra", "proofs", "lean"))
+    root = fake.add(COORD, text=f"{slack.ANNOUNCE} *Announcement* from @top to every handle\nmerge thread: land outcomes go here",
+                    username="top", bot_id=BOT)
+    fake.add(COORD, text="#1590 rides r20261009-035518-dd21; 6350 is its suites run", username="proofs", bot_id=BOT, thread_ts=root["ts"])
+    fake.add(COORD, text="lean: #1601 waits on dd21 too", username="lean", bot_id=BOT, thread_ts=root["ts"])
+    fake.add(COORD, text="vy-nebius-1: the OOM killer took python of the run for #1600", username="vy-monitors", bot_id=BOT,
+             thread_ts=root["ts"])
+    body = ("@infra circuits, on your placement: yes, r20261011-044421-6350 is ours, launched before it reached us.\n"
+            "\u2022 Delete its scratch the moment 6350's pytest exits; nothing of ours needs it.\n"
+            "\u2022 Its next suites run goes on vy-cpu-2 after dd21, beside #1590, #1600 and #1601, with --basetemp under scratch.\n"
+            "\u2022 The tree is main + #1590, pushed as `cursor/sweep-2-tree-95d4`.\n\n"
+            "Nothing else changes; the rest is in the run's notes.")
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", body)
+    assert rc == 0 and "route @infra: rang" in err and "vy-monitors" not in err
+    assert len(bells(fake, infra)) == 1 and bells(fake, proofs) == [] and bells(fake, lean) == []
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", "#1600 and #1601 are on the next train")
+    assert rc == 0 and len(bells(fake, lean)) == 1 and "vy-monitors" not in err   # naming no one, a PR's namer is rung
+
+
 def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-worker", "1.0", closed="2026-10-01T18:00Z", forward_to="circuits")
