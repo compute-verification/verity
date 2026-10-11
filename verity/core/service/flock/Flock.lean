@@ -29,6 +29,7 @@ import Flock.HmNets
 import Flock.RecOpen
 import Flock.RecAlgebra
 import Flock.RecResiduals
+import Flock.RecSparse
 import Flock.HmRow
 import Flock.RecVStar
 import Flock.ProvedScope
