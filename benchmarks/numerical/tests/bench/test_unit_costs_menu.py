@@ -180,11 +180,19 @@ def test_a_shape_takes_its_largest_positions_from_the_rows_instances():
     assert [e["positions"] for e in es] == [9, 9, 1]
 
 
-def test_v_star_refuses_the_reps_algebra_at_16_claims():
+def test_v_star_stages_the_reps_algebra_at_16_claims_and_refuses_past_the_lone_part_bound():
     """proofs' blocker (note:proofs/20261010T2112Z-finding-c3-claims-per-shape): at m 35, k_log 27 and 16 claims the
-    batched-T residual alone needs more sha512x3 slots than a part holds."""
+    batched-T residual alone needs more sha512x3 slots than a part holds, so it takes a part of its own (at most
+    ``MAX_LONE_SLOTS``) and V* stages the algebra in 3 parts. At m 26, k_log 24 and 28 claims it needs 300 alone, past
+    that bound, and V* refuses (the control of `test_vstar_menu.py`)."""
+    from verity_flock import rec_residuals as RR
+    from verity_flock.rec_algebra import Shape
+
     products, why = M.rep_algebra(35, 27, 16)
-    assert products > 4900 and why is not None and "residual 20 alone" in why
+    assert products > 4900 and why is None
+    assert len(RR.parts(RR.spec(Shape(35, 27, 16)))) == 3
+    _, why = M.rep_algebra(26, 24, 28)
+    assert why == f"V* parts: residual 32 alone reads more than {RR.MAX_REGIONS} regions or {RR.MAX_LONE_SLOTS} sha512x3 slots"
 
 
 def test_a_unit_types_regions_are_its_ports():
