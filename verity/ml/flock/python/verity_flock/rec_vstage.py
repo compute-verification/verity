@@ -65,9 +65,11 @@ from types import SimpleNamespace
 from verity.ml.circuits.ops.boolean import gf2k as G
 
 from . import rec_algebra as A
+from . import rec_live as RL
 from . import rec_open as R
 from . import rec_outer as O
 from . import rec_residuals as RR
+from . import rec_sparse as SP
 from . import rec_vstar as V
 
 TABLE = "circuit"
@@ -157,19 +159,81 @@ def message_rounds(public: dict, private: dict, sh: A.Shape) -> list[dict]:
              "salts": [per[r][i][2] for r in range(2)]} for i in range(len(want))]
 
 
-def messages(program: str, mrs: list[dict]) -> tuple[dict, dict]:
-    """The prover's registrations ``rec-c<i>`` and the verifier's own entries of them (from the ``c_k`` alone), by port."""
+def messages(program: str, mrs: list[dict], ports: list[tuple[str, str]] | None = None) -> tuple[dict, dict]:
+    """The prover's registrations of the message rounds and the verifier's own entries of them (from the ``c_k`` alone), by
+    port: ``ports`` (port, value) a round, default ``m<i>`` as ``rec-c<i>``."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     regs, own = {}, {}
-    for i, mr in enumerate(mrs):
-        value = f"rec-c{i}"
+    for i, ((port, value), mr) in enumerate(zip(ports or [(f"m{i}", f"rec-c{i}") for i in range(len(mrs))], mrs, strict=True)):
         reg = RG.Registered.commit(program, value, mr["rows"], mr["salts"])
-        own[f"m{i}"] = RR.commits_entry(program, value, len(mr["rows"][0]), mr["commits"])
-        if own[f"m{i}"]["root"] != reg.entry()["root"]:
+        own[port] = RR.commits_entry(program, value, len(mr["rows"][0]), mr["commits"])
+        if own[port]["root"] != reg.entry()["root"]:
             raise ValueError(f"round {i}: the prover's rows are not the rows its c_k commit")
-        regs[f"m{i}"] = reg
+        regs[port] = reg
     return regs, own
+
+
+def _sparse_stream(public: dict, rep: int) -> list[dict]:
+    s = f"{RL.SPARSE}/rep{rep}"
+    return sorted((r for r in public["rounds"] if r["stream"] == s), key=lambda r: r["k"])
+
+
+def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict) -> list[tuple]:
+    """Each rep's sparse phase (`rec_live.sparse_rounds` at the bucket's `rec_sparse.Shape` ``sp``, T = 1) as the session holds
+    it, per rep ``(coins, messages)``: its coins from the coin server's record of its stream (v2's round, which draws none,
+    skipped), the inner points from the rep's coins (`rec_sparse.inner_points`) and the slots' layout factors from META's
+    range ``rng`` of the hidden circuit (`rec_sparse.layout_factors`), all public; its messages the prover's rows of its
+    rounds, h its rep's h round's, and the registered claim ``Σ_p eq(ζ_p, p) u_p``."""
+    if sp.stacked:
+        raise ValueError("the sparse phase is staged at T = 1")
+    want, hk = RL.sparse_rounds(sp), RL.zp_round(vf.sh.m, vf.sh.k_log) + 1
+    prv = {(p["stream"], p["k"]): p for p in private["rounds"]}
+    nsc, at = len(sp.degrees), 2 + SP.PRE_ROUNDS
+    out = []
+    for r, rv in enumerate(vf.reps):
+        rs = _sparse_stream(public, r)
+        el = [RL.row_elements(prv[(x["stream"], x["k"])]["rows"][0])[:e] if e else [] for x, (*_, e) in zip(rs, want)]
+        if [(x["n"], len(x["commits"])) for x in rs] != [(n, int(e > 0)) for n, *_, e in want] or \
+                any(len(prv[(x["stream"], x["k"])]["elements"]) != e for x, (*_, e) in zip(rs, want)):
+            raise ValueError(f"rep {r}: its sparse stream is not the sparse phase's rounds at {sp}")
+        coins = [[G.of_hex(c) for c in x["coins"]] for x in rs if x["n"]]
+        pts = SP.inner_points(vf.sh, rv.rounds)
+        U = SP.layout_factors(sp, pts["x_rest"], pts["y_rest"], rng)
+        c = SP.Coins(pts["alpha"], pts["z"], pts["x_rest"], pts["y_rest"], tuple(coins[0]), tuple(x for [x] in coins[1:at - 1]),
+                     tuple(x for [x] in coins[at - 1:at - 1 + nsc]), tuple(coins[at - 1 + nsc]), (), tuple(U))
+        u = el[at + nsc]
+        out.append((c, {"h": RL.row_elements(prv[(f"{TABLE}/rep{r}", hk)]["rows"][0]), "pre": [tuple(e) for e in el[1:at - 1]],
+                        "v2": el[at - 1][0], "sc": el[at:at + nsc], "u": u, "claim": SP._dot(SP.eq_table(c.zeta_p), u)}))
+    return out
+
+
+def sparse_messages(program: str, public: dict, private: dict, sp) -> tuple[dict, dict]:
+    """The sparse streams' message rounds as `messages` registers them, port ``<p>`` as ``rec-sparse-<p>``
+    (`rec_sparse.registrations`' values; row r rep r's), with the verifier's own entries."""
+    names = [nm for nm, _ in SP.message_ports(sp)][1:-1]
+    prv = {(p["stream"], p["k"]): p for p in private["rounds"]}
+    per = [[(bytes.fromhex(x["commits"][0]), prv[(x["stream"], x["k"])]["rows"][0], bytes.fromhex(prv[(x["stream"], x["k"])]["salts"][0]))
+            for x in _sparse_stream(public, r) if x["commits"]] for r in range(2)]
+    if any(len(p) != len(names) for p in per):
+        raise ValueError(f"the sparse streams' message rounds are not {names}")
+    mrs = [{k: [per[r][i][j] for r in range(2)] for j, k in enumerate(("commits", "rows", "salts"))} for i in range(len(names))]
+    return messages(program, mrs, [(nm, f"rec-sparse-{nm}") for nm in names])
+
+
+def stage_sparse(public: dict, private: dict, vf: SimpleNamespace, program: str, regs: dict, own: dict, sp, rng: dict, out: Path,
+                 evaluate: bool = True, claim=None) -> dict:
+    """The sparse phase's RecSparse statement over both reps (`rec_sparse.stage`): each rep's instance from `sparse_reps`, its
+    message ports read as the firewall committed them (`sparse_messages`), ``h`` as the algebra's h round (``regs`` and
+    ``own``, `messages`' of the reps' rounds), ``claim`` the prover's ``rec-claim`` registration (default fresh salts)."""
+    reps_ = sparse_reps(public, private, vf, sp, rng)
+    inst = SP.session_rows(sp, [m for _, m in reps_], [SP.verifier_row(sp, c) for c, _ in reps_])
+    sregs, sown = sparse_messages(program, public, private, sp)
+    hr = f"m{A.h_round(vf.sh)}"
+    sregs["h"], sown["h"] = regs[hr], own[hr]
+    if claim is not None:
+        sregs["claim"] = claim
+    return SP.stage(sp, inst, out, program, regs=sregs, own=sown, evaluate=evaluate)
 
 
 def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
@@ -286,12 +350,14 @@ def _copy_verifier(src: Path, dst: Path) -> None:
 
 
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
-          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None) -> dict:
+          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
-    session whose V* is not the cap's shape (`rec_shape.check`) before staging. Returns what each statement costs and holds,
-    and the verifier's own seconds."""
+    session whose V* is not the cap's shape (`rec_shape.check`) before staging. ``sparse``: the bucket's `rec_sparse.Shape`
+    and META's range of the hidden circuit; the sparse phase's RecSparse statement over both reps (`sparse_reps`), its
+    messages read as the firewall committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``.
+    Returns what each statement costs and holds, and the verifier's own seconds."""
     inner, out = Path(inner), Path(out)
     t = {}
     t0 = time.perf_counter()
@@ -351,11 +417,16 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
                 res[f"forged_{forge}"] = {"level": lv["level"], "instance": 0, "rep": q.rep, "j": q.j, "word": 0, "bit": 0}
             s["stage_s"] = round(time.perf_counter() - t0, 1)
             res["levels"][f"L{lv['level']}"] = s
-    if algebra:
+    if algebra or sparse:
         t0 = time.perf_counter()
         mrs = message_rounds(public, private, sh)
         regs, own = messages(program, mrs)
         t["entries_s"] = round(time.perf_counter() - t0, 2)
+    if sparse:
+        t0 = time.perf_counter()
+        res["sparse"] = stage_sparse(public, private, vf, program, regs, own, *sparse, out / "sparse", evaluate)
+        res["sparse"]["stage_s"] = round(time.perf_counter() - t0, 1)
+    if algebra:
         a0, a1 = zip(*(chain.rep_ends(r) for r in range(2)))
         reads = {nm: (regs[nm], [0, 1]) for nm in regs}
         reads["acc0"], reads["acc1"] = (chain.reg, list(a0)), (chain.reg, list(a1))
@@ -398,6 +469,8 @@ def main(argv=None) -> int:
                    "staged with one FILE reads one chain")
     s.add_argument("--cap", default=os.environ.get("REC_CAP") or None, help="the deployment's cap, instances=N,claims=C,k_log=K,"
                    "vus_per_block=V (rec_shape.Cap.parse; default REC_CAP): refuse a session of another shape, exit 2")
+    s.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="stage the sparse phase at this RecSparse shape (with --circuit)")
+    s.add_argument("--circuit", help="--sparse: the inner statement's circuit.txt, whose META has the hidden circuit's range")
     a = ap.parse_args(argv)
     if a.cmd == "points":
         inner = Path(a.inner)
@@ -408,11 +481,18 @@ def main(argv=None) -> int:
         return 0
     levels = None if a.levels == "all" else [] if a.levels == "none" else [int(x) for x in a.levels.split(",")]
     pts = json.loads(Path(a.points).read_text()) if a.points else None
+    fold = json.loads(Path(a.fold).read_text())
+    sparse = None
+    if a.sparse:
+        if not a.circuit:
+            ap.error("--sparse needs --circuit")
+        [rng] = [r for r in meta(Path(a.circuit))["ranges"] if r["type"] == "unit" and r["net"] in fold.get("hidden", [])]
+        sparse = (SP.Shape(*(int(v) for v in a.sparse.split(","))), rng)
     from . import rec_shape
 
     try:
-        res = stage(Path(a.inner), json.loads(Path(a.fold).read_text()), Path(a.out), levels, not a.no_algebra, a.forge,
-                    not a.no_evaluate, pts, a.salts, rec_shape.Cap.parse(a.cap) if a.cap else None)
+        res = stage(Path(a.inner), fold, Path(a.out), levels, not a.no_algebra, a.forge, not a.no_evaluate, pts, a.salts,
+                    rec_shape.Cap.parse(a.cap) if a.cap else None, sparse)
     except rec_shape.Refused as e:
         print(json.dumps({"refused": str(e)}), flush=True)
         return 2
@@ -423,7 +503,8 @@ def main(argv=None) -> int:
     if a.forge is not None:
         return 0
     held = all(not s["not_opened"] and not s["not_summed"] for s in res["levels"].values())
-    return 0 if held and all(all(p["holds"]) for p in alg) else 1
+    sp = res.get("sparse")
+    return 0 if held and all(all(p["holds"]) for p in alg) and (sp is None or all(sp["holds"])) else 1
 
 
 if __name__ == "__main__":
