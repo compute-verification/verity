@@ -316,8 +316,9 @@ def STACKED : String := "stacked"
 
 /-- One stream of the inner session as the coin server recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
 round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
-level 0 the table's `root_B` from `Commit` (the record's `link.roots`), then each later salted top in the order the stream's
-rounds absorbed them. A sparse stream belongs to no table and has none. -/
+level 0 the table's `root_B` from `Commit` (the record's `link.roots`; R, which has none there, its binding round's salted
+top), then each later salted top in the order the stream's rounds absorbed them. A sparse stream belongs to no table and has
+none. -/
 structure InnerStream where
   name : String
   commits : Array (Nat × ByteArray)
@@ -337,14 +338,37 @@ private def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
     if b.size != 128 then throw s!"rec inner transcript: {ctx}: a b ‖ c of {b.size} bytes, not 128"
     pure b
 
+/-- **A rep's coins, by the transcript's rounds**: what the inner session's record (the prover's, which check 5 reads)
+holds of rep stream `s` at each of the transcript's rounds `0 … n-1` of it (`rs`, in round order): that round's coins, or
+`none` at the round the record has no counterpart of. A holo session's firewall splits z_partial's round in two (`rec_session`:
+a round of no coins, then h's round), and the transcript records both where the prover's record has the one round. So with
+one round of no coins at `j` in the transcript's stream, the record has `n - 1` rounds, its round `k` the transcript's `k`
+below `j` and `k + 1` from `j` on (h's round taking z_partial's coins); with none, the two have the same rounds. -/
+def repCoins (s : String) (rs : Array Json) (srec : Json) : V (Array (Option (Array String))) := do
+  let n := rs.size
+  if rs.toList.map (fun r => (r.getObjValAs? Nat "k").toOption) != (List.range n).map some then
+    throw s!"rec inner transcript: {s}'s rounds are not its rounds 0 to {n - 1}"
+  let rr := (srec.getObjValAs? (Array Json) "rounds").toOption.getD #[]
+  match (rs.zipIdx.filter fun (r, _) => (coinsOf r).isEmpty).map (·.2) with
+  | #[] =>
+    if rr.size != n then throw s!"rec inner transcript: {s} records {n} rounds and the inner session's record {rr.size}"
+    return rr.map (some ∘ coinsOf)
+  | #[j] =>
+    if j + 1 == n then throw s!"rec inner transcript: {s}'s round {j} of no coins is its last; h's round follows z_partial's"
+    if rr.size + 1 != n then
+      throw s!"rec inner transcript: {s} splits z_partial's round {j} in two and records {n} rounds; the inner session's record has {rr.size}, not {n - 1} (it is the prover's record, check 5's)"
+    return (Array.range n).map fun k => if k == j then none else rr[if k < j then k else k - 1]?.map coinsOf
+  | js => throw s!"rec inner transcript: {s} has rounds of no coins at {js}, and only z_partial's round is split"
+
 /-- **Candidate 3's session** (`rec_live.schedule_for` with `sparse`, and `stacked`): the circuit table `t`'s two reps, both
-reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`), the inner session record's and
-the streams its message rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end
-of the rep's stream, the reps and R at round 0 of no parent), each with every round from 0 to its count and that round's coins the
-record's; Hello's tables and the committed roots are `t`'s and R's; each round's tops are lists of `b ‖ c`, none in a sparse
-stream; and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since the firewall commits each under a
-fresh salt. -/
-def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : String) (names : List String)
+reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`) and the streams its message
+rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end of the rep's stream, the
+reps and R at round 0 of no parent), each with every round from 0 to its count; the sparse streams and R's are the coin
+server's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
+`t`'s alone (the inner statement's Hello), R's root being the top its stream's binding round commits; each round's tops are
+lists of `b ‖ c`, none in a sparse stream; and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since
+the firewall commits each under a fresh salt. -/
+def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List String)
     (msgs : Array (String × Nat × ByteArray)) : V (Array InnerStream) := do
   let stacked := names.contains s!"{STACKED}/rep0"
   let want := [s!"{t}rep0", s!"{t}rep1", s!"{SPARSE}/rep0", s!"{SPARSE}/rep1"] ++ (if stacked then [s!"{STACKED}/rep0"] else [])
@@ -355,11 +379,8 @@ def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : Str
   let declared ← match tr.getObjVal? "streams" with
     | .ok (.obj kvs) => pure kvs.toArray
     | _ => throw "rec inner transcript: streams is not an object"
-  let recNames := streams.toList.filterMap fun x => (x.getObjValAs? String "stream").toOption
   if !same (declared.toList.map (·.1)) want then
     throw s!"rec inner transcript: it declares the streams {declared.toList.map (·.1)}, not {want}"
-  if !same recNames want then
-    throw s!"rec inner transcript: the inner session's record has the streams {recNames}, not {want}"
   let decl := fun (s : String) => (declared.find? (·.1 == s)).map (·.2) |>.getD Json.null
   let count := fun (s : String) => ((decl s).getObjValAs? Nat "rounds").toOption.getD 0
   for s in want do
@@ -367,18 +388,14 @@ def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : Str
     let at_ := if parent.isEmpty then 0 else count parent
     if ((decl s).getObjValAs? String "parent").toOption != some parent || ((decl s).getObjValAs? Nat "at").toOption != some at_ then
       throw s!"rec inner transcript: {s} is not declared at {parent}'s round {at_}"
-    let srec := (streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s).getD Json.null
-    let rr := (srec.getObjValAs? (Array Json) "rounds").toOption.getD #[]
     let mine := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).map fun r =>
       ((r.getObjValAs? Nat "k").toOption, r)
-    if rr.size != count s || mine.size != count s then
-      throw s!"rec inner transcript: {s} declares {count s} rounds; it records {mine.size} and the inner session's record {rr.size}"
+    if mine.size != count s then
+      throw s!"rec inner transcript: {s} declares {count s} rounds and records {mine.size}"
     for k in [0:count s] do
-      let some (_, r) := mine.find? (·.1 == some k) | throw s!"rec inner transcript: {s} has no round {k}"
-      if (rr[k]?.map coinsOf) != some (coinsOf r) then
-        throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
+      if !(mine.any (·.1 == some k)) then throw s!"rec inner transcript: {s} has no round {k}"
   let tables := (tr.getObjVal? "hello" |>.toOption.getD Json.null).getObjValAs? (Array String) "tables" |>.toOption.getD #[]
-  let wantTables := #[tbl] ++ (if stacked then #[STACKED] else #[])
+  let wantTables := #[tbl]
   if tables != wantTables then throw s!"rec inner transcript: Hello's tables {tables}, not {wantTables}"
   let roots ← match (tr.getObjVal? "link" |>.toOption.getD Json.null).getObjVal? "roots" with
     | .ok (.obj kvs) => pure kvs.toArray
@@ -395,20 +412,21 @@ def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : Str
   let mut all : Array ByteArray := rootOf.foldl (· ++ ·.2) #[]
   for s in want do
     let table := if s.startsWith s!"{SPARSE}/" then none else some (if s.startsWith s!"{STACKED}/" then STACKED else tbl)
-    let mut tops : Array (Array ByteArray) := match table with
-      | some n => #[((rootOf.find? (·.1 == n)).map (·.2)).getD #[]]
-      | none => #[]
+    let committed := table == some tbl
+    let mut tops : Array (Array ByteArray) := if committed then #[((rootOf.find? (·.1 == tbl)).map (·.2)).getD #[]] else #[]
     let rs := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).qsort fun a b =>
       (a.getObjValAs? Nat "k").toOption.getD 0 < (b.getObjValAs? Nat "k").toOption.getD 0
     for r in rs do
       let k := (r.getObjValAs? Nat "k").toOption.getD 0
       let .ok ts := r.getObjValAs? (Array (Array String)) "tops" | throw s!"rec inner transcript: {s} round {k}'s tops are not lists of b ‖ c"
       if table.isNone && !ts.isEmpty then throw s!"rec inner transcript: {s} round {k} commits a top, and a sparse stream has no table"
+      if table == some STACKED && k == 0 && ts.isEmpty then
+        throw s!"rec inner transcript: {s}'s binding round commits no top: R's root is committed nowhere"
       for (top, i) in ts.zipIdx do
         if top.isEmpty then throw s!"rec inner transcript: {s} round {k}'s top {i} has no nodes"
         tops := tops.push (← hexList s!"{s} round {k}'s top {i}" top)
     let cs := ((msgs.filter (·.1 == s)).qsort (·.2.1 < ·.2.1)).map (·.2)
-    all := all ++ (tops.extract (if table.isSome then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
+    all := all ++ (tops.extract (if committed then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
     out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[] }
   let mut seen : Std.HashSet String := {}
   for b in all do
@@ -420,9 +438,11 @@ def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : Str
 
 /-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
 `rec/inner-transcript/v1`), those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
-its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). Each
-round's coins must be the inner session record's (`--rec-inner-session`) at the same stream and round. With candidate 3's
-streams beside the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it. -/
+its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). The inner
+session's record (`--rec-inner-session`) is the prover's, the one check 5 reads, and holds the two reps alone: each rep's
+rounds' coins must be the record's at the same round, z_partial's split aside (`repCoins`). With candidate 3's streams beside
+the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it from the coin
+server's record alone. -/
 def innerCommits (tr : Json) (record : String) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
@@ -437,23 +457,31 @@ def innerCommits (tr : Json) (record : String) : V InnerCommits := do
     let (.ok s, .ok k) := (r.getObjValAs? String "stream", r.getObjValAs? Nat "k")
       | throw "rec inner transcript: a message round names no stream or round"
     if cs.size != 1 then throw s!"rec inner transcript: {s} round {k} holds {cs.size} commitments, not one"
-    let some srec := streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s
-      | throw s!"rec inner transcript: {s} is no stream of the inner session's record"
-    let rr := ((srec.getObjValAs? (Array Json) "rounds").toOption.getD #[])[k]?
-    if (rr.map coinsOf) != some (coinsOf r) then
-      throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
     msgs := msgs.push (s, k, ← unhex cs[0]!)
   let names := (msgs.map (·.1)).toList.eraseDups
   let some t := names.head?.map fun n => (n.dropEndWhile (· != '/')).toString | throw "rec inner transcript: no message round holds a commitment"
-  let reps := fun (t : String) => #[0, 1].map fun x => ((msgs.filter (·.1 == s!"{t}rep{x}")).qsort (·.2.1 < ·.2.1)).map (·.2)
   let extra := fun (n : String) => n.startsWith s!"{SPARSE}/" || n.startsWith s!"{STACKED}/"
-  if names.any extra then
-    let some t := (names.find? (!extra ·)).map fun n => (n.dropEndWhile (· != '/')).toString
-      | throw s!"rec inner transcript: its message rounds' streams {names} hold no table's reps"
-    return { reps := reps t, streams := ← candidate3 tr rounds streams t names msgs }
-  if names.length != 2 || !names.contains s!"{t}rep0" || !names.contains s!"{t}rep1" then
-    throw s!"rec inner transcript: its message rounds' streams {names} are not one table's rep0 and rep1"
-  return { reps := reps t }
+  let c3 := names.any extra
+  let t ← if c3 then
+      match (names.find? (!extra ·)).map fun n => (n.dropEndWhile (· != '/')).toString with
+      | some t => pure t
+      | none => throw s!"rec inner transcript: its message rounds' streams {names} hold no table's reps"
+    else if names.length != 2 || !names.contains s!"{t}rep0" || !names.contains s!"{t}rep1" then
+      throw s!"rec inner transcript: its message rounds' streams {names} are not one table's rep0 and rep1"
+    else pure t
+  let repNames := [s!"{t}rep0", s!"{t}rep1"]
+  let recNames := streams.toList.filterMap fun x => (x.getObjValAs? String "stream").toOption
+  if recNames != repNames then
+    throw s!"rec inner transcript: the inner session's record has the streams {recNames}, not {repNames} (the prover's record, which check 5 reads)"
+  for s in repNames do
+    let rs := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).qsort fun a b =>
+      (a.getObjValAs? Nat "k").toOption.getD 0 < (b.getObjValAs? Nat "k").toOption.getD 0
+    let srec := (streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s).getD Json.null
+    for (r, c) in rs.zip (← repCoins s rs srec), k in [0:rs.size] do
+      if c.any (· != coinsOf r) then throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
+  let reps := #[0, 1].map fun x => ((msgs.filter (·.1 == s!"{t}rep{x}")).qsort (·.2.1 < ·.2.1)).map (·.2)
+  if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs }
+  return { reps }
 
 /-- `rec-opening-c<i>`'s `i`. -/
 def openingIndex (value : String) : Option Nat :=

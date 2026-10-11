@@ -1,10 +1,13 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
 `flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the coin server's
-record (`public.json`) and the inner session's record (`session/session.json`) of `r20261011-044202-b907` (#1759's
-`pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1): the circuit table's two reps (95 rounds
-each), both reps' sparse phases (33 each) and the stacked table R (36). The verifier holds every stream's `c_k` and tops,
-and refuses the session with a stream missing or a top another stream committed; the plain session (`rec-coins`' inner
-session) is read as before, its two reps' `c_k` and nothing else."""
+record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261011-181721-c16e`
+(#1759's `pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
+Hello): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's record, which keeps z_partial's
+round 40 whole), both reps' sparse phases (33 each) and the stacked table R (36), whose root is no Hello table's but the top
+its stream's binding round commits. The reps' coins are checked against the prover's record, the sparse streams and R's are
+the coin server's alone; `session/session.json` is the relay's record, which is refused. The verifier holds every stream's
+`c_k` and tops, and refuses the session with a stream missing or a top another stream committed; the plain session
+(`rec-coins`' inner session) is read as before, its two reps' `c_k` and nothing else."""
 from __future__ import annotations
 
 import copy
@@ -23,7 +26,7 @@ PLAIN = HERE / "fixtures" / "rec-coins" / "16-16-8-n64" / "inner-honest"
 pytestmark = pytest.mark.skipif(not BIN.exists(), reason="the Lean verifier is not built")
 
 #: what the verifier holds of candidate 3's session: each stream's message rounds and its tops' node counts by level (level 0
-#: its table's root_B; the sparse streams belong to no table)
+#: its table's root_B, R's the top its binding round commits; the sparse streams belong to no table)
 C3_STREAMS = [{"commits": 77, "stream": "circuit/rep0", "tops": [128, 64, 64, 32]},
               {"commits": 77, "stream": "circuit/rep1", "tops": [128, 64, 64, 32]},
               {"commits": 32, "stream": "sparse/rep0", "tops": []},
@@ -37,9 +40,10 @@ def _fixture(d: Path) -> Path:
     return d
 
 
-def _read(d: Path, transcript: Path | None = None) -> tuple[int, dict | None, str]:
+def _read(d: Path, transcript: Path | None = None, record: Path | None = None) -> tuple[int, dict | None, str]:
+    record = record or (d / "prover" if (d / "prover").is_dir() else d / "session")
     p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
-                        "--rec-inner-session", str(d / "session")], capture_output=True, text=True)
+                        "--rec-inner-session", str(record)], capture_output=True, text=True)
     line = [json.loads(ln[14:]) for ln in p.stdout.splitlines() if ln.startswith("RECTRANSCRIPT ")]
     return p.returncode, (line[0] if line else None), p.stderr.strip()
 
@@ -71,7 +75,7 @@ def test_verify_reads_candidate_3s_transcript(tmp_path):
 
     def verify(transcript: Path) -> subprocess.CompletedProcess:
         return subprocess.run([str(BIN), "verify", "--zk", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),
-                               "--rec-inner-coins", str(tmp_path / "coins.json"), "--rec-inner-session", str(C3 / "session"),
+                               "--rec-inner-coins", str(tmp_path / "coins.json"), "--rec-inner-session", str(C3 / "prover"),
                                "--rec-inner-transcript", str(transcript), "--session", str(tmp_path / "none")],
                               capture_output=True, text=True)
 
@@ -93,8 +97,7 @@ def _drop_stacked(t: dict) -> None:
 
 def _drop_stacked_everywhere(t: dict) -> None:
     _drop_stacked(t)
-    del t["streams"]["stacked/rep0"], t["link"]["roots"]["stacked"]
-    t["hello"]["tables"] = ["circuit"]
+    del t["streams"]["stacked/rep0"]
 
 
 def _drop_sparse_round(t: dict) -> None:
@@ -103,14 +106,67 @@ def _drop_sparse_round(t: dict) -> None:
 
 @pytest.mark.parametrize("change,why", [
     (_drop_stacked, f"it declares the streams {STREAMS}, not {FOUR}"),
-    (_drop_stacked_everywhere, f"the inner session's record has the streams {STREAMS}, not {FOUR}"),
     (lambda t: t.__setitem__("rounds", [r for r in t["rounds"] if r["stream"] != "sparse/rep1"]),
      "its message rounds' streams [circuit/rep0, circuit/rep1, sparse/rep0, stacked/rep0] are not one table's rep0 and rep1, "
      f"both reps' sparse phases and at most R's stream ({STREAMS})"),
-    (_drop_sparse_round, "sparse/rep0 declares 33 rounds; it records 32 and the inner session's record 33"),
-], ids=["stacked-rounds", "stacked-everywhere", "sparse-rep1", "sparse-round"])
+    (_drop_sparse_round, "sparse/rep0 declares 33 rounds and records 32"),
+], ids=["stacked-rounds", "sparse-rep1", "sparse-round"])
 def test_a_stream_missing_is_refused(tmp_path, change, why):
     rc, line, err = _read(C3, _changed(tmp_path, change))
+    assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
+
+
+def test_the_sparse_streams_and_rs_are_the_coin_servers_alone(tmp_path):
+    """The prover's record holds the reps only, so whether the session committed R is the coin server's record's to say: a
+    transcript with R's stream gone from its rounds and its declarations is read as a session without R."""
+    rc, line, err = _read(C3, _changed(tmp_path, _drop_stacked_everywhere))
+    assert (rc, line) == (0, {"reps": [77, 77], "streams": C3_STREAMS[:4]}), err
+
+
+REPS = "[circuit/rep0, circuit/rep1]"
+
+
+def _record(tmp_path: Path, change) -> Path:
+    r = json.loads((_fixture(C3) / "session" / "session.json").read_text())
+    change(r)
+    (tmp_path / "rec").mkdir()
+    (tmp_path / "rec" / "session.json").write_text(json.dumps(r))
+    return tmp_path / "rec"
+
+
+def _coins(stream: str, k: int, coins: list[str] | None = None):
+    def change(t):
+        r = _round(t, stream, k=k)
+        r["coins"] = coins if coins is not None else ["00" * 16] * len(r["coins"])
+    return change
+
+
+@pytest.mark.parametrize("change,why", [
+    (_coins("circuit/rep0", 2), "circuit/rep0 round 2's coins are not the inner session record's"),
+    (_coins("circuit/rep1", 41), "circuit/rep1 round 41's coins are not the inner session record's"),
+    (_coins("circuit/rep0", 42), "circuit/rep0 round 42's coins are not the inner session record's"),
+    (_coins("circuit/rep0", 40, ["00" * 16]), "circuit/rep0 records 95 rounds and the inner session's record 94"),
+    (_coins("circuit/rep0", 41, []), "circuit/rep0 has rounds of no coins at #[40, 41], and only z_partial's round is split"),
+], ids=["before-split", "h-round", "after-split", "no-split", "two-splits"])
+def test_the_reps_coins_are_the_prover_records_across_z_partials_split(tmp_path, change, why):
+    """The transcript splits z_partial's round 40 (no coins, then h's round 41, which takes the prover's round 40's coins), so
+    the prover's round `k` is the transcript's `k` below 40 and `k + 1` from 40 on; a rep's coins are checked at every
+    round."""
+    rc, line, err = _read(C3, _changed(tmp_path, change))
+    assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
+
+
+@pytest.mark.parametrize("record,why", [
+    (lambda tmp: _fixture(C3) / "session", f"the inner session's record has the streams {STREAMS}, not {REPS} (the prover's "
+     "record, which check 5 reads)"),
+    (lambda tmp: _record(tmp, lambda r: r.__setitem__("streams", r["streams"][:2])),
+     "circuit/rep0 splits z_partial's round 40 in two and records 95 rounds; the inner session's record has 95, not 94 (it is "
+     "the prover's record, check 5's)"),
+], ids=["relay-record", "relay-reps"])
+def test_the_relays_record_is_not_the_inner_sessions(tmp_path, record, why):
+    """The relay's record holds the transcript's rounds as the firewall split them, and the sparse streams and R's: it is not
+    the record check 5 reads, and `innerCommits` reads that one."""
+    rc, line, err = _read(C3, record=record(tmp_path))
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
 
 
@@ -119,7 +175,7 @@ def test_a_top_another_stream_committed_is_refused(tmp_path):
     salt, so the session holds that `b ‖ c` twice."""
     def swap(t):
         top = _round(t, "circuit/rep0", tops=True)["tops"]
-        _round(t, "stacked/rep0", tops=True)["tops"] = copy.deepcopy(top)
+        _round(t, "stacked/rep0", k=11)["tops"] = copy.deepcopy(top)
         swap.first = top[0][0]
 
     rc, line, err = _read(C3, _changed(tmp_path, swap))
@@ -131,18 +187,20 @@ def test_a_top_another_stream_committed_is_refused(tmp_path):
 @pytest.mark.parametrize("change,why", [
     (lambda t: _round(t, "sparse/rep1").__setitem__("tops", [["00" * 128]]),
      "sparse/rep1 round 0 commits a top, and a sparse stream has no table"),
-    (lambda t: _round(t, "stacked/rep0", tops=True)["tops"][0].__setitem__(0, "00" * 64),
+    (lambda t: _round(t, "stacked/rep0", k=11)["tops"][0].__setitem__(0, "00" * 64),
      "stacked/rep0 round 11's top 0: a b ‖ c of 64 bytes, not 128"),
-    (lambda t: t["hello"].__setitem__("tables", ["stacked", "circuit"]),
-     "Hello's tables #[stacked, circuit], not #[circuit, stacked]"),
-    (lambda t: _round(t, "stacked/rep0", k=2).__setitem__("coins", ["00" * 16] * len(_round(t, "stacked/rep0", k=2)["coins"])),
-     "stacked/rep0 round 2's coins are not the inner session record's"),
+    (lambda t: t["hello"].__setitem__("tables", ["circuit", "stacked"]),
+     "Hello's tables #[circuit, stacked], not #[circuit]"),
+    (lambda t: t["link"]["roots"].__setitem__("stacked", t["link"]["roots"]["circuit"]),
+     "the committed roots are [circuit, stacked]'s, not #[circuit]'s"),
+    (lambda t: _round(t, "stacked/rep0", k=0).__setitem__("tops", []),
+     "stacked/rep0's binding round commits no top: R's root is committed nowhere"),
     (lambda t: t["streams"]["sparse/rep1"].__setitem__("parent", "circuit/rep0"),
      "sparse/rep1 is not declared at circuit/rep1's round 95"),
-], ids=["sparse-top", "short-node", "tables", "coins", "parent"])
+], ids=["sparse-top", "short-node", "tables", "roots", "r-unbound", "parent"])
 def test_candidate_3s_session_is_held_to_its_layout(tmp_path, change, why):
-    """Where `rec_live.schedule_for` puts each stream, and what its rounds hold: coins are checked at every round of every
-    stream (here a round of R's that commits nothing), tops are `b ‖ c` lists in a table's streams only."""
+    """Where `rec_live.schedule_for` puts each stream, and what its rounds hold: tops are `b ‖ c` lists in a table's streams
+    only, and R's binding round commits R's root."""
     rc, line, err = _read(C3, _changed(tmp_path, change))
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
 
@@ -186,7 +244,7 @@ def sparse(tmp_path_factory) -> Path:
 
 
 def _statement(d: Path, transcript: Path | None = None) -> subprocess.CompletedProcess:
-    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "session")]
+    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "prover")]
     return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
                            "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
                            str(d / "program.json"), "--registered", str(d / "registered.json"), *rec],
