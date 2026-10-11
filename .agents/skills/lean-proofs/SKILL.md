@@ -163,9 +163,14 @@ simp with that.
   constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
   outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
   acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
-  constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
+  constant of a module under `shape.premises` (under its leading `∀`s); the acceptance applies the function in its own
+  body, under no hypothesis of its own; a `Prop` field of a structure an input ranges over, or a family of them
+  (`Vs : Fin S → VStmt`) holds, counts as a hypothesis (`Nonempty` too),
   and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
-  `{function, outcome}` each. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
+  `{function, outcome}` each. A probability statement has its acceptance in the event instead: with its constant under
+  `shape.events` (`FlockSoundness.Game.prob`), a conjunct whose events are each the acceptance and then what fails
+  (`prob (fun o => A o ∧ B o) g σ ≤ …`, every conjunct before the last an acceptance) takes premises only, and every
+  other hypothesis is refused; a compound failure goes under one `¬` or definition. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
   with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
   `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
   `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one

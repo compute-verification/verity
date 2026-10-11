@@ -8,7 +8,8 @@ records of runs.
 `--generated` compares the two on honest P2 v4 records, at reduced widths and at the registered point, and on negative
 controls of each part of the verdict (a wrong, flipped, short or long block, a leaf file of another store under its own
 root, a wrong index, source or order, a late answer, too few or too many answers, no audit, a wrong root or limit, the
-certificate's refusals of `k`, `Δ` and the RTT allowance, and records that are not P2 v4 or malformed). It prints each
+certificate's refusals of `k`, `Δ` and the RTT allowance, and records that are not P2 v4 or malformed), and through the
+files on records whose JSON holds floats, `NaN` or `Infinity` (`file_instances`). It prints each
 difference with both outputs, then `N instances, M differences, K negative controls`, and exits 0 iff M is 0. A negative
 control is an instance built to be refused, faulted or rejected; the generator checks the reference does not accept it.
 
@@ -256,6 +257,36 @@ def instances(seed: int = 0) -> Iterator[dict[str, Any]]:
             yield inst(f"{tag} {name}", ready, leaves, bad, True)
 
 
+def file_instances(seed: int = 0) -> Iterator[dict[str, Any]]:
+    """Records whose files hold what the server's canonical JSON can't carry, compared through the files (`lean_verdict`):
+    floats Python's `json` writes in exponent form (`1e+16`, which `Json.parse` alone reads as a natural), and `NaN`,
+    `Infinity` and `-Infinity` in fields the verdict reads and in fields it doesn't."""
+    from verity.core.protocols.pous.schemes import p2 as P2
+
+    rng = random.Random(seed)
+    s = Store(P2.P2Params(64, 189, 4, 2), rng.randbytes(16))
+    big = 10 ** 16
+    doc = record(s, rng, k=3, deadline=big, rtt=0, strict=False, audits=1, elapsed=lambda j: j)
+
+    def inst(name, doc, ready=None, negative=True):
+        return {"name": f"file: {name}", "negative": negative, "ready": ready or s.ready, "leaves": s.leaves, "audit": doc}
+
+    yield inst("honest, Δ 10^16", doc, negative=False)
+    yield inst("Δ and the limit the float 1e16", {**doc, "deadline_ns": float(big), "limit_ns": float(big)})
+    yield inst("the limit the float 1e16", {**doc, "limit_ns": float(big)})
+    yield inst("Δ the float 1e16", {**doc, "deadline_ns": float(big)})
+    yield inst("an elapsed time the float 1e16", _edit(doc, lambda d: _answer(d).update(elapsed_ns=float(big))))
+    yield inst("an elapsed time the float 1e-05", _edit(doc, lambda d: _answer(d).update(elapsed_ns=1e-05)))
+    yield inst("k the float 3.0", {**doc, "k": 3.0})
+    yield inst("Δ NaN", {**doc, "deadline_ns": float("nan")})
+    yield inst("the clock NaN, unread", {**doc, "clock": float("nan")}, negative=False)
+    yield inst("the clock -Infinity, unread", {**doc, "clock": float("-inf")}, negative=False)
+    yield inst("an answer's device time Infinity, unread",
+               _edit(doc, lambda d: _answer(d).update(device_ns=float("inf"))), negative=False)
+    yield inst("the ready file's port NaN, unread", doc, ready={**s.ready, "port": float("nan")}, negative=False)
+    yield inst("the manifest's w the float 64.0", doc, ready={**s.ready, "params": {**s.ready["params"], "w": 64.0}})
+
+
 def python_verdict(mc, inst: dict) -> str:
     try:
         return canonical(mc.verdict(inst["ready"], inst["leaves"], inst["audit"]))
@@ -275,6 +306,9 @@ def compare(seed: int = 0) -> list[dict]:
         for inst in instances(seed):
             out.append({"id": inst["name"], "negative": inst["negative"], "python": python_verdict(mc, inst),
                         "lean": _lean_side(lean, inst)})
+    for inst in file_instances(seed):
+        out.append({"id": inst["name"], "negative": inst["negative"], "python": python_verdict(mc, inst),
+                    "lean": canonical(lean_verdict(inst["ready"], inst["leaves"], inst["audit"]))})
     return out
 
 
