@@ -164,6 +164,19 @@ def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tm
     assert v["why"].startswith(f"setup: rec-coins: {UNIT}: the verifier holds no inner session"), v["why"]
 
 
+def test_an_inner_record_that_keeps_a_unit_draw_is_refused(forged, shape, tmp_path):
+    """`Record.decode`'s U1 (`Draw.check`): the inner statement never carries a draw (`Inner.load` refuses one in its
+    header), so an honest inner record given a `unit_draw` is refused by U1 alone; nothing else reads the record's draw."""
+    inner = shutil.copytree(SET / "inner-honest", tmp_path / "inner-drawn")
+    s = json.loads((inner / "session" / "session.json").read_text())
+    s["unit_draw"] = {"law": "subset", "units": [0]}
+    (inner / "session" / "session.json").write_text(json.dumps(s))
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
+                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's record: U1: the record keeps a unit draw the "
+                        "statement does not carry"), v["why"]
+
+
 def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
     v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "rows.json", forged))
