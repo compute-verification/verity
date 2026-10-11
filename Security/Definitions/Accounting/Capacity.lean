@@ -13,10 +13,10 @@ holds, the whole chip, and every side channel's capacity over a round. The capac
 The state bound is where double counting is ruled out. Device memory the capacity audit's answers depend on is charged
 to the capacity account, so memory another account holds at the same tick (a PoUW weight, a bandwidth store) is not
 credited to the capacity audit, and the device's limits (`Step.Fits`) bound the accounts' memory together. A server of
-the game is also handed the game's public inputs (PoUS's `W`), so state that is a function of them alone, such as the
-weight-derived state a PoUW scheme keeps (Pearl-C's `B̃`), is not part of its bound: a device may keep it in another
-account, uncounted by the capacity certificate, and it then counts against the capacity residual
-(`Accounting.Guarantees.DerivedStateResidual`).
+the game is also handed the game's public inputs (PoUS's `W`), so state it computes from them alone, without the
+operations the game charges (PoUS's ring operations and key queries), is not part of its bound. The weight-derived state
+a PoUW scheme keeps (Pearl-C's `B̃`) is such state: a device may keep it in another account, uncounted by the capacity
+certificate, and it then counts against the capacity residual (`Accounting.Guarantees.DerivedStateResidual`).
 
 The game bounds the state at every round boundary at once, so it certifies the capacity account's peak: a run whose
 capacity account holds less than the game's bound at one tick and more at others is not one of its servers. The capacity
