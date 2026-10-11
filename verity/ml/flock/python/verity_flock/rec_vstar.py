@@ -9,7 +9,8 @@ top. Its hashing part, which this module states over plain Python:
   received each node's salted commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
   commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
-  its binding round's top, which must be the top registered before the session (`registered`, ``registration.json``).
+  its binding round's top, which must be the top registered before the session (`registered`: the ``stacked`` entry of the
+  private circuit's ``verity/registration/v2`` record, `rec_live.REGISTRATION`).
 * **Openings** (PROTOCOL.md §13.3, §13.5). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
   ``j``'s position is ``pos_j = (s_j << (d - c_j)) | (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins,
   its leaf ``SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE: the statement's
@@ -265,14 +266,17 @@ def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> li
 
 
 def registered(public: dict, registration: dict | None, table: str = RL.STACKED) -> None:
-    """A table with no root at ``Commit`` (R) is bound by its registration alone (`rec_live.register_top`): its stream's
-    binding round's salted top must be the registered top, ``b || c`` for ``b || c``; refused by name otherwise."""
+    """A table with no root at ``Commit`` (R) is bound by the private circuit's registration alone (`rec_live.register_top`):
+    the registered entry named ``table`` of its ``verity/registration/v2`` record must be the entry its stream's binding
+    round's salted top makes (`rec_live.top_entry` under the record's ``program``: root, leaves, words and domain); refused
+    by name otherwise."""
     stream = f"{table}/rep0"
     first = next((r for r in _stream_rounds(public, stream) if r["k"] == 0), None)
-    reg = ((registration or {}).get("registered") or {}).get(table) if (registration or {}).get("kind") == RL.REGISTRATION_KIND else None
-    if reg is None or (registration or {}).get("tops") != RL.TOPS:
+    entry = RL.registered_entry(registration, table)
+    if entry is None:
         raise ValueError(RL.refused(f"registration: {table} has no root at Commit and no registered top"))
-    if first is None or not first["tops"] or first["tops"][0] != reg["top"]:
+    if first is None or not first["tops"] or RL.top_entry(registration["program"], table,
+                                                          [bytes.fromhex(b) for b in first["tops"][0]]) != entry:
         raise ValueError(RL.refused(f"registration: {stream}'s binding round's top is not {table}'s registered top"))
 
 

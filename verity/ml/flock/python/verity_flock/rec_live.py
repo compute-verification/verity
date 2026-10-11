@@ -25,10 +25,12 @@ registered value the verifier builds from them (`verity_flock.rec_outer`). The n
 absorb): it is committed once, at ``Commit``, and the firewall refuses a binding round whose cap is not ``root_B``; a later
 copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (candidate 3's
 stacked table R) has its level-0 top committed as a salted top of its stream's binding round instead, and its later copies
-counted the same way. That top is registered (`register_top`, `registration_record`): salted once, before the session and
-any coin, as the private circuit's other registered rows are, and the firewall refuses a binding round whose cap is not the
-registered top's, or a table that has neither a root at ``Commit`` nor a registered top; the round's salted top is the
-registered one, ``b || c`` for ``b || c``. The inner trees' leaves need no salt of their own (the statement's
+counted the same way. That top is registered with the private circuit (`register_top`): its nodes are registered rows
+under salts drawn once, before the session and any coin, and the private circuit's ``verity/registration/v2`` record
+(``REGISTRATION``) names them as one more ``registered`` entry, named for the table (`with_registered`). The firewall
+refuses a binding round whose cap is not the registered top's, or a table that has neither a root at ``Commit`` nor a
+registered top; the round's salted top is the registered one, ``b || c`` for ``b || c``, so the verifier rebuilds the
+entry from that round's top alone (`top_entry`). The inner trees' leaves need no salt of their own (the statement's
 ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`): nothing about a tree but its salted top leaves the
 firewall.
 
@@ -85,9 +87,9 @@ from .rec_algebra import fast100
 
 KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
-#: the registered tops of tables with no root at ``Commit`` (`registration_record`), public, fixed before the session
-REGISTRATION_KIND = "rec/inner-registration/v0"
-REGISTRATION = "registration.json"
+#: the private circuit's registration (one-stage ``registration.record``, ``verity/registration/v2``), public, fixed before
+#: the session: its ``registered`` entries include the top of each table with no root at ``Commit`` (`with_registered`)
+REGISTRATION = "circuit-registration.json"
 #: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
 #: (`commit_top`)
 TOPS = "hm96-sha512/v1/node-row"
@@ -656,17 +658,47 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
     return {"nodes": [cap[i:i + CAP_NODE_BYTES].hex() for i in range(0, len(cap), CAP_NODE_BYTES)], "salts": [s.hex() for s in salts]}
 
 
-def register_top(cap: bytes, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict:
-    """A table's level-0 top registered before its session (the module docstring): each node a registered row under its own
-    salt, drawn here, once (`commit_top`, the key every registered row is committed under). Its opening (``nodes``,
-    ``salts``) is the prover's; its ``b || c`` a node (``top``) is the public registration."""
-    salts = [fresh_salt() for _ in top_rows(cap)]
-    return {**_opening(cap, salts), "top": [b.hex() for b in commit_top(cap, salts)]}
+def register_top(program: str, table: str, cap: bytes, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict:
+    """A table's level-0 top registered with the private circuit (``program``, the registration's) before its session: the
+    registered value ``table`` whose rows are the top's nodes (`top_rows`), each under its own salt, drawn here, once
+    (one-stage ``registered.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
+    ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the registration names (`with_registered`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+
+    rows = top_rows(cap)
+    salts = [fresh_salt() for _ in rows]
+    reg = G.Registered.commit(program, table, rows, salts)
+    return {**_opening(cap, salts), "top": [b.hex() for b in reg.bcs], "entry": reg.entry()}
 
 
-def registration_record(registered: dict[str, dict]) -> dict:
-    """``registration.json``: each registered table's top, its ``b || c`` a node (`register_top`'s ``top``), public."""
-    return {"kind": REGISTRATION_KIND, "tops": TOPS, "registered": {t: {"top": list(r["top"])} for t, r in sorted(registered.items())}}
+def top_entry(program: str, table: str, top: list[bytes]) -> dict:
+    """The registered entry of ``table`` whose rows' ``b || c`` are ``top``: what the verifier rebuilds from a binding round's
+    salted top alone (`rec_residuals.commits_entry`, rows of `ROW_WORDS` words)."""
+    from .rec_residuals import commits_entry
+
+    return commits_entry(program, table, ROW_WORDS, top)
+
+
+def with_registered(registration: dict, entries: list[dict]) -> dict:
+    """The private circuit's registration with ``entries`` (`register_top`'s ``entry``) among its registered values, as
+    one-stage ``registration.record`` writes them: a ``verity/registration/v2`` record. A value is registered once."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    old = list(registration.get("registered") or ())
+    names = [e["value"] for e in old + list(entries)]
+    if len(set(names)) != len(names):
+        raise ValueError(f"a value is registered once, and the registration would name {sorted(names)}")
+    return {**registration, "format": R.FORMAT_V2, "registered": old + [dict(e) for e in entries]}
+
+
+def registered_entry(registration: dict | None, table: str) -> dict | None:
+    """The private circuit's ``verity/registration/v2`` record's one registered entry named ``table``, or None."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    if not isinstance(registration, dict) or registration.get("format") != R.FORMAT_V2:
+        return None
+    got = [e for e in registration.get("registered") or () if isinstance(e, dict) and e.get("value") == table]
+    return got[0] if len(got) == 1 else None
 
 
 class Proxy:
@@ -675,11 +707,14 @@ class Proxy:
     and V*'s witness need. ``commitments``, when the challenger committed to its coins before the session
     (`CoinServer.commit_coins`), are those commitments: every coin answer must then come with the salt that opens its
     round's commitment. Without them the coins are live, and a coin answer that comes with an opening stops the session
-    (`Flock.Firewall.Contract`'s rule). ``registered``: by table, the registered top (`register_top`) of each table the
-    schedule gives no root at ``Commit``, which its stream's binding round must bind (`register`)."""
+    (`Flock.Firewall.Contract`'s rule). ``registration``: the private circuit's ``verity/registration/v2`` record;
+    ``registered``: by table, the prover's opening of the registered top (`register_top`) of each table the schedule gives
+    no root at ``Commit``, which the registration names by the table's name and its stream's binding round must bind
+    (`register`)."""
 
     def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
-                 commitments: dict[str, list[str]] | None = None, registered: dict[str, dict] | None = None):
+                 commitments: dict[str, list[str]] | None = None, registration: dict | None = None,
+                 registered: dict[str, dict] | None = None):
         self.coins = coins
         self.fresh_salt = fresh_salt
         self.schedule = check_schedule(schedule)
@@ -695,21 +730,28 @@ class Proxy:
         self.private: list[dict] = []
         self.stopped: str | None = None
         self.verdict: dict | None = None
-        #: by table, its registered top (`register_top`)
+        #: the private circuit's registration, and by table the opening of its registered top (`register_top`)
+        self.registration = registration
         self.registered: dict[str, dict] = {}
         for t, reg in (registered or {}).items():
             self.register(t, reg)
 
     def register(self, table: str, reg: dict) -> None:
-        """``table``'s registered top (`register_top`), before Hello and any coin: a table the schedule gives no root at
-        ``Commit``, registered once, whose opening opens its ``top``."""
+        """``table``'s registered top (`register_top`'s opening), before Hello and any coin: a table the schedule gives no
+        root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the registration's entry
+        named ``table`` (`top_entry`)."""
         if self.hello is not None or self.coins.hello is not None or self.coins.committed is not None:
             raise ValueError(f"{table}: a top is registered before the session, never after Hello or a coin")
         if table in self.schedule["roots"] or table in self.registered:
             raise ValueError(f"{table}: registered twice, or a table whose root is committed at Commit")
+        entry = registered_entry(self.registration, table)
+        if entry is None:
+            raise ValueError(f"{table}: the private circuit's registration (verity/registration/v2) names no {table}")
         cap = b"".join(bytes.fromhex(x) for x in reg["nodes"])
         if [b.hex() for b in commit_top(cap, [bytes.fromhex(s) for s in reg["salts"]])] != list(reg["top"]):
             raise ValueError(f"{table}: the registered top's opening does not open it")
+        if top_entry(self.registration["program"], table, [bytes.fromhex(b) for b in reg["top"]]) != entry:
+            raise ValueError(f"{table}: the registered top is not the registration's {table}")
         self.registered[table] = {"nodes": list(reg["nodes"]), "salts": list(reg["salts"]), "top": list(reg["top"])}
 
     def _salted(self, cap: bytes) -> tuple[list[bytes], dict]:
@@ -909,8 +951,8 @@ class Proxy:
 
     def write(self, out: Path) -> Path:
         """The session directory (``session.json``, ``<table>.rep<r>.bin``), ``public.json``, ``private.json`` and, when the
-        challenger committed to its coins, its commitments and openings, ``coins.json``; with registered tops,
-        ``registration.json`` (`registration_record`), left as it is when the registration wrote it before the session."""
+        challenger committed to its coins, its commitments and openings, ``coins.json``; with registered tops, the private
+        circuit's registration (`REGISTRATION`), left as it is when the registration wrote it before the session."""
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
@@ -921,7 +963,7 @@ class Proxy:
         if self.commitments:
             (out / "coins.json").write_text(json.dumps(self.coins.commitment_record(), indent=1))
         if self.registered:
-            reg, rec = out / REGISTRATION, registration_record(self.registered)
+            reg, rec = out / REGISTRATION, self.registration
             if not reg.exists():
                 reg.write_text(json.dumps(rec, indent=1))
             elif json.loads(reg.read_text()) != rec:

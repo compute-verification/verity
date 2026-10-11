@@ -10,6 +10,8 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py forge --what top|unsalted --inner DIR
                                                              top: flips one byte of rep 0's level-1 top in private.json;
                                                              unsalted: public.json's tops as their clear nodes (no salts)
+    python rec_inner.py registration --n N --sets DIR --out FILE
+                                                             the private circuit's registration before R (88's --registration)
 """
 from __future__ import annotations
 
@@ -42,6 +44,22 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
             "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "blocks": blocks,
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "leaf_scheme": meta["leaf_scheme"]["id"],
             "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+
+
+def registration(n: int, sets: Path, out: Path) -> dict:
+    """The private circuit's registration before R (`rec_session.circuit_registration`), written to ``out``: the inner
+    statement's program, `population_program` of the set's template at ``n``, and `Q_template_instance` v0 over it."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity_flock import rec_session as RS
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    s = InputSet.open(generate(TM.rope_head(64), n, SEED, sets)["path"])
+    template = s.subcircuit.definition(**FC.set_statics(s))
+    rec = RS.circuit_registration(P.population_program(template, n), P.template_instance_query(template))
+    out.write_text(json.dumps(rec, indent=1))
+    return {k: rec[k] for k in ("format", "program", "partition", "population")}
 
 
 def forge(what: str, inner: Path, level: int = 0) -> dict:
@@ -89,8 +107,15 @@ def main(argv=None) -> int:
     fg.add_argument("--what", choices=("challenge", "query", "top", "unsalted"), required=True)
     fg.add_argument("--inner", required=True)
     fg.add_argument("--level", type=int, default=0)
+    rg = sp.add_parser("registration")
+    rg.add_argument("--n", type=int, required=True)
+    rg.add_argument("--sets", required=True)
+    rg.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    res = stage(a.n, Path(a.sets), Path(a.out), a.plain_leaves) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
+    if a.cmd == "registration":
+        res = registration(a.n, Path(a.sets), Path(a.out))
+    else:
+        res = stage(a.n, Path(a.sets), Path(a.out), a.plain_leaves) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
     json.dump(res, sys.stdout, sort_keys=True)
     print()
     return 0
