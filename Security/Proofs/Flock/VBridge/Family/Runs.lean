@@ -270,7 +270,7 @@ theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (
     (hxs : d.extras = G.extras)
     (hext : ∀ j < G.extras.size, G.extras[j]!.skip.size = 64 ∧ G.extras[j]!.x.size = G.st.m - 6)
     -- the stream's coins
-    (hd : d.rounds = (G.stream r).rounds.map (·.coins)) (hwf : RoundsWF (G.stream r).rounds)
+    (hd : d.rounds = (G.stream r).rounds.map (·.coins)) (hne : NoEmpty d.rounds) (hwf : RoundsWF (G.stream r).rounds)
     -- the proof file: its decode, the messages w holds, the comb port and the levels' openings
     (hdec : decodeProof (shapeOf G.st G.sch G.extras.size) (G.bytes r) = .ok (G.proof r))
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
@@ -298,7 +298,7 @@ theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (
   obtain ⟨hn₀, hn₁, hn₂, hnr, ha₀, ha₁, ha₂, har, hlc, hrn, hra, hgn, hga, hlg⟩ :=
     framed_frames G.st G.sch _ (2 + G.extras.size) (by omega) (G.proof r) _
       (Transcript.init (G.stream r).rounds (G.spec.domain G.spec.tables[G.i]! r).toUTF8) rfl (init_enc _ _) hm14 hfr
-  exact run_of_frames sh d halg hacc G.st G.sch (G.proof r) (G.bytes r) G.extras _ rfl hd hwf hm hm14 hkL hkS hkm
+  exact run_of_frames sh d halg hacc G.st G.sch (G.proof r) (G.bytes r) G.extras _ rfl hd hne hwf hm hm14 hkL hkS hkm
     hxs hext hsch hf hdec hzp hlp hrsw hmessages hoodValues hyr hinitialCap hfoldPts hopen hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂
     har hlc hrn hra hgn hga hlg
 
@@ -317,6 +317,7 @@ structure RunsFrom (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) : P
   extras : ∀ r, (d r).extras = G.extras
   extras_wf : ∀ j < G.extras.size, G.extras[j]!.skip.size = 64 ∧ G.extras[j]!.x.size = G.st.m - 6
   coins : ∀ r : Fin 2, (d r).rounds = (G.stream r).rounds.map (·.coins)
+  noEmpty : ∀ r : Fin 2, NoEmpty (d r).rounds
   roundsWF : ∀ r : Fin 2, RoundsWF (G.stream r).rounds
   decode : ∀ r : Fin 2, decodeProof (shapeOf G.st G.sch G.extras.size) (G.bytes r) = .ok (G.proof r)
   zerocheck : ∀ r : Fin 2, ∀ v info kappa, verifierRows sh (d r).rounds (d r).extras (d r).comb = .ok (v, info, kappa) →
@@ -346,7 +347,7 @@ theorem runs_of_files (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) 
   intro r hr
   let r' : Fin 2 := ⟨r, hr⟩
   exact run_of_files G r sh (d r') (halg r').1 (halg r').2 h.m h.foldKLog h.kLog h.kLog_le h.sched h.fast
-    (h.extras r') h.extras_wf (h.coins r') (h.roundsWF r') (h.decode r') (h.zerocheck r') (h.lincheck r')
+    (h.extras r') h.extras_wf (h.coins r') (h.noEmpty r') (h.roundsWF r') (h.decode r') (h.zerocheck r') (h.lincheck r')
     (h.ringSwitches r') (h.messages r') (h.oodValues r') (h.yr r') (h.initialCap r') (h.foldPts r') (h.opened r')
     (h.framed r')
 

@@ -380,11 +380,11 @@ def Encodes : Prop :=
   ∀ r, ∃ b, decodeProof (shapeOf s.st s.sch (2 * s.S.regions.length)) b = .ok (s.proof r)
 
 /-- **Each rep's coin counts** (`CoinsShaped`), for the statement's `2 · |regions|` extra claims and the rep's Ligerito
-rounds. -/
+rounds, and none of its rounds empty. -/
 def Coins : Prop :=
   ∀ r : Fin 2, CoinsShaped s.st.m s.st.fold.kLog (2 * s.S.regions.length)
     (chunks (ligFrames s.sch (valOf s.sh (s.d r).w (s.d r).comb (s.d r).cons .T) (s.proofAt r).cap
-      (s.proofAt r).ligerito)).1.length (s.d r).rounds
+      (s.proofAt r).ligerito)).1.length (s.d r).rounds ∧ Flock.RecAlgebra.NoEmpty (s.d r).rounds
 
 theorem extrasAt_of {P : Array (Array F128)} {e : Array Claim} (h : s.st.extra P = .ok e) : s.extrasAt P = e := by
   unfold extrasAt; rw [h]
@@ -424,7 +424,7 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
   rw [← hsz] at hb
   have hco : CoinsShaped s.st.m s.st.fold.kLog (2 * s.S.regions.length)
       (chunks (ligFrames s.sch (valOf s.sh (s.d (fin2 r)).w (s.d (fin2 r)).comb (s.d (fin2 r)).cons .T)
-        (s.proof r).cap (s.proof r).ligerito)).1.length (s.d (fin2 r)).rounds := hcoins (fin2 r)
+        (s.proof r).cap (s.proof r).ligerito)).1.length (s.d (fin2 r)).rounds := (hcoins (fin2 r)).1
   obtain ⟨hcs, hc0, hc1, hc2, hcz, hcl, hcr, hcg⟩ := hco
   rw [← hsz] at hcs hcr hcg
   obtain ⟨t, htdef⟩ : ∃ t, t = Transcript.init (s.stream e.size r).rounds (s.spec.domain s.spec.tables[0]! r).toUTF8 :=
@@ -455,7 +455,8 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
     ⟨hN j 1 (by omega) (hcl' j h₁ h₂), answers_of_retains (hL ▸ hR j (by omega))⟩
   obtain ⟨t₄, hrun, hk⟩ := FlockVBridge.Runs.run_of_frames s.sh (s.d (fin2 r)) (halg (fin2 r)).1 (halg (fin2 r)).2
     s.st s.sch
-    (s.proof r) b e t htk (by rw [htr, streamRounds_coins]) (by rw [htr]; exact streamRounds_wf _ _) hshm.symm hm14
+    (s.proof r) b e t htk (by rw [htr, streamRounds_coins]) (hcoins (fin2 r)).2
+    (by rw [htr]; exact streamRounds_wf _ _) hshm.symm hm14
     (hkL.trans hshk.symm) hshk.symm hkm hxe hes hshs hf hb (fun _ _ _ h => proofOf_zc h) ⟨rfl, rfl⟩ rfl rfl rfl rfl
     (beq_self_eq_true _) (hcomb (fin2 r)) (hopen (fin2 r))
     (by rw [htk]; exact hN 0 6 (by omega) hc0)

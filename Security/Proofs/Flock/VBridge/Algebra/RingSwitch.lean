@@ -22,11 +22,12 @@ open Flock FlockSoundness.Refine
 
 /-! ## Where the ring switches are in w -/
 
-/-- The rounds before the ring switches (`rounds`, rec_algebra.py:748–772): zerocheck's, then lincheck's. -/
+/-- The rounds before the ring switches (`rounds`, rec_algebra.py:748–772): zerocheck's, then lincheck's, then a holo
+shape's `h` (`hRound`). -/
 def preRounds (sh : Shape) : Array (Array Key) :=
   #[(Array.range 64).map .ab ++ (Array.range 64).map .c] ++
     (Array.range (sh.m - 6)).map (fun i => #[.g1 i, .ginf i]) ++ #[#[.fa, .fb]] ++
-    (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp]
+    (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp] ++ hRound sh
 
 /-- The ring switches' rounds: `c` blocks of 128, block `k` entry `v` being `g k v`. -/
 def blocks (g : Nat → Nat → Key) (c : Nat) : Array Key :=
@@ -56,7 +57,7 @@ theorem rounds_split (sh : Shape) :
       ligRounds sh.sched := rfl
 
 theorem rs_not_pre (sh : Shape) (j v : Nat) : Key.rs j v ∉ (preRounds sh).flatten := by
-  simp [preRounds, Array.mem_flatten]
+  cases h : sh.holo <;> simp [preRounds, hRound, h, Array.mem_flatten]
 
 theorem idxOf?_of {xs : Array Key} {a : Key} {i : Nat} (hi : xs[i]? = some a) (hlt : ∀ j < i, xs[j]? ≠ some a) :
     xs.idxOf? a = some i := by

@@ -29,7 +29,7 @@ open FlockSoundness.Discharge.Exec (chunks ligFrames ligerito_frames)
 variable {c : Array (Array F128)}
 
 /-- V*'s level loop records one consistency context per iteration (Structure.lean:415–432). -/
-theorem levelsLoop_count {M : Messages F128} {sch : Flock.Schedule} {R : ℕ}
+theorem levelsLoop_count [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch : Flock.Schedule} {R : ℕ}
     (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel ≤ R →
@@ -70,7 +70,7 @@ theorem levelsLoop_count {M : Messages F128} {sch : Flock.Schedule} {R : ℕ}
       omega
 
 /-- V*'s Ligerito up to its final check records one consistency context per level (Structure.lean:436–450). -/
-theorem ligeritoRun_conss {sch : Flock.Schedule} {M : Messages F128} {T : F128} {k₀ k' : ℕ} {initCh : Array F256}
+theorem ligeritoRun_conss [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} {M : Messages F128} {T : F128} {k₀ k' : ℕ} {initCh : Array F256}
     {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hrun : (RecAlgebra.ligeritoRun sch M).run
@@ -189,7 +189,8 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
     (hT : rsT claims p.ringSwitches rpp gamma = valOf sh d.w d.comb d.cons .T)
     (hsws : rsSws claims rpp gamma = info.rs.sws)
     -- the record
-    (hcoins : d.rounds = t.rounds.map (·.coins)) (hwf : RoundsWF t.rounds) (htk : t.k = 0)
+    (hcoins : d.rounds = t.rounds.map (·.coins)) (hne : RecAlgebra.NoEmpty d.rounds) (hwf : RoundsWF t.rounds)
+    (htk : t.k = 0)
     {k₁ k₂ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6)) (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1) :
     ∃ (F : ℕ → ByteArray) (P' : ByteArray),
       (∀ j, k₂ + claims.size + 1 ≤ j → j < t.rounds.size → (t.rounds[j]!).bytes = some (F j)) →
@@ -199,9 +200,10 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
   subst hsch
   obtain ⟨ext, stV, k', hl, hd, hmsg, hood, hlc, hfin⟩ :=
     ligerito_of_residuals_at (by omega) hrows hS hw hc hacc hres hzero
+  haveI : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
   have hk' : k' = t.rounds.size := by
-    have e : (k' == d.rounds.size) = true := hd
-    rw [beq_iff_eq, hcoins, Array.size_map] at e
+    have e : (k' == (d.rounds.filter (·.size ≠ 0)).size) = true := hd
+    rw [RecAlgebra.filter_noEmpty hne, beq_iff_eq, hcoins, Array.size_map] at e
     exact e
   subst hk'
   have hdim := (fast100_dims st.m sh.sched hf).1
@@ -278,7 +280,8 @@ theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Fl
     (hT : rsT claims p.ringSwitches rpp gamma = valOf sh d.w d.comb d.cons .T)
     (hsws : rsSws claims rpp gamma = info.rs.sws)
     -- the record
-    (hcoins : d.rounds = t.rounds.map (·.coins)) (hwf : RoundsWF t.rounds) (htk : t.k = 0)
+    (hcoins : d.rounds = t.rounds.map (·.coins)) (hne : RecAlgebra.NoEmpty d.rounds) (hwf : RoundsWF t.rounds)
+    (htk : t.k = 0)
     {k₁ k₂ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6)) (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1)
     -- the Ligerito rounds' frames
     (hfr : ∀ i < (chunks (ligFrames sch (valOf sh d.w d.comb d.cons .T) p.cap p.ligerito)).1.length,
@@ -291,9 +294,10 @@ theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Fl
   subst hsch
   obtain ⟨ext, stV, k', hl, hd, hmsg, hood, hlc, hfin⟩ :=
     ligerito_of_residuals_at (by omega) hrows hS hw hc hacc hres hzero
+  haveI : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
   have hk' : k' = t.rounds.size := by
-    have e : (k' == d.rounds.size) = true := hd
-    rw [beq_iff_eq, hcoins, Array.size_map] at e
+    have e : (k' == (d.rounds.filter (·.size ≠ 0)).size) = true := hd
+    rw [RecAlgebra.filter_noEmpty hne, beq_iff_eq, hcoins, Array.size_map] at e
     exact e
   subst hk'
   have hdim := (fast100_dims st.m sh.sched hf).1
