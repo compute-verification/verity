@@ -24,42 +24,58 @@ namespace RecVStar
 open Lean
 
 /-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), its claims, two and one per region and
-link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), and its table's regions (`Stmt.regions`). -/
+link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), its table's regions (`Stmt.regions`), and
+whether its circuits are private (`holo`, `rec_algebra.Shape.holo`): the verifier's own `--hide`, never the prover's. -/
 structure Inner where
   m : Nat
   kLog : Nat
   claims : Nat
   regions : Nat
+  holo : Bool := false
   deriving Repr, BEq, Inhabited
 
 /-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
 /-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program. -/
-def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) : V Inner := do
+def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false) :
+    V Inner := do
   let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
-  pure ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size, st.regions.size⟩
+  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
 
 def FORMAT : String := "verity/rec-inner/v1"
 
+/-- `verity/rec-inner/v1`'s key for `Inner.holo`, written only when true; absent means false. -/
+def HOLO_KEY : String := "holo"
+
 def Inner.toJson (i : Inner) : Json :=
-  Json.mkObj [("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog), ("claims", Lean.toJson i.claims),
-    ("regions", Lean.toJson i.regions)]
+  Json.mkObj ([("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog),
+    ("claims", Lean.toJson i.claims), ("regions", Lean.toJson i.regions)] ++ (if i.holo then [(HOLO_KEY, .bool true)] else []))
 
 def Inner.ofJson (j : Json) : Except String Inner := do
   if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
-  pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims",
-    ← j.getObjValAs? Nat "regions"⟩
+  let holo ← match j.getObjVal? HOLO_KEY with
+    | .error _ => pure false
+    | .ok (.bool b) => pure b
+    | .ok _ => throw s!"rec-inner: {HOLO_KEY} is not a boolean"
+  pure { m := ← j.getObjValAs? Nat "m", kLog := ← j.getObjValAs? Nat "k_log", claims := ← j.getObjValAs? Nat "claims",
+         regions := ← j.getObjValAs? Nat "regions", holo }
 
 /-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at,
 whose claims are two and two per region of the inner statement (an extra claim per region at each of two link points), and
 where V*'s parts (`VStar.parts (spec vsh)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
-(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`). -/
+(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`). The shape is holo as `i` says, so a
+part's circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`). V*'s
+circuit writer does not write holo parts yet, so a private inner session (`i.holo`) has no statements: the verifier
+accepts no form ahead of its proof. -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
-  let some sh := RecResiduals.shape? i.m i.kLog i.claims
+  if i.holo then
+    throw "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
+  let some sh0 := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
         "k_log at least 6, claims at least 2")
+  let sh := { sh0 with holo := i.holo }
   if i.claims != 2 + 2 * i.regions then
     throw s!"the inner session's claims {i.claims}, not two and two per region of its {i.regions} ({2 + 2 * i.regions})"
   let vsh : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
