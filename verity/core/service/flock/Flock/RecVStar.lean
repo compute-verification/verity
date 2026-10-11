@@ -309,11 +309,121 @@ def TRANSCRIPT_FORMAT : String := "rec/inner-transcript/v1"
 /-- A round's coins, as hex strings. -/
 def coinsOf (r : Json) : Array String := (r.getObjValAs? (Array String) "coins").toOption.getD #[]
 
+/-- Candidate 3's streams beside the circuit table's reps (`rec_live.SPARSE`, `rec_live.STACKED`): each rep's sparse phase,
+`sparse/rep<x>`, and the stacked table R's one stream, `stacked/rep0`. -/
+def SPARSE : String := "sparse"
+def STACKED : String := "stacked"
+
+/-- One stream of the inner session as the coin server recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
+round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
+level 0 the table's `root_B` from `Commit` (the record's `link.roots`), then each later salted top in the order the stream's
+rounds absorbed them. A sparse stream belongs to no table and has none. -/
+structure InnerStream where
+  name : String
+  commits : Array (Nat × ByteArray)
+  tops : Array (Array ByteArray)
+
+/-- What the verifier holds of the inner session's transcript: the circuit table's reps' `c_k` (`reps`, rep `x` at `x`), and
+with candidate 3's streams every stream of the session (`streams`; empty for a session of one table's two reps). -/
+structure InnerCommits where
+  reps : Array (Array (Nat × ByteArray))
+  streams : Array InnerStream := #[]
+
+def InnerCommits.stream? (ic : InnerCommits) (name : String) : Option InnerStream := ic.streams.find? (·.name == name)
+
+private def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
+  xs.mapM fun x => do
+    let b ← (unhex x).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
+    if b.size != 128 then throw s!"rec inner transcript: {ctx}: a b ‖ c of {b.size} bytes, not 128"
+    pure b
+
+/-- **Candidate 3's session** (`rec_live.schedule_for` with `sparse`, and `stacked`): the circuit table `t`'s two reps, both
+reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`), the inner session record's and
+the streams its message rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end
+of the rep's stream, the reps and R at round 0 of no parent), each with every round from 0 to its count and that round's coins the
+record's; Hello's tables and the committed roots are `t`'s and R's; each round's tops are lists of `b ‖ c`, none in a sparse
+stream; and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since the firewall commits each under a
+fresh salt. -/
+def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : String) (names : List String)
+    (msgs : Array (String × Nat × ByteArray)) : V (Array InnerStream) := do
+  let stacked := names.contains s!"{STACKED}/rep0"
+  let want := [s!"{t}rep0", s!"{t}rep1", s!"{SPARSE}/rep0", s!"{SPARSE}/rep1"] ++ (if stacked then [s!"{STACKED}/rep0"] else [])
+  let tbl := (t.dropEnd 1).toString
+  let same := fun (a b : List String) => a.all b.contains && b.all a.contains && a.length == b.length
+  if !same names want then
+    throw s!"rec inner transcript: its message rounds' streams {names} are not one table's rep0 and rep1, both reps' sparse phases and at most R's stream ({want})"
+  let declared ← match tr.getObjVal? "streams" with
+    | .ok (.obj kvs) => pure kvs.toArray
+    | _ => throw "rec inner transcript: streams is not an object"
+  let recNames := streams.toList.filterMap fun x => (x.getObjValAs? String "stream").toOption
+  if !same (declared.toList.map (·.1)) want then
+    throw s!"rec inner transcript: it declares the streams {declared.toList.map (·.1)}, not {want}"
+  if !same recNames want then
+    throw s!"rec inner transcript: the inner session's record has the streams {recNames}, not {want}"
+  let decl := fun (s : String) => (declared.find? (·.1 == s)).map (·.2) |>.getD Json.null
+  let count := fun (s : String) => ((decl s).getObjValAs? Nat "rounds").toOption.getD 0
+  for s in want do
+    let parent := if s.startsWith s!"{SPARSE}/" then s!"{t}{(s.drop (SPARSE.length + 1)).toString}" else ""
+    let at_ := if parent.isEmpty then 0 else count parent
+    if ((decl s).getObjValAs? String "parent").toOption != some parent || ((decl s).getObjValAs? Nat "at").toOption != some at_ then
+      throw s!"rec inner transcript: {s} is not declared at {parent}'s round {at_}"
+    let srec := (streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s).getD Json.null
+    let rr := (srec.getObjValAs? (Array Json) "rounds").toOption.getD #[]
+    let mine := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).map fun r =>
+      ((r.getObjValAs? Nat "k").toOption, r)
+    if rr.size != count s || mine.size != count s then
+      throw s!"rec inner transcript: {s} declares {count s} rounds; it records {mine.size} and the inner session's record {rr.size}"
+    for k in [0:count s] do
+      let some (_, r) := mine.find? (·.1 == some k) | throw s!"rec inner transcript: {s} has no round {k}"
+      if (rr[k]?.map coinsOf) != some (coinsOf r) then
+        throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
+  let tables := (tr.getObjVal? "hello" |>.toOption.getD Json.null).getObjValAs? (Array String) "tables" |>.toOption.getD #[]
+  let wantTables := #[tbl] ++ (if stacked then #[STACKED] else #[])
+  if tables != wantTables then throw s!"rec inner transcript: Hello's tables {tables}, not {wantTables}"
+  let roots ← match (tr.getObjVal? "link" |>.toOption.getD Json.null).getObjVal? "roots" with
+    | .ok (.obj kvs) => pure kvs.toArray
+    | _ => throw "rec inner transcript: link.roots is not an object"
+  if !same (roots.toList.map (·.1)) wantTables.toList then
+    throw s!"rec inner transcript: the committed roots are {roots.toList.map (·.1)}'s, not {wantTables}'s"
+  let mut rootOf : Array (String × Array ByteArray) := #[]
+  for (name, j) in roots do
+    let .ok xs := Json.getArr? j | throw s!"rec inner transcript: {name}'s root is not a list"
+    let bcs ← hexList s!"{name}'s root" (xs.map fun x => (x.getStr?).toOption.getD "")
+    if bcs.isEmpty then throw s!"rec inner transcript: {name}'s root has no nodes"
+    rootOf := rootOf.push (name, bcs)
+  let mut out : Array InnerStream := #[]
+  let mut all : Array ByteArray := rootOf.foldl (· ++ ·.2) #[]
+  for s in want do
+    let table := if s.startsWith s!"{SPARSE}/" then none else some (if s.startsWith s!"{STACKED}/" then STACKED else tbl)
+    let mut tops : Array (Array ByteArray) := match table with
+      | some n => #[((rootOf.find? (·.1 == n)).map (·.2)).getD #[]]
+      | none => #[]
+    let rs := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).qsort fun a b =>
+      (a.getObjValAs? Nat "k").toOption.getD 0 < (b.getObjValAs? Nat "k").toOption.getD 0
+    for r in rs do
+      let k := (r.getObjValAs? Nat "k").toOption.getD 0
+      let .ok ts := r.getObjValAs? (Array (Array String)) "tops" | throw s!"rec inner transcript: {s} round {k}'s tops are not lists of b ‖ c"
+      if table.isNone && !ts.isEmpty then throw s!"rec inner transcript: {s} round {k} commits a top, and a sparse stream has no table"
+      for (top, i) in ts.zipIdx do
+        if top.isEmpty then throw s!"rec inner transcript: {s} round {k}'s top {i} has no nodes"
+        tops := tops.push (← hexList s!"{s} round {k}'s top {i}" top)
+    let cs := ((msgs.filter (·.1 == s)).qsort (·.2.1 < ·.2.1)).map (·.2)
+    all := all ++ (tops.extract (if table.isSome then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
+    out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[] }
+  let mut seen : Std.HashSet String := {}
+  for b in all do
+    let h := hexOf b
+    if seen.contains h then
+      throw s!"rec inner transcript: the b ‖ c {(h.take 16).toString}… is committed twice; the firewall commits each under a fresh salt"
+    seen := seen.insert h
+  return out
+
 /-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
 `rec/inner-transcript/v1`), those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
 its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). Each
-round's coins must be the inner session record's (`--rec-inner-session`) at the same stream and round. -/
-def innerCommits (tr : Json) (record : String) : V (Array (Array (Nat × ByteArray))) := do
+round's coins must be the inner session record's (`--rec-inner-session`) at the same stream and round. With candidate 3's
+streams beside the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it. -/
+def innerCommits (tr : Json) (record : String) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
   let rec_ ← match Json.parse record with
@@ -335,32 +445,93 @@ def innerCommits (tr : Json) (record : String) : V (Array (Array (Nat × ByteArr
     msgs := msgs.push (s, k, ← unhex cs[0]!)
   let names := (msgs.map (·.1)).toList.eraseDups
   let some t := names.head?.map fun n => (n.dropEndWhile (· != '/')).toString | throw "rec inner transcript: no message round holds a commitment"
+  let reps := fun (t : String) => #[0, 1].map fun x => ((msgs.filter (·.1 == s!"{t}rep{x}")).qsort (·.2.1 < ·.2.1)).map (·.2)
+  let extra := fun (n : String) => n.startsWith s!"{SPARSE}/" || n.startsWith s!"{STACKED}/"
+  if names.any extra then
+    let some t := (names.find? (!extra ·)).map fun n => (n.dropEndWhile (· != '/')).toString
+      | throw s!"rec inner transcript: its message rounds' streams {names} hold no table's reps"
+    return { reps := reps t, streams := ← candidate3 tr rounds streams t names msgs }
   if names.length != 2 || !names.contains s!"{t}rep0" || !names.contains s!"{t}rep1" then
     throw s!"rec inner transcript: its message rounds' streams {names} are not one table's rep0 and rep1"
-  return #[0, 1].map fun x =>
-    ((msgs.filter (·.1 == s!"{t}rep{x}")).qsort (·.2.1 < ·.2.1)).map (·.2)
+  return { reps := reps t }
 
-/-- **`pub.bin`'s rows at its `rec-c<i>` reads are the `c_i` the verifier holds**: for each port of the verifier's reads
-file registering a `rec-c<i>`, every row of the port's table, at the registered position `x` it opens, is rep `x`'s `i`-th
-message round's `c_i` in `innerCommits`. `Registered.check` puts each instance's row at the position its unit reads. -/
+/-- `rec-opening-c<i>`'s `i`. -/
+def openingIndex (value : String) : Option Nat :=
+  if value.startsWith "rec-opening-c" then (value.drop 13).toString.toNat? else none
+
+/-- `rec-top-stacked-L<l>`'s `l`. -/
+def stackedTopLevel (value : String) : Option Nat :=
+  if value.startsWith "rec-top-stacked-L" then (value.drop 17).toString.toNat? else none
+
+/-- `rec-sparse-<p>`'s `p` when `p` is one of RecSparse's message ports at some shape (`pre<j>`, `v2`, `sc<j>`, `u`, `vt`):
+not `h` (registered as its `rec-c<i>`), `claim` (`rec-claim`), nor `v`, `zero` or `tau`, which no round commits. -/
+def sparsePort (value : String) : Option String :=
+  if !value.startsWith "rec-sparse-" then none else
+  let p := (value.drop 11).toString
+  let idx := fun (pre : String) => p.startsWith pre && ((p.drop pre.length).toString.toNat?).isSome
+  if p == "v2" || p == "u" || p == "vt" || idx "pre" || idx "sc" then some p else none
+
+/-- RecSparse's message ports at `sh` in the order its sparse phase commits them (`message_ports` without `h` and
+`claim`): `pre<j>`, `v2`, `sc<j>`, `u`, and `vt` at T > 1. -/
+def sparseMessages (sh : RecSparse.Shape) : List String :=
+  ((RecSparse.messagePorts sh).map (·.1)).filter fun p => p != "h" && p != "claim"
+
+/-- A registered value the inner transcript fixes, and what its row `x` is there: `rec-c<i>`, rep `x`'s `i`-th message
+round's `c_i`; `rec-opening-c<i>` (R's registered opening, `rec_vstage.opening_messages`), R's one stream's `i`-th message
+round's `c_i`, at row 0; `rec-top-stacked-L<l>` (R's levels, `rec_vstage.stage_stacked`), node `x` of R's level-`l` top;
+`rec-sparse-<p>` (RecSparse's message ports, `rec_vstage.sparse_messages`), `sparse/rep<x>`'s `i`-th message round's `c_i`,
+`i` `p`'s place in `sparseMessages sparse`, `sparse` the statement's RecSparse shape.
+`none` for any other value; else the row's description and its `b ‖ c`, or why the transcript has no such row. -/
+def fixedRow (cs : InnerCommits) (value : String) (x : Nat) (sparse : Option RecSparse.Shape := none) :
+    Option (Except String (String × ByteArray)) :=
+  match cIndex value, openingIndex value, stackedTopLevel value, sparsePort value with
+  | some i, _, _, _ => some <| match (cs.reps[x]?).bind (·[i]?) with
+    | some (k, c) => .ok (s!"rep {x}'s c_{i} (inner round {k})", c)
+    | none => .error s!"the inner transcript has no rep {x} message round {i}"
+  | _, some i, _, _ => some <| match (if x == 0 then (cs.stream? s!"{STACKED}/rep0").bind (·.commits[i]?) else none) with
+    | some (k, c) => .ok (s!"R's c_{i} ({STACKED}/rep0 round {k})", c)
+    | none => .error s!"the inner transcript has no row {x} of R's message round {i}, which is R's stream's at row 0"
+  | _, _, some l, _ => some <| match ((cs.stream? s!"{STACKED}/rep0").bind (·.tops[l]?)).bind (·[x]?) with
+    | some c => .ok (s!"node {x} of R's level {l} top", c)
+    | none => .error s!"the inner transcript has no node {x} of R's level {l} top"
+  | _, _, _, some p => some <| do
+    let some sh := sparse | .error s!"{value} is a RecSparse message port and the statement is no rec-sparse unit"
+    let names := sparseMessages sh
+    let some i := names.idxOf? p | .error s!"{p} is not one of RecSparse's message ports {names} at {RecSparse.unitName sh}"
+    let s := s!"{SPARSE}/rep{x}"
+    let some st := cs.stream? s | .error s!"the inner transcript has no stream {s}"
+    if st.commits.size != names.length then
+      .error s!"{s} holds {st.commits.size} message rounds, not {RecSparse.unitName sh}'s {names.length} ({names})"
+    let (k, c) := st.commits[i]!
+    .ok (s!"{s}'s c_{i} ({p}, inner round {k})", c)
+  | none, none, none, none => none
+
+/-- **`pub.bin`'s rows at its reads of what the inner transcript fixes are the `b ‖ c` the verifier holds**: for each port of
+the verifier's reads file registering a value `fixedRow` names (`rec-c<i>`, and with R `rec-opening-c<i>` and
+`rec-top-stacked-L<l>`, and with a rec-sparse unit `rec-sparse-<p>`), every row of the port's table, at the registered
+position `x` it opens, is that value's row `x` in `innerCommits`: for `rec-c<i>`, rep `x`'s `i`-th message round's `c_i`.
+`Registered.check` puts each instance's row at the position its unit reads. -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
-    (commits : Option (Array (Array (Nat × ByteArray)))) : V Unit := do
+    (commits : Option InnerCommits) : V Unit := do
   let unit := st.c.unit.name
-  let regs := (registered.getD #[]).filterMap fun reg => (cIndex reg.value).map (reg, ·)
-  let some (reg0, _) := regs[0]? | return
+  let regs := (registered.getD #[]).filter fun reg => (fixedRow {reps := #[]} reg.value 0).isSome
+  let some reg0 := regs[0]? | return
   let some cs := commits
     | throw s!"rec-pub: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no c_k to check port {reg0.name}'s rows of {reg0.value} against"
   let some t := st.pub.tables | throw s!"rec-pub: {unit}: {reg0.name} is not a table of a shared-row file"
-  for (reg, i) in regs do
+  for reg in regs do
     let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)
       | throw s!"rec-pub: {unit}: {reg.name} is not a row of the circuit"
     let (positions, _) ← Registered.entry st.pub reg
     for r in [0:positions.size] do
       let x := positions[r]!
-      let some (k, c) := (cs[x]?).bind (·[i]?)
-        | throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} reads row {x} of {reg.value}, and the inner transcript has no rep {x} message round {i}"
-      if Registered.tableRow st.pub t p r != c then
-        throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} is not rep {x}'s c_{i} (inner round {k}) of the inner transcript"
+      match fixedRow cs reg.value x (RecSparse.params unit) with
+      | some (.ok (what, c)) =>
+        if Registered.tableRow st.pub t p r != c then
+          throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} is not {what} of the inner transcript"
+      | some (.error why) =>
+        throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} reads row {x} of {reg.value}, and {why}"
+      | none => throw s!"rec-pub: {unit}: port {reg.name}: the inner transcript fixes no {reg.value}"
 
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table

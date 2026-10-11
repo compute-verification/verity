@@ -1627,6 +1627,9 @@ def _now_stamp() -> str:
 def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
     routes = routes_of(ns)
     if ns.verb == "list":
+        for h in reg["handles"]:                                    # a clone not pulled since the name opened lists it too
+            if h["handle"] not in routes.local:
+                routes.get_route(h["handle"])
         rows = sorted({**routes.local, **routes.all()}.values(), key=lambda r: r["name"])
         if ns.json:
             print(json.dumps(rows, indent=2))

@@ -67,6 +67,22 @@ def test_cancel_terms_the_workloads_group_records_a_manual_cancel_and_leaves_the
         _end(workload, runner)
 
 
+def test_cancel_says_how_long_the_run_ran_and_how_much_of_it_waited_for_a_check_slot():
+    """af2d (10 Oct) was launched at 16:56Z, waited in node 1's check line until 18:31Z and was cancelled at 18:43Z: 107 minutes
+    in by its state, which reads `running` from launch, but 12 of checking."""
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 10, 18, 43, tzinfo=timezone.utc)
+    s = {"started_utc": "2026-10-10T16:56:00.120Z", "slot": {"state": "held", "since": "2026-10-10T16:56:10Z", "took": "2026-10-10T18:31:00Z",
+                                                              "slot": "a", "cores": "0-79"}}
+    assert cli._ran_text(s, now) == ("ran 107 min since 2026-10-10T16:56Z: waited 95 min for a check slot, then checked 12 min in "
+                                     "slot a")
+    s["slot"] = {"state": "waiting", "since": "2026-10-10T16:56:10Z", "why": "every check slot is taken"}
+    assert cli._ran_text(s, now).endswith("waiting for a check slot since 16:56Z (107 min), so its check never started")
+    assert cli._ran_text({"started_utc": "2026-10-10T18:00:00Z", "slot": None}, now) == "ran 43 min since 2026-10-10T18:00Z"
+    assert cli._ran_text({"started_utc": None}, now) == ""
+
+
 RUN = "r20261003-101500-c0de"
 
 
