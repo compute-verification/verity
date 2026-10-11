@@ -9,7 +9,7 @@ import Flock.RecAlgebra
 
 At an accepted outer proof every layer is `Good` (`ZkOuter.Good`): no wrong unit, and each wire a unit reads at a
 registered read carries the registrant's bit there (`RegAgree`). This file reads those bits through the session's layout
-(`laySh`) into the columns of a copy of V*'s unit, so that the unit theorems (`unit_innerUnit`, `keyProg_recOpen`) apply
+(`layShHJ`) into the columns of a copy of V*'s unit, so that the unit theorems (`unit_innerUnit`, `keyProg_recOpen`) apply
 to the layer itself. Only `RegAgree` is read: the unit theorems hold at any transcript's local evaluation.
 
 * `fill`: the layer with every wire at a registered read set to the registrant's bit. It agrees with the layer on every
@@ -40,8 +40,8 @@ open FlockVBridge.OfVStar
 
 section Fill
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 open Classical in
 /-- **The layer `bits` at the registrant's bits**: every wire at a registered read carries the registrant's bit there. -/
@@ -113,19 +113,19 @@ theorem fill_one {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree b
 
 /-- The session's commit string of each wire is `posK`'s. -/
 theorem lay_pos (g : Fin (Layout.keyN c hU nv)) : zo.lay.pos g = posK c hU nv g := by
-  dsimp only [ZkOuter.lay, ZkReg.laySh, Layout.keyedLayout, Layout.keyLayout, Layout.Readers.layout, Layout.ofBits,
-    Layout.keyReaders]
+  dsimp only [ZkOuter.lay, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
+    HiddenExec.keyReadersH]
   unfold posK
-  rcases h : Layout.keyRowOf c hU nv (Layout.portRowW c) g with _ | ⟨u, q, k⟩
+  rcases h : HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩
   · exact Layout.ofRows_pos_none _ h
   · exact Layout.ofRows_pos_some _ h
 
 /-- The session's bit of each wire is `bitK`'s. -/
 theorem lay_bit (v : ValK c) (g : Fin (Layout.keyN c hU nv)) : zo.lay.bit v g = bitK c hU nv v g := by
-  dsimp only [ZkOuter.lay, ZkReg.laySh, Layout.keyedLayout, Layout.keyLayout, Layout.Readers.layout, Layout.ofBits,
-    Layout.keyReaders, Layout.Readers.ofRows]
+  dsimp only [ZkOuter.lay, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
+    HiddenExec.keyReadersH, Layout.Readers.ofRows]
   unfold bitK idxK
-  rcases Layout.keyRowOf c hU nv (Layout.portRowW c) g with _ | ⟨u, q, k⟩ <;> rfl
+  rcases HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩ <;> rfl
 
 end Fill
 
@@ -208,8 +208,8 @@ end Keys
 
 section Reg
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- The registered reads, at V*'s commit strings. -/
 def regRead (p : PosK c hU nv) : Prop := zo.rd.isRead p
@@ -233,9 +233,10 @@ theorem fill_row (bits : Fin (Layout.keyN c hU nv) → Bool) {g : Fin (Layout.ke
     (hr : Layout.keyRowOf c hU nv (Layout.portRowW c) g = some (u, ⟨q, ⟨k, hk⟩⟩)) (hread : regRead zo (.inl (u, q))) :
     fill zo bits g =
       (regVal zo (.inl (u, q))).2 ⟨k, lt_of_lt_of_le hk ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ := by
+  have hr' := HiddenExec.rowOfH_of_key (Layout.outsOf c hU nv) hr
   have hp : posK c hU nv g = .inl (u, q) := by
     unfold posK
-    rw [hr]
+    rw [hr']
     try rfl
   have hread' : zo.rd.isRead (zo.lay.pos g) := by
     rw [lay_pos zo, hp]
@@ -247,7 +248,7 @@ theorem fill_row (bits : Fin (Layout.keyN c hU nv) → Bool) {g : Fin (Layout.ke
     rw [lay_pos zo g, hp]
   refine e.trans ?_
   unfold bitK idxK
-  rw [hr]
+  rw [hr']
   try rfl
 
 /-- **A registered bit is the copy's column in `fill`.** -/
@@ -390,8 +391,8 @@ theorem vOf_eq {sh : Flock.Shape} {rounds : Array (Array Flock.F128)} {extras : 
 
 section Part
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A part of S computes its residuals at the whole ports, in a layer agreeing with the registrant** (`decode_innerUnit` at `sub`). When copy
 `j` of unit `u` is V*'s `InnerRepCheck` unit of a part `S` whose row ports are registered bits of the whole message

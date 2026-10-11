@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Registered.Binding
+import Proofs.Flock.Soundness.Registered.ReadsX
 import Proofs.Flock.Recursive.StageRead
 
 /-!
@@ -10,8 +10,8 @@ registration) at one position open it there, so their leaves are one or SHA-512 
 session's `boundIf` (each sees one session's record) outputs it. A finder of the whole recursive audit does: it plays
 the audit once and outputs the pair where the outcome's history has one.
 
-* `Reads.Clash`, `Reads.Clash.collision`: two records' registered reads whose openings (`TwoOpenings.pair`) or hm96
-  leaves (`hm96Pair`) collide, a collision of `H512`;
+* `ReadsX.Clash`, `ReadsX.Clash.collision`: two records' registered reads whose openings (`TwoOpenings.pair`) or hm96
+  leaves over their commit strings' encodings (`hm96Pair`) collide, a collision of `H512`;
 * `RegColl`, `regFinder`, `prob_regColl_le`: some two of V*'s sessions at a history clash; the finder that plays the
   recursive audit once and outputs that collision; under `cr/sha-512` (`Finder.CR` at `qX`), the audit's outcome has
   such a history with probability at most `qX²/2^513`, once per audit;
@@ -34,23 +34,23 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : Binding.Layout P plan tab decode} {rs : HmRows lay}
+  {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
   {C' : Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
-  {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRows lay'}
+  {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
 /-- **Two registrant records clash**: at registered reads `p` of `rd` and `p'` of `rd'`, the openings
-(`TwoOpenings.pair`, under `p`'s root and position) or the hm96 leaves (`hm96Pair`) are a SHA-512 collision. It asks
-nothing of the two reads' roots or positions, so it covers a collision however an obligation keys them (one
-`Registered.Port`, or one registration). -/
-def Reads.Clash (rd : Reads lay rs) (rd' : Reads lay' rs') : Prop :=
+(`TwoOpenings.pair`, under `p`'s root and position) or the hm96 leaves over the two commit strings' encodings
+(`hm96Pair` of `rs.enc p` and `rs'.enc p'`) are a SHA-512 collision. It asks nothing of the two reads' roots or
+positions, so it covers a collision however an obligation keys them (one `Registered.Port`, or one registration). -/
+def ReadsX.Clash (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') : Prop :=
   ∃ p p', rd.isRead p ∧ rd'.isRead p' ∧
     (Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
-      Collides (hm96Pair (rs.enc (rd.wv p)) (rd.ws p) (rs'.enc (rd'.wv p')) (rd'.ws p')))
+      Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')))
 
-theorem Reads.Clash.collision {rd : Reads lay rs} {rd' : Reads lay' rs'} (h : rd.Clash rd') :
+theorem ReadsX.Clash.collision {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (h : rd.Clash rd') :
     Merkle.Collision H512 := by
   obtain ⟨_, _, _, _, ⟨h1, h2⟩ | ⟨h1, h2⟩⟩ := h
   · exact ⟨_, _, h1, h2⟩
@@ -70,7 +70,7 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **Two of V*'s sessions clash at a history**: at the history `(R, ω, t)` and registration `R₂`, the registrant
-records of some sessions `j`, `j'` clash (`Reads.Clash`). -/
+records of some sessions `j`, `j'` clash (`ReadsX.Clash`). -/
 def RegColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg) (ω : L.Ω)
     (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
   ∃ j j', (zs R ω t R₂ j).rd.Clash (zs R ω t R₂ j').rd
@@ -128,8 +128,8 @@ theorem outerV_le_dep
     (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
-    (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : Reg₂ → ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hr : ∀ R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ)
+    {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : Reg₂ → ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
       (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
@@ -156,7 +156,8 @@ theorem zk_sessions_recursive_upto_off
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -226,7 +227,8 @@ theorem zk_sessions_recursive_read_off
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -275,7 +277,8 @@ theorem zk_sessions_recursive_fork_read_off
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : VBridgeOff (RegColl zs) zs dg N k Rw x wmsg)

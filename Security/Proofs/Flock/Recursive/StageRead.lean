@@ -29,7 +29,7 @@ some unit. A layer failing `Q` disagrees with `wv` at a read wire, which every d
 theorem sessions_stage_le_read
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ j S' R' i, rateZ (planZAt (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (hr : ∀ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j → ReadW Vs j g →
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
@@ -112,7 +112,7 @@ prover sends (`outerV_stage_le`'s proof). -/
 theorem outerV_stage_le_read
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
+    (hr : ∀ R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
     (ht' : 0 ≤ t') (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j → ReadW Vs j g →
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
@@ -155,7 +155,8 @@ theorem zk_sessions_recursive_read
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -199,7 +200,8 @@ theorem zk_sessions_recursive_fork_read
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : Recursion.VBridge zs dg N k Rw x wmsg)
