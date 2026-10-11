@@ -48,6 +48,13 @@ def test_bare_ids_are_kebab_case_without_a_slash() -> None:
     assert all(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", k) for k in (*PROPERTIES, *INSTANCES))
 
 
+def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
+    device, inst = get("pous-ring-device"), get("pous-ring-instantiation")
+    assert (device.kind, device.standing) == ("model", None) and "D = 32,893" in device.name and "L = 2^64" in device.name
+    assert (inst.kind, inst.standing) == ("assumption", "conjectured") and "SHA-512-CTR" in inst.name
+    assert get("prf/sha-512").kind == "assumption"
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")

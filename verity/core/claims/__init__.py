@@ -119,6 +119,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
           "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
+    # `Pous.EndToEnd.EndToEndRing`'s two steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
+    # prf/sha-512 for the memory challenger's index streams
+    Entry("pous-ring-device", "model",
+          "PoUS ring model of the server: the deployed server, on the allowed hardware and answering within Δ + RTT, is a "
+          "ring-model server holding at most ⌊ρ·|C|⌋ bits between setup, the session and its rounds, each answer within "
+          "D = 32,893 multiplication rounds, Q = 2^20 key queries and L = 2^64 ring operations, with one session per audit "
+          "and the memory challenger's coins drawn online, after its state is fixed", "PoUS ring device"),
+    Entry("pous-ring-instantiation", "assumption",
+          "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
+          "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
+          "conjectured"),
 )}
 
 
