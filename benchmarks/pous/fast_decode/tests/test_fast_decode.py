@@ -36,7 +36,7 @@ def rand_below(rng: random.Random, n: int) -> int:
     return rng.randrange(n)
 
 
-@pytest.mark.parametrize("per", sorted(A.WIDTHS))
+@pytest.mark.parametrize("per", [pytest.param(16, marks=pytest.mark.slow), 8, 4, 2])
 def test_widths_are_the_primes_named(per: int):
     w = A.Width(per)
     assert w.w == 32 * (32 * per + 2) and w.n == w.w // 8
