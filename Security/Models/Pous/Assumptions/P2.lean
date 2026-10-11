@@ -24,10 +24,13 @@ challenges accepts every `⌊ρ·|C|⌋`-bit (`ρ = 18/19`), `(D, Q, L)`-bounded
 `2^-130`.
 
 It is the conjecture that square–mask–square over `Z/p` with a random odd labeling and random keys is no easier than
-independent ideal permutations, once a responder may not finish a root within the deadline. It is false at
-`D ≥ 32,894` with `Q ≥ 2` and `L ≥ 65,789` (`PousP2Ring.tight_p16448`: the responder recomputes the roots), and at
-large enough `L` (`PousP2Ring.not_meetsOn_b19_k88`'s truncation; at `k = 105` it needs about 167 dropped bits per
-block), so it is a hypothesis only at the `(D, Q, L)` a deadline gives. Those two theorems are its falsification tests. -/
+independent ideal permutations, once a responder may not finish a root within the deadline. If `p` is prime
+(`PrimeP16448`; both refutations read only the `AuditSecureOn` conjunct of `MeetsOn` and `ε ≤ 2^-128`), it is false at
+`D ≥ 32,894` with `Q ≥ 2` and `L ≥ 65,789` (`PousP2Ring.tight_p16448`: the responder recomputes the roots), at every
+`k`. Its form at `k ≤ 88` is false at `L ≥ 2^30` (`PousP2Ring.not_meetsOn_b19_k88`: a responder that stores truncated
+roots and recomputes the dropped bits); at `k = 105` the same attack needs about 167 dropped bits per block, which no
+theorem here refutes or rules out. So it is a hypothesis only at the `(D, Q, L)` a deadline gives. Those two theorems
+are its falsification tests. -/
 def P2RingAuditSecure (D Q L : ℕ) : Prop :=
   AuditSecureOn (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) .sequential
     ((p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) D Q L 105
