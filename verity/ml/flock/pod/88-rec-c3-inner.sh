@@ -20,9 +20,12 @@
 #   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
 #   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
 #   sparse claims (--points, after the sparse streams, into the same session); rec_vstar checks R's openings and rec_vstage
-#   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold)
+#   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold). R's top
+#   is registered before the session as the entry `stacked` of the private circuit's verity/registration/v2 record
+#   (rec_inner.py registration, then rec_session --registration; inner/circuit-registration.json)
 #   FORGE=cell|point (with STACKED): R committed with a flipped cell, or a claim point off; the algebra is not staged, and the
-#   run passes when the session runs and rec_vstage refuses R's opening (summary.json's refused)
+#   run passes when the session runs and rec_vstage refuses R's opening (summary.json's refused). FORGE=late: R's cell
+#   flipped after its registration, which the firewall refuses at R's binding round (the session stops)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
@@ -33,7 +36,7 @@ export FC_COINS=os
 N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}; STK=; MR=
 if [ -n "${STACKED:-}" ]; then
   MR=$(python3 -c "from verity_flock import rec_sparse as S; print(S.table_m(S.Shape($SPARSE)))") || exit 1
-  STK="--stacked $B ${FORGE:+--forge $FORGE}"
+  STK="--stacked $B --registration $D/circuit-registration.json ${FORGE:+--forge $FORGE}"
 fi
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
@@ -50,6 +53,10 @@ FP=$!
 python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
+if [ -n "${STACKED:-}" ]; then
+  python3 verity/ml/flock/pod/rec_inner.py registration --n $N --sets $S/sets --out $D/circuit-registration.json \
+    > $O/registration-base.json 2> $O/registration-base.err || { tail -20 $O/registration-base.err; exit 1; }
+fi
 
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1
