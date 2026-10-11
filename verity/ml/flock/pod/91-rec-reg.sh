@@ -128,3 +128,11 @@ cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt | cut -c1-30
 grep -h "^VERDICT" $D/lean-*.log | cut -c1-600 > $E/verdicts.txt
 for f in $D/lean-*.log; do echo "== $f"; grep -v "^VERDICT" $f | tail -3; done >> $E/verdicts.txt
 cat $X
+
+# R's cell 0 flipped after its registration: the proxy refuses stacked/rep0's binding round, before any of R's coins
+RESEARCH_RUN_DIR=$O/late RESEARCH_RUN_ID=$RID-late bash verity/ml/flock/pod/88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 \
+  FORGE=late > $O/88-late.log 2>&1
+echo "88 late exit $?" | tee -a $X
+grep -h "^REC_INNER" $O/late/out/session.log > $E/late.json
+python3 -c 'import json, sys; r = json.loads(open(sys.argv[1]).read().split("\t", 1)[1]); print(r); sys.exit(0 if "the binding round'"'"'s cap is not stacked'"'"'s registered top" in (r.get("refused") or "") else 1)' $E/late.json
+echo "late refused exit $?" | tee -a $X
