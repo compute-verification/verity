@@ -1,0 +1,588 @@
+{
+ "schema": "verity-circuit-check/v1",
+ "options": {
+  "vectors": 64,
+  "min_vectors": 4,
+  "seed": 20260926,
+  "reference_budget": 400000,
+  "X": 16,
+  "W": 32,
+  "extras": 0,
+  "partition_max_gates": 4000000,
+  "partition_max_leaves": 4194304,
+  "lower_max_gates": 256,
+  "lower_max_ands": 60000,
+  "input_budget": 4194304,
+  "lane_budget": 65536,
+  "dead_ids": 131072
+ },
+ "summary": {
+  "new_failures": [],
+  "known_failures": [],
+  "warnings": {}
+ },
+ "targets": [
+  {
+   "subcircuit": "attention-head/d64-bn128/sm80-fa2-bf16",
+   "template": "attention-head",
+   "params": {
+    "D": 64,
+    "BN": 128,
+    "semantics": "sm80.fa2.bf16"
+   },
+   "definitions": [
+    {
+     "definition": "AttentionHead_v3{T=1,D=64,BN=128}",
+     "form": "composite",
+     "gates": 277,
+     "correspondence": {
+      "vectors": 64,
+      "edge_vectors": 26,
+      "reference_raised": 0,
+      "realizations": [
+       {
+        "via": "c-flock:ir_lower",
+        "lowered": false,
+        "reason": "lowered as its template's units"
+       }
+      ]
+     },
+     "partition": {
+      "applies": true,
+      "query": "Q_word_v1{X=16,W=32,R=no-recompute}",
+      "units_per_call": 67,
+      "by_kind": {
+       "output": 64,
+       "committed": 3
+      },
+      "committed_interior_words": 3,
+      "max_out_bits": 32,
+      "free_gates": 73,
+      "checked": true,
+      "whole": {
+       "units": 67,
+       "redundant_gates": 0,
+       "codes": [],
+       "q_word_v2": {
+        "codes": [],
+        "recomputed_across": 0
+       }
+      },
+      "q_word": 1,
+      "q_call": {
+       "X": 32,
+       "checked": true,
+       "units": 202,
+       "committed": 202,
+       "committed_bits": 5424,
+       "recomputed_across": 0,
+       "redundant_gates": 0,
+       "codes": []
+      }
+     },
+     "redundant_gates": {
+      "count": 0,
+      "scope": "unit"
+     },
+     "dead_gates": {
+      "count": 1,
+      "unread_inputs": 0,
+      "where": {
+       "Const32[0x00000000]_v1 @ AttentionHead_v3{T=1,D=64,BN=128}": 1
+      },
+      "where_complete": true,
+      "approximate": false
+     },
+     "failures": [],
+     "warnings": [
+      {
+       "check": "dead-gates",
+       "code": "ir",
+       "definition": "AttentionHead_v3{T=1,D=64,BN=128}",
+       "count": 1,
+       "name": "dead-gates/ir AttentionHead_v3{T=1,D=64,BN=128}: 1 gates no output depends on",
+       "where": {
+        "Const32[0x00000000]_v1 @ AttentionHead_v3{T=1,D=64,BN=128}": 1
+       },
+       "unread_inputs": 0
+      }
+     ]
+    },
+    {
+     "definition": "AttentionHead_v3{T=512,D=64,BN=128}",
+     "form": "composite",
+     "gates": 7573,
+     "correspondence": {
+      "vectors": 52,
+      "edge_vectors": 26,
+      "reference_raised": 0,
+      "realizations": [
+       {
+        "via": "c-flock:ir_lower",
+        "lowered": false,
+        "reason": "lowered as its template's units"
+       }
+      ]
+     },
+     "partition": {
+      "applies": true,
+      "query": "Q_word_v1{X=16,W=32,R=no-recompute}",
+      "units_per_call": 1614,
+      "by_kind": {
+       "committed": 1550,
+       "output": 64
+      },
+      "committed_interior_words": 1550,
+      "max_out_bits": 32,
+      "free_gates": 581,
+      "checked": true,
+      "whole": {
+       "units": 1614,
+       "redundant_gates": 0,
+       "codes": [],
+       "q_word_v2": {
+        "codes": [],
+        "recomputed_across": 0
+       }
+      },
+      "q_word": 1,
+      "q_call": {
+       "X": 32,
+       "checked": true,
+       "units": 5456,
+       "committed": 5456,
+       "committed_bits": 165376,
+       "recomputed_across": 0,
+       "redundant_gates": 0,
+       "codes": []
+      }
+     },
+     "redundant_gates": {
+      "count": 0,
+      "scope": "unit"
+     },
+     "dead_gates": {
+      "count": 1,
+      "unread_inputs": 0,
+      "where": {
+       "Const32[0x00000000]_v1 @ AttentionHead_v3{T=512,D=64,BN=128}": 1
+      },
+      "where_complete": true,
+      "approximate": false
+     },
+     "failures": [],
+     "warnings": [
+      {
+       "check": "dead-gates",
+       "code": "ir",
+       "definition": "AttentionHead_v3{T=512,D=64,BN=128}",
+       "count": 1,
+       "name": "dead-gates/ir AttentionHead_v3{T=512,D=64,BN=128}: 1 gates no output depends on",
+       "where": {
+        "Const32[0x00000000]_v1 @ AttentionHead_v3{T=512,D=64,BN=128}": 1
+       },
+       "unread_inputs": 0
+      }
+     ]
+    }
+   ],
+   "lowering": [
+    {
+     "instance_statics": {
+      "T": 1
+     },
+     "lowered": true,
+     "via": "c-flock:attention-head/fa2-bf16/tc-step",
+     "units_per_instance": 68,
+     "ands": 8260,
+     "rows": 9473,
+     "digest": "a9061fd040ca8f4a4847bf458886f9f79f1bdb4e0b0a8dc31b57b4595362eced",
+     "export": {
+      "and": 8660,
+      "xor": 55268,
+      "not": 2041,
+      "subcircuit_types": 72,
+      "flat_ands": 8260,
+      "shared_across_types": 400
+     },
+     "pin": {
+      "pin": "attention-head/d64-bn128/sm80-fa2-bf16",
+      "counts": {
+       "and": 8660,
+       "xor": 55268,
+       "not": 2041
+      },
+      "pinned": {
+       "and": 8660,
+       "not": 2041,
+       "xor": 55268
+      },
+      "status": "ok"
+     },
+     "redundant_ands": {
+      "count": 0,
+      "where": {}
+     },
+     "compared": 64,
+     "mismatches": 0,
+     "unsatisfied_lanes": 0
+    },
+    {
+     "instance_statics": {
+      "T": 512
+     },
+     "lowered": true,
+     "via": "c-flock:attention-head/fa2-bf16/tc-step",
+     "units_per_instance": 4096,
+     "ands": 8260,
+     "rows": 9473,
+     "digest": "86cd8f63230f71001a5d5113ac0c31c102ba20ba926359b3a54ed732a0cff776",
+     "export": {
+      "and": 8660,
+      "xor": 55268,
+      "not": 2041,
+      "subcircuit_types": 72,
+      "flat_ands": 8260,
+      "shared_across_types": 400
+     },
+     "pin": {
+      "pin": "attention-head/d64-bn128/sm80-fa2-bf16",
+      "counts": {
+       "and": 8660,
+       "xor": 55268,
+       "not": 2041
+      },
+      "pinned": {
+       "and": 8660,
+       "not": 2041,
+       "xor": 55268
+      },
+      "status": "ok"
+     },
+     "redundant_ands": {
+      "count": 0,
+      "where": {}
+     },
+     "compared": 16,
+     "mismatches": 0,
+     "unsatisfied_lanes": 0
+    }
+   ],
+   "target_equivalence": [
+    {
+     "target": "Attention_v3{T=1,NH=1,KVH=1,D=64,BN=128}",
+     "compared": 64,
+     "mismatches": 0
+    },
+    {
+     "target": "Attention_v3{T=512,NH=1,KVH=1,D=64,BN=128}",
+     "compared": 52,
+     "mismatches": 0
+    }
+   ],
+   "failures": [],
+   "warnings": [
+    {
+     "check": "dead-gates",
+     "code": "ir",
+     "definition": "AttentionHead_v3{T=1,D=64,BN=128}",
+     "count": 1,
+     "name": "dead-gates/ir AttentionHead_v3{T=1,D=64,BN=128}: 1 gates no output depends on",
+     "where": {
+      "Const32[0x00000000]_v1 @ AttentionHead_v3{T=1,D=64,BN=128}": 1
+     },
+     "unread_inputs": 0
+    },
+    {
+     "check": "dead-gates",
+     "code": "ir",
+     "definition": "AttentionHead_v3{T=512,D=64,BN=128}",
+     "count": 1,
+     "name": "dead-gates/ir AttentionHead_v3{T=512,D=64,BN=128}: 1 gates no output depends on",
+     "where": {
+      "Const32[0x00000000]_v1 @ AttentionHead_v3{T=512,D=64,BN=128}": 1
+     },
+     "unread_inputs": 0
+    }
+   ],
+   "kind": "template",
+   "target": "attention-head/d64-bn128/sm80-fa2-bf16",
+   "seconds": 41.343,
+   "peak_gb": 9.48,
+   "rss_start_gb": 9.44
+  },
+  {
+   "subcircuit": "gemm-coordinate/k1536/sm90-wgmma-e4m3",
+   "template": "gemm-coordinate",
+   "params": {
+    "K": 1536,
+    "datatype": "e4m3",
+    "semantics": "sm90.wgmma.m64n8k32.e4m3"
+   },
+   "definitions": [
+    {
+     "definition": "tc.hopper_e4m3_wgmma_k32.dot",
+     "form": "reference",
+     "gates": null,
+     "correspondence": {
+      "vectors": 64,
+      "edge_vectors": 20,
+      "reference_raised": 0,
+      "realizations": [
+       {
+        "via": "kernel:numpy",
+        "compared": 64,
+        "declined": 0,
+        "mismatches": 0
+       },
+       {
+        "via": "c-flock:ir_lower",
+        "lowered": false,
+        "reason": "a ScalarReference has no IR body"
+       }
+      ]
+     },
+     "failures": [],
+     "warnings": []
+    }
+   ],
+   "lowering": [
+    {
+     "instance_statics": {},
+     "lowered": false,
+     "reason": "gemm-coordinate/k1536/sm90-wgmma-e4m3: its tensor-core step (a silicon reference) is not one C-Flock lowers (AmpereBF16TcDot16_v1, AmpereBF16TcDot16_v2, HopperBF16WgmmaDot16_v1)"
+    }
+   ],
+   "failures": [],
+   "warnings": [],
+   "kind": "template",
+   "target": "gemm-coordinate/k1536/sm90-wgmma-e4m3",
+   "seconds": 0.139,
+   "peak_gb": 9.44,
+   "rss_start_gb": 9.44
+  },
+  {
+   "subcircuit": "bias-add/n2048/bf16",
+   "template": "bias-add",
+   "params": {
+    "N": 2048
+   },
+   "definitions": [
+    {
+     "definition": "BiasAdd_v1{N=2048}",
+     "form": "composite",
+     "gates": 2048,
+     "correspondence": {
+      "vectors": 64,
+      "edge_vectors": 26,
+      "reference_raised": 0,
+      "realizations": [
+       {
+        "via": "kernel:rows",
+        "compared": 17,
+        "declined": 47,
+        "mismatches": 0
+       },
+       {
+        "via": "kernel:twin",
+        "compared": 64,
+        "declined": 0,
+        "mismatches": 0
+       },
+       {
+        "via": "c-flock:ir_lower",
+        "lowered": false,
+        "reason": "lowered as its template's units"
+       }
+      ]
+     },
+     "partition": {
+      "applies": true,
+      "query": "Q_word_v1{X=16,W=32,R=no-recompute}",
+      "units_per_call": 2048,
+      "by_kind": {
+       "output": 2048
+      },
+      "committed_interior_words": 0,
+      "max_out_bits": 16,
+      "free_gates": 0,
+      "checked": true,
+      "whole": {
+       "units": 2048,
+       "redundant_gates": 0,
+       "codes": [],
+       "q_word_v2": {
+        "codes": [],
+        "recomputed_across": 0
+       }
+      },
+      "q_word": 1,
+      "q_call": {
+       "X": 32,
+       "checked": true,
+       "units": 2048,
+       "committed": 2048,
+       "committed_bits": 32768,
+       "recomputed_across": 0,
+       "redundant_gates": 0,
+       "codes": []
+      }
+     },
+     "redundant_gates": {
+      "count": 0,
+      "scope": "unit"
+     },
+     "dead_gates": {
+      "count": 0,
+      "unread_inputs": 0,
+      "where": {},
+      "where_complete": true,
+      "approximate": false
+     },
+     "failures": [],
+     "warnings": []
+    }
+   ],
+   "lowering": [
+    {
+     "instance_statics": {},
+     "lowered": false,
+     "reason": "C-Flock: no lowering module verity/ml/flock/python/verity_flock/templates/bias_add.py"
+    }
+   ],
+   "failures": [],
+   "warnings": [],
+   "kind": "template",
+   "target": "bias-add/n2048/bf16",
+   "seconds": 3.203,
+   "peak_gb": 9.45,
+   "rss_start_gb": 9.44
+  },
+  {
+   "subcircuit": "rope-head/d64/neox-bf16",
+   "template": "rope-head",
+   "params": {
+    "D": 64
+   },
+   "definitions": [
+    {
+     "definition": "RoPEHead_v1{D=64}",
+     "form": "composite",
+     "gates": 64,
+     "correspondence": {
+      "vectors": 64,
+      "edge_vectors": 26,
+      "reference_raised": 0,
+      "realizations": [
+       {
+        "via": "c-flock:ir_lower",
+        "lowered": false,
+        "reason": "lowered as its template's units"
+       }
+      ]
+     },
+     "partition": {
+      "applies": true,
+      "query": "Q_word_v1{X=16,W=32,R=no-recompute}",
+      "units_per_call": 64,
+      "by_kind": {
+       "output": 64
+      },
+      "committed_interior_words": 0,
+      "max_out_bits": 16,
+      "free_gates": 0,
+      "checked": true,
+      "whole": {
+       "units": 64,
+       "redundant_gates": 0,
+       "codes": [],
+       "q_word_v2": {
+        "codes": [],
+        "recomputed_across": 0
+       }
+      },
+      "q_word": 1,
+      "q_call": {
+       "X": 32,
+       "checked": true,
+       "units": 64,
+       "committed": 64,
+       "committed_bits": 1024,
+       "recomputed_across": 0,
+       "redundant_gates": 0,
+       "codes": []
+      }
+     },
+     "redundant_gates": {
+      "count": 0,
+      "scope": "unit"
+     },
+     "dead_gates": {
+      "count": 0,
+      "unread_inputs": 0,
+      "where": {},
+      "where_complete": true,
+      "approximate": false
+     },
+     "failures": [],
+     "warnings": []
+    }
+   ],
+   "lowering": [
+    {
+     "instance_statics": {},
+     "lowered": true,
+     "via": "c-flock:rope-head/neox-bf16/pair",
+     "units_per_instance": 32,
+     "ands": 5828,
+     "rows": 6145,
+     "digest": "9cbdef1922281eadd751b12a8d35d73b5d98aa9660b449136b790b54e459b80e",
+     "digest_pin": "ok",
+     "export": {
+      "and": 6036,
+      "xor": 42802,
+      "not": 1031,
+      "subcircuit_types": 102,
+      "flat_ands": 5828,
+      "shared_across_types": 208
+     },
+     "pin": {
+      "pin": "rope-head/d64/neox-bf16",
+      "counts": {
+       "and": 6036,
+       "xor": 42802,
+       "not": 1031
+      },
+      "pinned": {
+       "and": 6036,
+       "not": 1031,
+       "xor": 42802
+      },
+      "status": "ok"
+     },
+     "redundant_ands": {
+      "count": 0,
+      "where": {}
+     },
+     "compared": 64,
+     "mismatches": 0,
+     "unsatisfied_lanes": 0
+    }
+   ],
+   "target_equivalence": [
+    {
+     "target": "RoPE_v1{NHEADS=1,D=64}",
+     "compared": 64,
+     "mismatches": 0
+    }
+   ],
+   "failures": [],
+   "warnings": [],
+   "kind": "template",
+   "target": "rope-head/d64/neox-bf16",
+   "seconds": 0.785,
+   "peak_gb": 9.46,
+   "rss_start_gb": 9.44
+  }
+ ]
+}
