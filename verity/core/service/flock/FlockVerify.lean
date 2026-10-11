@@ -306,9 +306,10 @@ def recBindingsInput (args : List String) : IO (Except String (Option VStar.Bind
       | .error e => return .error s!"rec-bindings: not JSON: {e}"
 
 /-- `--rec-inner-transcript F`: the coin server's record of V*'s inner session (`rec/inner-transcript/v1`), with the inner
-session's record `record` (`--rec-inner-session`) that its coins must match: each rep's `c_k` (`RecVStar.innerCommits`). -/
+session's record `record` (`--rec-inner-session`) that its coins must match: each rep's `c_k`, and with candidate 3's
+streams every stream's `c_k` and tops (`RecVStar.innerCommits`). -/
 def recTranscriptInput (args : List String) (record : Option String) :
-    IO (Except String (Option (Array (Array (Nat × ByteArray))))) := do
+    IO (Except String (Option RecVStar.InnerCommits)) := do
   let some f := argOf args "--rec-inner-transcript" | return .ok none
   let some record := record | return .error "--rec-inner-transcript goes with the inner session (--rec-inner-session and its three files)"
   let t ← try pure (Except.ok (← IO.FS.readFile f)) catch e => pure (Except.error s!"rec inner transcript: {e}")
@@ -345,6 +346,29 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
     IO.eprintln "usage: flock-verify rec-coins --rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR"
     return 2
   | .error e => IO.eprintln e; return 2
+
+/-- `rec-transcript --rec-inner-transcript F --rec-inner-session DIR`: what `verify` holds of the inner session's transcript
+(`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's message rounds and its
+tops' node counts by level; exit 1 when the transcript is refused. -/
+def recTranscriptOfSession (args : List String) : IO (Except String (Option RecVStar.InnerCommits)) := do
+  let some dir := argOf args "--rec-inner-session"
+    | return if (argOf args "--rec-inner-transcript").isSome then .error "--rec-inner-transcript goes with --rec-inner-session" else .ok none
+  let record ← try pure (← IO.FS.readFile (dir ++ "/session.json"))
+    catch e => return .error s!"rec inner session: {e}"
+  recTranscriptInput args (some record)
+
+def recTranscriptCmd (args : List String) : IO UInt32 := do
+  let some _ := argOf args "--rec-inner-session"
+    | IO.eprintln "usage: flock-verify rec-transcript --rec-inner-transcript F --rec-inner-session DIR"; return 2
+  match ← recTranscriptOfSession args with
+  | .ok (some ic) =>
+    let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
+    IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),
+      ("streams", .arr (ic.streams.map fun s => Lean.Json.mkObj [("stream", .str s.name), ("commits", n s.commits),
+        ("tops", .arr (s.tops.map fun t => Lean.toJson t.size))]))]).compress}"
+    return 0
+  | .ok none => IO.eprintln "usage: flock-verify rec-transcript --rec-inner-transcript F --rec-inner-session DIR"; return 2
+  | .error e => IO.eprintln e; return 1
 
 /-- `rec-statements --rec-inner F [--unit NAME | --circuit F --rec-bindings F] [--instances N] [--rec-part J]
 [--registered F]`: V*'s statements at the inner shape (`RecVStar.statements`), each unit name and instance count, as one
@@ -607,10 +631,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
 `--rec-inner F`, the statement must be one of V*'s at that inner shape, statement `--rec-part J` of them under the
-verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). -/
+verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). With `--rec-inner-transcript F --rec-inner-session DIR`, its
+rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`RecVStar.checkPubRows`, as `verify` sets up). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let stmtTags := tags
@@ -647,10 +672,14 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
+  let recCommits ← match ← recTranscriptOfSession args with
+    | .ok c => pure c
+    | .error e => IO.eprintln e; return 2
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
       if recInner.isSome then RecVStar.checkStmt recInner stmtTags tables st circuitB partition program registered recPart recBindings recRows
+      if recCommits.isSome then RecVStar.checkPubRows st registered recCommits
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
@@ -1128,6 +1157,7 @@ def main (args : List String) : IO UInt32 := do
   | "rec-inner" :: rest => recInnerCmd rest
   | "rec-coins" :: rest => recCoinsCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
+  | "rec-transcript" :: rest => recTranscriptCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
   | "region-words" :: rest => regionWordsCmd rest
