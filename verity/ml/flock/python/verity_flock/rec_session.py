@@ -328,7 +328,7 @@ class Relay:
                     raise AssertionError(f"rep {r}: R's value at the claim's point is not the sparse phase's claim")
                 x.append(list(cl.x))
             if st.get("forge") == "point":
-                # x[0] enters only the verifier's weights; the prover's ring switch reads x[1:]
+                # a point's first coordinate enters only the verifier's weights; the prover's ring switch reads the rest
                 x[0][1] ^= 1
             (d / "P.json").write_text(json.dumps({"x": [[RL.f128_hex(v) for v in xs] for xs in x]}))
             with socket.create_server(("127.0.0.1", 0)) as srv, open(d / "open.log", "w") as log:
