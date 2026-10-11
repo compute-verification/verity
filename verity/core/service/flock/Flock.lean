@@ -48,3 +48,4 @@ import Flock.Firewall
 import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
+import Flock.Witness

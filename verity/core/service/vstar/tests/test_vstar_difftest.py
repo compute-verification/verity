@@ -480,8 +480,7 @@ def test_the_verifiers_part_nets_are_vstars_units(server):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
-#: `rec_open` also builds H = 0 and 17 .. 32, which `VStar.checkRecOpen` refuses until it reads `dirs`' word 1; the
-#: refused heights drawn here are ones both refuse.
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
                      st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
@@ -497,7 +496,13 @@ def test_inner_unit_agrees(server):
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    stats = D.run(port("rec_open_unit", rec_open_unit, REC_OPEN), examples=30, seed=SEED, server=server)
+    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
+    takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
+    p = port("rec_open_unit", rec_open_unit, REC_OPEN)
+    for h in (0, 17):
+        assert D.replay(p, {"LANES": 8, "H": h}, server)[0] == "output", h
+    stats = D.run(p, examples=30, seed=SEED, server=server)
     assert stats.outputs >= 1 and stats.rejects >= 10, stats
 
 

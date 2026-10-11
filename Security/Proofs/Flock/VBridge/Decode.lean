@@ -328,7 +328,7 @@ theorem decode_innerUnit {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.Re
 position's bits (`RegBit`), the copy's output columns in `bits` hold `laid_recOpen`'s outputs. -/
 theorem decode_recOpen {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) (u : Fin nv) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true)
-    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (p : Ports) (outBits : Array ℕ) {name : String}
     (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hu : c.unit.unitLog ≤ 32) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)

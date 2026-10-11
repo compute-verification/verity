@@ -110,9 +110,12 @@ theorem unit_check_pinned {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u :
     (hr : r.size = LANES) (ha : a.size = 2) (hcf : cf.size = 2 * LANES) (hrest : rest.size = 96) (hss : ss.length = H)
     (hrow : ColsHold (copyVal I X hj) 0 (Flock.MerkleScheme.rowBytes r))
     (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ ColsHold (copyVal I X hj) (128 * LANES + 512 * i) ss[i])
-    (hacc : ColsHold (copyVal I X hj) (128 * LANES + 1024 * ((H + 1) / 2)) (Flock.MerkleScheme.rowBytes a ++ rest))
-    (hcoef : ColsHold (copyVal I X hj) (128 * LANES + 1024 * ((H + 1) / 2) + 1024) (Flock.MerkleScheme.rowBytes cf))
-    (hdir : ∀ h < H, copyVal I X hj (128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
+    (hacc : ColsHold (copyVal I X hj) (128 * LANES + 1024 * max 1 ((H + 1) / 2))
+      (Flock.MerkleScheme.rowBytes a ++ rest))
+    (hcoef : ColsHold (copyVal I X hj) (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024)
+      (Flock.MerkleScheme.rowBytes cf))
+    (hdir : ∀ h < H, copyVal I X hj (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) =
+      idx.testBit h) :
     ColsHold (copyVal I X hj)
       (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run St.empty).2
         (Flock.RecOpen.wordPorts (unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))
