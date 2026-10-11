@@ -134,7 +134,7 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
         c.dummyDigests.getD p ByteArray.empty = dummyBc hidden c p)
       (fun p s y h => by
         try dsimp only at h
-        cases ht : pub.tables <;> rw [ht] at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
+        cases ht : pub.tables <;> rw [ht] at h <;> dsimp only at h <;> (try simp only [throw_bind', pure_bind] at h) <;>
           repeat' walk_step
         all_goals
           simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -170,7 +170,7 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
                obtain ⟨oname, w⟩ := x
                try dsimp only at h
                try dsimp only
-               simp only [throw_bind', pure_bind] at h
+               try simp only [throw_bind', pure_bind] at h
                repeat' walk_step
                simp only [pure, Except.pure, Except.ok.injEq] at h
                refine ⟨⟨_, ‹pub.fv3Bytes "domain_ids" _ = _›, ?_⟩, h.symm⟩
