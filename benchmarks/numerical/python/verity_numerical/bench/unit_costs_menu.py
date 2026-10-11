@@ -2,6 +2,7 @@
 fixed per model (F2's menu, merge thread 1791629248.978729).
 
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR [--outer proofs_c3_multiblock.json]
+        [--positions proofs-rows/buckets.json]
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR --rows VSTAR_DIR
 
 **Buckets** (:func:`buckets`): :mod:`unit_costs_prover`'s dp4t at its CPU cap (``workload``'s cap: the largest power of two
@@ -33,6 +34,10 @@ shapes are merged.
 is padded up), its claims 2 + 2 regions, both in ``menu.json``. With ``--outer``, each entry's outer proof gains V*'s
 check of the inner session's two reps' algebra at those claims (:func:`inner_algebra`), which the input's rows leave out,
 and carries V*'s refusal where ``rec_residuals.parts`` refuses the shape.
+
+**Positions per shape** (lean's #1734, ``FlockSampled.Shape``): an entry's unit positions per slot are its bucket's
+``instances_max`` in the ``--rows`` output (``--positions``), and a shape's are the largest among its entries, as its
+claims are.
 """
 from __future__ import annotations
 
@@ -211,6 +216,7 @@ def one_session_per_shape(entries: Sequence[dict[str, Any]],
         rss = max(e["outer_rss_gib"] for e in es) if has else None
         refused = sorted({r for e in es for r in e["outer_refused"]}) if has else None
         regions = max(e["regions"] for e in es) if all(e.get("regions") is not None for e in es) else None
+        positions = max(e["positions"] for e in es) if all(e.get("positions") is not None for e in es) else None
         for i in ix:
             e = entries[i]
             if e["k_log"] < top["k_log"]:
@@ -224,7 +230,7 @@ def one_session_per_shape(entries: Sequence[dict[str, Any]],
                     e.update(k_log=o["k_log"], inner_m=o["inner_m"], inner_peak_gib=o["peak_gib"],
                              inner_session_s=o["session_s"])
             e.update(outer_session_s=out_s, outer_rss_gib=rss, outer_refused=refused, regions=regions,
-                     claims=None if regions is None else 2 + 2 * regions)
+                     claims=None if regions is None else 2 + 2 * regions, positions=positions)
             _reprice(e)
 
 
@@ -282,9 +288,11 @@ def inner_algebra(entries: Sequence[dict[str, Any]], blocks: Mapping[int, tuple[
 
 def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | None = None,
          outer_sha512: str | None = None,
-         algebra: Callable[[int, int, int], tuple[int, str | None]] = rep_algebra) -> dict[str, Any]:
+         algebra: Callable[[int, int, int], tuple[int, str | None]] = rep_algebra,
+         positions: Mapping[str, int] | None = None) -> dict[str, Any]:
     """Each workload's pinned menu: every bucket at its :func:`pick`, one session per shape, V*'s check of the inner
-    reps' algebra at the shape's claims (with the outer input), and the totals per audit."""
+    reps' algebra at the shape's claims (with the outer input), and the totals per audit. ``positions``: each (bucket, B)
+    row id's unit positions per slot (the ``--rows`` output's ``instances_max``)."""
     rows = {r["workload"]: r for r in (outer or {}).get("buckets", [])}
     blocks = block_costs(outer) if outer is not None else {}
     models = []
@@ -305,6 +313,7 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
             entries.append({
                 "part": b["part"], "class": b["class"], "bound": b["Z"], "slots": B, "pieces": b["pieces"],
                 "unit_types": [u.label for u in b["units"]], "regions": b.get("regions"), "claims": None,
+                "positions": None if positions is None else positions[row_id(W["workload"], i, B)],
                 "k_log": c["k_log"], "inner_m": c["inner_m"],
                 "inner_peak_gib": c["peak_gib"], "inner_session_s": c["session_s"],
                 "outer_session_s": c["outer_s"] if has else None, "outer_rss_gib": c["outer_rss_gib"] if has else None,
@@ -331,6 +340,7 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
             "outer_sha512": outer_sha512, "openings_batched": False,
             "inner_per_shape": "the largest among the shape's entries",
             "claims": "2 + 2 regions, a shape's regions the largest of its entries' unit types' input + output ports",
+            "positions": "unit positions per slot, a shape's the largest of its entries' instances_max",
             "models": models}
 
 
@@ -362,12 +372,12 @@ def render(mn: Mapping[str, Any]) -> str:
 
 def lean(mn: Mapping[str, Any], source: str) -> str:
     """The Lean module `VStar.Menu.Pinned` of the pinned menu ``mn`` (from ``source``): each model's entries as
-    `VStar.Menu.Entry` (slots, bound, inner m, k_log, claims, unit types' count). An entry's ``claims`` are its inner
+    `VStar.Menu.Entry` (slots, bound, inner m, k_log, claims, positions, unit types' count). An entry's ``claims`` are its inner
     session's: 2 + 2 x (its unit's input ports + output ports); `VStar.Menu.inner` gives a shape its entries' most."""
     def entry(e: Mapping[str, Any]) -> str:
         if e["bound"] != int(e["bound"]):
             raise ValueError(f"bound {e['bound']} is not a whole number of nonzeros")
-        return f"⟨{e['slots']}, {int(e['bound'])}, {e['inner_m']}, {e['k_log']}, {e['claims']}, {len(e['unit_types'])}⟩"
+        return f"⟨{e['slots']}, {int(e['bound'])}, {e['inner_m']}, {e['k_log']}, {e['claims']}, {e['positions']}, {len(e['unit_types'])}⟩"
     models = ",\n".join(f"  ({json.dumps(M['workload'])},\n    [" + ",\n     ".join(entry(e) for e in M["entries"]) + "])"
                         for M in mn["models"])
     return "\n".join([
@@ -387,6 +397,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--outer", default=None, help="circuits' nonzero_cost.py --proofs-c3 output on the --rows rows")
     ap.add_argument("--rows", default=None, metavar="VSTAR_DIR",
                     help="write proofs-rows/ (buckets.json, k2.py, units.json) from proofs' vstar_c3.py and buckets.py")
+    ap.add_argument("--positions", default=None, metavar="ROWS_JSON",
+                    help="the --rows output's buckets.json: each entry's positions, its row's instances_max")
     a = ap.parse_args(argv)
     from .unit_costs import retree
 
@@ -414,7 +426,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.outer:
         raw = Path(a.outer).read_bytes()
         outer, sha = json.loads(raw), hashlib.sha512(raw).hexdigest()
-    mn = menu(pl, int(inv["K"]), outer, sha)
+    pos = ({r["workload"]: r["instances_max"] for r in json.loads(Path(a.positions).read_text())}
+           if a.positions else None)
+    mn = menu(pl, int(inv["K"]), outer, sha, positions=pos)
     (out / "menu.json").write_text(json.dumps(mn, indent=1) + "\n")
     (out / "menu.md").write_text(render(mn))
     print(f"wrote {out / 'menu.json'} and {out / 'menu.md'}")

@@ -107,16 +107,16 @@ def test_a_smaller_entry_is_costed_as_its_own_units_in_the_shape_session():
 
 def test_the_lean_menu_lists_each_model_s_entries():
     mn = {"format": "verity/f6-menu/v1", "K": 50, "models": [
-        {"workload": "w1", "entries": [{"slots": 16, "bound": 3.0, "inner_m": 30, "k_log": 22, "claims": 8,
+        {"workload": "w1", "entries": [{"slots": 16, "bound": 3.0, "inner_m": 30, "k_log": 22, "claims": 8, "positions": 3,
                                         "unit_types": ["a", "b"]},
-                                       {"slots": 4, "bound": 7.0, "inner_m": 28, "k_log": 26, "claims": 6,
+                                       {"slots": 4, "bound": 7.0, "inner_m": 28, "k_log": 26, "claims": 6, "positions": 1,
                                         "unit_types": ["c"]}]},
-        {"workload": "w2", "entries": [{"slots": 1, "bound": 9.0, "inner_m": 26, "k_log": 24, "claims": 16,
+        {"workload": "w2", "entries": [{"slots": 1, "bound": 9.0, "inner_m": 26, "k_log": 24, "claims": 16, "positions": 2,
                                         "unit_types": ["d"]}]}]}
     text = M.lean(mn, "SRC")
     assert text.startswith("import VStar.Menu\n") and "\nSRC\n(verity/f6-menu/v1, K = 50); do not edit. -/" in text
-    assert ('def pinned : List (String × List Entry) := [\n  ("w1",\n    [⟨16, 3, 30, 22, 8, 2⟩,\n     ⟨4, 7, 28, 26, 6, 1⟩]),\n'
-            '  ("w2",\n    [⟨1, 9, 26, 24, 16, 1⟩])]\n') in text
+    assert ('def pinned : List (String × List Entry) := [\n  ("w1",\n    [⟨16, 3, 30, 22, 8, 3, 2⟩,\n     ⟨4, 7, 28, 26, 6, 1, 1⟩]),\n'
+            '  ("w2",\n    [⟨1, 9, 26, 24, 16, 2, 1⟩])]\n') in text
     mn["models"][1]["entries"][0]["bound"] = 9.5
     with pytest.raises(ValueError, match="not a whole number"):
         M.lean(mn, "SRC")
@@ -124,14 +124,14 @@ def test_the_lean_menu_lists_each_model_s_entries():
 
 def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
     """`VStar.Menu.Pinned` is `lean` of F6's pinned `menu.json` (`data/f6-menu.json`, the one in
-    art:ce914239d538ca64c33981c81d7631b4188397aac6c19c4066fd6f39d0d54197), byte for byte."""
+    art:bb9b72df0377d54ad001bb52a9d24b6152e83cdefb896d02fbbce26bc281dffa), byte for byte."""
     import json
     from pathlib import Path
 
     here = Path(__file__).resolve()
     pinned = here.parents[4] / "verity/core/service/flock/VStar/Menu/Pinned.lean"
     mn = json.loads((here.parent / "data/f6-menu.json").read_text())
-    assert M.lean(mn, "art:ce914239d538ca64c33981c81d7631b4188397aac6c19c4066fd6f39d0d54197 (menu.json)") == pinned.read_text()
+    assert M.lean(mn, "art:bb9b72df0377d54ad001bb52a9d24b6152e83cdefb896d02fbbce26bc281dffa (menu.json)") == pinned.read_text()
 
 
 def _entry(slots, regions, m=35, k=27, outer_s=100.0, sessions=1):
@@ -162,6 +162,22 @@ def test_a_shape_takes_its_largest_region_count_and_v_star_checks_the_reps_algeb
     assert (d["inner_algebra_k_log"], d["outer_session_s"], d["outer_refused"]) == (26, 110.0, [])
     with pytest.raises(ValueError, match="no one-block statement at k_log 27"):
         M.inner_algebra([_entry(256, 7) | {"claims": 16}], {26: (10.0, 14.0)}, algebra)
+
+
+def test_a_shape_takes_its_largest_positions_from_the_rows_instances():
+    """Each entry's positions are its row's ``instances_max`` at the chosen B; two entries of one shape (B = 1, Z = 3) at 5
+    and 2 positions both take 5, and a menu without the rows carries none."""
+    pl = [{"workload": "w", "N": 100, "cap": 2.0 ** 29, "buckets": []}]
+    for label in ("a", "b"):
+        b = _bucket([P.Unit(label, "t", 60, 3, 3)], 3)
+        b["by_B"] = {1: M.inner(100, 50, b, 1, {}, COEF, **TINY)}
+        pl[0]["buckets"].append(b)
+    rows = {M.row_id("w", 0, 1): 5, M.row_id("w", 1, 1): 2}
+    assert [e["positions"] for e in M.menu(pl, 50, positions=rows)["models"][0]["entries"]] == [5, 5]
+    assert [e["positions"] for e in M.menu(pl, 50)["models"][0]["entries"]] == [None, None]
+    es = [_entry(256, 4) | {"positions": 3}, _entry(256, 7) | {"positions": 9}, _entry(64, 3) | {"positions": 1}]
+    M.one_session_per_shape(es)
+    assert [e["positions"] for e in es] == [9, 9, 1]
 
 
 def test_v_star_refuses_the_reps_algebra_at_16_claims():
