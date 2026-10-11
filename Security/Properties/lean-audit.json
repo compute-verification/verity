@@ -4580,7 +4580,7 @@
    ]
   },
   "PouwCommit.Frame": {
-   "digest": "5150b0c5a25ced9e389d0a8c719cb47a3b3a011c07f7fd4b3e3156602f471635",
+   "digest": "7215b8e14985ae0e0e4d2dc6422d8e5dce1fc37e33092c2a960a53178217d7c8",
    "definitions": {
     "PouwCommit.Domain": "9fec723b34bd2909ea66bff49fb2c521467390aa31017d446d8cae7c122addd4",
     "PouwCommit.Domain.count": "656f0d5f545492183076ea329ae409106bab714818d56a577df3b42a746b0394",
@@ -4605,6 +4605,7 @@
     "PouwCommit.depth": "0136cc0777f5f29d54f92d6529872dbc95db24e16e35fe5f8135f58bc429c323",
     "PouwCommit.frameBytes": "9d299d976ca99f2d162dca798ae7b4a76df89ea77a29f985ab8516e70f4bd316",
     "PouwCommit.frameHash": "b211c21bee57c8b838adfce7327a8af367b1a7329ceafb3a3058ecf360fa63c6",
+    "PouwCommit.frameHash?": "cab4c59088a6ec28e211766ddeed664edb0fd245d3c08a70cb7dfdf16ce0b824",
     "PouwCommit.instReprHash.repr.match_1": "c55ef4c414901fd69be2a4afde393212707f6bada33e3c4f15c9d43f680f8843",
     "PouwCommit.rangeIdentity": "78603c6c6af2df2ae1b5c19cbb561f6e9f2a3399071f4bc29dd3dc3b305bce5c"
    },
@@ -5312,7 +5313,7 @@
    ]
   },
   "Properties.Pouw.Commit": {
-   "digest": "bf709f84898eb633fa21452282985fdd5870a68426229897baa636ff2c0eb60f",
+   "digest": "16b62e872cfdc6d187424bbea694f320247cac5eb0204b783a37c06a59bc3914",
    "definitions": {
     "Properties.Pouw.Commit.CoinAccepts": "e7a2e20919bdb7763c05e5cc934d6849841049e14f55d9ab0f79f2835f94c49c",
     "Properties.Pouw.Commit.CoinBinding": "c4547bc524c96cc5affe829dbedce3c9feecd748dfd43a4da1848c8c241e4162",
@@ -5324,7 +5325,7 @@
     "Properties.Pouw.Commit.DrawCoinAccepts": "822a6f1310a0609b84c4db125c4e479c8f6662cfd5076846f54d205ce6003eb5",
     "Properties.Pouw.Commit.DrawShape": "8bf11cfb0a3649c87b1f88959aed2ce2eef174a9aa35ce7109faef723425af1e",
     "Properties.Pouw.Commit.EpochSaltAccepts": "738a38f9a91d4640e906d46aaa14f05a4d6826138f2bab5faa6a742f6c8c44d1",
-    "Properties.Pouw.Commit.FrameInjective": "3503794599488d33a6c0bf04599a2a4fa23124e05100fbe073cfaaf47434921d",
+    "Properties.Pouw.Commit.FrameInjective": "0d8f764513d5eec5ca7dca9ff38f1295036c74645b78444e2833323b835e9844",
     "Properties.Pouw.Commit.FrameSizes": "86c21e59981d31bc2bd8857a5399e8f24ddb38cbf23b36658eb8ab95cf6e7b82",
     "Properties.Pouw.Commit.KeyRefusals": "5e5c8930e8bb19fac20ed99eb629adada65f855795ac2d64cfe694f46cff322a",
     "Properties.Pouw.Commit.KeySize": "e7e452f85d5d233a4bde2dce33a01471fbcd6e3ab8ba1667d4adbefc18862fb8",
