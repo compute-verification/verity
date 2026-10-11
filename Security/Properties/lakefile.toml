@@ -2,8 +2,9 @@
 # functions (`Pouw`: PoUW's window; `Pouw.Check`: its check as a core protocol; `Pouw.Commit`: its commitments, salts and
 # draws; `Nci`: the NCI check; `CertifierDevice`: the network certifier device's `step` over traces and its issuer; `Pous`:
 # the PoUS setup check, its timed audit and the memory challenger's verdict; `NetworkCertifier`: the network certificate
-# check; `NetworkRecords`: the records check over every published record; `Proofs.CertifierNetwork`: the check
-# accepts the device's own output, completeness rather than a property; `Identity`: core's identity hash is C-Flock's
+# check; `NetworkRecords`: the records check over every published record; `CertifierNetwork`: the device's output as
+# the check reads it, and what an accepted run of the device is; `Proofs.CertifierNetwork`: the check accepts the
+# device's own output, completeness rather than a property; `Identity`: core's identity hash is C-Flock's
 # SHA-512; `SampledProofs`: sampled proofs' one-stage audit as a core protocol; `Evaluate`: the descriptor v1
 # evaluator's primitives, each equal to the `Definitions.Core` definition it copies). It may require `security` (Definitions, Models) and the code it states properties of, never
 # `security_proofs`. Its modules sit beside the trusted text's (`srcDir = ".."`) under a root of their own, `Properties`:
@@ -68,6 +69,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Proofs.Pous.TimedAudit",
   "Properties.Proofs.Pous.MemoryChallenger", "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier",
-  "Properties.Proofs.CertifierNetwork", "Properties.Identity", "Properties.Proofs.Identity",
+  "Properties.CertifierNetwork", "Properties.Proofs.CertifierNetwork", "Properties.CertifierNetwork.Runs",
+  "Properties.Proofs.CertifierNetwork.Runs", "Properties.Identity", "Properties.Proofs.Identity",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.Evaluate", "Properties.Proofs.Evaluate",
   "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords"]

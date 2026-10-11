@@ -75,6 +75,9 @@ structure Shape where
   hashLen : Nat := 32
   /-- each level's openings carry `opened_salts` (PR #83's Flock patch from `2908d078`): this many bytes per opened row -/
   saltLen : Option Nat := none
+  /-- hidden unit circuits (`rec_algebra.Shape.holo`): the prover absorbs `h`, the hidden part's fold, in a round of its
+  own after `z_partial`, and V*'s lincheck reads the comb's operand as `comb[l] + h[l]` -/
+  holo : Bool := false
   deriving Inhabited
 
 open Reader in

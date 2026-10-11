@@ -33,8 +33,8 @@ theorem kapSum_init (lvs : Array Level) (r : Nat) :
 
 /-- The residuals of a built S at w, the coefficient slots and the comb are the symbolic residuals evaluated at the
 message elements they hold, each consistency sum read through the running sums (`hacc`). -/
-theorem build_eval {lins : Array Lin} {b : Built} (hb : build sh lins = .ok b) (hw : w.size = b.S.nw)
-    (hc : comb.size = 64)
+theorem build_eval {lins : Array Lin} {b : Built} (hp : sh.holo = false) (hb : build sh lins = .ok b)
+    (hw : w.size = b.S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum b.kappa r cons) :
     residuals b.S w (b.vVals ++ comb) = .ok (lins.map (Lin.eval (valOf sh w comb cons))) := by
   unfold build at hb
@@ -65,7 +65,7 @@ theorem build_eval {lins : Array Lin} {b : Built} (hb : build sh lins = .ok b) (
         omega
       congr 1
       apply Array.toList_inj.mp
-      rw [Array.toList_map, Array.toList_map, hval _ st.vVals ⟨⟨#[], by simp⟩, ⟨#[], by simp⟩⟩ hn2]
+      rw [Array.toList_map, Array.toList_map, hval hp _ st.vVals ⟨⟨#[], by simp⟩, ⟨#[], by simp⟩⟩ hn2]
       conv_rhs => rw [← List.zipIdx_map_fst 0 lins.toList, List.map_map]
       apply List.map_congr_left
       intro fi hfi
@@ -92,9 +92,9 @@ def decoded (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) : M
 
 /-- `GfResiduals` on the S `structureOf` builds and the v `verifierRows` gives at the rep's coins computes `run` over
 F at those coins, on the messages w holds, when the running sums w holds differ by the consistency sums weighted by
-`kappa` (`hacc`). -/
+`kappa` (`hacc`). The shape is plain (`hpl`): a holo shape's comb operands also read `h` (`atomOp`). -/
 theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS}
+    {kappa : Array (Array (Array F128))} {S : GfS} (hpl : sh.holo = false)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons) :
@@ -127,7 +127,7 @@ theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v
         have hbS : b.S = S := by simpa [Except.toOption] using hSb
         subst hbS
         exact ⟨_, k, run_sim (Lin.eval_hom (valOf sh w comb cons)) sh (symbolic sh) extras 0 _ _ _ hr,
-          build_eval w comb cons hb hw hc hacc⟩
+          build_eval w comb cons hpl hb hw hc hacc⟩
 
 end Eval
 

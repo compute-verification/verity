@@ -163,7 +163,12 @@ def handed : State → List Event → List (Frame × Nat)
 /-- **The complete records of `tr` are the Program's.** Every record an egress tick of `tr` publishes, event `n`, whose
 status is complete, of a window with a sync among those `step` declared through event `n`, has as row `j`, slot by slot,
 `NetworkCertifier.expectedRow` at bucket `w·T + j` of the frames the shaper handed through event `n` (their bits, as the
-difftest's honest check reads them), under those syncs. -/
+difftest's honest check reads them), under those syncs.
+
+Its record is the Program's on the frames handed by its close: the Program's grid on the frames handed by the record's
+publish, not on every frame the Program places in its window. A frame the Program places in window `w` but the shaper
+hands late, in `w + 1`, faults `w + 1`, and `w` still closes complete without it. An accepted run excludes that, since
+every one of its windows must be complete. -/
 def ProgramRows (c : Config) (tr : List Event) : Prop :=
   ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts → .publish rec p ∈ acts →
     let hs := handed (init c) (tr.take (n + 1))

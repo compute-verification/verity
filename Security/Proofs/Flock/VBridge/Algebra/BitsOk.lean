@@ -211,6 +211,17 @@ variable {sh : Shape} {comb0 : Nat}
 theorem atom_bitOk {k : Key} {t : Term} (ha : atomTerm sh comb0 k = .ok t) (hk : k.Good) : t.BitOk := by
   cases k <;> simp only [atomTerm] at ha <;> (try split at ha) <;> (try cases ha) <;> exact hk
 
+theorem atomOp_bitOk {k : Key} {op : Array Term} (ha : atomOp sh comb0 k = .ok op) (hk : k.Good) :
+    ∀ x ∈ op, x.BitOk := by
+  obtain ⟨t, ht, rfl | ⟨-, i, rfl⟩⟩ := atomOp_cases ha
+  · exact single_bitOk (atom_bitOk ht hk)
+  · intro x hx
+    simp at hx
+    rcases hx with rfl | rfl
+    · exact atom_bitOk ht hk
+    · show True
+      trivial
+
 theorem varOp_bits {k : Key} {st st' : BSt} {o : Nat} (hr : varOp sh comb0 k st = .ok (o, st'))
     (hi : OpsBits st.ops) (hk : k.Good) : OpsBits st'.ops := by
   unfold varOp at hr
@@ -229,7 +240,7 @@ theorem varOp_bits {k : Key} {st st' : BSt} {o : Nat} (hr : varOp sh comb0 k st 
     obtain ⟨_, st3, hs, hr⟩ := bm_bind hr
     cases hs
     cases hr
-    exact hi.push (single_bitOk (atom_bitOk ha hk))
+    exact hi.push (atomOp_bitOk ha hk)
 
 theorem coefOps_bits (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (ps : Array (Nat × Nat)),
     coefOps sh comb0 ri l st = .ok (ps, st') → OpsBits st.ops → (∀ kx ∈ l, kx.1.Good) → OpsBits st'.ops

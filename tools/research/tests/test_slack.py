@@ -1318,6 +1318,20 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
 
 
+def test_a_long_lived_routes_reads_the_routers_switch_back_to_cli(tmp_path, monkeypatch):
+    clock = [1700000000.0]
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(clock[0], timezone.utc))
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}
+    routes = slack.Routes(root=tmp_path, base="https://example.invalid/routes.d",
+                          get=lambda url: json.dumps(router).encode() if url.endswith("/router.json") else None)
+    assert routes.server_delivers()
+    router["mode"] = "cli"
+    clock[0] += slack.ROUTER_RECHECK_S - 1
+    assert routes.server_delivers()
+    clock[0] += 1
+    assert not routes.server_delivers(), "a relay that started in server mode would otherwise ring no one for good"
+
+
 def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_and_alerts_its_owner(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     status = [405]

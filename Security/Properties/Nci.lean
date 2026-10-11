@@ -11,12 +11,17 @@ random instances; the statements here say what it computes on every instance. Ea
 `NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Properties.Proofs.Nci`, and a guarantee of this
 package (`lean-audit.json`).
 
-**Every input is covered: a refusal exactly where a condition fails.**
+Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
+doesn't refuse with a code), its named conclusion holds. The converses, that the check refuses exactly the malformed
+and gives a verdict on every well-formed instance, are completeness, in `Properties.Proofs.Nci`, each with an instance.
 
-* `RejectsExactly`: `evaluate j` refuses with code `k` exactly when `Malformed j k`: the first condition `j` fails, in
-  the order the check reads them, is `k`'s. The conditions are written over `j`'s JSON and what C-Flock's decoder
-  returns for the program (`Flock.Program.decode`, then `Prog.gate` per gate), never over the check's own state.
-* `AcceptsExactly`: `evaluate j` gives a verdict exactly when `WellFormed j`.
+**Refusals: a malformed instance is refused with its code.**
+
+* `RejectsExactly`: if `evaluate j` doesn't refuse with code `k`, then not `Malformed j k` (the first condition `j`
+  fails, in the order the check reads them, is `k`'s): so a malformed instance is refused, with that condition's code.
+  The conditions are written over `j`'s JSON and what C-Flock's decoder returns for the program (`Flock.Program.decode`,
+  then `Prog.gate` per gate), never over the check's own state.
+* `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
 * `CheckRefuses`, `CheckAccepts`: the same of `NciCheck.check`, whose `error` field is the refusal's code and which has
   none on a verdict.
 
@@ -145,21 +150,26 @@ def WellFormed (j : Json) : Prop :=
     (∀ t < i.theta.size, ThetaOk P i.theta t) ∧ i.owner.size = gates P ∧ (∀ g < gates P, OwnerOk P i.owner g) ∧
     ¬ EmptyIU i.owner
 
-/-- **Each refusal is its condition.** `evaluate j` refuses with `k` exactly when `Malformed j k`. -/
+/-- **A malformed instance is refused with its condition's code**, stated as its contrapositive: whatever `evaluate j`
+doesn't refuse with `k` is not `Malformed j k`. (Its converse, that a refusal with `k` is `Malformed j k`, is
+completeness: `malformed_of_refused`.) -/
 def RejectsExactly : Prop :=
-  ∀ (j : Json) (k : String), evaluate j = .error k ↔ Malformed j k
+  ∀ (j : Json) (k : String), evaluate j ≠ .error k → ¬ Malformed j k
 
-/-- **A verdict exactly on a well-formed instance.** -/
+/-- **A verdict only on a well-formed instance.** (Its converse, that a well-formed instance gets a verdict, is
+completeness: `verdict_of_wellFormed`.) -/
 def AcceptsExactly : Prop :=
-  ∀ j : Json, (∃ out, evaluate j = .ok out) ↔ WellFormed j
+  ∀ (j out : Json), evaluate j = .ok out → WellFormed j
 
-/-- **`check` refuses exactly the malformed.** Its `error` field is `k` exactly when `Malformed j k`. -/
+/-- **`check` refuses a malformed instance with its condition's code**, stated as its contrapositive: whatever `check j`
+doesn't give the `error` field `k` is not `Malformed j k`. (Its converse is completeness: `check_malformed_of_refused`.) -/
 def CheckRefuses : Prop :=
-  ∀ (j : Json) (k : String), (check j).getObjVal? "error" = .ok (.str k) ↔ Malformed j k
+  ∀ (j : Json) (k : String), (check j).getObjVal? "error" ≠ .ok (.str k) → ¬ Malformed j k
 
-/-- **`check` gives a verdict exactly on a well-formed instance:** one with no `error` field. -/
+/-- **`check` gives a verdict, one with no `error` field, only on a well-formed instance.** (Its converse is
+completeness: `check_verdict_of_wellFormed`.) -/
 def CheckAccepts : Prop :=
-  ∀ j : Json, (∀ k, (check j).getObjVal? "error" ≠ .ok (.str k)) ↔ WellFormed j
+  ∀ j : Json, (∀ k, (check j).getObjVal? "error" ≠ .ok (.str k)) → WellFormed j
 
 /-! ## (2) Verdicts -/
 
@@ -193,15 +203,15 @@ def Decodes : Prop :=
       ∃ D : Verity.Circuit, LaysOut P D ∧ (∃ θ : Finset (Fin D.N), Names i.theta θ ∧ ∀ g ∈ θ, D.isInput g = true) ∧
         ∃ (n : ℕ) (U : Verity.Partition D n), Divides i.owner U
 
-/-- **The verdict is the definition's.** For every declaration `d` the Program lays out with the baseline `theta`
-names, and the partition `U` the owners are, at `Γ = gamma` and `α = num / den`: `gates` is `d`'s number of gates;
-`ius` lists per IU its `size` and `novelReads`; `complies` is `true` exactly when every IU meets both bounds; and
+/-- The verdict `out` on `j` is the definition's: for every declaration `d` the Program lays out with the baseline
+`theta` names, and the partition `U` the owners are, at `Γ = gamma` and `α = num / den`: `gates` is `d`'s number of
+gates; `ius` lists per IU its `size` and `novelReads`; `complies` is `true` exactly when every IU meets both bounds; and
 `failure` is `null` when every IU does, and otherwise the first IU `u` that doesn't, with `size` when it has more than `Γ`
 gates and else `nci`. -/
-def Reports : Prop :=
-  ∀ (j out : Json) (i : Instance) (P : Prog) (d : Verity.Declaration) (n : ℕ) (U : Verity.Partition d.D n),
-    evaluate j = .ok out → Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D →
-    Names i.theta d.θ → Divides i.owner U →
+def Reported (j out : Json) : Prop :=
+  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration) (n : ℕ) (U : Verity.Partition d.D n),
+    Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
+    Divides i.owner U →
     let α : ℝ := (i.num : ℝ) / i.den
     out.getObjVal? "gates" = .ok (toJson d.D.N) ∧
     out.getObjVal? "ius" = .ok (Json.arr (Array.ofFn fun u : Fin n =>
@@ -216,12 +226,19 @@ def Reports : Prop :=
            (rule = "nci" ∧ d.D.size (U.gates u) ≤ i.gamma ∧
              α * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ)))
 
-/-- **A verdict of compliance witnesses the policy.** When the verdict's `complies` is `true`, every declaration the
-Program lays out with the baseline `theta` names complies with `Nci.Complies Γ (num / den)`. -/
+/-- **The verdict is the definition's.** On every instance with a verdict, the verdict is `Reported`. -/
+def Reports : Prop :=
+  ∀ (j out : Json), evaluate j = .ok out → Reported j out
+
+/-- When the verdict `out` on `j` has `complies` `true`, every declaration the Program lays out with the baseline
+`theta` names complies with `Nci.Complies Γ (num / den)`. -/
+def Witnessed (j out : Json) : Prop :=
+  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+    Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
+    out.getObjVal? "complies" = .ok (.bool true) → Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+
+/-- **A verdict of compliance witnesses the policy.** On every instance with a verdict, the verdict is `Witnessed`. -/
 def Witnesses : Prop :=
-  ∀ (j out : Json) (i : Instance) (P : Prog) (d : Verity.Declaration),
-    evaluate j = .ok out → Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D →
-    Names i.theta d.θ → out.getObjVal? "complies" = .ok (.bool true) →
-    Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+  ∀ (j out : Json), evaluate j = .ok out → Witnessed j out
 
 end NciCheck.Properties

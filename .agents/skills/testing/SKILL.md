@@ -114,6 +114,9 @@ a `sys.path` entry another test file added: every suite runs alone.
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
   code rejects by name, not merely that it raises.
+- **Statistical floors from a sweep:** a bound a test asserts on a sampled quantity (a rate, a spread, a count over random
+  draws) is set from a sweep over many seeds, with margin past the worst seed's value, never from one run's. Its docstring
+  names the sweep (seeds and worst value), so a later change of seed doesn't turn the test flaky.
 - **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
