@@ -397,8 +397,13 @@
   },
   "Definitions.Accounting": {
    "imports": ["Mathlib", "Definitions.Accounting"],
-   "except": [],
+   "except": ["Definitions.Accounting.Tag.Sketch"],
    "why": "resource accounting's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Accounting.Tag.Sketch": {
+   "imports": ["Mathlib", "Definitions.Accounting", "Definitions.Pouw.Fp8Atom", "Definitions.Pouw.PearlC.Sm120"],
+   "except": [],
+   "why": "the tensor-core sketch is stated over the sm_120 E4M3 step's trusted definitions (Fp8Atom, Sm120), and imports no proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": ["Mathlib", "Definitions.Accounting", "Models.Accounting.Guarantees"],
@@ -3376,6 +3381,18 @@
   },
   "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
    "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Sketch.NonCollision": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Sketch.SmallCode": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Sketch.Exact": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -3423,6 +3440,22 @@
    },
    "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
     "function": "Accounting.Tag.hornerHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.NonCollision": {
+    "function": "Accounting.Tag.project",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.SmallCode": {
+    "function": "Accounting.Tag.smallCode",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.Exact": {
+    "function": "Accounting.Tag.sketchWord",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
+    "function": "Accounting.Tag.sketchWord",
     "outcome": "none"
    }
   },

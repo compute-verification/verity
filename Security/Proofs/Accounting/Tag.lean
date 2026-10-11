@@ -1,15 +1,19 @@
 import Proofs.Accounting.Tag.Basic
 import Proofs.Accounting.Tag.PolyHash
 import Proofs.Accounting.Tag.PartialRead
+import Proofs.Accounting.Tag.Signs
+import Proofs.Accounting.Tag.SketchExact
 
 /-!
 # The block tags' guarantees
 
-Each statement of `Models/Accounting/Guarantees/Tag.lean`, proved:
+Each statement of `Models/Accounting/Guarantees/Tag.lean` and `Models/Accounting/Guarantees/Sketch.lean`, proved:
 
 * `Tag/Basic.lean`: `p = 2^31 − 1` is prime, uniform probabilities as counts, the sparse root count;
 * `Tag/PolyHash.lean`: the polynomial hash's non-collision, unpredictability, fold, digest and Horner loop;
-* `Tag/PartialRead.lean`: a partially read block's unread words are each guessed with probability `2^-32`.
+* `Tag/PartialRead.lean`: a partially read block's unread words are each guessed with probability `2^-32`;
+* `Tag/Signs.lean`: `k` uniform ±1 rows collide on two different integer vectors with probability at most `2^-k`;
+* `Tag/SketchExact.lean`: the ±1 sketch on sm_120's E4M3 tensor cores is exact, and so collides as rarely.
 -/
 
 namespace Accounting.SecurityProofs.Tag
@@ -24,3 +28,13 @@ theorem DigestNonCollision : Accounting.Guarantees.Tag.DigestNonCollision := Acc
 theorem HornerIsBlockHash : Accounting.Guarantees.Tag.HornerIsBlockHash := Accounting.TagProofs.hornerIsBlockHash
 
 end Accounting.SecurityProofs.Tag
+
+namespace Accounting.SecurityProofs.Sketch
+
+theorem NonCollision : Accounting.Guarantees.Sketch.NonCollision := Accounting.TagProofs.nonCollision
+theorem SmallCode : Accounting.Guarantees.Sketch.SmallCode := Accounting.TagProofs.smallCode_value
+theorem Exact : Accounting.Guarantees.Sketch.Exact := Accounting.TagProofs.sketchExact
+theorem TensorCoreNonCollision : Accounting.Guarantees.Sketch.TensorCoreNonCollision :=
+  Accounting.TagProofs.tensorCoreNonCollision
+
+end Accounting.SecurityProofs.Sketch
