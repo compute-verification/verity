@@ -17,7 +17,7 @@ point is `(r_k, ζ_p, ρ_t)` in that order (`RegClaim.toClaim`): skip weights `e
 
 namespace FlockSoundness.Model
 
-open FlockSoundness.Game
+open FlockSoundness.Game FlockSoundness.Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
