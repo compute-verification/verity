@@ -99,19 +99,20 @@ if [ -f $C/rec-bindings.json ]; then
 fi
 $LEAN_BIN verify "${LV[@]}" --rec-inner-session $H/inner/session --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-transcript.log 2>&1
 echo "lean verify --rec-inner-transcript exit $?" | tee -a $O/exits.txt
-# V*'s check 5 on the inner statement's files: the verifier's coins against L3's registered values (RecCoins.check)
-RI=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/session)
-$LEAN_BIN verify "${LV[@]}" "${RI[@]}" --session $SESS > $D/lean-check5.log 2>&1
-echo "lean verify check5 exit $?" | tee -a $O/exits.txt
-$LEAN_BIN verify "${LV[@]}" "${RI[@]}" --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-check5-transcript.log 2>&1
-echo "lean verify check5 --rec-inner-transcript exit $?" | tee -a $O/exits.txt
-if [ -f $C/rec-bindings.json ]; then
-  for tag in hide plain; do
-    $LEAN_BIN verify "${LV[@]}" --rec-inner $E/rec-inner-$tag.json --rec-part 3 --rec-bindings $C/rec-bindings.json --rec-rows $C/rec-rows.json \
-      "${RI[@]}" --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-check5-full-$tag.log 2>&1
-    echo "lean verify check5 full $tag exit $?" | tee -a $O/exits.txt
-  done
-fi
+# V*'s check 5 on the inner statement's files, under each inner record: the relay's verifier record (session/, every stream)
+# and the prover's (prover/, the statement's own Hello)
+for SD in session prover; do
+  RI=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/$SD)
+  if [ -f $C/rec-bindings.json ]; then
+    for tag in hide plain; do
+      RV=(--rec-inner $E/rec-inner-$tag.json --rec-part 3 --rec-bindings $C/rec-bindings.json --rec-rows $C/rec-rows.json)
+      $LEAN_BIN verify "${LV[@]}" "${RV[@]}" "${RI[@]}" --session $SESS > $D/lean-check5-$SD-$tag.log 2>&1
+      echo "lean verify check5 $SD $tag exit $?" | tee -a $O/exits.txt
+      $LEAN_BIN verify "${LV[@]}" "${RV[@]}" "${RI[@]}" --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-check5-$SD-$tag-transcript.log 2>&1
+      echo "lean verify check5 $SD $tag --rec-inner-transcript exit $?" | tee -a $O/exits.txt
+    done
+  fi
+done
 $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS > $D/replay.txt 2>&1; echo "replay exit $?" | tee -a $O/exits.txt
 cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt > $D/unit.txt; du -sb $C/* > $D/sizes.txt
 [ -d $S/v-honest ] && (cd $S/v-honest && find . -name circuit.txt -printf '%h\n' | LC_ALL=C sort | while read d; do echo "$d $(head -1 $d/circuit.txt | cut -c1-120) $(stat -c %s $d/circuit.txt)"; done) > $E/statements.txt
