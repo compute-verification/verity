@@ -350,10 +350,11 @@ rounds name are those, each declared where `schedule_for` puts it (a rep's spars
 reps and R at round 0 of no parent), each with every round from 0 to its count; the sparse streams and R's are the coin
 server's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
 `t`'s alone (the inner statement's Hello), R's root being the top its stream's binding round commits; each round's tops are
-lists of `b ‖ c`, none in a sparse stream; and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since
-the firewall commits each under a fresh salt. -/
+lists of `b ‖ c`, none in a sparse stream; R's binding round's first top is R's registered top `regR`, `b ‖ c` for
+`b ‖ c` (`registration`); and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since the firewall
+commits each under a fresh salt. -/
 def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List String)
-    (msgs : Array (String × Nat × ByteArray)) : V (Array InnerStream) := do
+    (msgs : Array (String × Nat × ByteArray)) (regR : Array ByteArray := #[]) : V (Array InnerStream) := do
   let stacked := names.contains s!"{STACKED}/rep0"
   let want := [s!"{t}rep0", s!"{t}rep1", s!"{SPARSE}/rep0", s!"{SPARSE}/rep1"] ++ (if stacked then [s!"{STACKED}/rep0"] else [])
   let tbl := (t.dropEnd 1).toString
@@ -408,7 +409,10 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
         throw s!"rec inner transcript: {s}'s binding round commits no top: R's root is committed nowhere"
       for (top, i) in ts.zipIdx do
         if top.isEmpty then throw s!"rec inner transcript: {s} round {k}'s top {i} has no nodes"
-        tops := tops.push (← hexList s!"{s} round {k}'s top {i}" top)
+        let bcs ← hexList s!"{s} round {k}'s top {i}" top
+        if table == some STACKED && k == 0 && i == 0 && bcs.map hexOf != regR.map hexOf then
+          throw s!"rec inner transcript: {s}'s binding round commits a top other than R's registered top (--rec-inner-registration)"
+        tops := tops.push bcs
     let cs := ((msgs.filter (·.1 == s)).qsort (·.2.1 < ·.2.1)).map (·.2)
     all := all ++ (tops.extract (if committed then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
     out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[] }
@@ -420,15 +424,40 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
     seen := seen.insert h
   return out
 
+def REGISTRATION_FORMAT : String := "rec/inner-registration/v0"
+/-- How a registered top's nodes are salted (`rec_live.TOPS`): each 64-byte node a registered row under its own salt. -/
+def TOPS_FORMAT : String := "hm96-sha512/v1/node-row"
+
+/-- **R's registered top** (`--rec-inner-registration`, `rec_live.registration_record`'s `registration.json`): the tops of
+the tables with no root at `Commit`, salted once at registration, before the session and any coin (`rec_live.register_top`),
+public: `{"kind": "rec/inner-registration/v0", "tops": "hm96-sha512/v1/node-row", "registered": {"stacked": {"top": [b ‖ c,
+…]}}}`, each `b ‖ c` a node's 128 bytes in hex. R (`stacked`) is the only such table. -/
+def registration (j : Json) : V (Array ByteArray) := do
+  if (j.getObjValAs? String "kind").toOption != some REGISTRATION_FORMAT then
+    throw s!"rec inner registration: not a {REGISTRATION_FORMAT} record"
+  if (j.getObjValAs? String "tops").toOption != some TOPS_FORMAT then
+    throw s!"rec inner registration: its tops are not salted as {TOPS_FORMAT}"
+  let .ok (.obj kvs) := j.getObjVal? "registered" | throw "rec inner registration: registered is not an object"
+  let names := kvs.toArray.map (·.1)
+  if names != #[STACKED] then throw s!"rec inner registration: it registers the tops of {names}, not R's ({STACKED}) alone"
+  let .ok xs := (kvs.toArray[0]!.2).getObjValAs? (Array String) "top" | throw "rec inner registration: R's top is not a list of b ‖ c"
+  if xs.isEmpty then throw "rec inner registration: R's top has no nodes"
+  (hexList "R's registered top" xs).mapError fun e => e.replace "rec inner transcript: " "rec inner registration: "
+
 /-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
 `rec/inner-transcript/v1`), those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
 its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). The inner
 session's record (`--rec-inner-session`) is the prover's, the one check 5 reads, and holds the two reps alone: each rep's
 rounds' coins must be the record's at the same round, z_partial's split aside (`repCoins`). With candidate 3's streams beside
 the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it from the coin
-server's record alone. -/
-def innerCommits (tr : Json) (record : String) : V InnerCommits := do
+server's record alone. R has no root at `Commit`, so its registration (`reg`, `--rec-inner-registration`) binds it before
+any coin: a session with R's stream needs R's registered top, which its binding round commits; and a session whose
+registration has R's top needs R's stream, whose opening the statement then reads (a session without it is a downgrade). -/
+def innerCommits (tr : Json) (record : String) (reg : Option Json := none) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
+  let regR ← match reg with
+    | some j => some <$> registration j
+    | none => pure none
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
   let rec_ ← match Json.parse record with
     | .ok j => pure j
@@ -463,8 +492,18 @@ def innerCommits (tr : Json) (record : String) : V InnerCommits := do
     let srec := (streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s).getD Json.null
     for (r, c) in rs.zip (← repCoins s rs srec), k in [0:rs.size] do
       if c.any (· != coinsOf r) then throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
+  let stackedS := s!"{STACKED}/rep0"
+  let declaredR := (tr.getObjVal? "streams" >>= (·.getObjVal? stackedS)).toOption.isSome
+  match names.contains stackedS, regR with
+  | true, none =>
+    throw s!"rec inner transcript: {stackedS} binds R, and the verifier holds no registered top of R (--rec-inner-registration)"
+  | false, some _ =>
+    -- declared with no rounds in candidate 3's session: `candidate3`'s layout check names it
+    if !(declaredR && c3) then
+      throw s!"rec inner transcript: the registration has R's top, and the session has no {stackedS}: R's stream is missing (a downgrade)"
+  | _, _ => pure ()
   let reps := #[0, 1].map fun x => ((msgs.filter (·.1 == s!"{t}rep{x}")).qsort (·.2.1 < ·.2.1)).map (·.2)
-  if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs }
+  if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs (regR.getD #[]) }
   return { reps }
 
 /-- `rec-opening-c<i>`'s `i`. -/

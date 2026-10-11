@@ -6,14 +6,20 @@ Hello): the circuit table's two reps (95 rounds each in the transcript, 94 in th
 round 40 whole), both reps' sparse phases (33 each) and the stacked table R (36), whose root is no Hello table's but the top
 its stream's binding round commits. The reps' coins are checked against the prover's record, the sparse streams and R's are
 the coin server's alone; `session/session.json` is the relay's record, which is refused. The verifier holds every stream's
-`c_k` and tops, and refuses the session with a stream missing or a top another stream committed; the plain session
-(`rec-coins`' inner session) is read as before, its two reps' `c_k` and nothing else."""
+`c_k` and tops, and refuses the session with a stream missing or a top another stream committed. R has no root at `Commit`,
+so its salted top is registered before the session (#1798's `rec_live.registration_record`, `registration.json`), and the
+verifier takes it (`--rec-inner-registration`): R's binding round must commit exactly that top, a session with R's stream
+needs it, and a registration of R's top needs R's stream. c16e predates the registration, so the tests register the top its
+binding round committed (`_registration`). The plain session (`rec-coins`' inner session) is read as before, its two reps'
+`c_k` and nothing else."""
 from __future__ import annotations
 
 import copy
+import functools
 import json
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -40,10 +46,41 @@ def _fixture(d: Path) -> Path:
     return d
 
 
-def _read(d: Path, transcript: Path | None = None, record: Path | None = None) -> tuple[int, dict | None, str]:
+#: `rec_live.registration_record`'s format (#1798), which `RecVStar.registration` reads
+REGISTRATION = {"kind": "rec/inner-registration/v0", "tops": "hm96-sha512/v1/node-row"}
+
+
+def _registration_of(t: dict) -> dict:
+    """The registration of the top R's binding round commits: `{"stacked": {"top": [b ‖ c, …]}}`, as `registration.json`."""
+    return {**REGISTRATION, "registered": {"stacked": {"top": list(_round(t, "stacked/rep0", k=0)["tops"][0])}}}
+
+
+def _write(path: Path, j: dict) -> Path:
+    path.write_text(json.dumps(j))
+    return path
+
+
+@functools.cache
+def _registration() -> Path:
+    """c16e's R registered: the top its binding round committed."""
+    t = json.loads((_fixture(C3) / "public.json").read_text())
+    return _write(Path(tempfile.mkdtemp(prefix="rec-c3-registration-")) / "registration.json", _registration_of(t))
+
+
+def _reg_args(registration: Path | None) -> list[str]:
+    return [] if registration is None else ["--rec-inner-registration", str(registration)]
+
+
+HONEST = object()
+
+
+def _read(d: Path, transcript: Path | None = None, record: Path | None = None,
+          registration: Path | None | object = HONEST) -> tuple[int, dict | None, str]:
     record = record or (d / "prover" if (d / "prover").is_dir() else d / "session")
+    if registration is HONEST:
+        registration = _registration() if d == C3 else None
     p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
-                        "--rec-inner-session", str(record)], capture_output=True, text=True)
+                        "--rec-inner-session", str(record), *_reg_args(registration)], capture_output=True, text=True)
     line = [json.loads(ln[14:]) for ln in p.stdout.splitlines() if ln.startswith("RECTRANSCRIPT ")]
     return p.returncode, (line[0] if line else None), p.stderr.strip()
 
@@ -76,7 +113,8 @@ def test_verify_reads_candidate_3s_transcript(tmp_path):
     def verify(transcript: Path) -> subprocess.CompletedProcess:
         return subprocess.run([str(BIN), "verify", "--zk", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),
                                "--rec-inner-coins", str(tmp_path / "coins.json"), "--rec-inner-session", str(C3 / "prover"),
-                               "--rec-inner-transcript", str(transcript), "--session", str(tmp_path / "none")],
+                               "--rec-inner-transcript", str(transcript), *_reg_args(_registration()),
+                               "--session", str(tmp_path / "none")],
                               capture_output=True, text=True)
 
     p = verify(_fixture(C3) / "public.json")
@@ -117,10 +155,72 @@ def test_a_stream_missing_is_refused(tmp_path, change, why):
 
 
 def test_the_sparse_streams_and_rs_are_the_coin_servers_alone(tmp_path):
-    """The prover's record holds the reps only, so whether the session committed R is the coin server's record's to say: a
-    transcript with R's stream gone from its rounds and its declarations is read as a session without R."""
-    rc, line, err = _read(C3, _changed(tmp_path, _drop_stacked_everywhere))
+    """The prover's record holds the reps only, so whether the session committed R is the coin server's record's to say,
+    held to the registration: a transcript with R's stream gone from its rounds and its declarations is read as a session
+    without R when nothing registered R's top, and refused as a downgrade when R's top was registered."""
+    bad = _changed(tmp_path, _drop_stacked_everywhere)
+    rc, line, err = _read(C3, bad, registration=None)
     assert (rc, line) == (0, {"reps": [77, 77], "streams": C3_STREAMS[:4]}), err
+    rc, line, err = _read(C3, bad)
+    assert (rc, line, err) == (1, None, "rec inner transcript: the registration has R's top, and the session has no "
+                                        "stacked/rep0: R's stream is missing (a downgrade)")
+
+
+def _flip_node(i: int):
+    def change(reg: dict) -> None:
+        top = reg["registered"]["stacked"]["top"]
+        c = bytearray.fromhex(top[i])
+        c[-1] ^= 1
+        top[i] = c.hex()
+    return change
+
+
+@pytest.mark.parametrize("change", [
+    _flip_node(0), _flip_node(127),
+    lambda reg: reg["registered"]["stacked"].__setitem__("top", reg["registered"]["stacked"]["top"][:64]),
+    lambda reg: reg["registered"]["stacked"]["top"].reverse(),
+], ids=["node-0", "node-127", "half", "reversed"])
+def test_an_r_whose_top_is_not_the_registered_one_is_refused(tmp_path, change):
+    """R's binding round must commit exactly the registered `b ‖ c`, node for node: a registration one bit off in its first
+    or last node, of half the nodes, or in another order is refused (as is R's top changed after registration)."""
+    reg = _registration_of(json.loads((_fixture(C3) / "public.json").read_text()))
+    change(reg)
+    rc, line, err = _read(C3, registration=_write(tmp_path / "registration.json", reg))
+    assert (rc, line, err) == (1, None, "rec inner transcript: stacked/rep0's binding round commits a top other than R's "
+                                        "registered top (--rec-inner-registration)")
+
+
+def test_a_session_with_r_needs_rs_registered_top():
+    """R has no root at `Commit`, so nothing but the registration binds it before the coins: a session with R's stream and
+    no registered top is refused."""
+    rc, line, err = _read(C3, registration=None)
+    assert (rc, line, err) == (1, None, "rec inner transcript: stacked/rep0 binds R, and the verifier holds no registered "
+                                        "top of R (--rec-inner-registration)")
+
+
+@pytest.mark.parametrize("change,why", [
+    (lambda r: r.__setitem__("kind", "verity/registration/v2"), "not a rec/inner-registration/v0 record"),
+    (lambda r: r.__setitem__("tops", "hm96-sha512/v1/row"), "its tops are not salted as hm96-sha512/v1/node-row"),
+    (lambda r: r["registered"].__setitem__("circuit", r["registered"]["stacked"]),
+     "it registers the tops of #[circuit, stacked], not R's (stacked) alone"),
+    (lambda r: r.__setitem__("registered", {}), "it registers the tops of #[], not R's (stacked) alone"),
+    (lambda r: r["registered"]["stacked"].__setitem__("top", []), "R's top has no nodes"),
+    (lambda r: r["registered"]["stacked"].__setitem__("top", "00"), "R's top is not a list of b ‖ c"),
+    (lambda r: r["registered"]["stacked"]["top"].__setitem__(3, "00" * 64),
+     "R's registered top: a b ‖ c of 64 bytes, not 128"),
+], ids=["kind", "tops", "two-tables", "no-table", "no-nodes", "not-a-list", "short-node"])
+def test_the_registration_is_held_to_its_format(tmp_path, change, why):
+    """`RecVStar.registration` reads `rec_live.registration_record`'s format and nothing else (`REGISTRATION`)."""
+    reg = _registration_of(json.loads((_fixture(C3) / "public.json").read_text()))
+    change(reg)
+    rc, line, err = _read(C3, registration=_write(tmp_path / "registration.json", reg))
+    assert (rc, line, err) == (1, None, f"rec inner registration: {why}")
+
+
+def test_the_registration_goes_with_the_transcript():
+    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-session", str(_fixture(C3) / "prover"),
+                        "--rec-inner-registration", str(_registration())], capture_output=True, text=True)
+    assert (p.returncode, p.stderr.strip()) == (1, "--rec-inner-registration goes with --rec-inner-transcript"), p.stderr
 
 
 REPS = "[circuit/rep0, circuit/rep1]"
@@ -219,6 +319,17 @@ def test_the_plain_session_is_read_as_before(tmp_path):
                                         "table's rep0 and rep1")
 
 
+def test_a_plain_session_under_rs_registration_is_a_downgrade(tmp_path):
+    """A registration of R's top holds the session to R's stream even when it has no candidate 3 stream at all, and even
+    when it declares `stacked/rep0` with no rounds."""
+    why = ("rec inner transcript: the registration has R's top, and the session has no stacked/rep0: R's stream is missing "
+           "(a downgrade)")
+    assert _read(_fixture(PLAIN), registration=_registration()) == (1, None, why)
+    t = json.loads((PLAIN / "public.json").read_text())
+    t["streams"]["stacked/rep0"] = json.loads((C3 / "public.json").read_text())["streams"]["stacked/rep0"]
+    assert _read(PLAIN, _write(tmp_path / "plain.json", t), registration=_registration()) == (1, None, why)
+
+
 #: the bucket's RecSparse shape b907 ran its sparse phase at, and META's range of its inner statement's hidden circuit
 #: (`pod/rec_inner.py stage --n 16 --plain-leaves`, circuit_sha512 e1148161…, which `rec_vstage stage --circuit` reads)
 SPARSE = (18, 13, 6, 0)
@@ -244,7 +355,8 @@ def sparse(tmp_path_factory) -> Path:
 
 
 def _statement(d: Path, transcript: Path | None = None) -> subprocess.CompletedProcess:
-    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "prover")]
+    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "prover"),
+                                         *_reg_args(_registration())]
     return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
                            "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
                            str(d / "program.json"), "--registered", str(d / "registered.json"), *rec],
