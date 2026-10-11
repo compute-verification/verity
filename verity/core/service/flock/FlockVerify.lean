@@ -306,9 +306,9 @@ def recBindingsInput (args : List String) : IO (Except String (Option VStar.Bind
 
 /-- `--rec-inner-transcript F`: the coin server's record of V*'s inner session (`rec/inner-transcript/v1`), with the inner
 session's record `record` (`--rec-inner-session`) that its coins must match: each rep's `c_k`, and with candidate 3's
-streams every stream's `c_k` and tops (`RecVStar.innerCommits`). `--rec-inner-registration F`: the registration's record
-of R's top (`rec_live.registration_record`'s `registration.json`, `RecVStar.registration`), which a session with R's stream
-needs. -/
+streams every stream's `c_k` and tops (`RecVStar.innerCommits`). `--rec-inner-registration F`: the private circuit's
+registration (`verity/registration/v2`, `rec_live.REGISTRATION`), whose entry `stacked` is R's registered top
+(`RecVStar.registration`), which a session with R's stream needs. -/
 def recTranscriptInput (args : List String) (record : Option String) :
     IO (Except String (Option RecVStar.InnerCommits)) := do
   let reg := argOf args "--rec-inner-registration"
