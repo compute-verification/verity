@@ -300,8 +300,9 @@ def STACKED : String := "stacked"
 
 /-- One stream of the inner session as the coin server recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
 round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
-level 0 the table's `root_B` from `Commit` (the record's `link.roots`), then each later salted top in the order the stream's
-rounds absorbed them. A sparse stream belongs to no table and has none. -/
+level 0 the table's `root_B` from `Commit` (the record's `link.roots`; R, which has none there, its binding round's salted
+top), then each later salted top in the order the stream's rounds absorbed them. A sparse stream belongs to no table and has
+none. -/
 structure InnerStream where
   name : String
   commits : Array (Nat × ByteArray)
@@ -325,8 +326,8 @@ private def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
 reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`), the inner session record's and
 the streams its message rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end
 of the rep's stream, the reps and R at round 0 of no parent), each with every round from 0 to its count and that round's coins the
-record's; Hello's tables and the committed roots are `t`'s and R's; each round's tops are lists of `b ‖ c`, none in a sparse
-stream; and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since the firewall commits each under a
+record's; Hello's tables and the committed roots are `t`'s alone (the inner statement's Hello), R's root being the top its
+stream's binding round commits; each round's tops are lists of `b ‖ c`, none in a sparse stream; and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since the firewall commits each under a
 fresh salt. -/
 def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : String) (names : List String)
     (msgs : Array (String × Nat × ByteArray)) : V (Array InnerStream) := do
@@ -362,7 +363,7 @@ def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : Str
       if (rr[k]?.map coinsOf) != some (coinsOf r) then
         throw s!"rec inner transcript: {s} round {k}'s coins are not the inner session record's"
   let tables := (tr.getObjVal? "hello" |>.toOption.getD Json.null).getObjValAs? (Array String) "tables" |>.toOption.getD #[]
-  let wantTables := #[tbl] ++ (if stacked then #[STACKED] else #[])
+  let wantTables := #[tbl]
   if tables != wantTables then throw s!"rec inner transcript: Hello's tables {tables}, not {wantTables}"
   let roots ← match (tr.getObjVal? "link" |>.toOption.getD Json.null).getObjVal? "roots" with
     | .ok (.obj kvs) => pure kvs.toArray
@@ -379,20 +380,21 @@ def candidate3 (tr : Json) (rounds : Array Json) (streams : Array Json) (t : Str
   let mut all : Array ByteArray := rootOf.foldl (· ++ ·.2) #[]
   for s in want do
     let table := if s.startsWith s!"{SPARSE}/" then none else some (if s.startsWith s!"{STACKED}/" then STACKED else tbl)
-    let mut tops : Array (Array ByteArray) := match table with
-      | some n => #[((rootOf.find? (·.1 == n)).map (·.2)).getD #[]]
-      | none => #[]
+    let committed := table == some tbl
+    let mut tops : Array (Array ByteArray) := if committed then #[((rootOf.find? (·.1 == tbl)).map (·.2)).getD #[]] else #[]
     let rs := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).qsort fun a b =>
       (a.getObjValAs? Nat "k").toOption.getD 0 < (b.getObjValAs? Nat "k").toOption.getD 0
     for r in rs do
       let k := (r.getObjValAs? Nat "k").toOption.getD 0
       let .ok ts := r.getObjValAs? (Array (Array String)) "tops" | throw s!"rec inner transcript: {s} round {k}'s tops are not lists of b ‖ c"
       if table.isNone && !ts.isEmpty then throw s!"rec inner transcript: {s} round {k} commits a top, and a sparse stream has no table"
+      if table == some STACKED && k == 0 && ts.isEmpty then
+        throw s!"rec inner transcript: {s}'s binding round commits no top: R's root is committed nowhere"
       for (top, i) in ts.zipIdx do
         if top.isEmpty then throw s!"rec inner transcript: {s} round {k}'s top {i} has no nodes"
         tops := tops.push (← hexList s!"{s} round {k}'s top {i}" top)
     let cs := ((msgs.filter (·.1 == s)).qsort (·.2.1 < ·.2.1)).map (·.2)
-    all := all ++ (tops.extract (if table.isSome then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
+    all := all ++ (tops.extract (if committed then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
     out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[] }
   let mut seen : Std.HashSet String := {}
   for b in all do
