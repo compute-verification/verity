@@ -256,14 +256,14 @@ theorem structureOf_length : (Flock.RecSparse.structureOf sh).2.length = (Flock.
   obtain ⟨rs, ops⟩ := p
   simp
 
-theorem nv_eq : Flock.RecSparse.nv sh = 80 + sh.degrees.foldl (· + ·) 0 + 2 * sh.ell + sh.PP +
+theorem nv_eq : Flock.RecSparse.nv sh = 79 + sh.degrees.foldl (· + ·) 0 + 2 * sh.ell + sh.PP +
     (if sh.stacked then sh.S + sh.T else 0) := by
   cases h : sh.stacked <;>
     simp [Flock.RecSparse.nv, vParts, Flock.RecSparse.SKIP, Flock.RecSparse.PRE_ROUNDS, h] <;> omega
 
 theorem vp_offsets : offset (vParts sh) "pre" = 64 ∧ offset (vParts sh) "sc" = 77 ∧
-    offset (vParts sh) "ur" = 79 + sh.degrees.foldl (· + ·) 0 + 2 * sh.ell ∧
-    offset (vParts sh) "eqs" = 80 + sh.degrees.foldl (· + ·) 0 + 2 * sh.ell + sh.PP := by
+    offset (vParts sh) "ur" = 78 + sh.degrees.foldl (· + ·) 0 + 2 * sh.ell ∧
+    offset (vParts sh) "eqs" = 79 + sh.degrees.foldl (· + ·) 0 + 2 * sh.ell + sh.PP := by
   cases h : sh.stacked <;>
     simp [vParts, offset, Flock.RecSparse.SKIP, Flock.RecSparse.PRE_ROUNDS, h] <;> omega
 
