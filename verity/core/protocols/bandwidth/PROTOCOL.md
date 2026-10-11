@@ -134,6 +134,12 @@ fraction of the tag kernel: 0.906, 0.871, 0.835 and 0.552 ms at `f = 0, 5, 10, 5
 skips 1% is rejected with probability 99%, and one that skips 5% with probability 1 − 6·10^-11. Both skip windows
 run on the device were rejected.
 
+A second run on another RTX PRO 6000 of the node, `r20261011-230558-8be4`
+(art:49177aa1e45e0e4e5172ca771050d2e5e0cb8b9d099c2826803837442d67ee81), passed the same gates and reproduced every time
+in the table to within 0.01 ms. It also ran one window per tag at a 100 ms deadline with the rebuild floor lifted past
+it, which certifies nothing but checks the openings: both were accepted, so `ro-sha512/v1`'s openings (tags recomputed
+from the block, paths read from the device's tree) pass the verifier even though its timed windows are late.
+
 `bound` at `s = 459`, `δ_s = 1%`, `δ_γ = 2^-40`, `S_chip = 208,142,336` bytes and `cap_side = 63.0 GB/s`:
 
 | tag | `T`, `RTT` | `I` | share of `E` | `I / (T + RTT)` |
