@@ -155,7 +155,9 @@ def markdown(doc: dict, verdicts: dict, source: str) -> str:
     notes = sorted({r.get("w_unproved") for r in rows(doc) if r.get("w_unproved")})
     if notes:
         lines += ["", "W_cert unproved: " + "; ".join(notes)]
-    lines += ["Q_cert: " + C.UNPROVED_Q + ". S_cert: " + C.NO_POUS + ".",
+    lines += [("W_cert is in W1 (one dense FP8 MAC on the device), as 2·W_cert over the chain's time; ΣW_ref prices a credited "
+               "cell at about 1.1 W1 per MAC at these shapes, so W_cert can exceed the useful rate."),
+              "Q_cert: " + C.UNPROVED_Q + ". S_cert: " + C.NO_POUS + ".",
               ("Compute residual: F·T − W_cert as a share of F·T (F the native FP8 chain's rate at the shape, T the arm's chain "
                "time), split into honest overhead (F·T − ΣW_ref) and soundness slack (ΣW_ref − W_cert).")]
     return "\n".join(lines) + "\n"
