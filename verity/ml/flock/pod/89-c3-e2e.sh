@@ -11,11 +11,11 @@ R0=$RESEARCH_RUN_DIR; RID=${RESEARCH_RUN_ID:-local-$$}; mkdir -p $R0/out
 # PREV=RUN_ID: an earlier run of this job on this machine, whose 88 sessions (and kept inner statements) are reused
 if [ -n "${PREV:-}" ]; then
   K=/workspace/jobs/c3e2e/$PREV
-  for f in honest cell point; do cp -r /workspace/research/runs/$PREV/out/$f $R0/out/ || exit 1; done
+  for f in ${RUNS88:-honest cell point}; do cp -r /workspace/research/runs/$PREV/out/$f $R0/out/ || exit 1; done
   echo "reused $PREV" | tee -a $R0/out/exits.txt
 else
   K=/workspace/jobs/c3e2e/$RID; mkdir -p $K || exit 1
-  for f in honest cell point; do
+  for f in ${RUNS88:-honest cell point}; do
     case $f in honest) X=;; *) X="FORGE=$f";; esac
     RESEARCH_RUN_DIR=$R0/out/$f RESEARCH_RUN_ID=$RID-$f KEEP=$K/$f bash verity/ml/flock/pod/88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 $X \
       > $R0/out/88-$f.log 2>&1
@@ -29,7 +29,7 @@ export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 wait $LP
 STAGES=${STAGES:-honest claim claim-own h cell point}
 E=$O/e2e; mkdir -p $E; LJ=$E/lean.jsonl; SALTS=$S/acc-salts.bin
-H=$O/honest/out; ST=$K/honest/stage; IC=$ST/circuit.txt; IP=$ST/pub-16.bin
+H=$O/honest/out; ST=$K/honest/stage; IC=$ST/circuit.txt; IP=$ST/pub-16.bin; IQ=$ST/partition.json
 P="python3 verity/ml/flock/pod/c3_e2e.py"
 sha256sum $LEAN_BIN > $E/lean-bin.sha256
 
@@ -43,13 +43,13 @@ st() {  # st KIND INNER_OUT DIR
 }
 if [[ " $STAGES " == *" honest "* ]]; then
   st honest $H $S/v-honest
-  $P lean --bin $LEAN_BIN --dir $S/v-honest --inner-circuit $IC --inner-public $IP --out $LJ --label honest > $E/lean-honest.log 2>&1
+  $P lean --bin $LEAN_BIN --dir $S/v-honest --inner-circuit $IC --inner-public $IP --inner-partition $IQ --out $LJ --label honest > $E/lean-honest.log 2>&1
   echo "lean honest exit $?" | tee -a $O/exits.txt
 fi
 for k in claim claim-own h; do
   [[ " $STAGES " == *" $k "* ]] || continue
   SALTS=$S/acc-salts-$k.bin st $k $H $S/v-$k
-  $P lean --bin $LEAN_BIN --dir $S/v-$k --inner-circuit $IC --inner-public $IP --out $LJ --label $k > $E/lean-$k.log 2>&1
+  $P lean --bin $LEAN_BIN --dir $S/v-$k --inner-circuit $IC --inner-public $IP --inner-partition $IQ --out $LJ --label $k > $E/lean-$k.log 2>&1
   echo "lean $k exit $?" | tee -a $O/exits.txt
   rm -rf $S/v-$k
 done
@@ -60,7 +60,7 @@ for f in cell point; do
   /usr/bin/time -v -o $E/time-stage-$f.txt $P stage session --inner $O/$f/out/inner --fold $FO/fold.json --points $FO/points.json \
     --circuit $IC --salts $S/acc-salts-$f.bin --out $S/v-$f > $E/stage-$f.json 2> $E/stage-$f.err
   echo "stage $f exit $?" | tee -a $O/exits.txt
-  $P lean --bin $LEAN_BIN --dir $S/v-$f --inner-circuit $IC --inner-public $IP --out $LJ --label $f > $E/lean-$f.log 2>&1
+  $P lean --bin $LEAN_BIN --dir $S/v-$f --inner-circuit $IC --inner-public $IP --inner-partition $IQ --out $LJ --label $f > $E/lean-$f.log 2>&1
   echo "lean $f exit $?" | tee -a $O/exits.txt
   rm -rf $S/v-$f
 done
@@ -69,7 +69,7 @@ done
 # of V*'s statements Lean lists. Proved --zk at a full draw and verified by Lean.
 if [ "${PROVE:-smallest}" = L3 ]; then
   SALTS=$S/acc-salts-l3.bin st level3 $H $S/v-l3
-  $P lean --bin $LEAN_BIN --dir $S/v-l3 --inner-circuit $IC --inner-public $IP --out $LJ --label level3 > $E/lean-level3.log 2>&1
+  $P lean --bin $LEAN_BIN --dir $S/v-l3 --inner-circuit $IC --inner-public $IP --inner-partition $IQ --out $LJ --label level3 > $E/lean-level3.log 2>&1
   echo "lean level3 exit $?" | tee -a $O/exits.txt
   C=$S/v-l3/L3
 else
@@ -99,6 +99,19 @@ if [ -f $C/rec-bindings.json ]; then
 fi
 $LEAN_BIN verify "${LV[@]}" --rec-inner-session $H/inner/session --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-transcript.log 2>&1
 echo "lean verify --rec-inner-transcript exit $?" | tee -a $O/exits.txt
+# V*'s check 5 on the inner statement's files: the verifier's coins against L3's registered values (RecCoins.check)
+RI=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/session)
+$LEAN_BIN verify "${LV[@]}" "${RI[@]}" --session $SESS > $D/lean-check5.log 2>&1
+echo "lean verify check5 exit $?" | tee -a $O/exits.txt
+$LEAN_BIN verify "${LV[@]}" "${RI[@]}" --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-check5-transcript.log 2>&1
+echo "lean verify check5 --rec-inner-transcript exit $?" | tee -a $O/exits.txt
+if [ -f $C/rec-bindings.json ]; then
+  for tag in hide plain; do
+    $LEAN_BIN verify "${LV[@]}" --rec-inner $E/rec-inner-$tag.json --rec-part 3 --rec-bindings $C/rec-bindings.json --rec-rows $C/rec-rows.json \
+      "${RI[@]}" --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-check5-full-$tag.log 2>&1
+    echo "lean verify check5 full $tag exit $?" | tee -a $O/exits.txt
+  done
+fi
 $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS > $D/replay.txt 2>&1; echo "replay exit $?" | tee -a $O/exits.txt
 cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt > $D/unit.txt; du -sb $C/* > $D/sizes.txt
 [ -d $S/v-honest ] && (cd $S/v-honest && find . -name circuit.txt -printf '%h\n' | LC_ALL=C sort | while read d; do echo "$d $(head -1 $d/circuit.txt | cut -c1-120) $(stat -c %s $d/circuit.txt)"; done) > $E/statements.txt

@@ -96,7 +96,7 @@ def lean(a) -> int:
     b, root, out = a.bin, Path(a.dir), Path(a.out)
     inner = {}
     for tag, extra in (("hide", ["--hide"]), ("plain", [])):
-        p = subprocess.run([b, "rec-inner", "--circuit", a.inner_circuit, "--public", a.inner_public, *extra],
+        p = subprocess.run([b, "rec-inner", "--circuit", a.inner_circuit, "--public", a.inner_public, "--partition", a.inner_partition, *extra],
                            capture_output=True, text=True)
         f = out.parent / f"rec-inner-{tag}.json"
         f.write_text(p.stdout)
@@ -155,7 +155,7 @@ def main() -> int:
     for k in ("--inner", "--fold", "--points", "--circuit", "--salts", "--out"):
         s.add_argument(k, required=True)
     l = sub.add_parser("lean")
-    for k in ("--bin", "--dir", "--inner-circuit", "--inner-public", "--out"):
+    for k in ("--bin", "--dir", "--inner-circuit", "--inner-public", "--inner-partition", "--out"):
         l.add_argument(k, required=True)
     l.add_argument("--label", default="honest")
     a = ap.parse_args()
