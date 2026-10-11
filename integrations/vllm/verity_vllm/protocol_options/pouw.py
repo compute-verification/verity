@@ -18,7 +18,9 @@ coin.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the run'
 Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from, the epoch's coin
 commitment and its salt coin's opening and, once closed,
-the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
+the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
+`weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
+weights were served.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
 after the run.  Beside sampled proofs the composition asks `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only
 ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
@@ -91,6 +93,12 @@ PLACEHOLDER = (
     "for the life of the install",
     "the executor runs on the host in numpy, not a native route-U kernel",
 )
+#: The transforms Pearl-C's executor applies to a checkpoint's weights before committing them: none.  The keyed 8-block
+#: rotation (`registration.ROTATION_8`) is not built on the device, so served FP8 registers only a curated unrotated
+#: checkpoint, and no curated list is wired here.
+SERVED_TRANSFORMS: tuple[str, ...] = ()
+#: What Pearl-C's commitment says of weights that are not registered (`weights_claim`)
+UNREGISTERED = "nothing about which weights were served: the checkpoint is not registered"
 #: The host bytes `weight_operands` works in at a time (its copy of the weight's rows and their int64 noise and sums).
 FORM_BYTES = 1 << 28
 _INV63 = np.float32(1.0) / np.float32(63.0)
@@ -582,6 +590,20 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
+def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = False) -> dict[str, Any]:
+    """What served FP8 (Pearl-C) claims of the weights it serves, the commitment's ``registration``.  It claims registered
+    weights only when `SERVED_TRANSFORMS` pass the registered-weights rule (`registration.check_registration`, Pearl-C4's
+    too); a keyed transform would take its key from the epoch's salt coin (`registration.rotation_key`).  Otherwise the
+    claim says it is about nothing (`UNREGISTERED`) and names the refusal, and serving goes on: the salt is still the
+    challenger's live coin (`Epoch.start`), so what the draw establishes of the work is unchanged."""
+    out: dict[str, Any] = {"transforms": list(SERVED_TRANSFORMS), "curated": curated}
+    try:
+        scheme.check_registration(SERVED_TRANSFORMS, curated, needs_gamma_fold)
+    except DomainError as e:
+        return {**out, "registered": False, "claims": UNREGISTERED, "refused": str(e)}
+    return {**out, "registered": True}
+
+
 def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: int = 0) -> dict[str, dict[str, Any]]:
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.core.protocols.pouw.coins.Challenger`) when `enabled` (the protocol set) has PoUW, for a pipeline
@@ -608,6 +630,7 @@ def install(scheme: str, target: Target) -> Option:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                   {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                   schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
+        run.commits["registration"] = weights_claim(s)
     else:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))

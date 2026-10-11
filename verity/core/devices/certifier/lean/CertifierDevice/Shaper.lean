@@ -88,9 +88,10 @@ def arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int) : Shaper 
                 prover := s.prover.map (·.arrive position frame.anchor frame.index ready) }
 
 /-- `Shaper.tick`: the prover's declaration at a window's first tick (a choice already made), then the frames due by the
-handing rule, then the certifier's row, with the window's record at its last bucket. A window closing faulted with
-frames still queued faults the next one with the same reason. A declaration the prover refuses faults the window
-`monitor-unavailable`. -/
+handing rule, then the certifier's row, with the window's record at its last bucket. A frame handed at a bucket after
+its `h` (late: ready after it, behind a late frame, or read after its tick) faults the window
+`coverage-never-established` before it is enqueued. A window closing faulted with frames still queued faults the next
+one with the same reason. A declaration the prover refuses faults the window `monitor-unavailable`. -/
 def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
   let T := s.certifier.params.buckets
   let mut s := s
@@ -109,8 +110,9 @@ def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
         let h := max (eligibleAt frame.anchor frame.index sync) s.h
         let hand := (max (max (h : Int) ready) s.last).toNat
         if hand > s.t then break
+        let certifier := if h < s.t then s.certifier.doFault .coverageNeverEstablished else s.certifier
         s := { s with pending := s.pending.erase s.next, h, last := hand, next := s.next + 1, hands := s.hands.push hand,
-                      certifier := s.certifier.enqueue frame.bytes, queued := s.queued + 1 }
+                      certifier := certifier.enqueue frame.bytes, queued := s.queued + 1 }
   let (c, row) := s.certifier.tick
   s := { s with certifier := c, queued := s.queued - min s.queued c.params.allocation, t := s.t + 1 }
   if s.t % T ≠ 0 then return (s, row, none)
