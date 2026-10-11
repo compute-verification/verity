@@ -1323,8 +1323,9 @@ DIST = ["--dist", "worksteal"]
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
-#: each suite's pytest `--basetemp`, `<tmp>/<BASETEMP>-<suites.py's pid>-<suite>-*`, removed when the suite ends: pytest's own keeps
-#: its last three runs, and a flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct
+#: each suite's pytest `--basetemp`, `<tmp>/<BASETEMP>-<suites.py's pid>-*`, removed when the suite ends: pytest's own keeps
+#: its last three runs, and a flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. The name is no
+#: longer than pytest's own `pytest-of-<user>/pytest-<n>`: a test's AF_UNIX socket under tmp_path has at most 107 bytes of path
 BASETEMP = "verity-suite"
 
 
@@ -1363,7 +1364,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     own = not any(a == "--basetemp" or a.startswith("--basetemp=") for a in args)
-    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}-{slug}-")) if own else None
+    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}-")) if own else None
     start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
         p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
