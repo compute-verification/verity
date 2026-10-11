@@ -94,11 +94,13 @@ def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path)
 
 def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
     """`--mem-gb 149` (a 160 GB worker) with the parent holding its 9.6 GiB task list leaves 139.4 GiB for the targets, so a
-    151 GiB target is over it (run alone, and warned about) and a 137.8 GiB one fits."""
+    151 GiB target is over it (run alone, and warned about) and a 137.8 GiB one fits.  `--mem-gb` is a cap, never more than the
+    machine has free: a check slot's mem= on a node whose other check already took most of it leaves only what is free."""
     monkeypatch.setattr(cli, "_rss_gb", lambda: 9.6)
+    monkeypatch.setattr(cli, "memory_gb", lambda: 1500)
     budget = cli.budget_gb(149)
     assert budget == pytest.approx(139.4)
     assert cli.admit([151.02, 16], [], jobs=8, budget=budget) == [0]
     assert cli.admit([137.81], [], jobs=8, budget=budget) == [0] and cli.admit([16], [137.81], jobs=8, budget=budget) == []
     monkeypatch.setattr(cli, "memory_gb", lambda: 200)
-    assert cli.budget_gb(None) == 200
+    assert cli.budget_gb(None) == 200 and cli.budget_gb(560) == 200

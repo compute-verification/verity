@@ -6,6 +6,7 @@ import VStar.InnerRepCheck
 import VStar.Algebra
 import VStar.Parts
 import VStar.Stage
+import VStar.Menu.Pinned
 import VStar.Stream
 import VStar.PyJson
 import VStar.Compose

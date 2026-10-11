@@ -866,6 +866,124 @@
       "targets": [
         "infra"
       ]
+    },
+    {
+      "name": "a long multi-line reply under an announcement that names someone wakes only them, whatever PRs and runs its body mentions",
+      "msg": {
+        "ts": "1700000040.000020",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@infra circuits, on 1700000040.000004: yes, r20261011-044421-6350 is ours, launched before your placement reached it.\n• Delete its scratch the moment 6350's pytest exits; nothing of ours needs it.\n• Its next suites run goes on vy-cpu-2 after dd21, beside #1590 and #1600, with --basetemp under scratch.\n• #1585's tree is main + #1590.\n\nThe rest is in the run's notes."
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1590 rides r20261009-035518-dd21; 6350 is its suites run"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "vy-monitors",
+          "text": "vy-nebius-1: the OOM killer took python of the run for #1600"
+        }
+      ],
+      "branches": {
+        "1590": "cursor/level3-95d4",
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply led by an unlabelled user-group mention is addressed: a PR its body names wakes no owner",
+      "msg": {
+        "ts": "1700000040.000021",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "<!subteam^SINFRA> Sweep 2 is in slot a: r20261011-052607-b6d8.\nIts tree is main + #1590, labelled on the run. (quiet)"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1590 rides r20261009-035518-dd21; 6350 is its suites run"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "vy-monitors",
+          "text": "vy-nebius-1: the OOM killer took python of the run for #1600"
+        }
+      ],
+      "branches": {
+        "1590": "cursor/level3-95d4",
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply that names no one wakes the PR watchers that are handles: a bot that named an unknown PR earlier is not one",
+      "msg": {
+        "ts": "1700000040.000022",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "#1600 and #1590 are on the next train, after dd21"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1590 rides r20261009-035518-dd21; 6350 is its suites run"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "vy-monitors",
+          "text": "vy-nebius-1: the OOM killer took python of the run for #1600"
+        }
+      ],
+      "branches": {
+        "1590": "cursor/level3-95d4",
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra",
+        "proofs"
+      ]
     }
   ],
   "subscriptions": {
