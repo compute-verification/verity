@@ -16,7 +16,8 @@ real frames or another list (too many, a frame of another size), every k to open
 on each opening and on tampered ones (a byte of the frame, the root or a sibling flipped, another k, k past 2^D or
 negative, a path one short or one long, a frame of another size), heads as `record_head` gives them and with a field out
 of range (counts, the window, T, τ_b, a digest's length, a link past 2^16 bytes), links with non-ASCII and control
-characters, and certificate messages with every field valid and each made invalid.
+characters, and certificate messages with every field valid and each made invalid (sessions of 31 and 33 bytes among
+them).
 """
 from __future__ import annotations
 
@@ -211,24 +212,27 @@ def _heads(rng: random.Random, base: dict) -> list[dict]:
     return out
 
 
-def _messages(rng: random.Random, key_id: bytes, link: str, direction: Direction, window: int,
+def _messages(rng: random.Random, key_id: bytes, session: bytes, link: str, direction: Direction, window: int,
               digest: bytes | None) -> list[list]:
-    """`certificate_message` on the record's digest, and with one field changed, in range or out of it."""
+    """`certificate_message` on the record's digest, and with one field changed, in range or out of it: a session of 31
+    or 33 bytes among them, which Python and Lean must both refuse."""
     digest = digest if digest is not None else rng.randbytes(64)
-    out = [[key_id, link, direction, window, digest]]
+    out = [[key_id, session, link, direction, window, digest]]
     for _ in range(rng.randint(0, 2)):
         m = list(out[0])
-        kind = rng.randrange(5)
+        kind = rng.randrange(6)
         if kind == 0:
             m[0] = rng.randbytes(rng.choice([0, 15, 17, 32]))
         elif kind == 1:
-            m[4] = rng.randbytes(rng.choice([0, 32, 63, 65]))
+            m[5] = rng.randbytes(rng.choice([0, 32, 63, 65]))
         elif kind == 2:
-            m[3] = rng.choice([0, 2 ** 64 - 1, 2 ** 64, -1])
+            m[4] = rng.choice([0, 2 ** 64 - 1, 2 ** 64, -1])
         elif kind == 3:
-            m[1] = rng.choice(LINKS)
+            m[2] = rng.choice(LINKS)
+        elif kind == 4:
+            m[3] = Direction.INGRESS if m[3] is Direction.EGRESS else Direction.EGRESS
         else:
-            m[2] = Direction.INGRESS if m[2] is Direction.EGRESS else Direction.EGRESS
+            m[1] = rng.randbytes(rng.choice([0, 31, 33, 32, 64]))
         out.append(m)
     return out
 
@@ -244,6 +248,7 @@ def instance(seed: int) -> tuple[dict, dict]:
     status = rng.choice(REASONS) if rng.random() < 0.4 else None
     deadline = rng.random() < 0.8
     key_id = rng.randbytes(16)
+    session = rng.randbytes(32)
     grid_t = tuple(tuple(row) for row in grid)
     real = _maybe(cert.real_frames, grid_t, p)
     frames = _frames(rng, p, real)
@@ -263,7 +268,7 @@ def instance(seed: int) -> tuple[dict, dict]:
             "root": head.root if head else rng.randbytes(64)}
     heads = _heads(rng, base)
     digest = None if head_result is None else bytes.fromhex(head_result[1])
-    messages = _messages(rng, key_id, link, direction, window, digest)
+    messages = _messages(rng, key_id, session, link, direction, window, digest)
     nodes = [[rng.randbytes(rng.choice([0, 1, 63, 64, 65, 130])), rng.randbytes(rng.choice([0, 64, 200]))]
              for _ in range(rng.randint(0, 2))]
     manifest = {
@@ -277,7 +282,7 @@ def instance(seed: int) -> tuple[dict, dict]:
         "grid": [[_hex(x) for x in row] for row in grid], "frames": [f.hex() for f in frames],
         "link": link, "direction": direction.value, "window": window, "status": status, "deadline": deadline,
         "opens": ks, "verifies": verifies, "heads": [_head_json(h) for h in heads],
-        "messages": [[i.hex(), l, d.value, w, g.hex()] for i, l, d, w, g in messages],
+        "messages": [[i.hex(), s.hex(), l, d.value, w, g.hex()] for i, s, l, d, w, g in messages],
         "nodes": [[a.hex(), b.hex()] for a, b in nodes]}
     d = cert.depth(p)
     results = {
@@ -289,7 +294,7 @@ def instance(seed: int) -> tuple[dict, dict]:
                      for r, k, f, path in verifies],
         "manifest": canonical_json_bytes(manifest).decode(), "parameters": parameters.hex(),
         "record_head": head_result, "heads": [_head_result(h) for h in heads],
-        "messages": [_hex(_maybe(cert.certificate_message, i, l, d_, w, g)) for i, l, d_, w, g in messages],
+        "messages": [_hex(_maybe(cert.certificate_message, i, s, l, d_, w, g)) for i, s, l, d_, w, g in messages],
         "nodes": [cert.node(a, b).hex() for a, b in nodes]}
     return inst, results
 

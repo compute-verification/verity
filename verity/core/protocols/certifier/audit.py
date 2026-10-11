@@ -25,8 +25,9 @@ A record may come raw or committed (`commitment`: its digest, with padding elide
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
 
 A record may also come certified (`certificate`): a network certificate and the record head it signs, both witness.
-The audit checks the certificate's signature against the network certifier's public key (`key`), and that it names the
-head's link-window and signs the head's digest; a certificate that fails is a `signature` violation. A head settled
+The audit checks the certificate's signature against the network certifier's public key (`key`) over its message in
+the certifier session (`session`, the id the challenger drew for it), and that it names the head's link-window and signs
+the head's digest; a certificate that fails, one from another session included, is a `signature` violation. A head settled
 after the verdict deadline is a `no-verdict`. The status is the head's, which the signed digest binds. On egress the
 grid check compares the certified record digest with the digest of the Program's grid, under the parameters digest
 of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier every certificate verifies,
@@ -84,18 +85,19 @@ class Audit:
         sync_set: SyncSet,
         params: GridParams,
         key: PublicKey | None = None,
+        session: bytes | None = None,
     ) -> list[Verdict]:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
-        `advice` violation. Certified records are checked against the certifier's `key`."""
+        `advice` violation. Certified records are checked against the certifier's `key` in its `session`."""
         expected = expected_grids(frames, syncs, params)
-        by_window = _by_window(link, records, Direction.EGRESS, key)
+        by_window = _by_window(link, records, Direction.EGRESS, key, session)
         parameters = parameters_digest(params, sync_set)
         out = []
         for w, sync in enumerate(syncs):
             unit_sync = self.syncs.setdefault(w, sync)
             found = by_window.get(w, [])
-            violation = _status_violation(found, key)
+            violation = _status_violation(found, key, session)
             if violation is None:
                 record = found[0]
                 if sync not in sync_set or sync != unit_sync:
@@ -114,17 +116,17 @@ class Audit:
         return out
 
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
-                           params: GridParams | None = None) -> list[Verdict]:
+                           params: GridParams | None = None, session: bytes | None = None) -> list[Verdict]:
         """Check one ingress link's records for windows 0 … windows − 1: one record each, with a complete status. No
-        grid is compared. Certified records are checked against the certifier's `key`, and their heads against
-        `params`."""
-        by_window = _by_window(link, records, Direction.INGRESS, key)
+        grid is compared. Certified records are checked against the certifier's `key` in its `session`, and their heads
+        against `params`."""
+        by_window = _by_window(link, records, Direction.INGRESS, key, session)
         if params is None and any(isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
             raise ValueError("certified ingress records are checked against the grid parameters: pass params")
         out = []
         for w in range(windows):
             found = by_window.get(w, [])
-            violation = _status_violation(found, key)
+            violation = _status_violation(found, key, session)
             if violation is None and isinstance(found[0], CertifiedRecord):
                 h = found[0].head
                 if ((h.buckets, h.allocation, h.frame_bytes, h.bucket_ms)
@@ -144,15 +146,16 @@ class Audit:
         return [v for v in self.verdicts if not v.accepted]
 
 
-def _by_window(link: str, records: Sequence[Published], direction: Direction,
-               key: PublicKey | None) -> dict[int, list[Published]]:
+def _by_window(link: str, records: Sequence[Published], direction: Direction, key: PublicKey | None,
+               session: bytes | None) -> dict[int, list[Published]]:
     """The link's records by window. A certificate names its direction, so one for the other direction is another
     link-window's."""
     by_window: dict[int, list[Published]] = defaultdict(list)
     for r in records:
         if isinstance(r, CertifiedRecord):
-            if key is None:
-                raise ValueError("certified records are checked against the network certifier's public key: pass key")
+            if key is None or session is None:
+                raise ValueError("certified records are checked against the network certifier's public key in its "
+                                 "session: pass key and session")
             if r.direction is not direction:
                 continue
         if r.link == link:
@@ -160,7 +163,7 @@ def _by_window(link: str, records: Sequence[Published], direction: Direction,
     return by_window
 
 
-def _status_violation(found: Sequence[Published], key: PublicKey | None) -> str | None:
+def _status_violation(found: Sequence[Published], key: PublicKey | None, session: bytes | None) -> str | None:
     """The violations every link-window can have, in order: no record, more than one, a certificate that doesn't verify,
     a record settled after the deadline, or an incomplete status."""
     if not found:
@@ -169,7 +172,7 @@ def _status_violation(found: Sequence[Published], key: PublicKey | None) -> str 
         return "duplicate"
     record = found[0]
     if isinstance(record, CertifiedRecord):
-        if not record.verify(key):
+        if not record.verify(key, session):
             return "signature"
         if not record.head.deadline:
             return "no-verdict"

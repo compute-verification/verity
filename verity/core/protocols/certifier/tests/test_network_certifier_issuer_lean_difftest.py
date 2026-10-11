@@ -1,7 +1,7 @@
 """The difftest of `certificate.Issuer` against the Lean package `certifier_device`'s `Issuer.certify`: the Python half.
 
 `verity/core/devices/certifier/lean/scripts/issuer_vectors.py` writes 160 LMS keys with calls to one issuer
-on each, and what this package's real `certificate.Issuer` does with them, its signer at the leaf the host reserves for
+on each in a certifier session (its id 32 bytes, or 31 or 33, which the issuer refuses), and what this package's real `certificate.Issuer` does with them, its signer at the leaf the host reserves for
 each call (the parameters digest, the certified record or none, `verify` under the key and after a tamper, and the
 issuer's `refused`). `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`, about a
 minute interpreted, since every key and signature is hashed by the Lean side's SHA-512):
@@ -45,7 +45,10 @@ def test_the_generator_covers_what_it_says():
     malformed = Counter()
     tampers = Counter()
     after_refusal = 0
+    sessions = Counter()
     for inst, res in zip(insts, results, strict=True):
+        session = len(bytes.fromhex(inst["session"]))
+        sessions[session] += 1
         refused = [[c["record"]["link"], c["direction"], c["record"]["window"]] for c, r in zip(inst["calls"], res["calls"])
                    if r["certify"] is not None and r["certify"]["certified"] is None]
         assert res["refused"] == refused
@@ -55,8 +58,9 @@ def test_the_generator_covers_what_it_says():
                 malformed[c["malformed"], r["certify"] is None] += 1
             if r["certify"] is None:
                 calls["record refused"] += 1
-                assert c["malformed"] is not None
+                assert c["malformed"] is not None or session != 32
                 continue
+            assert session == 32
             certified = r["certify"]["certified"]
             if certified is None:
                 calls["leaf refused"] += 1
@@ -78,3 +82,4 @@ def test_the_generator_covers_what_it_says():
         for deadline in [True, False]:
             assert calls["certified", direction, False, deadline] > 0
     assert calls["certified", "egress", True, True] > 0
+    assert set(sessions) == {31, 32, 33} and sessions[32] > 100

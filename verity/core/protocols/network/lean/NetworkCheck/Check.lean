@@ -4,24 +4,25 @@ import Lms.Verify
 import CoreProtocol.Cli
 
 /-!
-# The network certificate check, a core protocol: `verity/network-certificate/v2`
+# The network certificate check, a core protocol: `verity/network-certificate/v3`
 
 The auditor's check of one spatial unit's certified link-windows (record v2, `certificate.py`), as `audit.py`'s `Audit`
 runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each against the
-network certifier's public key (`LmsKey`). The id names the record version it checks; the message a certificate signs keeps
-its own tag, `verity/network-certificate/v1`.
+network certifier's public key (`LmsKey`) in the certifier session the parameters name. The id is the check's; the message
+a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2` (`messageTag`).
 
 **Params**, canonical JSON:
 
     {"egress": {"grid": G, "links": [link, …]}, "ingress": {"grid": G, "links": [link, …]},
-     "key": hex(I ‖ T[1]), "lms": {"H": h, "N": n, "W": w, "toy": bool},
+     "key": hex(I ‖ T[1]), "lms": {"H": h, "N": n, "W": w, "toy": bool}, "session": hex(session),
      "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": W}
     G = {"allocation": r, "bucket_ms": τ_b, "buckets": T, "frame_bytes": B, "queue_capacity": Q}
 
 The spatial unit's boundary links by direction, each list duplicate-free, a name at most 65,535 UTF-8 bytes, at least one
 link in all; the grid parameters of each direction (`GridParams`, with T, r, B and τ_b u32s, since a record encodes them so,
 and every value ≥ 1); Σ_sync (`SyncSet`: non-empty, every δ and every ρ = num/den listed once, num and den ≥ 1); the W ≥ 1
-windows checked; the LMS parameters (`lms.Params`) and the public key, 16 + N bytes.
+windows checked; the LMS parameters (`lms.Params`) and the public key, 16 + N bytes; and the certifier session's id, the 32
+bytes the challenger drew for the certifier's session, which every certificate's message binds.
 
 **Commitment**: what the auditor holds before the check, the unit's certified records (`CertifiedRecord`: the record head
 and the certificate that signs it), each in `service.encode`'s bytes, concatenated:
@@ -48,7 +49,8 @@ the parameters (another number of links or of syncs, a payload of other than B b
 * `no-verdict`: no record for it, so no certificate (a refused signer issues none), or a head not settled by the deadline;
 * `duplicate`: more than one record;
 * `signature`: the certificate is not the key's (its I), names another link, direction or window than the head, signs
-  another digest than the head's, or its LMS signature doesn't verify over `certificate_message`;
+  another digest than the head's, or its LMS signature doesn't verify over `certificate_message` in the parameters'
+  session (a certificate of another session of the certifier included);
 * `status:<reason>`: the signed status is not complete;
 * `advice` (egress): the declared sync is outside Σ_sync or not the spatial unit's, the first egress link's;
 * `mismatch`: on egress, the signed digest is not that of `record_head` of the Program's grid under the declared syncs
@@ -74,7 +76,7 @@ open Lean (Json toJson)
 open Flock (V)
 open NetworkCertifier (ClockSync LogicalFrame expectedRow)
 
-def protocolId : String := "verity/network-certificate/v2"
+def protocolId : String := "verity/network-certificate/v3"
 def commitmentTag : String := "verity-network-certifier/certificates/v2"
 
 /-- The grid parameters of one direction (`grid.GridParams`). -/
@@ -89,6 +91,7 @@ structure Params where
   syncSet : NetworkCertifier.SyncSet
   lms : Lms.Params
   key : ByteArray
+  session : ByteArray
 
 /-- `certificate.Certificate`. -/
 structure Certificate where
@@ -188,9 +191,11 @@ def paramsOf (j : Json) : V Params := do
     (← Flock.J.bool l "toy" "lms")
   let key ← Flock.unhex (← Flock.J.str j "key" "the object")
   unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
+  let session ← Flock.unhex (← Flock.J.str j "session" "the object")
+  unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
   pure { egress, ingress, windows, grid := ← gridOf (← Flock.J.get e "grid" "egress") "egress.grid",
          ingressGrid := ← gridOf (← Flock.J.get i "grid" "ingress") "ingress.grid",
-         syncSet := ← syncSetOf (← Flock.J.get j "sync_set" "the object"), lms, key }
+         syncSet := ← syncSetOf (← Flock.J.get j "sync_set" "the object"), lms, key, session }
 
 section Commitment
 
@@ -292,8 +297,9 @@ def inSyncSet (ss : NetworkCertifier.SyncSet) (s : ClockSync) : Bool := decide (
 def manifestSet (ss : NetworkCertifier.SyncSet) : NetworkCheck.SyncSet :=
   ⟨ss.deltas.toArray.map Int.ofNat, ss.rhos.toArray.map fun ρ => (ρ.num, ρ.den)⟩
 
-/-- `CertifiedRecord.verify` under `LmsKey`: the certificate is the key's, names the head's link-window, signs the head's
-digest, and its signature verifies over the message; a signature that doesn't decode is false. -/
+/-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate is the key's, names the head's
+link-window, signs the head's digest, and its signature verifies over the message in that session; a signature that
+doesn't decode is false. -/
 def verifies (p : Params) (r : Certified) : Bool :=
   let c := r.certificate
   let h := r.head
@@ -301,7 +307,8 @@ def verifies (p : Params) (r : Certified) : Bool :=
     (match h.digest with
      | .ok d => c.digest == d
      | .error _ => false) &&
-    match certificateMessage c.keyId c.link c.direction c.window c.digest, Lms.Signature.decode p.lms c.signature with
+    match certificateMessage c.keyId p.session c.link c.direction c.window c.digest,
+        Lms.Signature.decode p.lms c.signature with
     | .ok m, .ok sig => (Lms.verify p.lms p.key m sig).toOption == some true
     | _, _ => false
 

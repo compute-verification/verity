@@ -20,7 +20,8 @@ is compared between the verifiers only: the recorded runs had no certified audit
 ones mutate one published link-window of each run (the first link-window both verifiers accepted, of the first audit
 that checked an egress link) and check the mutated link again with a fresh audit of each verifier: drop its record
 (`no-verdict`), duplicate it (`duplicate`), flip a byte of its committed digest, change one slot of its raw grid
-(`mismatch`), give its certified head a certificate signing the next window (`signature`), make its status incomplete
+(`mismatch`), give its certified head a certificate signing the next window or one of another of the certifier's sessions
+(`signature`), make its status incomplete
 (`status:…`), declare a sync outside Σ_sync (`advice`) or one other than the spatial unit's (`advice`, the unit's clock
 set by a link checked before it with no records), and on the ingress link drop, duplicate or fault its record. A control
 passes when both verifiers give the same verdict on every link-window and reject the mutated one; one both accept, or on
@@ -99,14 +100,15 @@ def recording(base: type, sink: list, stop_after_ingress: int = 0) -> type:
         return audit.__dict__.setdefault("_recording", next(_serial))
 
     class Recording(base):
-        def check_link(self, link, records, frames, syncs, sync_set, params, key=None):
-            v = super().check_link(link, records, frames, syncs, sync_set, params, key)
-            sink.append((tag(self), "egress", (link, list(records), frames, list(syncs), sync_set, params, key), list(v)))
+        def check_link(self, link, records, frames, syncs, sync_set, params, key=None, session=None):
+            v = super().check_link(link, records, frames, syncs, sync_set, params, key, session)
+            sink.append((tag(self), "egress", (link, list(records), frames, list(syncs), sync_set, params, key, session),
+                         list(v)))
             return v
 
-        def check_ingress_link(self, link, records, windows, key=None, params=None):
-            v = super().check_ingress_link(link, records, windows, key, params)
-            sink.append((tag(self), "ingress", (link, list(records), windows, key, params), list(v)))
+        def check_ingress_link(self, link, records, windows, key=None, params=None, session=None):
+            v = super().check_ingress_link(link, records, windows, key, params, session)
+            sink.append((tag(self), "ingress", (link, list(records), windows, key, params, session), list(v)))
             if stop_after_ingress and sum(c[1] == "ingress" for c in sink) == stop_after_ingress:
                 raise AuditDone
             return v
@@ -182,8 +184,16 @@ def _change_slot(record: Record, frame_bytes: int) -> Record:
 
 def _other_window_certificate(c: CertifiedRecord, signer: replay.ReplaySigner) -> CertifiedRecord:
     h, w = c.head, c.head.window + 1
-    sig = signer.sign(certificate_message(signer.key_id, h.link, h.direction, w, h.digest()))
+    sig = signer.sign(certificate_message(signer.key_id, replay.REPLAY_SESSION, h.link, h.direction, w, h.digest()))
     return CertifiedRecord(h, Certificate(signer.key_id, h.link, h.direction, w, h.digest(), sig))
+
+
+def _other_session_certificate(c: CertifiedRecord, signer: replay.ReplaySigner) -> CertifiedRecord:
+    """The certificate the same key gives the same head in another of the certifier's sessions."""
+    h = c.head
+    other = bytes(b ^ 0xFF for b in replay.REPLAY_SESSION)
+    sig = signer.sign(certificate_message(signer.key_id, other, h.link, h.direction, h.window, h.digest()))
+    return CertifiedRecord(h, Certificate(signer.key_id, h.link, h.direction, h.window, h.digest(), sig))
 
 
 def _verdicts(cls: type, calls: Sequence[tuple[str, tuple]]) -> list[tuple[str, int, str | None]]:
@@ -202,7 +212,7 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
     egress = [c for c in egress if any(v.accepted for v in c[3])] or egress
     if not egress:
         return []
-    owner, _, (link, records, frames, syncs, sync_set, params, key), vs = egress[0]
+    owner, _, (link, records, frames, syncs, sync_set, params, key, session), vs = egress[0]
     w = next((v.window for v in vs if v.accepted), None)
     clean = "accepted"
     if w is None:
@@ -220,7 +230,7 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
     parameters = parameters_digest(params, sync_set)
     tests: list[tuple[str, str, list]] = []
     target = next((r for r in raw if r.window == w), None)
-    honest = [("egress", (link, records, frames, syncs, sync_set, params, key))]
+    honest = [("egress", (link, records, frames, syncs, sync_set, params, key, session))]
     baseline = {side: next((v for l, x, v in _verdicts(cls, honest) if l == link and x == w), "absent")
                 for side, cls in (("python", py_audit.Audit), ("lean", lean_cls))}
     if raw and target is not None:
@@ -237,25 +247,28 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
         flipped = [dataclasses.replace(c, digest=_flip_hex(c.digest)) if c.window == w else c for c in committed]
         tests.append(("committed-digest-byte", "mismatch",
                       [("egress", (link, flipped, frames, syncs, sync_set, params, None))]))
-        issuer = Issuer(signer)
+        issuer = Issuer(signer, replay.REPLAY_SESSION)
         certified = [issuer.certify(r, Direction.EGRESS, params, parameters) for r in raw]
-        swapped = [_other_window_certificate(c, signer) if c.window == w else c for c in certified]
-        tests.append(("certificate-other-window", "signature",
-                      [("egress", (link, swapped, frames, syncs, sync_set, params, signer.public_key()))]))
+        for name, change in (("certificate-other-window", _other_window_certificate),
+                             ("certificate-other-session", _other_session_certificate)):
+            swapped = [change(c, signer) if c.window == w else c for c in certified]
+            tests.append((name, "signature", [("egress", (link, swapped, frames, syncs, sync_set, params,
+                                                          signer.public_key(), replay.REPLAY_SESSION))]))
     outside = ClockSync(max(sync_set.deltas) + 1, syncs[w].rho)
     tests.append(("sync-outside-set", "advice", [("egress", (link, records, frames,
                                                              [outside if i == w else s for i, s in enumerate(syncs)],
-                                                             sync_set, params, key))]))
+                                                             sync_set, params, key, session))]))
     alternative = next((ClockSync(d, r) for d in sync_set.deltas for r in sync_set.rhos
                         if ClockSync(d, r) != syncs[w]), None)
     if alternative is not None:
         unit = [alternative if i == w else s for i, s in enumerate(syncs)]
         tests.append(("sync-not-units", "advice", [("egress", ("unit-clock", [], [], unit, sync_set, params, None)),
-                                                   ("egress", (link, records, frames, syncs, sync_set, params, key))]))
+                                                   ("egress", (link, records, frames, syncs, sync_set, params, key,
+                                                               session))]))
     ingress = [c for c in calls if c[0] == owner and c[1] == "ingress" and c[3]]
     ilink, w_in = None, 0
     if ingress:
-        ilink, irecords, windows, ikey, iparams = ingress[0][2]
+        ilink, irecords, windows, ikey, iparams, isession = ingress[0][2]
         w_in = next((v.window for v in ingress[0][3] if v.accepted), 0)
         iraw = [r for r in irecords if r.link == ilink and isinstance(r, Record)]
         itarget = next((r for r in iraw if r.window == w_in), None)

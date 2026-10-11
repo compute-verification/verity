@@ -1,4 +1,4 @@
-"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v1` (`NetworkCheck.Records`, the
+"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v2` (`NetworkCheck.Records`, the
 `network-records` executable of `verity/core/protocols/network/lean`), which `audit.py` is the reference for.
 
 `Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
@@ -14,11 +14,11 @@ and a call that one answers and the other raises on raises. Each call is one uni
 - `check_ingress_link`: the ingress link `[link]` alone, with this call's records of `link`, a certified one only if it is
   ingress.
 
-The grid parameters, Σ_sync and key the call doesn't read (the ingress grid of an egress call, say, or the key when no
-certified record of the link is in it) are placeholders. Anything the Lean protocol can't state (a key other than an
-`LmsKey` for a certified record, a raw grid that isn't a tuple of tuples of bytes or `None`, a window or a grid field
-outside its integer width, a frame of other than B bytes) raises `ValueError`, as does a call `audit.Audit` refuses; the
-exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
+The grid parameters, Σ_sync, key and session the call doesn't read (the ingress grid of an egress call, say, or the key
+and the session when no certified record of the link is in it) are placeholders. Anything the Lean protocol can't
+state (a key other than an `LmsKey` for a certified record, a raw grid that isn't a tuple of tuples of bytes or `None`,
+a window or a grid field outside its integer width, a frame of other than B bytes, a session id not 32 bytes) raises
+`ValueError`, as does a call `audit.Audit` refuses; the exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit.
@@ -54,6 +54,7 @@ BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake"
 RAW, COMMITTED, CERTIFIED = 0, 1, 2
 DISAGREEMENT = "disagreement"
 _KEY = LmsKey(lms.Params(8, 8, 1, toy=True), bytes(24))
+_SESSION = bytes(lms.SESSION_BYTES)
 _SYNC_SET = SyncSet((0,), (1,))
 
 
@@ -119,14 +120,15 @@ def _sync_json(s: ClockSync) -> list[int]:
 
 
 def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]]], ingress: Sequence[str], windows: int,
-         grid: GridParams, ingress_grid: GridParams, sync_set: SyncSet, key: LmsKey,
+         grid: GridParams, ingress_grid: GridParams, sync_set: SyncSet, key: LmsKey, session: bytes,
          records: Sequence[Published]) -> dict:
-    """A `serve` case of `verity/network-records/v1`: the unit's egress links with their frames and syncs, its ingress
-    links, and the records."""
+    """A `serve` case of `verity/network-records/v2`: the unit's egress links with their frames and syncs, its ingress
+    links, the certifier's key and session, and the records."""
     p = key.params
     params = {"egress": {"grid": _grid_json(grid), "links": [l for l, _, _ in egress]},
               "ingress": {"grid": _grid_json(ingress_grid), "links": list(ingress)},
               "key": key.public.hex(), "lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy},
+              "session": bytes(session).hex(),
               "sync_set": {"deltas": list(sync_set.deltas),
                            "rhos": [[r.numerator, r.denominator] for r in sync_set.rhos]},
               "windows": windows}
@@ -213,21 +215,22 @@ SERVER = Server()
 atexit.register(SERVER.close)
 
 
-def _need_key(records: Sequence[Published], key: PublicKey | None) -> None:
-    if key is None and any(isinstance(r, CertifiedRecord) for r in records):
-        raise ValueError("certified records are checked against the network certifier's public key: pass key")
+def _need_key(records: Sequence[Published], key: PublicKey | None, session: bytes | None) -> None:
+    if (key is None or session is None) and any(isinstance(r, CertifiedRecord) for r in records):
+        raise ValueError("certified records are checked against the network certifier's public key in its session: "
+                         "pass key and session")
 
 
 def _mine(link: str, records: Sequence[Published], direction: Direction) -> list[Published]:
     return [r for r in records if r.link == link and not (isinstance(r, CertifiedRecord) and r.direction is not direction)]
 
 
-def _lean_key(records: Sequence[Published], key: PublicKey | None) -> LmsKey:
+def _lean_key(records: Sequence[Published], key: PublicKey | None, session: bytes | None) -> tuple[LmsKey, bytes]:
     if not any(isinstance(r, CertifiedRecord) for r in records):
-        return _KEY
+        return _KEY, _SESSION
     if not isinstance(key, LmsKey):
         raise ValueError(f"outside the Lean audit's domain: certified records under a {type(key).__name__}, not an LmsKey")
-    return key
+    return key, session
 
 
 def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) -> list[Verdict]:
@@ -267,8 +270,8 @@ class Audit:
 
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
-                   key: PublicKey | None = None) -> list[Verdict]:
-        _need_key(records, key)
+                   key: PublicKey | None = None, session: bytes | None = None) -> list[Verdict]:
+        _need_key(records, key, session)
         frames, syncs = list(frames), list(syncs)
         lean = []
         if syncs:
@@ -276,25 +279,28 @@ class Audit:
             clock = [self.syncs.get(w, s) for w, s in enumerate(syncs)]
             unit = "clock" if link == "" else ""
             out = self.server.verdicts(case([(unit, [], clock), (link, frames, syncs)], [], len(syncs), params, params,
-                                            sync_set, _lean_key(mine, key), mine))
+                                            sync_set, *_lean_key(mine, key, session), mine))
             lean = _verdicts(out, Direction.EGRESS, link, len(syncs))
-        vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key))
+        vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key,
+                                                               session))
         for w, s in enumerate(syncs):
             self.syncs.setdefault(w, s)
         return vs
 
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
-                           params: GridParams | None = None) -> list[Verdict]:
-        _need_key(records, key)
+                           params: GridParams | None = None, session: bytes | None = None) -> list[Verdict]:
+        _need_key(records, key, session)
         mine = _mine(link, records, Direction.INGRESS)
         if params is None and any(isinstance(r, CertifiedRecord) for r in mine):
             raise ValueError("certified ingress records are checked against the grid parameters: pass params")
         lean = []
         if windows > 0:
             grid = params or GridParams(1, 1, 1)
-            out = self.server.verdicts(case([], [link], windows, grid, grid, _SYNC_SET, _lean_key(mine, key), mine))
+            out = self.server.verdicts(case([], [link], windows, grid, grid, _SYNC_SET, *_lean_key(mine, key, session),
+                                            mine))
             lean = _verdicts(out, Direction.INGRESS, link, windows)
-        return self._beside(lean, lambda: self.python.check_ingress_link(link, records, windows, key, params))
+        return self._beside(lean, lambda: self.python.check_ingress_link(link, records, windows, key, params,
+                                                                         session))
 
     @property
     def accepted(self) -> bool:

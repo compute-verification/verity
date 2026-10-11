@@ -34,7 +34,7 @@ def _cases(p: R.Params) -> tuple[list, list[int]]:
     bad_I, bad_root = _flip(pk[:16]) + pk[16:], pk[:16] + _flip(pk[16:])
     rows, want = [], []
     for q in range(2 ** p.H):
-        m = R.certificate_message(k.I, "responses", "egress", q, b"record")
+        m = R.certificate_message(k.I, bytes(32), "responses", "egress", q, b"record")
         s = R.sign_at(k, q, m)
         lv = q % p.H
         cases = [(pk, m, s),

@@ -53,6 +53,10 @@ def test_the_generator_covers_what_it_says():
     assert None in heads and heads.count(None) < len(heads) // 2
     messages = [m for r in results for m in r["messages"]]
     assert None in messages and messages.count(None) < len(messages) // 2
+    by_session = [(len(q[1]) // 2, m) for i, r in zip(insts, results) for q, m in zip(i["messages"], r["messages"])]
+    for n in (31, 33):  # the session-length refusal, pinned to agree with Lean's
+        assert any(k == n for k, _ in by_session) and all(m is None for k, m in by_session if k == n)
+    assert any(k == 32 and m is not None for k, m in by_session)
     assert any(r["nodes"] for r in results)
     links = {i["link"] for i in insts} | {h["link"] for i in insts for h in i["heads"]}
     assert any(not link.isascii() for link in links) and "" in links and any("\x00" in link for link in links)

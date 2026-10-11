@@ -2,9 +2,10 @@
 harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
-`check_link` on each egress link, then `check_ingress_link` on each ingress link, under the certifier's `LmsKey`. The cases
-are generated spatial units: an honest network certifier (`grid.Certifier` driven by `schedule.run_shaper` on the egress
-links, fed directly on the ingress links) whose records `certificate.Issuer` signs with a small LMS key, then one change
+`check_link` on each egress link, then `check_ingress_link` on each ingress link, under the certifier's `LmsKey` in its
+session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
+`schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
+a small LMS key in a drawn certifier session, then one change
 (`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence."""
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ from verity.core.protocols.certifier.service import encode
 LEAN = Path(__file__).resolve().parents[1] / "lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-certificate/v2"
+ID = "verity/network-certificate/v3"
 COMMITMENT_TAG = "verity-network-certifier/certificates/v2"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 REASONS = {code: reason for reason, code in STATUS_CODES.items()}
@@ -52,6 +53,7 @@ class Unit:
     ingress_grid: GridParams
     sync_set: SyncSet
     key: LmsKey
+    session: bytes
 
 
 def _get(j, k, ctx="the object"):
@@ -114,13 +116,17 @@ def params(j) -> Unit:
     key = P.unhex(_of(_get(j, "key"), str, "key"))
     if len(key) != 16 + lp.N:
         raise D.Reject(f"an LMS public key is {16 + lp.N} bytes")
+    session = P.unhex(_of(_get(j, "session"), str, "session"))
+    if len(session) != lms.SESSION_BYTES:
+        raise D.Reject(f"a certifier session id is {lms.SESSION_BYTES} bytes")
     ss = _get(j, "sync_set")
     deltas = [_nat(x, "sync_set.deltas") for x in _of(_get(ss, "deltas", "sync_set"), list, "deltas")]
     rhos = [_rho(x, "sync_set.rhos") for x in _of(_get(ss, "rhos", "sync_set"), list, "rhos")]
     if not deltas or not rhos or len(set(deltas)) < len(deltas) or len(set(rhos)) < len(rhos):
         raise D.Reject("sync_set: non-empty, each delta and each rho listed once")
     return Unit(egress, ingress, windows, _grid(_get(e, "grid", "egress"), "egress.grid"),
-                _grid(_get(i, "grid", "ingress"), "ingress.grid"), SyncSet(tuple(deltas), tuple(rhos)), LmsKey(lp, key))
+                _grid(_get(i, "grid", "ingress"), "ingress.grid"), SyncSet(tuple(deltas), tuple(rhos)), LmsKey(lp, key),
+                session)
 
 
 def commitment(b: bytes) -> tuple[list[CertifiedRecord], bytes]:
@@ -201,9 +207,11 @@ def check(u: Unit, c, e) -> tuple:
     audit = Audit()
     verdicts = []
     for link, (frames, syncs) in zip(u.egress, e):
-        verdicts += [("egress", v) for v in audit.check_link(link, records, frames, syncs, u.sync_set, u.grid, u.key)]
+        verdicts += [("egress", v) for v in audit.check_link(link, records, frames, syncs, u.sync_set, u.grid, u.key,
+                                                                     u.session)]
     for link in u.ingress:
-        verdicts += [("ingress", v) for v in audit.check_ingress_link(link, records, u.windows, u.key, u.ingress_grid)]
+        verdicts += [("ingress", v) for v in audit.check_ingress_link(link, records, u.windows, u.key, u.ingress_grid,
+                                                                              u.session)]
     for d, v in verdicts:
         if v.violation not in (None, "no-verdict"):
             return "reject", f"{d} link {v.link} window {v.window}: {v.violation}"
@@ -239,7 +247,8 @@ def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
 
 
 class _Signer:
-    """A test signer without leaf state: its n-th signature is at leaf n mod 2^H. It refuses while `refuse` is set."""
+    """A test signer without leaf state: it starts any session, and its n-th signature is at leaf n mod 2^H. It refuses
+    to sign while `refuse` is set."""
 
     def __init__(self, key: lms.PrivateKey):
         self.key, self.n, self.refuse = key, 0, False
@@ -247,6 +256,9 @@ class _Signer:
     @property
     def key_id(self) -> bytes:
         return self.key.I
+
+    def start(self, session: bytes) -> None:
+        pass
 
     def sign(self, message: bytes) -> bytes:
         if self.refuse:
@@ -274,7 +286,7 @@ EXPECT = {
     "missing": "no-verdict", "refused": "no-verdict", "deadline": "no-verdict",
     "status": "status", "duplicate": "duplicate",
     "replay-window": "signature", "replay-link": "signature", "replay-direction": "signature", "other-key": "signature",
-    "forged": "signature", "tampered": "signature",
+    "other-session": "signature", "forged": "signature", "tampered": "signature",
     "advice-outside": "advice", "advice-unit": "advice",
     "late": "mismatch", "frames": "mismatch", "parameters": "mismatch", "ingress-grid": "mismatch",
     "params": "params", "commitment": "commitment", "evidence": "evidence", "case": "case",
@@ -340,6 +352,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     ingress = list(names[:ni] if m == "replay-direction" or draw(st.booleans()) else names[ne:ne + ni])
     ki = draw(st.integers(0, len(KEYS) - 1))
     key = _key(ki)
+    session = draw(st.binary(min_size=lms.SESSION_BYTES, max_size=lms.SESSION_BYTES))
     unit = [ClockSync(draw(st.sampled_from(deltas)), draw(st.sampled_from(rhos))) for _ in range(W)]
     syncs = {l: list(unit) for l in egress}
     frames = {}
@@ -403,7 +416,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         ingress_parameters = parameters_digest(certified_grid)
 
     signer = _Signer(key)
-    issuer = Issuer(signer)
+    issuer = Issuer(signer, session)
     records: list[CertifiedRecord] = []
     raws: dict[tuple[str, str, int], tuple[Record, GridParams]] = {}
 
@@ -450,7 +463,15 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         same_id = draw(st.booleans())
         k2 = _key(ki, 1, same_id)
         c = dataclasses.replace(r.certificate, key_id=k2.I)
-        records[at] = CertifiedRecord(r.head, dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message).encode()))
+        records[at] = CertifiedRecord(r.head, dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
+    elif m == "other-session" and at is not None:
+        # the same key's certificate of the same record in another of the certifier's sessions
+        r = records[at]
+        c = r.certificate
+        other = draw(st.sampled_from([_flip(session, n), bytes(lms.SESSION_BYTES), bytes(range(lms.SESSION_BYTES))])
+                     .filter(lambda s: s != session))
+        records[at] = CertifiedRecord(r.head, dataclasses.replace(
+            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(other)).encode()))
     elif m == "forged" and at is not None:
         r = records[at]
         sig = r.certificate.signature
@@ -473,7 +494,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     elif m == "duplicate" and at is not None:
         r = records[at]
         records.append(draw(st.sampled_from([r, CertifiedRecord(r.head, dataclasses.replace(
-            r.certificate, signature=lms.sign_at(key, 1, r.certificate.message).encode()))])))
+            r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session)).encode()))])))
     elif m == "extra":
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))
         extra = draw(st.sampled_from([Record("zz", 0, empty, COMPLETE), Record(tl, W, empty, COMPLETE)]))
@@ -487,6 +508,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
                    "ingress": {"grid": _grid_json(ingress_grid), "links": ingress},
                    "key": lms.public_key(key).hex(), "lms": {"H": KEYS[ki][2], "N": KEYS[ki][0], "W": KEYS[ki][1],
                                                               "toy": KEYS[ki][3]},
+                   "session": session.hex(),
                    "sync_set": {"deltas": deltas, "rhos": [[r.numerator, r.denominator] for r in rhos]}, "windows": W}
     return Drawn(m, n, case_params, list(records), raws, egress, frames, syncs, target, egress_target)
 
@@ -529,6 +551,8 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"egress": p["egress"] | {"links": ["a", "a"]}}, p | {"ingress": p["ingress"] | {"links": [1]}},
            p | {"egress": p["egress"] | {"links": ["x" * (1 << 16)]}}, p | {"egress": "a"},
            p | {"key": p["key"][:-2]}, p | {"key": p["key"] + "00"},
+           p | {"session": p["session"][:-2]}, p | {"session": p["session"] + "00"}, p | {"session": ""},
+           p | {"session": 0},
            p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"N": 8, "toy": False}},
            p | {"lms": p["lms"] | {"toy": 0}},
            p | {"sync_set": p["sync_set"] | {"deltas": []}}, p | {"sync_set": p["sync_set"] | {"rhos": []}},

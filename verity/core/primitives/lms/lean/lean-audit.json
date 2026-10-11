@@ -9,8 +9,8 @@
    "why": "600 instances, keys at every parameter set Params admits (N = 64 and TOY_N, W = 1, 2, 4, 8, heights 1 to 5, and DEPLOYED's height 20, 11 and 30 under a stand-in tree), their signatures and tampered ones, on which Lms.Verify gives what verity/ml/crypto/lms.py gives: Params' admission, Signature.decode, digits, root_of and every accept and reject of verify",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "600"],
    "data": {
-    "difftest/instances.jsonl": "6c1d357b724afe7b726851f3f9c93c696f870fb4fba4fc2cb313b163a1df26d4",
-    "difftest/python.jsonl": "3a3b90a476e5ebdab404d505ec8fa1ada86369a128b3e3d3c030e30ad56c9d7a"
+    "difftest/instances.jsonl": "86c93571a0ea5af1223f9b47c9f6dafc13ec653fc3c8e6f0030706841f8e74bb",
+    "difftest/python.jsonl": "44ca0eae631f083c247137243afcb9b68e9d37efcda27b648637e2f250a590d1"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
@@ -18,8 +18,8 @@
    "why": "80 instances, keys at N = 64 (W = 1, 2, 4) and at TOY_N (every W) of heights 1 to 4, from keygen and from key, with seeds and identifiers of the right length and of others, and parameter sets Params refuses, on which Lms.Sign gives what verity/ml/crypto/lms.py gives: the public key, each sign_at's signature byte for byte (every leaf, or a sample, and leaves past 2^H refused) and verify's verdict on it",
    "args": ["{sign/instances.jsonl}", "{sign/python.jsonl}", "80"],
    "data": {
-    "sign/instances.jsonl": "c145a6069c742703884b43547c580c7ed04053ec680d2fac52db3f7cd64d94b8",
-    "sign/python.jsonl": "ba2d3dbbfab7c383e1d680d1e03389216a9f87323dec4658dc585c3489d75282"
+    "sign/instances.jsonl": "e877ca414fb8b5397804a2774d678cd4cf88b5d47fe5308136267bb661fa64d8",
+    "sign/python.jsonl": "99cdbdb4bedd91ab5e4b0b7275722665d94453178a4cece99ea26e684b881159"
    },
    "generate": ["python3", "scripts/sign_vectors.py", "{repo}", "--out", "{out}"]
   }
