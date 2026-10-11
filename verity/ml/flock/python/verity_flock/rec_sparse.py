@@ -55,6 +55,11 @@ the reads of ``claim`` and ``tau`` are the statement's row reads, outside this D
 
 `sparse_ref` is the reference on words. The body computes the products of a message by a verifier value as one
 ``GfResiduals_v1`` (`products_structure`), then the sumchecks' claim chains, Φ's product tree, the selects and the residuals.
+
+**The M0 unit** (`unit_circuit`, named `unit_name`) is the same steps over `forms`, as `rec_residuals`' unit: one input port
+of u16 words per port, one output row. Its ANDs are ``ands`` and `copy_rows`' (leaf sums and committed product operands).
+`stage` writes one statement over a session's reps (`session_rows`, read at `reads`' rows), as `rec_vstage` stages
+InnerRepCheck's parts (`rec_residuals.write_rows`).
 """
 from __future__ import annotations
 
@@ -69,10 +74,13 @@ from verity.ml.circuits.types import Array
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.ml.circuits.boolean.forms import ZERO
+from verity.ml.commitments.gates.sha512 import commit
 
-__all__ = ["Coins", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "definition", "inner_points", "message_ports",
-           "out_words", "port_words", "ports", "products", "products_structure", "reads", "registered_claim", "rows",
-           "session_rows", "sparse_ref", "v_layout", "verifier_row"]
+__all__ = ["Coins", "PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "inner_points",
+           "lowering", "message_ports", "out_words", "port_words", "ports", "products", "products_structure", "reads",
+           "registered_claim", "registrations", "rows", "session_rows", "sparse_ref", "stage", "statement", "subcircuit",
+           "unit_circuit", "unit_name", "v_layout", "verifier_row"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -81,6 +89,8 @@ ROW_BLOCK = 64
 #: H2's rounds: the univariate skip's 6 low row bits
 PRE_ROUNDS = 6
 SKIP = 1 << PRE_ROUNDS
+#: fast100's least m (`rec_algebra.fast100`): `registered_claim` pads a shorter point to it (under --zk, 25: ``pad_to``)
+PAD_TO = 22
 
 
 @dataclass(frozen=True)
@@ -320,20 +330,28 @@ class RegisteredClaim:
     """The claim rep r's instance hands the registered opening: its value is row ``row`` (= r) of the prover's ``claim``
     registration, which the opening reads as a witness element, never as a public value (it depends on the templates), so
     it has no ``value`` and `rec_algebra.run` refuses it as an extra claim; its point is the coins': skip weights
-    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order."""
+    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order, then
+    ``pad`` coordinates the shape fixes at zero (`registered_claim`)."""
 
     row: int
     skip: tuple[int, ...]
     x: tuple[int, ...]
     port: str = "claim"
+    pad: int = 0
     value = None
 
 
-def registered_claim(sh: Shape, c: Coins, row: int) -> RegisteredClaim:
+def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
+    """Rep ``row``'s claim at the coins' point. A point of fewer than ``pad_to`` coordinates (the stacked table of fewer than
+    fast100's least m variables) is padded with zeros in new high variables, the table with zero rows: ``eq(x || 0, b || c)``
+    vanishes off ``c = 0``, so the claim is the table's at the unpadded point. How many is the shape's, never the prover's,
+    and the opening refuses a padded coordinate that is not zero (`rec_algebra._registered`)."""
     point = list(c.rounds[:sh.NU]) + list(c.zeta_p) + list(c.rho)
     if len(point) < PRE_ROUNDS:
         raise ValueError(f"{sh}: a claim point of {len(point)} coordinates, fewer than the skip's {PRE_ROUNDS}")
-    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]))
+    pad = max(0, pad_to - len(point))
+    point += [0] * pad
+    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]), pad=pad)
 
 
 def verifier_row(sh: Shape, c: Coins) -> list[int]:
@@ -598,3 +616,176 @@ RecSparse = CompositeDefinition(
 def definition(NU: int, ELL: int, S_LOG: int, T_LOG: int):
     Shape(NU, ELL, S_LOG, T_LOG)
     return bind(RecSparse, NU=NU, ELL=ELL, S_LOG=S_LOG, T_LOG=T_LOG)
+
+
+# --- the M0 unit -------------------------------------------------------------------------------------------------------------
+
+class _Forms:
+    """`_steps` over `forms`: the products of messages by verifier values leaf-summed per residual
+    (`rec_residuals.residual_forms`), and each other product's operands committed first unless they are already committed
+    bits, so that no AND reads a chain's or a product tree's accumulated sum."""
+
+    def __init__(self, C):
+        self.C = C
+
+    def zero(self):
+        return ZERO
+
+    def muls(self, pairs: list[tuple[list, list]]) -> list[list]:
+        return [G.mul_forms(self.C, commit(self.C, a), commit(self.C, b)) for a, b in pairs]
+
+    def xor(self, a: list, b: list) -> list:
+        return [p ^ q for p, q in zip(a, b, strict=True)]
+
+    def and_(self, a: list, b: list) -> list:
+        return [self.C.AND(p, q) for p, q in zip(a, b, strict=True)]
+
+    def sums(self, groups: list[list[list]]) -> list[list]:
+        return [reduce(self.xor, g) for g in groups]
+
+    def residuals(self, S: dict, w: list, v: list) -> list[list]:
+        from .rec_residuals import residual_forms
+
+        return _elems(residual_forms(self.C, S, w, v), len(S["res"]))
+
+
+def copy_rows(sh: Shape) -> int:
+    """The unit's rows beyond ``ands`` (each one AND with ``B = 1``, `sha512.commit`): 2,187 leaf sums for each of
+    `products_structure`'s residuals of two products or more, and 128 for each product operand that is not already committed
+    bits: H2's running claim each round, H3's from its second round, the operands of Φ's product tree but ``Ũ(r_s)``, and with
+    T > 1 each ``w_t`` (the all-ones type's is one AND when S = 1)."""
+    sh = _shape(sh)
+    S, _ = products_structure(sh)
+    leaf = 3 ** 7 * sum(1 for r in S["res"] if len(r["mul"]) > 1)
+    flags, tree = [True] * (2 * sh.ELL + 1) + [False], 0
+    while len(flags) > 1:
+        k = len(flags) // 2
+        tree += sum(flags[:2 * k])
+        flags = [True] * k + flags[2 * k:]
+    w = (sh.T - (sh.S == 1)) if sh.stacked else 0
+    return leaf + 128 * (PRE_ROUNDS + len(sh.degrees) - 1 + tree + w)
+
+
+def unit_name(sh: Shape) -> str:
+    sh = _shape(sh)
+    return f"rec-sparse/n{sh.NU}-e{sh.ELL}-s{sh.S_LOG}-t{sh.T_LOG}"
+
+
+def unit_circuit(sh: Shape):
+    """The unit over `forms`: inputs ``in0 ..`` (each port's words in `ports`' order, 16 bits each), outputs ``out0 ..
+    out{out_words - 1}``."""
+    from verity.ml.circuits.boolean.forms import Circuit
+
+    sh = _shape(sh)
+    C = Circuit()
+    pw = [n for _, n in ports(sh)]
+    ins = [C.input(f"in{j}", 16) for j in range(sum(pw))]
+    flat = [b for wd in ins for b in wd]
+    at = [16 * sum(pw[:i]) for i in range(len(pw) + 1)]
+    P = {nm: flat[a:b] for (nm, _), a, b in zip(ports(sh), at, at[1:])}
+    bits = _steps(_Forms(C), sh, P)
+    outs = [f"out{j}" for j in range(out_words(sh))]
+    for j, nm in enumerate(outs):
+        C.output(nm, bits[16 * j:16 * j + 16])
+    return C, [f"in{j}" for j in range(len(ins))], outs
+
+
+def lowering(sh: Shape):
+    """`unit_circuit` as M0's unit, named `unit_name`: one u16 row per port, one output row."""
+    from . import ir_lower as IL
+    from .class_statement import ClassDefinition
+
+    sh = _shape(sh)
+    name = unit_name(sh)
+    C, ins, outs = unit_circuit(sh)
+    w_in, w_out = len(ins), len(outs)
+    units = IL.Units(target=None, in_widths=[16] * w_in, out_widths=[16] * w_out, in_src=[[("leaf", p) for p in range(w_in)]],
+                     out_src=[[("ret", p) for p in range(w_out)]], signature=(name,), gates=[], arg_gates=[], ret_gates=[])
+    defn = ClassDefinition(name, tuple(n for _, n in ports(sh)), w_out)
+    return IL.Lowering(name, defn, units, C, IL.layout(C, ins, outs))
+
+
+def subcircuit(sh: Shape):
+    """What `circuit.compose` and `circuit.write` read of a subcircuit: its ports and its Definition, ``RecSparse_v1{shape}``."""
+    from types import SimpleNamespace
+
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.program import Program
+
+    sh = _shape(sh)
+    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")
+    defn = definition(sh.NU, sh.ELL, sh.S_LOG, sh.T_LOG)
+    digest = program_digest(Program(defn))
+    return SimpleNamespace(id=unit_name(sh), template=SimpleNamespace(id="rec-sparse"), inputs=[port(nm) for nm, _ in ports(sh)],
+                           outputs=[port("out")], definition=lambda **_: defn, program_digests=lambda statics: {defn.id: digest})
+
+
+# --- the statement -----------------------------------------------------------------------------------------------------------
+
+V_VALUE = "rec-sparse-v"
+ZERO_VALUE = "rec-sparse-zero"
+
+
+def statement(sh: Shape, n: int):
+    """``RecSparse_v1{shape}`` over ``n`` instances (a session's reps): its Program, partition, unit and circuit text, in
+    `rec_residuals.write_rows`' form (row ports every port but ``v``, ``v`` the verifier's, one output row registered zero)."""
+    import time
+    from types import SimpleNamespace
+
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    from . import circuit as FC
+
+    sh = _shape(sh)
+    t0 = time.perf_counter()
+    defn = definition(sh.NU, sh.ELL, sh.S_LOG, sh.T_LOG)
+    program = P.population_program(defn, n)
+    part = P.partition(program, P.template_instance_query(defn))
+    prog = P.program_sha512(program)
+    low, sub = lowering(sh), subcircuit(sh)
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    return SimpleNamespace(sh=sh, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,
+                           names=[nm for nm, _ in ports(sh) if nm != "v"], v_words=dict(ports(sh))["v"], out_words=out_words(sh),
+                           v_value=V_VALUE, zero_value=ZERO_VALUE, ref=lambda rows, vw: sparse_ref(sh, {**rows, "v": vw}),
+                           build_s=round(time.perf_counter() - t0, 1))
+
+
+def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]]], salts: Mapping | None = None) -> dict:
+    """The prover's registered values of the row ports, from `session_rows`' instances: each port as ``rec-sparse-<port>``, row r
+    rep r's, but ``tau``, the session's one row, and ``claim``, ``rec-claim`` (`rec_outer.CLAIM_VALUE`, which the registered
+    opening reads too). ``salts``: per port, its rows' salts (default fresh)."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from .rec_outer import CLAIM_VALUE
+
+    sh = _shape(sh)
+    out = {}
+    for nm, _ in ports(sh):
+        if nm == "v":
+            continue
+        rows = [list(inst[0][nm])] if nm == "tau" else [list(r[nm]) for r in inst]
+        out[nm] = RG.Registered.commit(program, CLAIM_VALUE if nm == "claim" else f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
+    return out
+
+
+def stage(sh: Shape, inst: Sequence[Mapping[str, list[int]]], out_dir, program: str | None = None, regs: Mapping | None = None,
+          own: Mapping | None = None, evaluate: bool = True) -> dict:
+    """One RecSparse statement over a session's reps, written to ``out_dir`` as `rec_vstage` stages InnerRepCheck's parts
+    (`rec_residuals.write_rows`): ``inst`` is `session_rows`' instances, each row port read at its row of `reads` (τ at row 0,
+    every other port at row r) of the prover's registration (``regs`` by port, the rest `registrations`' under ``program``,
+    default the statement's), ``v`` the verifier's own registration of each rep's row, and ``out`` its zero rows. ``own``: per
+    row port the verifier's own entry, which its reads file names (default the registration's). Returns what the statement
+    costs and holds, and each instance's nonzero residuals (and ``tau`` for a type outside the bucket)."""
+    from .rec_residuals import write_rows
+
+    sh = _shape(sh)
+    n = len(inst)
+    st = statement(sh, n)
+    rd = reads(sh, n)
+    regs = {**registrations(sh, program or st.prog, inst), **(regs or {})}
+    s = write_rows(st, {nm: (regs[nm], rd[nm]) for nm in st.names}, [list(r["v"]) for r in inst], out_dir, evaluate, own)
+    names = residual_names(sh)
+    hits = [[nm for i, nm in enumerate(names) if any(x[8 * i:8 * i + 8])] + (["tau"] if any(x[8 * len(names):]) else [])
+            for x in s.pop("ref")]
+    return {"template": st.defn.id, "unit": unit_name(sh), "instances": n, "products": products(sh), "ands": ands(sh),
+            "nonzero_residuals": hits, **s}
+
