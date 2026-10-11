@@ -52,6 +52,11 @@ def summarize(out: Path) -> dict:
              "cold_tags_ms_p50": cold["tags_ms"]["p50"], "cold_tree_ms_p50": cold["tree_ms"]["p50"],
              "cold_host_e2e_ms_p50": cold["host_e2e_ms"]["p50"], "cold_host_e2e_ms_p99": cold["host_e2e_ms"]["p99"],
              "warm_device_ms_p50": warm["device_ms"]["p50"]}
+        clean = timing.get(f"{key}_clean")
+        if clean:
+            t.update({"clean_device_ms_p50": clean["device_ms"]["p50"], "clean_device_ms_p99": clean["device_ms"]["p99"],
+                      "clean_tags_ms_p50": clean["tags_ms"]["p50"], "clean_host_e2e_ms_p50": clean["host_e2e_ms"]["p50"],
+                      "clean_host_e2e_ms_p99": clean["host_e2e_ms"]["p99"]})
         t["pass_gbs"] = store / (t["cold_device_ms_p50"] * 1e-3) / 1e9
         t["pass_over_raw_read"] = t["cold_device_ms_p50"] / raw
         t["skip_device_ms_p50"] = {f"{r['f']:.2f}": r["device_ms"]["p50"] for r in timing[f"{key}_skip"]}
@@ -60,8 +65,10 @@ def summarize(out: Path) -> dict:
             tags[name] = t
             continue
         bounds = {}
-        deadlines = {"largest": audit.REGEN_FLOOR_NS - 1,
-                     "measured_p99": 50_000 * math.ceil(t["cold_host_e2e_ms_p99"] * 1e6 / 50_000)}
+        p99 = t.get("clean_host_e2e_ms_p99", t["cold_host_e2e_ms_p99"])
+        deadlines = {"largest": audit.REGEN_FLOOR_NS - 1, "measured_p99": 50_000 * math.ceil(p99 * 1e6 / 50_000)}
+        if windows and windows["results"] and windows["results"][0]["deadline_ns"] != audit.REGEN_FLOOR_NS - 1:
+            deadlines["windows"] = windows["results"][0]["deadline_ns"]
         for label, deadline in deadlines.items():
             if deadline >= audit.REGEN_FLOOR_NS:
                 bounds[label] = {"deadline_ns": deadline, "refused": "at or past the rebuild floor"}

@@ -313,44 +313,48 @@ def test_b3_key_is_the_cores():
         assert b3_key(seed) == list(struct.unpack("<8I", B3.key(seed)))
 
 
-def test_b3_staging_gives_each_lane_its_row():
-    """`b3_kernel`'s staging: lane l writes word wd = l & 7 of rows 4i + (l >> 3) at stride `B3S`, then reads words
-    0..7 of row l; every slot is written once per message block."""
+def b3_word(c: int, g: int, wd: int) -> int:
+    """E's u64 word that chunk `c`'s message block `g` holds at position `wd` (−1 is u64be j)."""
+    return 128 * c + 8 * g - 1 + wd
+
+
+def test_b3_staging_gives_each_lane_its_chunk():
+    """`b3_kernel`'s staging: lane l writes word wd = l & 7 of streams s = 4i + (l >> 3) (block s >> 1, chunk s & 1) at
+    stride `B3S`, then reads words 0..7 of stream l; every slot is written once per message block."""
     assert B3S >= 8
-    for g in (0, 1, 31):
-        sm: dict[int, tuple[int, int]] = {}
+    for g in (0, 1, 15):
+        sm: dict[int, tuple[int, int, int]] = {}
         for lane in range(32):
             sub, wd = lane >> 3, lane & 7
             for i in range(8):
-                r = 4 * i + sub
-                assert r * B3S + wd not in sm
-                sm[r * B3S + wd] = (r, 8 * g - 1 + wd)
+                s = 4 * i + sub
+                assert s * B3S + wd not in sm
+                sm[s * B3S + wd] = (s >> 1, s & 1, b3_word(s & 1, g, wd))
         for lane in range(32):
-            assert [sm[lane * B3S + i] for i in range(8)] == [(lane, 8 * g - 1 + i) for i in range(8)]
+            assert [sm[lane * B3S + i] for i in range(8)] == [(lane >> 1, lane & 1, b3_word(lane & 1, g, i))
+                                                              for i in range(8)]
 
 
 def b3_tag(key: list[int], j: int, block: bytes) -> list[int]:
-    """`b3_kernel` for one lane: 32 message blocks of E's words 8g − 1 .. 8g + 6 (word −1 is u64be j), two chunks of
-    16, then words 255 and 256 as the third chunk (16 bytes), the parent of the first two and the root."""
+    """`b3_kernel` for one block's two lanes: lane c hashes chunk c's 16 message blocks (`b3_word`), then the odd lane
+    E's words 255 and 256 as the third chunk (16 bytes) while the even lane forms the parent, then the even lane the
+    root."""
     e8 = struct.unpack("<257Q", block)
     f = B3_FLAG
-    cv: list[int] = []
-    cv0: list[int] = []
-    for g in range(32):
-        words = [e8[8 * g - 1 + wd] if 8 * g - 1 + wd >= 0 else 0 for wd in range(8)]
-        m = [h for x in words for h in (x & M32, x >> 32)]
-        if g == 0:
-            m[0], m[1] = bswap32(j >> 32), bswap32(j & M32)
-        t = g & 15
-        if t == 0:
-            cv = list(key)
-        cv = b3_compress(cv, m, g >> 4, 64,
-                         f["KEYED"] | (f["CHUNK_START"] if t == 0 else 0) | (f["CHUNK_END"] if t == 15 else 0))
-        if g == 15:
-            cv0 = cv
+    cvs = []
+    for c in (0, 1):
+        cv = list(key)
+        for g in range(16):
+            words = [e8[b3_word(c, g, wd)] if b3_word(c, g, wd) >= 0 else 0 for wd in range(8)]
+            m = [h for x in words for h in (x & M32, x >> 32)]
+            if g == 0 and c == 0:
+                m[0], m[1] = bswap32(j >> 32), bswap32(j & M32)
+            cv = b3_compress(cv, m, c, 64,
+                             f["KEYED"] | (f["CHUNK_START"] if g == 0 else 0) | (f["CHUNK_END"] if g == 15 else 0))
+        cvs.append(cv)
     m = [e8[255] & M32, e8[255] >> 32, e8[256] & M32, e8[256] >> 32] + [0] * 12
     cv2 = b3_compress(key, m, 2, 16, f["KEYED"] | f["CHUNK_START"] | f["CHUNK_END"])
-    p = b3_compress(key, cv0 + cv, 0, 64, f["KEYED"] | f["PARENT"])
+    p = b3_compress(key, cvs[0] + cvs[1], 0, 64, f["KEYED"] | f["PARENT"])
     return b3_compress(key, p + cv2, 0, 64, f["KEYED"] | f["PARENT"] | f["ROOT"])
 
 

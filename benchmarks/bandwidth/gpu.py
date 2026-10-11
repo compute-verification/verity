@@ -16,7 +16,9 @@
 
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
 `--deadline-ns` (default the largest `audit.Params` allows), negative controls that tag only part of the store, and one
-window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.
+window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.  Before
+each timed window the prover reads `--scrub-mib` of another buffer (untimed, before the seed), so the window starts with
+L2 clean and holding no part of the store.
 """
 
 from __future__ import annotations
@@ -80,8 +82,9 @@ class Tagger:
         L.bw_alloc.argtypes, L.bw_alloc.restype = [ctypes.c_size_t], vp
         L.bw_free.argtypes = [vp]
         L.bw_memset.argtypes = [vp, i32, ctypes.c_size_t]
+        L.bw_read_scrub.argtypes = [vp, ctypes.c_size_t]
         for f in ("bw_tag_pass", "bw_tag_pass_prefix", "bw_read_tags", "bw_read_node", "bw_fill_test_store",
-                  "bw_read_block", "bw_free", "bw_memset"):
+                  "bw_read_block", "bw_free", "bw_memset", "bw_read_scrub"):
             getattr(L, f).restype = i32
 
     def _ok(self, rc: int, what: str) -> None:
@@ -99,6 +102,10 @@ class Tagger:
 
     def memset(self, ptr: int, value: int, nbytes: int) -> None:
         self._ok(self.lib.bw_memset(ptr, value, nbytes), "cudaMemset")
+
+    def read_scrub(self, ptr: int, nbytes: int) -> None:
+        """Read `nbytes` of a buffer once: before a window, L2 then holds clean lines and no part of the store."""
+        self._ok(self.lib.bw_read_scrub(ptr, nbytes), "read scrub")
 
     def fill_test_store(self, store: int, blocks: int) -> None:
         self._ok(self.lib.bw_fill_test_store(store, blocks), "fill_test_store")
@@ -180,9 +187,13 @@ def _windows(a: argparse.Namespace) -> dict:
     t = Tagger(a.lib)
     store = t.alloc(a.blocks * BLOCK_BYTES)
     t.fill_test_store(store, a.blocks)
+    scrub_bytes = a.scrub_mib << 20
+    scrub = t.alloc(scrub_bytes) if scrub_bytes else 0
+    if scrub:
+        t.memset(scrub, 0, scrub_bytes)
     source = bytes.fromhex(a.source)
-    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "results": [],
-                 "openings_check": []}
+    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "scrub_mib": a.scrub_mib,
+                 "results": [], "openings_check": []}
     for name in a.tags:
         ws = t.alloc(t.workspace_bytes(name, a.blocks))
         t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)  # loads the kernels, untimed
@@ -193,6 +204,8 @@ def _windows(a: argparse.Namespace) -> dict:
             tagged = a.blocks - round(f * a.blocks)
             if f:
                 t.memset(ws, 0xA5, t.workspace_bytes(name, a.blocks))
+            if scrub:
+                t.read_scrub(scrub, scrub_bytes)
             seed = w.start()
             commitment = (t.tag_pass(name, store, a.blocks, seed, ws) if not f
                           else t.tag_pass_prefix(name, store, a.blocks, tagged, seed, ws))
@@ -216,6 +229,8 @@ def _windows(a: argparse.Namespace) -> dict:
                                       "elapsed_ns": v.elapsed_ns, "accepted": v.accepted, "failure": v.failure})
         t.free(ws)
     t.free(store)
+    if scrub:
+        t.free(scrub)
     return out
 
 
@@ -228,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--blocks", type=int, required=True)
     w.add_argument("--samples", type=int, default=audit.SAMPLES)
     w.add_argument("--deadline-ns", type=int, default=audit.REGEN_FLOOR_NS - 1)
+    w.add_argument("--scrub-mib", type=int, default=512, help="read this much of another buffer before each window")
     w.add_argument("--windows", type=int, default=20)
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))
