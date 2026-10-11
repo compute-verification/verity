@@ -1355,6 +1355,12 @@ def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_an
     srv.shutdown()
 
 
+def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, registry, routes_dirs, capsys):
+    add_route(routes_dirs[1], "circuits", "1.0", holder="bc-11111111")
+    rc, out, _ = run(capsys, "names", "list")
+    assert rc == 0 and out.startswith("@circuits") and "bc-11111111" in out and "open" in out
+
+
 def notes_clone(tmp_path) -> Path:
     import subprocess
     bare, clone = tmp_path / "notes.git", tmp_path / "notes"
