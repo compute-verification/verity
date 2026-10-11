@@ -19,7 +19,9 @@ bits per run; `c` stands for `cap · T`, every side channel's capacity over the 
 a program `Chip` from its state, querying the oracle, reading device memory and side sources, and regenerating blocks
 (`regen j` returns `E_j`, at most `G` times per run: the window over the regeneration time `R_regen`, times the
 devices that regenerate). It outputs a tag for every block. The sample `I` is drawn after the output and independently
-of it, which is what the commitment before the deadline enforces.
+of it, which is what the commitment before the deadline enforces. A program remembers every answer it has had, so the
+chip's working memory in the window is unbounded: `S` bounds only what is on chip when the seed arrives, and writing to
+device memory to read it back gains a device nothing.
 
 **What is a parameter.** `S`, `c` and `G` are bounds the device class is drawn with; the claims registry names the
 measurement that falsifies each for a deployed device (`bandwidth-s-chip`, `bandwidth-side-cap`,
