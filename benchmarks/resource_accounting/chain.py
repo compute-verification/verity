@@ -2,7 +2,7 @@
 
   python chain.py --out OUT/chain.json [--shapes o,qkv,gate_up,down,cube8192] [--batches 1,8,32,128,512,2048] [--lengths 32]
       [--arms native-bf16,native-fp8,pearl-c,...] [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
-      [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25]
+      [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25] [--beside DIR --beside-cmd CMD [--beside-log F] [--beside-cpus V,R]]
   python chain.py --plan ...      the points and their weights' bytes, without a GPU
 
 A point (`sweep.Point`) is L dependent calls y_{i+1} = act(W_i · y_i) at one (n, k) and batch B, every W_i its own BF16
@@ -30,6 +30,11 @@ Timing: each item is R chains (one graph replay each, or one Pearl-C pass over R
 `ITEM_S`; the arms take turns within each rep, starting one later each rep, and each rep records the SM clock.  With
 ``--retain``, one point's chain (``--verify-at``) is kept as a poisoned retained pass, its commitment held to the gate's,
 with a no-write control beside it, for `verify_run.py` after the lease.  The JSON is rewritten after every point.
+
+With ``--beside``, once the first shape's points are measured alone, `beside` starts the PoUS harness (``--beside-cmd``, the
+P2 timed audit with its memory challenger and GPU responder, as `run.sh` gives it) on the same GPU and runs the shape's
+chains from its honest audit's start to its end: the chain's slowdown under the audit, and the audit's answers under the
+chain (in the harness's own result).
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ import argparse
 import json
 import math
 import os
+import signal
 import statistics
 import sys
 import time
@@ -506,6 +512,81 @@ def retain_pass(pc: PearlC, p: S.Point, act: Act, retain: Path, point: dict) -> 
             "control_root": control.get("transcript_root"), "ok": same and gated}
 
 
+def leave_cpus(spec: str | None) -> list[int]:
+    """Move every thread of this process off the CPUs in ``spec`` (the memory challenger's and responder's, which pin
+    themselves there): a host thread spinning in a CUDA synchronize on one of them would make honest answers late for a
+    reason that is not the GPU.  The harness, started first, keeps its own mask."""
+    reserved = {int(x) for x in (spec or "").split(",") if x}
+    here = set(os.sched_getaffinity(0))
+    if not reserved & here or not here - reserved:
+        return []
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), here - reserved)
+        except ProcessLookupError:
+            pass
+    return sorted(reserved & here)
+
+
+def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act, pc: PearlC | None, measured: list[dict],
+           left) -> dict:
+    """The shape's chains beside the PoUS harness (``--beside-cmd``), started once they were measured alone: from its honest
+    audit's ``ready-<tag>.json`` to its ``audit-<tag>.json`` (`band_gpu.harness.audit_round`), the points' arms take turns
+    with the alone phase's items, each item's monotonic start kept, so the chain's slowdown and the audit's answers share
+    one window.  The harness runs to its end after the window (its controls and SeqRoot) and its exit code is kept."""
+    import subprocess
+
+    import torch
+    ready, done = a.beside / f"ready-{a.beside_tag}.json", a.beside / f"audit-{a.beside_tag}.json"
+    plans = {m["key"]: m for m in measured if m.get("arms")}
+    pts = [p for p in group if p.key in plans]
+    x0s = {p.key: chain_input(p, act) for p in pts}
+    natives = {(p.key, arm): Native(arm, W, act, x0s[p.key]) for p in pts for arm in arms if arm in S.NATIVE
+               and arm in plans[p.key]["arms"]}
+    rec: dict = {"tag": a.beside_tag, "cmd": a.beside_cmd, "points": {p.key: {} for p in pts}}
+    over = lambda: left() < 0
+    torch.cuda.synchronize()
+    with open(a.beside_log or os.devnull, "w") as log:
+        rec["started_ns"] = time.monotonic_ns()
+        proc = subprocess.Popen(["bash", "-c", a.beside_cmd], stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        rec["left_cpus"] = leave_cpus(a.beside_cpus)
+        while not ready.exists() and proc.poll() is None and not over():
+            time.sleep(0.05)
+        if not ready.exists():
+            rec["error"] = f"no {ready.name}: the harness exited {proc.poll()} or the budget ran out first"
+        else:
+            rec["window_start_ns"] = time.monotonic_ns()
+            turns = [(p, arm, m) for p in pts for arm, m in plans[p.key]["arms"].items() if not arm.endswith("-gemm")]
+            i = 0
+            while not done.exists() and proc.poll() is None and not over():
+                p, arm, m = turns[i % len(turns)]
+                i += 1
+                t = time.monotonic_ns()
+                if arm in S.NATIVE:
+                    r = natives[(p.key, arm)].item(m["chains"])
+                else:
+                    r = pc.item(arm, x0s[p.key], p.batch, m["chains"])
+                    r.pop("y")
+                rec["points"][p.key].setdefault(arm, []).append([t, r["seconds"]])
+            rec["window_end_ns"] = time.monotonic_ns()
+            rec["window_closed_by"] = "audit" if done.exists() else "harness exit" if proc.poll() is not None else "budget"
+        for key, by_arm in rec["points"].items():
+            for arm, items in by_arm.items():
+                alone = plans[key]["arms"][arm]["median_s"]
+                during = statistics.median(s for _, s in items)
+                by_arm[arm] = {"items": items, "median_s": during, "alone_median_s": alone, "slowdown": during / alone - 1}
+        del natives
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        try:
+            rec["harness_rc"] = proc.wait(timeout=max(1.0, left() + 90))
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGTERM)
+            rec["harness_rc"] = proc.wait()
+            rec["harness_stopped"] = "still running at the budget: its process group was sent SIGTERM"
+    return rec
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path)
@@ -522,7 +603,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--budget-min", type=float, default=25.0, help="start no point after this many minutes")
     ap.add_argument("--l2-bytes", type=int, default=128 << 20, help="--plan's L2 (the device's own when it runs)")
     ap.add_argument("--plan", action="store_true", help="print the points and each shape's weight bytes, and exit")
+    ap.add_argument("--beside", type=Path, help="the PoUS harness's output directory (its ready-<tag>.json and audit-<tag>.json)")
+    ap.add_argument("--beside-cmd", help="the PoUS harness's command (bash -c), started after the first shape's points")
+    ap.add_argument("--beside-tag", default="p2-honest", help="the audit round the window spans")
+    ap.add_argument("--beside-log", type=Path, help="the harness's output")
+    ap.add_argument("--beside-cpus", help="the harness's memory challenger and responder CPUs (its VCPU,RCPU), left to it")
     a = ap.parse_args(argv)
+    if bool(a.beside) != bool(a.beside_cmd):
+        ap.error("--beside and --beside-cmd go together")
     arms = tuple(x for x in a.arms.split(",") if x)
     if set(arms) - set(S.ARMS):
         ap.error(f"unknown arms {sorted(set(arms) - set(S.ARMS))}")
@@ -548,7 +636,8 @@ def main(argv: list[str] | None = None) -> int:
            "points": [], "shapes": {}, "verify": None, "status": "running"}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     clocks = Clocks(uuid)
-    over = lambda: (time.perf_counter() - start) / 60 > a.budget_min
+    left = lambda: a.budget_min * 60 - (time.perf_counter() - start)
+    over = lambda: left() < 0
     with torch.inference_mode():
         doc["read_rate"] = read_rate()
         save(a.out, doc)
@@ -607,6 +696,13 @@ def main(argv: list[str] | None = None) -> int:
                         doc["verify"] = retain_pass(pc, p, act, a.retain, doc["points"][-1])
                     except Exception:  # noqa: BLE001
                         doc["verify"] = {"point": p.key, "error": traceback.format_exc(limit=6), "ok": False}
+                save(a.out, doc)
+            if a.beside and "beside" not in doc:
+                try:
+                    doc["beside"] = beside(a, group, arms, W, act, pc, [m for m in doc["points"] if m.get("length") == length
+                                                                        and m.get("shape") == name], left)
+                except Exception:  # noqa: BLE001
+                    doc["beside"] = {"error": traceback.format_exc(limit=6)}
                 save(a.out, doc)
             if pc is not None:
                 pc.close()

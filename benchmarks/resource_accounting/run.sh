@@ -10,6 +10,12 @@
 #     v1 only, no timing), then chain.py into $OUT/chain.json, its budget two minutes under the lease's;
 #  3. on the CPUs, after the lease: the retained pass (verify_run.py --fast, which must ACCEPT) and its no-write control
 #     (which must REJECT), from scratch; their verify.json files go to $OUT/verify.
+# POUS=1 (one shape; --cwd clone, since the memory challenger's Lean verdict builds in the tree) adds the PoUS arm: before the
+# lease, pod.sh PREPARE=1 builds that verdict; under it, once the shape's points are measured alone, chain.py starts
+# pod.sh IMPL=p2-v3-mc-gpu (P2's timed audit: the GPU responder and the memory challenger, signed with the PoUS lanes' LMS key
+# through pod.sh's own --mc-lms-key, under their WORK) with no load of its own, and runs the chain beside its honest audit,
+# off the memory challenger's and responder's CPUs.
+# The harness's outputs go to $OUT/pous. POUS_WS, POUS_AUDITS and POUS_SEGMENTS pick its weight set, audits and segments.
 # Scratch (the ship's check fixture, the retained passes) is a mktemp -d under /workspace/tmp, deleted on exit.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}/out}; mkdir -p "$OUT"
@@ -35,6 +41,20 @@ if [ -n "$PEARL" ]; then
   KERNEL=(--kernel benchmarks/pouw/pearl_c_sm120 --cubin "$S/ship/pearl_c_sm120.cubin" --retain "$S/passes" --verify-at "$VERIFY_AT"
           --coins-dir "$OUT/coins")
   CHECK=$S/ship/check/check.json
+fi
+if [ -n "${POUS:-}" ]; then
+  case $SHAPES in *,*) stamp "RUN_FAIL_POUS: POUS=1 takes one shape, not $SHAPES"; exit 2 ;; esac
+  [ "$(basename "$PWD")" != "${RESEARCH_SOURCE_SHA:-}" ] || { stamp "RUN_FAIL_POUS: POUS=1 builds Lean in the tree: --cwd clone"; exit 2; }
+  POUS_WORK=${POUS_WORK:-/workspace/pouw/fill-out/pous/work}; POUS_WS=${POUS_WS:-llama3.1-8b/layer0+head}
+  POUS_AUDITS=${POUS_AUDITS:-20}; POUS_SEGMENTS=${POUS_SEGMENTS:-8}
+  mkdir -p "$OUT/pous"
+  stamp "PoUS prepare"
+  RESEARCH_RUN_DIR=$OUT/pous nice bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu WORK="$POUS_WORK" \
+    > "$OUT/pous-prepare.log" 2>&1 || { stamp "RUN_FAIL_POUS_PREPARE"; tail -20 "$OUT/pous-prepare.log"; exit 13; }
+  # pod.sh's own choice of the memory challenger's and responder's CPUs (record_host), named so the chain leaves them
+  read -r VCPU RCPU <<< "$(lscpu -p=CPU,CORE | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
+  KERNEL+=(--beside "$OUT/pous/bench" --beside-log "$OUT/pous.log" --beside-cpus "$VCPU,$RCPU" --beside-cmd
+           "bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR=$OUT/pous IMPL=p2-v3-mc-gpu WORK=$POUS_WORK WS=$POUS_WS AUDITS=$POUS_AUDITS MAX_SEGMENTS=$POUS_SEGMENTS LOAD_TOKENS=0 TOKENS=1 WORKERS=8 VCPU=$VCPU RCPU=$RCPU")
 fi
 
 stamp "chain under gpu-lease 1 (at most $LEASE_MIN min)"

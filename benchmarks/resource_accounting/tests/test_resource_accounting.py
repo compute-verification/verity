@@ -115,11 +115,55 @@ def test_render_reads_a_chain_json_and_refuses_another_schema(tmp_path):
     p.write_text(json.dumps(_doc()))
     (tmp_path / "verify").mkdir()
     (tmp_path / "verify" / "pass.txt").write_text("noise\nACCEPT run r-test sha256:00\n")
-    doc, verdicts = R.load(str(p))
-    assert doc["run"] == "r-test" and verdicts == {"pass": "ACCEPT run r-test sha256:00"}
+    doc, verdicts, result = R.load(str(p))
+    assert doc["run"] == "r-test" and verdicts == {"pass": "ACCEPT run r-test sha256:00"} and result is None
+    (tmp_path / "pous" / "bench").mkdir(parents=True)
+    (tmp_path / "pous" / "bench" / "bench-result.json").write_text(json.dumps(_pous_result()))
+    assert R.load(str(p))[2] == _pous_result()
     p.write_text(json.dumps({**_doc(), "schema": "other/v0"}))
     with pytest.raises(SystemExit, match="not ra-matmul-chain/v1"):
         R.load(str(p))
+
+
+def _pous_result(certified: bool = True) -> dict:
+    """The harness's bench-result.json, cut to what the renderer reads: P2's deployed point, made-up answer times."""
+    sp = {"blocks": 1 << 19, "block_bits": 16448, "k": 105, "limit_ns": 854_000, "state_bound_bits": (1 << 19) * 16448 * 18 // 19,
+          "certificate": {"theorem": "Pous.SecurityProofs.P2SlackFamilyUncond", "delta": "1/100", "eps_log2": -128},
+          "gaps": [], "certified": certified}
+    audit = {"audits": 20, "audits_accepted": 19, "answers": 2100, "late": 1, "wrong": 0,
+             "elapsed_s": {"n": 2100, "min": 1e-4, "p50": 2e-4, "p99": 4e-4, "p99.9": 6e-4, "max": 9e-4},
+             "margin_s": {"min": -4.6e-5}, "calibration_here": {"rtt_s": {"p50": 5e-5, "p99.9": 9e-5}}}
+    return {"passed": False, "gates": {"timed_audit": {"passed": False}, "value_control": {"passed": True}},
+            "metrics": {"audit": audit, "deadline": {"limit_ns": 854_000, "limit_fixed_before_load": True}},
+            "profile": {"certified": certified, "gaps": [] if certified else ["operating point: k is not the frozen value"],
+                        "experimental": "P2 remains experimental", "storage_profile": sp}}
+
+
+def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
+    """S_cert is the storage profile's ⌊ρ·|C|⌋ in bytes only when it is certified, and the capacity residual splits into
+    M − |C| and |C| − S_cert; without a profile it is unproved with the honest audit's count; the chain's slowdown is its
+    time beside the audit over its time alone."""
+    st = C.storage(_pous_result())
+    stored = (1 << 19) * 16448 / 8
+    assert st["stored"] == stored and st["s_cert"] == (1 << 19) * 16448 * 18 // 19 / 8
+    assert st["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond" and st["unproved"] is None
+    assert "operating point" in C.storage(_pous_result(certified=False))["unproved"]
+    assert C.storage({**_pous_result(), "profile": None})["unproved"] == "no profile: 19 of 20 honest audits accepted"
+    assert C.storage(None)["unproved"] == C.NO_POUS
+    doc = _doc()
+    doc["beside"] = {"window_start_ns": 0, "window_end_ns": 3_000_000_000, "window_closed_by": "audit", "harness_rc": 1,
+                     "left_cpus": [2, 3], "points": {"o-n4096-k4096-b1-L32": {"native-fp8": {
+                         "items": [[1, 0.0005], [2, 0.0007]], "median_s": 0.0006, "alone_median_s": 0.0004, "slowdown": 0.5}}}}
+    p = R.pous(doc, _pous_result())
+    cap, memory = p["capacity"], 96 << 30
+    assert cap["residual"] == pytest.approx(memory - st["s_cert"])
+    assert cap["honest_overhead"] == pytest.approx(memory - stored) and cap["soundness_slack"] == pytest.approx(stored - st["s_cert"])
+    assert (p["accepted"], p["audits"], p["late"], p["window_s"], p["failed_gates"]) == (19, 20, 1, 3.0, ["timed_audit"])
+    assert p["beside"] == [{"key": "o-n4096-k4096-b1-L32", "arm": "native-fp8", "items": 2, "alone_ms": 0.4, "beside_ms": 0.6,
+                            "slowdown": 0.5}]
+    md = R.markdown(doc, {}, "fixture", _pous_result())
+    assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md and "| +50.0% | 2 |" in md
+    assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
 
 
 def test_the_plan_needs_no_gpu(capsys):

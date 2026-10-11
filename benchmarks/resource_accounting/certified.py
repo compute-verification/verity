@@ -9,12 +9,16 @@
   at the cubes 8,192³ and 16,384³ only, so every other shape's W_cert is unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
-* **Q_cert, bandwidth**, and **S_cert, capacity**: no pinned theorem yet for the first; the second is PoUS's
-  (`EndToEndRingDeployed` with its timed audit's parameters) once a PoUS arm runs beside the chain.
+* **Q_cert, bandwidth**: no pinned theorem yet.
+* **S_cert, capacity**: the PoUS arm's storage profile (`storage`), when the harness issued one and it is certified: a
+  server holding fewer than ⌊ρ·|C|⌋ bits passes the audit of record's k challenges within its limit with probability at most
+  δ + 2^eps_log2, by the certificate's theorem (P2's is ``Pous.SecurityProofs.P2SlackFamilyUncond``), under its claims,
+  with P2 itself experimental (the profile says why).  S_cert is that bound in bytes; otherwise it is unproved, with why.
 * **The covert residual** of a resource over an arm's chain time T is what the device could have done in T less what is
   certified: compute F·T − W_cert, with F the native FP8 chain's rate at the shape (W1 per second); bandwidth BW·T − Q_cert,
-  BW the native read rate; capacity M − S_cert.  It splits into honest overhead, native less the honest reference (F·T −
-  ΣW_ref: what the protocol's own time costs), and soundness slack, the reference less what is certified (ΣW_ref − W_cert).
+  BW the native read rate; capacity M − S_cert, M the device's memory.  It splits into honest overhead, native less the
+  honest reference (F·T − ΣW_ref: what the protocol's own time costs; M − |C|, the memory the store leaves), and soundness
+  slack, the reference less what is certified (ΣW_ref − W_cert; |C| − S_cert).
 """
 
 from __future__ import annotations
@@ -121,6 +125,30 @@ def bandwidth(read_rate: float | None, seconds: float, bytes_read: float) -> dic
     return {"q_cert": None, "unproved": UNPROVED_Q, **residual(capacity, bytes_read, None)}
 
 
-def capacity(memory_bytes: int | None, s_cert: float | None = None, why: str = NO_POUS) -> dict:
+def capacity(memory_bytes: int | None, s_cert: float | None = None, why: str = NO_POUS, stored: float | None = None) -> dict:
+    """The capacity residual: the device's memory against the honest store |C| (``stored``) and S_cert, in bytes."""
     return {"s_cert": s_cert, "unproved": None if s_cert is not None else why,
-            **residual(None if memory_bytes is None else float(memory_bytes), None, s_cert)}
+            **residual(None if memory_bytes is None else float(memory_bytes), stored, s_cert)}
+
+
+def storage(result: dict | None) -> dict:
+    """S_cert from the PoUS harness's ``bench-result.json``: its storage profile's ``state_bound_bits`` as bytes when the
+    harness issued a profile (every honest audit accepted) and it is certified; |C| is the profile's blocks at their bits."""
+    if result is None:
+        return {"s_cert": None, "stored": None, "unproved": NO_POUS}
+    prof = result.get("profile") or {}
+    sp = prof.get("storage_profile") or {}
+    cert = sp.get("certificate") or {}
+    out = {"s_cert": None, "unproved": None, "stored": sp["blocks"] * sp["block_bits"] / 8 if sp.get("blocks") else None,
+           "theorem": cert.get("theorem"), "delta": cert.get("delta"), "eps_log2": cert.get("eps_log2"),
+           "k": sp.get("k"), "limit_ns": sp.get("limit_ns"), "gaps": prof.get("gaps") or [],
+           "experimental": prof.get("experimental")}
+    audit = (result.get("metrics") or {}).get("audit") or {}
+    if not prof:
+        out["unproved"] = (f"no profile: {audit.get('audits_accepted')} of {audit.get('audits')} honest audits accepted"
+                           if audit else "no profile: the harness ran no honest audit")
+    elif not prof.get("certified") or sp.get("state_bound_bits") is None:
+        out["unproved"] = "not certified: " + ("; ".join(out["gaps"] + list(sp.get("gaps") or [])) or "no certificate")
+    else:
+        out["s_cert"] = sp["state_bound_bits"] / 8
+    return out

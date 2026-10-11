@@ -9,7 +9,9 @@ Per point and arm: the chain's time (the median over reps), its overhead over it
 the device-memory rate the chain achieved, estimated as its weights' and activations' bytes read once over its time (a lower
 bound: the weights are at least twice the L2).  For the Pearl-C arms, `certified`'s columns: W_cert (as TFLOP/s-equivalent,
 2·W_cert over the time) and the compute residual's split as shares of F·T, with F the native FP8 chain's rate; Q_cert and
-S_cert say why they are unproved.  The retained pass's verdicts, when the run kept one, head the table.
+S_cert say why they are unproved.  The retained pass's verdicts, when the run kept one, head the table.  A run with a PoUS
+arm (`chain.beside`) adds its section: the honest audit's answers against the limit while the chain ran, S_cert from the
+harness's storage profile with the capacity residual (`certified.storage`), and each chain's time beside the audit.
 """
 
 from __future__ import annotations
@@ -31,12 +33,13 @@ import sweep as S
 SCHEMA = "ra-matmul-chain/v1"
 
 
-def load(source: str) -> tuple[dict, dict]:
-    """The run's chain.json and its verify verdicts (``verify/*.txt`` beside it), from a path or an ``art:`` id."""
+def load(source: str) -> tuple[dict, dict, dict | None]:
+    """The run's chain.json, its verify verdicts (``verify/*.txt`` beside it) and the PoUS harness's result
+    (``pous/bench/bench-result.json`` beside it, when the run had a PoUS arm), from a path or an ``art:`` id."""
     if source.startswith("art:"):
         d = Path(tempfile.mkdtemp(prefix="ra-render-"))
-        subprocess.run(["research", "data", "fetch", source, "--to", str(d), "--path", "*chain.json", "--path", "*verify/*.txt"],
-                       check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["research", "data", "fetch", source, "--to", str(d), "--path", "*chain.json", "--path", "*verify/*.txt",
+                        "--path", "*pous/bench/bench-result.json"], check=True, stdout=subprocess.DEVNULL)
         found = sorted(d.rglob("chain.json"))
         if not found:
             raise SystemExit(f"{source}: no chain.json in the tree")
@@ -52,7 +55,8 @@ def load(source: str) -> tuple[dict, dict]:
         if f.exists():
             lines = [x for x in f.read_text().splitlines() if x.startswith(("ACCEPT", "REJECT"))]
             verdicts[name] = lines[-1] if lines else None
-    return doc, verdicts
+    result = path.parent / "pous" / "bench" / "bench-result.json"
+    return doc, verdicts, json.loads(result.read_text()) if result.exists() else None
 
 
 def bytes_read(p: dict, arm: str) -> int:
@@ -108,8 +112,76 @@ def rows(doc: dict) -> list[dict]:
     return out
 
 
+def pous(doc: dict, result: dict | None) -> dict | None:
+    """The PoUS arm (`chain.beside`): the harness's honest audit while the chain ran (its answers against the limit fixed
+    before), its gates, S_cert with the capacity residual, and each chain's time beside the audit against its time alone."""
+    b = doc.get("beside")
+    if b is None and result is None:
+        return None
+    b, result = b or {}, result or {}
+    m = result.get("metrics") or {}
+    audit, deadline = m.get("audit") or {}, m.get("deadline") or {}
+    st = C.storage(result or None)
+    memory = (doc.get("identity") or {}).get("memory_bytes")
+    beside = [{"key": key, "arm": arm, "items": len(r["items"]), "alone_ms": r["alone_median_s"] * 1e3,
+               "beside_ms": r["median_s"] * 1e3, "slowdown": r["slowdown"]}
+              for key, by_arm in (b.get("points") or {}).items() for arm, r in by_arm.items()]
+    return {"error": b.get("error"), "window_closed_by": b.get("window_closed_by"), "harness_rc": b.get("harness_rc"),
+            "harness_stopped": b.get("harness_stopped"), "left_cpus": b.get("left_cpus"),
+            "window_s": (b["window_end_ns"] - b["window_start_ns"]) / 1e9 if b.get("window_end_ns") else None,
+            "passed": result.get("passed"), "failed_gates": sorted(g for g, v in (result.get("gates") or {}).items()
+                                                                   if not (v or {}).get("passed")),
+            "audits": audit.get("audits"), "accepted": audit.get("audits_accepted"), "answers": audit.get("answers"),
+            "late": audit.get("late"), "wrong": audit.get("wrong"), "limit_ns": deadline.get("limit_ns"),
+            "limit_fixed_before_load": deadline.get("limit_fixed_before_load"), "elapsed_s": audit.get("elapsed_s") or {},
+            "margin_s": audit.get("margin_s") or {}, "rtt_s": (audit.get("calibration_here") or {}).get("rtt_s") or {},
+            "storage": st, "capacity": C.capacity(memory, st["s_cert"], st["unproved"] or C.NO_POUS, st["stored"]),
+            "beside": beside}
+
+
 def _f(v, fmt: str) -> str:
     return "–" if v is None else format(v, fmt)
+
+
+def _us(q: dict, *keys: str) -> str:
+    return " / ".join(_f(None if q.get(x) is None else q[x] * 1e6, ".0f") for x in keys)
+
+
+def _gb(v) -> str:
+    return _f(None if v is None else v / 1e9, ".3f")
+
+
+def pous_lines(p: dict) -> list[str]:
+    lines = ["", ("PoUS beside the chain: P2's timed audit (benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu: the GPU responder and the "
+                  "memory challenger, signed with S1's LMS key), with no load of its own, on the same GPU in its own process; "
+                  f"the chain's items ran from its honest audit's start to its end ({_f(p['window_s'], '.1f')} s, closed by "
+                  f"{p['window_closed_by'] or '–'}), off CPUs {p['left_cpus'] or '–'}; harness exit {p['harness_rc']}"
+                  + (f" ({p['harness_stopped']})" if p["harness_stopped"] else "") + ", gates "
+                  + ("passed" if p["passed"] else "failed: " + ", ".join(p["failed_gates"]) if p["passed"] is not None
+                     else "– (no bench-result.json)") + ".")]
+    if p["error"]:
+        lines.append("Beside failed: " + p["error"].strip().splitlines()[-1])
+    if p["audits"] is not None:
+        lines.append(f"Honest audit under the chain: {p['accepted']} of {p['audits']} audits accepted, {p['answers']} answers, "
+                     f"{p['late']} late, {p['wrong']} wrong; limit {_f(p['limit_ns'] and p['limit_ns'] / 1e3, '.0f')} µs, "
+                     f"fixed before load {p['limit_fixed_before_load']} (calibrated while the chain waited); answer time "
+                     f"p50 / p99.9 / max {_us(p['elapsed_s'], 'p50', 'p99.9', 'max')} µs, least margin "
+                     f"{_us(p['margin_s'], 'min')} µs; RTT under the chain p50 / p99.9 {_us(p['rtt_s'], 'p50', 'p99.9')} µs.")
+    st, cap = p["storage"], p["capacity"]
+    if st["s_cert"] is not None:
+        lines.append(f"S_cert {_gb(st['s_cert'])} GB: a server holding fewer than ⌊ρ·|C|⌋ bits passes the audit of record's "
+                     f"{st['k']} challenges within {st['limit_ns']:,} ns with probability at most {st['delta']} + "
+                     f"2^{st['eps_log2']} ({st['theorem']}); EXPERIMENTAL: {st['experimental']}.")
+    else:
+        lines.append(f"S_cert unproved: {st['unproved']}.")
+    lines.append(f"Capacity residual M − S_cert: {_gb(cap['residual'])} of {_gb(cap['capacity'])} GB = honest overhead M − |C| "
+                 f"{_gb(cap['honest_overhead'])} GB + soundness slack |C| − S_cert {_gb(cap['soundness_slack'])} GB "
+                 f"(|C| = {_gb(st['stored'])} GB).")
+    if p["beside"]:
+        lines += ["", "| point | arm | alone ms | beside the audit ms | slowdown | items |", "|---|---|---|---|---|---|"]
+        lines += [f"| {r['key']} | {r['arm']} | {r['alone_ms']:.3f} | {r['beside_ms']:.3f} | {r['slowdown']:+.1%} | {r['items']} |"
+                  for r in p["beside"]]
+    return lines
 
 
 def _verdict(line: str | None) -> str:
@@ -120,8 +192,8 @@ def _verdict(line: str | None) -> str:
     return line.split()[0] + (f" ({drawn[1]}, of {drawn[2]} tiles)" if drawn else "")
 
 
-def markdown(doc: dict, verdicts: dict, source: str) -> str:
-    ident, rr = doc.get("identity") or {}, doc.get("read_rate") or {}
+def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None) -> str:
+    ident, rr, p = doc.get("identity") or {}, doc.get("read_rate") or {}, pous(doc, result)
     clocks = [c.get("sm_mhz") for p in doc["points"] for c in p.get("clocks", []) if "sm_mhz" in c]
     lines = [f"Matmul chain y_(i+1) = act(W_i · y_i), {source}, run {doc.get('run')}, {doc.get('status')}",
              (f"{ident.get('name')} {ident.get('uuid')}, driver {ident.get('driver')}, torch {ident.get('torch')} (CUDA {ident.get('cuda')}); "
@@ -157,9 +229,12 @@ def markdown(doc: dict, verdicts: dict, source: str) -> str:
         lines += ["", "W_cert unproved: " + "; ".join(notes)]
     lines += [("W_cert is in W1 (one dense FP8 MAC on the device), as 2·W_cert over the chain's time; ΣW_ref prices a credited "
                "cell at about 1.1 W1 per MAC at these shapes, so W_cert can exceed the useful rate."),
-              "Q_cert: " + C.UNPROVED_Q + ". S_cert: " + C.NO_POUS + ".",
+              "Q_cert: " + C.UNPROVED_Q + ". S_cert: " + (C.NO_POUS if p is None else
+                                                          "the table's chains ran alone; the PoUS section's ran beside its audit") + ".",
               ("Compute residual: F·T − W_cert as a share of F·T (F the native FP8 chain's rate at the shape, T the arm's chain "
                "time), split into honest overhead (F·T − ΣW_ref) and soundness slack (ΣW_ref − W_cert).")]
+    if p is not None:
+        lines += pous_lines(p)
     return "\n".join(lines) + "\n"
 
 
@@ -168,12 +243,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("source", help="art:<id> of a run's tree, or a chain.json")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    doc, verdicts = load(a.source)
+    doc, verdicts, result = load(a.source)
     if a.json:
         print(json.dumps({"source": a.source, "run": doc.get("run"), "verify": doc.get("verify"), "verdicts": verdicts,
-                          "rows": rows(doc)}, indent=1, default=str))
+                          "rows": rows(doc), "pous": pous(doc, result)}, indent=1, default=str))
     else:
-        print(markdown(doc, verdicts, a.source), end="")
+        print(markdown(doc, verdicts, a.source, result), end="")
     return 0
 
 
