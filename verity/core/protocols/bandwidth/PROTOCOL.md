@@ -168,8 +168,8 @@ beyond a raw read.
 5. **Openings disclose sampled blocks** of `C*` (an encoding of `W`) to the verifier; the memory challenger already
    holds `vk` and publishes only verdicts, so nothing leaves it.
 6. **`ro-sha512/v1` does not fit on the RTX PRO 6000.** Its honest pass takes 1.73 ms, past the 1.708 ms rebuild
-   floor, so no `T` that `Params` allows admits it (§6). It is SHA-512-bound (18 compressions per block), not
-   memory-bound. It remains the tag the proof treats first; deployment needs `gf31-poly/v1` or its injective
+   floor, so no `T` that `Params` allows admits it (§6). It is SHA-512-bound (17 compressions per block and one
+   for its leaf), not memory-bound. It remains the tag the proof treats first; deployment needs `gf31-poly/v1` or its injective
    successor.
 7. **`S_chip` counts L2, the register files and L1/shared memory.** Smaller on-chip stores (instruction and
    constant caches, copy-engine buffers) are left out. A red team should confirm that none of them can hold a useful
