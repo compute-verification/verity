@@ -164,6 +164,22 @@ def test_a_shape_takes_its_largest_region_count_and_v_star_checks_the_reps_algeb
         M.inner_algebra([_entry(256, 7) | {"claims": 16}], {26: (10.0, 14.0)}, algebra)
 
 
+def test_a_shape_takes_its_largest_positions_from_the_rows_instances():
+    """Each entry's positions are its row's ``instances_max`` at the chosen B; two entries of one shape (B = 1, Z = 3) at 5
+    and 2 positions both take 5, and a menu without the rows carries none."""
+    pl = [{"workload": "w", "N": 100, "cap": 2.0 ** 29, "buckets": []}]
+    for label in ("a", "b"):
+        b = _bucket([P.Unit(label, "t", 60, 3, 3)], 3)
+        b["by_B"] = {1: M.inner(100, 50, b, 1, {}, COEF, **TINY)}
+        pl[0]["buckets"].append(b)
+    rows = {M.row_id("w", 0, 1): 5, M.row_id("w", 1, 1): 2}
+    assert [e["positions"] for e in M.menu(pl, 50, positions=rows)["models"][0]["entries"]] == [5, 5]
+    assert [e["positions"] for e in M.menu(pl, 50)["models"][0]["entries"]] == [None, None]
+    es = [_entry(256, 4) | {"positions": 3}, _entry(256, 7) | {"positions": 9}, _entry(64, 3) | {"positions": 1}]
+    M.one_session_per_shape(es)
+    assert [e["positions"] for e in es] == [9, 9, 1]
+
+
 def test_v_star_refuses_the_reps_algebra_at_16_claims():
     """proofs' blocker (note:proofs/20261010T2112Z-finding-c3-claims-per-shape): at m 35, k_log 27 and 16 claims the
     batched-T residual alone needs more sha512x3 slots than a part holds."""
