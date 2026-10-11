@@ -67,7 +67,7 @@ def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     tmp = tmp_path_factory.mktemp("tmp")                         # outside the suite's tree, as /tmp is
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))
-    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-pkg-"))
+    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-"))
     (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
         "import os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
         "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n")
