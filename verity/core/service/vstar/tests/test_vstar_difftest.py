@@ -300,11 +300,11 @@ CLIMB = st.one_of(
 
 
 @st.composite
-def gf_s(draw, big: bool = False, strict: bool = False, v: bool = False) -> dict:
+def gf_s(draw, big: bool = False, strict: bool = False) -> dict:
     """A GfResiduals S, its indices mostly in range (`check_structure` refuses the rest), or all of them (`strict`): ports of a
-    few elements, or (`big`) a w of at least 128 elements, for `wt` terms; ``v``: at least one v element."""
+    few elements, or (`big`) a w of at least 128 elements, for `wt` terms."""
     nw = draw(st.integers(128, 130) if big else st.integers(1 if strict else 0, 3))
-    nv = draw(st.integers(1 if v else 0, 3))
+    nv = draw(st.integers(0, 3))
     tags = [t for t, ok in (("w", nw > 0 or not strict), ("v", nv > 0 or not strict), ("wt", big)) if ok]
     out = (lambda: st.just(False)) if strict else (lambda: st.integers(0, 9).map(lambda x: x == 0))
 
@@ -337,10 +337,10 @@ NAME = st.text(max_size=4) | st.sampled_from(["rec-residuals/l0-p0", "row0"])
 
 
 @st.composite
-def rep_s(draw, valid: bool = True, big: bool = False, v: bool = False) -> dict:
-    """InnerRepCheck's S: a GfResiduals S (`big`: with `wt` terms; ``v``: a v row) with w split into named row ports
-    (`valid`), or ports that refuse."""
-    gf = draw(gf_s(strict=valid, big=big, v=v))
+def rep_s(draw, valid: bool = True, big: bool = False) -> dict:
+    """InnerRepCheck's S: a GfResiduals S (`big`: with `wt` terms) with w split into named row ports (`valid`), or ports
+    that refuse."""
+    gf = draw(gf_s(strict=valid, big=big))
     if valid:
         cuts = sorted(draw(st.lists(st.integers(1, max(gf["nw"] - 1, 1)), max_size=2, unique=True)))
         sizes = [b - a for a, b in zip([0, *cuts], [*cuts, gf["nw"]]) if b > a]
@@ -499,23 +499,13 @@ def test_rec_open_unit_agrees(server):
 
 # --- the circuit files ----------------------------------------------------------------------------------------------------------
 
-@st.composite
-def _inner_file(draw) -> dict:
-    """`inner_circuit`'s input: one in eight (the first, Hypothesis's simplest, among them) any S under drawn bindings, invalid
-    ones included, the rest an S with a v row under two digests, a file `compose` writes. Hypothesis mixes the literals of
-    every workspace module it has loaded into its draws, so which five inputs `SEED` draws moves with code the test never
-    reads; at five examples, only a strategy that mostly draws files keeps two of them."""
-    refusable = draw(st.integers(0, 7)) == 0
-    S = draw(rep_s() if refusable else rep_s(v=True))
-    binding = BINDING if refusable else DIGEST
-    return {"S": S, "name": draw(NAME), "partition": draw(binding), "program": draw(binding), "program_digests": draw(DIGESTS)}
-
-
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
     """`compose` on small InnerRepCheck units under drawn bindings, invalid ones included: META, the zero instance's
     outputs and `b ‖ c`, the slot ranges and the block size."""
-    stats = D.run(port("inner_circuit", inner_circuit, _inner_file()), examples=5, seed=SEED, server=server)
+    inputs = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": BINDING, "program": BINDING,
+                                    "program_digests": DIGESTS})
+    stats = D.run(port("inner_circuit", inner_circuit, inputs), examples=5, seed=SEED, server=server)
     assert stats.outputs >= 2 and stats.rejects >= 1, stats
 
 
