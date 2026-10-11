@@ -40,6 +40,8 @@ from . import rec_live as RL
 
 HIDDEN = ("unit",)
 UNIT_FORMAT = "flock-ir-unit/v2"
+#: the sparse streams' Open label
+SPARSE_LABEL = b"verity/rec-sparse/v1"
 
 
 def _frame(op: int, kind: int, n: int, payload: bytes = b"") -> bytes:
@@ -181,7 +183,8 @@ class Relay:
     """The prover's side of candidate 3's inner session (the module docstring): every request to ``proxy`` but each rep's
     z_partial round, which it splits. ``h_of(points)``: h at a rep's fold points (`rec_algebra.fold_points`' ints)."""
 
-    def __init__(self, proxy: RL.Proxy, m: int, k_log: int, h_of: Callable[[dict], list[int]]):
+    def __init__(self, proxy: RL.Proxy, m: int, k_log: int, h_of: Callable[[dict], list[int]], sparse: tuple | None = None,
+                 workers: int = 1):
         self.proxy, self.h_of = proxy, h_of
         self.sh, self.zp = A.Shape(m, k_log, 2), RL.zp_round(m, k_log)
         self.reps = {f"{RL.TABLE}/rep{r}" for r in range(RL.REPS)}
@@ -189,6 +192,11 @@ class Relay:
         self.coins: dict[str, list[list[int]]] = {}
         #: per rep, its z_partial round as the prover sent it, h and the fold points it was computed at
         self.split: dict[str, dict] = {}
+        #: the sparse phase (`sparse_phase`): the bucket's `rec_sparse.Shape`, the hidden circuit's entries and its range;
+        #: ``workers`` processes share each rep's H3
+        self.sparse, self.workers = sparse, workers
+        #: per rep, its sparse phase's coins and messages (`rec_sparse.prove`)
+        self.sparse_out: dict[int, tuple] = {}
 
     def _refuse(self, why: str) -> bytes:
         self.proxy.stop(f"rec session: {why}")
@@ -196,6 +204,8 @@ class Relay:
 
     def handle(self, req: bytes) -> bytes:
         r = None
+        if req[:1] == bytes([RL.REQ_FINISH]) and self.sparse is not None and not self.sparse_out and self.proxy.stopped is None:
+            self.sparse_phase()
         if req[:1] == bytes([RL.REQ_ROUND]) and self.proxy.stopped is None:
             try:
                 r = RL.decode_req(req)
@@ -230,12 +240,43 @@ class Relay:
             self.split[stream] = {"content": content, "h": h, "points": pts}
         return resp
 
+    def _round(self, stream: str, elems: list[int], n: int) -> list[int]:
+        content = (observe(elems) if elems else b"") + _frame(RL.OP_SQUEEZE, RL.KIND_SLICE, n)
+        resp = self.proxy.handle(RL.encode_req(RL.REQ_ROUND, stream, content, n))
+        if resp[:1] != bytes([RL.RESP_COINS]):
+            raise RuntimeError(f"{stream}: {RL.decode_resp(resp)[1]}")
+        return RL.decode_resp(resp)[1]
+
+    def sparse_phase(self) -> None:
+        """Each rep's sparse stream (`rec_live.sparse_rounds`), opened as its rep's child at the rep's end once the prover has
+        sent Finish: `rec_sparse.prove` at the rep's fold points and h, each message a round of the relay's own. A refusal,
+        or a sum the phase cannot send, stops the session."""
+        from . import rec_sparse as SP
+
+        sh, ents, rng = self.sparse
+        try:
+            for r in range(RL.REPS):
+                rep, stream = f"{RL.TABLE}/rep{r}", f"{RL.SPARSE}/rep{r}"
+                at = len(self.proxy.streams[rep]["rounds"])
+                resp = self.proxy.handle(RL.encode_req(RL.REQ_OPEN, stream, rep, SPARSE_LABEL, at))
+                if resp[:1] != bytes([RL.RESP_OK]):
+                    return
+                pts = SP.inner_points(self.sh, self.coins[rep][:self.zp] + [[0]])
+                U = SP.layout_factors(sh, pts["x_rest"], pts["y_rest"], rng)
+                self.sparse_out[r] = SP.prove(sh, ents, pts, U, self.split[rep]["h"], lambda e, n, s=stream: self._round(s, e, n),
+                                              self.workers)
+        except Exception as e:  # noqa: BLE001 - the session stops, never the relay
+            self.proxy.stop(f"rec session: sparse phase: {type(e).__name__}: {e}")
+
     def prover_record(self) -> dict:
         """The session as the prover ran it: `rec_live.Proxy.session_record` with each rep's z_partial round whole again,
-        answered with r′ (what upstream's replay and the Lean verifier check the proofs against)."""
+        answered with r′, and only the reps' streams and proofs (what upstream's replay and the Lean verifier check the
+        proofs against)."""
         p = copy.copy(self.proxy)
-        p.streams = {}
+        p.streams, p.proofs = {}, {k: v for k, v in self.proxy.proofs.items() if k[0] == RL.TABLE}
         for name, st in self.proxy.streams.items():
+            if name not in self.reps:
+                continue
             rounds = list(st["rounds"])
             if name in self.split:
                 k = self.zp
@@ -252,25 +293,37 @@ class Relay:
         d.mkdir(parents=True, exist_ok=True)
         (d / "session.json").write_text(json.dumps(self.prover_record(), indent=1))
         for (t, r), b in self.proxy.proofs.items():
-            (d / f"{t}.rep{r}.bin").write_bytes(b)
+            if t == RL.TABLE:
+                (d / f"{t}.rep{r}.bin").write_bytes(b)
         return d
 
 
 def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequence[str] = HIDDEN,
-          rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None) -> dict:
+          rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None, sparse=None,
+          workers: int = 1) -> dict:
     """One session on ``listen``, held to the statement's holo schedule (`rec_live.schedule_for`, written to
     ``out/schedule.json`` first), through a `Relay` whose h is the ``hidden`` circuits' fold in ``circuit``; written into
-    ``out`` (`Relay.write`), or, when it stops, the coin server's record alone. Returns its summary."""
+    ``out`` (`Relay.write`), or, when it stops, the coin server's record alone. ``sparse``: the bucket's `rec_sparse.Shape`,
+    whose sparse phase (`Relay.sparse_phase`, on ``workers`` processes) the one hidden circuit's entries run. Returns its
+    summary."""
     m, k_log = statement["dense_m"], statement["k_log"]
     nets, ranges, meta = hidden_circuits(Path(circuit), hidden)
     if meta["k_log"] != k_log:
         raise ValueError(f"the circuit's k_log {meta['k_log']} is not the statement's {k_log}")
-    schedule = RL.schedule_for(statement, holo=True)
+    phase = None
+    if sparse is not None:
+        from . import rec_sparse as SP
+
+        if len(ranges) != 1:
+            raise ValueError(f"the sparse phase at T = 1 runs one hidden circuit, not {len(ranges)}")
+        net = nets[ranges[0]["net"]]
+        phase = (sparse, SP.entries(sparse, net["a"], net["b"]), ranges[0])
+    schedule = RL.schedule_for(statement, holo=True, sparse=sparse)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "schedule.json").write_text(json.dumps(schedule, indent=1))
     proxy = RL.Proxy(RL.CoinServer(rand), schedule=schedule)
-    relay = Relay(proxy, m, k_log, lambda p: hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]))
+    relay = Relay(proxy, m, k_log, lambda p: hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, workers)
     host, port = listen.rsplit(":", 1)
     with socket.create_server((host, int(port))) as srv:
         h, p = srv.getsockname()[:2]
@@ -294,7 +347,8 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     rec = proxy.coins.record()
     return {"session": str(out / "session"), "prover": str(out / "prover"), "rounds": len(rec["rounds"]),
             "message_rows": rec["message_rows"], "coins": sum(r["n"] for r in rec["rounds"]), "hidden": list(hidden),
-            "h_round": relay.zp + 1, "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}}
+            "h_round": relay.zp + 1, "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()},
+            "sparse": None if sparse is None else {"shape": [sparse.NU, sparse.ELL, sparse.S_LOG, sparse.T_LOG], "reps": len(relay.sparse_out)}}
 
 
 def main(argv=None) -> int:
@@ -309,6 +363,8 @@ def main(argv=None) -> int:
     ap.add_argument("--check-fold", metavar="FOLD", help="InnerFold.lean --hide's output: check its comb plus the session's h "
                     "is its full fold, and exit (1 if not)")
     ap.add_argument("--inner", help="--check-fold: the session directory, whose private.json holds h")
+    ap.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="each rep's sparse phase at this RecSparse shape (the bucket's)")
+    ap.add_argument("--workers", type=int, help="--sparse: processes sharing each rep's H3 (default: the cores it may run on)")
     a = ap.parse_args(argv)
     if a.check_fold:
         if not a.inner:
@@ -318,8 +374,12 @@ def main(argv=None) -> int:
         return 0 if all(res["comb_plus_h_is_full"]) and all(res["h_nonzero"]) else 1
     if not (a.out and a.statement and a.circuit):
         ap.error("--out, --statement and --circuit are required to serve")
+    sparse = None
+    if a.sparse:
+        from .rec_sparse import Shape
+        sparse = Shape(*(int(v) for v in a.sparse.split(",")))
     res = serve(a.listen, Path(a.out), RL.statement_of(Path(a.statement).read_text()), Path(a.circuit), a.hidden.split(","),
-                ready=lambda addr: print(f"SERVING {addr}", flush=True))
+                ready=lambda addr: print(f"SERVING {addr}", flush=True), sparse=sparse, workers=len(os.sched_getaffinity(0)) if a.workers is None else a.workers)
     print("REC_INNER\t" + json.dumps(res), flush=True)
     return 0 if res["session"] else 1
 

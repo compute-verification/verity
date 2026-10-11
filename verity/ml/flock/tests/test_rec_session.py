@@ -4,7 +4,8 @@ socket against a fake prover that replays rec-algebra's fixture session: the pro
 verifier's record has h in a round of its own after z_partial's coinless one on the rep's one coin stream, and
 `rec_vstage` stages the holo algebra from that record, with h read from the session's rows, and it holds (Lean's fold of
 the fixture, `fixtures/inner_claims.json`, split as public comb + h). The stacked table's stream, as candidate 3's
-opening-only prover sends it (``flock-circuit stacked``), is held to `rec_live.schedule_for`'s. That the verifier's public comb plus h is Lean's own
+opening-only prover sends it (``flock-circuit stacked``), is held to `rec_live.schedule_for`'s, and the relay runs each
+rep's sparse phase (`rec_sparse.prove`) on the coin server's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
 full fold (``InnerFold.lean --hide``) is the pod's (``pod/88-rec-c3-inner.sh``, `check_fold`)."""
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import random
 import socket
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from verity.ml.circuits.ops.boolean import gf2k as G
@@ -23,6 +25,7 @@ from verity_flock import rec_live as RL
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 from verity_flock import rec_session as RS
+from verity_flock import rec_sparse as SP
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
@@ -318,12 +321,14 @@ def test_the_relay_splits_z_partials_round_and_refuses_another():
         assert [r[3] for r in proxy.reqs] == ([0] if why.startswith("h") else [])
 
 
-def _stacked_session(proxy, roots: dict, sh: tuple, m_r: int, order=("circuit/rep0", "circuit/rep1", "stacked/rep0"), binds=None):
+def _stacked_session(proxy, roots: dict, sh: tuple, m_r: int | None, order=("circuit/rep0", "circuit/rep1", "stacked/rep0"),
+                     binds=None, prover: bool = False):
     """A holo session at ``sh`` and the stacked table's stream at ``m_r``, as the relay would hand them to the proxy: Hello
     naming the stacked table after the circuit's, Commit with R's cap among the roots, then each stream's rounds built
     from its round tuples (a rep's first round binds its table: the r1cs label, a digest, its root; then its fresh tops,
     its other copies of the root, its free message, the ring switch's nonce, its squeeze), its proof and Finish. ``binds``:
-    the caps the rounds bind and copy, if not the committed ones."""
+    the caps the rounds bind and copy, if not the committed ones. ``prover``: the reps' rounds as the prover sends them to
+    the relay (z_partial's round whole, `rec_live.rep_rounds`)."""
     m, k_log, claims = sh
     g, binds = random.Random(5), binds or roots
     hello = {"profile": "fast100", "reps": 2, "flavor": "rs", "tables": list(roots), "rounds": "bytes retained",
@@ -334,7 +339,7 @@ def _stacked_session(proxy, roots: dict, sh: tuple, m_r: int, order=("circuit/re
     b = lambda p: RS._frame(RL.OP_BYTES, 0, len(p), p)
     for s in order:
         table = s.split("/")[0]
-        rounds = RL.stacked_rounds(m_r) if table == RL.STACKED else RL.holo_rounds(m, k_log, claims)
+        rounds = RL.stacked_rounds(m_r) if table == RL.STACKED else (RL.rep_rounds if prover else RL.holo_rounds)(m, k_log, claims)
         label = f"flock-circuit/{table}/fast100/rep{s[-1]}" if table == RL.STACKED else f"flock-circuit/fast100/rep{s[-1]}"
         out.append(proxy.handle(RL.encode_req(RL.REQ_OPEN, s, "", label.encode(), 0)))
         for k, (n, tops, level0, e) in enumerate(rounds):
@@ -387,3 +392,79 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
         proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch)
         _stacked_session(proxy, **{"roots": roots, "sh": sh, "m_r": m_r, **kw})
         assert why in (proxy.stopped or ""), (why, proxy.stopped)
+
+
+def _toy_circuit(d: Path, seed: int) -> tuple[Path, dict]:
+    """A circuit file at k_log 10 whose one hidden circuit ``unit`` (100 rows of 2^7-bit slots) has a range of 3 slots at 4."""
+    lines = _unit_text("unit", 100, random.Random(seed), 128)
+    rng = {"type": "unit", "net": "unit", "slot_log": 7, "pos0": 4, "count": 3}
+    text = ["flock-circuit toy", "META " + json.dumps({"k_log": 10, "ranges": [rng]}), f"CIRCUIT unit {len(lines)}", *lines]
+    (d / f"circuit-{seed}.txt").write_text("\n".join(text) + "\n")
+    return d / f"circuit-{seed}.txt", rng
+
+
+def _sparse_relay(circuit: Path, phase_of=lambda ph: ph):
+    sp, statement = SP.Shape(9, 7, 2, 0), {"dense_m": 22, "k_log": 10, "nbl": 12, "regions": 0}
+    nets, ranges, _ = RS.hidden_circuits(circuit)
+    phase = phase_of((sp, SP.entries(sp, nets["unit"]["a"], nets["unit"]["b"]), ranges[0]))
+    sch = RL.schedule_for(statement, holo=True, sparse=sp)
+    salts = random.Random(4)
+    proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), lambda: salts.randbytes(192), schedule=sch)
+    relay = RS.Relay(proxy, 22, 10, lambda p: RS.hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, 2)
+    resp = _stacked_session(relay, {"circuit": random.Random(1).randbytes(64 << 7)}, (22, 10, 2), None,
+                            order=("circuit/rep0", "circuit/rep1"), prover=True)
+    return relay, sch, resp
+
+
+@pytest.fixture(scope="module")
+def sparse_session(tmp_path_factory):
+    d = tmp_path_factory.mktemp("sparse")
+    circuit, rng = _toy_circuit(d, 8)
+    relay, sch, resp = _sparse_relay(circuit)
+    relay.proxy.write(d / "inner")
+    public, private = (json.loads((d / "inner" / f).read_text()) for f in ("public.json", "private.json"))
+    vf = SimpleNamespace(sh=A.Shape(22, 10, 2, holo=True), reps=[SimpleNamespace(rounds=S.rep_coins(public, r)) for r in (0, 1)])
+    return SimpleNamespace(d=d, circuit=circuit, rng=rng, relay=relay, sch=sch, resp=resp, public=public, private=private, vf=vf)
+
+
+def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_coin_servers_coins(sparse_session):
+    """At the prover's Finish the relay opens each rep's sparse stream as its child at its end and runs `rec_sparse.prove`
+    there (h the rep's, entries the hidden circuit's), each message a round of its own on the coin server's coins: the
+    record is `schedule_for(..., sparse=)`'s, both reps' rounds before either sparse stream's; `rec_vstage.sparse_reps`
+    reads back from the public record and the prover's rows the coins and messages the relay ran (v2's coinless round
+    skipped), which the reference accepts; the prover's own record holds only its reps. Entries that are not h's circuit
+    stop the session at H1, and the prover's Finish is answered refused."""
+    ss = sparse_session
+    relay, proxy = ss.relay, ss.relay.proxy
+    assert proxy.stopped is None and json.loads(ss.resp[-1][1])["accepted"] is None
+    rec = proxy.coins.record()
+    sp = relay.sparse[0]
+    assert RL.schedule_of(rec) == ss.sch and rec["streams"]["sparse/rep1"] == \
+        {"parent": "circuit/rep1", "at": len(RL.holo_rounds(22, 10, 2)), "rounds": len(RL.sparse_rounds(sp))}
+    order = ["circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1"]
+    assert [r["stream"] for r in rec["rounds"]] == sorted((r["stream"] for r in rec["rounds"]), key=order.index)
+    got = S.sparse_reps(ss.public, ss.private, ss.vf, sp, ss.rng)
+    assert got == [relay.sparse_out[r] for r in (0, 1)]
+    for c, m in got:
+        assert SP.sparse_ref(sp, SP.rows(sp, m, SP.verifier_row(sp, c))) == [0] * SP.out_words(sp)
+    assert [s["stream"] for s in relay.prover_record()["streams"]] == ["circuit/rep0", "circuit/rep1"]
+
+    def flip(ph):
+        ents = list(ph[1])
+        i = next(i for i, e in enumerate(ents) if e[2])
+        ents[i] = (*ents[i][:3], ents[i][3] ^ 1)
+        return (ph[0], ents, ph[2])
+
+    relay, _, resp = _sparse_relay(ss.circuit, flip)
+    assert "sparse phase: AssertionError: H1" in relay.proxy.stopped and json.loads(resp[-1][1])["accepted"] is False
+
+
+@pytest.mark.slow
+def test_rec_vstage_stages_the_relays_sparse_phase_as_rec_sparse(sparse_session, tmp_path):
+    """`rec_vstage.stage_sparse` stages the relay's sparse phase as RecSparse over both reps, its message ports the rows the
+    firewall committed (h the algebra's h round's), and both instances hold. Building RecSparse's statement is the cost."""
+    ss = sparse_session
+    program = O.session_program((ss.d / "inner" / "public.json").read_bytes())
+    regs, own = S.messages(program, S.message_rounds(ss.public, ss.private, ss.vf.sh))
+    st = S.stage_sparse(ss.public, ss.private, ss.vf, program, regs, own, ss.relay.sparse[0], ss.rng, tmp_path, evaluate=False)
+    assert st["holds"] == [True, True] and st["nonzero_residuals"] == [[], []]
