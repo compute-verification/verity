@@ -102,6 +102,48 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
+  on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
+  through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
+  proves coverage against the committed partition: each sampled unit sits in exactly one slot, of its committed type,
+  on its committed values. Revealing each sampled unit's type would leak the architecture, since a uniform sample's
+  type mix estimates the model's. The public-unit case is this design with the partition opened, and
+  `RecursiveAudit` is stated for it first. The same night:
+  - The universal unit (option 3) is frozen. Its registration, hidden reads, statement hiding and `circuit_indist`
+    are kept; its unit-specific work stops.
+  - VBridge is to become a theorem about one Lean function: Lean's `VStar.statements` builder, proved correct one
+    building block at a time.
+  - Hiding the type mix costs padding, not an evaluation of every type. A session picks its type's matrix by a hidden
+    index, small types are padded to the shape's nonzero bound, and session counts are padded per shape.
+  - No benchmark harness is built until the theory lands.
+  - (7:08 PM) One key per protecting party, drawn once at setup from the OS before anything else: the developer's for
+    its registrations and the firewall, the challenger's for coin commitments. It is public and a constant in V\*, so
+    one V\* serves every registration. A Lean bound over the key chooses the data and the auditor's choices (prompts,
+    coins) after the key, never before it. A key on a wire stays the fallback: hm96's key is a GF(2) Hankel multiplier,
+    XORs as a constant and an AND per product as a wire.
+- 2026-10-09 (4:48–5:00 PM PDT, relayed by top): a key that hides a commitment is drawn by the party the hiding
+  protects, and fixed in the commitment before use (which party's key, and when it is drawn: 7:08 PM, above). hm96's
+  pinned key stays only where the key is wired into a circuit (the row gadget), as a named exception. The inner phase's
+  coins are sent live, because the auditor sees only hiding commitments that are never opened; committed coins are for
+  V\*'s outer sessions. "The verifier accepts the inner statement" in a soundness event means the statement-level checks
+  the auditor runs, never acceptance of the inner transcript, which VBridge derives.
+- 2026-10-09 (9:01 AM PDT, relayed by top): a part's verdict in `check` is keyed on the code that decides that verdict (a
+  suite's runner and harness), not on every line of the check tool; that is what the 7 Oct ruling's "the check's code" means.
+  The other half of reuse is declared inputs narrowed to what each suite reads, and since the guard fails a suite that
+  reads outside its inputs, narrowing fails closed. The same day:
+  - Raising `maxHeartbeats` is not banned. The kernel checks a proof the same way at any limit, so an override is a
+    question of cost, not soundness. The Lean check records each override (file, value, reason, measured time) and the
+    nightly report lists them; nothing blocks on one.
+  - A premise is listed only if it is a fact about the world. Anything the code could check, or that could be proved,
+    becomes a check or a proof instead.
+  - A property with several conjuncts gets one shape-check entry per conjunct, so it stays one statement.
+  - A private circuit's class is "any description of its width, read in gate order", provided the format makes a
+    malformed description impossible: each gate reads only inputs and earlier gates, so no description has a cycle. The
+    class then reveals exactly its gate count, inputs and outputs.
+  - Salts are drawn from the OS, not expanded by a PRG. What remains is salted SHA-512's hiding, stated as a reduction,
+    and the OS's randomness, a listed premise.
+  - A public constant that sets how many statements a proof has (V\*'s `MAX_SLOTS`) appears in the soundness bound,
+    whose sum depends on it.
 - 2026-10-08 (11:02 PM PDT, relayed by top): parallel proof work runs against fixed statements. The final theorem's
   statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
   integration runs continuously; what the deadline leaves open is a gap list of exact lemma names

@@ -31,6 +31,12 @@ def any_core(monkeypatch):
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
 
 
+@pytest.fixture(autouse=True)
+def outside_a_run(monkeypatch):
+    """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+
+
 def _hold(path: Path) -> int:
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -268,6 +274,45 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
     for bad in (["--wait-max", "0"], ["--run-max", "soon"], ["--wait-max"]):
         with pytest.raises(SystemExit):
             SLOT.main([*bad, "--", "true"])
+
+
+def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
+    """af2d (10 Oct) waited 95 min in node 1's line and was reported running since its launch: its run's slot.json says waiting,
+    and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    held, t, seen = [_hold(tmp_path / "check-a.lock")], [NOW], []
+
+    def sleep(s):
+        seen.append(json.loads((run / SLOT.RUN_SLOT).read_text()))
+        t[0] += timedelta(seconds=s)
+        os.close(held.pop())
+
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: (_ for _ in ()).throw(Exec()))
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "true"], now=lambda: t[0], sleep=sleep)
+    assert seen == [{"state": "waiting", "since": "2026-10-01T09:00:00Z", "priority": True,
+                     "why": "every check slot is taken (a: busy)"}]
+    assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:00Z", "priority": True,
+                                                              "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z"}
+    (tmp_path / "again").mkdir()
+    (tmp_path / "again" / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "again" / "slots")
+    held = [_hold(tmp_path / "again" / "check-a.lock")]
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran without a slot"))
+    assert SLOT.main(["--wait-max", "20", "--", "true"], now=lambda: t[0],
+                     sleep=lambda s: t.__setitem__(0, t[0] + timedelta(seconds=s))) == SLOT.NOT_STARTED
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert doc["state"] == "left" and doc["since"] == "2026-10-01T09:00:20Z" and doc["why"].startswith("no check slot within --wait-max 20 s")
+    os.close(held[0])
+    (run / SLOT.RUN_SLOT).unlink()
+    run.rmdir()
+    SLOT.record_slot(str(run), {"state": "waiting"})                       # an unwritable run dir never stops the check
+    assert not run.exists()
 
 
 def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):

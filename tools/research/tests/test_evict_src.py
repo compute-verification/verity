@@ -327,6 +327,60 @@ def test_a_process_it_cannot_read_deletes_nothing(node, monkeypatch):
     assert "CAP_SYS_PTRACE" in run(node)["error"]
 
 
+RUNPOD_NGINX = """events { worker_connections 2048; }
+http {
+    server { listen 9091; location / { proxy_pass http://localhost:9090; } error_page 502 /502.html;
+             location = /502.html { root /usr/share/nginx/html; } }
+}
+"""
+
+
+def _runpod_proxy(node, monkeypatch, *, conf: str = RUNPOD_NGINX, uid: int = 65534, master: str = "nginx: master process /usr/sbin/nginx",
+                  name: str = "nginx") -> Path:
+    """RunPod's proxy: a root nginx master (39) the pass reads and its worker (40) as `nobody`, which it can't."""
+    fake_proc(node.proc, 39, cmdline=master)
+    os.remove(node.proc / "39" / "exe")
+    os.symlink("/usr/sbin/nginx", node.proc / "39" / "exe")
+    fake_proc(node.proc, 40, cmdline="nginx: worker process")
+    (node.proc / "40" / "status").write_text(f"Name:\t{name}\nPPid:\t39\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+    real = os.readlink
+
+    def readlink(p, *a, **k):
+        if str(p).startswith(str(node.proc / "40") + "/"):
+            raise PermissionError(13, "Permission denied")
+        return real(p, *a, **k)
+
+    monkeypatch.setattr(EV.os, "readlink", readlink)
+    path = node.tmp / "nginx.conf"
+    path.write_text(conf)
+    return path
+
+
+def test_runpods_proxy_worker_is_passed_over_unread_and_its_master_is_read(node, monkeypatch):
+    rep = run(node, nginx_conf=_runpod_proxy(node, monkeypatch))
+    assert rep["error"] is None and [d["tree"] for d in rep["deleted"]] == [node.a, node.b], rep
+    tree(node.src, node.a, 5)
+    os.remove(node.proc / "39" / "cwd")
+    os.symlink(f"{node.src}/{node.a}", node.proc / "39" / "cwd")
+    rep = run(node, nginx_conf=node.tmp / "nginx.conf")
+    assert rep["error"] is None and kept(rep)[node.a] == ["2: process 39 (p39) uses it"], rep
+
+
+@pytest.mark.parametrize("how", ["conf names the root", "conf includes", "conf loads a module", "root worker", "master with -c",
+                                 "not nginx"])
+def test_any_other_process_it_cannot_read_still_deletes_nothing(node, monkeypatch, how):
+    top = Path(os.path.abspath(node.src)).parts[1]
+    kw = {"conf names the root": {"conf": RUNPOD_NGINX + f"# root /{top}/x;\n"},
+          "conf includes": {"conf": RUNPOD_NGINX + "include /etc/nginx/sites-enabled/*;\n"},
+          "conf loads a module": {"conf": "load_module modules/x.so;\n" + RUNPOD_NGINX},
+          "root worker": {"uid": 0},
+          "master with -c": {"master": "nginx: master process /usr/sbin/nginx -c /elsewhere.conf"},
+          "not nginx": {"name": "python3"}}[how]
+    rep = run(node, nginx_conf=_runpod_proxy(node, monkeypatch, **kw))
+    _all_kept(node, rep, "2: ")
+    assert "/40 is unreadable" in rep["error"]
+
+
 def test_an_empty_proc_deletes_nothing(node):
     empty = node.tmp / "noproc"
     empty.mkdir()

@@ -54,7 +54,8 @@ check that came through here also names its run (RESEARCH_RUN_ID), the tree it c
 `research run` names by commit) and who asked (`--by NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in
 `check-NAME.who` beside the lock, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the check that
 came before it. A waiting check prints the same lines, the waiters before it only, each time its reason to wait changes, so its
-log says whom it waits behind.
+log says whom it waits behind. Inside a `research run` (RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and
+why), held (which slot, since when) or left (why), so `research status` shows a run whose check waits here as `waiting`, not running.
 """
 from __future__ import annotations
 
@@ -76,6 +77,8 @@ POLL_S = 20
 NOT_STARTED = 75
 #: the run's timeout control file, relative to RESEARCH_RUN_DIR (research.telemetry.run.CONTROL_TIMEOUT)
 RUN_TIMEOUT = Path("control") / "timeout_s"
+#: the run's slot record, relative to RESEARCH_RUN_DIR (research.runs.SLOT_FILE): whether CMD waits in the line, holds a slot or left
+RUN_SLOT = "slot.json"
 #: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 USAGE = "usage: slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
@@ -279,6 +282,21 @@ def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotoni
                                "reason": f"slot.py --run-max: {run_max:g} s from taking check slot {slot}"}) + "\n")
     os.replace(tmp, ctl)
     return f"slot: the run's timeout is now {t:g} s from its start: {run_max:g} s from taking slot {slot}"
+
+
+def record_slot(run_dir: str | None, doc: dict) -> None:
+    """``doc`` as the run's RUN_SLOT, replaced whole, so `research status` shows a check waiting in the line as waiting and not as
+    running since its run began (10 Oct: af2d waited 95 min on node 1 and was reported running all along). Nothing outside a
+    `research run`; a write that fails never stops the check."""
+    if not run_dir:
+        return
+    p = Path(run_dir) / RUN_SLOT
+    tmp = p.with_name(f".{p.name}.{os.getpid()}")
+    try:
+        tmp.write_text(json.dumps(doc) + "\n")
+        os.replace(tmp, p)
+    except OSError as e:
+        print(f"slot: the run's {RUN_SLOT} not written: {e}", file=sys.stderr, flush=True)
 
 
 def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
@@ -549,6 +567,14 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me)
     told, joined, peeked = None, now(), None
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {})}
+    record_slot(run_dir, {"state": "waiting", **since})
+
+    def gone(why: str) -> int:
+        record_slot(run_dir, {"state": "left", **since, "left": f"{now():%Y-%m-%dT%H:%M:%SZ}", "why": why})
+        return leave(ticket, tfd, why)
+
     if pair:
         print(f"slot: twin {pair}: runs only if it takes a slot before its twins do", file=sys.stderr, flush=True)
     while True:
@@ -557,17 +583,17 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             state, info = twin("peek", pair, me)
             peeked = now()
             if state == "taken":
-                return leave(ticket, tfd, f"its twin took a slot first ({describe(info) or 'claimed'})")
+                return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
         n = ahead(ticket)
         got = None if n else take(slots if priority else [s for s in slots if not s["trains"]], SLOTS.parent, now())
         if got and pair:
             state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
             if state != "claimed":
                 os.close(got[1])
-                return leave(ticket, tfd, f"its twin took a slot first ({describe(info) or 'claimed'})" if state == "taken" else
-                             f"twin {pair} can't be claimed ({info.get('why')}), so its twin there runs instead" if "@" in pair else
-                             f"twin {pair}'s claim can't be written here ({info.get('why')}), and no twin runs without it: "
-                             "rerun the check")
+                return gone(f"its twin took a slot first ({describe(info) or 'claimed'})" if state == "taken" else
+                            f"twin {pair} can't be claimed ({info.get('why')}), so its twin there runs instead" if "@" in pair else
+                            f"twin {pair}'s claim can't be written here ({info.get('why')}), and no twin runs without it: "
+                            "rerun the check")
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
@@ -577,9 +603,10 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
             for ln in status(slots, SLOTS.parent, now(), before=ticket.name):
                 print(f"slot:   {ln}", file=sys.stderr, flush=True)
+            record_slot(run_dir, {"state": "waiting", **since, "why": why})
             told = why
         if wait_max is not None and (now() - joined).total_seconds() >= wait_max:
-            return leave(ticket, tfd, f"no check slot within --wait-max {wait_max:g} s ({why})")
+            return gone(f"no check slot within --wait-max {wait_max:g} s ({why})")
         sleep(POLL_S)
     ticket.unlink()
     os.close(tfd)
@@ -595,9 +622,10 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
                **({SLOT_MEM_ENV: str(slot["mem"])} if slot.get("mem") else {}))
+    record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": f"{now():%Y-%m-%dT%H:%M:%SZ}"})
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if run_max is not None:
-        print(limit_run(run_max, slot["name"], os.environ.get("RESEARCH_RUN_DIR")), file=sys.stderr, flush=True)
+        print(limit_run(run_max, slot["name"], run_dir), file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 
 
