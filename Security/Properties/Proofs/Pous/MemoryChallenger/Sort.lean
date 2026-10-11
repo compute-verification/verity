@@ -151,4 +151,12 @@ theorem mem_qsort (lt : α → α → Bool) {as : Array α} {x : α} (hx : x ∈
   · exact hx
   · exact (Vector.Perm.toArray (sort_perm lt _ as.toVector _ _ _ _ _ rfl)).mem_iff.2 hx
 
+/-- **`qsort` adds no element.** -/
+theorem qsort_mem (lt : α → α → Bool) {as : Array α} {x : α} (hx : x ∈ as.qsort lt) : x ∈ as := by
+  revert hx
+  unfold Array.qsort
+  split
+  · exact id
+  · exact (Vector.Perm.toArray (sort_perm lt _ as.toVector _ _ _ _ _ rfl)).mem_iff.1
+
 end MemoryChallenger.Properties.SecurityProofs.Sort
