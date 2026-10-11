@@ -245,11 +245,14 @@ def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
 
 def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> list[Top]:
     """Each Ligerito level's top of a rep's stream, opened (`opened_top`) against the coin server's record: level 0's the
-    table's ``root_B`` from ``Commit``, then each later salted top in the order the stream's rounds absorbed them. A round's
-    copies of a level-0 top (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""
+    table's ``root_B`` from ``Commit`` (for a table with none there, the stacked table R, its binding round's salted top),
+    then each later salted top in the order the stream's rounds absorbed them. A round's copies of a level-0 top
+    (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""
     if public.get("tops") != RL.TOPS or private.get("tops") != RL.TOPS:
         raise ValueError(RL.refused("tree top: the record's tops are not salted (rec_live.TOPS)"))
-    out = [opened_top(private["roots"][table], public["link"]["roots"][table], f"{table}'s root_B")]
+    out = []
+    if table in public["link"]["roots"]:
+        out.append(opened_top(private["roots"][table], public["link"]["roots"][table], f"{table}'s root_B"))
     prv = {(r["stream"], r["k"]): r for r in private["rounds"]}
     for r in _stream_rounds(public, stream):
         got = prv.get((stream, r["k"]), {}).get("tops", [])
@@ -337,7 +340,7 @@ def main(argv=None) -> int:
     try:
         public, private, proofs = load(Path(a.inner))
         res = check(public, private, proofs)
-        if RL.STACKED in public["link"]["roots"]:
+        if f"{RL.STACKED}/rep0" in public["streams"]:
             res["stacked"] = check(public, private, load(Path(a.inner), RL.STACKED)[2], RL.STACKED)
             res["accepted"] = res["accepted"] and res["stacked"]["accepted"]
     except ValueError as e:

@@ -19,9 +19,11 @@ The copies between slots (Δ) and the pin stay public: the verifier's comb is th
 --hide``), and comb + h is the circuit's whole fold (`check_fold`).
 
 **The sparse phase and R** (``--sparse``, ``--stacked``): at the prover's Finish the relay runs each rep's sparse phase as a
-stream of its own (`Relay.sparse_phase`), then opens the stacked table R, whose root it added to the prover's Commit (and
-``stacked`` to its Hello), at both reps' registered claims with ``flock-circuit stacked`` on a connection of its own into the
-same session (`Relay.stacked_phase`), and only then passes the prover's Finish on.
+stream of its own (`Relay.sparse_phase`), then commits the stacked table R and opens it at both reps' registered claims with
+``flock-circuit stacked`` on a connection of its own into the same session (`Relay.stacked_phase`), and only then passes the
+prover's Finish on. The prover's Hello and Commit pass as they are, the circuit table's alone: R's root is the salted top of
+its stream's binding round (`rec_live.stacked_rounds`), so the verifier's record has the statement's Hello, the bytes of the
+prover's own record.
 
 `serve` writes the proxy's directory (`rec_live.Proxy.write`: ``public.json``, ``private.json`` and ``session/``, whose rounds
 are the verifier's, z_partial's of no coins then h's) and ``prover/``: ``session.json``, the session as the prover ran it
@@ -206,44 +208,15 @@ class Relay:
         #: per rep, its sparse phase's coins and messages (`rec_sparse.prove`)
         self.sparse_out: dict[int, tuple] = {}
         #: the stacked table R (`stacked_phase`): ``bin`` (flock-circuit), ``dir`` (R.bin, ROOT.json, P.json and its logs),
-        #: ``forge`` (None, ``cell``: R committed with cell 0 flipped, or ``point``: rep 0's point off by one bit); the
-        #: prover's own Hello and Commit are kept here
+        #: ``forge`` (None, ``cell``: R committed with cell 0 flipped, or ``point``: rep 0's point off by one bit)
         self.stacked = stacked
 
     def _refuse(self, why: str) -> bytes:
         self.proxy.stop(f"rec session: {why}")
         return RL.resp_str(RL.RESP_REFUSED, self.proxy.stopped)
 
-    def _stacked_req(self, req: bytes) -> bytes:
-        """The prover's Hello with ``stacked`` after its table, or its Commit with R's root: R's cells from the hidden
-        circuit's entries (`rec_sparse.table`), committed by ``flock-circuit stacked --root-out``."""
-        from . import rec_sparse as SP
-
-        st, r = self.stacked, RL.decode_req(req)
-        if r[0] == RL.REQ_HELLO:
-            v = json.loads(r[1])
-            st["hello"] = r[1]
-            return RL.encode_req(RL.REQ_HELLO, json.dumps({**v, "tables": [*v["tables"], RL.STACKED]}))
-        d = Path(st["dir"])
-        d.mkdir(parents=True, exist_ok=True)
-        raw = bytearray(SP.table(*self.sparse[:2]))
-        if st.get("forge") == "cell":
-            raw[0] ^= 1
-        st["raw"] = bytes(raw)
-        (d / "R.bin").write_bytes(st["raw"])
-        subprocess.run([str(st["bin"]), "stacked", "--table", str(d / "R.bin"), "--root-out", str(d / "ROOT.json")], check=True,
-                       capture_output=True)
-        st["commit"] = r[1:]
-        cap = bytes.fromhex(json.loads((d / "ROOT.json").read_text())["cap"])
-        return RL.encode_req(RL.REQ_COMMIT, r[1], [*r[2], (RL.STACKED, cap)], r[3])
-
     def handle(self, req: bytes) -> bytes:
         r = None
-        if self.stacked is not None and req[:1] in (bytes([RL.REQ_HELLO]), bytes([RL.REQ_COMMIT])) and self.proxy.stopped is None:
-            try:
-                req = self._stacked_req(req)
-            except Exception as e:  # noqa: BLE001 - the session stops, never the relay
-                return self._refuse(f"stacked table: {type(e).__name__}: {e}")
         if req[:1] == bytes([RL.REQ_FINISH]) and self.sparse is not None and not self.sparse_out and self.proxy.stopped is None:
             self.sparse_phase()
             if self.stacked is not None and self.proxy.stopped is None:
@@ -311,14 +284,23 @@ class Relay:
             self.proxy.stop(f"rec session: sparse phase: {type(e).__name__}: {e}")
 
     def stacked_phase(self) -> None:
-        """R opened at both reps' registered claims (`rec_sparse.registered_claim`, each checked to be R's value there, the
-        sparse phase's claim) by ``flock-circuit stacked --points P.json --verifier`` on a connection of its own into the same
-        session; its Finish is answered here, the prover's goes on to the proxy."""
+        """R's cells from the hidden circuit's entries (`rec_sparse.table`, its root by ``flock-circuit stacked --root-out``),
+        opened at both reps' registered claims (`rec_sparse.registered_claim`, each checked to be R's value there, the sparse
+        phase's claim) by ``flock-circuit stacked --points P.json --verifier`` on a connection of its own into the same
+        session, whose binding round commits R's root; its Finish is answered here, the prover's goes on to the proxy."""
         from . import rec_sparse as SP
 
         sh, st = self.sparse[0], self.stacked
         d = Path(st["dir"])
         try:
+            d.mkdir(parents=True, exist_ok=True)
+            raw = bytearray(SP.table(*self.sparse[:2]))
+            if st.get("forge") == "cell":
+                raw[0] ^= 1
+            st["raw"] = bytes(raw)
+            (d / "R.bin").write_bytes(st["raw"])
+            subprocess.run([str(st["bin"]), "stacked", "--table", str(d / "R.bin"), "--root-out", str(d / "ROOT.json")], check=True,
+                           capture_output=True)
             x = []
             for r in range(RL.REPS):
                 c, msgs = self.sparse_out[r]
@@ -351,18 +333,18 @@ class Relay:
                         RL.write_frame(wf, self.proxy.handle(req))
             if proc.wait() != 0 and self.proxy.stopped is None:
                 raise RuntimeError(f"flock-circuit stacked exited {proc.returncode}: {(d / 'open.log').read_text()[-400:]}")
+            bound = (self.proxy.streams.get(f"{RL.STACKED}/rep0") or {}).get("cap")
+            if self.proxy.stopped is None and (bound is None or bound.hex() != json.loads((d / "ROOT.json").read_text())["cap"]):
+                raise AssertionError("R's stream bound a root other than R's (ROOT.json)")
         except Exception as e:  # noqa: BLE001 - the session stops, never the relay
             self.proxy.stop(f"rec session: stacked phase: {type(e).__name__}: {e}")
 
     def prover_record(self) -> dict:
         """The session as the prover ran it: `rec_live.Proxy.session_record` with each rep's z_partial round whole again,
         answered with r′, and only the reps' streams and proofs (what upstream's replay and the Lean verifier check the
-        proofs against); with R, the prover's own Hello and Commit."""
+        proofs against)."""
         p = copy.copy(self.proxy)
         p.streams, p.proofs = {}, {k: v for k, v in self.proxy.proofs.items() if k[0] == RL.TABLE}
-        if self.stacked is not None:
-            p.hello, p.commit = self.stacked["hello"], self.stacked["commit"]
-            p.hello_v = {**p.hello_v, "tables": [RL.TABLE]}
         for name, st in self.proxy.streams.items():
             if name not in self.reps:
                 continue
