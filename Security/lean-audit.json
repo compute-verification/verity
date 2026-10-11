@@ -3393,6 +3393,9 @@
   },
   "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
    "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -3456,6 +3459,10 @@
    },
    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
     "function": "Accounting.Tag.sketchWord",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
+    "function": "Accounting.Tag.unreadSum",
     "outcome": "none"
    }
   },

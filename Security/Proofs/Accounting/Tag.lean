@@ -2,6 +2,7 @@ import Proofs.Accounting.Tag.Basic
 import Proofs.Accounting.Tag.PolyHash
 import Proofs.Accounting.Tag.PartialRead
 import Proofs.Accounting.Tag.Signs
+import Proofs.Accounting.Tag.LittlewoodOfford
 import Proofs.Accounting.Tag.SketchExact
 
 /-!
@@ -13,7 +14,8 @@ Each statement of `Models/Accounting/Guarantees/Tag.lean` and `Models/Accounting
 * `Tag/PolyHash.lean`: the polynomial hash's non-collision, unpredictability, fold, digest and Horner loop;
 * `Tag/PartialRead.lean`: a partially read block's unread words are each guessed with probability `2^-32`;
 * `Tag/Signs.lean`: `k` uniform ±1 rows collide on two different integer vectors with probability at most `2^-k`;
-* `Tag/SketchExact.lean`: the ±1 sketch on sm_120's E4M3 tensor cores is exact, and so collides as rarely.
+* `Tag/SketchExact.lean`: the ±1 sketch on sm_120's E4M3 tensor cores is exact, and so collides as rarely;
+* `Tag/LittlewoodOfford.lean`: Erdős's anti-concentration bound for one row under partial reads.
 -/
 
 namespace Accounting.SecurityProofs.Tag
@@ -36,5 +38,6 @@ theorem SmallCode : Accounting.Guarantees.Sketch.SmallCode := Accounting.TagProo
 theorem Exact : Accounting.Guarantees.Sketch.Exact := Accounting.TagProofs.sketchExact
 theorem TensorCoreNonCollision : Accounting.Guarantees.Sketch.TensorCoreNonCollision :=
   Accounting.TagProofs.tensorCoreNonCollision
+theorem LittlewoodOfford : Accounting.Guarantees.Sketch.LittlewoodOfford := Accounting.TagProofs.littlewoodOfford
 
 end Accounting.SecurityProofs.Sketch

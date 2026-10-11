@@ -15,6 +15,8 @@ product with a block's elements, computed exactly on the tensor cores.
   `2^15 − 1` steps from `+0`, with ±1 codes against data codes of `−16 … 16`, writes the exact integer sum: no step
   rounds or truncates, since every partial sum stays below `2^24`.
 * `TensorCoreNonCollision`: the two together, for the words the tensor cores write.
+* `LittlewoodOfford`: one row is weak against partial reads. Whatever the row, `u` unread elements that each take one of
+  two values leave its inner product guessable with probability up to `C(u, ⌊u/2⌋)/2^u ≈ √(2/(π u))`, and no more.
 
 Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
 on the data and the chain's length are in their types. The proofs are in `Security/Proofs/Accounting/Tag/`.
@@ -51,5 +53,16 @@ def TensorCoreNonCollision : Prop :=
   ∀ (k : ℕ) (T : Fin (2 ^ 15)) (x y : Fin T → Fin 32 → Fin 33),
     prob (PMF.uniformOfFintype (Fin k → Fin T → Fin 32 → Bool))
         (fun S => x ≠ y ∧ ∀ i, sketchWord (S i) x = sketchWord (S i) y) ≤ (2 ^ k : ℝ≥0∞)⁻¹
+
+/-- **Anti-concentration under partial reads (Erdős's Littlewood–Offord bound).** For nonzero integer weights `v` and
+`u` uniform independent bits `ε`, any guess `t` of `unreadSum v ε = Σ_j [ε_j] · v_j` succeeds with probability at most
+`C(u, ⌊u/2⌋)/2^u`: `1/2` at `u = 1`, about `0.246` at `u = 10` and `0.080` at `u = 100`. With a ±1 row fixed (as the
+prover knows it once the seed is out), a block whose unread elements each take one of two values uniformly has inner
+product `c + unreadSum v ε` with `v_j = sgn (s j) · (b_j − a_j)`. The bound is attained (all `v_j = 1`, `t = ⌊u/2⌋`),
+so a single row does not make a few unread elements costly; `k` rows or the polynomial hash do. -/
+def LittlewoodOfford : Prop :=
+  ∀ (u : ℕ) (v : Fin u → ℤ) (t : ℤ),
+    prob (PMF.uniformOfFintype (Fin u → Bool)) (fun ε => (∀ j, v j ≠ 0) ∧ unreadSum v ε = t) ≤
+      (u.choose (u / 2) : ℝ≥0∞) / 2 ^ u
 
 end Accounting.Guarantees.Sketch
