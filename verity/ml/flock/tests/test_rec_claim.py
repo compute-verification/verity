@@ -4,7 +4,8 @@ r of ``rec-claim``; an honest prover written here from the verifier's spec (§12
 `rec_sparse.registered_claim` points by ring switching and Ligerito, and the opening-only algebra (`rec_algebra.Shape`'s
 ``opening_only``) holds on it, reading the claims as witness elements, through the reference, `GfResiduals` and
 `InnerRepCheck`'s ports. A wrong claim row is refused by the opening and by RecSparse; a claim handed to the algebra as a
-public value is refused on either path."""
+public value is refused on either path. A point under fast100's least m (22) is padded with coordinates the shape fixes at
+zero, the table with zero rows, and the opening holds with the same claim."""
 from __future__ import annotations
 
 import dataclasses
@@ -341,6 +342,69 @@ def test_the_opening_only_products_against_k2():
     for m, k2, op in zip(range(22, 36), K2, OPENING):
         assert sum(len(r["mul"]) for r in A.structure(A.Shape(m, 6, 2))[0]["res"]) == k2
         assert sum(len(r["mul"]) for r in A.structure(A.Shape(m, 6, 2, opening_only=True))[0]["res"]) == op
+
+
+#: a point of 18 coordinates (6 entry bits, 4 plane bits, 8 type bits), under fast100's least m: padded to 22
+SHORT = RS.Shape(6, 7, 1, 8)
+
+
+@pytest.fixture(scope="module")
+def padded():
+    """Two honest reps of a RecSparse session whose stacked table has 2^18 bits: each claim at the point padded with 4 zero
+    coordinates, and the opening of the table padded with zero rows to 2^22 bits at both padded points."""
+    g = random.Random(5)
+    tables = [_template(g, SHORT) for _ in range(SHORT.T)]
+    tau = [g.randrange(SHORT.T) for _ in range(SHORT.S)]
+    reps = [session(SHORT, seed, tau=tau, tables=tables) for seed in (0, 1)]
+    bits = np.array([P[p][k] for P in tables for p in range(SHORT.PP) for k in range(1 << SHORT.NU)], np.uint8)
+    assert len(bits) == 1 << 18
+    bits = np.concatenate([bits, np.zeros((1 << OPEN.m) - len(bits), np.uint8)])
+    points = [RS.registered_claim(SHORT, c, r) for r, (c, _, _) in enumerate(reps)]
+    values = [m["claim"] for _, m, _ in reps]
+    rounds, p, cons = open_table(OPEN, bits, points, random.Random(9))
+    return dict(reps=reps, bits=bits, points=points, values=values, rounds=rounds, proof=p, cons=cons)
+
+
+@pytest.mark.slow
+def test_a_short_point_padded_to_fast100s_least_m_opens_with_the_same_claim(padded):
+    """RecSparse's point of 18 coordinates padded with 4 zeros (`registered_claim`, ``pad_to`` = 22), its table with zero rows:
+    the opening at the padded points holds with RecSparse's own claims, which are the unpadded table's at the unpadded point;
+    the padding is the shape's (4 whatever the coins), and the unpadded point is the padded one's first 16 coordinates of x.
+    At a point whose last coordinate is not zero (taken as an unpadded point), the honest opening of the same table does not
+    hold with those claims: the zeros are what make the padded table's value the claim. About 10 s, most of it the honest
+    prover."""
+    s = padded
+    for r, (c, m, _) in enumerate(s["reps"]):
+        assert RS.sparse_ref(SHORT, RS.rows(SHORT, m, RS.verifier_row(SHORT, c))) == [0] * RS.out_words(SHORT)
+        pt = s["points"][r]
+        assert (pt.pad, len(pt.x), pt.x[-4:]) == (4, OPEN.m - 6, (0, 0, 0, 0))
+        bare = RS.registered_claim(SHORT, c, r, pad_to=0)
+        assert (bare.pad, bare.x, bare.skip) == (0, pt.x[:-4], pt.skip)
+    out = A.residuals(OPEN, s["proof"], s["rounds"], [], s["points"], claims=s["values"], cons=_cons(s["cons"]))[0]
+    assert _nonzero(out) == []
+    assert _nonzero(A.residuals(OPEN, s["proof"], s["rounds"], [], s["points"], claims=[s["values"][0] ^ 1, s["values"][1]],
+                                cons=_cons(s["cons"]))[0]) == [0]
+    moved = [dataclasses.replace(pt, x=pt.x[:-1] + (1,), pad=0) for pt in s["points"]]
+    rounds, p, cons = open_table(OPEN, s["bits"], moved, random.Random(9))
+    assert _nonzero(A.residuals(OPEN, p, rounds, [], moved, claims=s["values"], cons=_cons(cons))[0]) == [0, 1]
+
+
+def test_a_padded_coordinate_that_is_not_zero_is_refused():
+    """The padded coordinates are the shape's, fixed at zero: a point whose padded coordinate is not zero is refused, as is a
+    pad longer than x; a point of 22 coordinates or more is not padded (fast100's least m, or ``pad_to`` under --zk)."""
+    g = random.Random(4)
+    pt = lambda n: tuple(g.getrandbits(128) for _ in range(n))
+    M = A.symbolic(OPEN)
+    ok = [RS.RegisteredClaim(r, pt(64), pt(OPEN.m - 10) + (0,) * 4, pad=4) for r in range(2)]
+    assert A.run(OPEN, A._dummy_coins(OPEN), M, ok)[0][1].t[("claim", 1)] == 1
+    bad = dataclasses.replace(ok[1], x=ok[1].x[:-1] + (1,))
+    with pytest.raises(ValueError, match="padded coordinates are the shape's, fixed at zero"):
+        A.run(OPEN, A._dummy_coins(OPEN), M, [ok[0], bad])
+    with pytest.raises(ValueError, match="fixed at zero"):
+        A.run(OPEN, A._dummy_coins(OPEN), M, [ok[0], dataclasses.replace(ok[1], pad=OPEN.m - 5)])
+    c = RS.Coins(alpha=0, z=0, x_rest=(), y_rest=(), zeta_c=(), pre=(), rounds=pt(SPARSE.NU + SPARSE.S_LOG),
+                 zeta_p=pt(SPARSE.P_LOG), rho=pt(SPARSE.T_LOG), U=())
+    assert RS.registered_claim(SPARSE, c, 0).pad == 0 and RS.registered_claim(SPARSE, c, 0, pad_to=25).pad == 3
 
 
 def _lean_statement(d: Path):

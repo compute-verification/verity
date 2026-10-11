@@ -1,6 +1,6 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-sparse", "flock-rec-opening"]
+defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening", "flock-rec-sparse"]
 
 [leanOptions]
 autoImplicit = false
@@ -24,12 +24,12 @@ name = "flock-firewall"
 root = "FlockFirewall"
 
 [[lean_exe]]
-name = "flock-witness"
-root = "FlockWitness"
-
-[[lean_exe]]
 name = "flock-rec-sparse"
 root = "FlockRecSparse"
+
+[[lean_exe]]
+name = "flock-witness"
+root = "FlockWitness"
 
 [[lean_exe]]
 name = "flock-rec-opening"
