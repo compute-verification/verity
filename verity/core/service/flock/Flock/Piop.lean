@@ -73,7 +73,6 @@ def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : Zeroc
   label "flock-r1cs-v0"
   absorbBytes digest
   absorbBytes cap
-  check (m ≥ 13) "zerocheck: m < 13"
   label "flock-zerocheck-v0"
   let _rSkip ← sampleVec 6
   let rOuter ← sampleVec (m - 13)

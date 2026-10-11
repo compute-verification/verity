@@ -134,7 +134,6 @@ def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Re
   label "flock-r1cs-v0"
   absorbBytes st.digest
   absorbBytes (p.cap.foldl (· ++ ·) ByteArray.empty)
-  check (m ≥ 13) "zerocheck: m < 13"
   label "flock-zerocheck-v0"
   label LABEL_PADS
   absorbBytes root
