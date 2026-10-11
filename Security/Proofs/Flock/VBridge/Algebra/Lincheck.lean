@@ -14,7 +14,7 @@ the verifier's `CircuitFold.folded` at `lincheck`'s fold points. The rounds are 
 `lincheck_coins` says which rounds `lincheck` draws its points from, and `lincheck_of_residuals` is the stage at a rep.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
@@ -199,7 +199,7 @@ the verifier's lincheck rounds at the fold points `verifierRows` returns, from t
 the comb port. -/
 theorem lincheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -209,7 +209,7 @@ theorem lincheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
     lcFold p C (sh.kLog - 6)
         (info.lc.fold.alpha * (decoded sh w comb cons).fa + (decoded sh w comb cons).fb + info.lc.fold.beta) =
       (dot comb p.zPartial, info.lc.fold.ts) := by
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hpl hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   obtain ⟨-, r0, r1, rsr, lgr, k1, k2, -, -, h1, -, -, hrs⟩ := run_stages hrun
@@ -217,4 +217,4 @@ theorem lincheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
   rw [← hl, show dot comb p.zPartial = dot (decoded sh w comb cons).comb p.zPartial by rw [decoded_comb sh cons hc]]
   exact lincheck_checks h1 (hzero r1 (by rw [hrs]; simp)) hp (fun j hj => hC j (by rwa [hl] at hj))
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

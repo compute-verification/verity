@@ -163,9 +163,8 @@ def _session(proxy, n=1):
 
 
 def _proxy(schedule=SCHEDULE, coins=None):
-    """A proxy held to ``schedule``, whose challenger committed to the session's coins before it started."""
-    coins = coins or RL.CoinServer(_counter_rand())
-    return RL.Proxy(coins, _salts(), schedule=schedule, commitments=coins.commit_coins(schedule))
+    """A proxy held to ``schedule``, on live coins."""
+    return RL.Proxy(coins or RL.CoinServer(_counter_rand()), _salts(), schedule=schedule)
 
 
 def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):

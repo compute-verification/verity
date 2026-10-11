@@ -17,7 +17,9 @@ minutes: a check there would run into a whole-node timed measurement. A slot wit
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM), so a
 check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
-8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs).  With every slot busy it retries every POLL_S, reading
+8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs), and CMD gets GB as SLOT_MEM_ENV, which check.py makes
+circuit-check's budget, so two checks' circuit-checks never each budget all the memory free when they began (node 2, 10 Oct
+20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice).  With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
@@ -77,6 +79,8 @@ NOT_STARTED = 75
 RUN_TIMEOUT = Path("control") / "timeout_s"
 #: the run's slot record, relative to RESEARCH_RUN_DIR (research.runs.SLOT_FILE): whether CMD waits in the line, holds a slot or left
 RUN_SLOT = "slot.json"
+#: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 USAGE = "usage: slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
@@ -109,7 +113,9 @@ def parse(text: str) -> list[dict]:
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use, in GiB: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's
-    session scope and the user slice on a VM; a pod's /proc/meminfo is the host's)."""
+    session scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's page cache (active_file and
+    inactive_file in its memory.stat) is in its memory.current but the kernel reclaims it at the limit, so it counts as left:
+    on vy-nebius-cpu-1 273 GB of cache held slot a's 560 GB line shut with 677 GB available (9 Oct 20:50Z)."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()
@@ -123,7 +129,9 @@ def memory_gb(root: Path = Path("/")) -> int:
             d = top / line[3:].strip("/")
             for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
                 if (m := read(c / "memory.max")).isdigit():
-                    left.append(int(m) - int(read(c / "memory.current") or 0))
+                    stat = dict(ln.split()[:2] for ln in read(c / "memory.stat").splitlines() if len(ln.split()) >= 2)
+                    cache = sum(int(stat.get(k, 0)) for k in ("active_file", "inactive_file") if stat.get(k, "").isdigit())
+                    left.append(int(m) - int(read(c / "memory.current") or 0) + cache)
     return max(0, min(left)) >> 30 if left else 0
 
 
@@ -610,9 +618,10 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
-    env = {k: v for k, v in os.environ.items() if k != "LEASE_DIR"}
+    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
-               VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"))
+               VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
+               **({SLOT_MEM_ENV: str(slot["mem"])} if slot.get("mem") else {}))
     record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": f"{now():%Y-%m-%dT%H:%M:%SZ}"})
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if run_max is not None:

@@ -1,13 +1,17 @@
 import Properties.Pous.MemoryChallenger
+import Properties.Proofs.Pous.MemoryChallenger.Device
 import Mathlib.Tactic.SplitIfs
 
 /-!
-# Proofs of the memory challenger's verdict's property (`Properties.Pous.MemoryChallenger`)
+# Proofs of the memory challenger's verdict's properties (`Properties.Pous.MemoryChallenger`)
 
 `verdict` is its checks before the rounds (`pre`, the reasons they give) followed by the rounds and the counts (`tail`),
 by case analysis (`verdict_eq`). The rounds' loop only adds: the reasons, the late and the wrong count never shrink,
 and a round that adds none passes (`forIn'_measure`). An accepted verdict has no reason, so the checks before the
 rounds gave none and every round passed.
+
+`VerdictSigned` follows: an accepted verdict's signature verifies over the session's message and its session ended
+`complete`, which is all `Device.signedByDevice_of` reads.
 -/
 
 namespace MemoryChallenger.Properties.SecurityProofs
@@ -203,5 +207,15 @@ theorem judgeAccepts : JudgeAccepts := by
     simp only [hs] at hj
     refine ⟨schemes, rfl, verdictAccepts _ _ _ _ _ _ ?_⟩
     simpa [Functor.map, Except.map, pure, Except.pure, bind, Except.bind] using hj
+
+theorem verdictSigned : VerdictSigned := by
+  intro schemes trusted expected s c openings dev h
+  obtain ⟨⟨p, hp, ht, m, hm, hv⟩, -, he, -⟩ := verdictAccepts schemes trusted expected s c openings h
+  exact Device.signedByDevice_of dev hp ht hm hv he
+
+theorem judgeSigned : JudgeSigned := by
+  intro r dev hj
+  obtain ⟨schemes, hs, ⟨p, hp, ht, m, hm, hv⟩, -, he, -⟩ := judgeAccepts r hj
+  exact ⟨schemes, hs, Device.signedByDevice_of dev hp ht hm hv he⟩
 
 end MemoryChallenger.Properties.SecurityProofs
