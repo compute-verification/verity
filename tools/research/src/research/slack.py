@@ -315,6 +315,10 @@ def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
     """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket. Asking again is safe: a token
     request changes nothing."""
     path = os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock")
+    hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
+        f"{aud} needs is unavailable (only a Cursor agent has one)"
+    if not os.path.exists(path):                     # checked first: connecting to a long path fails with a plain OSError
+        raise SlackError(f"the Cursor identity socket {hint}")
     for wait in (*OIDC_RETRY_S, None):
         conn = _UnixHTTP(path)
         try:
@@ -324,8 +328,6 @@ def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
             break
         except (OSError, http.client.HTTPException) as e:
             if wait is None or isinstance(e, FileNotFoundError):
-                hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
-                    f"{aud} needs is unavailable (only a Cursor agent has one)"
                 raise SlackError(f"the Cursor identity socket {hint}") from None
         finally:
             conn.close()
