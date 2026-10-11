@@ -19,6 +19,11 @@
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
 #   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
 #   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
+#   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
+#   sparse claims (--points, after the sparse streams, into the same session); rec_vstar checks R's openings and rec_vstage
+#   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold)
+#   FORGE=cell|point (with STACKED): R committed with a flipped cell, or a claim point off; the algebra is not staged, and the
+#   run passes when the session runs and rec_vstage refuses R's opening (summary.json's refused)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
@@ -26,7 +31,11 @@ export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
 
-N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}
+N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}; STK=; MR=
+if [ -n "${STACKED:-}" ]; then
+  MR=$(python3 -c "from verity_flock import rec_sparse as S; print(S.table_m(S.Shape($SPARSE)))") || exit 1
+  STK="--stacked $B ${FORGE:+--forge $FORGE}"
+fi
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 (
@@ -44,8 +53,8 @@ python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --
 cat $O/stage.json
 
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
-python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA > $O/schedule.json || exit 1
-python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt $SPA \
+python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1
+python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt $SPA $STK \
   > $O/session.log 2>&1 &
 PP=$!
 ADDR=
@@ -70,7 +79,7 @@ wait $FP || { tail -30 $O/build-fold.log; exit 1; }
 echo "fold exit $?"
 python3 -m verity_flock.rec_session --check-fold $O/fold.json --inner $O/inner > $O/check-fold.json; echo "check-fold exit $?"
 /usr/bin/time -v -o $O/time-vstage.txt python3 -m verity_flock.rec_vstage stage $O/inner $O/fold.json $V --points $O/points.json \
-  --levels none $SPA ${SPARSE:+--circuit $D/circuit.txt} > $O/vstage.json 2> $O/vstage.err
+  --levels none $SPA ${SPARSE:+--circuit $D/circuit.txt} ${FORGE:+--no-algebra} > $O/vstage.json 2> $O/vstage.err
 echo "vstage exit $?"
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage-sizes.txt 2>&1
 
@@ -108,7 +117,12 @@ s = {"stage": stage, "served": served[0] if served else text("session.log")[-150
      "vstage": {k: vs.get(k) for k in ("shape", "holo", "openings", "chain_rows")} | {
          "algebra": [{k: p.get(k) for k in ("part", "holds", "unit_agrees", "instances", "of_residuals")} for p in vs.get("algebra", [])],
          "sparse": vs.get("sparse") and {k: vs["sparse"].get(k) for k in ("template", "unit", "instances", "ands", "holds", "unit_agrees",
-                                                                         "nonzero_residuals")}}
+                                                                         "nonzero_residuals")},
+         "stacked": vs.get("stacked") and {"m": vs["stacked"]["m"], "openings": vs["stacked"]["openings"],
+                                           "levels": {k: {x: v.get(x) for x in ("instances", "opened", "not_opened", "summed", "not_summed", "H", "LANES")}
+                                                      for k, v in vs["stacked"]["levels"].items()},
+                                           "opening": [{x: p.get(x) for x in ("part", "holds", "nonzero_residuals", "unit_agrees", "unit_rows")}
+                                                       for p in vs["stacked"]["opening"]], "stage_s": vs["stacked"].get("stage_s")}}
      if vs else text("vstage.err")[-1500:], "vstage_sizes": text("vstage-sizes.txt"),
      "lean": {"exit": text("lean-exit.txt").strip(), "tail": text("lean.log")[-400:]},
      "prover_peak_gb": int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", t).group(1)) / 2**20 if t else None,
@@ -119,6 +133,15 @@ ok = {"session": bool(served) and bool(served[0].get("session")), "schedule": s[
       "replay": bool(up) and up["verdict"].get("accepted") is True, "vstar": isinstance(s["vstar"], dict) and s["vstar"].get("accepted") is True,
       "check_fold": bool(s["check_fold"]) and all(s["check_fold"]["comb_plus_h_is_full"]) and all(s["check_fold"]["h_nonzero"]),
       "vstage": bool(vs) and vs.get("holo") is True and bool(vs.get("algebra")) and all(all(p["holds"]) for p in vs["algebra"])}
+st = vs.get("stacked") if vs else None
+if os.environ.get("STACKED"):
+    ok["vstar"] = ok["vstar"] and s["vstar"].get("stacked", {}).get("accepted") is True
+    held = bool(st) and all(not v["not_opened"] and not v["not_summed"] for v in st["levels"].values())
+    if os.environ.get("FORGE"):
+        del ok["vstage"]
+        ok["refused"] = held and not all(all(p["holds"]) for p in st["opening"])
+    else:
+        ok["stacked"] = held and all(all(p["holds"]) for p in st["opening"])
 if os.environ.get("SPARSE"):
     ok["sparse"] = bool(served) and (served[0].get("sparse") or {}).get("reps") == RL.REPS and bool(vs.get("sparse")) \
         and vs["sparse"]["holds"] == [True] * RL.REPS
