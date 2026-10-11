@@ -1,15 +1,17 @@
 import Properties.CertifierDevice
 import Properties.NetworkCertifier
+import Properties.Proofs.CertifierDevice.Issuer
 
 /-!
-# The certifier device's own output is accepted by the network certificate check
+# The certifier device's own output is accepted by the network certificate check: completeness
 
 `Properties.CertifierDevice` states what the device's `step` does over a trace; `Properties.NetworkCertifier` what the
 check (`NetworkCheck.Check.protocol`, `verity/network-certificate/v2`) accepts. This module joins them: for a run of the
 device on one boundary link, the commitment its host assembles from the records the device publishes and the evidence
 the device's own shaper holds (the frames it handed and the syncs it declared) are accepted under the parameters of the
-device's configuration (`DeviceOutputAccepted`, proved as `deviceOutputAccepted` in
-`Properties.Proofs.CertifierNetwork`).
+device's configuration (`DeviceOutputAccepted`, proved as `deviceOutputAccepted` in `Properties.Proofs.CertifierNetwork`).
+It is completeness: what an honest run gets, not a claim about what an accepted one is, so it is no guarantee of the
+package and its hypotheses are the honest case's. `Proofs.CertifierNetwork.Instance` gives one run where they all hold.
 
 **The unit is one link pair**, the device's: `active.py`'s `Proxy` runs one boundary link (`egressLink`, `ingressLink`),
 and `service.LinkWindows` is "network accounting's protocol on one link". A unit of several devices is several such
@@ -30,9 +32,10 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
 * the configuration's: `Ticking` (both grids have buckets), `FieldsFit` (what a record encodes fits its field), `Distinct`
   (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canon` is a `partial def`, so this is a fact
   about the configuration that only running it shows), and `ValidKey` of the issuer's key;
-* the run's: `Closed` (both grids ran all their ticks), `HonestTiming` (`CompleteRows`'s: each frame handed at the bucket
-  the Program hands it), `NoFault` (every record published is complete), `SyncsDeclared` (one sync per window) and
-  `SyncsAdmitted` (each in Σ_sync), and `LeavesLeft` (the signer has a leaf for every record).
+* the run's: `Closed` (both grids ran all their ticks), `NoFault` (every record published is complete), `SyncsDeclared`
+  (one sync per window) and `SyncsAdmitted` (each in Σ_sync), and `LeavesLeft` (the signer has a leaf for every
+  record). Honest timing (`HonestTiming`: each frame handed at the bucket the Program hands it) follows from `Closed`
+  and `NoFault`, since a frame handed late faults its window.
 -/
 
 namespace Properties.CertifierNetwork
@@ -135,8 +138,8 @@ def Digested (c : Config) : Prop :=
 /-- The run is over: both grids ran all their `W · T` ticks (`State.done`), so every window closed. -/
 def Closed (c : Config) (tr : List Event) : Prop := (after (init c) tr).done = true
 
-/-- **Honest timing**, `CompleteRows`'s hypothesis: each frame the shaper handed was handed at the bucket
-`NetworkCertifier.handingBuckets` gives it under the declared syncs. -/
+/-- **Honest timing**: each frame the shaper handed was handed at the bucket `NetworkCertifier.handingBuckets` gives it
+under the declared syncs. Not a hypothesis: `Closed` and `NoFault` give it (`Proofs.honestTiming_of`). -/
 def HonestTiming (c : Config) (tr : List Event) : Prop :=
   (handed (init c) tr).map Prod.snd =
     NetworkCertifier.handingBuckets c.egress.buckets (declaredSyncs c tr).size (fun w => (declaredSyncs c tr)[w])
@@ -156,18 +159,17 @@ def SyncsAdmitted (c : Config) (tr : List Event) : Prop :=
 def LeavesLeft (i : Issuer) (next : Nat) (c : Config) (tr : List Event) : Prop :=
   next + (published c tr).length ≤ 2 ^ i.key.params.H
 
-/-! ## The guarantee -/
+/-! ## Completeness -/
 
 /-- **The device's output is accepted.** For a configuration whose grids tick and encode, with two links and digested
-grids, and an issuer with a valid key: on a closed run with honest timing, no fault, one admitted sync declared per
-window, and a leaf for every record, the host's assembly certifies every record the device published, and the check
-accepts that commitment, whatever its bytes, with the evidence the device's shaper holds, under the configuration's
-parameters and the key's public key. -/
+grids, and an issuer with a valid key: on a closed run with no fault, one admitted sync declared per window, and a leaf
+for every record, the host's assembly certifies every record the device published, and the check accepts that
+commitment, whatever its bytes, with the evidence the device's shaper holds, under the configuration's parameters and
+the key's public key. -/
 def DeviceOutputAccepted : Prop :=
   ∀ (c : Config) (tr : List Event) (i : Issuer) (next : Nat),
     Ticking c → FieldsFit c → Distinct c → Digested c → ValidKey i.key →
-    Closed c tr → HonestTiming c tr → NoFault c tr → SyncsDeclared c tr → SyncsAdmitted c tr →
-    LeavesLeft i next c tr →
+    Closed c tr → NoFault c tr → SyncsDeclared c tr → SyncsAdmitted c tr → LeavesLeft i next c tr →
     ∃ i' crs, certifyAll c i next (published c tr) = .ok (i', crs) ∧
       ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams c i.key) (commitment crs bytes) (evidence c tr)
 

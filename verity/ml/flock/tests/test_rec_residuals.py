@@ -185,6 +185,38 @@ def test_h_adds_no_product_to_the_algebra(shape):
         assert RR.LEAVES * sum(len(r["mul"]) for r in H["res"]) == 2704 * 2187 == 5_913_648
 
 
+def _holo_s(S, p, c0):
+    """Lean's `Flock.RecAlgebra.holoS p c0`: S with h's 64 elements inserted into w at p, and comb slot c0 + l's operand
+    gaining w[p + l]."""
+    shift = lambda i: i if i < p else i + 64
+
+    def term(t):
+        if t[0] == "w":
+            return [["w", shift(t[1])]]
+        if t[0] == "wt":
+            return [["wt", shift(t[1]), t[2]]]
+        return [t, ["w", p + t[1] - c0]] if c0 <= t[1] < c0 + 64 else [t]
+
+    flat = lambda ts: [x for t in ts for x in term(t)]
+    return {"nw": S["nw"] + 64, "nv": S["nv"], "ops": [flat(op) for op in S["ops"]],
+            "res": [{"mul": r["mul"], "add": flat(r["add"])} for r in S["res"]]}
+
+
+@pytest.mark.parametrize("shape", [(25, 22, 8), (22, 10, 2), (35, 24, 8)], ids=str)
+def test_the_holo_structure_is_holoS_of_the_plain_one(shape):
+    """L4′'s Lean (`lincheck_of_residuals_holo`, `VBridge/Algebra/Holo.lean`) takes a holo shape's S to be `holoS p c0` of
+    the plain one, p being h's first w slot and c0 the comb's first v slot, with every ring switch's 128 w slots on one
+    side of p (`HoloOk`)."""
+    sh = A.Shape(*shape)
+    (S, _), (H, lay) = A.structure(sh), A.structure(dataclasses.replace(sh, holo=True))
+    p = lay.index[("h", 0)]
+    assert [lay.index[("h", l)] for l in range(64)] == list(range(p, p + 64))
+    assert p == 128 + 2 * (sh.m - 6) + 2 + 2 * (sh.k_log - 6) + 64
+    assert H == _holo_s(S, p, S["nv"] - 64)
+    wts = [t for op in S["ops"] for t in op if t[0] == "wt"] + [t for r in S["res"] for t in r["add"] if t[0] == "wt"]
+    assert wts and all(p <= t[1] or t[1] + 128 <= p for t in wts)
+
+
 def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     """`parts` cuts the algebra into statements of at most MAX_REGIONS regions and MAX_SLOTS sha512x3 slots that each read
     their residuals' row ports and v elements: each part's residuals are the whole's on the fixture's reps (zero on the
@@ -240,7 +272,36 @@ def test_the_universal_units_inner_algebra_is_two_parts_within_the_caps(salt_len
         assert slots <= RR.MAX_SLOTS and regions <= RR.MAX_REGIONS and len(p.res) <= RR.OUT_WORDS // RR.F_WORDS
     assert [shape(p)[1] for p in RR.parts({"gf": {**S["gf"], "res": S["gf"]["res"][16:]}, "ports": S["ports"]})] == [130]
     with pytest.raises(ValueError, match="residual 16 alone reads more than 64 regions or 128 sha512x3 slots"):
-        RR.parts(S, max_slots=128)
+        RR.parts(S, max_slots=128, max_lone_slots=128)
+
+
+def test_a_residual_wider_than_max_slots_stands_alone_within_max_lone_slots():
+    """llama32-1b/b1/i256's 2^29 bucket samples inner sessions of 16 claims (Gumbel's 7 regions, note
+    proofs/20261010T2112Z-finding-c3-claims-per-shape), whose batched-T residual alone reads 172 sha512x3 slots: it is a part
+    of its own, and composes at k_log 26, under circuit.K_MAX (each part's net built in run r20261010-212155-f5ab). Shapes
+    whose residuals each fit MAX_SLOTS cut as they did under MAX_SLOTS alone; a uniform 172 would have moved (34, 26, 8)'s
+    first part to 172 slots and a 2^27 block."""
+    shape = lambda p: (len(p.res), RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"]))
+    S = RR.spec(A.Shape(35, 27, 16))
+    ps = RR.parts(S)
+    assert [shape(p) for p in ps] == [(11, 140, 64), (9, 115, 62), (1, 172, 19)] and ps[2].res == [20]
+    assert RR.MAX_SLOTS < 172 <= RR.MAX_LONE_SLOTS
+    with pytest.raises(ValueError, match="residual 20 alone reads more than 64 regions or 160 sha512x3 slots"):
+        RR.parts(S, max_lone_slots=RR.MAX_SLOTS)
+    S8 = RR.spec(A.Shape(34, 26, 8))
+    assert [shape(p) for p in RR.parts(S8)] == [shape(p) for p in RR.parts(S8, max_lone_slots=0)] == [(10, 129, 61), (3, 123, 63)]
+
+
+@pytest.mark.slow
+def test_the_widest_lone_residual_max_lone_slots_admits_is_twenty_claims():
+    """The batched T alone reads 215 slots at 20 claims, a part that composes at k_log 27 (= circuit.K_MAX) beside a 2^23 unit
+    (run r20261010-223054-2894), and 226 at 21 claims, just past MAX_LONE_SLOTS, which refuses it. Slow for the two specs alone
+    (about 10 s); the quick test above pins the 16 claims a pinned shape needs."""
+    ps = RR.parts(RR.spec(A.Shape(35, 27, 20)))
+    assert [(len(p.res), RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"])) for p in ps][-1] == (1, 215, 23)
+    assert 215 <= RR.MAX_LONE_SLOTS < 226
+    with pytest.raises(ValueError, match="residual 25 alone reads more than 64 regions or 223 sha512x3 slots"):
+        RR.parts(RR.spec(A.Shape(35, 27, 21)))
 
 
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:

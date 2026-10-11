@@ -124,10 +124,10 @@ def _ignoring(node, ignore: str, artifacts: dict | None = None) -> str:
 
 
 def test_build_caches_and_fetched_fixtures_under_ignored_paths_let_the_tree_go(node):
-    d = _ignoring(node, ".venv/\n.lake/\n__pycache__/\nbig/\nfx/\n",
+    d = _ignoring(node, ".venv/\n.lake/\n__pycache__/\n.hypothesis/\nbig/\nfx/\n",
                   {"art:" + "1" * 64: "big/data.npz", "art:" + "2" * 64: "fx/tree", "previous": {"art:" + "1" * 64: ["art:" + "3" * 64]}})
     t = node.src / d
-    for p in (".venv/bin/python", ".lake/build/x.olean", "pkg/__pycache__/m.cpython-312.pyc", "big/data.npz", "fx/tree/a/b.bin"):
+    for p in (".venv/bin/python", ".lake/build/x.olean", "pkg/__pycache__/m.cpython-312.pyc", "pkg/.hypothesis/.gitignore", "big/data.npz", "fx/tree/a/b.bin"):
         (t / p).parent.mkdir(parents=True, exist_ok=True)
         (t / p).write_text("regenerable")
     _age(t, 5)
