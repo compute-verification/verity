@@ -910,7 +910,7 @@ class Proxy:
     def write(self, out: Path) -> Path:
         """The session directory (``session.json``, ``<table>.rep<r>.bin``), ``public.json``, ``private.json`` and, when the
         challenger committed to its coins, its commitments and openings, ``coins.json``; with registered tops,
-        ``registration.json`` (`registration_record`)."""
+        ``registration.json`` (`registration_record`), left as it is when the registration wrote it before the session."""
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
@@ -921,7 +921,11 @@ class Proxy:
         if self.commitments:
             (out / "coins.json").write_text(json.dumps(self.coins.commitment_record(), indent=1))
         if self.registered:
-            (out / REGISTRATION).write_text(json.dumps(registration_record(self.registered), indent=1))
+            reg, rec = out / REGISTRATION, registration_record(self.registered)
+            if not reg.exists():
+                reg.write_text(json.dumps(rec, indent=1))
+            elif json.loads(reg.read_text()) != rec:
+                raise ValueError(f"{reg}: a registration other than the one this session was held to")
         (out / "private.json").write_text(json.dumps({"kind": KIND + "/private", "tops": TOPS, "roots": self.roots, "rounds": self.private}))
         return sess
 
