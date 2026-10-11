@@ -47,18 +47,18 @@ theorem innerAt_leaf {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [�
 
 /-- **VBridge at the inner statement's model, from VBridge at its class and `fast100`'s schedule**: at a statement whose
 checks pass, `innerAt` is the compiled table at `Refine.leafPlain` and `Refine.schedOf s₀`
-(`execClassAt_sch_of_fast100`), the model VBridge G proves VBridge at. -/
+(`execClassAt_sch_of_fast100`), the model VBridge G proves VBridge at. The coins, messages and statements are
+`schedInner`'s, which no schedule changes. -/
 theorem vbridge_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
     (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type}
-    {zs : Reg → L.Ω → List (Cm × (Flock.Guarantees.innerAt T CT st).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → (Flock.Guarantees.innerAt T CT st).Stmt}
-    {wmsg : ((j : Fin S) → (Vs j).Bits) → List (Flock.Guarantees.innerAt T CT st).Msg}
+    {zs : Reg → L.Ω → List (Cm × ((k : Fin r) → CT k)) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → Hidden (execClassAt st).cls}
+    {wmsg : ((j : Fin S) → (Vs j).Bits) → List (List (SMsg T))}
     {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
     {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg}
-    {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
-      (Flock.Guarantees.innerAt T CT st).Msg}
+    {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → List (SMsg T)}
     (hb : Flock.Assumptions.VBridge (I := flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain
       (execClassAt st).cls (execClassAt st).regs (Refine.schedOf s₀)) zs dg N k Rw x wmsg Sk cmt msg) :
     Flock.Premises.VBridge (I := Flock.Guarantees.innerAt T CT st) zs dg N k Rw x wmsg Sk cmt msg := by
