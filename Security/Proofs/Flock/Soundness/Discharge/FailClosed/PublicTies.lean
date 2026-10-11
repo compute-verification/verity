@@ -133,12 +133,12 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
           J.str s c.ports[p]!.name "public file" = .ok (rowSchema c.ports[p]!))) ∧
         c.dummyDigests.getD p ByteArray.empty = dummyBc hidden c p)
       (fun p s y h => by
-        dsimp only at h
+        try dsimp only at h
         cases ht : pub.tables <;> rw [ht] at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
           repeat' walk_step
         all_goals
           simp only [pure, Except.pure, Except.ok.injEq] at h
-          refine ⟨⟨⟨_, ‹pub.fv3Bytes "domain_ids" _ = _›, ?_⟩,
+          refine ⟨⟨⟨⟨_, ‹pub.fv3Bytes "domain_ids" _ = _›, ?_⟩,
             ⟨_, _, ‹pub.frameV3 = _›, ‹J.get _ "schemas" _ = _›, ?_⟩⟩, ?_⟩, _, h.symm⟩
           · rw [‹pub.fv3Bytes "roots" _ = _›, ← bytes_of_not_bne ‹¬ (FV3.root _ _ _ != _) = true›]
             simp only [inRoot, inRows, rowSchema, ht, hpop]
@@ -168,7 +168,8 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
                pub.fv3Bytes "roots" x.1 = .ok (outRoot c pub s x.2 dom))
              (fun x s y h => by
                obtain ⟨oname, w⟩ := x
-               dsimp only at h ⊢
+               try dsimp only at h
+               try dsimp only
                simp only [throw_bind', pure_bind] at h
                repeat' walk_step
                simp only [pure, Except.pure, Except.ok.injEq] at h
