@@ -11,8 +11,10 @@ audit prices `RegColl` once, by `regFinder` (`prob_regColl_le`, `zk_sessions_rec
 finding a collision as a fork (`zk_sessions_recursive_fork_read_off`).
 
 * `RegClear`: no `RegColl` at an accepted outer proof; `regClear`: it holds, since `Accepted` carries `¬ RegColl`;
-* `noRegistrantCollision_of_clear`, `rowsShared_of_clear`: `NoRegistrantCollision`, and so `RowsShared`;
-* `noRegistrantCollisionS_of_clear`, `siteRowsShared_of_clear`: `NoRegistrantCollisionS`, and so `SiteRowsShared`.
+* `noRegistrantCollision_of_clear`, `rowsShared_of_clear`: `NoRegistrantCollision`, and so `RowsShared` where no read
+  is segmented (`ReadsUnsegmented`);
+* `noRegistrantCollisionS_of_clear`, `siteRowsShared_of_clear`: `NoRegistrantCollisionS`, and so `SiteRowsShared`
+  where no read is segmented.
 -/
 
 namespace FlockVBridge.Family
@@ -44,9 +46,9 @@ theorem noRegistrantCollision_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistra
   exact ⟨fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
     fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
 
-/-- **`RowsShared` where no two sessions clash.** -/
-theorem rowsShared_of_clear (h : F.RegClear dg N k Rw) : F.RowsShared dg N k Rw :=
-  F.rowsShared_of dg N k Rw (F.noRegistrantCollision_of_clear dg N k Rw h)
+/-- **`RowsShared` where no two sessions clash and no read is segmented.** -/
+theorem rowsShared_of_clear (h : F.RegClear dg N k Rw) (hu : F.ReadsUnsegmented dg N k Rw) : F.RowsShared dg N k Rw :=
+  F.rowsShared_of dg N k Rw (F.noRegistrantCollision_of_clear dg N k Rw h) hu
 
 /-- **`NoRegistrantCollisionS` where no two sessions clash**: its two collisions are `RegColl`'s two. -/
 theorem noRegistrantCollisionS_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistrantCollisionS dg N k Rw := by
@@ -54,9 +56,11 @@ theorem noRegistrantCollisionS_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistr
   exact ⟨fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
     fun hc => h R ω t R₂ τ o ha ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
 
-/-- **`SiteRowsShared` where no two sessions clash.** -/
-theorem siteRowsShared_of_clear (h : F.RegClear dg N k Rw) : F.SiteRowsShared dg N k Rw :=
+/-- **`SiteRowsShared` where no two sessions clash and no read is segmented.** -/
+theorem siteRowsShared_of_clear (h : F.RegClear dg N k Rw) (hu : F.ReadsUnsegmented dg N k Rw) :
+    F.SiteRowsShared dg N k Rw :=
   F.siteRowsShared_of_sharedRowsS dg N k Rw (F.sharedRowsS_of dg N k Rw (F.noRegistrantCollisionS_of_clear dg N k Rw h))
+    hu
 
 end VStarFamily
 

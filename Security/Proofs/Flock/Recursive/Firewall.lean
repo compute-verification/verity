@@ -17,8 +17,9 @@ sessions, no acceptance and no premise: its bound is at the hiding gap of hm96-s
 * `FirewallSends`: the honest worker's requests run through the firewall to the pinned schedule's transcript, its
   holes the salted commit strings of the messages in salt order (`firewallStrings`), and finish.
 * `SessionsPublic`, `SessionsCoined`, `SessionsHonest`: V*'s staging. The simulator's public context is the honest
-  one's, each session's table is `verify --zk`'s at its data and a draw it sets up, and the honest witnesses are valid
-  with public registered values; V*'s sizes are `OuterZK.Sessions`' `hz`, `hR`, `hS`.
+  one's, each session's table is one of `verify --zk`'s hidden-output tables at its data and a draw, where it sets that
+  table up, and the honest witnesses are valid with public registered values; V*'s sizes are `OuterZK.Sessions`' `hz`,
+  `hR`, `hS`.
 
 `fwRealPr` is the auditor's real view, `fwSimPr` the simulated one; `firewallStrings` is the commit strings the
 firewall sends, message `i` reading the strings before it (`commitBytes`, `firewallCommits`: a commit string from its
@@ -71,16 +72,19 @@ def SessionsPublic {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Pr
   ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (OuterZK.hctxAt msgs P w r a p y) =
     pubS o (regLeaves rows pub P r) a (firewallCommits (msgs P w r a p) y)
 
-/-- Obligation (V*'s staging, the tables): each of V*'s session tables is `coinedOf` at `verify --zk`'s table of the
-session's data `D` at a draw `verify --zk` sets up (`DrawSetupZK`), so it passes `CoinedOK`
-(`OuterZK.tablesOK_of_sessions`). -/
+/-- Obligation (V*'s staging, the tables): each of V*'s session tables is `coinedOf` at table `tab` of `verify --zk`'s
+hidden-output session of the data `D` at a draw, where `verify --zk` sets that table up (`ZkHidden.DrawSetupZHJ` at the
+table's inputs and part of the draw), so it passes `CoinedOK` (`OuterZK.tablesOK_of_sessions`). -/
 def SessionsCoined {Ctx Pub : Type} (V : OuterZK.Sessions Ctx Pub) : Prop :=
   ∃ (P : Composed.LigProver) (Vs : Fin V.S → VStmt) (Reg' : Type)
     (D : Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → (j : Fin V.S) → (Vs j).OuterD Reg')
     (draw : (j : Fin V.S) → Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → Finset (Fin (Vs j).nv))
-    (y : ∀ j pc l, ZkLink.DrawSetupZK (D pc l j).I (Vs j).mPts (draw j pc l) ((D pc l j).dj (draw j pc l))),
-    ∀ j pc l, V.C j pc l = Composed.coinedOf P (ZkLink.tableAtZK (D pc l j).dj (D pc l j).y₀ (draw j pc l))
-      (y j pc l).x.st
+    (tab : ∀ j pc l, Fin (Composed.nTab (D pc l j).I))
+    (y : ∀ j pc l, ZkHidden.DrawSetupZHJ (Composed.inputsJ (D pc l j).I (tab j pc l)) (Vs j).mPts
+      (Composed.partS (D pc l j).I ((D pc l j).dj (draw j pc l)) (draw j pc l) (tab j pc l))
+      (Composed.drawJ (D pc l j).I ((D pc l j).dj (draw j pc l)) (tab j pc l))),
+    ∀ j pc l, V.C j pc l =
+      Composed.coinedOf P (ZkHidden.tableZHJ (D pc l j).dj (D pc l j).y₀ (draw j pc l) (tab j pc l)) (y j pc l).x.st
 
 /-- Obligation (V*'s staging, the honest witnesses): at every honest context, each session's witness is valid and its
 registered values are the public ones (`OuterZK.Sessions.Honest`). -/
@@ -136,8 +140,9 @@ It takes no premise; what it takes of the code, each an obligation:
 * the honest worker's requests run through the firewall to the schedule's transcript `T` with the salted commit strings
   of the messages `msgs` in it, each reading the strings before it, and finish (`FirewallSends`);
 * V*'s staging: the simulator's public context `pubS` is the honest one's (`SessionsPublic`), each session's table is
-  `verify --zk`'s at its data and a draw it sets up (`SessionsCoined`), the honest witnesses are valid with public
-  registered values (`SessionsHonest`), and V*'s sizes are fixed (`OuterZK.Sessions`' `hz`, `hR`, `hS`).
+  one of `verify --zk`'s hidden-output tables at its data and a draw, where it sets that table up (`SessionsCoined`),
+  the honest witnesses are valid with public registered values (`SessionsHonest`), and V*'s sizes are fixed
+  (`OuterZK.Sessions`' `hz`, `hR`, `hS`).
 
 Then for every honest witness `w` of every private circuit `P` of the class, and every private circuit `p₀` of it, the
 real view and the simulated one (`fwSimPr`: `p₀` registered, `T` on ideal commit strings, V*'s simulator), which reads

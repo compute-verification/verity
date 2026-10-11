@@ -93,7 +93,10 @@ allowed axioms replaces it.  `--update` writes the records and `reads` from the 
 whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  A guarantee whose
+those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
+`--update` whose every failure is a record difference (`RECORD_DIFFERENCE`: two records each right on its side of a merge
+whose definitions changed) writes the same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names
+the file, so a failed check of a train's merge carries its record.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
@@ -1032,6 +1035,24 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     return out, fails
 
 
+#: the failures `--update` settles from the build alone: a guarantee, a `reads` group or an assumption whose record differs
+#: from the build (two records, each right on its own side of a merge).  A missing record or name, an owner, and every other
+#: failure take a person
+RECORD_DIFFERENCE = re.compile(
+    r"guarantees: (\S+'s (signature|assumptions|type hash) changed:|they now read definitions in |they no longer read |"
+    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for )|"
+    r"assumptions: \S+'s definition in \S+ changed;")
+
+
+def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[str]) -> dict | None:
+    """The `lean-audit.json` that `--update` writes, when ``fails`` are all record differences (`RECORD_DIFFERENCE`), else
+    None: the policy with its guarantees, reads and assumptions as the build has them."""
+    if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
+        return None
+    new = judge(policy, facts, files, update=True)[1]
+    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions") if k in new}
+
+
 #: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
 #: always returns, whose property takes no such hypothesis, only the input
 OUTCOMES = ("accept", "undecided", "reject", "none")
@@ -1865,6 +1886,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if work.resolve().is_relative_to(pkg.resolve()):
         raise ValueError(f"the audit's output {work} is inside the package {pkg}")
     work.mkdir(parents=True, exist_ok=True)
+    for stale in (POLICY, "review.txt"):
+        (work / stale).unlink(missing_ok=True)
     rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
     t, _peak.bytes = time.monotonic(), 0
     if build:
@@ -1988,12 +2011,20 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    def sources() -> dict[str, Path]:
+        return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
+
     if update:
         dump(work, new)
+    elif (regen := regenerated(policy, facts, files, fails)) is not None:
+        dump(work, regen)
+        notes = review(policy, regen, facts, sources())
+        (work / "review.txt").write_text("\n".join(notes) + "\n")
+        rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY)}
+        log(f"audit: {pkg}/{POLICY}: every failure is a record difference; {work / POLICY} is the record `--update` writes")
     if update and new != policy:
         dump(pkg, new)
-        sources = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
-        notes = review(policy, new, facts, sources, moved) + lnotes
+        notes = review(policy, new, facts, sources(), moved) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
@@ -2239,7 +2270,10 @@ def main(argv: list[str]) -> int:
             if not built[pkg].is_set():
                 seal(pkg)
         with lock:
-            rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
+            if tamper := [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]:
+                rep["failures"] += tamper
+                if regen := rep.pop("regenerated", None):
+                    Path(regen).unlink(missing_ok=True)
             reports[pkg] = rep
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"

@@ -8,11 +8,11 @@
  },
  "runs": {
   "PousCheck.DifftestMain": {
-   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths), the challenges (verity.ml.randomness; reference.audit_id, audit_key, round_key, each round's index and nonce), and the timed audit (wire.verify_audit's FINAL frame, fault or refusal on honest and adversarial sessions, at reduced width and at the deployment's, with the verifier's own root of a private setup, a wrong or missing one, a required seen set, flag bit 1 against a held, wrong or missing W, and an elapsed time past u64, and on the spec's 31 negative and 3 positive audit vectors), the certificate gate and StorageProfile (protocol.TimedAudit with P2's deadline refusals, and StorageProfile at schemes.p2.P2) of every accepted session and of 200 stores and audits at the certificate's edges, with the spec's section 7 pins of the audit files and frames",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1442"],
+   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths), the challenges (verity.ml.randomness; reference.audit_id, audit_key, round_key, each round's index and nonce), and the timed audit (wire.verify_audit's FINAL frame, fault or refusal on honest and adversarial sessions, at reduced width and at the deployment's, with the verifier's own root of a private setup, a wrong or missing one, a required seen set, flag bit 1 against a held, wrong or missing W, and an elapsed time past u64, on the spec's 31 negative and 3 positive audit vectors, and on named sessions at edges the two once read apart: a store whose payloads are not all below p, 2^79 blocks, a beacon round named twice, manifest numbers Python reads as floats), the certificate gate and StorageProfile (protocol.TimedAudit with P2's deadline refusals, and StorageProfile at schemes.p2.P2) of every accepted session and of 200 stores and audits at the certificate's edges, with the spec's section 7 pins of the audit files and frames",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1462"],
    "data": {
-    "difftest/instances.jsonl": "211832d052da9939ffdceed4441e3ac2104a1d86b53ca53e0dd2de681dc2b85e",
-    "difftest/python.jsonl": "e83fb1acfbbef1232af59b1bf86e9ff1b5eed724a9ca138a347adf8194e07ef8"
+    "difftest/instances.jsonl": "cc5b6a0bb9648a036e6e72b3ec71c0aac2c96b80ccae5a124f1dab00f280cad8",
+    "difftest/python.jsonl": "a27240798f8180419a0e57ec14a8c012c90adb08c503155e1728906652b01a0b"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
