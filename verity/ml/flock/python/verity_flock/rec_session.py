@@ -69,7 +69,7 @@ def hidden_circuits(circuit: Path, hidden: Sequence[str] = HIDDEN) -> tuple[dict
         if "types" in meta or "unit_type" in meta:
             raise ValueError("a typed statement: its root's rows read columns outside its slot")
         while line := f.readline():
-            kw, name, n = line.split()
+            _, name, n = line.split()
             n = int(n)
             if name not in hidden:
                 for _ in range(n):
