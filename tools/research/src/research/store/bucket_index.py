@@ -277,12 +277,9 @@ def _lit(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
-def _copy_text(v: Any) -> str:
-    """One field of COPY's text format.  Postgres text and jsonb cannot hold NUL, so it becomes U+FFFD here only."""
-    if v is None:
-        return r"\N"
-    s = str(v).replace("\x00", "\ufffd")
-    return s.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")
+def _values(rows: Iterable[tuple]) -> str:
+    """Rows as SQL VALUES literals.  Postgres text and jsonb cannot hold NUL, so it becomes U+FFFD here only."""
+    return ",\n".join("(" + ",".join("NULL" if v is None else _lit(str(v).replace("\x00", "\ufffd")) for v in r) + ")" for r in rows)
 
 
 _UNCOPY = {"\\": "\\", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
@@ -290,11 +287,6 @@ _UNCOPY = {"\\": "\\", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v
 
 def _uncopy(field: str) -> str | None:
     return None if field == r"\N" else re.sub(r"\\(.)", lambda m: _UNCOPY.get(m.group(1), m.group(1)), field)
-
-
-def _copy(table: str, rows: Iterable[tuple]) -> str:
-    body = "".join("\t".join(_copy_text(v) for v in r) + "\n" for r in rows)
-    return f"COPY {table} FROM STDIN;\n{body}\\.\n"
 
 
 _UTC = "to_char({col} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
@@ -353,29 +345,33 @@ class PostgresIndex:
     def edges_of(self, rid: str) -> list[tuple[str, str, str]]:
         return self.select(f"SELECT src, name, dst FROM {self.schema}.edges WHERE src={_lit(rid)} ORDER BY name, dst")
 
-    def _insert(self, rows: list[Row], edges: Callable[[Row], list[tuple]], tag: str) -> str:
-        """SQL that COPYs `rows` into temporary tables and inserts the records not yet present, with their fields and edges."""
-        s, r, f, e = self.schema, f"r{tag}", f"f{tag}", f"e{tag}"
-        return (f"CREATE TEMP TABLE {r} (LIKE {s}.records) ON COMMIT DROP;\nCREATE TEMP TABLE {f} (LIKE {s}.fields) ON COMMIT DROP;\n"
-                f"CREATE TEMP TABLE {e} (LIKE {s}.edges) ON COMMIT DROP;\n"
-                + _copy(r, (row.record() for row in rows)) + _copy(f, (x for row in rows for x in row.fields()))
-                + _copy(e, (x for row in rows for x in edges(row)))
-                + f"INSERT INTO {s}.fields SELECT {f}.* FROM {f} WHERE NOT EXISTS (SELECT 1 FROM {s}.records x WHERE x.id = {f}.id);\n"
-                f"INSERT INTO {s}.edges SELECT DISTINCT {e}.* FROM {e} WHERE NOT EXISTS (SELECT 1 FROM {s}.records x WHERE x.id = {e}.src) "
-                "ON CONFLICT DO NOTHING;\n"
-                f"WITH n AS (INSERT INTO {s}.records SELECT * FROM {r} ON CONFLICT (id) DO NOTHING RETURNING 1) SELECT count(*) FROM n;\n")
+    def _insert(self, rows: list[Row], edges: Callable[[Row], list[tuple]]) -> str:
+        """One statement inserting the records not yet present and the fields and edges of those only; it returns how many were new.
+        Plain VALUES rather than COPY: COPY cannot skip a present key, and the indexer may not create temporary tables."""
+        s = self.schema
+        fields = [x for row in rows for x in row.fields()]
+        links = [x for row in rows for x in edges(row)]
+        sql = (f"WITH new AS (INSERT INTO {s}.records SELECT id, type, kind, time::timestamptz, doc::jsonb FROM (VALUES\n"
+               f"{_values(row.record() for row in rows)}) v(id, type, kind, time, doc) ON CONFLICT (id) DO NOTHING RETURNING id)")
+        if fields:
+            sql += (f",\nf AS (INSERT INTO {s}.fields SELECT v.* FROM (VALUES\n{_values(fields)}) v(id, path, value) JOIN new USING (id) "
+                    "RETURNING 1)")
+        if links:
+            sql += (f",\ne AS (INSERT INTO {s}.edges SELECT v.* FROM (VALUES\n{_values(links)}) v(src, name, dst) "
+                    "JOIN new ON new.id = v.src ON CONFLICT DO NOTHING RETURNING 1)")
+        return sql + "\nSELECT count(*) FROM new;\n"
 
     def add(self, rows: list[Row], edges: Callable[[Row], list[tuple]] = Row.edges) -> int:
         """Insert the rows not already present, in one transaction.  How many were new."""
         if not rows:
             return 0
-        return int(self.run("BEGIN;\n" + self._insert(rows, edges, "0") + "COMMIT;\n")[-1][0])
+        return int(self.run(self._insert(rows, edges))[-1][0])
 
     def replace(self, groups: list[tuple[list[Row], Callable[[Row], list[tuple]]]], listings: dict[str, tuple[str, int]]) -> None:
         """Every row replaced by `groups` and `listings`, in one transaction (the public rebuild); tables are kept, so grants are."""
         s = self.schema
         self.run("BEGIN;\n" + "".join(f"DELETE FROM {s}.{t};\n" for t in ("records", "fields", "edges", "listings"))
-                 + "".join(self._insert(rows, edges, str(i)) for i, (rows, edges) in enumerate(groups) if rows)
+                 + "".join(self._insert(rows, edges) for rows, edges in groups if rows)
                  + "".join(f"INSERT INTO {s}.listings VALUES ({_lit(p)}, {_lit(t)}, {int(n)});\n" for p, (t, n) in listings.items())
                  + "COMMIT;\n")
 

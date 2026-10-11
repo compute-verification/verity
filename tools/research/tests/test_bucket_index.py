@@ -218,15 +218,15 @@ def test_the_cli_builds_the_index_from_a_directory(tmp_path, capsys):
     assert rep["added"] == {"artifact": 1, "run": 0, "label": 1} and rep["size"]["records"]["rows"] == 2
 
 
-def test_pg_env_takes_the_url_apart_and_copy_escapes_what_its_text_format_needs():
+def test_pg_env_takes_the_url_apart_and_values_and_copy_text_round_trip():
     url = "postgresql://store_indexer:p%40ss%2Fw@ep-x.eu-central-1.aws.neon.tech/store?sslmode=require&channel_binding=require"
     assert BI.pg_env(url) == {"PGHOST": "ep-x.eu-central-1.aws.neon.tech", "PGPORT": "5432", "PGDATABASE": "store", "PGUSER": "store_indexer",
                               "PGPASSWORD": "p@ss/w", "PGSSLMODE": "require", "PGCHANNELBINDING": "require"}
     assert BI.pg_env("postgresql://u@/store?host=/run/pg")["PGHOST"] == "/run/pg"
     with pytest.raises(ValueError, match="not a postgres URL"):
         BI.pg_env("sqlite:///x.db")
-    assert BI._copy_text(None) == r"\N" and BI._copy_text(1.5) == "1.5"
-    assert BI._copy_text("a\tb\nc\rd\\e\x00f") == "a\\tb\\nc\\rd\\\\e\ufffdf"
+    assert BI._values([(None, 1.5, "it's\x00")]) == "(NULL,'1.5','it''s\ufffd')"
+    assert BI._uncopy(r"\N") is None and BI._uncopy(r"a\tb\nc\\d") == "a\tb\nc\\d"
 
 
 def test_postgres_index_hands_psql_the_url_only_in_its_environment_and_names_the_schema_on_every_table(tmp_path):
@@ -247,8 +247,8 @@ def test_postgres_index_hands_psql_the_url_only_in_its_environment_and_names_the
     assert all("sekrit" not in " ".join(c["argv"]) and c["pg"]["PGPASSWORD"] == "sekrit" and c["pg"]["PGHOST"] == "db.example" for c in calls)
     ddl, insert = calls[0]["sql"], calls[1]["sql"]
     assert "CREATE TABLE IF NOT EXISTS store_private.records" in ddl and "DROP" not in ddl and "SCHEMA" not in ddl
-    assert insert.startswith("BEGIN;") and insert.rstrip().endswith("COMMIT;") and "INSERT INTO store_private.records" in insert
-    assert f"{a}\tmeta.note\ttab\\there\n" in insert
+    assert "INSERT INTO store_private.records" in insert and "TEMP" not in insert
+    assert f"('{a}','meta.note','tab\there')" in insert
     with pytest.raises(ValueError, match="bad schema name"):
         BI.PostgresIndex(url, "store_private; DROP", psql=str(fake))
 
@@ -271,7 +271,7 @@ def postgres(tmp_path):
     subprocess.run([f"{bindir}/pg_ctl", "-D", str(data), "-w", "-l", str(tmp_path / "pg.log"), "-o", f"-k {sock} -c listen_addresses=''", "start"],
                    check=True, capture_output=True)
     try:
-        sql = ("CREATE ROLE store_indexer LOGIN; CREATE ROLE store_private_reader LOGIN; CREATE SCHEMA store_private; CREATE SCHEMA store_public;"
+        sql = ("REVOKE TEMP ON DATABASE store FROM PUBLIC; CREATE ROLE store_indexer LOGIN; CREATE ROLE store_private_reader LOGIN; CREATE SCHEMA store_private; CREATE SCHEMA store_public;"
                " GRANT USAGE, CREATE ON SCHEMA store_private, store_public TO store_indexer; GRANT USAGE ON SCHEMA store_private TO store_private_reader;"
                " ALTER DEFAULT PRIVILEGES FOR ROLE store_indexer IN SCHEMA store_private GRANT SELECT ON TABLES TO store_private_reader;"
                " ALTER ROLE store_private_reader SET search_path = store_private;"
