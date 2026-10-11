@@ -47,7 +47,17 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 /-- The verifier's own inner shape at an inner statement `st` set up with `spec`: `RecVStar.innerOf`'s value, its `m`,
 `k_log`, two claims and one per region and link point, and its regions. -/
 def innerAt (spec : Flock.SessionSpec) (st : Flock.Stmt) : RecVStar.Inner :=
-  ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size, st.regions.size⟩
+  { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size }
+
+/-- **A private inner session has no V* statements**: `RecVStar.statements` refuses an inner shape whose circuits are
+private (`i.holo`, the verifier's own `--hide`), as V*'s circuit writer writes no holo part yet. -/
+theorem statements_holo {i : RecVStar.Inner} (h : i.holo = true) (ss : Array VStar.Stmt) :
+    RecVStar.statements i ≠ .ok ss := by
+  obtain ⟨m, k, c, r, holo⟩ := i
+  dsimp only at h
+  subst h
+  intro hss
+  cases hss
 
 /-- **flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the
 transcript**, at the inner shape `i`, as V*'s statement `j` under the verifier's own bindings `f`: `AcceptsZKR`, and each
