@@ -233,4 +233,131 @@ theorem endToEndRing : EndToEndRing := by
 set_option exponentiation.threshold 20000 in
 theorem endToEndRingDeployed : EndToEndRingDeployed := fun hH hP => endToEndRing hH _ _ _ hP
 
+/-! ### The code always builds the coin tree -/
+
+theorem uint8_clear (v : UInt8) : (v &&& 0x7f) &&& 0x80 = 0 := by
+  rw [UInt8.and_assoc, show (0x7f &&& 0x80 : UInt8) = 0 from rfl]
+  exact UInt8.toBitVec_inj.1 (by simp)
+
+theorem get!_set!_self (b : ByteArray) (i : ℕ) (v : UInt8) (h : i < b.size) : (b.set! i v).get! i = v := by
+  obtain ⟨bs⟩ := b
+  exact Array.getElem!_set!_self bs i v h
+
+theorem checkKey_coinKey (k : Bytes 256) : checkKey (coinKey k) = .ok () := by
+  have hs : (coinKey k).size = 256 := by rw [coinKey, ByteArray.size_set!, size_bytesOf]
+  have hg : (coinKey k).get! 255 = (bytesOf k).get! 255 &&& 0x7f := by
+    have h := get!_set!_self (bytesOf k) 255 ((bytesOf k).get! 255 &&& 0x7f) (by rw [size_bytesOf]; omega)
+    exact h
+  unfold checkKey
+  rw [show HM96.keyBytes = 256 from rfl, hs, hg, uint8_clear]
+  rfl
+
+theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
+    ∀ l : List α, (∀ a ∈ l, ∃ b, f a = .ok b) → ∃ bs, l.mapM f = .ok bs
+  | [], _ => ⟨[], rfl⟩
+  | a :: l, h => by
+    obtain ⟨b, hb⟩ := h a (by simp)
+    obtain ⟨bs, hbs⟩ := list_mapM_ok f l fun x hx => h x (by simp [hx])
+    exact ⟨b :: bs, by rw [List.mapM_cons, hb, hbs]; rfl⟩
+
+theorem beN_ok (n x : ℕ) (w : String) (h : x < 2 ^ (8 * n)) : ∃ b, beN n x w = .ok b := by
+  unfold beN; simp only [h, ↓reduceIte]; exact ⟨_, rfl⟩
+
+theorem coinLeaf_ok (key session : ByteArray) (j index : ℕ) (salt : ByteArray) (hk : checkKey key = .ok ())
+    (hj : j < 2 ^ 32) (hi : index < 2 ^ 64) (hs : salt.size = 192) : ∃ b, coinLeaf key session j index salt = .ok b := by
+  obtain ⟨bj, hbj⟩ := beN_ok 4 j "j" hj
+  obtain ⟨bi, hbi⟩ := beN_ok 8 index "index" hi
+  have hsalt : checkSalt salt = .ok () := by
+    unfold checkSalt; rw [hs]; rfl
+  simp only [coinLeaf, coinDigest, hbj, hbi, hk, hsalt]
+  exact ⟨_, rfl⟩
+
+theorem ofFn_getElem! {α : Type} [Inhabited α] {n : ℕ} (f : Fin n → α) (a : ℕ) (h : a < n) :
+    (Array.ofFn f)[a]! = f ⟨a, h⟩ := by
+  rw [getElem!_pos (Array.ofFn f) a (by simpa using h)]
+  simp [Array.getElem_ofFn]
+
+theorem make_ok_of (session key : ByteArray) (indices : Array ℕ) (salts : Array ByteArray) (hs : session.size = 32)
+    (hn : indices.size = 105) (hsalts : salts.size = indices.size) (hlt : ∀ j < indices.size, indices[j]! < 2 ^ 19)
+    (hsalt : ∀ j < indices.size, salts[j]!.size = 192) (hk : checkKey key = .ok ()) :
+    ∃ t, CoinTree.make session (2 ^ 19) indices key salts = .ok t := by
+  have hcond : (decide (2 ^ 19 < 1) || indices.isEmpty || salts.size != indices.size ||
+      indices.any fun x => decide (x ≥ 2 ^ 19)) = false := by
+    have he : indices.isEmpty = false := by
+      rw [Array.isEmpty_eq_false_iff]; intro h; rw [h] at hn; simp at hn
+    rw [hsalts, he, bne_self_eq_false]
+    simp only [Bool.or_false, Bool.or_eq_false_iff]
+    refine ⟨by decide, Bool.eq_false_iff.2 fun h => ?_⟩
+    rw [Array.any_eq_true] at h
+    obtain ⟨i, hi, hp⟩ := h
+    have := hlt i hi
+    rw [getElem!_pos indices i hi] at this
+    simp only [decide_eq_true_eq] at hp
+    omega
+  obtain ⟨hm, hhm⟩ : ∃ hm, (Array.range indices.size).mapM (fun j =>
+      coinLeaf key session j indices[j]! salts[j]!) = .ok hm := by
+    rw [Array.mapM_eq_mapM_toList, Array.toList_range]
+    obtain ⟨bs, hbs⟩ := list_mapM_ok _ (List.range indices.size) fun a ha => by
+      have h := List.mem_range.1 ha
+      exact coinLeaf_ok key session a indices[a]! salts[a]! hk (by omega) (by have := hlt a h; omega) (hsalt a h)
+    exact ⟨bs.toArray, by rw [hbs]; rfl⟩
+  simp only [CoinTree.make, hs, ne_eq, not_true_eq_false, ↓reduceIte, hcond, Bool.false_eq_true]
+  rw [hk]
+  simp only [bind, Except.bind]
+  rw [hhm]
+  exact ⟨_, rfl⟩
+
+theorem coinView_some (session : ByteArray) (hs : session.size = 32) (c : HmCoins) (I : Fin 105 → Fin (2 ^ 19)) :
+    ∃ v, coinView session c I = some v := by
+  obtain ⟨t, ht⟩ := make_ok_of session (coinKey c.1) (Array.ofFn fun j => (I j).val)
+    (Array.ofFn fun j => bytesOf (c.2 j)) hs (Array.size_ofFn) (by rw [Array.size_ofFn, Array.size_ofFn])
+    (fun j hj => by
+      rw [Array.size_ofFn] at hj
+      rw [ofFn_getElem! _ j hj]; exact (I _).isLt)
+    (fun j hj => by
+      rw [Array.size_ofFn] at hj
+      rw [ofFn_getElem! _ j hj]; exact size_bytesOf _)
+    (checkKey_coinKey c.1)
+  exact ⟨_, by rw [coinView, ht]; rfl⟩
+
+/-! ### Non-vacuity: the honest full-state server -/
+
+theorem stateBound_lt : S < FULL := by
+  show ⌊Params.ρ * ((2 ^ 19 * 16448 : ℕ) : ℚ)⌋₊ < 2 ^ 19 * 16448
+  rw [Nat.floor_lt (by unfold Params.ρ; positivity)]
+  unfold Params.ρ
+  norm_num
+
+set_option exponentiation.threshold 20000 in
+/-- The honest full-state responder: it keeps all of `C` and answers each index from it, with no query. -/
+noncomputable def honestOn : SeqResponderOn sch FULL 0 0 0 :=
+  ⟨fun _ _ _ σ i => .ret ((codeEquiv sch.B sch.ℓ).symm σ i, σ), fun _ _ _ _ _ _ => ⟨le_rfl, le_rfl, le_rfl⟩⟩
+
+set_option exponentiation.threshold 20000 in
+/-- The honest full-state server, whatever the session commitment. -/
+noncomputable def honest : Server FULL 0 0 0 :=
+  ⟨honestPre sch, fun _ => honestOn.step, fun _ => honestOn.bounded⟩
+
+set_option exponentiation.threshold 20000 in
+theorem honest_answers (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ans)
+    (W : Bits sch.n) (pp : Bits sch.t) (C : Fin sch.B → Bits sch.ℓ) (k : ℕ) (I : Fin k → Fin sch.B) :
+    seqAnswers f (honestOn.step W pp) 0 (List.ofFn I) (codeEquiv _ _ C) = List.ofFn fun j => C (I j) := by
+  show seqAnswers f (fun _ σ i => .ret ((codeEquiv sch.B sch.ℓ).symm σ i, σ)) 0 (List.ofFn I) (codeEquiv _ _ C) = _
+  rw [seqAnswers_const f (fun σ i => (codeEquiv sch.B sch.ℓ).symm σ i), List.map_ofFn]
+  congr 1
+  funext j
+  simp
+
+set_option exponentiation.threshold 20000 in
+theorem honestPassesRing : HonestPassesRing :=
+  ⟨stateBound_lt, honestPre sch, honestOn, fun W => pr_eq_one fun x =>
+    honest_answers _ W _ (sch.enc W x.1 x.2.1).2 105 x.2.2⟩
+
+set_option exponentiation.threshold 20000 in
+theorem honestPassesAccepts : HonestPassesAccepts := by
+  refine ⟨honest, fun session hs binding W => pr_eq_one fun x => ?_⟩
+  obtain ⟨v, hv⟩ := coinView_some session hs x.2.1 (splitAll x.2.2).1
+  exact ⟨(splitAll x.2.2).1, v, fun j => uniformOn_split (x.2.2 j), hv,
+    honest_answers _ W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 105 (splitAll x.2.2).1⟩
+
 end Pous.EndToEnd.SecurityProofs

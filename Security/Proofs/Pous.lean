@@ -44,6 +44,7 @@ import Proofs.Pous.Thm1.Theorem1iiiTimed
 import Proofs.Pous.Chain.PubFamily
 import Proofs.Pous.Chain.PubRounds
 import Proofs.Pous.Rebuild.Exclusion
+import Proofs.Pous.EndToEnd
 
 /-!
 # The proved guarantees
