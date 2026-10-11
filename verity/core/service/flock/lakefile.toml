@@ -24,13 +24,13 @@ name = "flock-firewall"
 root = "FlockFirewall"
 
 [[lean_exe]]
-name = "flock-witness"
-root = "FlockWitness"
-
-[[lean_exe]]
 name = "flock-rec-sparse"
 root = "FlockRecSparse"
 
 [[lean_exe]]
 name = "flock-rec-opening"
 root = "FlockRecOpening"
+
+[[lean_exe]]
+name = "flock-witness"
+root = "FlockWitness"
