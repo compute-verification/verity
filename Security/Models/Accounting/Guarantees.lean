@@ -1,0 +1,3 @@
+import Models.Accounting.Guarantees.Tag
+
+/-! `Models.Accounting.Guarantees`: resource accounting's guarantee statements. -/
