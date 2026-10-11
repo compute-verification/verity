@@ -181,7 +181,6 @@ theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : 
 
 end AuditRO
 
-open AuditRO in
 theorem pr_eq_zero_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) (h : Fintype.card Ω = 0) : pr P = 0 := by
   classical
   unfold pr
