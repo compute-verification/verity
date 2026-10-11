@@ -54,6 +54,7 @@ verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/hidden-outputs
 verity/ml/flock/tests/fixtures/public-inputs
 verity/ml/flock/tests/fixtures/public-inputs-blocks
+verity/ml/flock/tests/fixtures/rec-c3-inner
 verity/ml/flock/tests/fixtures/rec-coins
 archive/gkr/fixtures/babybear-transcripts/transcript_vu4.json
 archive/gkr/fixtures/babybear-transcripts/transcript_vu64.json
