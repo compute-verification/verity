@@ -23,6 +23,10 @@ circuit-check $(python -c 'from verity_numerical.bench import subcircuit_catalog
 python -m verity_numerical.bench.subcircuit_catalog --records cc.json --out DIR --put [--preserve]
 ~~~
 
+A `research run` workload holds no store credentials. There, `--put` goes into a scratch store (`RESEARCH_STORE` and
+`RESEARCH_STORE_CONFIG` under its scratch), and `DIR/catalog.json` records the ids. Afterwards, `research data put` of the
+run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref circuit_check=ART --preserve` gives the same ids.
+
 ## WP1: independence audit of the existing columns
 
 The target names three executable columns of the finite-domain step: Python `verity.ml.circuits.silicon.silicon`, Rust
