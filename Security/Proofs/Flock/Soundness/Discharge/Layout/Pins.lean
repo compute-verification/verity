@@ -16,7 +16,9 @@ value of any other commit string) and three facts about every satisfying witness
 * `Readers.ValPinned`: at another commit string, the bits at `rowAt` are the registration's value.
 
 The registered leaf (`Readers.regLeaf`) is `SHA-512(leaf_prefix ‖ b ‖ c)` of the registration's `b ‖ c` at a row, the
-leaf the verifier computes from the public `b ‖ c` (`HmRow.checkPublic`), and `SHA-512(enc v)` of the registration's
+leaf the verifier computes from the public `b ‖ c` and holds, in its frame-v3-sha512 tree, to the public file's header
+root (`HmRow.checkPublic`, stated by `FailClosed.flock_verify_public_ties`; that root is the registration's by the
+auditor's `matches_public`, not by anything here), and `SHA-512(enc v)` of the registration's
 value elsewhere. That the serving roots commit to these leaves is the serving roots' rewinding (`StrictCR.TreeRewind`),
 paid once in the headline as `δ_tree`; nothing here is cryptographic.
 -/
