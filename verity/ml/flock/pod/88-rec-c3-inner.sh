@@ -13,15 +13,14 @@
 # inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json,
 # check-fold.json, vstage.json, lean.log, summary.json. Exits 1 unless the session, replay, rec_vstar, the fold check and the
 # staging all pass.
-# env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)
+# Launch it through a check slot, which pins it to the slot's cores and holds the slot (the slots' cores are not contiguous,
+# which cpu-slices.sh's ranges assume):
+#   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
+# env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-if [ -z "${RI_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
-  hold_slices "" "${CPUS:-32}" || exit 1
-  export RI_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
-  exec taskset -c $SLICE_CPUS bash "$0" "$@"
-fi
+export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
+export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
 
