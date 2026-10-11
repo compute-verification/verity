@@ -16,7 +16,7 @@ a rep: each claim's value check, and Ligerito's `T` (the one w holds, which V*'s
 sum) the verifier's `T` at the rep's coins.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
@@ -312,4 +312,4 @@ theorem ringSwitch_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat â
     rw [e]
     rfl
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

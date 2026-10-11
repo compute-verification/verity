@@ -476,9 +476,10 @@ def test_the_verifiers_part_nets_are_vstars_units(server):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
-                     st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([0, 17, -1, True])}),
+                     st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
                      st.dictionaries(st.sampled_from(["LANES", "H", "x"]), st.just(7), max_size=3), JSON)
 
 
@@ -491,7 +492,13 @@ def test_inner_unit_agrees(server):
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    stats = D.run(port("rec_open_unit", rec_open_unit, REC_OPEN), examples=30, seed=SEED, server=server)
+    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
+    takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
+    p = port("rec_open_unit", rec_open_unit, REC_OPEN)
+    for h in (0, 17):
+        assert D.replay(p, {"LANES": 8, "H": h}, server)[0] == "output", h
+    stats = D.run(p, examples=30, seed=SEED, server=server)
     assert stats.outputs >= 1 and stats.rejects >= 10, stats
 
 
@@ -513,7 +520,7 @@ def test_rec_open_circuit_refuses_as_compose_does(server):
     SHA-512 digest); `test_rec_open_file_is_byte_equal` compares a file it writes."""
     p = port("rec_open_circuit", rec_open_circuit, st.nothing())
     good = {"LANES": 8, "H": 1, "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
-    for bad in ({**good, "LANES": 7}, {**good, "LANES": True}, {**good, "H": 0}, {**good, "H": 17},
+    for bad in ({**good, "LANES": 7}, {**good, "LANES": True}, {**good, "H": -1}, {**good, "H": 33},
                 {k: v for k, v in good.items() if k != "program"}, {**good, "x": 0}, {**good, "partition": "A" * 128}):
         assert D.replay(p, bad, server)[0] == "reject", bad
 

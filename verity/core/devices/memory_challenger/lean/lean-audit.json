@@ -1,7 +1,5 @@
 {
- "roots": [
-  "MemoryChallenger"
- ],
+ "roots": ["MemoryChallenger"],
  "exempt": {
   "MemoryChallenger.Main": "the memory-challenger executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.protocol, audited under MemoryChallenger",
   "MemoryChallenger.TestMain": "the memory-challenger-test executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.testProtocol, audited under MemoryChallenger",
@@ -10,16 +8,8 @@
  },
  "layers": {
   "MemoryChallenger": {
-   "imports": [
-    "Flock",
-    "Randomness",
-    "Lms",
-    "CoreProtocol",
-    "MemoryChallenger"
-   ],
-   "except": [
-    "MemoryChallenger.Difftest"
-   ],
+   "imports": ["Flock", "Randomness", "Lms", "CoreProtocol", "MemoryChallenger"],
+   "except": ["MemoryChallenger.Difftest"],
    "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryChallenger.Difftest) also imports the difftest server"
   }
  },

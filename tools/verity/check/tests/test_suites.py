@@ -1163,6 +1163,42 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
 
 
+def test_a_suite_that_is_not_parallel_reuses_its_whole_traced_pass_until_a_file_its_run_read_changes(tmp_path):
+    """Its tests may depend on their order, so it reuses no test's pass, but a run of all of them that the guard traced answers
+    for the suite while every read holds; a run in which a test started a program no tracer sees into keeps no such pass."""
+    import json
+
+    root, lib, tests = tmp_path / "tree", tmp_path / "tree" / "lib", tmp_path / "tree" / "pkg" / "tests"
+    _traced_workspace(root)
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("parallel = true", "parallel = false"))
+    spawn = (tests / "test_spawn.py").read_text()
+    (tests / "test_spawn.py").unlink()
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "3 passed in" in p.stdout, p.stdout
+    [whole] = (tmp_path / "cache" / "per-test" / "pkg").glob("(suite)--*.json")
+    reads = json.loads((whole.parent / "traced" / f"{json.loads(whole.read_text())['traced']}.json").read_text())["reads"]
+    assert "F\tlib/used.py" in reads and "F\tlib/unused.py" not in reads, sorted(reads)
+
+    (lib / "unused.py").write_text("OTHER = 3\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "traced: every file its run read" in p.stdout, p.stdout
+    assert "pkg: cached: a traced pass of the whole suite" in _run_suite(root, tmp_path, "--explain", "pkg").stdout
+
+    (lib / "used.py").write_text("VALUE = 1  # read by test_a\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "3 passed in" in p.stdout and _reused(tmp_path) == [], p.stdout
+    (tests / "test_b.py").write_text("def test_b():\n    assert True\n")          # a test module: in the key, read or not
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "3 passed in" in p.stdout, p.stdout
+
+    (tests / "test_spawn.py").write_text(spawn)
+    assert _run_suite(root, tmp_path).returncode == 0
+    (lib / "unused.py").write_text("OTHER = 4\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
 def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
     R = importlib.util.module_from_spec(spec)

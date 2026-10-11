@@ -57,22 +57,19 @@ def inner(tmp_path_factory) -> Path:
 
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
     schedule = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
-    lk = rec["link"]
-    # the challenger commits to every coin before the session, in the schedule's order
-    recorded = {(st["stream"], k): rd["coins"] for st in rec["streams"] for k, rd in enumerate(st["rounds"])}
-    pending += coins(x for p in lk["points"] for x in p)
-    pending += coins(c for r in schedule["rounds"] for c in recorded[(r["stream"], r["k"])])
-    challenger = RL.CoinServer(rand)
-    proxy = RL.Proxy(challenger, lambda: g.randbytes(192), schedule=schedule, commitments=challenger.commit_coins(schedule))
+    proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192), schedule=schedule)
     send = lambda *req: RL.decode_resp(proxy.handle(RL.encode_req(*req)))
     hello = json.loads(rec["hello"])
     del hello["coins"]
+    lk = rec["link"]
+    pending += coins(x for p in lk["points"] for x in p)
     assert send(RL.REQ_HELLO, json.dumps(hello))[0] == RL.RESP_OK
     assert send(RL.REQ_COMMIT, bytes.fromhex(lk["root_f"]), [(t, bytes.fromhex(v)) for t, v in lk["root_b"].items()], [])[0] == RL.RESP_COINS
     assert send(RL.REQ_LINK, coins(lk["y"]))[0] == RL.RESP_OK
     for st in rec["streams"]:
         assert send(RL.REQ_OPEN, st["stream"], st["parent"] or "", st["label"].encode(), st["at"])[0] == RL.RESP_OK
         for rd in st["rounds"]:
+            pending += coins(rd["coins"])
             assert send(RL.REQ_ROUND, st["stream"], bytes.fromhex(rd["msg"]), rd["n"]) == (RL.RESP_COINS, [int(c, 16) for c in rd["coins"]])
     for r in (0, 1):
         assert send(RL.REQ_PROOF, "circuit", r, (SET / "records-cpu" / f"honest.rep{r}.proof").read_bytes())[0] == RL.RESP_OK
