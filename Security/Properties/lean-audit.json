@@ -25,10 +25,19 @@
   "Properties.Proofs.SampledProofs",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
+  "Properties.Pous.EndToEnd",
   "Properties.Proofs.Pous.TimedAudit",
   "Properties.Proofs.Pous.MemoryChallenger"
  ],
  "proved_in": ["../Proofs"],
+ "assumptions": {
+  "Pous.P2.Assumptions.P2RingAuditSecure": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.P2.Assumptions.CoinCommitHides": {
+   "owner": "@memory-accounting"
+  }
+ },
  "meaning": [
   "Properties.Pouw",
   "PouwWindow.Grid",
@@ -86,7 +95,9 @@
   "Properties.Pous.TimedAudit",
   "PousCheck",
   "Properties.Pous.MemoryChallenger",
-  "MemoryChallenger"
+  "MemoryChallenger",
+  "Definitions.Pous",
+  "Models.Pous.Assumptions"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -110,7 +121,15 @@
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pous": {
-   "imports": ["Mathlib", "Definitions.Pous", "PousCheck", "Properties.Pous", "MemoryChallenger"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous",
+    "PousCheck",
+    "Properties.Pous",
+    "MemoryChallenger",
+    "Models.Pous.Assumptions",
+    "Properties.Identity"
+   ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
@@ -1198,6 +1217,21 @@
    "signature": ["Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"],
    "assumptions": [],
    "type_hash": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70"
+  },
+  "Pous.EndToEnd.SecurityProofs.drawExact": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.EndToEnd.SecurityProofs.endToEndRing": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.EndToEnd.SecurityProofs.honestPassesRing": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -1901,6 +1935,10 @@
    "MemoryChallenger.Properties.SecurityProofs.verdictSigned": {
     "function": "MemoryChallenger.verdict",
     "outcome": "accept"
+   },
+   "Pous.EndToEnd.SecurityProofs.drawExact": {
+    "function": "FlockSoundness.Randomness.uniformOn",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -1921,7 +1959,19 @@
    "Properties.NetworkCertifier.honestAccepted": "completeness: Move to Proofs with its honest case as written; no Lean instance (the network difftest's accepted transcripts could supply one); it pairs with AcceptsIff's forward half.",
    "Properties.NetworkCertifier.malformedEvidenceRejects": "restatable: State the contrapositive: an outcome other than reject -> EvidenceFits.",
    "Properties.NetworkCertifier.undecidedIff": "restatable: Split the iff: keep undecided -> the link-window conditions (other-outcome); move the converse to Proofs.",
-   "Properties.NetworkCertifier.undigestedParamsReject": "restatable: State the contrapositive: an outcome other than reject -> some ParamsDigests p eg ig."
+   "Properties.NetworkCertifier.undigestedParamsReject": "restatable: State the contrapositive: an outcome other than reject -> some ParamsDigests p eg ig.",
+   "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-instantiation and prf/sha-512, and of the deployed verifier not at all until G-1 (one session per audit) and G-2 (the composed setup-to-challenger check) are fixed in code",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at D = 32,893, Q = 2^20, L = 2^64; frozen as it is",
+   "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
+   "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
+   "Pous.EndToEnd.RunCertifies": "unstated: the composed acceptance it is about is restated by hand (`Accepted`, G-2); no theorem proves it until the composed check exists in code"
+  },
+  "conjectures": {
+   "Pous.P2.Assumptions.P2RingAuditSecure": {
+    "status": "open",
+    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
+    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k, and at L >= 2^30 for k <= 88, which its tests prove."
+   }
   }
  },
  "reads": {
