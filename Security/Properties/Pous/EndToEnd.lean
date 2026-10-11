@@ -21,18 +21,20 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   coins drawn as the code draws them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
   uniform bytes.
 
-The step from the ring game to the deployed system is three claims, each its own id in `verity.core.claims`, cited
+The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:
 
-1. `pous-ring-device` (hardware and timing): the deployed server, on the allowed hardware and answering within
-   `Δ + RTT`, is a `Server S D Q L` at the certificate's numbers (`D = 32,893` multiplication rounds, `Q = 2^20` key
-   queries and `L = 2^64` ring operations per answer), with one session per audit and the coins drawn online, after
-   its state is fixed.
-2. `pous-ring-instantiation`: P2 with the identity labeling (`φ = id`), SHA-512-CTR keys and its published Merkle root of
+1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded
+   between setup, the session and its rounds, with one session per audit and the coins drawn online, after its state
+   is fixed. It names no number.
+2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
+   multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
+   `D = 16,446`, `Q = 2^20` and `L = 2^64`; `EndToEndRingDeployed`'s docstring derives `D` and its margin.
+3. `pous-ring-instantiation`: P2 with the identity labeling (`φ = id`), SHA-512-CTR keys and its published Merkle root of
    `C*` is no easier than `p2ring` with uniform `ω`. Every model in which P2 is secure hides structure the deployed code
    computes with, so "the real P2 resists every Lean function" is false (a server storing nothing recomputes `C*`
    locally, which a Lean function does for free): this step is a claim, never a theorem.
-3. `prf/sha-512`: the indices the memory challenger derives from its secret source (`Randomness.derive`, then the
+4. `prf/sha-512`: the indices the memory challenger derives from its secret source (`Randomness.derive`, then the
    counter-mode SHA-512 stream that `Randomness.uniform` reads) are as good as uniform: each stream is replaced here by
    `DRAW_BYTES` uniform bytes, and `uniformOn` reads them exactly as the code does.
 
@@ -239,28 +241,45 @@ secure in the ring model (`P2RingAuditSecure`), and given that the coin commitme
 challenger's coins and its uniform streams. The budget is `2^-129` (the ideal term), `2^-130` (the instantiation's
 term in `P2RingAuditSecure`), `2^-131` (the hiding) and `ε_rs = 0` (`DrawExact`), which sum to less than `2^-128`.
 
-It speaks of the deployed system only through the three claims of this module's header, each cited on its own:
-`pous-ring-device` (the deployed server is a `Server S D Q L` at the certificate's numbers, one session, online
-coins), `pous-ring-instantiation` (P2 with `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring`
-with uniform `ω`) and `prf/sha-512` (the derived streams are as good as uniform bytes). Nothing may cite it as covering
-the deployed verifier until G-1 (one session per audit) and G-2 (the composed check) are fixed in code. -/
+It speaks of the deployed system only through the four claims of this module's header, each cited on its own:
+`pous-ring-device` (the deployed server is a `Server`: state bounded between rounds, one session, online coins),
+`pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
+`φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
+derived streams are as good as uniform bytes). Nothing may cite it as covering the deployed verifier until G-1 (one
+session per audit) and G-2 (the composed check) are fixed in code. -/
 def EndToEndRing : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
     ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
       ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 
-/-- **`EndToEndRing` at the certificate's numbers, in the ring model, with `ω` uniform: `D = 32,893`, `Q = 2^20`,
-`L = 2^64`.** `D = 32,893` is one step below `RingTight`'s falsification of `P2RingAuditSecure` at `D = 32,894`
-(`PousP2Ring.tight_p16448`, a responder that recomputes the roots, if `p` is prime): the conjecture is claimed right up
-to a known attack. `L` is bounded because `P2RingAuditSecure` is not claimed for every `L` at `k = 105`: the truncation
-attack (`PousP2Ring.trunc_seq_accepted`, which refutes `k ≤ 88` from `L = 2^30`) passes `k = 105` once it drops about
-167 bits of every block, which takes about `2^168` ring operations per answer; `2^64` is far below that, and far above
-what `pous-ring-device` says the allowed hardware does within `Δ + RTT`. -/
+/-- **`EndToEndRing` at one root's depth, in the ring model, with `ω` uniform: `D = 16,446`, `Q = 2^20`, `L = 2^64`.**
+The margin first. `P2RingAuditSecure` is claimed at `D = 16,446`, about half of `RingTight`'s falsification at
+`D = 32,894` (`PousP2Ring.tight_p16448`, a responder that recomputes the block's two roots, if `p` is prime), and
+`pous-ring-speed` keeps the timing's 2× margin: 1.995× at the measured 8-core speedup, 1.64× and 1.25× under the timing
+red team's sync model.
+
+The count. In the ring model a root of `y` is `y^((p+1)/4)` by `rootProg`: `n = 16,446` rounds over the exponent's bits
+(`(p+1)/4 < 2^16446`, `PousP2Ring.p16448_root_bits`) and one more that squares the result to fix its sign, so
+`n + 1 = 16,447` multiplication rounds (`PousP2Ring.rootProg_cost`); recomputing a block takes two sequential roots,
+`2 · 16,447 = 32,894` (`recBlock_cost`). `D = 16,446` is the largest `D` at which that root program cannot finish one
+root; at `16,447` a responder completes a root. The two roots are sequential (the second's input is `σ_K` of the
+first), so even a root in fewer rounds leaves the attack about twice as far as `D`.
+
+The timing. `pous-ring-speed` at this `D` says no allowed hardware finishes 16,447 sequential multiplication rounds
+within `Δ + RTT ≤ 854 µs`. `ROOT_CALL_NS` (PROTOCOL.md, P2's SeqRoot) is half the fastest modelled root, the timing red
+team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×
+(run `r20260929-060834-0ec4`): about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs, 1.995 × 854 µs. The
+PROTOCOL's 2.0001× counts the root's 20 extra multiplications, which a round of the ring model performs beside its
+squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the margin is 1.64× and 1.25×.
+
+`L` is bounded because `P2RingAuditSecure` is not claimed for every `L` at `k = 105`: the truncation attack
+(`PousP2Ring.trunc_seq_accepted`, which refutes `k ≤ 88` from `L = 2^30`) passes `k = 105` once it drops about 167
+bits of every block, which takes about `2^168` ring operations per answer; `2^64` is far below that. -/
 def EndToEndRingDeployed : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    Pous.P2.Assumptions.P2RingAuditSecure 32893 (2 ^ 20) (2 ^ 64) →
-      ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 32893 (2 ^ 20) (2 ^ 64)),
+    Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
+      ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 
 /-- **Non-vacuity in the ring model, with `ω` uniform: the honest full-state server passes P2's audit.** At the full

@@ -733,15 +733,27 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no
   leftover hash lemma to prove it with). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
   proved (`DrawExact`: `uniformOn` reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected).
-  `EndToEndRingDeployed` is it at `D = 32,893` (one below `RingTight`'s falsification at 32,894), `Q = 2^20` and
-  `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). `HonestPassesRing` and
+  `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half of `RingTight`'s falsification at
+  32,894, with `Q = 2^20` and `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). In the ring
+  model a root is 16,447 multiplication rounds (16,446 over the exponent's bits and one to fix the sign,
+  `rootProg_cost`), and recomputing a block takes two, `2 · 16,447 = 32,894`; 16,446 is the largest `D` at which that
+  program cannot finish one root. The timing keeps its 2× margin there: at SeqRoot's measured floor (103.6 ns per
+  cooperating squaring), 16,447 rounds take 1,704 µs, 1.995× `Δ + RTT`, and 1.64× and 1.25× under the red team's sync
+  model. `HonestPassesRing` and
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
   probability 1.
 
-`EndToEndRing` reaches the deployed system only through three claims, each cited on its own:
+`EndToEndRing` reaches the deployed system only through four claims, each cited on its own:
 
-- `pous-ring-device` (hardware and timing): the deployed server is a `Server S D Q L` at the certificate's numbers,
-  with one session per audit and the coins drawn online;
+- `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
+  its rounds, with one session per audit and the coins drawn online;
+- `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
+  round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the measurement
+  behind `ROOT_CALL_NS` (SeqRoot, under P2 in "The generic protocol"): the 8-core cooperation run
+  `r20260929-060834-0ec4` (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed) and the timing red
+  team's `note:20261004T2102Z-report-relay-p2-redteam-timing`
+  (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57); its margin is 1.995×, and 1.64× and 1.25×
+  under the red team's sync model;
 - `pous-ring-instantiation`: P2 with the identity labeling and SHA-512-CTR keys is no easier than `p2ring` with
   uniform ω;
 - `prf/sha-512`: the memory challenger's derived index streams are as good as uniform bytes.
