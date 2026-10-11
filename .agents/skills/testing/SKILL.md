@@ -110,6 +110,11 @@ a `sys.path` entry another test file added: every suite runs alone.
   Don't write a test whose result can depend on load, a shared machine or what holds it (GPU leases, check slots, pods),
   ports and sockets, a race between processes, or an outside service. A test that flakes (it passed and failed under one
   key, which `suites.py` reports as `nondeterministic`) is deleted, not fixed or rerun.
+- **Statistical floors from a seed sweep:** a test that asserts a count over random draws ("more than 250 of 400 accepted")
+  takes its floor from a sweep over seeds, not from the one seed it runs at, and its docstring states the margin ("0 of 40
+  seeds miss"). A seeded test is deterministic for one tree, but any change that shifts the draws re-rolls it. A floor in
+  the middle of the spread then fails a full check. On Oct 11, `test_inner_circuit_agrees` missed at 24 of 40 seeds and
+  the memory challenger's `test_verdict_agrees` at seeds 0–2.
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
