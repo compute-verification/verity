@@ -423,9 +423,9 @@ requirement.
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
-| `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
+| `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
-| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, limit_ns=, block_bytes=)` with its `SessionCommitment`, `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -759,9 +759,16 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   uniform ω;
 - `prf/sha-512`: the memory challenger's derived index streams are as good as uniform bytes.
 
-Nothing may cite either statement as covering the deployed verifier until two gaps are fixed in code: G-1, nothing
-enforces one session per audit (a `SessionCommitment`'s `binding` defaults to `b""`); G-2, there is no composed
-setup-to-challenger check, and `Accepted` restates the glue by hand.
+Nothing may cite either statement as covering the deployed verifier until two gaps are fixed in code:
+
+- G-1, one session per audit. Every session now names its setup: a `SessionCommitment`'s `binding` has no default, the
+  `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory challenger
+  (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the `C*` its
+  digests describe (`VerifierKey.from_row_digests`). What is still open is that a device may sign several sessions
+  under one root (the harness runs the honest audit and four controls against one setup, each of several sessions), so
+  "one session per audit" still rests on `pous-ring-device` until the device refuses a second session under a root it
+  has signed one for.
+- G-2, there is no composed setup-to-challenger check, and `Accepted` restates the glue by hand.
 
 ## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
 

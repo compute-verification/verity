@@ -576,13 +576,20 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
 
 def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it():
     """`Δ + 354 µs` is inside `P2SlackFamilyUncond`'s certificate: 105 rounds a session run, the test-signed sessions pass
-    under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round."""
+    under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round.  Every
+    session is bound to the root the setup publishes for the responder's `C*`."""
+    from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.schemes import p2
+    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert doc["strict"] and "refused" not in doc and answered == 2 * 105 and doc["k"] == 105
     assert doc["audits"] == doc["audits_accepted_under_signer"] == 2 and doc["audits_accepted"] == 0
     assert doc["late"] == doc["wrong"] == 0 and doc["profile"] is None
+    params, salt = schemes.get("p2-16448/v4").params, b"s" * 24
+    blocks = [i.to_bytes(8, "big") * (params.block_bytes // 8) for i in range(params.blocks)]
+    root = VerifierKey.from_leaves(params, salt, [leaf_hash(params, salt, i, b) for i, b in enumerate(blocks)]).root.hex()
+    assert doc["setup_root"] == root and all(rec["public"]["commitment"]["binding"] == root for rec in doc["records"])
     rec = doc["records"][0]
     assert rec["witness"]["expected"] == {str(a["index"]): rec["witness"]["signed"]["rounds"][j]["digest"]
                                           for j, a in enumerate(rec["answers"])}

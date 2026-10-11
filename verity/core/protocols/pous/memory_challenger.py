@@ -6,7 +6,8 @@ A session has four steps:
 
 1. **Commit.** Before the session the memory challenger draws its `k` indices from its own secret
    (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
-   root and hm96 key together with the session's parameters (`SessionCommitment`).
+   root and hm96 key together with the session's parameters and the root the setup published for the `C*` it audits
+   (`SessionCommitment`).
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
@@ -76,6 +77,7 @@ from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
 from .protocol import Certificate, Scheme
+from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
@@ -199,8 +201,9 @@ def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
 @dataclass(frozen=True, slots=True)
 class SessionCommitment:
     """What the memory challenger publishes before the session: the session id, the coin tree (root and hm96 key),
-    the number of blocks and rounds, the limit `Δ + RTT`, the answer's size, and `binding`, what the session audits
-    (for example the salted roots of the encoding).  Every field is in the signed header."""
+    the number of blocks and rounds, the limit `Δ + RTT`, the answer's size, and `binding`, the root the setup published
+    for the `C*` the session audits (`verifier.VerifierKey.root`, the setup protocol's `root`).  Every field is in the
+    signed header."""
 
     session: bytes
     coin_root: bytes
@@ -209,7 +212,7 @@ class SessionCommitment:
     k: int
     limit_ns: int
     block_bytes: int
-    binding: bytes = b""
+    binding: bytes
 
     def header(self) -> dict[str, Any]:
         return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records_tree": RECORDS_TREE, "session": self.session.hex(),
@@ -359,14 +362,17 @@ def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental:
 
 
 class MemoryChallenger:
-    """One session of the memory challenger over `coins`, judged against `limit_ns`, signed by `signer` (module
-    docstring).  `challenge()` reveals the next index and reads the send time; `receive(block)` reads the receipt time
-    first, then hashes the block.  A late round ends the session; `close()` signs it once."""
+    """One session of the memory challenger over `coins`, judged against `limit_ns`, signed by `signer`, bound to
+    `binding`, the setup's root of the `C*` it audits (module docstring).  `challenge()` reveals the next index and reads
+    the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round ends the session;
+    `close()` signs it once."""
 
-    def __init__(self, coins: CoinTree, signer: Signer, *, limit_ns: int, block_bytes: int, binding: bytes = b"",
+    def __init__(self, coins: CoinTree, signer: Signer, *, limit_ns: int, block_bytes: int, binding: bytes,
                  clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
         if limit_ns <= 0 or block_bytes <= 0:
             raise ValueError("a session's limit and answer size are positive")
+        if len(binding) != DIGEST_BYTES:
+            raise ValueError(f"a session's binding is the setup's {DIGEST_BYTES}-byte root of C*, not {len(binding)} bytes")
         if resolution_ns is None:
             resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
         if resolution_ns > CLOCK_RESOLUTION_NS:

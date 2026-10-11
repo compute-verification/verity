@@ -14,7 +14,8 @@ against C's leaf).
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
 - **A session** draws a fresh session id and challenger secret and commits its coin tree, every session's before the first
   round of any; it runs `k` rounds (the certificate's `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
-  certificate covers (`covering_certificate`) before any round.
+  certificate covers (`covering_certificate`) before any round.  Every session's binding is `setup_root`, the root the setup
+  publishes for the `C*` of these digests under READY's salt (`VerifierKey.from_row_digests`), recorded as `setup_root`.
 - **The signer.** `--signer lms` signs with S1's LMS at `lms.DEPLOYED` (`memory_challenger.LMS`), the key in `--lms-key DIR`:
   `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
@@ -174,9 +175,12 @@ def signer_schemes(scheme: str) -> Mapping[str, Any]:
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
 
-def binding_of(salt: bytes, digests: bytes) -> bytes:
-    """What a session audits: SHA-512 of the setup salt and the table of block digests."""
-    return hashlib.sha512(b"verity-pous/bench/memory-challenger/binding/v1\0" + salt + hashlib.sha512(digests).digest()).digest()
+def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
+    """What a session audits: the root the setup publishes for the `C*` whose block digests are `digests`, under `salt`
+    (`VerifierKey.root`)."""
+    from verity.core.protocols.pous.verifier import VerifierKey
+
+    return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
 
 def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
@@ -283,10 +287,11 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     limit = limit_ns if fixed else deadline_ns + cap
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
+    binding = setup_root(params, salt, digests)
     base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
-            "k": k, "scheme": scheme.name}
+            "k": k, "scheme": scheme.name, "setup_root": binding.hex()}
     gaps: tuple[str, ...] = ()
     try:
         cert = mc.covering_certificate(scheme, k, limit, experimental=True)
@@ -302,7 +307,6 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
            else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length())))
     key_load_s = (time.perf_counter_ns() - t0) / 1e9
-    binding = binding_of(salt, digests)
     resolution = None if clock is time.perf_counter_ns else 1
     if cpu is not None:
         os.sched_setaffinity(0, {cpu})
