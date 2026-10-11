@@ -4,6 +4,7 @@
   "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",
   "PousCheck.SetupDifftestMain": "the pous-setup-difftest server's entry point, one line: Difftest.serve of PousCheck.SetupDifftest.table, which tests/test_setup_difftest.py drives against the Python reference; audited under PousCheck",
   "PousCheck.TimedAuditMain": "the pous-timed-audit executable's entry point: with three files, PousCheck.TimedAudit.run, the timed audit's verdict of record, audited under PousCheck; with `serve`, Difftest.serve of PousCheck.TimedAudit.verdictFn, which timed_audit.py drives against memory_challenger.verdict",
+  "PousCheck.RunMain": "the pous-run executable's entry point: with three files, PousCheck.Run.run, the composed check of a recorded run, audited under PousCheck; with `serve`, Difftest.serve of PousCheck.Run.runFn, which tests/test_run.py drives against run.check_at",
   "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof; with `serve`, Difftest.serve of PousCheck.Difftest.transcript, which interop.py drives against wire.py"
  },
  "runs": {
@@ -19,9 +20,9 @@
  },
  "layers": {
   "PousCheck": {
-   "imports": ["PousCheck", "Flock", "CoreProtocol", "Identity", "Randomness"],
+   "imports": ["PousCheck", "Flock", "CoreProtocol", "Identity", "Randomness", "MemoryChallenger"],
    "except": ["PousCheck.SetupDifftest"],
-   "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface and the core primitives (identity, randomness) only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface, the core primitives (identity, randomness) and the memory challenger's verdict (PousCheck.Run composes it with the setup) only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {
