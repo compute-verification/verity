@@ -82,12 +82,13 @@ def VerifiesVStar {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (i : Rec
   AcceptsVRV i bind rows zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
 
 /-- **C-Flock's compiled inner protocol as the executable runs it**: `flockInnerCL` at the executable's arithmetic
-(`execArith`) and its hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the class
-`cls`, its regions and the schedule `sch`. -/
+(`execArith`) and the inner statement's Merkle scheme, SHA-512 with plain leaves (`Refine.enc512`, `Refine.leafPlain`
+under `Refine.H512`: `flock-leaf/sha512-unsalted`, which `RecVStar.innerTags` names), on the class `cls`, its regions
+and the schedule `sch`. -/
 noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule) : Inner :=
-  flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch
+  flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch
 
 /-- **The number of V*'s outer statements** over an inner session of a table of `m` variables, `k_log` and `claims`
 claims, as V*'s staging lays them out (`rec_vstage.stage`, `VStar.statements`) and the verifier of record groups the
@@ -260,7 +261,7 @@ def RecursiveAudit : Prop :=
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (hiddenAt st rt stmt) wmsg
-        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
+        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧

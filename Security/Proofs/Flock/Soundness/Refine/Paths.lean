@@ -131,6 +131,18 @@ theorem toDig_val {b : ByteArray} (h : b.size = 64) : (toDig b).1 = b := by simp
 theorem bytes_of_list (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray) = b := by
   cases b; simp
 
+/-- **The plain leaf**: SHA-512 of the row's encoding, its salt ignored: `MerkleScheme.sha512`'s leaf (`leafPlain_leaf`),
+the leaf of a recursive session's inner statement (`flock-leaf/sha512-unsalted`, `Tags.withPlainLeaves`). -/
+def leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 where
+  leaf c _ := H512 (enc512.col c)
+  bind _ _ _ _ hc h := ⟨_, _, fun e => hc (enc512.col_inj e), h⟩
+
+/-- **The executable's unsalted leaf is the model's plain leaf**, under any salt. -/
+theorem leafPlain_leaf (id : String) (row : Array F128) (salt : ByteArray) (y : List UInt8) :
+    (leafPlain.leaf row.toList y).1 = (MerkleScheme.sha512 id).leaf row salt := by
+  show Sha512.hash ⟨(colBytes row.toList).toArray⟩ = Sha512.hash (MerkleScheme.rowBytes row)
+  rw [← rowBytes_data, bytes_of_list]
+
 theorem H512_append (a b : Dig) : (H512 (enc512.dig a ++ enc512.dig b)).1 = Sha512.hash (a.1 ++ b.1) := by
   simp only [H512, enc512]
   congr 1

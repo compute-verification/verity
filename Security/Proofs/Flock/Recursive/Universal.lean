@@ -13,7 +13,7 @@ fixes the class at `UniversalUnit_v1{G, N_IN, N_OUT}`'s, and there the premise i
 * `fast100_some`: `fast100 m` is a schedule for every `22 ≤ m ≤ 35`.
 * `compiledForkSound_of_fast100`: `CompiledForkSound` at a class whose schedule is `fast100`'s and whose link layout
   holds at every hidden template (`LinkLayout`): `flock_inner_sound_compiled` as stated, at the executable's arithmetic
-  (`execArith_correct`) and hm96-sha512.
+  (`execArith_correct`) and the inner statement's plain SHA-512 leaves (`Refine.leafPlain`).
 * `HClass.ofStmt`: the class of an executable statement: its `m`, `k_log`, pin and matrices (`Refine.stmtOf`'s) as the
   public part, with a hidden template's geometry (`slotLog`, `units`, `nnz`) given, the link layout at `PT_LOCAL` and the
   statement's link points.
@@ -37,7 +37,7 @@ theorem compiledForkSound_of_fast100 {nT r : ℕ} (T : Fin nT → Type) (CT : Fi
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
     Flock.Premises.CompiledForkSound T CT cls regs sch := by
   let _ : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
-  exact flock_inner_sound_compiled T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leaf512 cls regs
+  exact flock_inner_sound_compiled T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leafPlain cls regs
     sch hsch hlay
 
 /-- **The class of an executable statement**: its `m`, `k_log` and pin, its matrices (`Refine.matA`, `Refine.matB`, as

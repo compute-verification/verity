@@ -25,12 +25,14 @@ function of it (`execClassAt`), so the class's fields are no hypotheses and the 
   `Stmt.setupHidden`, since those tags hide outputs), and
   `Zk.schedule` accepts its `m`. `classOk_of_accepts`: then its class checks pass, so an accepted statement's class is
   its own
-  (`execClassAt_of_accepts`), never the fixed one.
+  (`execClassAt_of_accepts`), never the fixed one. `acceptsStmt_merkle`: its Merkle scheme is the one the inner tags
+  name (`innerTags_merkleLeaf`), unsalted SHA-512, whose leaf is the model's `Refine.leafPlain` (`Refine.leafPlain_leaf`).
 * `compiledForkSound_execClassAt`: the compile premise at `execClassAt st` when its checks pass
   (`compiledForkSound_of_fast100`, from `flock_inner_sound_compiled`).
 * Class-fixed regions: the class (`execClassAt_cls`), the number of regions (`execClassAt_regs_length`) and the
   schedule (`execClassAt_sch`) are functions of `shapeOf st`, and so is each region's place in the block, its free and
   fixed bits (`regionsOf_layout`); two statements of one shape differ only in the regions' bytes (`execClassAt_shape`).
+  When the checks pass, the schedule is `fast100`'s (`execClassAt_sch_of_fast100`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -64,6 +66,24 @@ def AcceptsStmt (st : Flock.Stmt) : Prop :=
 
 /-- The inner tags hide the statement's outputs, so `setupTables` sets the inner statement up with `setupHidden`. -/
 theorem innerTags_hiddenOutputs : Flock.RecVStar.innerTags.hiddenOutputs = true := rfl
+
+/-- The inner tags name plain SHA-512 leaves (`Tags.withPlainLeaves`). -/
+theorem innerTags_merkleLeaf : Flock.RecVStar.innerTags.merkleLeaf = "flock-leaf/sha512-unsalted" := rfl
+
+/-- **An accepted statement's Merkle scheme is `flock-leaf/sha512-unsalted`'s**: `setupHidden` commits with the scheme
+its tags name (`Hidden.setupHidden_spec'`), and the inner tags name that one (`innerTags_merkleLeaf`). -/
+theorem acceptsStmt_merkle {st : Flock.Stmt} (h : AcceptsStmt st) :
+    st.merkle = Flock.MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
+  obtain ⟨⟨_, _, _, _, _, hs⟩, -⟩ := h
+  rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hs with ⟨-, st', hst, -, hsts⟩ | ⟨hc, -⟩
+  · obtain rfl : st = st' := by simpa using hsts
+    have s := Hidden.setupHidden_spec' hst
+    have hf := s.merkle
+    rw [Hidden.parse_leafScheme s.parse, innerTags_merkleLeaf,
+      show Flock.MerkleScheme.find? "flock-leaf/sha512-unsalted" =
+        some (Flock.MerkleScheme.sha512 "flock-leaf/sha512-unsalted") from rfl] at hf
+    exact (Option.some.inj hf).symm
+  · omega
 
 /-- **A class, its regions and its schedule**, the compiled table's parameters. -/
 structure ExecClass where
@@ -187,6 +207,13 @@ theorem execClassAt_regs_length (st : Flock.Stmt) :
     simp [Refine.regionsOf]
   · rw [execClassAt, dif_neg h, if_neg h]
     rfl
+
+/-- **The schedule of a statement whose checks pass is `fast100`'s**, as the model's. -/
+theorem execClassAt_sch_of_fast100 {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
+    (hs : Flock.fast100 st.m = some s₀) : (execClassAt st).sch = Refine.schedOf s₀ := by
+  rw [execClassAt, dif_pos h]
+  show schedAt st.m = _
+  simp only [schedAt, hs]
 
 open Classical in
 /-- **The schedule reads only the shape.** -/
