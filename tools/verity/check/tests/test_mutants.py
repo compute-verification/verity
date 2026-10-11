@@ -57,6 +57,11 @@ def test_a_check_no_test_needs_survives_and_the_source_is_restored(tmp_path):
     got = {m["line"]: m["outcome"] for m in json.loads(out.read_text())["mutants"]}
     assert got == {2: "killed", 3: "survived", 8: "survived", 9: "survived", 11: "survived"}
     assert src.read_text() == SOURCE and built.read_text() == SOURCE
+    rc = M.main([str(src), "--build", f"cp {src} {built}", "--test", f"grep -q checkRegistered {built}", "--json", str(out),
+                 "--line", "2", "--line", "11"])
+    assert rc == 1
+    assert {m["line"]: m["outcome"] for m in json.loads(out.read_text())["mutants"]} == {2: "killed", 11: "survived"}
+    assert M.main([str(src), "--build", "true", "--test", "true", "--line", "4"]) == 2
 
 
 def test_a_failing_baseline_or_build_is_not_a_kill(tmp_path, capsys):
