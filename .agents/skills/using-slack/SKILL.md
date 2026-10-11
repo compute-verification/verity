@@ -2,7 +2,7 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, and the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
@@ -19,7 +19,7 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), plus two advisors,
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier) and `@console`, plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
@@ -87,7 +87,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 
 - **Holders in the top-level's Project don't subscribe to `#agent-coordination`.** The top-level agent (bc-7f347b4b) reads it
   and forwards each holder only the posts addressed to it. The registry's `subscribers` lists only the holders outside that
-  Project (the `old-*` handles). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
+  Project (the `old-*` handles and `@console`, on Daniel's laptop). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
   still run `match` over the channel to catch anything missed.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
@@ -98,7 +98,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
-subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the top-level and old-* holders only
+subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the top-level, old-* and console holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=2592000)       # @infra only
 subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=2592000)         # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)
