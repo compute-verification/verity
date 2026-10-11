@@ -69,6 +69,11 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "sudo ps aux | tail",
     "ssh n1 'ps -ef'",
     "cat /proc/*/cmdline",
+    "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # the Nebius key's lines again, 11 Oct
+    "tmux show-environment",
+    "tmux showenv -t main",
+    "tmux show-environment -g NEBIUS_SA_PRIVATE_KEY",
+    "ssh n1 'tmux show-env -g'",
 ])
 def test_a_command_that_would_print_the_environment_is_refused(command):
     assert verdict(command) == "deny"
@@ -111,6 +116,8 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps aux | rg -i lake",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
     "pgrep -af quick_tier",
+    "tmux show-environment -g DISPLAY",
+    "tmux -f /exec-daemon/tmux.portal.conf send-keys -t build:0.0 'make' C-m",
     "cat /proc/1234/cmdline | tr '\\0' ' '",
     "",
 ])
