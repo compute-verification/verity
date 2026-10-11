@@ -87,6 +87,18 @@ theorem bit_out_tail {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (
   rw [bit_append_left z _ (by rw [List.length_append, hl]; omega), show 512 + i = L.flatten.length + i by omega,
     bit_append_right]
 
+/-- The output's length: the zeros fill it to `n` bits. -/
+theorem length_out {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (hL : List.Forall₂ (Holds z) L xs)
+    (tail : List Lin) (n : ℕ) (h : 128 * xs.length + tail.length ≤ n) :
+    (L.flatten ++ tail ++ List.replicate (n - (L.flatten ++ tail).length) Lin.zero).length = n := by
+  rw [List.length_append, List.length_replicate, List.length_append, length_flatten_holds hL]
+  omega
+
+theorem outWords_ge (sh : Flock.RecSparse.Shape) : 128 * (Flock.RecSparse.residualNames sh).length +
+    16 * (if sh.stacked then sh.S else 0) ≤ 16 * Flock.RecSparse.outWords sh := by
+  unfold Flock.RecSparse.outWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_BLOCK
+  omega
+
 /-! ## Lists -/
 
 theorem forall₂_range {α β : Type} {R : α → β → Prop} (f : ℕ → α) (g : ℕ → β) :
@@ -332,6 +344,7 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
     (hτ : sh.stacked = true → 16 * sh.S ≤ (P "tau").length) (ht16 : sh.tLog ≤ 16)
     (hn : ∀ nm, Used sh nm → nm ∈ (Flock.RecSparse.structureOf sh).2) :
     Sound (Flock.RecSparse.steps sh P) fun z out => ∀ w v τ, StepsIn sh P z w v τ →
+      out.length = 16 * Flock.RecSparse.outWords sh ∧
       (∀ r (hr : r < (stepVals sh (rval sh w v) w v τ).length), ∀ k < 128,
         bit z out (128 * r + k) = bitOf (stepVals sh (rval sh w v) w v τ)[r] k) ∧
       (sh.stacked = true → ∀ s < sh.S, ∀ b < 16,
@@ -435,9 +448,12 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
       exact .cons H2 (.cons H3 (.cons H4 (.cons (HR "claim" (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨hst, rfl⟩))))))
         .nil)))
     obtain ⟨htl, htb'⟩ := tail_bits z (P "tau") sh.tLog ht16 sh.S (hτ hst)
-    refine ⟨post_of HL _ _, fun _ s hs b hb => ?_⟩
-    rw [bit_out_tail HL (by simp [stepVals, hst]) _ _ (by rw [htl]; omega), htb' s hs b hb, Hτ s hs b hb,
-      testBit_clear]
+    have h4l : (stepVals sh (rval sh w v) w v τ).length = 4 := by simp [stepVals, hst]
+    have how := outWords_ge sh
+    have hrn : (Flock.RecSparse.residualNames sh).length = 4 := by simp [Flock.RecSparse.residualNames, hst]
+    simp only [hst, ↓reduceIte] at how
+    refine ⟨length_out HL _ _ (by rw [h4l, htl]; omega), post_of HL _ _, fun _ s hs b hb => ?_⟩
+    rw [bit_out_tail HL h4l _ _ (by rw [htl]; omega), htb' s hs b hb, Hτ s hs b hb, testBit_clear]
   · rename_i hst
     simp only [pure_bind]
     refine Sound.pure' fun z hphi hc4 hc2 hres w v τ hin => ?_
@@ -461,7 +477,11 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
         Flock.RecOpen.xorL c4 phi, elem out.toArray (names.idxOf "bp")] (stepVals sh (rval sh w v) w v τ) := by
       simp only [stepVals, hst, Bool.false_eq_true, ↓reduceIte]
       exact .cons H2 (.cons H3 (.cons (HR "bp" (Or.inr (Or.inr (Or.inr (Or.inl rfl))))) .nil))
-    exact ⟨post_of HL _ _, fun h => absurd h hst⟩
+    have h3l : (stepVals sh (rval sh w v) w v τ).length = 3 := by simp [stepVals, hst]
+    have how := outWords_ge sh
+    have hrn : (Flock.RecSparse.residualNames sh).length = 3 := by simp [Flock.RecSparse.residualNames, hst]
+    simp only [hst, Bool.false_eq_true, ↓reduceIte] at how
+    exact ⟨length_out HL _ _ (by rw [h3l, List.length_nil]; omega), post_of HL _ _, fun h => absurd h hst⟩
 
 end Steps
 
