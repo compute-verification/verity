@@ -24,7 +24,6 @@ theorem ligerito_ybar (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap
   unfold Zk.ligerito at h
   try dsimp only at h
   obtain ⟨-, h⟩ := check_bind h
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨hc, -⟩ := check_bind h
   simp only [Bool.and_eq_true, beq_iff_eq] at hc
   exact hc.1

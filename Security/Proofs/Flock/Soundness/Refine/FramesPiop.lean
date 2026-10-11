@@ -31,7 +31,6 @@ theorem zerocheck_frames (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p :
   have h := modify_bind h
   have h := modify_bind h
   have h := modify_bind h
-  obtain ⟨-, h⟩ := check_bind h
   have h := modify_bind h
   obtain ⟨-, -, R₀, h⟩ := sampleVec_bindA (n := 6) (by decide) h hret
   obtain ⟨-, -, R₁, h⟩ := sampleVec_bindA (n := m - 13) (by omega) h hret

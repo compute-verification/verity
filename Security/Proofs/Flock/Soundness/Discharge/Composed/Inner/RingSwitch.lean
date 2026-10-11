@@ -139,7 +139,6 @@ theorem replay_values (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byte
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h

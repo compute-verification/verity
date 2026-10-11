@@ -283,7 +283,6 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
   obtain ⟨t₁, k₁, h⟩ := label_bind h
   obtain ⟨t₂, k₂, h⟩ := absorbBytes_bind h
   obtain ⟨t₃, k₃, h⟩ := absorbBytes_bind h
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨t₄, k₄, h⟩ := label_bind h
   obtain ⟨t₅, k₅, h⟩ := label_bind h
   obtain ⟨t₆, k₆, h⟩ := absorbBytes_bind h
