@@ -306,7 +306,7 @@ theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) 
   obtain ⟨cγ, t₃, -, h⟩ := bind_ok h
   obtain ⟨hTs, -⟩ := pure_ok h
   rw [forIn_range_eq] at hloop
-  obtain ⟨-, -, hQ, hs'⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck m claims rs) (by
+  obtain ⟨-, -, hQ, hs'⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck claims rs) (by
       intro k st tt b tt' hb
       obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
       obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb

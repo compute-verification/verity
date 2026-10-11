@@ -227,7 +227,7 @@ theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) 
       · simp [List.range'_succ]
 
 /-- The check of one ring switch (O4): `Σ_v w[v]·ŝ[v] = value`. -/
-def RsCheck (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array F128)) (k : ℕ) : Prop :=
+def RsCheck (claims : Array Flock.Claim) (rs : Array (Array F128)) (k : ℕ) : Prop :=
   (dot (wOf claims[k]!) rs[k]! == claims[k]!.value) = true
 
 theorem getD_zipIdx_map {α β : Type} (l : List α) (f : α × ℕ → β) (k : ℕ) (hk : k < l.length) (d : β) :
@@ -250,7 +250,7 @@ theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (c
   obtain ⟨lt₂, n₂, t₃, r₃, kk₃, h⟩ := sampleVec_bind (by omega) h
   obtain ⟨hTs, rfl⟩ := pure_ok h
   rw [forIn_range_eq] at hloop
-  obtain ⟨hr₂, hk₂, hQ, hs⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck m claims rs) (by
+  obtain ⟨hr₂, hk₂, hQ, hs⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck claims rs) (by
       intro k st tt b tt' hb
       obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
       obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb
