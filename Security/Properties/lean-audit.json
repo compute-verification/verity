@@ -14,7 +14,6 @@
   "Properties.Proofs.Pous",
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
-  "Properties.CertifierNetwork",
   "Properties.Proofs.CertifierNetwork",
   "Properties.Identity",
   "Properties.Proofs.Identity",
@@ -66,7 +65,6 @@
   "Properties.Identity",
   "Properties.NetworkCertifier",
   "Definitions.NetworkCertifier",
-  "Properties.CertifierNetwork",
   "Properties.Pous",
   "PousCheck.P2",
   "PousCheck.Params",
@@ -131,11 +129,6 @@
    ],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
-  },
-  "Properties.CertifierNetwork": {
-   "imports": ["Properties.CertifierDevice", "Properties.NetworkCertifier"],
-   "except": [],
-   "why": "the guarantee joins the device's statements and the check's: stated over their definitions, never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -270,12 +263,6 @@
    "assumptions": [],
    "type_hash": "e21f4f333b07742207112c7c3b3129dfbf940b434ec1c2e4273f54e572b4571a"
   },
-  "Properties.CertifierDevice.issuerSigns": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.issuerSigns : Properties.CertifierDevice.IssuerSigns"],
-   "assumptions": [],
-   "type_hash": "613fb12cc329b7d473eea2acf5e1127e5c59cee678c1237c37e60a7ea3192ed7"
-  },
   "Properties.CertifierDevice.issuerVerifies": {
    "owner": "@network-accounting",
    "signature": ["Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"],
@@ -288,23 +275,11 @@
    "assumptions": [],
    "type_hash": "ebc61df5d4bcea9f8a6698bb3499a497c7d0a575af8cf6c540359d19347d83e8"
   },
-  "Properties.CertifierDevice.lmsCorrect": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.lmsCorrect : Properties.CertifierDevice.LmsCorrect"],
-   "assumptions": [],
-   "type_hash": "c0fc2bd002f025f6fc11e5fad51844c70fa58a9235d817cb0e5cb9450f2b35ec"
-  },
   "Properties.CertifierDevice.records": {
    "owner": "@network-accounting",
    "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
    "assumptions": [],
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3"
-  },
-  "Properties.CertifierNetwork.deviceOutputAccepted": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierNetwork.deviceOutputAccepted : Properties.CertifierNetwork.DeviceOutputAccepted"],
-   "assumptions": [],
-   "type_hash": "e60b64d60e57ef470c1c3b410954f8dfa0db434866dc3ea3d91a0c0f618c5e4f"
   },
   "Properties.Evaluator.Casts.bf16ToF32": {
    "owner": "@circuits",
@@ -1301,28 +1276,16 @@
     "function": "CertifierDevice.step",
     "outcome": "none"
    },
-   "Properties.CertifierDevice.issuerSigns": {
-    "function": "CertifierDevice.Issuer.certify",
-    "outcome": "accept"
-   },
    "Properties.CertifierDevice.issuerVerifies": {
-    "function": "CertifierDevice.Issuer.certify",
+    "function": ["CertifierDevice.Issuer.certify", "Lms.Params.make", "Lms.key"],
     "outcome": "accept"
    },
    "Properties.CertifierDevice.linkSchedule": {
     "function": "CertifierDevice.step",
     "outcome": "none"
    },
-   "Properties.CertifierDevice.lmsCorrect": {
-    "function": "Lms.verify",
-    "outcome": "accept"
-   },
    "Properties.CertifierDevice.records": {
     "function": "CertifierDevice.step",
-    "outcome": "none"
-   },
-   "Properties.CertifierNetwork.deviceOutputAccepted": {
-    "function": "NetworkCheck.Check.protocol.check",
     "outcome": "none"
    },
    "Properties.Evaluator.Casts.bf16ToF32": {
@@ -1951,13 +1914,6 @@
    "PousCheck.Properties.PublishesRoot": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": "restatable: As AcceptedRowsAreProgramRows, and make ss a definition of p.syncSet; move o's agreement with the device, its length, linkOf's range and the opened-frames condition into the conclusion.",
    "Proofs.NetworkCertifier.encardAcceptedObservationsLe": "restatable: Make ss a definition of p.syncSet and move linkOf's range into the conclusion; acceptance sits inside the counted set, as in a Pr statement (question for top).",
-   "Properties.CertifierDevice.completeRows": "frozen (scope,world-unlisted): It takes honest timing (each frame handed at the bucket the Program gives it, Security/Properties/CertifierDevice.lean:166) as a hypothesis; it leaves the list once the device refuses to mark a record complete after a late frame, which network-accounting is doing.",
-   "Properties.CertifierDevice.contentIndependent": "restatable: Move the tick-view equality into a named conclusion; it is also a corollary of LinkSchedule.",
-   "Properties.CertifierDevice.failClosed": "restatable: Move 'a fault is held' and 'a later egress tick of the same window', which pick out the event, into a named conclusion.",
-   "Properties.CertifierDevice.issuerSigns": "completeness: Move to Proofs with its honest case as written (ValidKey, q < 2^H, prepare succeeds); no concrete instance exists yet.",
-   "Properties.CertifierDevice.issuerVerifies": "restatable: Make ValidKey the subject: quantify over the keys Lms.key derives under Params.make, with certify ... = .ok (i', some cr) as the acceptance.",
-   "Properties.CertifierDevice.lmsCorrect": "completeness: Move to Proofs; no Lean instance (verity/core/devices/certifier/lean/scripts/issuer_vectors.py could supply one); it pairs with the LMS-forgery disjunct of AcceptedRowsAreProgramRows.",
-   "Properties.CertifierNetwork.deviceOutputAccepted": "completeness: Move to Proofs with its honest case as written (HonestTiming, NoFault, Closed, SyncsDeclared, SyncsAdmitted, LeavesLeft, ValidKey and the configuration's facts); no Lean instance exists: verity/core/devices/certifier/lean/CertifierDevice/SmokeMain.lean runs the device and certifies its records by hand on the wall clock but doesn't run the network check, so it is a starting point for one.",
    "Properties.NetworkCertifier.acceptedRowsAreProgramRows": "restatable: Make eg and ig definitions (the parameters digests of p, the rule's own example) instead of the ParamsDigests hypothesis; Honest p dev eg stays only if top lists it as trusted-nebius-host (question); the break disjuncts already follow the hash rule.",
    "Properties.NetworkCertifier.acceptsIff": "restatable: Split the iff: keep Accepts -> every link-window accepted; the converse is HonestAccepted's content and goes to Proofs.",
    "Properties.NetworkCertifier.answerAccepts": "restatable: Split the iff: keep accept -> the three decode and the check accepts; move the converse to Proofs as completeness.",
@@ -1999,11 +1955,9 @@
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
   },
   "CertifierDevice.Device": {
@@ -2113,8 +2067,7 @@
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
   },
   "CertifierDevice.Frame": {
@@ -2142,12 +2095,11 @@
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
   },
   "CertifierDevice.Issuer": {
-   "digest": "7030ad17d274a6b7e46b961bd73f979791fd6d11be30fd454b7273d471efda52",
+   "digest": "bd5b3a304c9455faea4cc9c069b06ab5d58d770d3fc4aeece8625ca81878d268",
    "definitions": {
     "CertifierDevice.Certificate": "146b0570158b6385464c1ae979d0a2dd05f1032aaebeda84490df2145d37559a",
     "CertifierDevice.Certificate.digest": "8c257990b4777074e2cbc2e41497c568cd2ebdb97711a862479981bcefde3f9f",
@@ -2166,15 +2118,9 @@
     "CertifierDevice.Issuer.finish": "b2c18a6fc6a46d6a6c388939e47f4f41ab9ce80a97c5d52f3dbdb6d70742189e",
     "CertifierDevice.Issuer.key": "472ef3df6f7e6c75dfc9e7f99e7936753afbea64578a2e0915a5fe28d4f01081",
     "CertifierDevice.Issuer.prepare": "226b01dca411e1d38046d8f293a8dac571dc27ab787173945bade13195d93006",
-    "CertifierDevice.Issuer.refused": "dd554bd2cc015964d2b2d75d16a307756b1ce8eda34b7e2960a0caaa516aeec8",
-    "CertifierDevice.checkSyncSet": "53c7df337148ed2102fd55cd8e80170d49245900404be212569f1a64aa51d10a",
-    "CertifierDevice.parameters": "eb48acc1158582e256ea9afffb668597a1e84c510824aa9911b76bbb53040e7a"
+    "CertifierDevice.Issuer.refused": "dd554bd2cc015964d2b2d75d16a307756b1ce8eda34b7e2960a0caaa516aeec8"
    },
-   "guarantees": [
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
-   ]
+   "guarantees": ["Properties.CertifierDevice.issuerVerifies"]
   },
   "CertifierDevice.Online": {
    "digest": "82a6ab47bb0af2d40332cab40b1803cf4e17ea64c9b0f497b840e0508ec62e57",
@@ -2227,12 +2173,11 @@
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
   },
   "CertifierDevice.Shaper": {
-   "digest": "a8bb85ccf47cd9d4475041a529fd7a3166910e6d47869542f9237b635f2df5b6",
+   "digest": "d0cef39d57b73544a890ae17cff3b0d364d3cb3b5ec4b5d085230d19f4eeb71a",
    "definitions": {
     "CertifierDevice.Bucketer": "269b9d5dec080fed93915d985086b668528331d32c813b6005fa52213d1f9fad",
     "CertifierDevice.Bucketer.arrive": "ad8c1db2b448c437f8546c8ea8635c38f9bd163837c76d76419f523904e8e30b",
@@ -2267,7 +2212,7 @@
     "CertifierDevice.Shaper.syncSet": "4b247b0a0dc11b7266aca681e492480f06e3257236191295f6277ca243dca371",
     "CertifierDevice.Shaper.syncs": "1129756b7a773c4286591a72e982979b52c34a0f4cc5cc32652a7eec228ed584",
     "CertifierDevice.Shaper.t": "d3bd6acc46f4d9cf908db6071ca59e3558d989328ebb0c4849d8e569eb9a1ac0",
-    "CertifierDevice.Shaper.tick": "f4587023ee50c41fb1fcb30620e5db3aa8b09773a869bbd343b07f68facfebf2",
+    "CertifierDevice.Shaper.tick": "faa298e465b4392905e9f9ccf6925842afab74568644732e40c3b77e78522e93",
     "CertifierDevice.Shaper.tick._sparseCasesOn_3": "455bd34b87a4a98c40b07a4ee7bdf1a91dd3b1bfed69b2f7a196566b42662999",
     "CertifierDevice.Shaper.windows": "50a1fdf1ff533a264928bcd66b40c2bac7e4e3ad11060515151228eb2ff8a5ed"
    },
@@ -2276,8 +2221,7 @@
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
   },
   "CoreProtocol.Profile": {
@@ -2396,7 +2340,6 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -3137,12 +3080,9 @@
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
@@ -3203,7 +3143,6 @@
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -3305,10 +3244,7 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.Identity.streamIsFlock",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -3600,9 +3536,7 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.Identity.streamIsFlock",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -3637,9 +3571,7 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
@@ -3677,12 +3609,7 @@
     "Lms.secret": "9a1da7b4c316ba2ca43100102095dd447d344070d90383de37ae74d4c191c504",
     "Lms.signAt": "013e60d1e8eb98aa9cfcd9569309b9601fd53dee8fad48b90c5afb7632463676"
    },
-   "guarantees": [
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
-   ]
+   "guarantees": ["Properties.CertifierDevice.issuerVerifies"]
   },
   "Lms.Verify": {
    "digest": "34158752c38442f8d30203dd232eabbda949538bfb948ddffe729e3925cb0dbb",
@@ -3731,10 +3658,7 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -3992,7 +3916,6 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -4028,11 +3951,9 @@
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
   },
   "NetworkCertifier.Schedule": {
@@ -4063,7 +3984,6 @@
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.linkSchedule",
     "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -4154,11 +4074,9 @@
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
     "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -4256,7 +4174,6 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
-    "Properties.CertifierNetwork.deviceOutputAccepted",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -4950,19 +4867,20 @@
    ]
   },
   "Properties.CertifierDevice": {
-   "digest": "67cb9c52d99bb13783533c0c27720316d24829ff4468e3e37204a83030ebe122",
+   "digest": "b6f077a25129fe3099e437ec2a067e79a2fadceb040ae001fdeaeef40eaaa5f3",
    "definitions": {
-    "Properties.CertifierDevice.CompleteRows": "957f921d416def25e258206e8dfaede6bff0ab493982d2da00d4bbfa6bbde6cc",
-    "Properties.CertifierDevice.ContentIndependent": "a50415aa8ec9328c420653df996e134047b7a12fdc5c55a607766525747156cf",
+    "Properties.CertifierDevice.ClosedAfterFault": "c9d3d4cbb556c9fc4673b58c7663912c18e4e38b7af17e69fd10ea20dc2540b8",
+    "Properties.CertifierDevice.CompleteRows": "be52753ad07d3bf66bc0eedad8847cb9647939e2f239df4f7cad966dea1fce9f",
+    "Properties.CertifierDevice.ContentIndependent": "c8b0cd75aeb192ac2199d1c9a7139185f182bc372d5d0b9443df73292be7bbbf",
     "Properties.CertifierDevice.EgressAt": "9875f2a1bff110ab91746a1a19f1a7c47eddc2afceaf151787133aba61b2f072",
-    "Properties.CertifierDevice.FailClosed": "3174d10ec8a4e142a05bb1880a4f77fcfc08398393e67e51bd2a3952bc6ba5ce",
-    "Properties.CertifierDevice.IssuerSigns": "83ec15dc5367e21b417b81cf5e177a70cc4301f839a4dbd9aab0fd90d1807af7",
-    "Properties.CertifierDevice.IssuerVerifies": "0599341d496f390423f5a403f8f8abb9e24f428c9cc7b004849381b264398f23",
+    "Properties.CertifierDevice.FailClosed": "5bc3591d912ed88c2e13a267e52c06665b370b0027deb93502cd8907f61e10e9",
+    "Properties.CertifierDevice.IssuerVerifies": "c781228e5943dc991903df44aa33141fb60ed00e3a6171eba6e75d14aae94842",
     "Properties.CertifierDevice.LinkSchedule": "3a940ea36d36c08a19671ab8a8071c5742d8bd0bfbf814187db09c39c1642db1",
-    "Properties.CertifierDevice.LmsCorrect": "d0d00bc0d4edb2ea249340560314de72855cf980099b6272b7dc9ca5c7961bef",
     "Properties.CertifierDevice.Packed": "9ea91c7d79b3e40e2297151339dbe4583239f041959f8165f0590d17ec29cbf8",
-    "Properties.CertifierDevice.Records": "88f7dbe94167edfc5071d054042ce3c103f5058255082eb295ab6b7bc4503cac",
-    "Properties.CertifierDevice.ValidKey": "b6038b9cc32fcffd84ba1af8ccdd46c452de1a2fe1596f7b8f960c0c22ec7c8a",
+    "Properties.CertifierDevice.ProgramRows": "1282d2dab36c0182397e56860b49a225beaf1e703357449963f3d207e2393cee",
+    "Properties.CertifierDevice.Records": "c24d4ce8730906365c18e9b870894022feb1f3e15d83c7f085fae5ecba08d24e",
+    "Properties.CertifierDevice.RowsWritten": "7b8e3e3f20e3e71497ff6c59b7c94aeea7becfcdcd09d302e84a90c02ab31fda",
+    "Properties.CertifierDevice.SameWrites": "74b84c43bbda3c920e1b698ba5e065813d815d7998e7ffadd4b99c532fdc592c",
     "Properties.CertifierDevice.after": "7afce07e8a8c97642ce967aed00187311b16fe0b6cab8ea7209f3eaead9b4482",
     "Properties.CertifierDevice.bucketBytes": "85fbc1f2aabc219325c629d44f8634a235d6973b935f2a4ebde4a41af26c2836",
     "Properties.CertifierDevice.egressActions": "1ec8699468c670336d5296b9a3d12128142a1ae0c3925db08beade1c3d86e7d6",
@@ -4985,45 +4903,10 @@
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.lmsCorrect",
-    "Properties.CertifierDevice.records",
-    "Properties.CertifierNetwork.deviceOutputAccepted"
+    "Properties.CertifierDevice.records"
    ]
-  },
-  "Properties.CertifierNetwork": {
-   "digest": "948c761b6730f1e1359f4959176e9e45e140eb4e6fb334a096348a70469cf570",
-   "definitions": {
-    "Properties.CertifierNetwork.Closed": "0b65009421acf784c803126a86637bb6a9577a64a061cb1e89f4799373f4ad0a",
-    "Properties.CertifierNetwork.DeviceOutputAccepted": "216ef91ce6175125afddeb721be3b218eaa2f74eadbc52aae75bcdb7206900f9",
-    "Properties.CertifierNetwork.Digested": "b8e5fe631e890c44f2ec6d9f9531b43b0eafb16233bd518b57ae7aa3ebffae15",
-    "Properties.CertifierNetwork.Distinct": "a3614c6bd9e3de989cc432b43d3b3df223b0fbbfbf557e62f928901ad56bd4c8",
-    "Properties.CertifierNetwork.FieldsFit": "b156ba3e8c9ead7183379bb9114a84185b180b81b3982478a7d8285426b60208",
-    "Properties.CertifierNetwork.HonestTiming": "3725727f65b8ae01af5e90a846010dc09b4313f717ff8fae5e38d5217874fab2",
-    "Properties.CertifierNetwork.LeavesLeft": "11fd57101cd3b7db3914533941d7394f8e53a097f8541cca76a74b1df961c3cb",
-    "Properties.CertifierNetwork.NoFault": "2ead1a3c69f296dfdf9d919954f3843a72320748b18c41bcdf84eff1b3ef61f3",
-    "Properties.CertifierNetwork.SyncsAdmitted": "972aa9380e92ff2ba6e3f81ff0f3f4a54bd3fdbab53dba09a4a9b3fd7cc1d51f",
-    "Properties.CertifierNetwork.SyncsDeclared": "c1f730bf9e0fd13e36f6379e8bdda9339516723c3d6427eba5a5d39b1ca22058",
-    "Properties.CertifierNetwork.Ticking": "18df844b55d1fb29e134bcd5005836f617b857f20862fe2f6a106def13c5f819",
-    "Properties.CertifierNetwork.advance": "a5f2e8cc4ee4bb3ccabbee706934b3628a619f81b9cd1262ebee284c3d217ebd",
-    "Properties.CertifierNetwork.certified": "4546f727a86ab92e345ba2f7ded28c6a26715315b54b96d245bc883c7659cc83",
-    "Properties.CertifierNetwork.certifyAll": "a670086493a536ee3a0f234c4e00ec8eba3b510d34d2eb3e426648dd56673883",
-    "Properties.CertifierNetwork.commitment": "557fe1d4d6ff43773b1eaf6ad0e1bf7022153db0a5fbf063b889c82c7ce8ee93",
-    "Properties.CertifierNetwork.declaredSyncs": "21080f2992d529646600d53db084287cd9607d04db04a69ba3be4ce405ca7dc2",
-    "Properties.CertifierNetwork.directionOf": "26d685355d4b18715880dab0c06e8ab6e56f32a20246f9aa7f378914907c6d01",
-    "Properties.CertifierNetwork.evidence": "bdd3f4051ba86798e57e8236db0bddcea9a4c4672132942b16ef61cd63f9aaf9",
-    "Properties.CertifierNetwork.gridOf": "6002341ecc1a7fc0690718b1debe683ce416f853f2ab608f29e30d59c0e29502",
-    "Properties.CertifierNetwork.openedFrames": "3a13ead09f8d9738e4a5ea33b5d9453d9019790a2cb4e9a3d7aa22667f608e78",
-    "Properties.CertifierNetwork.published": "ba23ba50d4a296b1b88332754f657624dbfbb306ef6e568f1bf783761a60ca71",
-    "Properties.CertifierNetwork.publishes": "6b10b9a728496b6fd6a40864f83e1e89ded459d6a7f5921e8ab226071e4b0360",
-    "Properties.CertifierNetwork.publishes._sparseCasesOn_1": "cc497cef2991f36a954462dd3db5982ee2e34b4a7c0d66cac85f4dac711cd18c",
-    "Properties.CertifierNetwork.reserve": "07281f6657a85679513d98a9dcd25b8a9c1afbba14cad67870218ea786b6936d",
-    "Properties.CertifierNetwork.syncSetOf": "79cbe731cfa0b6a6eceb969b7f708f3ff2c8f7bc27fafeab41d140e9494c876a",
-    "Properties.CertifierNetwork.unitParams": "be94e89979a4e1e7a32b0cdfe1e7b1280083df617657cd292a9868b65f663342"
-   },
-   "guarantees": ["Properties.CertifierNetwork.deviceOutputAccepted"]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",

@@ -473,7 +473,11 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "560", "a slot's mem= caps circuit-check's own budget"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]

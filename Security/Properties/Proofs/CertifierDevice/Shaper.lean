@@ -27,6 +27,15 @@ def declareStage (s : Shaper) : Shaper :=
     else s
   | none => s
 
+/-- The certifier a frame is enqueued in: faulted `coverage-never-established` if the frame is handed after its `h`. -/
+def lateCert (s : Shaper) (h : Nat) : Certifier :=
+  if h < s.t then s.certifier.doFault .coverageNeverEstablished else s.certifier
+
+theorem lateCert_rel (s : Shaper) (h : Nat) : CertRel s.certifier (lateCert s h) := by
+  unfold lateCert; split
+  · exact Or.inr ⟨_, rfl⟩
+  · exact CertRel.refl _
+
 /-- `Shaper.tick`'s handing loop body, buckets of `T`. -/
 def handBody (T : Nat) (_ : Nat) (s : Shaper) : Id (ForInStep Shaper) :=
   match s.pending.get? s.next with
@@ -40,7 +49,7 @@ def handBody (T : Nat) (_ : Nat) (s : Shaper) : Id (ForInStep Shaper) :=
       if hand > s.t then pure (.done s)
       else pure (.yield { s with
         pending := s.pending.erase s.next, h, last := hand, next := s.next + 1, hands := s.hands.push hand,
-        certifier := s.certifier.enqueue frame.bytes, queued := s.queued + 1 })
+        certifier := (lateCert s h).enqueue frame.bytes, queued := s.queued + 1 })
 
 /-- `Shaper.tick`'s handing loop. -/
 def handStage (T : Nat) (s : Shaper) : Shaper := (forIn (List.range' 0 s.pending.size) s (handBody T)).run
@@ -108,15 +117,17 @@ theorem declareStage_eq (s : Shaper) : ∃ c' prover syncs, CertRel s.certifier 
 
 /-! ## The handing loop -/
 
-/-- One frame handed: the frame at the next canonical position enqueued, at hand time `hand`. -/
-def HandStep (s s' : Shaper) : Prop :=
-  ∃ frame ready h hand, s.pending.get? s.next = some (frame, ready) ∧ hand ≤ s.t ∧
+/-- One frame handed: the frame at the next canonical position enqueued at hand time `hand`, its handing bucket `h` the
+rule's under the sync of its anchor's window, the certifier faulted first if the bucket is after `h`. -/
+def HandStep (T : Nat) (s s' : Shaper) : Prop :=
+  ∃ frame ready sync h hand, s.pending.get? s.next = some (frame, ready) ∧ s.syncs[frame.anchor / T]? = some sync ∧
+    h = max (eligibleAt frame.anchor frame.index sync) s.h ∧ h ≤ s.t ∧ hand ≤ s.t ∧
     s' = { s with pending := s.pending.erase s.next, h, last := hand, next := s.next + 1, hands := s.hands.push hand,
-                  certifier := s.certifier.enqueue frame.bytes, queued := s.queued + 1 }
+                  certifier := (lateCert s h).enqueue frame.bytes, queued := s.queued + 1 }
 
-theorem handStage_reach (T : Nat) (s : Shaper) : Relation.ReflTransGen HandStep s (handStage T s) := by
+theorem handStage_reach (T : Nat) (s : Shaper) : Relation.ReflTransGen (HandStep T) s (handStage T s) := by
   unfold handStage
-  refine forIn_inv (fun x => Relation.ReflTransGen HandStep s x) Relation.ReflTransGen.refl ?_
+  refine forIn_inv (fun x => Relation.ReflTransGen (HandStep T) s x) Relation.ReflTransGen.refl ?_
   intro i _ x hx
   unfold handBody
   split
@@ -124,25 +135,30 @@ theorem handStage_reach (T : Nat) (s : Shaper) : Relation.ReflTransGen HandStep 
   · rename_i frame ready hget
     split
     · exact hx
-    · dsimp only
+    · rename_i sync hsync
+      dsimp only
       split
       · exact hx
       · rename_i hle
-        exact hx.tail ⟨frame, ready, _, _, hget, by omega, rfl⟩
+        exact hx.tail ⟨frame, ready, sync, _, _, hget, hsync, rfl, by omega, by omega, rfl⟩
 
 /-- What the handing loop keeps. -/
-theorem HandStep.keeps {s s' : Shaper} (h : HandStep s s') :
+theorem HandStep.keeps {T : Nat} {s s' : Shaper} (h : HandStep T s s') :
     s'.t = s.t ∧ s'.syncs = s.syncs ∧ s'.certifier.link = s.certifier.link ∧
       s'.certifier.params = s.certifier.params ∧ s'.certifier.window = s.certifier.window ∧
       s'.certifier.rows = s.certifier.rows ∧ (∀ r, s.certifier.fault = some r → s'.certifier = s.certifier) := by
-  obtain ⟨frame, ready, hh, hand, -, -, rfl⟩ := h
-  exact ⟨rfl, rfl, enqueue_link _ _, enqueue_params _ _, enqueue_window _ _, enqueue_rows _ _,
-    fun r hr => enqueue_of_fault hr _⟩
+  obtain ⟨frame, ready, sync, hh, hand, -, -, -, -, -, rfl⟩ := h
+  have hl := lateCert_rel s hh
+  refine ⟨rfl, rfl, (enqueue_link _ _).trans hl.link, (enqueue_params _ _).trans hl.params,
+    (enqueue_window _ _).trans hl.window, (enqueue_rows _ _).trans hl.rows, fun r hr => ?_⟩
+  dsimp only
+  rw [hl.of_fault hr]
+  exact enqueue_of_fault hr _
 
-theorem HandStep.shape {s s' : Shaper} {link : String} {p : Params} (h : HandStep s s')
+theorem HandStep.shape {T : Nat} {s s' : Shaper} {link : String} {p : Params} (h : HandStep T s s')
     (hs : Shape s.certifier link p) : Shape s'.certifier link p := by
-  obtain ⟨frame, ready, hh, hand, -, -, rfl⟩ := h
-  exact hs.enqueue _
+  obtain ⟨frame, ready, sync, hh, hand, -, -, -, -, -, rfl⟩ := h
+  exact ((lateCert_rel s hh).shape hs).enqueue _
 
 theorem handStage_keeps (T : Nat) (s : Shaper) {link : String} {p : Params} (hs : Shape s.certifier link p) :
     let s' := handStage T s
