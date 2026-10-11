@@ -186,6 +186,8 @@ def pous_lines(p: dict) -> list[str]:
                        "vs after | items |"), "|---|---|---|---|---|---|---|---|"]
         lines += [f"| {r['key']} | {r['arm']} | {r['alone_ms']:.3f} | {r['beside_ms']:.3f} | {_f(r['after_ms'], '.3f')} | "
                   f"{r['slowdown']:+.1%} | {_f(r['slowdown_after'], '+.1%')} | {r['items']} |" for r in p["beside"]]
+        lines += ["", ("Alone before is the sweep's own median (its arms in turn with the GEMM-only graphs); alone after runs the "
+                       "beside items' own turns once the harness has exited, so the audit's effect is the slowdown vs after.")]
     return lines
 
 
