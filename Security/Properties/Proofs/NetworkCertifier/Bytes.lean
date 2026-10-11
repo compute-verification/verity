@@ -1,5 +1,6 @@
 import Properties.NetworkCertifier
 import Properties.Proofs.Identity
+import Mathlib.Data.Set.Card
 
 /-!
 # The record's encodings are injective

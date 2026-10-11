@@ -1,5 +1,4 @@
-import Properties.CertifierDevice
-import Properties.NetworkCertifier
+import Properties.CertifierNetwork
 import Properties.Proofs.CertifierDevice.Issuer
 
 /-!
@@ -46,13 +45,6 @@ open Properties.CertifierDevice (outputs after handed ValidKey)
 
 /-! ## The device's output -/
 
-/-- The records an event publishes, in order. -/
-def publishes (acts : List Action) : List Record :=
-  acts.filterMap fun | .publish r _ => some r | _ => none
-
-/-- Every record the device publishes over the trace, in order. -/
-def published (c : Config) (tr : List Event) : List Record := (outputs (init c) tr).flatMap publishes
-
 /-- The frames the shaper handed over the trace, in canonical order, as the Program's logical frames: their bits
 (`bitsOf`), anchors and indices. -/
 def openedFrames (c : Config) (tr : List Event) : List LogicalFrame :=
@@ -61,23 +53,7 @@ def openedFrames (c : Config) (tr : List Event) : List LogicalFrame :=
 /-- The syncs the shaper declared over the trace, one per window. -/
 def declaredSyncs (c : Config) (tr : List Event) : Array NetworkCertifier.ClockSync := (after (init c) tr).shaper.syncs
 
-/-! ## The commitment, the evidence and the parameters -/
-
-/-- The direction a record is certified in: egress on the egress link, ingress otherwise. -/
-def directionOf (c : Config) (r : Record) : NetworkCheck.Direction := if r.link = c.egressLink then .egress else .ingress
-
-/-- The grid a record is certified under. -/
-def gridOf (c : Config) (r : Record) : Params := if r.link = c.egressLink then c.egress else c.ingress
-
-/-- Σ_sync where a clock applies: on egress. -/
-def syncSetOf (c : Config) (r : Record) : Option SyncSet := if r.link = c.egressLink then some c.syncSet else none
-
-/-- The signer's reservation at its next unused leaf `next`: refused once every one of the `2^H` leaves is used. -/
-def reserve (i : Issuer) (next : Nat) : Except String Nat :=
-  if next < 2 ^ i.key.params.H then .ok next else .error s!"all 2^{i.key.params.H} leaves are used"
-
-/-- The next unused leaf after a reservation at `next`. -/
-def advance (i : Issuer) (next : Nat) : Nat := if next < 2 ^ i.key.params.H then next + 1 else next
+/-! ## The commitment and the evidence -/
 
 /-- **The host's assembly**: each record, in order, certified by `Issuer.certify` at the reserved leaf under its link's
 direction, grid and parameters digest; the certificates issued, in order. -/
@@ -89,11 +65,6 @@ def certifyAll (c : Config) : Issuer → Nat → List Record → Except String (
     let (i'', crs) ← certifyAll c i' (advance i next) rs
     pure (i'', cr?.toList ++ crs)
 
-/-- A certified record as the check reads it: the same head and certificate. -/
-def certified (cr : CertifiedRecord) : NetworkCheck.Check.Certified :=
-  ⟨cr.head, ⟨cr.certificate.keyId, cr.certificate.link, cr.certificate.direction, cr.certificate.window,
-    cr.certificate.digest, cr.certificate.signature⟩⟩
-
 /-- The commitment of the certificates `crs`, whatever its bytes. -/
 def commitment (crs : List CertifiedRecord) (bytes : ByteArray) : NetworkCheck.Check.Commitment :=
   ⟨(crs.map certified).toArray, bytes⟩
@@ -101,18 +72,6 @@ def commitment (crs : List CertifiedRecord) (bytes : ByteArray) : NetworkCheck.C
 /-- The evidence the device's shaper holds: on its one egress link, the frames it handed and the syncs it declared. -/
 def evidence (c : Config) (tr : List Event) : NetworkCheck.Check.Evidence :=
   ⟨#[⟨openedFrames c tr, declaredSyncs c tr⟩]⟩
-
-/-- The check's parameters of the device's configuration and key: its two links, its `W` windows, its two grids, its
-Σ_sync, and the key's LMS parameters and public key. -/
-def unitParams (c : Config) (key : Lms.PrivateKey) : NetworkCheck.Check.Params where
-  egress := #[c.egressLink]
-  ingress := #[c.ingressLink]
-  windows := c.windows
-  grid := c.egress
-  ingressGrid := c.ingress
-  syncSet := c.syncSet
-  lms := key.params
-  key := key.publicKey
 
 /-! ## The configuration's conditions -/
 

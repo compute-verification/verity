@@ -17,9 +17,8 @@ theorem parses_unique {j : Json} {i i' : Instance} (h : Parses j i) (h' : Parses
   rw [(parse_ok j i').2 h', Except.ok.injEq] at h1
   exact h1.symm
 
-/-- **Each refusal is its condition.** -/
-theorem RejectsExactly : Properties.RejectsExactly := by
-  intro j k
+/-- `evaluate j` refuses with `k` exactly when `Malformed j k`. -/
+theorem refused_iff_malformed (j : Json) (k : String) : evaluate j = .error k ↔ Malformed j k := by
   rw [evaluate_error, parse_error, Malformed, or_assoc]
   refine or_congr_right (or_congr_right (exists_congr fun i => ?_))
   rw [parse_ok]
@@ -32,9 +31,8 @@ theorem RejectsExactly : Properties.RejectsExactly := by
     obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hg
     exact ⟨c, hc, (divisionOf_error hc _ _ k).2 hd⟩
 
-/-- **A verdict exactly on a well-formed instance.** -/
-theorem AcceptsExactly : Properties.AcceptsExactly := by
-  intro j
+/-- `evaluate j` gives a verdict exactly when `WellFormed j`. -/
+theorem verdict_iff_wellFormed (j : Json) : (∃ out, evaluate j = .ok out) ↔ WellFormed j := by
   constructor
   · rintro ⟨out, h⟩
     obtain ⟨i, P, c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 h
@@ -55,15 +53,27 @@ theorem check_error (j : Json) (k : String) :
     show Except.error _ = _ ↔ _
     simp
 
-/-- **`check` refuses exactly the malformed.** -/
-theorem CheckRefuses : Properties.CheckRefuses := fun j k => (check_error j k).trans (RejectsExactly j k)
-
-/-- **`check` gives a verdict exactly on a well-formed instance.** -/
-theorem CheckAccepts : Properties.CheckAccepts := by
-  intro j
-  rw [← AcceptsExactly j]
+theorem check_verdict_iff_wellFormed (j : Json) :
+    (∀ k, (check j).getObjVal? "error" ≠ .ok (.str k)) ↔ WellFormed j := by
+  rw [← verdict_iff_wellFormed j]
   simp only [ne_eq, check_error]
   rcases evaluate j with e | out <;> simp
+
+/-- **A malformed instance is refused with its condition's code.** -/
+theorem RejectsExactly : Properties.RejectsExactly :=
+  fun j k h hm => h ((refused_iff_malformed j k).2 hm)
+
+/-- **A verdict only on a well-formed instance.** -/
+theorem AcceptsExactly : Properties.AcceptsExactly :=
+  fun j out h => (verdict_iff_wellFormed j).1 ⟨out, h⟩
+
+/-- **`check` refuses a malformed instance with its condition's code.** -/
+theorem CheckRefuses : Properties.CheckRefuses :=
+  fun j k h hm => h ((check_error j k).2 ((refused_iff_malformed j k).2 hm))
+
+/-- **`check` gives a verdict only on a well-formed instance.** -/
+theorem CheckAccepts : Properties.CheckAccepts :=
+  fun j h => (check_verdict_iff_wellFormed j).1 h
 
 /-- **What a verdict is about.** -/
 theorem Decodes : Properties.Decodes := by
@@ -161,7 +171,7 @@ theorem toJson_nat_inj {a b : ℕ} (h : toJson a = toJson b) : a = b := by
 
 /-- **The verdict is the definition's.** -/
 theorem Reports : Properties.Reports := by
-  intro j out i P d n U hev hpar hdec hL hθ hU
+  intro j out hev i P d n U hpar hdec hL hθ hU
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, rfl⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
   rw [hdec, Except.ok.injEq] at h2
@@ -204,12 +214,59 @@ theorem Reports : Properties.Reports := by
 
 /-- **A verdict of compliance witnesses the policy.** -/
 theorem Witnesses : Properties.Witnesses := by
-  intro j out i P d hev hpar hdec hL hθ hc
+  intro j out hev i P d hpar hdec hL hθ hc
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
   rw [hdec, Except.ok.injEq] at h2
   subst h2
   obtain ⟨U, hU⟩ := exists_partition h3 h4 hL
-  exact ⟨dv.n, U, (Reports j out i' P d dv.n U hev hpar hdec hL hθ hU).2.2.1.1 hc⟩
+  exact ⟨dv.n, U, (Reports j out hev i' P d dv.n U hpar hdec hL hθ hU).2.2.1.1 hc⟩
+
+/-! ## Completeness
+
+The converses of the refusals and of the verdict: the check refuses only the malformed, and gives a verdict on every
+well-formed instance. Each comes with an instance where its case holds. A refusal's is concrete (`Json.null`, which has
+no fields). A well-formed instance needs a program the decoder decodes, and the decoder is `partial` (`Prog.gate` and
+the descriptor's resolution), so the kernel can't run it: the instance takes what the decoder returns as a hypothesis,
+a Program whose canonical layout has no gates, with θ and the owners empty. -/
+
+/-- **A refusal is its condition** (the converse of `RejectsExactly`). -/
+theorem malformed_of_refused (j : Json) (k : String) (h : evaluate j = .error k) : Malformed j k :=
+  (refused_iff_malformed j k).1 h
+
+/-- **A well-formed instance gets a verdict** (the converse of `AcceptsExactly`). -/
+theorem verdict_of_wellFormed (j : Json) (h : WellFormed j) : ∃ out, evaluate j = .ok out :=
+  (verdict_iff_wellFormed j).2 h
+
+/-- **`check`'s refusal is its condition** (the converse of `CheckRefuses`). -/
+theorem check_malformed_of_refused (j : Json) (k : String) (h : (check j).getObjVal? "error" = .ok (.str k)) :
+    Malformed j k :=
+  malformed_of_refused j k ((check_error j k).1 h)
+
+/-- **`check` gives a verdict on a well-formed instance** (the converse of `CheckAccepts`). -/
+theorem check_verdict_of_wellFormed (j : Json) (h : WellFormed j) :
+    ∀ k, (check j).getObjVal? "error" ≠ .ok (.str k) :=
+  (check_verdict_iff_wellFormed j).2 h
+
+/-- **A refusal's case holds**: `Json.null` is refused, with `instance`. -/
+theorem refused_instance : evaluate Json.null = .error "instance" := rfl
+
+/-- `check` refuses `Json.null` with `instance`. -/
+theorem check_refused_instance : (check Json.null).getObjVal? "error" = .ok (.str "instance") :=
+  (check_error _ _).2 refused_instance
+
+/-- The instance of program text `s` with θ and the owners empty, `Γ = 0` and `α = 0 / 1`. -/
+def noGates (s : String) : Json :=
+  Json.mkObj [("program", .str s), ("theta", .arr #[]), ("owner", .arr #[]), ("gamma", toJson (0 : ℕ)),
+    ("alpha", .arr #[toJson (0 : ℕ), toJson (1 : ℕ)])]
+
+/-- **A well-formed instance's case holds**: where the decoder decodes `s` to a Program with no gates, `noGates s` is
+well-formed. -/
+theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s.toUTF8 = .ok P) (h0 : gates P = 0) :
+    WellFormed (noGates s) := by
+  refine ⟨⟨s, #[], #[], 0, 0, 1⟩, P, ⟨rfl, rfl, rfl, ⟨_, rfl, rfl⟩, ⟨_, _, rfl, rfl, rfl⟩, Nat.one_pos⟩, hP,
+    fun g hg => absurd hg (by omega), fun t ht => absurd ht (by simp), by simp [h0], fun g hg => absurd hg (by omega), ?_⟩
+  rintro ⟨g, u, hg, -⟩
+  exact absurd hg (by simp)
 
 end NciCheck.Properties.SecurityProofs
