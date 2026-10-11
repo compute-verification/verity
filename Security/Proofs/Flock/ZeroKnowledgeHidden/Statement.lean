@@ -22,7 +22,7 @@ open scoped ENNReal
 its self-check doesn't stop.** At
 every draw `S` at which `verify --zk` sets every one of the session's `J = nTab I` tables up (`ys`), and every
 registration `R`, the joint view of the session's plan `planZHJ dj y₀` (the plan `EndToEndHidden` is sound on), table
-`j` at its executable statement, is within `Σ_j 2·|Hid_j|·2^-193` of the per-table simulators' joint view, both ways
+`j` at its executable statement, is within `Σ_j 2·|Hid_j|·δ_{K*}` of the per-table simulators' joint view, both ways
 (`ZkViewAtJ`): at any coin vector per table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any
 encoding of the joint view and any event on it, the real view at valid witnesses whose registered values are the public
 ones, and the simulators' at any witnesses, each table's prover randomness independent. `|Hid_j|` is the number of
@@ -39,10 +39,12 @@ Which verifiers: honest-verifier zero knowledge at each fixed coin vector, a zer
 It covers a verifier that chooses its coins because the coin server commits every coin at `Hello`, before the prover's
 first message, under `keyed-cr`, which no statement here models yet.
 
-Its named assumption, a hypothesis:
-* `hash-derived-key` (`Assumptions.Zk.HashDerivedKeyHm96`): the pinned hm96 key hides at `2^-193`.
+`δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
+`ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
+Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
+that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
-And one hypothesis no check implies yet: every table's statement avoids the mask slot (`avoidsMask`), until the
+One hypothesis no check implies yet: every table's statement avoids the mask slot (`avoidsMask`), until the
 verifier's D11 refusal in `Net.ofRows` discharges it. The rest are an untyped statement and `EndToEndHidden`'s
 reference setup `y₀`: table 0's, at `mPts` link points, at some draw `d₀`, which every draw flock-verify accepts gives
 (`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
@@ -55,12 +57,11 @@ def ZeroKnowledgeHidden : Prop :=
     -- every table's statement avoids the mask slot
     (_hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
-    -- hash-derived-key
-    (_hKey : Assumptions.Zk.HashDerivedKeyHm96)
     -- a draw at which `verify --zk` sets every table up, and a registration
     (S : Finset (Fin n)) (R : Reg)
     (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
     ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
-      (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+      (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st)
+      (ENNReal.ofReal (CROnly.hidingGap FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash))
 
 end Flock.Guarantees

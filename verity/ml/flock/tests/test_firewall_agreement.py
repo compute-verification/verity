@@ -65,7 +65,7 @@ def proxy_session(schedule: dict, reqs: list[bytes]) -> tuple[dict, list]:
     for name, show in CALL.items():
         f = getattr(coins, name)
         setattr(coins, name, lambda *a, _f=f, _show=show, **kw: (calls.append(_show(a)), _f(*a, **kw))[1])
-    proxy = RL.Proxy(coins, lambda: next(salts), schedule=schedule, commitments=coins.commit_coins(schedule))
+    proxy = RL.Proxy(coins, lambda: next(salts), schedule=schedule)
     for b in reqs:
         proxy.handle(b)
     if proxy.verdict is None and proxy.stopped is None:

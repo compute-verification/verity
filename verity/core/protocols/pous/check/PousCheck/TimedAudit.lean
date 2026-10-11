@@ -2,6 +2,7 @@ import Flock.Canon
 import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Certificate
+import PousCheck.Prim.PyJson
 
 /-!
 # The timed audit's verdict on its record
@@ -157,9 +158,11 @@ def verdictFn (inst : Json) : Except String Json := do
   pure (verdict (← J.get inst "ready" "instance") leaves (← J.get inst "audit" "instance"))
 
 /-- `pous-timed-audit READY.json LEAVES.bin AUDIT.json`: the verdict as one canonical JSON line; exit 0 iff accepted. A file
-that is not JSON reads as `null`. -/
+is read as Python's `json` reads it (`Prim.PyJson.scan`: a float, which `natOf` never takes, as `null`), and a file that
+is not JSON as `null`. -/
 def run (readyPath leavesPath auditPath : String) : IO UInt32 := do
-  let read (path : String) : IO Json := return (Json.parse (← IO.FS.readFile path)).toOption.getD .null
+  let read (path : String) : IO Json :=
+    return (Json.parse (Prim.PyJson.scan (← IO.FS.readFile path)).1).toOption.getD .null
   let v := verdict (← read readyPath) (← IO.FS.readBinFile leavesPath) (← read auditPath)
   match canon v with
   | .ok text => IO.println text
