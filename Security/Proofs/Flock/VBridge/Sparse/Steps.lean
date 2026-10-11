@@ -46,8 +46,7 @@ theorem holds_elem {z : Var → Bool} {bits : List Lin} {i : ℕ} {x : F128} (hl
     (h : ∀ k < 128, bit z bits (128 * i + k) = bitOf x k) : Holds z (elem bits.toArray i) x := by
   refine holds_iff.2 ⟨by simp [elem]; omega, fun k hk => ?_⟩
   rw [← h k hk]
-  have hk' : k < 128 * i + 128 - 128 * i := by omega
-  simp [bit, elem, List.getElem?_take, List.getElem?_drop, hk, hk']
+  simp [bit, elem, List.getElem?_drop, hk]
 
 theorem bit_flatten {z : Var → Bool} {fs : List (List Lin)} {xs : List F128} (h : List.Forall₂ (Holds z) fs xs) :
     ∀ (rest : List Lin) r (hr : r < xs.length), ∀ k < 128, bit z (fs.flatten ++ rest) (128 * r + k) = bitOf xs[r] k := by
@@ -109,7 +108,7 @@ theorem forall₂_getD {α β : Type} {R : α → β → Prop} {d : α} {e : β}
     ∀ {l : List α} {m : List β}, List.Forall₂ R l m → ∀ {t}, t < m.length → R (l.getD t d) (m.getD t e)
   | _, _, .nil, _, h => absurd h (Nat.not_lt_zero _)
   | _, _, .cons hab _, 0, _ => hab
-  | _, _, .cons _ hs, t + 1, h => forall₂_getD hs (Nat.lt_of_succ_lt_succ h)
+  | _, _, .cons _ hs, _ + 1, h => forall₂_getD hs (Nat.lt_of_succ_lt_succ h)
 
 theorem forall₂_zip {α β γ δ : Type} {R : α → β → Prop} {Q : γ → δ → Prop} :
     ∀ {l : List α} {m : List β} {l' : List γ} {m' : List δ}, List.Forall₂ R l m → List.Forall₂ Q l' m' →
@@ -204,9 +203,8 @@ theorem chunk_bits (z : Var → Bool) (tau : List Lin) (t s : ℕ) (ht : t ≤ 1
     simp [bit, hb', Nat.not_le.2 hb']
   · obtain ⟨c, rfl⟩ : ∃ c, b = t + c := ⟨b - t, by omega⟩
     rw [bit_append_len z _ _ (by simp : (List.replicate t Lin.zero).length = t) c]
-    have hc : c < 16 - t := by omega
     have hc' : c < 16 * s + 16 - (16 * s + t) := by omega
-    simp [bit, List.getElem?_take, List.getElem?_drop, hc, hc', Nat.add_assoc]
+    simp [bit, List.getElem?_drop, hc', Nat.add_assoc]
 
 /-- **The tail is each slot's type with its low `t` bits cleared**: a slot a 16-bit word, `t` zeros then the type's
 other bits. -/
@@ -377,7 +375,7 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
       rw [hin.hv, wbit_elem v i hk]
   split
   · rename_i hst
-    simp only [bind_assoc, pure_bind]
+    simp only [pure_bind]
     refine Sound.bind' (sound_demux _ _ _) fun lists => ?_
     refine Sound.bind' (sound_mapM_rel _ (fun z (p : List Lin × List Lin) (e : F128 × F128) =>
       Holds z p.1 e.1 ∧ Holds z p.2 e.2) (fun _ (e : F128 × F128) => e.1 * e.2) (fun z r y => Holds z r y)
@@ -409,7 +407,8 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
     have hne : lists ≠ [] := by
       rintro rfl
       have := hL.length_eq
-      simp at this <;> omega
+      simp at this
+      omega
     have htb : ∀ s < sh.S, ∀ j < sh.tLog,
         (fun s j => ev z ((P "tau").toArray.getD (16 * s + j) Lin.zero)) s j = (τ s).testBit j :=
       fun s hs j hj => by

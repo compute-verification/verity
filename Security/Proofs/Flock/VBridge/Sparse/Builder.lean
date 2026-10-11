@@ -127,7 +127,7 @@ theorem take2_str : ∀ r, (str r).toList.take 2 = tag r
 theorem str_inj {a b : RName} (h : str a = str b) : a = b := by
   have ht : tag a = tag b := by rw [← take2_str, ← take2_str, h]
   cases a <;> cases b <;> simp only [str, tag] at h ht ⊢ <;>
-    first | rfl | exact absurd ht (by decide) | exact congrArg _ (idx_inj _ h) | exact idx_inj _ h
+    first | rfl | exact absurd ht (by decide) | exact congrArg _ (idx_inj _ h)
 
 theorem idxOf_map_inj {α β : Type} [DecidableEq α] [DecidableEq β] (f : α → β) (hf : ∀ a b, f a = f b → a = b)
     (a : α) : ∀ l : List α, (l.map f).idxOf (f a) = l.idxOf a
@@ -379,7 +379,8 @@ theorem resList_spec : Spec (resList sh) fun rs F => List.Forall₂ (Named sh F)
     Spec.bind' (put_den (s := spec (shOf sh) (.pre j)) ?_) fun r => Spec.pure' fun _ h => ⟨rfl, h⟩) fun pre => ?_
   · have hj : j < 6 := by simpa [Flock.RecSparse.PRE_ROUNDS] using hj
     simp only [opre j hj, vpre]
-    simp [spec, kSpec, kTerm, wPre, vPre] <;> omega
+    simp [spec, kSpec, kTerm, wPre, vPre]
+    omega
   refine Spec.bind' (put_den (s := spec (shOf sh) .wv) ?_) fun wv => ?_
   · simp [spec, kSpec, kTerm, ov2, vwhat, wV2]
   refine Spec.bind' (Spec.mapM _ (fun j p F => Named sh F (.sc j) p) _ fun j hj =>
@@ -387,7 +388,8 @@ theorem resList_spec : Spec (resList sh) fun rs F => List.Forall₂ (Named sh F)
   · have hj : j < nR (shOf sh) := by rw [← hl]; simpa using hj
     simp only [osc j hj, vsc, degs_getD sh hj, degs_take sh j (Nat.le_of_lt hj)]
     simp only [spec, kSpec, List.range'_eq_map_range, List.map_map, List.map_cons, List.map_nil, Prod.mk.injEq]
-    refine ⟨List.map_congr_left fun i _ => ?_, ?_⟩ <;> simp [kTerm, wSc, vSc] <;> omega
+    refine ⟨List.map_congr_left fun i _ => ?_, ?_⟩ <;> simp [kTerm, wSc, vSc]
+    omega
   refine Spec.bind' (put_den (s := spec (shOf sh) .f0) ?_) fun f0 => ?_
   · simp [spec, kSpec, kTerm, valpha, ou]
   refine Spec.bind' (Spec.mapM _ (fun j l F => List.Forall₂ (Named sh F) [.fx j, .fy j] l) _ fun j _ =>
