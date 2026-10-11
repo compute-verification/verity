@@ -275,7 +275,7 @@ theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (
     (hdec : decodeProof (shapeOf G.st G.sch G.extras.size) (G.bytes r) = .ok (G.proof r))
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) (G.proof r).zerocheck)
-    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) (G.proof r).lincheck)
+    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) (G.proof r).lincheck) (hpl : sh.holo = false)
     (hrsw : (G.proof r).ringSwitches = (decoded sh d.w d.comb d.cons).rs)
     (hmessages : (G.proof r).ligerito.messages =
       (decoded sh d.w d.comb d.cons).msgs.map fun mm => (RecAlgebra.kv mm.1, RecAlgebra.kv mm.2))
@@ -299,8 +299,8 @@ theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (
     framed_frames G.st G.sch _ (2 + G.extras.size) (by omega) (G.proof r) _
       (Transcript.init (G.stream r).rounds (G.spec.domain G.spec.tables[G.i]! r).toUTF8) rfl (init_enc _ _) hm14 hfr
   exact run_of_frames sh d halg hacc G.st G.sch (G.proof r) (G.bytes r) G.extras _ rfl hd hne hwf hm hm14 hkL hkS hkm
-    hxs hext hsch hf hdec hzp hlp hrsw hmessages hoodValues hyr hinitialCap hfoldPts hopen hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂
-    har hlc hrn hra hgn hga hlg
+    hxs hext hsch hf hdec hzp hlp hpl hrsw hmessages hoodValues hyr hinitialCap hfoldPts hopen hn₀ hn₁ hn₂ hnr ha₀ ha₁
+    ha₂ har hlc hrn hra hgn hga hlg
 
 /-- **What `TableFiles.Runs` asks of the table files**, at the verifier's shape `sh` and each rep's values `d r` (the
 family's `F.rep`): the setup's dimensions are the shape's and its schedule `fast100`'s; the extra claims are each rep's
@@ -343,12 +343,12 @@ structure RunsFrom (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) : P
 /-- **`TableFiles.Runs` from both reps' algebra**: at table files that `RunsFrom` describes, when both reps meet E's
 preconditions, each rep's program runs (`run_of_files`). -/
 theorem runs_of_files (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) (h : RunsFrom G sh d)
-    (halg : ∀ r, AlgebraHolds sh (d r) ∧ AccHolds sh (d r)) : G.Runs := by
+    (hpl : sh.holo = false) (halg : ∀ r, AlgebraHolds sh (d r) ∧ AccHolds sh (d r)) : G.Runs := by
   intro r hr
   let r' : Fin 2 := ⟨r, hr⟩
   exact run_of_files G r sh (d r') (halg r').1 (halg r').2 h.m h.foldKLog h.kLog h.kLog_le h.sched h.fast
     (h.extras r') h.extras_wf (h.coins r') (h.noEmpty r') (h.roundsWF r') (h.decode r') (h.zerocheck r') (h.lincheck r')
-    (h.ringSwitches r') (h.messages r') (h.oodValues r') (h.yr r') (h.initialCap r') (h.foldPts r') (h.opened r')
+    hpl (h.ringSwitches r') (h.messages r') (h.oodValues r') (h.yr r') (h.initialCap r') (h.foldPts r') (h.opened r')
     (h.framed r')
 
 /-! ## The fields `TableFiles.Valid` gives -/
@@ -407,7 +407,8 @@ theorem hRuns_of (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : 
       RunsFrom (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)) F.sh
         (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ))) :
     F.HRuns dg N k Rw :=
-  fun R ω t R₂ τ o hA halg => runs_of_files _ _ _ (h R ω t R₂ τ o hA halg) halg
+  fun R ω t R₂ τ o hA halg =>
+    runs_of_files _ _ _ (h R ω t R₂ τ o hA halg) (FlockVBridge.OfVStar.shape?_holo F.hsh) halg
 
 end family
 

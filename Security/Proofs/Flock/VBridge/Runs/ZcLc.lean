@@ -154,7 +154,7 @@ theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) 
     (hne : NoEmpty d.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m) (hkL : st.fold.kLog = sh.kLog)
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) p.zerocheck)
-    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck)
+    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck) (hpl : sh.holo = false)
     (hfoldPts : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
         .ok d.comb) :
@@ -175,10 +175,10 @@ theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) 
   have hacc' := hacc v info kappa hrows
   have hzp' := hzp v info kappa hrows
   obtain ⟨hr, hz, hrho, hα, hβ, hlw, hrin, hts, -⟩ := rows_coins hrows (by omega) ht hd hne
-  obtain ⟨hpc, hzf⟩ := zerocheck_of_residuals hrows hS hw hc hacc' hres hzero hzp'
+  obtain ⟨hpc, hzf⟩ := zerocheck_of_residuals hpl hrows hS hw hc hacc' hres hzero hzp'
     (C := fun i => (t.rounds[t.k + 3 + i]!).coins) (fun i hi => by
       rw [hrho, rhoOf, map_range_get _ _ hi])
-  have hlf := lincheck_of_residuals hrows hS hw hc hacc' hres hzero hlp
+  have hlf := lincheck_of_residuals hpl hrows hS hw hc hacc' hres hzero hlp
     (C := fun j => (t.rounds[t.k + 3 + (sh.m - 6) + 2 + j]!).coins) (fun j hj => by
       rw [hts, tsOf, map_range_get _ _ hj])
   rw [hm, hkL]
@@ -194,7 +194,7 @@ theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) 
 theorem prog_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc : AccHolds sh d)
     (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras : Array Claim) (t : Transcript) (ht : t.k = 0)
     (hd : d.rounds = t.rounds.map (·.coins)) (hne : NoEmpty d.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m)
-    (hkL : st.fold.kLog = sh.kLog)
+    (hkL : st.fold.kLog = sh.kLog) (hpl : sh.holo = false)
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) p.zerocheck)
     (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck)
@@ -234,7 +234,7 @@ theorem prog_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc
         .ok ((), t₄)) :
     repProg st sch p extras t = .ok ((), t₄) := by
   obtain ⟨hpc, hfold, hlfold, hcomb, hsize⟩ :=
-    zclc_of_residuals sh d halg hacc st p t ht hd hne hm hm14 hkL hzp hlp hfoldPts
+    zclc_of_residuals sh d halg hacc st p t ht hd hne hm hm14 hkL hzp hlp hpl hfoldPts
   exact prog_of_checks st sch p extras t hm14 hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂ har (r := _) (z := _)
     (rho := rhoOf t st.m) (C := fun i => (t.rounds[t.k + 3 + i]!).coins) rfl rfl (fun _ _ => rfl) hpc hfold
     (k₁ := t.k + 3 + (st.m - 6)) rfl hlc (ts := tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog) (comb := d.comb)

@@ -27,7 +27,7 @@ theorem prog_of_algebra (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (h
     -- the proof file's messages and the comb port
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) p.zerocheck)
-    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck)
+    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck) (hpl : sh.holo = false)
     (hrsw : p.ringSwitches = (decoded sh d.w d.comb d.cons).rs)
     (hfoldPts : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
@@ -61,13 +61,13 @@ theorem prog_of_algebra (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (h
     repProg st sch p extras t = .ok ((), t₄) := by
   obtain ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ := halg
   obtain ⟨hcl, hrs, hshape, hval, hR, hT, hSws⟩ :=
-    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht
+    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht hpl
       (hzp v info kappa hrows).fc hlp.zp hrsw rfl rfl hrn hra hgn hga
   obtain ⟨hr, hz, hrho, -, -, -, -, hts, -⟩ := rows_coins hrows (hm ▸ hm14) ht hd hne
   rw [hr, hz, hrho, hts, ← hm, ← hkL] at hcl
   have hsz := claimsF_size sh (valOf sh d.w d.comb d.cons) info extras
   refine prog_of_zclc sh d ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ hacc st sch p extras t ht hd hne hm
-    hm14 hkL hzp hlp hfoldPts hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂ har hlc hcl hrs hshape hval hR ?_
+    hm14 hkL hpl hzp hlp hfoldPts hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂ har hlc hcl hrs hshape hval hR ?_
   rw [hT, hSws, hsz]
   exact hlg v info kappa hrows
 

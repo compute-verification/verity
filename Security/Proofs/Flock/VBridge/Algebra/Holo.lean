@@ -207,7 +207,7 @@ at `p` are all zero, on the v `verifierRows` gives at the rep's coins, a proof c
 verifier's lincheck rounds at `dot (comb + h) z_partial`: `holoLincheck`'s check (`fOf_dot_holo`). -/
 theorem lincheck_of_residuals_holo {sh : Shape} {w comb h : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64) (hp : p ≤ w.size) (hok : HoloOk p S)
     (hacc : ∀ r < 2, valOf sh w (addH comb h) cons (.acc1 r) + valOf sh w (addH comb h) cons (.acc0 r) =
@@ -220,8 +220,8 @@ theorem lincheck_of_residuals_holo {sh : Shape} {w comb h : Array F128} {cons : 
       (dot (addH comb h) pf.zPartial, info.lc.fold.ts) := by
   obtain ⟨V, rfl, hV⟩ := verifierRows_comb hrows
   rw [show (V ++ comb).size - 64 = V.size by rw [Array.size_append, hc, Nat.add_sub_cancel]] at hres
-  exact lincheck_of_residuals (hV (addH comb h)) hS hw (addH_size comb h) hacc (residuals_of_holo hc hp hok hres)
-    hzero hpf hC
+  exact lincheck_of_residuals hpl (hV (addH comb h)) hS hw (addH_size comb h) hacc
+    (residuals_of_holo hc hp hok hres) hzero hpf hC
 
 /-- **`holoLincheck`'s check over F**: `dot (comb + h) z_partial` is `Σ_s (comb[s] + h[s])·z_partial[s]`. -/
 theorem fOf_dot_holo (comb h zp : Array F128) :
