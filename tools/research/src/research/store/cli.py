@@ -150,12 +150,24 @@ def _select_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def _select(st: LocalStore, ns: argparse.Namespace) -> tuple[list[dict], dict]:
+def _select(st: LocalStore, ns: argparse.Namespace, idx=None) -> tuple[list[dict], dict]:
+    """The catalog's matches, or with ``idx`` (`bucket_index.reader`) the index's plus the catalog's the index lacks (pending here)."""
+    from . import bucket_index as BI  # noqa: PLC0415
+
     labels = [tuple(next(iter(_kv([x], "--label").items()))) for x in ns.label]
     query = {k: v for k, v in (("kind", ns.kind), ("where", _kv(ns.where, "--where") or None), ("tool", ns.tool), ("derivation", ns.derivation),
                                ("attempt", ns.attempt), ("label", [list(x) for x in labels] or None)) if v}
     rows = st.index.select_artifacts(kind=ns.kind, where=_kv(ns.where, "--where"), label=labels or None, attempt=ns.attempt, tool=ns.tool, derivation=ns.derivation)
-    return rows, query
+    if idx is None:
+        return rows, query
+    here = {r["id"]: r for r in rows}
+    found = BI.select_artifacts(idx, kind=ns.kind, where=_kv(ns.where, "--where"), labels=labels, attempt=ns.attempt, tool=ns.tool,
+                                derivation=ns.derivation)
+    out = [here.get(i) or {"id": i, "kind": d.get("kind"), "bytes": (d.get("payload") or {}).get("bytes", 0),
+                           "payload_type": (d.get("payload") or {}).get("type"), "local": False, "remote": True, "repo_path": None}
+           for i, d in found]
+    pend = BI.not_indexed(idx, [i for i in here if i not in {r["id"] for r in out}])
+    return sorted(out + [{**here[i], "pending": True} for i in pend], key=lambda r: r["id"]), query
 
 
 def _payload_line(doc: dict) -> str:
@@ -399,8 +411,19 @@ def cmd_preserved(argv: list[str]) -> int:
 
 
 def cmd_select(argv: list[str]) -> int:
+    """Artifacts by facet, from the index (`bucket_index.reader`: Neon with $STORE_PRIVATE_READER_URL, else this machine's
+    `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index."""
+    from . import bucket_index as BI  # noqa: PLC0415
+
     ns = _select_parser().parse_args(argv)
-    rows, _ = _select(LocalStore(ns.store), ns)
+    st = LocalStore(ns.store)
+    idx = BI.reader(st.root)
+    try:
+        rows, _ = _select(st, ns, idx)
+        source = f"the index ({idx.describe()}, complete as of {BI.as_of(idx) or 'never listed'})" if idx else "the catalog"
+    finally:
+        if idx is not None:
+            idx.close()
     if ns.json:
         _dump(rows)
     elif ns.ids:
@@ -409,8 +432,9 @@ def cmd_select(argv: list[str]) -> int:
     else:
         for r in rows:
             print(f"{r['id']}  {r['kind']:<24} {r['bytes']:>12} {r['payload_type'] or 'none':<5} {'local' if r['local'] else '-':<5} "
-                  f"{'remote' if r['remote'] else '-':<6} {r['repo_path'] or ''}")
-        print(f"{len(rows)} artifact(s)", file=sys.stderr)
+                  f"{'remote' if r['remote'] else '-':<6} {r['repo_path'] or ''}{'  (pending: not in the index)' if r.get('pending') else ''}")
+        n = sum(1 for r in rows if r.get("pending"))
+        print(f"{len(rows)} artifact(s) from {source}" + (f", {n} of them only here" if n else ""), file=sys.stderr)
     return 0
 
 
@@ -818,7 +842,11 @@ def cmd_sql(argv: list[str]) -> int:
     ap = _ap("sql")
     ap.add_argument("query")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--index", action="store_true", help="query the index's records, fields, edges and listings (README §5.1): Neon's "
+                    "store_private with $STORE_PRIVATE_READER_URL, else this machine's `research data index` build; not the catalog")
     ns = ap.parse_args(argv)
+    if ns.index:
+        return _sql_index(ns)
     idx = LocalStore(ns.store).index
     try:
         cols, rows = idx.sql_with_columns(ns.query)
@@ -838,6 +866,37 @@ def cmd_sql(argv: list[str]) -> int:
         for r in rows:
             print("\t".join("" if v is None else str(v) for v in r))
     return 0
+
+
+def _sql_index(ns: argparse.Namespace) -> int:
+    from . import bucket_index as BI  # noqa: PLC0415
+
+    st = LocalStore(ns.store)
+    idx = BI.reader(st.root)
+    if idx is None:
+        print(f"research data sql --index: no index here: set {BI.READER_ENV} (store_private_reader's URL) or build one with "
+              "`research data index`", file=sys.stderr)
+        return 2
+    try:
+        try:
+            cols, rows = idx.query(ns.query)
+        except (sqlite3.Error, RuntimeError) as e:
+            print(f"research data sql --index: {e}\n  tables: records(id, type, kind, time, doc), fields(id, path, value), "
+                  "edges(src, name, dst), listings(prefix, listed_at, keys)", file=sys.stderr)
+            return 2
+        if ns.json:
+            _dump([dict(zip(cols, r)) for r in rows])
+        else:
+            if cols:
+                print("\t".join(cols))
+            for r in rows:
+                print("\t".join("" if v is None else str(v) for v in r))
+        n = len(BI.pending(st, idx))
+        print(f"research data sql --index: {idx.describe()}, complete as of {BI.as_of(idx) or 'never listed'}"
+              + (f"; {n} record(s) here are not in it (`research data pending`)" if n else ""), file=sys.stderr)
+        return 0
+    finally:
+        idx.close()
 
 
 def _attempt_artifacts(doc: dict) -> list[str]:

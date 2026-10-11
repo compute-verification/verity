@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from . import canon, ids
-from .index import flatten
+from .index import flatten, scalar_text
 from .model import Label
 
 PRIVATE, PUBLIC = "private", "public"
@@ -56,6 +56,7 @@ PUBLIC_RUN_FIELDS = (("schema",), ("id",), ("tool", "name"), ("status", "state")
                      ("conditions", "hw.sku"), ("conditions", "hw.count"), ("conditions", "rt.driver"), ("conditions", "rt.cuda"),
                      ("source", "commit"))
 HEX_RE = re.compile(ids.HEX64)
+READER_ENV = "STORE_PRIVATE_READER_URL"              # store_private_reader's URL (README §5.1)
 
 SQLITE_DDL = """
 CREATE TABLE IF NOT EXISTS records(id TEXT PRIMARY KEY, type TEXT NOT NULL, kind TEXT, time TEXT, doc TEXT NOT NULL);
@@ -189,6 +190,19 @@ class SqliteIndex:
         if self.path is not None:
             self.db.close()
 
+    def describe(self) -> str:
+        return str(self.path) if self.path is not None else "SQLite"
+
+    def query(self, sql: str) -> tuple[list[str], list[tuple]]:
+        """One read-only query: its column names and rows."""
+        db = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=30) if self.path is not None else self.db
+        try:
+            cur = db.execute(sql)
+            return [d[0] for d in cur.description or []], cur.fetchall()
+        finally:
+            if db is not self.db:
+                db.close()
+
     def ids(self) -> set[str]:
         return {r[0] for r in self.db.execute("SELECT id FROM records")}
 
@@ -318,6 +332,17 @@ class PostgresIndex:
 
     def close(self) -> None:
         pass
+
+    def describe(self) -> str:
+        return f"{self.schema} on {self.env.get('PGHOST', 'postgres')}"
+
+    def query(self, sql: str) -> tuple[list[str], list[tuple]]:
+        """One query in a read-only transaction with this schema first on the search path: its column names and rows, every
+        value as Postgres's text output (a time in this session's zone, UTC)."""
+        out = self.run(f"BEGIN READ ONLY;\nSET LOCAL search_path TO {self.schema};\nSET LOCAL TIME ZONE 'UTC';\n"
+                       f"COPY ({sql.strip().rstrip(';')}) TO STDOUT WITH (HEADER);\nCOMMIT;")
+        cols = [_uncopy(f) for f in out[0]] if out else []
+        return cols, [tuple(_uncopy(f) for f in row) for row in out[1:]]
 
     def ids(self) -> set[str]:
         return {r[0] for r in self.select(f"SELECT id FROM {self.schema}.records")}
@@ -529,3 +554,63 @@ def dump(db: Path | str | SqliteIndex | PostgresIndex) -> dict[str, list[tuple]]
         if idx is not db:
             idx.close()
 
+
+def reader(store_root: Path | str) -> SqliteIndex | PostgresIndex | None:
+    """The private index displays read: Neon's `store_private` when $READER_ENV holds its read-only role's URL, else this
+    machine's `research data index` build (`default_path`), else None (then a display reads the catalog, `catalog.sqlite`)."""
+    if url := os.environ.get(READER_ENV, "").strip():
+        return PostgresIndex(url, "store_private", create=False)
+    p = default_path(store_root)
+    return SqliteIndex(p) if p.is_file() else None
+
+
+def as_of(idx: SqliteIndex | PostgresIndex) -> str | None:
+    """What the index is complete as of: its oldest listing's time (each prefix is complete as of its own)."""
+    rows = idx.query("SELECT min(listed_at) FROM listings")[1]
+    return iso(str(rows[0][0]).replace(" ", "T")) if rows and rows[0][0] else None
+
+
+def not_indexed(idx: SqliteIndex | PostgresIndex, wanted: Iterable[str], batch: int = 2000) -> list[str]:
+    """The ids of ``wanted`` the index has no record of, in order."""
+    want, out = list(dict.fromkeys(wanted)), []
+    for i in range(0, len(want), batch):
+        vals = ", ".join(f"({_lit(x)})" for x in want[i:i + batch])
+        hit = {r[0] for r in idx.query(f"WITH v(id) AS (VALUES {vals}) SELECT id FROM v WHERE EXISTS "
+                                       "(SELECT 1 FROM records r WHERE r.id = v.id)")[1]}
+        out += [x for x in want[i:i + batch] if x not in hit]
+    return out
+
+
+def local_records(store) -> list[str]:
+    """The index ids of every record this store holds: its artifacts, its runs and `label:<hash>` for each assertion."""
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    return [*store.artifact_ids(), *store.attempt_ids(), *(f"label:{h}" for h in LS.local_labels(store))]
+
+
+def pending(store, idx: SqliteIndex | PostgresIndex) -> list[str]:
+    """This store's records the index lacks: written here and not yet in the bucket (`research data pending`), or in it since
+    the index last listed it.  A display shows them beside what it read."""
+    return not_indexed(idx, local_records(store))
+
+
+def select_artifacts(idx: SqliteIndex | PostgresIndex, *, kind: str | None = None, where: dict[str, str] | None = None,
+                     labels: Iterable[tuple[str, Any]] = (), attempt: str | None = None, tool: str | None = None,
+                     derivation: str | None = None) -> list[tuple[str, dict]]:
+    """(id, doc) of every indexed artifact matching every facet, as the catalog's `Index.select_artifacts` reads them: `where`
+    dotted meta keys (`meta.` optional), every (key, value) label asserted by anyone, and the outputs of the runs `attempt`, `tool`
+    and `derivation` name."""
+    q = ["r.type = 'artifact'"] + ([f"r.kind = {_lit(kind)}"] if kind else [])
+    for k, v in (where or {}).items():
+        path = k if k.startswith("meta.") else f"meta.{k}"
+        q.append(f"EXISTS (SELECT 1 FROM fields f WHERE f.id = r.id AND f.path = {_lit(path)} AND f.value = {_lit(v)})")
+    for k, v in labels:
+        q.append("EXISTS (SELECT 1 FROM edges e JOIN records l ON l.id = e.src JOIN fields f ON f.id = l.id AND f.path = 'value' "
+                 f"WHERE e.dst = r.id AND e.name = 'target' AND l.kind = {_lit(k)} AND f.value = {_lit(scalar_text(v))})")
+    if attempt or tool or derivation:
+        q.append("EXISTS (SELECT 1 FROM edges e JOIN records t ON t.id = e.src WHERE e.dst = r.id AND e.name LIKE 'outputs.%'"
+                 + (f" AND t.id = {_lit(attempt)}" if attempt else "") + (f" AND t.kind = {_lit(tool)}" if tool else "")
+                 + (f" AND EXISTS (SELECT 1 FROM fields d WHERE d.id = t.id AND d.path = 'derivation' AND d.value = {_lit(derivation)})"
+                    if derivation else "") + ")")
+    return [(i, json.loads(d) if isinstance(d, str) else d)
+            for i, d in idx.query(f"SELECT r.id, r.doc FROM records r WHERE {' AND '.join(q)} ORDER BY r.id")[1]]
