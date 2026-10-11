@@ -80,6 +80,7 @@ python3 -m verity_flock.rec_session --check-fold $O/fold.json --inner $O/inner >
 /usr/bin/time -v -o $O/time-vstage.txt python3 -m verity_flock.rec_vstage stage $O/inner $O/fold.json $V --points $O/points.json \
   --levels none $SPA ${SPARSE:+--circuit $D/circuit.txt} ${FORGE:+--no-algebra} > $O/vstage.json 2> $O/vstage.err
 echo "vstage exit $?"
+[ -n "${KEEP:-}" ] && { mkdir -p $KEEP && cp -r $D $KEEP/stage; }
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage-sizes.txt 2>&1
 
 wait $LP
