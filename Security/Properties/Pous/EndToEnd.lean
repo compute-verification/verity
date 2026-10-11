@@ -11,8 +11,8 @@ import Definitions.Pous.P2.Cost
 **Draft for statement review, not a root.** Nothing here is proved and nothing is built by `lake build`: this module is
 in no `roots` list, so `check`'s audit reports it as an orphan until it lands. Landing it needs a root
 (`lakefile.toml`, `lean-audit.json`), `Models.Pous` and `Properties.Identity` in the `Properties.Pous` layer's imports,
-a `shape.frozen` entry (`unstated: …`) for each statement until its proof lands, and a home for the four new
-assumptions (see "Assumptions").
+a `shape.frozen` entry (`unstated: …`) for each statement until its proof lands, and a home for the two new
+assumptions (see "Assumptions"); `P2RingAuditSecure` is `Models.Pous.Assumptions.P2`'s.
 
 Two statements at P2's deployed point (`P2.Params.deployed`: `p = 2^16448 − 21065`, `B = 2^19` blocks of 2,056 bytes,
 `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), over the Lean verdicts that judge a run: the setup check
