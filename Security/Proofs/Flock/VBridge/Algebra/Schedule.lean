@@ -242,7 +242,7 @@ theorem bind_nz {x : CM A} {f : A → CM B} (hx : Z t x) (hf : ∀ a, NZ (f a)) 
 theorem pure' {a : A} : Z t (Pure.pure a : CM A) := by
   intro k a' j h
   cases cm_pure h
-  exact ⟨[], rfl, fun _ h => by cases h, fun _ _ _ _ => rfl,
+  exact ⟨[], rfl, (fun _ h => by simp at h), fun _ _ _ _ => rfl,
     fun _ b j' _ _ h' => by cases h'; exact ⟨rfl, rfl, FitsSz.nil⟩⟩
 
 theorem throw' (e : String) : Z t (throw e : CM A) := by
@@ -253,7 +253,7 @@ theorem liftE' {e : Except String A} : Z t (liftE e) := by
   intro k a j h
   obtain ⟨a₁, rfl, hr⟩ := liftE_ok h
   cases hr
-  exact ⟨[], rfl, fun _ h => by cases h, fun _ _ _ _ => rfl,
+  exact ⟨[], rfl, (fun _ h => by simp at h), fun _ _ _ _ => rfl,
     fun _ b j' _ _ h' => by cases h'; exact ⟨rfl, rfl, FitsSz.nil⟩⟩
 
 theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → Z t x₁) (h₂ : ¬c → Z t x₂) :
@@ -273,7 +273,7 @@ theorem guardDrawn {err : String} {rest : CM A} (h : NZ rest) :
   simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hx
   obtain ⟨hj, H⟩ := h k a j hx
   subst j
-  refine ⟨[], rfl, fun _ h => by cases h, fun rounds hne _ hs => ?_, fun rounds b j' _ _ h' => ?_⟩
+  refine ⟨[], rfl, (fun _ h => by simp at h), fun rounds hne _ hs => ?_, fun rounds b j' _ _ h' => ?_⟩
   · rw [guard_eq]
     have hd : (Coins.ofRounds rounds).drawnAll k = true := by
       show (k == (rounds.filter (·.size ≠ 0)).size) = true
@@ -294,7 +294,7 @@ end Z
 theorem coinVec_z {t : Nat} (n : Nat) : Z t (coinVec n) := by
   intro k v j h
   rcases coinVec_ok h with ⟨rfl, rfl, rfl⟩ | ⟨hn, hv, rfl⟩
-  · refine ⟨[], rfl, fun _ h => by cases h, fun _ _ _ _ => rfl, fun rounds b j' _ _ h' => ?_⟩
+  · refine ⟨[], rfl, (fun _ h => by simp at h), fun _ _ _ _ => rfl, fun rounds b j' _ _ h' => ?_⟩
     rcases coinVec_ok h' with ⟨-, rfl, rfl⟩ | ⟨hn, -, -⟩
     · exact ⟨rfl, rfl, FitsSz.nil⟩
     · exact absurd rfl hn

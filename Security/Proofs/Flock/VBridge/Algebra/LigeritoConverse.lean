@@ -311,7 +311,7 @@ theorem vnextOod_bind {M : Messages F128} {f : F128 → RecAlgebra.LM F128 β} {
 
 end VStar
 
-/-- V*'s rounds hold no round of no coins, so `Coins.ofRounds` reads them as recorded. -/
+-- V*'s rounds hold no round of no coins, so `Coins.ofRounds` reads them as recorded.
 variable [hne : Fact (NoEmpty c)]
 
 /-- A round of the record that V* drew `n` coins from. -/
