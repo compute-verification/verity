@@ -192,7 +192,8 @@ theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (F
   rcases j with ⟨_ | i, hi⟩
   · show ((tableAt ht dj x₀ S).T.S.shape mPts).InRangeWide
     rcases tableAt_cases ht dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
-    · exact x.specAt_inRangeWide ht (regionsOf x.st) _ (by rw [FlockVBridge.Family.length_regionsOf]; omega)
+    · exact x.specAt_inRangeWide ht (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
+        (by rw [FlockVBridge.Family.length_regionsOf]; omega)
     · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog)) _
         (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
   · have h1 : (planAt (Reg := Reg) ht dj x₀ S R).length = 1 := rfl
@@ -228,7 +229,8 @@ theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (
   rcases j with ⟨_ | i, hi⟩
   · show ((tableAtH dj x₀ S).T.S.shape mPts).InRangeWide
     rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
-    · exact x.specAt_inRangeWide (regionsOf x.st) _ (by rw [FlockVBridge.Family.length_regionsOf]; omega)
+    · exact x.specAt_inRangeWide (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
+        (by rw [FlockVBridge.Family.length_regionsOf]; omega)
     · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog)) _
         (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
   · have h1 : (planAtH (Reg := Reg) dj x₀ S R).length = 1 := rfl
@@ -307,7 +309,7 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
 
 /-- **`SoundExec` gives `SoundExec205`**: every table of the plan is in the wide range (`planAt_inRangeWide`). -/
 theorem SoundExec.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = false} (h : SoundExec I hh) : SoundExec205 I hh :=
-  @fun n mPts dj S₀ x₀ Reg m σs ks hks St hS Kd pop Ω _ _ Lb src hA3 k hk Rw M hRw hM ρ hρ hr _ ht' K wr dg N hwr hdraw τ
+  @fun _ _ dj _ x₀ Reg _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
       hCR _ _ hKS =>
     (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
       (iSup_mono fun hs => add_le_add (add_le_add le_rfl
@@ -383,7 +385,7 @@ def SoundExecH205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
 
 /-- **`SoundExecH` gives `SoundExecH205`**: every table of the plan is in the wide range (`planAtH_inRangeWide`). -/
 theorem SoundExecH.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} (h : SoundExecH I hh) : SoundExecH205 I hh :=
-  @fun n mPts dj S₀ x₀ Reg m σs ks hks St hS Kd pop Ω _ _ Lb src hA3 k hk Rw M hRw hM ρ hρ hr _ ht' K wr dg N hwr hdraw τ
+  @fun _ _ dj _ x₀ Reg _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
       hCR _ _ hKS =>
     (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
       (iSup_mono fun _ => add_le_add (add_le_add le_rfl
