@@ -13,8 +13,7 @@
 # inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json,
 # check-fold.json, vstage.json, lean.log, summary.json. Exits 1 unless the session, replay, rec_vstar, the fold check and the
 # staging all pass.
-# Launch it through a check slot, which pins it to the slot's cores and holds the slot (the slots' cores are not contiguous,
-# which cpu-slices.sh's ranges assume):
+# Launch it through a check slot, which pins it to the slot's cores and holds the slot:
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
 #   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
