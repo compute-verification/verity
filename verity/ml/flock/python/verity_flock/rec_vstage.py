@@ -21,6 +21,10 @@ from its proofs, its tops with the salts the firewall committed them under (`rec
 chain), and its message rows with the salts it committed them under in the inner session, registered as ``rec-c<i>`` (row r:
 rep r's) under `rec_outer.session_program` of ``public.json``, which the chain shares.
 
+**Hidden unit circuits** (`verity_flock.rec_session`, ``fold.json``'s ``hidden``: ``InnerFold.lean --hide``): the comb is the
+public part's fold, the shape is holo (`rec_algebra.Shape.holo`), and h's round is one of the message rounds, its row
+registered as the others' are; z_partial's round draws no coins, which `rec_algebra.Coins` skips.
+
 **Forgeries** (``--forge``), staged under ``OUT/forged-<kind>/``, each beside the verifier's files of the honest session:
 
 * ``message``: the prover opens rep 0's first message round to another row (one bit of its first word), under the salt and
@@ -119,13 +123,13 @@ def points(public: dict, meta_: dict, n: int) -> dict:
 
 
 def verifier(public: dict, fold: dict, pts: dict | None = None) -> SimpleNamespace:
-    """The verifier's per-rep values: the shape, the extra claims, and each rep's coins, comb, v and `verifier_rows`' info.
-    ``pts``: the POINTS ``fold`` was computed at, whose shape it must have."""
+    """The verifier's per-rep values: the shape (holo when ``fold`` names hidden circuits), the extra claims, and each rep's
+    coins, comb, v and `verifier_rows`' info. ``pts``: the POINTS ``fold`` was computed at, whose shape it must have."""
     if pts is not None and (fold["m"], fold["k_log"]) != (pts["m"], pts["k_log"]):
         raise ValueError(f"InnerFold's shape {fold['m'], fold['k_log']} is not the points' {pts['m'], pts['k_log']}")
     claim = lambda e: A.Claim(G.of_hex(e["value"]), tuple(map(G.of_hex, e["skip"])), tuple(map(G.of_hex, e["x"])))
     extras = [claim(e) for e in fold["extras"]]
-    sh = A.Shape(fold["m"], fold["k_log"], 2 + len(extras))
+    sh = A.Shape(fold["m"], fold["k_log"], 2 + len(extras), holo=bool(fold.get("hidden")))
     reps = []
     for r, d in enumerate(fold["reps"]):
         rounds = rep_coins(public, r)
@@ -308,7 +312,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     t["coefficients_s"] = round(time.perf_counter() - t0, 2)
     ts = {rep: V.tops(public, private, f"{TABLE}/rep{rep}", TABLE) for rep in sorted(proofs)}
     chain = O.Chain.build(program, qs, coefs, None if salts is None else acc_salts(Path(salts), len(qs) + 1))
-    res: dict = {"shape": [sh.m, sh.k_log, sh.claims], "openings": len(qs), "chain_rows": chain.reg.leaves,
+    res: dict = {"shape": [sh.m, sh.k_log, sh.claims], "holo": sh.holo, "openings": len(qs), "chain_rows": chain.reg.leaves,
                  "acc_root": chain.reg.root.hex(), "program": program, "verifier": t} | ({"cap": cap.spec()} if cap else {})
     p_last = chain.rep_ends(0)[1] - 1
     if forge is not None:
@@ -360,7 +364,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             vs[0][-64] ^= 1
         res["algebra"] = []
         for j, p in enumerate(RR.parts(RR.spec(sh))):
-            st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2)
+            st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2, holo=sh.holo)
             names = [nm for nm, _ in p.S["ports"]]
             d = out / "alg" / f"p{j}"
             s = RR.write(st, {nm: reads[nm] for nm in names}, [[v[i] for i in p.v] for v in vs], d, evaluate=evaluate,

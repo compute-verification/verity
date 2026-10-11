@@ -30,10 +30,11 @@ pytestmark = [pytest.mark.slow,
 SHAPES = [(25, 22, 8), (27, 22, 8)]
 
 
-def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None) -> Path:
-    """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points."""
+def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None) -> Path:
+    """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points;
+    ``holo``, when given, its `holo` key (`rec-inner --hide`)."""
     path.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": k, "claims": c,
-                                "regions": (c - 2) // 2 if regions is None else regions}))
+                                "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {})}))
     return path
 
 
@@ -98,14 +99,15 @@ def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
 def test_v_stars_parts_are_as_many_as_the_verifiers_groups(tmp_path):
     """V*'s parts at the inner shape (`VStar.parts (spec vsh)`) are as many as the verifier's own packing of its algebra
     (`RecResiduals.groups (structureOf sh) (portSizes sh)`): both are functions of the shape alone, so the count refuses no
-    shape at which the two agree, and a shape whose packing refuses, where one residual alone reads more than 64 regions
-    (claims 16 at m = 22), is refused, naming V*'s parts."""
-    for shape in SHAPES:
+    shape at which the two agree, among them claims 16 at m = 22, whose batched T stands alone (172 slots, past MAX_SLOTS);
+    and a shape whose packing refuses, where one residual alone reads more than MAX_LONE_SLOTS (claims 22: 236 slots), is
+    refused, naming V*'s parts."""
+    for shape in (*SHAPES, (22, 6, 16)):
         rc, line = _statements(_inner(tmp_path / "inner.json", *shape))
         assert rc == 0 and len([s for s in line["statements"] if s[0].startswith("rec-residuals/")]) == len(
             RR.parts(RR.spec(A.Shape(*shape)))), line
-    rc, line = _statements(_inner(tmp_path / "wide.json", 22, 6, 16))
-    assert rc == 1 and line["error"] == "V*'s parts: residual 20 alone reads more than 64 regions or 160 sha512x3 slots", line
+    rc, line = _statements(_inner(tmp_path / "wide.json", 22, 6, 22))
+    assert rc == 1 and line["error"] == "V*'s parts: residual 26 alone reads more than 64 regions or 223 sha512x3 slots", line
 
 
 def test_the_inner_shapes_claims_are_two_and_two_per_region(tmp_path):
@@ -367,3 +369,42 @@ def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_veri
     assert p.returncode == 1 and p.stdout.strip() == (
         f'setup: rec-open/l8-h1: META program_digests {{"{tid}":"{digest}"}}, the verifier\'s bindings\' '
         f'{{"{tid}":"{other}"}}'), p.stdout
+
+
+PRIVATE = "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
+
+
+def test_a_private_inner_session_is_refused_and_the_verdict_says_whether_the_circuit_is_private(staged, tmp_path):  # noqa: F811
+    """`rec-inner`'s `holo` (the verifier's own `--hide`) is the verdict's `private_circuit`, on every VERDICT line verified
+    with `--rec-inner` and on no other. V*'s circuit writer does not write holo parts yet, so a private inner session is
+    refused by name (`verify`, `statement` and `rec-statements`) however its circuit file reads; a `holo` that is not a
+    boolean is refused as the verifier's file reads."""
+    d = staged[0]
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-part", "0",
+             "--rec-bindings", str(_bindings(d, tmp_path / "bindings.json"))]
+    sess = tmp_path / "session"
+    sess.mkdir()
+    (sess / "session.json").write_text("{}")
+
+    def verdict(*flags):
+        p = subprocess.run([str(BIN), "verify", *files, *flags, "--session", str(sess)], capture_output=True, text=True)
+        [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+        return p.returncode, v
+
+    rc, v = verdict()
+    assert rc == 1 and "private_circuit" not in v, v
+    for holo in (None, False):
+        rc, v = verdict("--rec-inner", str(_inner(tmp_path / "plain.json", 25, 22, 8, holo=holo)))
+        assert rc == 1 and v["private_circuit"] is False and PRIVATE not in v["why"], v
+    hidden = _inner(tmp_path / "hidden.json", 25, 22, 8, holo=True)
+    rc, v = verdict("--rec-inner", str(hidden))
+    assert rc == 1 and v["private_circuit"] is True and v["why"] == f"setup: {PRIVATE}", v
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(hidden)], capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == f"setup: {PRIVATE}", p.stdout
+    rc, line = _statements(hidden)
+    assert rc == 1 and line["error"] == PRIVATE, line
+    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(_inner(tmp_path / "bad.json", 25, 22, 8, holo=1))],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and p.stderr.strip() == "rec-inner: holo is not a boolean", p.stderr

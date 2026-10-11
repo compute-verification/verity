@@ -6,8 +6,10 @@ import Proofs.Flock.Level3.RowV2
 
 A layout's rows are the commit strings under the serving roots that hold `hm96-sha512/row/v1` or `/row/v2` leaves
 (`HmRows`): the circuit hashes each one's row in `sha512x3` slots and outputs its commit string `b ‖ c` from an `hm96` slot,
-the verifier hashes the public `b ‖ c` into the frame-v3-sha512 roots it checks against the registration
-(`HmRow.checkPublic`), and the statement pins the `hm96` slots' outputs to the public `b ‖ c` (`HmRow.regions`). The other
+the verifier hashes the public `b ‖ c` into frame-v3-sha512 roots and holds them to the public file's header
+(`HmRow.checkPublic`, stated by `FailClosed.flock_verify_public_ties`; that the header's roots are the registration's is
+the auditor's check, `matches_public`), and the statement pins the `hm96` slots' outputs to the public `b ‖ c`
+(`HmRow.regions`). The other
 commit strings (the returned outputs, u16 words hashed in the clear) have leaf schemes of their own (`other`). A
 `/row/v2` layout's rows are bit rows (`HmRows.v2`), hashed as `sha512/row/v2` hashes them (`FlockLevel3.RowV2.enc`), whose
 injectivity on rows of fewer than `2^64` bits is `FlockLevel3.RowV2.enc_inj`.

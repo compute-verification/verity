@@ -66,7 +66,7 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
+__all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
            "opening_rows", "residual_forms", "residual_words", "slots", "spec", "stage_opening",
            "statement", "unit_circuit", "write", "write_rows"]
 
@@ -79,6 +79,9 @@ ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
 VERIFIER_SALT = b"verity/rec-v0/verifier-salt/v0"
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
+# the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
+# unit's name does not say, and the verifier (`Flock.RecResiduals.HOLO_KEY`) builds the one net it selects, absent meaning plain
+HOLO_KEY = "holo"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
@@ -88,6 +91,13 @@ MAX_REGIONS = 64
 # compressions (about nv / 8) put its first part at 2^27. A shape's widest residual reads about 10.75 slots a claim, so 160
 # holds up to 14 claims (12 claims: 130)
 MAX_SLOTS = 160
+# a residual that fits no part alone under MAX_SLOTS stands alone up to this many: no other residual joins it (slots only
+# grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged, and the bound reaches only residuals
+# MAX_SLOTS refuses. The widest, the batched T, reads 172 slots at 16 claims (llama32-1b/b1/i256's 2^29 bucket), 194 at 18
+# and 215 at 20, beside hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask (one): 191 fill a 2^26 block, so past
+# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (runs r20261010-212155-f5ab, r20261010-223054-2894: 172 at
+# k_log 26, 194 to 215 at 27). 21 claims' 226 refuse
+MAX_LONE_SLOTS = 223
 
 
 def port_words(n: int) -> int:
@@ -128,9 +138,11 @@ def slots(ports: list, nv: int) -> int:
     return -(-sum(p.comps for p in rows) // FC.PER_SLOT)
 
 
-def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -> list[SimpleNamespace]:
+def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS,
+          max_lone_slots: int = MAX_LONE_SLOTS) -> list[SimpleNamespace]:
     """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions (`regions`), ``max_slots`` sha512x3
-    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order. A part
+    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order; a residual
+    that fits no part, not even alone, is a part of its own if it reads at most ``max_lone_slots`` slots. A part
     reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
     w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
     holds exactly when every part does."""
@@ -155,16 +167,17 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
 
     groups: list[tuple[list, set, set]] = []
     for i, (P, V) in enumerate(map(touched, gf["res"])):
-        def fit(g):
+        def fit(g, n=max_slots):
             ports = [S["ports"][p] for p in g[1] | P]
-            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= max_slots
+            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= n
                     and F_WORDS * (len(g[0]) + 1) <= OUT_WORDS)
 
         g = next((g for g in groups if fit(g)), None)
         if g is None:
             g = ([], set(), set())
-            if not fit(g):
-                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or {max_slots} sha512x3 slots")
+            if not fit(g, max(max_slots, max_lone_slots)):
+                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or "
+                                 f"{max(max_slots, max_lone_slots)} sha512x3 slots")
             groups.append(g)
         g[0].append(i)
         g[1].update(P)
@@ -419,9 +432,9 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
     return {"value": value, "root": root.hex(), "leaves": len(bcs), "words": int(words_), "domain": dom.domain_id.hex()}
 
 
-def statement(S: dict, name: str, n: int) -> SimpleNamespace:
-    """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
-    decide."""
+def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace:
+    """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n``, ``S`` and
+    ``holo`` decide. ``holo``: S is a part of a holo shape's spec, which META says (`HOLO_KEY`)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     t0 = time.perf_counter()
@@ -431,7 +444,7 @@ def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     prog = P.program_sha512(program)
     low = lowering(S, name)
     sub = subcircuit(S, name)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog, extra_meta={HOLO_KEY: True} if holo else None)
     names = [nm for nm, _ in S["ports"]]
     ref = lambda rows, vw: residual_words(S, [rows[nm] for nm in names], elements(vw, S["gf"]["nv"]))
     return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,

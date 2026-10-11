@@ -272,7 +272,36 @@ def test_the_universal_units_inner_algebra_is_two_parts_within_the_caps(salt_len
         assert slots <= RR.MAX_SLOTS and regions <= RR.MAX_REGIONS and len(p.res) <= RR.OUT_WORDS // RR.F_WORDS
     assert [shape(p)[1] for p in RR.parts({"gf": {**S["gf"], "res": S["gf"]["res"][16:]}, "ports": S["ports"]})] == [130]
     with pytest.raises(ValueError, match="residual 16 alone reads more than 64 regions or 128 sha512x3 slots"):
-        RR.parts(S, max_slots=128)
+        RR.parts(S, max_slots=128, max_lone_slots=128)
+
+
+def test_a_residual_wider_than_max_slots_stands_alone_within_max_lone_slots():
+    """llama32-1b/b1/i256's 2^29 bucket samples inner sessions of 16 claims (Gumbel's 7 regions, note
+    proofs/20261010T2112Z-finding-c3-claims-per-shape), whose batched-T residual alone reads 172 sha512x3 slots: it is a part
+    of its own, and composes at k_log 26, under circuit.K_MAX (each part's net built in run r20261010-212155-f5ab). Shapes
+    whose residuals each fit MAX_SLOTS cut as they did under MAX_SLOTS alone; a uniform 172 would have moved (34, 26, 8)'s
+    first part to 172 slots and a 2^27 block."""
+    shape = lambda p: (len(p.res), RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"]))
+    S = RR.spec(A.Shape(35, 27, 16))
+    ps = RR.parts(S)
+    assert [shape(p) for p in ps] == [(11, 140, 64), (9, 115, 62), (1, 172, 19)] and ps[2].res == [20]
+    assert RR.MAX_SLOTS < 172 <= RR.MAX_LONE_SLOTS
+    with pytest.raises(ValueError, match="residual 20 alone reads more than 64 regions or 160 sha512x3 slots"):
+        RR.parts(S, max_lone_slots=RR.MAX_SLOTS)
+    S8 = RR.spec(A.Shape(34, 26, 8))
+    assert [shape(p) for p in RR.parts(S8)] == [shape(p) for p in RR.parts(S8, max_lone_slots=0)] == [(10, 129, 61), (3, 123, 63)]
+
+
+@pytest.mark.slow
+def test_the_widest_lone_residual_max_lone_slots_admits_is_twenty_claims():
+    """The batched T alone reads 215 slots at 20 claims, a part that composes at k_log 27 (= circuit.K_MAX) beside a 2^23 unit
+    (run r20261010-223054-2894), and 226 at 21 claims, just past MAX_LONE_SLOTS, which refuses it. Slow for the two specs alone
+    (about 10 s); the quick test above pins the 16 claims a pinned shape needs."""
+    ps = RR.parts(RR.spec(A.Shape(35, 27, 20)))
+    assert [(len(p.res), RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"])) for p in ps][-1] == (1, 215, 23)
+    assert 215 <= RR.MAX_LONE_SLOTS < 226
+    with pytest.raises(ValueError, match="residual 25 alone reads more than 64 regions or 223 sha512x3 slots"):
+        RR.parts(RR.spec(A.Shape(35, 27, 21)))
 
 
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
@@ -342,3 +371,46 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     p = statement(tmp_path / "renamed.txt")
     why = "unit rec-residuals/small is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
     assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
+
+
+def _with_holo(text: str, holo: bool) -> str:
+    """``text`` with META's `RR.HOLO_KEY` as `RR.statement` writes it for ``holo`` (present only when true)."""
+    head, meta, rest = text.split("\n", 2)
+    m = {k: v for k, v in json.loads(meta[5:]).items() if k != RR.HOLO_KEY}
+    if holo:
+        m[RR.HOLO_KEY] = True
+    return f"{head}\nMETA {json.dumps(m, sort_keys=True, separators=(',', ':'))}\n{rest}"
+
+
+@pytest.mark.slow
+def test_the_statements_holo_selects_the_one_net_the_verifier_holds_a_part_to(tmp_path):
+    """At Shape(22, 10, 2), whose one part reads h when holo: the verifier holds the unit to the net META's `HOLO_KEY`
+    selects, so a holo statement on the plain part and a plain statement on the holo part are refused by name, and each
+    statement that says its part's shape passes the residuals check (stopping at the partition object it is not given).
+    Composing a part takes about two minutes; no cheaper test reaches `RecResiduals.check` with a real part's unit."""
+    if not BIN.exists():
+        pytest.skip("the Lean verifier is not built")
+    name = "rec-residuals/m22-k10-c2-p0"
+    (tmp_path / "pub.bin").write_bytes(b"")
+    texts = {holo: RR.statement(RR.parts(RR.spec(A.Shape(22, 10, 2, holo=holo)))[0].S, name, 2, holo=holo).text
+             for holo in (False, True)}
+    assert RR.HOLO_KEY not in json.loads(texts[False].split("\n", 2)[1][5:])
+    assert json.loads(texts[True].split("\n", 2)[1][5:])[RR.HOLO_KEY] is True and _with_holo(texts[True], True) == texts[True]
+
+    def statement(text):
+        (tmp_path / "circuit.txt").write_text(text)
+        p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin")], capture_output=True, text=True, check=False)
+        return p.returncode, p.stdout + p.stderr
+
+    bits = {False: 244736, True: 252928}
+    for part_holo in (False, True):
+        for says in (False, True):
+            rc, out = statement(_with_holo(texts[part_holo], says))
+            if says == part_holo:
+                assert rc == 1 and "the verifier's partition object is required" in out, out
+            else:
+                kind = "holo" if says else "plain"
+                why = (f"unit {name} has {bits[part_holo]} input and 2048 output bits, not its {kind} part's {bits[says]} and 2048 "
+                       f"(META {RR.HOLO_KEY}: {str(says).lower()})")
+                assert rc == 1 and why in out, out

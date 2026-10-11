@@ -250,10 +250,11 @@ def rep_rounds(record: dict, stream: str) -> list[list[int]]:
 
 
 class Coins:
-    """The rep's coins in the order the verifier draws them (§6.2: a draw of n coins is one round of n; none is no round)."""
+    """The rep's coins in the order the verifier draws them (§6.2: a draw of n coins is one round of n; none is no round, so
+    a recorded round of no coins, z_partial's in a holo session's `verity_flock.rec_live.holo_rounds`, is skipped)."""
 
     def __init__(self, rounds: Sequence[Sequence[int]]):
-        self.rounds, self.k = list(rounds), 0
+        self.rounds, self.k = [list(r) for r in rounds if r], 0
 
     def vec(self, n: int) -> list[int]:
         if n == 0:
