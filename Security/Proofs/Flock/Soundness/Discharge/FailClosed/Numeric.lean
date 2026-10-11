@@ -194,8 +194,8 @@ theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (F
     rcases tableAt_cases ht dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
     · exact x.specAt_inRangeWide ht (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
         (by rw [FlockVBridge.Family.length_regionsOf]; omega)
-    · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog)) _
-        (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
+    · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
+        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
   · have h1 : (planAt (Reg := Reg) ht dj x₀ S R).length = 1 := rfl
     omega
 
@@ -231,8 +231,8 @@ theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (
     rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
     · exact x.specAt_inRangeWide (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
         (by rw [FlockVBridge.Family.length_regionsOf]; omega)
-    · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog)) _
-        (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
+    · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
+        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
   · have h1 : (planAtH (Reg := Reg) dj x₀ S R).length = 1 := rfl
     omega
 
