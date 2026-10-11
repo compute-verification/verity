@@ -50,7 +50,7 @@ term**: `unit_recOpen` at `keyInst`, when the verifier built `c`'s unit net from
 transcript carries 1 on unit `u`'s constant gate. -/
 theorem keyProg_recOpen (outs : Finset (Fin (keyGates hU n))) (X : Fin (keyGates hU n) → Bool) (u : Fin n) {j : ℕ}
     (hj : j < c.upv) (hone : X (Const.Prog.oneAt (Placed.keyProg c hU n) u) = true)
-    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (p : Ports) (outBits : Array ℕ) {name : String}
     (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hu : c.unit.unitLog ≤ 32) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)

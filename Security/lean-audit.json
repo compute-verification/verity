@@ -1772,12 +1772,15 @@
     "          (List.instGetElemNatLtLength.getElem ss i hi)))",
     "  (hacc :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
-    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "        (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
     "  (hcoef :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "          (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
+    "        1024)",
     "      (Flock.MerkleScheme.rowBytes cf))",
     "  (hdir :",
     "    ∀ (h : Nat),",
@@ -1787,7 +1790,8 @@
     "            (instHAdd.hAdd",
     "              (instHAdd.hAdd",
     "                (instHAdd.hAdd",
-    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "                    (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "                  1024)",
     "                (instHMul.hMul 256 LANES))",
     "              h))",
@@ -1806,7 +1810,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "a55b3e41fe477e035ca10986259778229aff8905511790b11204e492d69d50e8"
+   "type_hash": "9f611943ff184b735430a820ce57b0088ea2bb981470d5b68c2694bb94f777d8"
   },
   "FlockVBridge.laidRows_layout_congr": {
    "owner": "@proofs",
@@ -1826,7 +1830,7 @@
    "signature": [
     "FlockVBridge.laid_recOpen (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (p : FlockVBridge.Ports) (outBits : Array Nat) (v : Nat → Bool)",
+    "  (hH : instLENat.le H 32) (p : FlockVBridge.Ports) (outBits : Array Nat) (v : Nat → Bool)",
     "  (hout :",
     "    instLENat.le (FlockVBridge.recOpenOuts LANES H p).length (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 outBits))",
     "  (h :",
@@ -1865,14 +1869,14 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "10d2fa996828bfc74558d32b261f36285313ca143fa3b2c99909b22130c05dfd"
+   "type_hash": "704017ed8f151c78a8c12c5788c535e4ebb6eba143c307020aa47e5da9b4ff3c"
   },
   "FlockVBridge.laid_unit": {
    "owner": "@proofs",
    "signature": [
     "FlockVBridge.laid_unit (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (v : Nat → Bool)",
+    "  (hH : instLENat.le H 32) (v : Nat → Bool)",
     "  (h :",
     "    FlockSoundness.Discharge.Hm.LaidRows (Flock.RecOpen.unitLaid LANES H)",
     "      (FlockSoundness.Discharge.Hm.inRowsOf (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H))) v)",
@@ -1886,12 +1890,15 @@
     "          (List.instGetElemNatLtLength.getElem ss i hi)))",
     "  (hacc :",
     "    FlockVBridge.ColsHold v",
-    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "        (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
     "  (hcoef :",
     "    FlockVBridge.ColsHold v",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "          (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
+    "        1024)",
     "      (Flock.MerkleScheme.rowBytes c))",
     "  (hdir :",
     "    ∀ (h : Nat),",
@@ -1901,7 +1908,8 @@
     "            (instHAdd.hAdd",
     "              (instHAdd.hAdd",
     "                (instHAdd.hAdd",
-    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "                    (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "                  1024)",
     "                (instHMul.hMul 256 LANES))",
     "              h))",
@@ -1920,7 +1928,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "68af55879e1e2d41a75ed922f7ae3192990c59de949dd9a3201c33a70f7b8f36"
+   "type_hash": "4cdd677c626b4fb5309130838d91026b514333fa0d14c84b55d32384f59fbd92"
   },
   "FlockVBridge.length_recOpenOuts": {
    "owner": "@proofs",
@@ -2005,7 +2013,7 @@
    "signature": [
     "FlockVBridge.sound_recOpen (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (row aux acc coef dirs : List Flock.HmNets.Lin) :",
+    "  (hH : instLENat.le H 32) (row aux acc coef dirs : List Flock.HmNets.Lin) :",
     "  FlockSoundness.Discharge.Hm.Sound (FlockVBridge.recOpen LANES H row aux acc coef dirs) fun z o =>",
     "    ∀ (r a c : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray),",
     "      Eq r.size LANES →",
@@ -2031,7 +2039,7 @@
     "                          rest))"
    ],
    "assumptions": [],
-   "type_hash": "90120213e4ea4b489dedc61ac4d605df6baf9b875065ec4f05e92c797b19fb5a"
+   "type_hash": "20754aa123442ae1ae7b1dbc3ca80ec6faf040eb332d7ad7966e74d69c9b1d33"
   },
   "FlockVBridge.sound_residualForms": {
    "owner": "@proofs",
@@ -2095,12 +2103,15 @@
     "          (List.instGetElemNatLtLength.getElem ss i hi)))",
     "  (hacc :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
-    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "        (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
     "  (hcoef :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "          (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
+    "        1024)",
     "      (Flock.MerkleScheme.rowBytes cf))",
     "  (hdir :",
     "    ∀ (h : Nat),",
@@ -2110,7 +2121,8 @@
     "            (instHAdd.hAdd",
     "              (instHAdd.hAdd",
     "                (instHAdd.hAdd",
-    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "                    (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "                  1024)",
     "                (instHMul.hMul 256 LANES))",
     "              h))",
@@ -2129,7 +2141,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "813f73fd31f0f54511835164ae97d598c78cd3349cd31513264cf2727cca2de0"
+   "type_hash": "474ddb16719b16c2ea9504af75073919a51740155e0f58102fd2710f5a7c1406"
   },
   "FlockVBridge.unit_recOpen": {
    "owner": "@proofs",
@@ -2139,7 +2151,7 @@
     "  (I : P.IsRowsUnit u ((FlockSoundness.Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : Nat} (hj : instLTNat.lt j k)",
     "  (hone : Eq (X (I.wire ((FlockSoundness.Rows.ofNet hB).stack k).one)) Bool.true) (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (p : FlockVBridge.Ports) (outBits : Array Nat) {name : String}",
+    "  (hH : instLENat.le H 32) (p : FlockVBridge.Ports) (outBits : Array Nat) {name : String}",
     "  (hl : Eq (Flock.HmNets.netOf name (FlockVBridge.recOpenLaid LANES H p outBits)) (Except.ok net))",
     "  (hu : instLENat.le net.unitLog 32)",
     "  (hout :",
@@ -2181,7 +2193,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "2f2f312b8fd64a4307cfeb3b72eed182bbf617e9c3dc3ffde5653deb988e314c"
+   "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -10033,7 +10045,7 @@
    ]
   },
   "Flock.RecOpen": {
-   "digest": "1145731f81ef20696aab0a3a1f6141a1c3f88a3a166e91241b470f393ccce8fe",
+   "digest": "cc4a0bcf2f9ca6bed29915b187071ec01a69231060be3e1f2d2233413fb4b9c8",
    "definitions": {
     "Flock.RecOpen.GfS": "4e758955dfda986b6a5b9d74b5d185d2888099d3df70b16f0076774d6f759a71",
     "Flock.RecOpen.GfS.ops": "82ad386d68752b6de1339bf39daa6068672737f748f1cbd7306b1f0a062331fe",
@@ -10058,7 +10070,7 @@
     "Flock.RecOpen.bitsOf": "809d68b3679db66f270612ab447bca86551c4970e4d8e28c227cc499c634282a",
     "Flock.RecOpen.blockAt": "a1fd1b10768307eb0fdada811e59255b7256e56241c23c5fb112806b0951aba6",
     "Flock.RecOpen.byteBit": "994b9593ed9c74dbf9ce3e0e77a659d74b82ff84818b415ea9fa4244d20aa0ce",
-    "Flock.RecOpen.check": "77a8552540a3375052ad76fd6fb136b856c30b992e19553352f2712763947573",
+    "Flock.RecOpen.check": "0972d66a5fbcf4635c40641edd1737fbd8b644c05520b82a07c5f1925d28cb45",
     "Flock.RecOpen.climbFrom": "58f4cd8efb66ed056bb9928e7f0a967e663773b41c818424ebbb3d5ec9adf5c7",
     "Flock.RecOpen.climbRow": "b609cef47ff26e6409b177324fe2aad8cb9bd25279c91a07820d9e98b3f89e4a",
     "Flock.RecOpen.consStructure": "d896d8555c615983e2c9151b833c205e3ea97318fa17e08ed04f5faa1d5f09ab",
@@ -10077,8 +10089,8 @@
     "Flock.RecOpen.params._sparseCasesOn_1": "9d5eff2719c2ab8d5bff8cfeee52d17aaf5e6fc8b7c5879aaebd59995e16b9a5",
     "Flock.RecOpen.params._sparseCasesOn_4": "ca8b48d23b0a1f56fcabf620fd178f4b24a0b74980429fd850cc629c2e4f28f6",
     "Flock.RecOpen.params._sparseCasesOn_5": "e3da4fda206da1b9c7c07bb3ebac1f34a8b814aefb1f1c94925c1f5497bb851a",
-    "Flock.RecOpen.ports": "c993bd3b8e6a130bcb1b3c62b32ecdf2d3c5fbf5bd9cbd729b0c1cbdea36351b",
-    "Flock.RecOpen.recOpen": "25929ce646b49a59f196edb259adec17b8f2beced90d85c78bf676c449e6364b",
+    "Flock.RecOpen.ports": "bb1950e7352057c4ee9e97084cdccb3bd7eda32df6d81b2dd548c15452ac4a45",
+    "Flock.RecOpen.recOpen": "132de311c5accaff97b8e61265349f8a58714242a42a79a1e401536f120657d4",
     "Flock.RecOpen.recOpenNet": "09747d317cb07428f986ef494058e20b386e1828317879ff624f04f91937a626",
     "Flock.RecOpen.recOpenOuts": "cc6f8b9d2ed539a7ee6e91365940174ca47d6d79aec684b60072d40a1b71efae",
     "Flock.RecOpen.recomb": "a64bc2b8915c96f701e5da51a3b0f136de79a5bcca6f24a64dc8597e6984cc41",
@@ -10097,7 +10109,7 @@
     "Flock.RecOpen.unitLaid": "7b29440e214e91d276ae1fcd4a46d57dcd1a5d569680a705a13fe86df02d8d58",
     "Flock.RecOpen.unitName": "20667d31e2f56b6d30575d65fdeac301403d5a5ca598ada4e521dc238dd7c475",
     "Flock.RecOpen.unitNet": "3ccadcff55cadb943a9229990c4b6947d44cfa25b0d8ac88c22a83defcf4b2f0",
-    "Flock.RecOpen.valid": "2a6d47bce636befe8e4522067d7c4b0ce268bed4f3bb023540380ec568aaf119",
+    "Flock.RecOpen.valid": "c75983d3e7540f78626bd938a7d6741210874d33e4c11a600babe4630bdd68c6",
     "Flock.RecOpen.wordPorts": "e0286627e96a3b359833aadd2efe3de01cc338999487b6d06d84ee1ee3a6ccc5",
     "Flock.RecOpen.xorAll": "89c743dc809478a084e99aae65a4d5b9250c2e2c6a6ccfb7f2c283ad87868995",
     "Flock.RecOpen.xorL": "8935e8f3e98775737ddd63b5d3573af33305eb6ccc1f76b2546e9f2d2cd38b2c"
@@ -18534,11 +18546,11 @@
    ]
   },
   "Proofs.Flock.VBridge.RecOpen": {
-   "digest": "5969be187a8906d60556edec80405fbc8fd0f53693893b9caf947549a3f4f15e",
+   "digest": "78d27e0e024bd3a85df6839ad5434c4ff50f03b142c4a6eefa1d5b32e3dc4d54",
    "definitions": {
     "FlockVBridge.consStructure": "97ea7667424a117b1eb102507ed74905f6993792f139eb34cec9362336ccf685",
     "FlockVBridge.consTerm": "b80175e494b438e7f9bc40a60efc00dfd5ca2dfe3a3e8a945fc445dd370b445d",
-    "FlockVBridge.recOpen": "42970f59868957be34b38d39d1d34363bc3a7afb762240b7e09c1d182af13fca"
+    "FlockVBridge.recOpen": "2c10de78b2fdf4de19625306e1a96379bebc404ea411d07f3df8098f8125bafc"
    },
    "guarantees": [
     "FlockVBridge.chainAcc_level",
@@ -18920,20 +18932,20 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "VStar.RecOpen": {
-   "digest": "b2b93f8f12b240108c2927c1dd0810eba98e589610a45db2f8ab05c8ef5460fb",
+   "digest": "51a16de9044057119f94d24560aa5024d3c669acec9fc7ead0c31cd1a786aa5d",
    "definitions": {
     "VStar.ACC_WORDS": "8e4c1df576876ea6055c9c84e5fe74870499ecc17e29f9a4e2ddcfb4d52e1c84",
     "VStar.DIRS_WORDS": "e8673b6ed00729fbf465ae0b975a5b8797dd596b0bee554e588fe204274290e9",
     "VStar.NODE_WORDS": "97dcd5c0d4749642cbab37674fa492e6f135e0c40be1e89bde8cc5d51af829e4",
     "VStar.OUT_WORDS": "2dd93013ac268fb0f1d6c2bbd545f04bf2b4255135e9cdce763ffe520dbf4911",
     "VStar.ROW_BLOCK": "58cf8fac7e605962b3d81fd03289e6932d163822e5c0de309c3f410e92aeed28",
-    "VStar.auxWords": "867d5677f00eec260288740dcbe1b38f376c9ca928cc02cc4672892b999bc9ee",
-    "VStar.checkRecOpen": "1030cb823f15e40cf9693591db5c0208b97a52db44f71798f233efde4195cff9",
+    "VStar.auxWords": "2acb94a102db55c44f6c45ec60f4df819ce6b10452234aa875eef4096e4bc53f",
+    "VStar.checkRecOpen": "a32a2b4dbdb04cabe72c9212ff9a7cc771df29d6c21921bf675ff345ee6fe248",
     "VStar.climbFrom": "5fb9e99b2aed2d5ce6a940dbbebdf7d74ddefc212929957a7782108bff86d61b",
     "VStar.climbRow": "93363204aba4ea4241189b4be6ac01d2b28e001fa644225418043191efd590f4",
     "VStar.coefWords": "120575f7cad8173e503a5e23b3c1a09419e205ae3ad9135afbd611ab8e2ecb25",
     "VStar.consStructure": "f97c90a4881ff1c2f38056c548a630926a2ea002194cb73a99fa1926f4c3179b",
-    "VStar.recOpen": "90059506159764f73ad36501be747bae320bc215d71c31cf23e7672c261f1f89",
+    "VStar.recOpen": "1cae4d7d4fbafc84d69f9bb4c893339e834eb6c460ad7f834ef86d71475fb42f",
     "VStar.recOpenPorts": "bd8996c37eb660d47a41c8cc18553a1440ca600a0ab42e8561a10ba0d97a10fe",
     "VStar.rowWords": "e7c6faaa7357c375eb9917e9950d848d5af09d9630d74b91d22a2cc95a5d2c49",
     "VStar.sibForms": "165af87f9abce7e403021aaddbb728488dc1dfab81ac75e836e2d5f9847a195a",

@@ -904,7 +904,8 @@ def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path
     """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
     PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
     before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
-    for its bits, in an address space of 8 GiB, far below the net's size."""
+    for its bits, in an address space of 8 GiB, far below the net's size. Renamed at the heights `RecOpen_v4` builds, 0
+    to 32 (`aux` one row at 0), it is refused for its bits against `max(1, ⌈H/2⌉)` rows of `aux`; at 33, for its height."""
     import resource
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -913,7 +914,9 @@ def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path
     head = text.index("\n", text.index("CIRCUIT unit ")) + 1
     end = text.index("\n", head)
     fields = text[head:end].split(" ")
-    renamed = text[:head] + " ".join([fields[0], "rec-open/l1000000000-h16", *fields[2:]]) + text[end:]
+
+    def renamed(name):
+        return text[:head] + " ".join([fields[0], name, *fields[2:]]) + text[end:]
 
     def statement(circuit):
         (d / "c.txt").write_text(circuit)
@@ -923,10 +926,14 @@ def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path
 
     p = statement(text)
     assert p.returncode == 0, p.stdout + p.stderr
-    p = statement(renamed)
     ins = 16 * sum(-(-b // 16) for b in bits)
-    opening = 384 * 10**9 + 1024 * 8 + 2048
-    why = f"unit rec-open/l1000000000-h16 has {ins} input and 16 output bits, not rec-open's {opening} and 2048"
+    for lanes, h in [(10**9, 16), (8, 0), (8, 17), (8, 32)]:
+        p = statement(renamed(f"rec-open/l{lanes}-h{h}"))
+        opening = 384 * lanes + 1024 * max(1, -(-h // 2)) + 2048
+        why = f"unit rec-open/l{lanes}-h{h} has {ins} input and 16 output bits, not rec-open's {opening} and 2048"
+        assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
+    p = statement(renamed("rec-open/l8-h33"))
+    why = "rec-open's LANES is a positive multiple of 8 and H is 0 to 32"
     assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
 
 
