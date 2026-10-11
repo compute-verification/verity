@@ -24,8 +24,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import certified as C  # noqa: E402
-import sweep as S  # noqa: E402
+import certified as C
+import sweep as S
 
 SCHEMA = "ra-matmul-chain/v1"
 
@@ -115,16 +115,16 @@ def markdown(doc: dict, verdicts: dict, source: str) -> str:
     ident, rr = doc.get("identity") or {}, doc.get("read_rate") or {}
     clocks = [c.get("sm_mhz") for p in doc["points"] for c in p.get("clocks", []) if "sm_mhz" in c]
     lines = [f"Matmul chain y_(i+1) = act(W_i · y_i), {source}, run {doc.get('run')}, {doc.get('status')}",
-             f"{ident.get('name')} {ident.get('uuid')}, driver {ident.get('driver')}, torch {ident.get('torch')} (CUDA {ident.get('cuda')}); "
-             f"SM clock median {statistics.median(clocks) if clocks else '–'} MHz over {len(clocks)} reps; "
-             f"read rate {_f(rr.get('bytes_per_s') and rr['bytes_per_s'] / 1e9, '.0f')} GB/s ({rr.get('kernel')})"]
+             (f"{ident.get('name')} {ident.get('uuid')}, driver {ident.get('driver')}, torch {ident.get('torch')} (CUDA {ident.get('cuda')}); "
+              f"SM clock median {statistics.median(clocks) if clocks else '–'} MHz over {len(clocks)} reps; "
+              f"read rate {_f(rr.get('bytes_per_s') and rr['bytes_per_s'] / 1e9, '.0f')} GB/s ({rr.get('kernel')})")]
     v = doc.get("verify")
     if v:
         lines.append(f"Retained pass at {v.get('point')}: equals the eager pass {v.get('equals_reference')}, graphed pass gated "
                      f"{v.get('graphed_pass_gated')}; verify_run.py: pass {verdicts.get('pass') or '–'}; control "
                      f"{verdicts.get('control') or '–'} (replay-verified, a development shortcut; the protocol's check is a ZK proof)")
-    lines += ["", "| point | arm | mode | chain ms | overhead | useful TFLOP/s | native GEMM TFLOP/s | GB/s (share of read) | "
-              "W_cert TFLOP/s-eq | compute residual (honest + slack) | Q_cert | S_cert |",
+    lines += ["", ("| point | arm | mode | chain ms | overhead | useful TFLOP/s | native GEMM TFLOP/s | GB/s (share of read) | "
+                   "W_cert TFLOP/s-eq | compute residual (honest + slack) | Q_cert | S_cert |"),
               "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows(doc):
         if "arm" not in r:
@@ -147,8 +147,8 @@ def markdown(doc: dict, verdicts: dict, source: str) -> str:
     if notes:
         lines += ["", "W_cert unproved: " + "; ".join(notes)]
     lines += ["Q_cert: " + C.UNPROVED_Q + ". S_cert: " + C.NO_POUS + ".",
-              "Compute residual: F·T − W_cert as a share of F·T (F the native FP8 chain's rate at the shape, T the arm's chain "
-              "time), split into honest overhead (F·T − ΣW_ref) and soundness slack (ΣW_ref − W_cert)."]
+              ("Compute residual: F·T − W_cert as a share of F·T (F the native FP8 chain's rate at the shape, T the arm's chain "
+               "time), split into honest overhead (F·T − ΣW_ref) and soundness slack (ΣW_ref − W_cert).")]
     return "\n".join(lines) + "\n"
 
 
