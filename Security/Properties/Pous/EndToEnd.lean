@@ -2,6 +2,7 @@ import Properties.Pous
 import Properties.Pous.MemoryChallenger
 import Properties.Identity
 import Models.Pous.Guarantees.P2
+import Models.Pous.Assumptions.P2
 import Definitions.Pous.P2.Cost
 
 /-!
@@ -233,10 +234,9 @@ end Pous.EndToEnd
 
 /-! ## Assumptions
 
-Four new named assumptions, each a `Prop` taken as a hypothesis. `P2RingAuditSecure` and `P2RingReducesToM1p` read only
-`Definitions.Pous` and belong in `Models/Pous/Assumptions/P2.lean` beside `PrimeP16448`; `DeviceIsRingResponder` and
-`CoinsHide` read the code's decoder and draw, so they need an assumptions module on the `security_properties` side, which
-has none yet. -/
+Two new named assumptions, each a `Prop` taken as a hypothesis, beside `P2RingAuditSecure` (in
+`Models.Pous.Assumptions.P2`). `DeviceIsRingResponder` and `CoinsHide` read the code's decoder and draw, so they need an
+assumptions module on the `security_properties` side, which has none yet. -/
 
 namespace Pous.P2.Assumptions
 
@@ -262,25 +262,6 @@ server sees, raises its chance of passing by at most `2^-131`. Relative to `Adm`
 short source. -/
 def CoinsHide (Adm : Prover S → Prop) : Prop :=
   ∀ τ, Adm τ → ∀ (W session : ByteArray), realPr τ W session ≤ unifPr τ W session + (2⁻¹ : ℝ≥0∞) ^ 131
-
-/-- **NEW, conjectured (the math half of `sms-m1-instantiation`, with `seq-root`), the weakest form `EndToEnd` needs.**
-P2 in the ring model at the deployed point is secure at `k = 105` against `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded
-responders: accepted with probability at most `1% + 2^-129 + 2^-130`. False at `D ≥ 32,894` with `Q ≥ 2` and
-`L ≥ 65,789` (`tight_p16448`: the responder recomputes the roots), and at large enough `L` (`not_meetsOn_b19_k88`'s
-truncation, which at `k = 105` needs about 167 dropped bits per block), so it is a hypothesis only at the `(D, Q, L)`
-the certificate's deadline gives. -/
-def P2RingAuditSecure (D Q L : ℕ) : Prop :=
-  AuditSecureOn sch .sequential S D Q L K (ENNReal.ofReal Params.δ) ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)
-
-/-- **NEW, conjectured (`sms-m1-instantiation` as the spec states it, P2–M1-SGI).** Not a hypothesis of `EndToEnd`: the
-form in which `P2RingAuditSecure` follows from the proved `m1p` row (`P2ErrorSplitB19Uncond`, `λ = 128`). Every
-ring-model responder is matched, up to `2^-130`, by an `m1p` responder with `128` more bits of state per block and
-`2^20` forward queries per answer. -/
-def P2RingReducesToM1p (D Q L : ℕ) : Prop :=
-  ∀ (W : Bits sch.n) (A₁ : Preprocessor sch S) (A₂ : SeqResponderOn sch S D Q L),
-    let m := m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432
-    ∃ (W' : Bits m.n) (D' : ℕ) (A₁' : Preprocessor m (S + 128 * 2 ^ 19)) (A₂' : SeqResponder m (S + 128 * 2 ^ 19) D' (2 ^ 20)),
-      pr (seqAcceptsOn sch K W A₁ A₂) ≤ pr (seqAccepts m K W' A₁' A₂') + (2⁻¹ : ℝ≥0∞) ^ 130
 
 end Pous.P2.Assumptions
 
