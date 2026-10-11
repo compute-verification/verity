@@ -4,22 +4,22 @@ import Properties.NetworkCertifier
 /-!
 # The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
 
-`verity/network-records/v1` is the network audit's verifier of record: `audit.py`'s `Audit` over raw, committed and
+`verity/network-records/v2` is the network audit's verifier of record: `audit.py`'s `Audit` over raw, committed and
 certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
 inputs (the parameters, the published records, the evidence) and never over its internals: every link-window of the
 unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for
 the bytes `Core.Protocol.answer` decodes. The check keeps each payload as its bytes (`Records.ByteEvidence`), and the
-conclusion reads that evidence as v2 reads the same JSON (`ByteEvidence.toEvidence`, each payload its bits, which
-`RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Properties.Proofs.NetworkRecords` proves both, and that the check accepts
+conclusion reads that evidence as `verity/network-certificate/v3` reads the same JSON (`ByteEvidence.toEvidence`, each
+payload its bits, which `RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Properties.Proofs.NetworkRecords` proves both, and that the check accepts
 every unit whose records are the Program's (`programRecords_accepted`, completeness).
 
 The Program's grid of an egress link-window is `programGrid`, rows of `NetworkCertifier.expectedRow` under the syncs
 the link declares, which the check reads through `Records.expectedGridsOfBytes` (`RecordsBytes.expectedGridsOfBytes_eq`). Nothing is
 assumed of SHA-256, SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
 and any grid of `B`-byte frames with that digest holds the Program's frames, or two distinct strings the two digests
-hash have one SHA-256 digest. A certified record's certificate verifies under the parameters' key (LMS's verifier
-accepts it; that only the key's holder could sign is not claimed), and its head is the record head of the Program's
-grid, or two distinct strings the two heads' digests hash have one SHA-512 digest.
+hash have one SHA-256 digest. A certified record's certificate verifies under the parameters' key over its message in
+their certifier session (LMS's verifier accepts it; that only the key's holder could sign is not claimed), and its head
+is the record head of the Program's grid, or two distinct strings the two heads' digests hash have one SHA-512 digest.
 -/
 
 open NetworkCheck hiding Params
@@ -45,11 +45,11 @@ def Complete : Records.Published → Prop
   | .certified r => r.head.status = none ∧ r.head.deadline = true
 
 /-- `r`'s certificate is the key's (its identifier `I`), names `(d, l, w)`, signs the head's digest `dg`, and its LMS
-signature verifies under the key over `certificateMessage` of them. -/
+signature verifies under the key over `certificateMessage` of them in the parameters' certifier session. -/
 def CertificateVerifies (p : Params) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) : Prop :=
   r.head.digest = .ok dg ∧ r.certificate.digest = dg ∧ r.certificate.keyId = p.key.extract 0 16 ∧
     r.certificate.link = l ∧ r.certificate.direction = d ∧ r.certificate.window = w ∧
-    ∃ m, certificateMessage (p.key.extract 0 16) l d w dg = .ok m ∧ LmsVerifies p m r.certificate.signature
+    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w dg = .ok m ∧ LmsVerifies p m r.certificate.signature
 
 /-! ## What a committed record's digest hashes (`commitment.py`) -/
 

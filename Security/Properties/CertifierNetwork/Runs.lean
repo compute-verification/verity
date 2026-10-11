@@ -17,8 +17,20 @@ recorded grid) is now a fact about the device's code.
 
 Nothing is assumed of SHA-512 or LMS. Each claim about an accepted run holds, or the run's own data carries a break:
 two distinct strings of `runStrings`, the strings the check and the device hash, with one SHA-512 digest
-(`cr/sha-512`), or a certificate of the commitment whose signature verifies under the device's key over its message
-(`certMessage`) though the device never signed that message (`Signed`, `euf-cma/lms-sha512-n64`).
+(`cr/sha-512`), or a certificate of the commitment whose signature verifies under the device's key over its message in
+this run's certifier session (`certMessage x.issuer.session`) though the device never signed that message in this run
+(`Signed`, `euf-cma/lms-sha512-n64`).
+
+**Other runs of the key.** The session id is the challenger's draw, and the check's parameters name it, so the
+forgery disjunct names a message of this run alone. Reading it as a forgery of the key also needs that no other run of
+the key signed that message: (a) the ids of two sessions differ, by the challenger's draw; (b) the device runs once per
+session id: it signs nothing when its signing state has already started its issuer's session (`DeviceInput.sessions`,
+`deviceCode`); (c) no other run's message input has the SHA-512 digest of this run's. (c) is `cr/sha-512` over the
+key's whole signing history, the hash-then-sign composition behind `euf-cma/lms-sha512-n64`, not a break tied to the
+run: only a model of the key's runs would make it one. (b), and the one-time use of each leaf that the forgery reading
+already rests on (`DeviceInput.next` is the host's), rest on one presumption: the device's signing state (next leaf,
+used session ids) is not rolled back (claim `TBD`). No statement here takes it as a premise, since a statement of one
+run can't name other runs.
 
 `Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
@@ -35,12 +47,13 @@ namespace Properties.NetworkCertifier
 
 /-! ## The device -/
 
-/-- What the certifier device is given in one run: its configuration, its issuer (its key), the signer's next unused
-leaf and the trace of events the world gives it. -/
+/-- What the certifier device is given in one run: its configuration, its issuer (its key and certifier session), the
+signer's state (its next unused leaf and the session ids it has started) and the trace of events the world gives it. -/
 structure DeviceInput where
   config : Config
   issuer : Issuer
   next : Nat
+  sessions : List ByteArray
   trace : List Event
 
 /-- What the device returns: the records it publishes and the certificates it signs. -/
@@ -59,12 +72,16 @@ def issued (c : Config) : Issuer → Nat → List Record → List CertifiedRecor
     | .ok (i', cr?) => cr?.toList ++ issued c i' (advance i next) rs
     | .error _ => []
 
-/-- **The device's code**: the records `step` publishes over the trace, and the certificates of them its issuer signs. -/
+/-- **The device's code**: the records `step` publishes over the trace, and the certificates of them its issuer signs;
+none where the signer's state has started the issuer's session already (it is in `x.sessions`), since the state refuses
+to start it again (`Core.World.start`). -/
 def deviceCode (x : DeviceInput) : DeviceOutput :=
-  ⟨published x.config x.trace, issued x.config x.issuer x.next (published x.config x.trace)⟩
+  ⟨published x.config x.trace, if x.sessions.any (fun s => decide (s = x.issuer.session)) then []
+    else issued x.config x.issuer x.next (published x.config x.trace)⟩
 
-/-- The check's parameters of the device's unit: its configuration's links, windows, grids and Σ_sync, and its key. -/
-def deviceParams (x : DeviceInput) : NetworkCheck.Check.Params := unitParams x.config x.issuer.key
+/-- The check's parameters of the device's unit: its configuration's links, windows, grids and Σ_sync, its key and its
+issuer's certifier session. -/
+def deviceParams (x : DeviceInput) : NetworkCheck.Check.Params := unitParams x.config x.issuer.key x.issuer.session
 
 /-- The egress grid's parameters digest under Σ_sync, the one the check recomputes heads under (empty where it has
 none; an accepted unit has one). -/
@@ -73,20 +90,21 @@ def egressDigest (p : NetworkCheck.Check.Params) : ByteArray :=
 
 /-! ## The breaks -/
 
-/-- What the device hashes: each certificate's head and its message's input, and the frame tree of each record it
-published, under its grid. -/
-def deviceStrings (c : Config) (out : DeviceOutput) : List ByteArray :=
+/-- What the device hashes: each certificate's head and its message's input in certifier session `session`, and the
+frame tree of each record it published, under its grid. -/
+def deviceStrings (c : Config) (session : ByteArray) (out : DeviceOutput) : List ByteArray :=
   out.certificates.flatMap (fun cr => headStrings cr.head ++
-    (messageInput cr.certificate.keyId cr.certificate.link cr.certificate.direction cr.certificate.window
+    (messageInput cr.certificate.keyId session cr.certificate.link cr.certificate.direction cr.certificate.window
       cr.certificate.digest).toOption.toList) ++
   out.records.flatMap fun r => treeStrings (gridOf c r) r.grid
 
 /-- The strings the run hashes: the check's (`checkStrings`) and the device's (`deviceStrings`). -/
 def runStrings (x : DeviceInput) (out : DeviceOutput) (c : Commitment) (e : Evidence) : List ByteArray :=
-  checkStrings (deviceParams x) c e (egressDigest (deviceParams x)) ++ deviceStrings x.config out
+  checkStrings (deviceParams x) c e (egressDigest (deviceParams x)) ++ deviceStrings x.config x.issuer.session out
 
-/-- The messages the device signs: each of its certificates' own message. -/
-def Signed (out : DeviceOutput) (m : ByteArray) : Prop := ∃ cr ∈ out.certificates, certMessage (certified cr) = some m
+/-- The messages the device signs in certifier session `session`: each of its certificates' own message in it. -/
+def Signed (session : ByteArray) (out : DeviceOutput) (m : ByteArray) : Prop :=
+  ∃ cr ∈ out.certificates, certMessage session (certified cr) = some m
 
 /-! ## (5a) An accepted run's records -/
 
@@ -105,15 +123,16 @@ def ProgramRecords (x : DeviceInput) (out : DeviceOutput) (e : Evidence) : Prop 
 /-- **An accepted run's records are the Program's (5a).** For every input of the device and every commitment and
 evidence the check accepts under the device's parameters, if the device runs as built, its records of the `W` windows
 are the Program's (`ProgramRecords`); or two distinct strings the run hashes have one SHA-512 digest, or a certificate of
-the commitment verifies under the device's key over a message the device never signed. -/
+the commitment verifies under the device's key over its message in this run's session, which the device never signed
+in this run (the module docstring reads it across the key's runs). -/
 def AcceptedRowsAreProgramRows : Prop :=
   ∀ (device : DeviceInput → DeviceOutput) (x : DeviceInput) (c : Commitment) (e : Evidence),
     protocol.Accepts (deviceParams x) c e → NetTiming.DeviceIntact device deviceCode →
     ProgramRecords x (device x) e ∨
     (∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
       Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
-    ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies (deviceParams x) m r.certificate.signature ∧
-      ¬ Signed (device x) m
+    ∃ r ∈ c.records.toList, ∃ m, certMessage x.issuer.session r = some m ∧
+      LmsVerifies (deviceParams x) m r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) m
 
 /-! ## (5b) An accepted run is a run of the certifier program -/
 
@@ -166,25 +185,27 @@ def RunIsProgramRun (x : DeviceInput) (out : DeviceOutput) (e : Evidence) : Prop
 /-- **An accepted run is a run of the certifier program under the declared advice (5b).** For every input of the device
 and every commitment and evidence the check accepts under the device's parameters, if the device runs as built, every
 observation sequence read off its run is accepted by the reference's constant-rate Program (`RunIsProgramRun`); or, as
-in `AcceptedRowsAreProgramRows`, the run's strings hold a SHA-512 collision or its certificates an LMS forgery. -/
+in `AcceptedRowsAreProgramRows`, the run's strings hold a SHA-512 collision or its certificates a message of this run's
+session the device never signed in it. -/
 def AcceptedRunsAreProgramRuns : Prop :=
   ∀ (device : DeviceInput → DeviceOutput) (x : DeviceInput) (c : Commitment) (e : Evidence),
     protocol.Accepts (deviceParams x) c e → NetTiming.DeviceIntact device deviceCode →
     RunIsProgramRun x (device x) e ∨
     (∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
       Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
-    ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies (deviceParams x) m r.certificate.signature ∧
-      ¬ Signed (device x) m
+    ∃ r ∈ c.records.toList, ∃ m, certMessage x.issuer.session r = some m ∧
+      LmsVerifies (deviceParams x) m r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) m
 
-/-- `o` is the observation sequence of an accepted run of `device` on input `x` with configuration `cfg` and key `key`,
-commitment `c`, evidence `e` and content advice `a`: the check accepts the unit, the boundary links `linkOf` are the
-device's, `o` `Observes` the device's records, and its opened frames are the ones `e` opens. -/
+/-- `o` is the observation sequence of an accepted run of `device` on input `x` with configuration `cfg` and key `key`
+(in the session of `x`'s issuer), commitment `c`, evidence `e` and content advice `a`: the check accepts the unit, the
+boundary links `linkOf` are the device's, `o` `Observes` the device's records, and its opened frames are the ones `e`
+opens. -/
 def AcceptedRun (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat} {In Ac : Type}
     (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String)
     (o : List (NetTiming.Obs 1 K cfg.egress.allocation)) (x : DeviceInput) (c : Commitment) (e : Evidence) (a : Ac) :
     Prop :=
-  x.config = cfg ∧ x.issuer.key = key ∧ protocol.Accepts (unitParams cfg key) c e ∧
+  x.config = cfg ∧ x.issuer.key = key ∧ protocol.Accepts (unitParams cfg key x.issuer.session) c e ∧
     (∀ κ, linkOf κ ∈ [cfg.egressLink, cfg.ingressLink]) ∧ Observes cfg (device x) linkOf o ∧
     OpensFrames cfg e frames a op o
 
@@ -198,7 +219,7 @@ def AcceptedObservations (cfg : Config) (key : Lms.PrivateKey) (device : DeviceI
 
 /-- The accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`, or some accepted run carries a
 break: two distinct strings it hashes with one SHA-512 digest, or a certificate that verifies under the device's key
-over a message the device never signed. -/
+over its message in the run's session, which the device never signed in that run. -/
 def ObservationsBounded (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat}
     {In Ac : Type} [Fintype Ac] (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat) : Prop :=
@@ -208,8 +229,8 @@ def ObservationsBounded (cfg : Config) (key : Lms.PrivateKey) (device : DeviceIn
   ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
     ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
         Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
-      ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies (deviceParams x) m r.certificate.signature ∧
-        ¬ Signed (device x) m)
+      ∃ r ∈ c.records.toList, ∃ m, certMessage x.issuer.session r = some m ∧
+        LmsVerifies (deviceParams x) m r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) m)
 
 /-- **What accepted runs can carry (Theorem 3 for the check).** For a device that runs as built, of every configuration
 and key, the observation sequences of its accepted runs number at most `#Ac · |Σ_sync|^W · D^(W·T)`

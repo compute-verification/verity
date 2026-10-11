@@ -261,8 +261,8 @@ def sessionBytes : Nat := 32
 /-- What `certificate_message` hashes:
 `[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `messageTag`
 (`verity/network-certificate-message/v2`, LMS's network-certificate role tag, the message's own and distinct from the ids
-of the checks that read it, `verity/network-certificate/v3` and `verity/network-records/v2`); refused unless the digest is 64 bytes, the window a u64, the session 32 bytes
-and I 16. -/
+of the checks that read it, `verity/network-certificate/v3` and `verity/network-records/v2`); refused unless the digest
+is 64 bytes, the window a u64, the session 32 bytes and I 16. -/
 def messageInput (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
     (digest : ByteArray) : E ByteArray := do
   if digest.size ≠ digestBytes then throw "a record digest is 64 bytes"
