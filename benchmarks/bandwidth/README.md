@@ -1,8 +1,8 @@
 # The bandwidth audit's GPU tagger
 
 The honest prover's step of the bandwidth audit v0 (`verity/core/protocols/bandwidth/PROTOCOL.md`) on an RTX PRO 6000:
-every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for both tag
-constructions (`gf31-poly/v1` and `ro-sha512/v1`).
+every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
+constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
 
 - `tagger.cu` holds the kernels and builds two ways: `bwtag`, which checks the device's roots against the reference and
   then times, and `libbwtag.so`, a C ABI for a harness that holds `E` in its own device buffer. Its header comment
@@ -16,12 +16,12 @@ constructions (`gf31-poly/v1` and `ro-sha512/v1`).
   `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
   lists the outputs.
 - `summarize.py` writes `summary.json`: the honest pass against the raw device read, the skip curve, the PCIe rates, the
-  windows, and `audit.bound` at the measured numbers.
+  windows, and `audit.bound` at the measured numbers for the certified tags.
 
 The store is a generated test store (`reference.block`, the bandwidth vectors' blocks) under P2's geometry at its
 registered point: 2^19 blocks of 2,056 bytes. It is not a P2 encoding. The audit reads only the blocks and their tree
 under `vk`, so a generated store exercises the same work.
 
-`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 constants read out of
-`tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
+`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
+of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
 Run it with `uv run tools/verity/check/suites.py benchmarks/bandwidth`.

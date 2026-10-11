@@ -452,6 +452,14 @@ __global__ void __launch_bounds__(RO_WARPS * 32, 4) ro_kernel(const uint64_t* __
 
 __device__ __forceinline__ uint32_t bswap32(uint32_t x) { return __byte_perm(x, 0, 0x0123); }
 
+// A streaming load whose L2 miss fetches the whole 256-byte block: a warp reads 32 rows 64 bytes at a time, and without
+// the hint each step reopens a DRAM page per row.
+__device__ __forceinline__ uint64_t ld_l2_256(const uint64_t* p) {
+  uint64_t v;
+  asm("ld.global.nc.L1::no_allocate.L2::256B.u64 %0, [%1];" : "=l"(v) : "l"(p));
+  return v;
+}
+
 constexpr int B3_WARPS = 4;
 constexpr int B3S = 9;  // shared-memory row stride, in u64
 
@@ -470,7 +478,7 @@ __global__ void __launch_bounds__(B3_WARPS * 32, 4) b3_kernel(const uint64_t* __
 #pragma unroll
     for (int i = 0; i < 8; ++i) {
       const int r = 4 * i + sub, e = 8 * g - 1 + wd;
-      pre[i] = base + r < count && e >= 0 ? __ldcs(E8 + (base + r) * ROW_U64 + e) : 0;
+      pre[i] = base + r < count && e >= 0 ? ld_l2_256(E8 + (base + r) * ROW_U64 + e) : 0;
     }
   };
   load(0);
@@ -505,8 +513,8 @@ __global__ void __launch_bounds__(B3_WARPS * 32, 4) b3_kernel(const uint64_t* __
   uint32_t m[16], cv2[8], p[8], y[8];
   uint64_t e255 = 0, e256 = 0;
   if (j < count) {
-    e255 = __ldcs(E8 + j * ROW_U64 + 255);
-    e256 = __ldcs(E8 + j * ROW_U64 + 256);
+    e255 = ld_l2_256(E8 + j * ROW_U64 + 255);
+    e256 = ld_l2_256(E8 + j * ROW_U64 + 256);
   }
 #pragma unroll
   for (int i = 0; i < 16; ++i) m[i] = 0;
