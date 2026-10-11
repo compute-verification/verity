@@ -146,8 +146,8 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     monkeypatch.setattr(TG, "suite", lambda: SUITE)
     for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
         assert TG.definition(fid) is SUITE[fid]
-    [res] = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
-    assert TG.definition(res) is SUITE[res]
+    res = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
+    assert res and all(TG.definition(fid) is SUITE[fid] for fid in res)
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
 
@@ -597,6 +597,9 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     r = json.loads(out.read_text())
     assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["Bf16ToF32_v1", "RoPEHead_v1{D=8}"]
     assert r["summary"]["ok"] and all(t["kind"] == "definition" for t in r["targets"])
+    assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-ands", "1", "--out", str(out), "-q"]) == 0
+    [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
+    assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
     fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
     assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing

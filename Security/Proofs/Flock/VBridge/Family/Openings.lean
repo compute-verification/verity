@@ -130,7 +130,7 @@ theorem colOf_eq (Q : VStmt) (bits : Q.Bits) (u : Fin Q.nv) (h : 0 < Q.c.upv) :
   funext fun _ => dite_eq_left h
 
 /-- The first column of `acc` in the verifier's opening unit (`RecOpen.ports`: `row`, then `aux`, then `acc`). -/
-abbrev accCol (LANES H : ℕ) : ℕ := 128 * LANES + 1024 * ((H + 1) / 2)
+abbrev accCol (LANES H : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((H + 1) / 2)
 
 /-- The first output column of the verifier's opening unit (`unit_check`). -/
 noncomputable abbrev outCol (LANES H : ℕ) : ℕ :=

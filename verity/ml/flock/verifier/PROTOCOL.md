@@ -1094,8 +1094,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   `m > 35` (no Fast100 schedule exists above it).
 - **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
   soundness package's `Stmt.InRange`: `k_log ≤ 27`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
-  and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
-  check accepts exactly that range.
+  and not only the writer, accepts only statements the proved bound covers. The pinned statement is
+  `flock_verify_sound_205` (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean`): every statement
+  accepted without `--zk` carries the 2^-205 per-table bound, with no range hypothesis, since acceptance gives the range.
+  `checkInRange_ok` is the lemma that says the check accepts exactly that range.
 
 ### 16.6 frame-v3 roots
 
@@ -1224,15 +1226,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
   (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
-  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16` (`rec_open` builds
-    `0 ≤ H ≤ 32`, reading the side bits above 16 from `dirs`' word 1 and giving `H = 0` one unread `aux` row; this verifier
-    refuses those heights until `Flock.RecOpen` does the same);
-  - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
-    verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
-    allow;
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `0 ≤ H ≤ 32` (the side bits
+    are `dirs`' words 0 and 1, and at `H = 0` there is no climb);
+  - its input ports must total `384·LANES + 1024·max(1, ⌈H/2⌉) + 2048` bits and its output ports 2048, compared before
+    the verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's
+    rows allow;
   - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
-    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
-    outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
+    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·max(1, ⌈H/2⌉)` (at `H = 0` one row the net does
+    not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
+    per word.
 
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
@@ -1779,7 +1781,7 @@ is the article's recursion caveat, applied to the slots of one block.
 | 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under the scheme's collision resistance (SHA-256, or SHA-512 on the target statement; an explicit collision extractor) | 4a; Merkle 3 |
 | 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
 | 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
-| 1e glue | one theorem, `FailClosed.flock_verify_sound`, over every statement `verify` accepts, `setupH`'s and `Stmt.setupHidden`'s (§16.13, §16.15): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. Without `--zk`, no zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
+| 1e glue | one theorem, `FailClosed.flock_verify_sound`, over every statement `verify` accepts, `setupH`'s and `Stmt.setupHidden`'s (§16.13, §16.15): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, except with probability δ. That the public file's `frame_v3` roots, domains and schemas are those of its `b ‖ c` rows and output words is the verifier's native check (`checkPublic`, §16.10), stated deterministically by `FailClosed.flock_verify_public_ties`, not by `flock_verify_sound`. Without `--zk`, no zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
 | 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. The field code is proved to be GF(2^128) and K (level 3, below). What remains: the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
 | 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
 

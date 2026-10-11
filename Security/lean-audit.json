@@ -1306,6 +1306,29 @@
    "assumptions": [],
    "type_hash": "81a4e1cc63cce79afc4fef9d1034d2b90dd0084697f853715b87fb454bd7eeed"
   },
+  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties (zk : Bool) (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (own : Array Flock.Registered.Port) (t : FlockSoundness.Discharge.Exec.Transcript)",
+    "  (h :",
+    "    Or (FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts zk I t)",
+    "      (FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR zk I own t)) :",
+    "  Exists fun spec =>",
+    "    Exists fun sts =>",
+    "      And",
+    "        (Eq",
+    "          (FlockSoundness.Discharge.Exec.setupOf (ite (Eq zk Bool.true) (FlockSoundness.Discharge.ZkExec.zkInputs I) I)",
+    "            t.record)",
+    "          (Except.ok { fst := spec, snd := sts }))",
+    "        (And (instLTNat.lt 0 sts.size)",
+    "          (∀ (j : Nat) (hj : instLTNat.lt j sts.size),",
+    "            FlockSoundness.Discharge.FailClosed.PublicTies I.tags.hiddenOutputs",
+    "              (Array.instGetElemNatLtSize.getElem sts j hj).c (Array.instGetElemNatLtSize.getElem sts j hj).pub))"
+   ],
+   "assumptions": [],
+   "type_hash": "29fb0578e4a2ad556ce3a858751abd5ef4411768d115f3b8a8400674b4720412"
+  },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": {
    "owner": "@proofs",
    "signature": [
@@ -1333,6 +1356,20 @@
    ],
    "assumptions": [],
    "type_hash": "bfebc7008d7efa43d9ec61b0f3ceb4b0682621cf299c32df9bd6dde4907c0fb3"
+  },
+  "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205 (I : FlockSoundness.Discharge.Exec.Inputs) :",
+    "  And",
+    "    (if hh : Eq I.tags.hiddenOutputs Bool.true then FlockSoundness.Discharge.FailClosed.SoundExecH205 I hh",
+    "    else FlockSoundness.Discharge.FailClosed.SoundExec205 I ⋯)",
+    "    (∀ (own : Array Flock.Registered.Port) (t : FlockSoundness.Discharge.Exec.Transcript),",
+    "      FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR Bool.false I own t →",
+    "        FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts Bool.false I t)"
+   ],
+   "assumptions": [],
+   "type_hash": "2e1b4856d877c8fc93c72239dd6ea29582e05ffb3d969c60cade2a7942e679a5"
   },
   "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1": {
    "owner": "@proofs",
@@ -1772,12 +1809,15 @@
     "          (List.instGetElemNatLtLength.getElem ss i hi)))",
     "  (hacc :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
-    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "        (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
     "  (hcoef :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "          (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
+    "        1024)",
     "      (Flock.MerkleScheme.rowBytes cf))",
     "  (hdir :",
     "    ∀ (h : Nat),",
@@ -1787,7 +1827,8 @@
     "            (instHAdd.hAdd",
     "              (instHAdd.hAdd",
     "                (instHAdd.hAdd",
-    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "                    (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "                  1024)",
     "                (instHMul.hMul 256 LANES))",
     "              h))",
@@ -1806,7 +1847,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "a55b3e41fe477e035ca10986259778229aff8905511790b11204e492d69d50e8"
+   "type_hash": "9f611943ff184b735430a820ce57b0088ea2bb981470d5b68c2694bb94f777d8"
   },
   "FlockVBridge.laidRows_layout_congr": {
    "owner": "@proofs",
@@ -1826,7 +1867,7 @@
    "signature": [
     "FlockVBridge.laid_recOpen (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (p : FlockVBridge.Ports) (outBits : Array Nat) (v : Nat → Bool)",
+    "  (hH : instLENat.le H 32) (p : FlockVBridge.Ports) (outBits : Array Nat) (v : Nat → Bool)",
     "  (hout :",
     "    instLENat.le (FlockVBridge.recOpenOuts LANES H p).length (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 outBits))",
     "  (h :",
@@ -1865,14 +1906,14 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "10d2fa996828bfc74558d32b261f36285313ca143fa3b2c99909b22130c05dfd"
+   "type_hash": "704017ed8f151c78a8c12c5788c535e4ebb6eba143c307020aa47e5da9b4ff3c"
   },
   "FlockVBridge.laid_unit": {
    "owner": "@proofs",
    "signature": [
     "FlockVBridge.laid_unit (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (v : Nat → Bool)",
+    "  (hH : instLENat.le H 32) (v : Nat → Bool)",
     "  (h :",
     "    FlockSoundness.Discharge.Hm.LaidRows (Flock.RecOpen.unitLaid LANES H)",
     "      (FlockSoundness.Discharge.Hm.inRowsOf (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H))) v)",
@@ -1886,12 +1927,15 @@
     "          (List.instGetElemNatLtLength.getElem ss i hi)))",
     "  (hacc :",
     "    FlockVBridge.ColsHold v",
-    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "        (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
     "  (hcoef :",
     "    FlockVBridge.ColsHold v",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "          (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
+    "        1024)",
     "      (Flock.MerkleScheme.rowBytes c))",
     "  (hdir :",
     "    ∀ (h : Nat),",
@@ -1901,7 +1945,8 @@
     "            (instHAdd.hAdd",
     "              (instHAdd.hAdd",
     "                (instHAdd.hAdd",
-    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "                    (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "                  1024)",
     "                (instHMul.hMul 256 LANES))",
     "              h))",
@@ -1920,7 +1965,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "68af55879e1e2d41a75ed922f7ae3192990c59de949dd9a3201c33a70f7b8f36"
+   "type_hash": "4cdd677c626b4fb5309130838d91026b514333fa0d14c84b55d32384f59fbd92"
   },
   "FlockVBridge.length_recOpenOuts": {
    "owner": "@proofs",
@@ -2005,7 +2050,7 @@
    "signature": [
     "FlockVBridge.sound_recOpen (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (row aux acc coef dirs : List Flock.HmNets.Lin) :",
+    "  (hH : instLENat.le H 32) (row aux acc coef dirs : List Flock.HmNets.Lin) :",
     "  FlockSoundness.Discharge.Hm.Sound (FlockVBridge.recOpen LANES H row aux acc coef dirs) fun z o =>",
     "    ∀ (r a c : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray),",
     "      Eq r.size LANES →",
@@ -2031,7 +2076,7 @@
     "                          rest))"
    ],
    "assumptions": [],
-   "type_hash": "90120213e4ea4b489dedc61ac4d605df6baf9b875065ec4f05e92c797b19fb5a"
+   "type_hash": "20754aa123442ae1ae7b1dbc3ca80ec6faf040eb332d7ad7966e74d69c9b1d33"
   },
   "FlockVBridge.sound_residualForms": {
    "owner": "@proofs",
@@ -2095,12 +2140,15 @@
     "          (List.instGetElemNatLtLength.getElem ss i hi)))",
     "  (hacc :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
-    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "        (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
     "  (hcoef :",
     "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "          (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
+    "        1024)",
     "      (Flock.MerkleScheme.rowBytes cf))",
     "  (hdir :",
     "    ∀ (h : Nat),",
@@ -2110,7 +2158,8 @@
     "            (instHAdd.hAdd",
     "              (instHAdd.hAdd",
     "                (instHAdd.hAdd",
-    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES)",
+    "                    (instHMul.hMul 1024 (Nat.instMax.max 1 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))))",
     "                  1024)",
     "                (instHMul.hMul 256 LANES))",
     "              h))",
@@ -2129,7 +2178,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "813f73fd31f0f54511835164ae97d598c78cd3349cd31513264cf2727cca2de0"
+   "type_hash": "474ddb16719b16c2ea9504af75073919a51740155e0f58102fd2710f5a7c1406"
   },
   "FlockVBridge.unit_recOpen": {
    "owner": "@proofs",
@@ -2139,7 +2188,7 @@
     "  (I : P.IsRowsUnit u ((FlockSoundness.Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : Nat} (hj : instLTNat.lt j k)",
     "  (hone : Eq (X (I.wire ((FlockSoundness.Rows.ofNet hB).stack k).one)) Bool.true) (ms : Flock.MerkleScheme)",
     "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
-    "  (hH : instLENat.le H 16) (p : FlockVBridge.Ports) (outBits : Array Nat) {name : String}",
+    "  (hH : instLENat.le H 32) (p : FlockVBridge.Ports) (outBits : Array Nat) {name : String}",
     "  (hl : Eq (Flock.HmNets.netOf name (FlockVBridge.recOpenLaid LANES H p outBits)) (Except.ok net))",
     "  (hu : instLENat.le net.unitLog 32)",
     "  (hout :",
@@ -2181,7 +2230,7 @@
     "        rest))"
    ],
    "assumptions": [],
-   "type_hash": "2f2f312b8fd64a4307cfeb3b72eed182bbf617e9c3dc3ffde5653deb988e314c"
+   "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -3310,6 +3359,10 @@
       "outcome": "none"
      }
     ]
+   },
+   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
+    "function": ["Flock.Stmt.setupTables", "Flock.verify", "Flock.Zk.verify", "Flock.ProvedScope.check"],
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3618,7 +3671,8 @@
    "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4."
+   "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
+   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7060,7 +7114,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7114,7 +7170,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7248,7 +7306,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7347,7 +7407,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7405,7 +7467,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7474,7 +7538,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7517,7 +7583,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7634,7 +7702,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7718,7 +7788,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7836,7 +7908,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7895,7 +7969,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -7992,7 +8068,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8153,7 +8231,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8234,7 +8314,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8377,7 +8459,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8571,7 +8655,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8690,7 +8776,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8740,7 +8828,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8827,7 +8917,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8892,7 +8984,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -8952,7 +9046,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9047,7 +9143,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9101,7 +9199,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9185,7 +9285,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9263,7 +9365,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9429,7 +9533,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9532,7 +9638,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9568,7 +9676,12 @@
     "Flock.ProvedScope.v1Ports": "3baccedf9ea33ffa406d947480c251a41a4ef9320a8f3791c075903ab956f316",
     "Flock.ProvedScope.v2Row": "7a9c3a01dd442dfeeea74d7b9c2ea0c6b30b87df3f8a99f56996c3fb05057321"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit", "FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "Flock.SecurityProofs.PublicAudit",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Flock.Public": {
    "digest": "26a84410cec36c619a664304e97bb672689ab0d85c2a7ff2ea695bae683e0491",
@@ -9617,7 +9730,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9711,7 +9826,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -9766,7 +9883,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10017,7 +10136,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10033,7 +10154,7 @@
    ]
   },
   "Flock.RecOpen": {
-   "digest": "1145731f81ef20696aab0a3a1f6141a1c3f88a3a166e91241b470f393ccce8fe",
+   "digest": "cc4a0bcf2f9ca6bed29915b187071ec01a69231060be3e1f2d2233413fb4b9c8",
    "definitions": {
     "Flock.RecOpen.GfS": "4e758955dfda986b6a5b9d74b5d185d2888099d3df70b16f0076774d6f759a71",
     "Flock.RecOpen.GfS.ops": "82ad386d68752b6de1339bf39daa6068672737f748f1cbd7306b1f0a062331fe",
@@ -10058,7 +10179,7 @@
     "Flock.RecOpen.bitsOf": "809d68b3679db66f270612ab447bca86551c4970e4d8e28c227cc499c634282a",
     "Flock.RecOpen.blockAt": "a1fd1b10768307eb0fdada811e59255b7256e56241c23c5fb112806b0951aba6",
     "Flock.RecOpen.byteBit": "994b9593ed9c74dbf9ce3e0e77a659d74b82ff84818b415ea9fa4244d20aa0ce",
-    "Flock.RecOpen.check": "77a8552540a3375052ad76fd6fb136b856c30b992e19553352f2712763947573",
+    "Flock.RecOpen.check": "0972d66a5fbcf4635c40641edd1737fbd8b644c05520b82a07c5f1925d28cb45",
     "Flock.RecOpen.climbFrom": "58f4cd8efb66ed056bb9928e7f0a967e663773b41c818424ebbb3d5ec9adf5c7",
     "Flock.RecOpen.climbRow": "b609cef47ff26e6409b177324fe2aad8cb9bd25279c91a07820d9e98b3f89e4a",
     "Flock.RecOpen.consStructure": "d896d8555c615983e2c9151b833c205e3ea97318fa17e08ed04f5faa1d5f09ab",
@@ -10077,8 +10198,8 @@
     "Flock.RecOpen.params._sparseCasesOn_1": "9d5eff2719c2ab8d5bff8cfeee52d17aaf5e6fc8b7c5879aaebd59995e16b9a5",
     "Flock.RecOpen.params._sparseCasesOn_4": "ca8b48d23b0a1f56fcabf620fd178f4b24a0b74980429fd850cc629c2e4f28f6",
     "Flock.RecOpen.params._sparseCasesOn_5": "e3da4fda206da1b9c7c07bb3ebac1f34a8b814aefb1f1c94925c1f5497bb851a",
-    "Flock.RecOpen.ports": "c993bd3b8e6a130bcb1b3c62b32ecdf2d3c5fbf5bd9cbd729b0c1cbdea36351b",
-    "Flock.RecOpen.recOpen": "25929ce646b49a59f196edb259adec17b8f2beced90d85c78bf676c449e6364b",
+    "Flock.RecOpen.ports": "bb1950e7352057c4ee9e97084cdccb3bd7eda32df6d81b2dd548c15452ac4a45",
+    "Flock.RecOpen.recOpen": "132de311c5accaff97b8e61265349f8a58714242a42a79a1e401536f120657d4",
     "Flock.RecOpen.recOpenNet": "09747d317cb07428f986ef494058e20b386e1828317879ff624f04f91937a626",
     "Flock.RecOpen.recOpenOuts": "cc6f8b9d2ed539a7ee6e91365940174ca47d6d79aec684b60072d40a1b71efae",
     "Flock.RecOpen.recomb": "a64bc2b8915c96f701e5da51a3b0f136de79a5bcca6f24a64dc8597e6984cc41",
@@ -10097,7 +10218,7 @@
     "Flock.RecOpen.unitLaid": "7b29440e214e91d276ae1fcd4a46d57dcd1a5d569680a705a13fe86df02d8d58",
     "Flock.RecOpen.unitName": "20667d31e2f56b6d30575d65fdeac301403d5a5ca598ada4e521dc238dd7c475",
     "Flock.RecOpen.unitNet": "3ccadcff55cadb943a9229990c4b6947d44cfa25b0d8ac88c22a83defcf4b2f0",
-    "Flock.RecOpen.valid": "2a6d47bce636befe8e4522067d7c4b0ce268bed4f3bb023540380ec568aaf119",
+    "Flock.RecOpen.valid": "c75983d3e7540f78626bd938a7d6741210874d33e4c11a600babe4630bdd68c6",
     "Flock.RecOpen.wordPorts": "e0286627e96a3b359833aadd2efe3de01cc338999487b6d06d84ee1ee3a6ccc5",
     "Flock.RecOpen.xorAll": "89c743dc809478a084e99aae65a4d5b9250c2e2c6a6ccfb7f2c283ad87868995",
     "Flock.RecOpen.xorL": "8935e8f3e98775737ddd63b5d3573af33305eb6ccc1f76b2546e9f2d2cd38b2c"
@@ -10123,7 +10244,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10142,15 +10265,16 @@
    ]
   },
   "Flock.RecResiduals": {
-   "digest": "0349649c4bc1bc35b67eec8d75f4d2701ff8b8aff76e2b7eddb26706a0e24695",
+   "digest": "d1cb358151c1e0276b1e3be23946171226ffa9b7718c36d02120cfa8bf99f388",
    "definitions": {
+    "Flock.RecResiduals.MAX_LONE_SLOTS": "78ed009b946d1cc11acf34965c22b082cef00e74681185f289a7a88d29470fff",
     "Flock.RecResiduals.MAX_REGIONS": "f9593ff468c01d7c7c5b3836d119f7c7a7a66dd0cc29e6babbfd0048f7b95a4a",
     "Flock.RecResiduals.MAX_SLOTS": "894c81e69c7e8c28b0a886e4ba8e84efe82848604c571897eab57783163050f6",
     "Flock.RecResiduals.PER_SLOT": "2841b70e4a3c8022032eb27208bd938d8eabaa861ae9069852f2e56b0d8fc790",
     "Flock.RecResiduals.RES_OUT_WORDS": "c240e3cd935653015a23a51d3312cd1c6a19fd5555bb5844a3c5a8f0ac79dbf8",
     "Flock.RecResiduals.check": "8a82116bf86d9141828eaead29599f2a727ba209d831726881d1036f39a7c43a",
     "Flock.RecResiduals.comps": "af7eb2ccd3244abccd47b3a2cb3fe24a155f8c7468fe6acc00b36beb6c09273a",
-    "Flock.RecResiduals.groups": "58fe7bd99d8bd1ed227e9e779eba274e7b4a6a2535b17dbcff74b1f33d98958c",
+    "Flock.RecResiduals.groups": "4c96c0d143863118822a61b35909187d682c1789e981f3d0700f6d9564ecf1dc",
     "Flock.RecResiduals.params": "c37698e67d4639f049e6d04c38c028266df4101651c4310fea85c7ce5e3b6ae6",
     "Flock.RecResiduals.params._sparseCasesOn_1": "a41a836e2c080a5118afe867d6f260b3e51a0cbf2d7dc0bbd3f14ae901751356",
     "Flock.RecResiduals.params._sparseCasesOn_4": "b5af4711b774a767371b20bb6fa7008044cb0604832d7cb7032e17943c95a40b",
@@ -10199,7 +10323,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10215,7 +10341,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "2b80a02c3885e3979f7bda27b6856ba215873db39d7893495199cca024fb1cc9",
+   "digest": "c4e8fb83d9c8def8c574e02d4051e74d3dfd6b3d7d7bf5be0b26863b51c86964",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.Inner": "d99f0be75488c1896919f4ba2f8db829774c9322be93ebe92b28236a02b120d0",
@@ -10250,7 +10376,7 @@
     "Flock.RecVStar.rowPorts": "1167696d89bf646284193ed1ad45fc689a6f04029b5d53583241bdf201ce0931",
     "Flock.RecVStar.showPort": "d69b99beea1be78574295a455a98f21432097de3fb4b597f321569edfeed48b3",
     "Flock.RecVStar.showReads": "cd51ce985366a0d5ad559fe14f0d581122583decf5d8d32572dbaba88eb920d2",
-    "Flock.RecVStar.statements": "8540c1bc51dfaeb61e4fe8639971d3861e6851f82a1c14af1a13ccac39da6fd2"
+    "Flock.RecVStar.statements": "4409ced2ae8ed749efe66278f0b6ef371c7a2eb4cce48fc0acb08e29d72db7f2"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
@@ -10313,7 +10439,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
@@ -10370,7 +10498,9 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Flock.RowLeaf": {
@@ -10415,7 +10545,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10475,7 +10607,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10573,7 +10707,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10693,7 +10829,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10763,7 +10901,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10827,7 +10967,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
@@ -10909,7 +11051,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -10962,7 +11106,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
@@ -11070,7 +11216,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -11122,7 +11270,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
@@ -11186,7 +11336,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
@@ -11974,6 +12126,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -12005,6 +12158,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum"
    ]
@@ -12026,7 +12180,8 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Level3.GF128": {
@@ -12049,6 +12204,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
     "FlockVBridge.colsHold_words",
@@ -12085,6 +12241,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -12118,6 +12275,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum"
    ]
@@ -12145,7 +12303,8 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Level3.Nodes": {
@@ -12166,7 +12325,8 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Level3.NovelBasis": {
@@ -12187,7 +12347,8 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Level3.Placed": {
@@ -12213,7 +12374,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Level3.Seam": {
@@ -12245,6 +12407,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -12816,6 +12979,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -12974,6 +13138,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -13008,7 +13173,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.Recursive": {
@@ -13081,6 +13247,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
@@ -13116,7 +13283,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.FlockLink": {
@@ -13139,7 +13307,10 @@
     "FlockSoundness.Audit.Partition.instFintypeΩc": "7f9b6129047fc9e9104865c7893d77f6268a723e574158f1806c59c1826c18f3",
     "FlockSoundness.Audit.Partition.Ωc": "89dd0de9f3fe98b8b66adc3776893d47f5b662dff1990c0bfc1ee44a14798951"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Audit.FlockLinked": {
    "digest": "81ad3aa1cef757530896eda6c85aba2cd417c6e62f605b9e61bc23fa2c25afbe",
@@ -13157,7 +13328,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.FlockPublic": {
@@ -13170,7 +13342,8 @@
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Harm": {
@@ -13247,7 +13420,8 @@
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.OneStage": {
@@ -13284,7 +13458,8 @@
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Partitioning.Guarantees": {
@@ -13371,7 +13546,8 @@
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.StratifiedMiss": {
@@ -13457,7 +13633,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Binding.Leaf": {
@@ -13485,7 +13662,8 @@
     "Flock.SecurityProofs.RanRegisteredRun",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Binding.RowSeg": {
@@ -13510,7 +13688,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Binding.Rows": {
@@ -13535,7 +13714,8 @@
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Binding.RowsX": {
@@ -13560,7 +13740,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.CROnly.Hm96Defs": {
@@ -13614,7 +13795,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.CompiledSound": {
@@ -13634,7 +13816,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Defs": {
@@ -13673,6 +13856,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -13718,6 +13902,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
   },
@@ -14057,6 +14242,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
   },
@@ -14077,7 +14263,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZL.OP": {
@@ -14095,7 +14282,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZL.Statements": {
@@ -14107,7 +14295,10 @@
     "FlockSoundness.Discharge.DecodeZL.nX": "9abfdf73bd52c1ab021d47df202a20bbe3985d57f45cc85a4e19d78f1bfda3eb",
     "FlockSoundness.Discharge.DecodeZL.opnAt": "608d0412f4c0e83e4aebb30ca4a9a4d84e28c9e972fd3327d1be6131905898e8"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZL.Wire": {
    "digest": "363f7334f39bb73d0485c57dbd97251470572dcaca93dac21aae38c3a2ab8dd5",
@@ -14143,7 +14334,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements": {
@@ -14204,7 +14396,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Decode": {
@@ -14222,7 +14415,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Event": {
@@ -14270,7 +14464,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -14289,7 +14485,10 @@
    "definitions": {
     "FlockSoundness.Discharge.Exec.batchStratL": "9cf4a6b2c9b1722741b3dd6810a8ab221dfed2fbd3ae235ec6e34c71f1206925"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL": {
    "digest": "bd3f58cccd08776ef5a6fcd14860a6c5b08113350cce839b2afae6e1d37f8e33",
@@ -14312,7 +14511,10 @@
     "FlockSoundness.Discharge.Exec.trialGL": "a5dd186cea3b1ec21d1503e4a1701cf744f86e9208ea021f1c45d6dcec5f9dbb",
     "FlockSoundness.Discharge.Exec.trialStratL": "c4cae1897781eb1ffe808147a65d87389d6c8c783c312a6db18dbfbb0694dd11"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Live": {
    "digest": "75432bf9852d94b98ae785d5cea5d690169a7d5496d8a8a57d7a7fab46ced221",
@@ -14322,7 +14524,10 @@
     "FlockSoundness.Discharge.Exec.simSessL": "176286db2d92866bd059fe640b7d78d38214eec66efbcb21b4935d4843d87efa",
     "FlockSoundness.Discharge.Exec.tableOutL": "71276f8c57b1004b0283de0d53a0a12f9e086e96165e8e30140873f9a00f3701"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.LiveOn": {
    "digest": "c3623dac97af9034f5e979034880d5c83fc868c3883c6f59801514cd85ebc3cc",
@@ -14330,7 +14535,10 @@
     "FlockSoundness.Discharge.Exec.DecodesOn": "407936538d5801b98e4236ea20e85b146a0fc5518aa362b1bc4aeab47f8e0e40",
     "FlockSoundness.Discharge.Exec.simAuditOn": "54ddbc1589a0f637d75c1a61ccecab38827f294b0af7ac36c3dc1ebc457f4f85"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Pts": {
    "digest": "a4f8f7f4d575bd2cf24954ad62db4f3eb1f8c46e7cd707b23a146f8ea5c9d2ba",
@@ -14372,7 +14580,10 @@
    "definitions": {
     "FlockSoundness.Discharge.Exec.stratBL": "b9f4d05caca92383853720abf1c834934e7585a6fd0e30d54d84638f48a187c8"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.SessionL": {
    "digest": "4f73a747612c311cf3d1a6bf77ded70c1386caab8cb805d83b0f5227f9c99790",
@@ -14386,7 +14597,10 @@
     "FlockSoundness.Discharge.Exec.tabAfterL": "ce4719ee170d0ac279079841fa051857543c6a31ca500f0d0329cb9e72a132ee",
     "FlockSoundness.Discharge.Exec.tableAfterL": "d735078df7588a2a9831dc924c6a5c58d62ce2a975d9fc78505f0125b37489c9"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL": {
    "digest": "d4c972e54796142d400b2d7cb183a6f37161551e12e024648fcee29d1a36efcf",
@@ -14401,7 +14615,10 @@
     "FlockSoundness.Discharge.Exec.sessAfterL": "73b84d4cd77777ea6a47bcd2ab005f84f68c5fbfd0ec761bc998873dcc3e53a0",
     "FlockSoundness.Discharge.Exec.tableOrcAfterL": "5673c92b7e81e86f40ee1a34309ab0886118791669ec13d64be217a23e56879b"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Setup": {
    "digest": "53bb180059979a278c43001365db4ee62724daafef1e658e5c9eb82ece655d07",
@@ -14447,14 +14664,30 @@
     "FlockSoundness.Discharge.Exec.adv₀SFinderL": "19ae1b55448b61b86d4c9189bd30786f7ad60c90e7fd8a1837177644688cb6e5",
     "FlockSoundness.Discharge.Exec.selfSFinderL": "02e43ab7e039e67f39a8eee8516922a441b20ed5a03af17a827a034623d2caa8"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Verdict": {
    "digest": "816b590c8e78a4e455abab5d16e20623f5f4773627abdbf507f7373546dabc35",
    "definitions": {
     "FlockSoundness.Discharge.Exec.opnOf": "436a54dc5dfaaefedd257880436ee960915c851b6123be4dd9108a645c2f0485"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Proofs.Flock.Soundness.Discharge.FailClosed.Numeric": {
+   "digest": "a0084e04a3e5862b9d3c41715cc65f2f22b795df23ee480f5116ac6dc30599e5",
+   "definitions": {
+    "FlockSoundness.Discharge.FailClosed.SoundExec205": "af13e5d6aaf1c195e6a26a9bcbda5f0ead9e4cd3cafb4c8f6092850afe838fd4",
+    "FlockSoundness.Discharge.FailClosed.SoundExecH205": "159019e090d2fe9d968df2e0e04814457689cbeb36c68d377fdc25a8c3c5c5dc",
+    "FlockSoundness.StrictCR.ksAvgStrict205": "d448c4b949d77b7e62155db188eb366e6975d7aee007a419bb74ae8a314f28fb",
+    "FlockSoundness.StrictCR.ksStrict205": "898bce35ae9bb722e0afe46a50741c351d914b4c2baa878886c0f87991fe8266"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
    "digest": "c5437119c80aff70ba0073c69113910af8863c1a72a00716a07a2d78ce376458",
@@ -14472,7 +14705,25 @@
     "FlockSoundness.Discharge.FailClosed.ViewZHJ": "a4369fba435bbe3080c6ac00d0314dc13ae45545926b8cea68a84ff3c0c1dcef",
     "FlockSoundness.Discharge.FailClosed.ViewZHJR": "7e841daac3ddd26fd203ca981000a491389c91ad52faabbe8e82503e028e848d"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies": {
+   "digest": "fc4e2a158bf49e69b0a52add2fbd45539b74f2c1fa882d1e5f5860333338e1c2",
+   "definitions": {
+    "FlockSoundness.Discharge.FailClosed.PublicTies": "eea96687f1b37fad52b03e321590bc4d49f28774a904b4c6fcc397b6d7c29b2f",
+    "FlockSoundness.Discharge.FailClosed.dummyBc": "a19ed83efce5a340686144203da05d46a6323d56d3eab7a66ee92ef7e9775369",
+    "FlockSoundness.Discharge.FailClosed.inRoot": "cf7532d05faf45c1a00c20a65c0d6d5396bebde58970c9755309264306b877cd",
+    "FlockSoundness.Discharge.FailClosed.inRows": "f020ac56f6bf6e9d77a55d5601895476281b0d5a2c6877f9d48492ebd5bfa851",
+    "FlockSoundness.Discharge.FailClosed.outRoot": "c6a59bbf02a7d87294c72bd74b3dbe24f51ef2ccb1ac8976e7882e254936626d",
+    "FlockSoundness.Discharge.FailClosed.popOf": "e25dd70380369e141b808ebb1403d0f39194f4dc85d540932c2282f083c9fbdc",
+    "FlockSoundness.Discharge.FailClosed.rowSchema": "4ae089d110fcbd558a52d08807b6f803eb783f1ee13f82116272f6a6aa6c9a1a",
+    "FlockSoundness.Discharge.FailClosed.wordAt": "038644c7c50895bda69d4874b74547be0761c360de9e237d3c63cdfe901bb07c"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_public_ties"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.Scope": {
    "digest": "aa8ff422827c1f3c8854a354e7bd7feb51f71c4170cf55fdd9899faa9203e0a4",
@@ -14490,14 +14741,23 @@
     "FlockSoundness.Discharge.FailClosed.pubS": "50dbe1f810dd1c15644f2e969c46a3c5718f990687250f8be7f5a8154f391ef3",
     "FlockSoundness.Discharge.FailClosed.pubZ": "8f040c36793fde6fef61321c86a0a3a11135b10c429a7c06e9c3fec690770fca"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit", "FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "Flock.SecurityProofs.PublicAudit",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered": {
    "digest": "5f05d9c0d438af3248be184b3f3c16ff38a4f45bf9e78cdbbd38ee44776978d8",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.VerifiesZKR": "8930b42879dcf27ffd74b42fa67d6df39dad516f5d1e57c4ff53fa9f11d25731"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Defs": {
    "digest": "1acaae26d255d7a47caa42ab3ec7ce0a643ab19c9ab7e9fd122422305a15b76d",
@@ -14512,7 +14772,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Flat": {
@@ -14528,7 +14789,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit": {
@@ -14545,7 +14807,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS": {
@@ -14562,7 +14825,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit": {
@@ -14580,7 +14844,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit": {
@@ -14596,7 +14861,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape": {
@@ -14612,7 +14878,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenDec.Statements": {
@@ -14621,7 +14888,10 @@
     "FlockSoundness.Discharge.HiddenDec.DrawOkH": "0b97217cbb41e29e9bc7b3c0ecb8f1357f921ee9cc65506b91ccbc5053f6ee2d",
     "FlockSoundness.Discharge.HiddenDec.opnAtH": "8ca4d62a8e920b89b93203622bdb9376a5114d63b130263ca2ba5a8ab61aa317"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Flat": {
    "digest": "8a54587b8c3f82382dacb8b6dea1c3724658cfbb3b266701e1a4138bfff798fc",
@@ -14636,7 +14906,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec": {
@@ -14645,7 +14916,10 @@
     "FlockSoundness.Discharge.HiddenExec.layAtH": "76431e5a23ef100afd403b4047e41906fcc186e2b6983238c3a14a1212783a2f",
     "FlockSoundness.Discharge.HiddenExec.rsAtH": "d10d617235ef139a1ae6394873a7d296fbb850c3c734eae75f8aa26937c118dc"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH": {
    "digest": "090dbcff0d72c8340c528d0119c98dd2e1d9b6cf6d03ce64d5d9c837d4d76d24",
@@ -14674,7 +14948,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Placed": {
@@ -14710,7 +14985,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Ret": {
@@ -14726,7 +15002,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH": {
@@ -14743,7 +15020,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Sites": {
@@ -14760,7 +15038,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Tables": {
@@ -14802,6 +15081,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -14894,7 +15174,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Slot": {
@@ -14933,7 +15214,10 @@
     "FlockSoundness.Discharge.Integrate.rsAt": "1d17e0e7fc8d74ccec8d712be104e9c649899f3e99c5b6447afaaef63e5614d1",
     "FlockSoundness.Discharge.Integrate.tablesAt": "c262a6aabde5f4a647f7c7944e19bee36f0be1b690155589f0be82881f16c616"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Integrate.Sites": {
    "digest": "bb02070d9942821459a9a2b0fb95d494931d948c2cd1a6edd4b365520364f6e8",
@@ -14982,7 +15266,8 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.HmRegion": {
@@ -15002,7 +15287,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.KeyProg": {
@@ -15035,7 +15321,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Keyed": {
@@ -15049,7 +15336,8 @@
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.KeysRow": {
@@ -15068,7 +15356,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.OfRows": {
@@ -15087,7 +15376,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.OutPin": {
@@ -15110,7 +15400,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Outs": {
@@ -15128,7 +15419,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Pins": {
@@ -15168,7 +15460,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.PinsX": {
@@ -15186,7 +15479,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Readers": {
@@ -15207,7 +15501,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.RowEnc": {
@@ -15232,7 +15527,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Scope": {
@@ -15258,6 +15554,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json_nonvacuous",
@@ -15277,7 +15574,8 @@
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Keyed": {
@@ -15297,6 +15595,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
   },
@@ -15339,6 +15638,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
   },
@@ -15363,6 +15663,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
   },
@@ -15696,7 +15997,9 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -15813,7 +16116,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkHidden.Defs": {
@@ -16399,7 +16703,9 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ": {
@@ -16684,7 +16990,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ExecDraw": {
@@ -16702,7 +17009,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ExecDrawOS": {
@@ -16724,7 +17032,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ExecFlatCopies": {
@@ -16745,6 +17054,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json_nonvacuous",
@@ -16781,7 +17091,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ExecRows": {
@@ -16810,6 +17121,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json_nonvacuous",
@@ -16828,7 +17140,10 @@
    "definitions": {
     "FlockSoundness.Audit.Law.ExecStrata": "387e5741ec909288bf6f5b7871d7f4b18974ff8ece9c278cd875c2567bc7f9e3"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.ExecTyped": {
    "digest": "4e58f2b9461246d6e31a8fa82e6b926236f78fb741f1432d993240714ba177e6",
@@ -16847,6 +17162,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
   },
@@ -16865,7 +17181,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ExtractWait": {
@@ -16884,7 +17201,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Game.Basic": {
@@ -16963,6 +17281,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -17002,7 +17321,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Game.Expect": {
@@ -17022,7 +17342,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Game.Interleave": {
@@ -17042,6 +17363,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17084,7 +17406,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Game.Prob": {
@@ -17107,7 +17430,8 @@
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Game.Seq": {
@@ -17129,7 +17453,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Instance": {
@@ -17148,7 +17473,8 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.LigeritoPadLevel0": {
@@ -17245,7 +17571,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.LinkSound": {
@@ -17265,6 +17592,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17324,6 +17652,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
@@ -17361,7 +17690,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Model.Basic": {
@@ -17396,6 +17726,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17457,7 +17788,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Model.Ligerito": {
@@ -17515,6 +17847,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17583,6 +17916,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17609,6 +17943,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17657,6 +17992,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
@@ -17715,7 +18051,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Frames": {
@@ -17748,7 +18085,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.LigeritoRun": {
@@ -17766,7 +18104,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Live": {
@@ -17815,7 +18154,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.LiveSim": {
@@ -17868,7 +18208,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Paths": {
@@ -17893,7 +18234,8 @@
     "Flock.SecurityProofs.RanRegisteredRun",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Regions": {
@@ -17918,6 +18260,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -17936,7 +18279,10 @@
    "definitions": {
     "FlockSoundness.Refine.shapeOf": "36884f888e3a0f63ecb870a6436041d9df0f79eeb0a6af670dc1b74e673d4338"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Refine.Run": {
    "digest": "82b6c0733918ce3c2ee13810eab5b7b2afdd6703462f9d623f95ff909bbef7ce",
@@ -17953,7 +18299,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Salted": {
@@ -17974,7 +18321,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Schedule": {
@@ -18047,6 +18395,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
     "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -18075,7 +18424,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Tapes": {
@@ -18097,6 +18447,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum"
    ]
@@ -18159,7 +18510,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.SessionBatch": {
@@ -18186,7 +18538,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.SessionBatchAcc": {
@@ -18194,7 +18547,10 @@
    "definitions": {
     "FlockSoundness.rateB": "7bb2dc6cb98f84ead915274623055ae503abd2bbaa458d9edcb561f57b0970b0"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.SoundnessPad": {
    "digest": "7efe290c37899ea4fc845d23c54d5b1d15c171010b58730627432c11045bfb2e",
@@ -18243,7 +18599,8 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ZK.Abort": {
@@ -18534,11 +18891,11 @@
    ]
   },
   "Proofs.Flock.VBridge.RecOpen": {
-   "digest": "5969be187a8906d60556edec80405fbc8fd0f53693893b9caf947549a3f4f15e",
+   "digest": "78d27e0e024bd3a85df6839ad5434c4ff50f03b142c4a6eefa1d5b32e3dc4d54",
    "definitions": {
     "FlockVBridge.consStructure": "97ea7667424a117b1eb102507ed74905f6993792f139eb34cec9362336ccf685",
     "FlockVBridge.consTerm": "b80175e494b438e7f9bc40a60efc00dfd5ca2dfe3a3e8a945fc445dd370b445d",
-    "FlockVBridge.recOpen": "42970f59868957be34b38d39d1d34363bc3a7afb762240b7e09c1d182af13fca"
+    "FlockVBridge.recOpen": "2c10de78b2fdf4de19625306e1a96379bebc404ea411d07f3df8098f8125bafc"
    },
    "guarantees": [
     "FlockVBridge.chainAcc_level",
@@ -18893,15 +19250,16 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "VStar.Parts": {
-   "digest": "7f06c7c3407538c86e66b60402e22bc9e19e2df89efc2f952d6379d04c8c9634",
+   "digest": "7a0c750ec7b4c0cfc319ac2670784f60d3b6fc00f29f2b76497257f107db9585",
    "definitions": {
+    "VStar.MAX_LONE_SLOTS": "a7960e5a1459bccc9608de6e5dd0a46d717cbab6daa85fba0dfda7710a596dd9",
     "VStar.MAX_REGIONS": "f7d26ff7ba89d9b94e279fc032f65a4f9b023fff56301635fc251c5603673770",
     "VStar.MAX_SLOTS": "32ceb2d114612fabd5ce57dc758fc260a72ec1ca70640525edf73a268e5adcf5",
     "VStar.Part": "fd65864de34aedf490d4df94e4e78b994558f68bff3df1f4ba36834feda5f939",
     "VStar.Part.S": "8e50cf67eaa2c657dc0e8e5b236a5bc339878d0f4ec124a7398656ee8ffd36ce",
     "VStar.instInhabitedPart": "e215d87b2f9955d3c1d7abd933aab7d2565dfebf0b840db02a37ed223f6fbbdf",
     "VStar.instInhabitedPart.default": "7e2dd574d56b8214b3c154f5cdfac76851187843ea96a7b4609d753eebe4d0d2",
-    "VStar.parts": "3cccb241bf63fc216c2aeb2e39ec13647e083cec9f06919e43466634efeafec5",
+    "VStar.parts": "7bba29fd478cb1f408dea084e4cfd9a88aa0721a205be4a97ba7fd26df22013e",
     "VStar.regions": "d3e6d856b09e45cf9ce725eda871f594bef063a7557f844032c01c5b826b1590",
     "VStar.slots": "d5f486d42a0dd4b18e887e8e87610de9f7bfb3753ca18f48c182809f49adcc4d",
     "VStar.sortDedup": "4853310772e8f8c5eee009c13fa239720ca67086fedd3606cf04d40abe4bb872",
@@ -18920,20 +19278,20 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "VStar.RecOpen": {
-   "digest": "b2b93f8f12b240108c2927c1dd0810eba98e589610a45db2f8ab05c8ef5460fb",
+   "digest": "51a16de9044057119f94d24560aa5024d3c669acec9fc7ead0c31cd1a786aa5d",
    "definitions": {
     "VStar.ACC_WORDS": "8e4c1df576876ea6055c9c84e5fe74870499ecc17e29f9a4e2ddcfb4d52e1c84",
     "VStar.DIRS_WORDS": "e8673b6ed00729fbf465ae0b975a5b8797dd596b0bee554e588fe204274290e9",
     "VStar.NODE_WORDS": "97dcd5c0d4749642cbab37674fa492e6f135e0c40be1e89bde8cc5d51af829e4",
     "VStar.OUT_WORDS": "2dd93013ac268fb0f1d6c2bbd545f04bf2b4255135e9cdce763ffe520dbf4911",
     "VStar.ROW_BLOCK": "58cf8fac7e605962b3d81fd03289e6932d163822e5c0de309c3f410e92aeed28",
-    "VStar.auxWords": "867d5677f00eec260288740dcbe1b38f376c9ca928cc02cc4672892b999bc9ee",
-    "VStar.checkRecOpen": "1030cb823f15e40cf9693591db5c0208b97a52db44f71798f233efde4195cff9",
+    "VStar.auxWords": "2acb94a102db55c44f6c45ec60f4df819ce6b10452234aa875eef4096e4bc53f",
+    "VStar.checkRecOpen": "a32a2b4dbdb04cabe72c9212ff9a7cc771df29d6c21921bf675ff345ee6fe248",
     "VStar.climbFrom": "5fb9e99b2aed2d5ce6a940dbbebdf7d74ddefc212929957a7782108bff86d61b",
     "VStar.climbRow": "93363204aba4ea4241189b4be6ac01d2b28e001fa644225418043191efd590f4",
     "VStar.coefWords": "120575f7cad8173e503a5e23b3c1a09419e205ae3ad9135afbd611ab8e2ecb25",
     "VStar.consStructure": "f97c90a4881ff1c2f38056c548a630926a2ea002194cb73a99fa1926f4c3179b",
-    "VStar.recOpen": "90059506159764f73ad36501be747bae320bc215d71c31cf23e7672c261f1f89",
+    "VStar.recOpen": "1cae4d7d4fbafc84d69f9bb4c893339e834eb6c460ad7f834ef86d71475fb42f",
     "VStar.recOpenPorts": "bd8996c37eb660d47a41c8cc18553a1440ca600a0ab42e8561a10ba0d97a10fe",
     "VStar.rowWords": "e7c6faaa7357c375eb9917e9950d848d5af09d9630d74b91d22a2cc95a5d2c49",
     "VStar.sibForms": "165af87f9abce7e403021aaddbb728488dc1dfab81ac75e836e2d5f9847a195a",
@@ -19002,7 +19360,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "VStar.Stage": {
-   "digest": "042880ee5cee93e6be6ea6239a762209627d85b47df0fbef9f734196d7ba631e",
+   "digest": "54b139365fc32950f92678037f81d1d17448de4a962d7bd1e45d85c7997d6c15",
    "definitions": {
     "VStar.Stmt": "b247528e1caea7b8488283ff0b7be422c1585a683af7f1af61b5f2695d012087",
     "VStar.Stmt.casesOn": "bce76b924bb4bcbda51448f8c98ba6c11b20817b0fc5669296c657b75fd63be0",
@@ -19015,7 +19373,7 @@
     "VStar.Stmt.unit": "f4548dd7ca7c798905c8148270977c244040187244d80c2cba120e8018b85daf",
     "VStar.innerSub": "c2349e175b75276963e218fac7989fdc8f7d2ab70b27d88c8996e5065f8a4b19",
     "VStar.recOpenSub": "73a4a1e2e0e9221955fa6d109e663b99057409cb200e71aa678ba416ba40ef2f",
-    "VStar.statements": "f5d1e8a19545c007c871cc23cc99ad631726aaca42cde666c74496e70beb1e4b"
+    "VStar.statements": "31a051b589a97bc40cc05501f0da95d12fa2036ee7cf7c1e73733c0c853bb56f"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
