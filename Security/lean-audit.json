@@ -438,6 +438,9 @@
    "assumptions": [],
    "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
   },
+  "Bandwidth.SecurityProofs.HonestPasses": {
+   "owner": "@memory-accounting"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -3696,7 +3699,8 @@
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list.",
-   "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-device, bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device."
+   "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
+   "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock"
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

@@ -1,17 +1,17 @@
 import Mathlib
-import Definitions.Accounting.Bandwidth
+import Models.Accounting.Guarantees.Bandwidth
 
 /-!
 # The honest device: the guarantee is not vacuous
 
 A device with no on-chip state, no side sources and no regeneration, whose device memory holds the store as it is,
-reads every block once and queries the oracle at it. It is accepted on every store, oracle and sample, so with
-probability 1, and its ingress is exactly the store, `N·b` bits (`honest_accepts`, `honest_pr_accepts`).
+reads every block once and queries the oracle at it. It is accepted on every store, oracle and sample, and its
+ingress is exactly the store, `N·b` bits (`honest_accepts`; the guarantee `Bandwidth.SecurityProofs.HonestPasses`).
 -/
 
 namespace Bandwidth.Completeness
 
-open Pous (Bits pr)
+open Pous (Bits)
 open scoped ENNReal
 
 variable {N b h : ℕ} {α : Type}
@@ -129,17 +129,7 @@ theorem honest_accepts {s : ℕ} (E : Store N b) (O : Oracle N b h) (I : Fin s �
   have := (loop_eq ((honest N b h).world E O) (List.finRange N) (fun _ _ => false)).2.1
   simpa [Device.ingress, honest] using this
 
-/-- **Completeness, as a probability.** With at least one block, the honest device is accepted with probability 1. -/
-theorem honest_pr_accepts (s : ℕ) (hN : 0 < N) :
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) => Accepts (honest N b h) x.1 x.2.1 x.2.2) = 1 := by
-  classical
-  unfold pr
-  have hall : Finset.univ.filter (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
-      Accepts (honest N b h) x.1 x.2.1 x.2.2) = Finset.univ :=
-    Finset.filter_true_of_mem (fun x _ => (honest_accepts x.1 x.2.1 x.2.2).1)
-  rw [Finset.filter_congr_decidable, hall, Finset.card_univ]
-  have : 0 < Fintype.card (Store N b × Oracle N b h × (Fin s → Fin N)) :=
-    Fintype.card_pos_iff.2 ⟨(fun _ _ => false, fun _ _ => false, fun _ => ⟨0, hN⟩)⟩
-  exact ENNReal.div_self (by exact_mod_cast this.ne') (ENNReal.natCast_ne_top _)
-
 end Bandwidth.Completeness
+
+theorem Bandwidth.SecurityProofs.HonestPasses : Bandwidth.Guarantees.HonestPasses :=
+  fun N b h => ⟨Bandwidth.Completeness.honest N b h, fun E O _ I => Bandwidth.Completeness.honest_accepts E O I⟩
