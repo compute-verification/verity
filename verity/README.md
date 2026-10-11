@@ -19,6 +19,7 @@ One distribution, one module per concern. Import from the module that owns an ob
 | `verity.core.protocols.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`) and two-stage sampling (`two_stage`). Plans and consumers are `verity.core.protocols.sampled_proofs`. |
 | `verity.core.protocols.pouw` | Proof of useful work: the `PoUWScheme` interface, its lifecycle (`audit`) and the named schemes (`schemes.get`), each with pinned vectors. |
 | `verity.core.protocols.pous` | Proof of useful space: the reference codecs, setup, and the memory challenger's timed audit. Its grader is the Lean package `lean/`. |
+| `verity.core.protocols.bandwidth` | The bandwidth audit v0: a window's tags over a PoUS store before a deadline, the verifier's sampled check, and the ingress it certifies (`PROTOCOL.md`). Its GPU tagger is `benchmarks/bandwidth/`. |
 | `verity.core.protocols.certifier` | The network certifier: its audit and calibration. |
 | `verity.core.claims` | The ids of security claims (guarantees, and assumptions as `property/instance` such as `cr/sha-512`) that the tables cite. Stdlib only. |
 | `verity/core/`, in Lean | The Lean ports in `primitives`, `devices`, `service` and `protocols`, each held to today's Python by `difftest`, and C-Flock's executable verifier of record (`service/flock/`). |
