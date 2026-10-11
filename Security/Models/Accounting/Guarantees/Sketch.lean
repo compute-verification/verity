@@ -59,9 +59,9 @@ def TensorCoreNonCollision : Prop :=
 /-- **Commit, then project (Freivalds's check with ±1 rows).** For integer matrices `A`, `B` and a claimed product `C`
 fixed before the signs are drawn, `C ≠ A·B` and `S·C = (S·A)·B` hold together with probability at most `2^-k` over
 `k` uniform ±1 rows `S`: a column where `C` and `A·B` differ is a nonzero vector that every row must miss. `C` may have
-been computed after the job's own seed, as PoUW's tile outputs are; what the bound needs is that a binding commitment
-fixed it before `S` was drawn. The verifier's work is `S·A` and then `(S·A)·B` and `S·C`, `k(mn + np + mp)`
-multiply-adds against `A·B`'s `mnp`. -/
+been computed after the job's own seed; what the bound needs is that a binding commitment fixed it before `S` was drawn.
+The verifier's work is `S·A` and `S·C`, `k(mn + mp)` additions of signed entries, and `(S·A)·B`, `knp` multiply-adds,
+against `A·B`'s `mnp`. -/
 def CommitThenProject : Prop :=
   ∀ (k m n p : ℕ) (A : Matrix (Fin m) (Fin n) ℤ) (B : Matrix (Fin n) (Fin p) ℤ) (C : Matrix (Fin m) (Fin p) ℤ),
     prob (PMF.uniformOfFintype (Signs k m))
@@ -72,7 +72,9 @@ def CommitThenProject : Prop :=
 `C(u, ⌊u/2⌋)/2^u`: `1/2` at `u = 1`, about `0.246` at `u = 10` and `0.080` at `u = 100`. With a ±1 row fixed (as the
 prover knows it once the seed is out), a block whose unread elements each take one of two values uniformly has inner
 product `c + unreadSum v ε` with `v_j = sgn (s j) · (b_j − a_j)`. The bound is attained (all `v_j = 1`, `t = ⌊u/2⌋`),
-so a single row does not make a few unread elements costly; `k` rows or the polynomial hash do. -/
+so a single row does not make a few unread elements costly, and `k` rows need not either: a prover that leaves unread
+only elements whose columns of signs agree up to sign has all `k` inner products move with one such sum. The polynomial
+hash does (`Accounting.Guarantees.Tag.PolyUnpredictable`). -/
 def LittlewoodOfford : Prop :=
   ∀ (u : ℕ) (v : Fin u → ℤ) (t : ℤ),
     prob (PMF.uniformOfFintype (Fin u → Bool)) (fun ε => (∀ j, v j ≠ 0) ∧ unreadSum v ε = t) ≤
