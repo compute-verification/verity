@@ -5,11 +5,12 @@
 A check here is a statement of a `do` block that is a bare call of a function named `check…` (`checkIdentifier st own`,
 `Registered.checkFull registered draw`): it returns nothing, and its only effect is to refuse. A line holding `:=`, `↔`,
 `∧` or `→` is part of a declaration (a theorem's statement, a field's type), not a call, and a block comment holds no
-call; a call whose brackets close on a later line is deleted with those lines. Each mutant replaces one such line of
-FILE with `pure ()` at its indentation, runs `--build` (the verifier's incremental build, e.g. `lake build flock-verify`
-from its package), then `--test`; a mutant whose test still exits 0 survived, which says no test refuses an input that
-only that check refuses. `--only` keeps the checks whose line holds TEXT. FILE is restored after each mutant, and
-`--build` runs once more at the end, so the build matches the source again; a stop (SIGINT) restores it too.
+call; a call is deleted with the lines that continue it (closing its brackets, or indented deeper). Each mutant replaces
+one such line of FILE with `pure ()` at its indentation, runs `--build` (the verifier's incremental build, e.g. `lake
+build flock-verify` from its package), then `--test`; a mutant whose test still exits 0 survived, which says no test
+refuses an input that only that check refuses. `--only` keeps the checks whose line holds TEXT. FILE is restored after
+each mutant, and `--build` runs once more at the end, so the build matches the source again; a stop (SIGINT) restores it
+too.
 
 The test runs once on the unmutated source first, and a failure there exits 2: every mutant would be killed by it. A
 mutant whose build fails is `unbuilt`, neither killed nor survived. Exit 0 when every mutant was killed, 1 when one survived
@@ -51,8 +52,8 @@ def _depth(code: str) -> int:
 
 
 def mutants(text: str, only: str | None = None) -> list[Mutant]:
-    """Each bare check call of ``text`` outside a block comment, as a mutant (holding ``only`` when given). A call whose
-    brackets are still open at the end of its line takes the lines that close them."""
+    """Each bare check call of ``text`` outside a block comment, as a mutant (holding ``only`` when given). A call takes
+    the lines that continue it: those that close its open brackets, and those indented deeper than it."""
     out, comment = [], 0
     lines = text.splitlines()
     for i, line in enumerate(lines, 1):
@@ -62,10 +63,13 @@ def mutants(text: str, only: str | None = None) -> list[Mutant]:
             continue
         code = line.split("--", 1)[0].rstrip()
         if CHECK.match(code) and not DECLARATION.search(code) and (only is None or only in line):
-            m, depth = Mutant(i, line.strip()), _depth(code)
-            while depth > 0 and m.last < len(lines):
+            m, depth, indent = Mutant(i, line.strip()), _depth(code), len(line) - len(line.lstrip())
+            while (m.last or i) < len(lines):
+                nxt = lines[m.last or i]
+                if depth <= 0 and not (nxt.strip() and len(nxt) - len(nxt.lstrip()) > indent):
+                    break
                 m.last = (m.last or i) + 1
-                depth += _depth(lines[m.last - 1].split("--", 1)[0])
+                depth += _depth(nxt.split("--", 1)[0])
             out.append(m)
     return out
 

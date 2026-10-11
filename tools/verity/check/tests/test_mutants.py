@@ -20,6 +20,8 @@ SOURCE = """def buildStmt (st : Stmt) : V Stmt := do
   Draw.check a b n
   check (a.size == 2
     && b.size == 3) "malformed"
+  check (a.all ok)
+    "S11: the streams are not the tables' streams"
   return st
 
 /-- every relation the verifier will
@@ -36,12 +38,12 @@ theorem checkInRange_ok :
 def test_a_mutant_is_each_bare_check_call_of_a_do_block():
     assert [(m.line, m.text) for m in M.mutants(SOURCE)] == [
         (2, "checkRegistered st registered"), (3, "Registered.checkFull registered draw   -- U4"), (8, "Draw.check a b n"),
-        (9, 'check (a.size == 2')]
-    assert M.mutants(SOURCE)[-1].last == 10
+        (9, 'check (a.size == 2'), (11, 'check (a.all ok)')]
+    assert [m.last for m in M.mutants(SOURCE)][-2:] == [10, 12]
     assert [m.line for m in M.mutants(SOURCE, only="checkFull")] == [3]
     assert M.mutate(SOURCE, 3).splitlines()[2] == "  pure ()"
     assert M.mutate(SOURCE, 3).splitlines()[3] == "  -- checkCommented st"
-    assert M.mutate(SOURCE, 9, 10).splitlines()[8:11] == ["  pure ()", "", "  return st"]
+    assert M.mutate(SOURCE, 9, 10).splitlines()[8:11] == ["  pure ()", "", "  check (a.all ok)"]
 
 
 def test_a_check_no_test_needs_survives_and_the_source_is_restored(tmp_path):
@@ -53,7 +55,7 @@ def test_a_check_no_test_needs_survives_and_the_source_is_restored(tmp_path):
     rc = M.main([str(src), "--build", f"cp {src} {built}", "--test", f"grep -q checkRegistered {built}", "--json", str(out)])
     assert rc == 1
     got = {m["line"]: m["outcome"] for m in json.loads(out.read_text())["mutants"]}
-    assert got == {2: "killed", 3: "survived", 8: "survived", 9: "survived"}
+    assert got == {2: "killed", 3: "survived", 8: "survived", 9: "survived", 11: "survived"}
     assert src.read_text() == SOURCE and built.read_text() == SOURCE
 
 
