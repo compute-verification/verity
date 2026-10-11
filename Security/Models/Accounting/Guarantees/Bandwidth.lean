@@ -36,8 +36,8 @@ the regeneration time `R_regen` (about 2 ms sequential for a P2 root), times the
 `Bandwidth.SecurityProofs.AuditRO`. An honest device that reads every block once is accepted with probability 1 and
 has ingress exactly `N·b` (`Bandwidth.Completeness.honest_accepts`).
 
-Frozen (no-function): a bound in the random-oracle model over an abstract chip program, which no Lean function of the
-bandwidth audit's code computes. -/
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the bandwidth audit's code computes. -/
 def AuditRO : Prop :=
   ∀ (N b h S c G q s k lam : ℕ) (A : Device N b h S c G q),
     pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>

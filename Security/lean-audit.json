@@ -432,6 +432,12 @@
  },
  "four_names": ["Nci", "NetTiming"],
  "guarantees": {
+  "Bandwidth.SecurityProofs.AuditRO": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
+   "assumptions": [],
+   "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -3360,9 +3366,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Bandwidth.SecurityProofs.AuditRO": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -3708,6 +3711,44 @@
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Definitions.Accounting.Bandwidth.Game": {
+   "digest": "419713f54ecb1553848ac084adeaab4e0a2db5738e1f27422be1050001d17ef0",
+   "definitions": {
+    "Bandwidth.Accepts": "e0bd08492460be18678e3282dfa068086b3c6e2d948e830d5e83a3db266a52b8",
+    "Bandwidth.Chip": "d45ebdb58abcdf8efc1b28e7bc4486fde30e16042446b9e02a0b279be2cc60f0",
+    "Bandwidth.Chip.below": "bb601ba183ce2e00b180f88a4056ccaa203f06b96efb324822340ff56e21d4df",
+    "Bandwidth.Chip.brecOn": "d6ae4146cbb47deb9bedcde350fafce683d0c4e4c73e0b97ba8a81145cb37758",
+    "Bandwidth.Chip.brecOn.go": "96932ebdb15eeac09e165fe22a8b89d464c71745d1809824bcb49b2773459aa8",
+    "Bandwidth.Chip.casesOn": "c93abf8f65fcb224fab8c29cd20353dd5c63ffb162fde7d08e877342ac065328",
+    "Bandwidth.Chip.done": "500286417fb8c754443ba87e9707b55903f2ee6c2415b3e864aba6a515c1aaaa",
+    "Bandwidth.Chip.ingress": "4c4aa8f8cf05183e5314d3a84a3345ef90af112eb55bdb982dde35cc1d4b42f4",
+    "Bandwidth.Chip.ingressBits": "c742a4a97c4585ee40046a027fceed817dc3e990c18a2caf1fac0565d1278c09",
+    "Bandwidth.Chip.queries": "d4e2e04b2d282eb6575fa2482d647c6080e8dba6988430eed644f74b184fdb28",
+    "Bandwidth.Chip.rec": "15011d328e665a5e6bbfade46d3e9c3fb0ccf878e7d9c478d70f26e7343f18b3",
+    "Bandwidth.Chip.regen": "88152855e208ae7daa93948380847295801b7ea7a6c1a589c30bf1a2bd3f6e04",
+    "Bandwidth.Chip.regens": "c73db498b34f8166c8055388982023473c0c953734df8a2d2f9636ac5e5c4332",
+    "Bandwidth.Chip.run": "d3ba71b334065b9b9c195e3399288ae8e531833ad35cf5c992c466baf4d030cf",
+    "Bandwidth.Chip.side": "c0f2ad3c3702aa70e52bf55844c80bbb722e605981b8be1371e76cd2e1c654a0",
+    "Bandwidth.Chip.sideBits": "141d32368d0786c9265410ad894f49caa90ea8a5b0fde8bc5c8117d7ca1c0c67",
+    "Bandwidth.Chip.tag": "69fc2badff916fbc3d79b67253633f3a0e732579c301eee23fab4f79ba2ce4cd",
+    "Bandwidth.Device": "8337e59b024471c7c84210e675bed3911444d809fce91a643b3e8a982695df1d",
+    "Bandwidth.Device.chip": "458f55105a6bc6dedf46e474a9ca6e72db2d6f029ba383946096da2993438507",
+    "Bandwidth.Device.ingress": "e7cd27e527fd802ea70b828679a336534f6c87f0f469ab50aa9dffae49ab45c3",
+    "Bandwidth.Device.mem": "3a9878dea6546e1442a17a7e527d19b04f57a72b57ff915d4733b4ec6c5c85a0",
+    "Bandwidth.Device.side": "f6a832e092295e65f52ab0fb8c3d36a20bc2addaf75813268307649ade926b9a",
+    "Bandwidth.Device.state": "74147efd3edbb2ab9604ee3a2bccc177be62bbca0a6992fc74a0cadcbf730b1a",
+    "Bandwidth.Device.tags": "48978632c53a2f5de4fd8eb7201d47ad99e3408b06acd7cff8d7a52ea4485791",
+    "Bandwidth.Device.world": "d38a7e62e80d0bd0f0e3262976752d10d9edcc9c1770e8f38de7f81fea3e121d",
+    "Bandwidth.Oracle": "00ba99c07d062a5499b309208fe1e4c3810334fa842eb2f437000dda6f8a04d5",
+    "Bandwidth.Store": "856a234f1ff4bc32b7603e9d223a26e7189b5c78d81dad699e2ba4d2e9cc1688",
+    "Bandwidth.World": "2f274b1c4548afd44a3098351cb44afc7570e8fbc78ab003372ca3f3fccc9b61",
+    "Bandwidth.World.block": "2ad5c8ac78c796224c8c65b59e59c02f6cd397e152ce8a715595903e8e284a8c",
+    "Bandwidth.World.mem": "529ee68a8130789546b62ff0661ff9ed7d739e72ed93c4fb56abf86f5d97d1bc",
+    "Bandwidth.World.oracle": "f624d94a48e3c59ebf88fa87dd1224d0287c1d02e19270d236d424eeec1f8d56",
+    "Bandwidth.World.side": "f566a8353998a8afde7363fd5ca5b98c5cb9ade02af1f79d543430fb1b1e8b99"
+   },
+   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
+  },
   "Definitions.Core.Circuit": {
    "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
    "definitions": {
@@ -4149,6 +4190,7 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Bandwidth.SecurityProofs.AuditRO",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -11545,6 +11587,13 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
+  },
+  "Models.Accounting.Guarantees.Bandwidth": {
+   "digest": "e4ca1c75ea30d2c9ed0f847a814de0fdcaf61dc5905b5b8346ec0705ef788f1c",
+   "definitions": {
+    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20"
+   },
+   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
   },
   "Models.Flock.Guarantees.Audit": {
    "digest": "e95e7804d3b91387a66349a191d56288f14663b77c7d3b58d42a3e5e3d9e05f2",
