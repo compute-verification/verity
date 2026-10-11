@@ -41,12 +41,14 @@ st() {  # st KIND INNER_OUT DIR
     --salts $SALTS --out $3 > $E/stage-$1.json 2> $E/stage-$1.err
   echo "stage $1 exit $?" | tee -a $O/exits.txt
 }
-st honest $H $S/v-honest
-$P lean --bin $LEAN_BIN --dir $S/v-honest --inner-circuit $IC --inner-public $IP --out $LJ --label honest > $E/lean-honest.log 2>&1
-echo "lean honest exit $?" | tee -a $O/exits.txt
+if [[ " $STAGES " == *" honest "* ]]; then
+  st honest $H $S/v-honest
+  $P lean --bin $LEAN_BIN --dir $S/v-honest --inner-circuit $IC --inner-public $IP --out $LJ --label honest > $E/lean-honest.log 2>&1
+  echo "lean honest exit $?" | tee -a $O/exits.txt
+fi
 for k in claim claim-own h; do
   [[ " $STAGES " == *" $k "* ]] || continue
-  st $k $H $S/v-$k
+  SALTS=$S/acc-salts-$k.bin st $k $H $S/v-$k
   $P lean --bin $LEAN_BIN --dir $S/v-$k --inner-circuit $IC --inner-public $IP --out $LJ --label $k > $E/lean-$k.log 2>&1
   echo "lean $k exit $?" | tee -a $O/exits.txt
   rm -rf $S/v-$k
@@ -63,9 +65,18 @@ for f in cell point; do
   rm -rf $S/v-$f
 done
 
-# the smallest honest statement (fewest circuit bytes), proved --zk at a full draw and verified by Lean
-C=$(cd $S/v-honest && for d in $(find . -name circuit.txt -printf '%h\n'); do echo "$(stat -c %s $d/circuit.txt) $d"; done | sort -n | head -1 | cut -d' ' -f2)
-C=$S/v-honest/${C#./}; D=$E/prove; mkdir -p $D; echo "$C" > $D/which.txt
+# PROVE=smallest: the smallest honest statement (fewest circuit bytes); PROVE=L3: the circuit table's level 3 alone, the smallest
+# of V*'s statements Lean lists. Proved --zk at a full draw and verified by Lean.
+if [ "${PROVE:-smallest}" = L3 ]; then
+  SALTS=$S/acc-salts-l3.bin st level3 $H $S/v-l3
+  $P lean --bin $LEAN_BIN --dir $S/v-l3 --inner-circuit $IC --inner-public $IP --out $LJ --label level3 > $E/lean-level3.log 2>&1
+  echo "lean level3 exit $?" | tee -a $O/exits.txt
+  C=$S/v-l3/L3
+else
+  C=$(cd $S/v-honest && for d in $(find . -name circuit.txt -printf '%h\n'); do echo "$(stat -c %s $d/circuit.txt) $d"; done | sort -n | head -1 | cut -d' ' -f2)
+  C=$S/v-honest/${C#./}
+fi
+D=$E/prove; mkdir -p $D; echo "$C" > $D/which.txt
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 PIN=$(sha512sum $C/circuit.txt | cut -d' ' -f1) PORT=$(free_port)
 $B serve --zk --listen 127.0.0.1:$PORT --out $D/sessions --instances $C/pub.bin --circuit $C/circuit.txt --pin $PIN --operator loopback > $D/serve.log 2>&1 &
@@ -79,9 +90,16 @@ SESS=$(find $D/sessions -name session.json -printf '%h\n' | sort | head -1)
 LV=(--zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json
     --registered $C/registered.json)
 $LEAN_BIN verify "${LV[@]}" --session $SESS > $D/lean.log 2>&1; echo "lean verify exit $?" | tee -a $O/exits.txt
+if [ -f $C/rec-bindings.json ]; then
+  for tag in hide plain; do
+    $LEAN_BIN verify "${LV[@]}" --rec-inner $E/rec-inner-$tag.json --rec-part 3 --rec-bindings $C/rec-bindings.json --rec-rows $C/rec-rows.json \
+      --session $SESS > $D/lean-rec-inner-$tag.log 2>&1
+    echo "lean verify --rec-inner $tag exit $?" | tee -a $O/exits.txt
+  done
+fi
 $LEAN_BIN verify "${LV[@]}" --rec-inner-session $H/inner/session --rec-inner-transcript $H/inner/public.json --session $SESS > $D/lean-transcript.log 2>&1
 echo "lean verify --rec-inner-transcript exit $?" | tee -a $O/exits.txt
 $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS > $D/replay.txt 2>&1; echo "replay exit $?" | tee -a $O/exits.txt
 cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt > $D/unit.txt; du -sb $C/* > $D/sizes.txt
-(cd $S/v-honest && find . -name circuit.txt -printf '%h\n' | LC_ALL=C sort | while read d; do echo "$d $(head -1 $d/circuit.txt | cut -c1-120) $(stat -c %s $d/circuit.txt)"; done) > $E/statements.txt
+[ -d $S/v-honest ] && (cd $S/v-honest && find . -name circuit.txt -printf '%h\n' | LC_ALL=C sort | while read d; do echo "$d $(head -1 $d/circuit.txt | cut -c1-120) $(stat -c %s $d/circuit.txt)"; done) > $E/statements.txt
 cat $O/exits.txt

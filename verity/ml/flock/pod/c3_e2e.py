@@ -78,6 +78,9 @@ def stage(kind: str, a) -> dict:
         levels, algebra = [], False
     elif kind == "session":
         levels, algebra = [], False
+    elif kind == "level3":
+        res = S.stage(inner, fold, Path(a.out), [3], False, None, True, pts, Path(a.salts), None, None)
+        return info | res
     elif kind != "honest":
         raise SystemExit(f"unknown kind {kind}")
     res = S.stage(inner, fold, Path(a.out), levels, algebra, None, True, pts, Path(a.salts), None, (SPARSE, rng))
@@ -112,6 +115,17 @@ def lean(a) -> int:
                 str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
                 "--registered", str(d / "registered.json")]
         runs = [("plain", base)]
+        ports = json.loads((d / "registered.json").read_text())["ports"]
+        rows = d / "rec-rows.json"
+        if "acc" in ports:
+            rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"acc0": ports["acc"]}}))
+        else:
+            shared = {}
+            for q in sorted(d.parent.glob("p*")):
+                for nm, e in json.loads((q / "registered.json").read_text())["ports"].items():
+                    if nm not in ("v", "out"):
+                        shared.setdefault(nm, e)
+            rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": shared}))
         for tag, (f, names) in inner.items():
             if names and unit in names:
                 bf = d / "rec-bindings.json"
@@ -119,7 +133,7 @@ def lean(a) -> int:
                     bf.write_text(json.dumps(RB.bindings(json.loads((d / "partition.json").read_text()),
                                                          json.loads((d / "program.json").read_text()))))
                 runs.append((f"rec-inner-{tag}", [*base, "--rec-inner", str(f), "--rec-part", str(names.index(unit)),
-                                                  "--rec-bindings", str(bf)]))
+                                                  "--rec-bindings", str(bf), "--rec-rows", str(rows)]))
         for mode, argv in runs:
             p = subprocess.run(argv, capture_output=True, text=True)
             first = (p.stdout.strip().splitlines() or [""])[0]
