@@ -23,7 +23,9 @@ fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s op
 registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
 (``private.json``). Level 0's cap reaches the firewall three times (``Commit``, the rep's binding round, Ligerito's first
 absorb): it is committed once, at ``Commit``, and the firewall refuses a binding round whose cap is not ``root_B``; a later
-copy is counted (``level0``), never committed again. The inner trees' leaves need no salt of their own (the statement's
+copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (candidate 3's
+stacked table R) has its level-0 top committed as a salted top of its stream's binding round instead, and its later copies
+counted the same way. The inner trees' leaves need no salt of their own (the statement's
 ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`): nothing about a tree but its salted top leaves the
 firewall.
 
@@ -433,11 +435,12 @@ def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], i
 
 def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
     """The stream of the stacked table R (``2^m`` cells) that candidate 3's opening-only prover runs (``flock-circuit
-    stacked``, its one rep): the binding round, which also absorbs the first claim's s_hat_v and squeezes its ring switch's
-    coins, then `rep_rounds`' second ring switch, the gammas and Ligerito at fast100(m)."""
+    stacked``, its one rep): the binding round, which commits R's level-0 top (R has no root at ``Commit``) and also absorbs
+    the first claim's s_hat_v and squeezes its ring switch's coins, then `rep_rounds`' second ring switch, the gammas and
+    Ligerito at fast100(m)."""
     if type(m) is not int or not 22 <= m <= 35:
         raise ValueError(f"the stacked table's m is 22 to 35, not {m}")
-    return [(7, [], 1, 128)] + rep_rounds(m, 6, 2)[m + 1:]
+    return [(7, [1 << fast100(m).levels[0].cap], 0, 128)] + rep_rounds(m, 6, 2)[m + 1:]
 
 
 def sparse_rounds(sh) -> list[tuple[int, list[int], int, int]]:
@@ -456,7 +459,8 @@ def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None
     ``STATEMENT`` record (`statement_of`), the four numbers the schedule reveals anyway. Each region adds one extra claim a
     link point. ``holo``: hidden unit circuits' rounds (`holo_rounds`). ``sparse``: the bucket's `rec_sparse.Shape`; each
     rep's sparse stream (`sparse_rounds`), opened at its rep's end, follows both reps'. ``stacked``: the stacked table's
-    ``m``; Hello names it after the circuit's table, Commit holds its root, and its stream (`stacked_rounds`) comes last."""
+    ``m``; its stream (`stacked_rounds`) comes last, and its binding round commits its root: Hello and Commit are the
+    circuit table's alone, the statement's own."""
     m, k_log, nbl, regions = (statement.get(k) for k in ("dense_m", "k_log", "nbl", "regions"))
     if not all(type(v) is int and v >= 0 for v in (m, k_log, nbl, regions)):
         raise ValueError("a STATEMENT record names dense_m, k_log, nbl and regions")
@@ -468,8 +472,7 @@ def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None
         for r in range(REPS):
             streams[f"{SPARSE}/rep{r}"], at[f"{SPARSE}/rep{r}"] = sparse_rounds(sparse), (f"{TABLE}/rep{r}", len(rep))
     if stacked is not None:
-        streams[f"{STACKED}/rep0"], roots[STACKED] = stacked_rounds(stacked), 1 << fast100(stacked).levels[0].cap
-        at[f"{STACKED}/rep0"] = ("", 0)
+        streams[f"{STACKED}/rep0"], at[f"{STACKED}/rep0"] = stacked_rounds(stacked), ("", 0)
     return {"kind": KIND + "/schedule",
             "hello": {"digests": "sha512", "flavor": "rs", "link": {"m": PT_LOCAL + nbl, "points": LINK_POINTS}, "profile": "fast100",
                       "reps": REPS, "rounds": "bytes retained", "tables": list(roots)},
@@ -790,9 +793,11 @@ class Proxy:
             if s.n != n:
                 raise ValueError(f"the round squeezes {s.n} coins, the prover asked for {n}")
             level0 = {bytes.fromhex("".join(o["nodes"])) for o in self.roots.values()}
+            level0 |= {v["cap"] for v in self.streams.values() if v["cap"] is not None}
             if k == 0 and not st["parent"]:
-                root_b = self.roots.get(stream.rsplit("/", 1)[0])
-                if root_b is None or s.caps[0].hex() != "".join(root_b["nodes"]):
+                table = stream.rsplit("/", 1)[0]
+                root_b = self.roots.get(table)
+                if table in self.schedule["roots"] and (root_b is None or s.caps[0].hex() != "".join(root_b["nodes"])):
                     raise ValueError(f"{stream}: the binding round's cap is not the committed root_B")
                 st["cap"] = s.caps[0]
             tops = [self._salted(c) for c in s.caps if c not in level0]
