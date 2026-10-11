@@ -5,7 +5,8 @@
 # (check 5) on the relay's record and on the prover's, L3 staged (c3_e2e.py stage level3), proved by C-Flock --zk under the
 # verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify under --rec-inner (plain) with check 5's
 # inputs on the prover's record (option (b)), with and without the inner transcript, the transcript with R's registered top
-# (inner/registration.json, --rec-inner-registration) and refused without it or with one a bit off. Outputs under out/: honest/
+# (the entry stacked of inner/circuit-registration.json, --rec-inner-registration) and refused without it or with its root a
+# bit off. Outputs under out/: honest/
 # (88's), e2e/ (fixture/: the inner session's files as rec-c3-inner holds them, with registration.json), exits.txt.
 #   research run --on vy-cpu-1 --mem-gb 40 --source . --cwd source --declared-output 'out/*' -- \
 #     python3 tools/verity/check/slot.py --by rec-hello -- bash $0
@@ -37,16 +38,19 @@ print(json.dumps({"same_bytes": v["hello"] == p["hello"], "canonical": p["hello"
                   "tables": json.loads(v["hello"])["tables"], "roots": sorted(pub["link"]["roots"]), "hello": v["hello"],
                   "stacked_round0_tops": [len(t) for t in next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0")["tops"]],
                   "zero_coin_rounds": [[s["stream"], r["k"]] for s in v["streams"] for r in s["rounds"] if not r["n"]],
-                  "registration": (reg := json.loads((d / "registration.json").read_text())) | {"registered": sorted(reg["registered"])},
-                  "registered_top_is_r_binding_round_top": reg["registered"]["stacked"]["top"]
-                  == next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)["tops"][0]}))
+                  "registration": {"format": (reg := json.loads((d / RL.REGISTRATION).read_text()))["format"],
+                                   "stacked": RL.registered_entry(reg, RL.STACKED)},
+                  "registered_entry_is_r_binding_round_tops": RL.top_entry(reg["program"], RL.STACKED, [bytes.fromhex(b) for b in
+                      next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)["tops"][0]])
+                  == RL.registered_entry(reg, RL.STACKED)}))
 EOF
 echo "hello exit $?" | tee -a $X
 
-REG=$H/inner/registration.json; BADREG=$E/registration-bad.json
+REG=$H/inner/circuit-registration.json; BADREG=$E/circuit-registration-bad.json
 python3 -c '
 import json, sys
-r = json.load(open(sys.argv[1])); t = r["registered"]["stacked"]["top"]; c = bytearray.fromhex(t[0]); c[-1] ^= 1; t[0] = c.hex()
+r = json.load(open(sys.argv[1])); (e,) = [e for e in r["registered"] if e["value"] == "stacked"]
+c = bytearray.fromhex(e["root"]); c[-1] ^= 1; e["root"] = c.hex()
 print(json.dumps(r))' $REG > $BADREG
 mkdir -p $E/fixture && cp -r $H/inner/public.json $H/inner/private.json $H/inner/prover $H/inner/session $REG $H/fold.json $H/points.json $E/fixture/
 for s in prover session; do
