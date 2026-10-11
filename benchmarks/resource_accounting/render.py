@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import subprocess
 import sys
@@ -111,6 +112,14 @@ def _f(v, fmt: str) -> str:
     return "–" if v is None else format(v, fmt)
 
 
+def _verdict(line: str | None) -> str:
+    """verify_run.py's line as its verdict and the tiles it drew."""
+    if not line:
+        return "–"
+    drawn = re.search(r"\((\d+ drawn[^)]*)\) of (\d+)", line)
+    return line.split()[0] + (f" ({drawn[1]}, of {drawn[2]} tiles)" if drawn else "")
+
+
 def markdown(doc: dict, verdicts: dict, source: str) -> str:
     ident, rr = doc.get("identity") or {}, doc.get("read_rate") or {}
     clocks = [c.get("sm_mhz") for p in doc["points"] for c in p.get("clocks", []) if "sm_mhz" in c]
@@ -121,8 +130,8 @@ def markdown(doc: dict, verdicts: dict, source: str) -> str:
     v = doc.get("verify")
     if v:
         lines.append(f"Retained pass at {v.get('point')}: equals the eager pass {v.get('equals_reference')}, graphed pass gated "
-                     f"{v.get('graphed_pass_gated')}; verify_run.py: pass {verdicts.get('pass') or '–'}; control "
-                     f"{verdicts.get('control') or '–'} (replay-verified, a development shortcut; the protocol's check is a ZK proof)")
+                     f"{v.get('graphed_pass_gated')}; verify_run.py: pass {_verdict(verdicts.get('pass'))}, control "
+                     f"{_verdict(verdicts.get('control'))} (replay-verified, a development shortcut; the protocol's check is a ZK proof)")
     lines += ["", ("| point | arm | mode | chain ms | overhead | useful TFLOP/s | native GEMM TFLOP/s | GB/s (share of read) | "
                    "W_cert TFLOP/s-eq | compute residual (honest + slack) | Q_cert | S_cert |"),
               "|---|---|---|---|---|---|---|---|---|---|---|---|"]
