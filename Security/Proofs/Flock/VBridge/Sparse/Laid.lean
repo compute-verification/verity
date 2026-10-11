@@ -182,10 +182,9 @@ theorem stepVals_outOf (R : String → F128) (rs wA vA : Array F128) (τA : Arra
     apply fOf_injective
     rw [fOf_sumVal _ (List.cons_ne_nil _ _), fOf_foldl_sum, List.map_cons, List.sum_cons, hbp]
     simp only [List.zip_map', List.map_map, Function.comp_def]
-    congr 1
-    refine congrArg List.sum (List.map_congr_left fun t _ => ?_)
+    refine congrArg₂ (· + ·) rfl (congrArg List.sum (List.map_congr_left fun t _ => ?_))
     rw [ovt hst, fOf_mul, fOf_mul]
-    congr 1
+    refine congrArg₂ (· * ·) ?_ rfl
     rw [fOf_sumVal, fOf_foldl_sum, fOf_zero, zero_add, List.map_map]
     · simp only [Function.comp_def, heqs]
     · rw [Ne, List.map_eq_nil_iff, List.range_eq_nil]
@@ -219,8 +218,8 @@ theorem fresh_forIn_range {σ : Type} (n : ℕ) (init : σ) (f : ℕ → σ → 
 
 theorem fresh_mulF (a b : List Lin) : Fresh (Flock.RecSparse.mulF a b) := by
   unfold Flock.RecSparse.mulF
-  exact Fresh.bind' (fresh_commitW a) fun _ => Fresh.bind' (fresh_commitW b) fun _ =>
-    Fresh.bind' (Fresh.mapM' _ (fun xy => fresh_and xy.1 xy.2) _) fun _ => Fresh.pure' _
+  refine Fresh.bind' (fresh_commitW a) fun _ => Fresh.bind' (fresh_commitW b) fun _ => ?_
+  exact Fresh.bind' (Fresh.mapM' _ (fun _ => fresh_and _ _) _) fun _ => Fresh.pure' _
 
 theorem fresh_pairsMul : ∀ fac : List (List Lin), Fresh (Flock.RecSparse.pairsMul fac)
   | [] => Fresh.pure' _
@@ -299,7 +298,6 @@ theorem ports_eq :
   unfold Flock.RecSparse.ports restPorts
   rw [List.append_assoc, portWords_eq]
   congr 1
-  exact List.map_congr_left fun p _ => by obtain ⟨a, b⟩ := p; exact congrArg (a, ·) (portWords_eq b)
 
 theorem ports_snd : (Flock.RecSparse.ports sh).map (·.2) = msgWords sh ++ (restPorts sh).map (·.2) := by
   simp only [ports_eq, msgWords, List.map_append, List.map_map, Function.comp_def]
@@ -387,7 +385,8 @@ theorem nodup_portKinds : (portKinds sh).Nodup := by
     nodup_map_inj PName.pre (fun _ _ h => PName.pre.inj h) List.nodup_range
   have hs : ((List.range sh.degrees.length).map PName.sc).Nodup :=
     nodup_map_inj PName.sc (fun _ _ h => PName.sc.inj h) List.nodup_range
-  cases hst : sh.stacked <;> simp [portKinds, List.nodup_append, List.nodup_cons, hp, hs]
+  cases hst : sh.stacked <;>
+    simp [portKinds, List.nodup_append, List.nodup_cons, hp, hs, hst, or_imp, forall_and, forall_exists_index, and_imp]
 
 theorem nodup_ports : ((Flock.RecSparse.ports sh).map (·.1)).Nodup := by
   rw [ports_names]
