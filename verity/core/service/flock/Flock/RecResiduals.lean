@@ -9,6 +9,10 @@ The verifier computes `GfResiduals`' S itself (`RecAlgebra.structureOf`), groups
 lookup is checked (`pos`), so a term the part does not read is refused, never sent to element 0. Soundness reads only
 the renumbering's checks and the comparison with the file's unit; the grouping decides which residuals a part holds and
 is checked to cover every residual once, in order.
+
+A holo shape (`Shape.holo`, hidden unit circuits) has `h`'s round as a row port after `z_partial`'s, which the comb's
+operands read (`RecAlgebra.atomOp`). A part's name does not say whether its shape is holo, so `check` takes the unit for
+either part.
 -/
 import Flock.RecOpen
 import Flock.RecAlgebra
@@ -269,9 +273,25 @@ def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat)
   let some (R, P, V) := gs[j]? | throw s!"part {j} of {gs.size}"
   pure (← partS S sizes R P V, P.toList.map (sizes[·]!), V.size)
 
-/-- A unit named `rec-residuals/…` is the verifier's part at the shape and part its name gives, equal in every field;
-any other unit passes. The shape is bounded by the file's unit before the structure is computed, and the part's input
-and output bits are compared before its net is built. Irreducible, so that no unification against it builds the net. -/
+/-- The file's unit is the verifier's part `j` at `sh`, equal in every field: the part's input and output bits are
+compared before its net is built. Irreducible, so that no unification against it builds the net. -/
+@[irreducible] def checkPart (c : Circuit) (sh : Shape) (m k cl j : Nat) : V Unit :=
+  match part sh j with
+  | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
+  | .ok (S, ns, nv) =>
+    let bits := 16 * (portWords ns nv).foldl (· + ·) 0
+    if RecOpen.inBits c.unit != bits || RecOpen.outBits c.unit != 16 * RES_OUT_WORDS then
+      throw (s!"circuit {c.name}: unit {c.unit.name} has {RecOpen.inBits c.unit} input and " ++
+        s!"{RecOpen.outBits c.unit} output bits, not its part's {bits} and {16 * RES_OUT_WORDS}")
+    else match netOf (unitName m k cl j) (unitLaid S ns nv) with
+      | .error e => throw e
+      | .ok g =>
+        if c.unit = g then pure ()
+        else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
+
+/-- A unit named `rec-residuals/…` is the verifier's part at the shape and part its name gives, or else its part at that
+shape's holo form (`Shape.holo`: the name does not say which); any other unit passes. The shape is bounded by the file's
+unit before the structure is computed. Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, k, cl, j) =>
@@ -280,27 +300,26 @@ and output bits are compared before its net is built. Irreducible, so that no un
     | some sh =>
       if k > RecOpen.inBits c.unit || cl > RecOpen.inBits c.unit then
         throw s!"circuit {c.name}: unit {c.unit.name}'s k_log or claims exceed its {RecOpen.inBits c.unit} input bits"
-      else match part sh j with
-        | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
-        | .ok (S, ns, nv) =>
-          let bits := 16 * (portWords ns nv).foldl (· + ·) 0
-          if RecOpen.inBits c.unit != bits || RecOpen.outBits c.unit != 16 * RES_OUT_WORDS then
-            throw (s!"circuit {c.name}: unit {c.unit.name} has {RecOpen.inBits c.unit} input and " ++
-              s!"{RecOpen.outBits c.unit} output bits, not its part's {bits} and {16 * RES_OUT_WORDS}")
-          else match netOf (unitName m k cl j) (unitLaid S ns nv) with
-            | .error e => throw e
-            | .ok g =>
-              if c.unit = g then pure ()
-              else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
+      else match checkPart c sh m k cl j with
+        | .ok () => pure ()
+        | .error e => match checkPart c { sh with holo := true } m k cl j with
+          | .ok () => pure ()
+          | .error e' => throw s!"{e}; nor its holo part: {e'}"
   | none =>
     if c.unit.name.startsWith "rec-residuals/" then
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
     else pure ()
 
+/-- `checkPart` reads a circuit's name and unit only. -/
+theorem checkPart_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : checkPart c = checkPart c' := by
+  funext sh m k cl j
+  unfold checkPart
+  rw [hn, hu]
+
 /-- `check` reads a circuit's name and unit only. -/
 theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : check c = check c' := by
   unfold check
-  rw [hn, hu]
+  rw [checkPart_congr hn hu, hn, hu]
 
 end RecResiduals
 end Flock
