@@ -169,13 +169,8 @@ Flattening: nested objects get dotted keys, lists numeric components (`families.
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
 blob present here; `remote` means pushed (from a listing or a recorded push/verification).
 
-`research.store.index.Index(path)`: `index_artifact(manifest_doc, art_id, local=None, remote=None, repo_path=None)` (None keeps the
-current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(art_id, *, local, remote, repo_path)`,
-`set_replica(art_id, location, verified_utc, detail, verified=None)`, `rebuild(artifacts, attempts, labels)`, `artifact(id)`, `artifacts()`,
-`attempt(run_id)`, `attempts_by_reuse_key(key)`, `attempts_by_derivation(drv)`, `attempts_by_output(art_id)`,
-`select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
-`replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
-return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
+`research.store.index.Index(path)` writes and queries these tables (its docstrings list the methods); `sql(query)` and
+`sql_with_columns` use a read-only (`?mode=ro`) connection.
 `compact(src, dst)` (`research data catalog --compact OUT`) copies the catalog for readers that query it but never fetch
 (`research notes mcp --catalog`): the same tables and indexes, `manifest_json` NULL, no `replicas` / `replica_checks`.
 
@@ -602,3 +597,10 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 6. **Content, not pathname**, is the identity of every input.
 7. **`conditions()` owns normalisation.** One SKU->family map.
 8. **Canonical JSON everywhere** ids are computed.
+
+## 13. Open questions
+
+- **Many-run analytics.** Postgres on Neon is the index now; DuckLake comes only when many-run results outgrow `fields`.
+  No lakeFS or registry server.
+- **Signed labels.** A label's `by` is whatever its writer says. When labels get signed, they become in-toto attestations
+  signed with Sigstore/cosign, not a scheme of our own.
