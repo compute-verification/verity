@@ -8,7 +8,8 @@ canonical positions (`handList`), enqueues them, and releases `min(queue, r)` fr
 trace (`fifo_inv`), the shaper has handed `handed`'s frames, its `queued` count is the Program's queue (`NetworkCertifier.queue`)
 of the hand counts, and an unfaulted certifier's queue is the last `queued` frames handed. A complete record's window
 never faults (by `FailClosed`), so each of its rows is the FIFO's release, which is `NetworkCertifier.expectedRow` when
-each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_proof`).
+each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_honest`). `Complete` drops
+that condition: a frame handed late faults its window.
 -/
 
 namespace Properties.CertifierDevice.Proofs
@@ -16,65 +17,7 @@ namespace Properties.CertifierDevice.Proofs
 open _root_.CertifierDevice
 open NetworkCertifier (Reason Status)
 
-/-! ## The handing loop -/
-
-/-- The frames at canonical positions `s.next … m − 1` that `s` holds, in order. -/
-def handList (s : Shaper) (m : Nat) : List Frame :=
-  (List.range' s.next (m - s.next)).filterMap fun k => (s.pending.get? k).map (·.1)
-
-/-- What the handing loop has done since `s1`: handed the positions `s1.next … s.next − 1`, each held, and enqueued their
-frames. -/
-def HandInv (s1 s : Shaper) : Prop :=
-  s1.next ≤ s.next ∧ s.queued = s1.queued + (s.next - s1.next) ∧ s.t = s1.t ∧
-    (∀ k, s.pending.get? k = if s1.next ≤ k ∧ k < s.next then none else s1.pending.get? k) ∧
-    (handList s1 s.next).length = s.next - s1.next ∧
-    s.certifier = ((handList s1 s.next).map Frame.bytes).foldl Certifier.enqueue s1.certifier
-
-theorem handList_succ (s1 : Shaper) {m : Nat} (hm : s1.next ≤ m) {frame : Frame} {ready : Int}
-    (h : s1.pending.get? m = some (frame, ready)) : handList s1 (m + 1) = handList s1 m ++ [frame] := by
-  unfold handList
-  rw [show m + 1 - s1.next = (m - s1.next) + 1 by omega, List.range'_concat, List.filterMap_append]
-  have h' : s1.pending[m]? = some (frame, ready) := h
-  simp [show s1.next + (m - s1.next) = m by omega, h']
-
-theorem HandInv.step {s1 s s' : Shaper} (hi : HandInv s1 s) (h : HandStep s s') : HandInv s1 s' := by
-  obtain ⟨i1, i2, i3, i4, i5, i6⟩ := hi
-  obtain ⟨frame, ready, hh, hand, hget, -, rfl⟩ := h
-  have hget1 : s1.pending.get? s.next = some (frame, ready) := by
-    rw [i4 s.next] at hget
-    simpa using hget
-  have hl := handList_succ s1 i1 hget1
-  unfold HandInv
-  dsimp only
-  refine ⟨by omega, by omega, i3, fun k => ?_, ?_, ?_⟩
-  · rw [Std.HashMap.get?_erase, i4 k]
-    by_cases hk : s.next = k
-    · subst hk
-      simp only [beq_self_eq_true, ↓reduceIte]
-      rw [ite_eq_left_of_eq_true _ _ (eq_true ⟨i1, by omega⟩)]
-    · have : (s.next == k) = false := by simpa using hk
-      simp only [this, Bool.false_eq_true, ↓reduceIte]
-      congr 1
-      apply propext
-      omega
-  · rw [hl, List.length_append, i5]
-    simp only [List.length_singleton]
-    omega
-  · rw [hl, List.map_append, List.foldl_append, ← i6]
-    rfl
-
-theorem handStage_inv (T : Nat) (s1 : Shaper) : HandInv s1 (handStage T s1) := by
-  have := handStage_reach T s1
-  generalize handStage T s1 = s2 at this ⊢
-  induction this with
-  | refl =>
-    refine ⟨le_rfl, by omega, rfl, fun k => ?_, by simp [handList], by simp [handList]⟩
-    rw [ite_eq_right_iff.2]
-    intro h
-    omega
-  | tail _ hst ih => exact ih.step hst
-
-/-! ## The certifier's queue -/
+/-! ## Enqueues and faults -/
 
 theorem enqueue_none {c : Certifier} {f : ByteArray} (h : (c.enqueue f).fault = none) :
     c.fault = none ∧ c.enqueue f = { c with queue := c.queue.push f } := by
@@ -97,6 +40,77 @@ theorem enqueue_none {c : Certifier} {f : ByteArray} (h : (c.enqueue f).fault = 
       · simp only [h3, ↓reduceIte]
         exact ⟨by simpa using h1, by simp⟩
 
+theorem CertRel.of_none {c c' : Certifier} (h : CertRel c c') (hf : c'.fault = none) : c' = c := by
+  rcases h with rfl | ⟨r, rfl⟩
+  · rfl
+  · have := doFault_fault_isSome c r
+    rw [hf] at this
+    cases this
+
+/-! ## The handing loop -/
+
+/-- The frames at canonical positions `s.next … m − 1` that `s` holds, in order. -/
+def handList (s : Shaper) (m : Nat) : List Frame :=
+  (List.range' s.next (m - s.next)).filterMap fun k => (s.pending.get? k).map (·.1)
+
+/-- What the handing loop has done since `s1`: handed the positions `s1.next … s.next − 1`, each held, and, unless it
+left the certifier faulted, enqueued their frames. -/
+def HandInv (s1 s : Shaper) : Prop :=
+  s1.next ≤ s.next ∧ s.queued = s1.queued + (s.next - s1.next) ∧ s.t = s1.t ∧
+    (∀ k, s.pending.get? k = if s1.next ≤ k ∧ k < s.next then none else s1.pending.get? k) ∧
+    (handList s1 s.next).length = s.next - s1.next ∧
+    (s.certifier.fault = none → s.certifier = ((handList s1 s.next).map Frame.bytes).foldl Certifier.enqueue s1.certifier)
+
+theorem handList_succ (s1 : Shaper) {m : Nat} (hm : s1.next ≤ m) {frame : Frame} {ready : Int}
+    (h : s1.pending.get? m = some (frame, ready)) : handList s1 (m + 1) = handList s1 m ++ [frame] := by
+  unfold handList
+  rw [show m + 1 - s1.next = (m - s1.next) + 1 by omega, List.range'_concat, List.filterMap_append]
+  have h' : s1.pending[m]? = some (frame, ready) := h
+  simp [show s1.next + (m - s1.next) = m by omega, h']
+
+theorem HandInv.step {T : Nat} {s1 s s' : Shaper} (hi : HandInv s1 s) (h : HandStep T s s') : HandInv s1 s' := by
+  obtain ⟨i1, i2, i3, i4, i5, i6⟩ := hi
+  obtain ⟨frame, ready, sync, hh, hand, hget, -, -, -, -, rfl⟩ := h
+  have hget1 : s1.pending.get? s.next = some (frame, ready) := by
+    rw [i4 s.next] at hget
+    simpa using hget
+  have hl := handList_succ s1 i1 hget1
+  unfold HandInv
+  dsimp only
+  refine ⟨by omega, by omega, i3, fun k => ?_, ?_, ?_⟩
+  · rw [Std.HashMap.get?_erase, i4 k]
+    by_cases hk : s.next = k
+    · subst hk
+      simp only [beq_self_eq_true, ↓reduceIte]
+      rw [ite_eq_left_of_eq_true _ _ (eq_true ⟨i1, by omega⟩)]
+    · have : (s.next == k) = false := by simpa using hk
+      simp only [this, Bool.false_eq_true, ↓reduceIte]
+      congr 1
+      apply propext
+      omega
+  · rw [hl, List.length_append, i5]
+    simp only [List.length_singleton]
+    omega
+  · intro hf
+    obtain ⟨h1, h2⟩ := enqueue_none hf
+    have e : lateCert s hh = s.certifier := (lateCert_rel s hh).of_none h1
+    rw [e] at h1 h2 ⊢
+    rw [hl, List.map_append, List.foldl_append, ← i6 h1]
+    rfl
+
+theorem handStage_inv (T : Nat) (s1 : Shaper) : HandInv s1 (handStage T s1) := by
+  have := handStage_reach T s1
+  generalize handStage T s1 = s2 at this ⊢
+  induction this with
+  | refl =>
+    refine ⟨le_rfl, by omega, rfl, fun k => ?_, by simp [handList], fun _ => by simp [handList]⟩
+    rw [ite_eq_right_iff.2]
+    intro h
+    omega
+  | tail _ hst ih => exact ih.step hst
+
+/-! ## The certifier's queue -/
+
 /-- Enqueues that leave the certifier unfaulted pushed every frame. -/
 theorem enqueue_fold (fs : List ByteArray) (c : Certifier) (h : (fs.foldl Certifier.enqueue c).fault = none) :
     c.fault = none ∧ (fs.foldl Certifier.enqueue c).queue = c.queue ++ fs.toArray := by
@@ -107,13 +121,6 @@ theorem enqueue_fold (fs : List ByteArray) (c : Certifier) (h : (fs.foldl Certif
     obtain ⟨h3, h4⟩ := enqueue_none h1
     rw [List.foldl_cons, h2, h4]
     exact ⟨h3, by simp⟩
-
-theorem CertRel.of_none {c c' : Certifier} (h : CertRel c c') (hf : c'.fault = none) : c' = c := by
-  rcases h with rfl | ⟨r, rfl⟩
-  · rfl
-  · have := doFault_fault_isSome c r
-    rw [hf] at this
-    cases this
 
 theorem certTick_none {c : Certifier} (h : c.fault = none) :
     let n := min c.queue.size c.params.allocation
@@ -211,7 +218,8 @@ theorem fifo_tick {link : String} {p : Params} (s : Shaper) (hs : ShGood link p 
   have key : s2.certifier.fault = none →
       s.certifier.fault = none ∧ s2.certifier.queue = s.certifier.queue ++ (L.map Frame.bytes).toArray := by
     intro hf
-    rw [i6] at hf ⊢
+    have e6 := i6 hf
+    rw [e6] at hf ⊢
     obtain ⟨h1, h2⟩ := enqueue_fold _ _ hf
     have e := hc1.of_none h1
     subst e
@@ -416,7 +424,7 @@ structure FifoInv (S : Nat) (hp : List (Frame × Nat)) (s : Shaper) : Prop where
 
 theorem FifoInv.rel {S : Nat} {hp : List (Frame × Nat)} {s s' : Shaper} (h : FifoInv S hp s) (hr : ShRel s s') :
     FifoInv S hp s' := by
-  obtain ⟨r1, r2, r3, r4⟩ := hr
+  obtain ⟨r1, r2, r3, r4, -⟩ := hr
   refine ⟨r3.trans h.next, fun x hx => r2 ▸ h.past x hx, by rw [r4, r2]; exact h.queued, r4 ▸ h.le, fun hf => ?_⟩
   rw [r1.of_none hf, r4]
   exact h.queue (by rw [← r1.of_none hf]; exact hf)
@@ -473,7 +481,7 @@ theorem step_fifo {c : Config} {st : State} {hp : List (Frame × Nat)} (hg : Goo
     have hi' := hi.rel hr
     obtain ⟨l, hl⟩ := step_egress_shaper hg ht (now := now) (backlog := backlog)
     rw [handedAt_egress hg ht, hl, ← hr.2.1]
-    refine FifoInv.rel (s := (egressMid st now backlog).tick.1) ?_ ⟨CertRel.refl _, rfl, rfl, rfl⟩
+    refine FifoInv.rel (s := (egressMid st now backlog).tick.1) ?_ ⟨CertRel.refl _, rfl, rfl, rfl, rfl, rfl⟩
     have tk := (tick_spec _ hgs).2.1
     obtain ⟨f1, f2, -, f4⟩ := fifo_tick _ hgs
     generalize egressMid st now backlog = s at hr hgs hi' tk f1 f2 f4 ⊢
@@ -547,7 +555,7 @@ theorem release {c : Config} {st : State} {hp : List (Frame × Nat)} (hg : Good 
   have hi' := hi.rel hr
   rw [handedAt_egress hg ht]
   rw [← hr.2.1] at hc ⊢
-  rw [← hr.2.2.2]
+  rw [← hr.2.2.2.1]
   obtain ⟨-, -, f3, -⟩ := fifo_tick _ hgs
   obtain ⟨h1, h2⟩ := f3 hc
   generalize egressMid st now backlog = s at hr hgs hi' h1 h2 ⊢
@@ -609,7 +617,22 @@ theorem egressAt_exists {c : Config} {tr : List Event} {n k b : Nat} (hE : Egres
 
 /-! ## Complete records -/
 
-theorem completeRows_proof : CompleteRows := by
+/-- Complete records over the whole trace, given that each frame is handed at the bucket
+`NetworkCertifier.handingBuckets` gives it under the syncs the trace declared. -/
+def CompleteRowsHonest : Prop :=
+  ∀ (c : Config) (tr : List Event),
+    let hs := handed (init c) tr
+    let syncs := (after (init c) tr).shaper.syncs
+    let frames : List NetworkCertifier.LogicalFrame := hs.map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩
+    let T := c.egress.buckets
+    hs.map Prod.snd = NetworkCertifier.handingBuckets T syncs.size (fun w => syncs[w]) frames →
+    ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts →
+      .publish rec p ∈ acts → rec.status = .complete → rec.window < syncs.size →
+      ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
+        NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
+          ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+
+theorem completeRows_honest : CompleteRowsHonest := by
   intro c tr
   dsimp only
   intro H n k backlog acts rec p hE hacts hmem hst hw j hj i hia

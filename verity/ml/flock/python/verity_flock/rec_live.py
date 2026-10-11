@@ -106,6 +106,10 @@ MASK64 = (1 << 64) - 1
 #: a flock-circuit statement's session (`schedule_for`): its one table, fast100's reps, the link's points (one ``y``
 #: element each, a table) and each point's free in-block coordinates (``circuit.rs`` ``PT_LOCAL``; ``nbl`` block ones follow)
 TABLE, REPS, LINK_POINTS, PT_LOCAL = "circuit", 2, 2, 24
+#: candidate 3's stacked table R (`stacked_rounds`)
+STACKED = "stacked"
+#: candidate 3's sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
+SPARSE = "sparse"
 
 
 # --- wire codec (live/src/lib.rs `Req`, `Resp`) -------------------------------------------------------------------------------
@@ -412,23 +416,67 @@ def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], in
     return out
 
 
-def schedule_for(statement: dict) -> dict:
+def zp_round(m: int, k_log: int) -> int:
+    """The index in `rep_rounds` of the round that absorbs z_partial (64 elements) and squeezes r′."""
+    return m + k_log - 7
+
+
+def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:
+    """`rep_rounds` with hidden unit circuits (`rec_algebra.Shape.holo`): z_partial's round squeezes nothing (its frames end
+    in a squeeze of no coins, `verity_flock.rec_session`; `rec_algebra.Coins` skips it), and a round of its own absorbs h (64
+    elements) and squeezes r′ (`rec_algebra.h_round`)."""
+    out, k = rep_rounds(m, k_log, claims), zp_round(m, k_log)
+    if out[k] != (1, [], 0, 64):
+        raise AssertionError(f"round {k} is not z_partial's")
+    return out[:k] + [(0, [], 0, 64), (1, [], 0, 64)] + out[k + 1:]
+
+
+def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
+    """The stream of the stacked table R (``2^m`` cells) that candidate 3's opening-only prover runs (``flock-circuit
+    stacked``, its one rep): the binding round, which also absorbs the first claim's s_hat_v and squeezes its ring switch's
+    coins, then `rep_rounds`' second ring switch, the gammas and Ligerito at fast100(m)."""
+    if type(m) is not int or not 22 <= m <= 35:
+        raise ValueError(f"the stacked table's m is 22 to 35, not {m}")
+    return [(7, [], 1, 128)] + rep_rounds(m, 6, 2)[m + 1:]
+
+
+def sparse_rounds(sh) -> list[tuple[int, list[int], int, int]]:
+    """A rep's sparse phase at `verity_flock.rec_sparse`'s shape ``sh`` (`rec_sparse.prove`'s draws, each message one row): ζ_c,
+    H2's rounds, v2's (no coins), H3's, u's (ζ_p), and with T > 1 vt's (ρ_t)."""
+    from .rec_sparse import PRE_ROUNDS
+
+    out = [(PRE_ROUNDS, [], 0, 0)] + [(1, [], 0, 2)] * PRE_ROUNDS + [(0, [], 0, 1)]
+    out += [(1, [], 0, d) for d in sh.degrees] + [(sh.P_LOG, [], 0, sh.PP)]
+    return out + ([(sh.T_LOG, [], 0, sh.T)] if sh.stacked else [])
+
+
+def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None, sparse=None) -> dict:
     """The schedule of a flock-circuit statement's inner session (one table, fast100's two reps, live OS coins) from the
     statement's public shape alone: ``dense_m``, ``k_log``, ``nbl`` and ``regions`` of ``flock-circuit statement``'s
     ``STATEMENT`` record (`statement_of`), the four numbers the schedule reveals anyway. Each region adds one extra claim a
-    link point."""
+    link point. ``holo``: hidden unit circuits' rounds (`holo_rounds`). ``sparse``: the bucket's `rec_sparse.Shape`; each
+    rep's sparse stream (`sparse_rounds`), opened at its rep's end, follows both reps'. ``stacked``: the stacked table's
+    ``m``; Hello names it after the circuit's table, Commit holds its root, and its stream (`stacked_rounds`) comes last."""
     m, k_log, nbl, regions = (statement.get(k) for k in ("dense_m", "k_log", "nbl", "regions"))
     if not all(type(v) is int and v >= 0 for v in (m, k_log, nbl, regions)):
         raise ValueError("a STATEMENT record names dense_m, k_log, nbl and regions")
-    rep = rep_rounds(m, k_log, 2 + LINK_POINTS * regions)
-    streams = [f"{TABLE}/rep{r}" for r in range(REPS)]
+    rep = (holo_rounds if holo else rep_rounds)(m, k_log, 2 + LINK_POINTS * regions)
+    streams = {f"{TABLE}/rep{r}": rep for r in range(REPS)}
+    at = {s: ("", 0) for s in streams}
+    roots = {TABLE: 1 << fast100(m).levels[0].cap}
+    if sparse is not None:
+        for r in range(REPS):
+            streams[f"{SPARSE}/rep{r}"], at[f"{SPARSE}/rep{r}"] = sparse_rounds(sparse), (f"{TABLE}/rep{r}", len(rep))
+    if stacked is not None:
+        streams[f"{STACKED}/rep0"], roots[STACKED] = stacked_rounds(stacked), 1 << fast100(stacked).levels[0].cap
+        at[f"{STACKED}/rep0"] = ("", 0)
     return {"kind": KIND + "/schedule",
             "hello": {"digests": "sha512", "flavor": "rs", "link": {"m": PT_LOCAL + nbl, "points": LINK_POINTS}, "profile": "fast100",
-                      "reps": REPS, "rounds": "bytes retained", "tables": [TABLE]},
-            "roots": {TABLE: 1 << fast100(m).levels[0].cap}, "link": {"y": LINK_POINTS},
-            "streams": {s: {"parent": "", "at": 0, "rounds": len(rep)} for s in streams},
+                      "reps": REPS, "rounds": "bytes retained", "tables": list(roots)},
+            "roots": roots, "link": {"y": LINK_POINTS},
+            "streams": {s: {"parent": at[s][0], "at": at[s][1], "rounds": len(rs)} for s, rs in streams.items()},
             "rounds": [{"stream": s, "k": k, "n": n, "tops": tops, "level0": level0, "commits": int(e > 0)}
-                       for s in streams for k, (n, tops, level0, e) in enumerate(rep)]}
+                       for s, rs in streams.items() for k, (n, tops, level0, e) in enumerate(rs)]}
 
 
 def statement_of(text: str) -> dict:
@@ -923,6 +971,9 @@ def main(argv=None) -> int:
     ap.add_argument("--schedule", help="the schedule every session is held to (required to serve: --schedule-for's)")
     ap.add_argument("--schedule-for", metavar="STATEMENT",
                     help="print the schedule of a statement (flock-circuit statement's output, or its STATEMENT record) and exit")
+    ap.add_argument("--holo", action="store_true", help="--schedule-for: hidden unit circuits' rounds (h after z_partial)")
+    ap.add_argument("--stacked", type=int, metavar="M_R", help="--schedule-for: the stacked table R's stream, R of 2^M_R cells")
+    ap.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="--schedule-for: each rep's sparse stream at this RecSparse shape")
     ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
     ap.add_argument("--firewall", metavar="DIR", help="the firewall's state: each session opens a recursive session on it")
     ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
@@ -934,7 +985,11 @@ def main(argv=None) -> int:
                          "plus W0 + ... + Wj (--firewall)")
     a = ap.parse_args(argv)
     if a.schedule_for:
-        print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text())), indent=1))
+        sparse = None
+        if a.sparse:
+            from .rec_sparse import Shape
+            sparse = Shape(*(int(v) for v in a.sparse.split(",")))
+        print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text()), a.holo, a.stacked, sparse), indent=1))
         return 0
     if a.schedule_of:
         print(json.dumps(schedule_of(json.loads(Path(a.schedule_of).read_text())), indent=1))

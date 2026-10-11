@@ -5,8 +5,11 @@ claim, a slot's type swapped for another and a type outside the bucket are refus
 bit for bit, honest and forged; and its ANDs are the products' 2,187 each and the selects'."""
 from __future__ import annotations
 
+import json
 import random
+import subprocess
 from functools import reduce
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -143,7 +146,8 @@ def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[in
     # H4: the plane batch, the types' values at (ζ_p, r_k), and the registered claim at ρ_t
     r_k = rounds[:sh.NU]
     zeta_p = [g.getrandbits(128) for _ in range(sh.P_LOG)]
-    vt = [_mle([_mle(P[p], r_k) for p in range(sh.PP)], zeta_p) for P in tables]
+    eqk, eqp = eq_table(r_k), eq_table(zeta_p)
+    vt = [RS._dot(eqp, [_xor(e for e, bit in zip(eqk, P[p]) if bit) for p in range(sh.PP)]) for P in tables]
     rho = [g.getrandbits(128) for _ in range(sh.T_LOG)]
     coins = RS.Coins(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
                      tuple(rho), tuple(U))
@@ -336,3 +340,192 @@ def test_h_is_the_inner_sessions_h_round_read_at_row_r():
     assert RS.reads(sh, 2)["h"] == [0, 1]
     coins, msgs, _ = session(sh, 0)
     assert "h2" in _hits(sh, _ref(sh, {**msgs, "h": [msgs["h"][0] ^ 1] + msgs["h"][1:]}, RS.verifier_row(sh, coins)))
+
+
+def _cases(sh: RS.Shape, seed: int = 0) -> list[dict]:
+    """An honest rep's ports, each forgery's and random words."""
+    g = random.Random(9)
+    coins, msgs, _ = session(sh, seed)
+    v = RS.verifier_row(sh, coins)
+    cases = [RS.rows(sh, msgs, v)] + [RS.rows(sh, m, v) for _, _, m in _forgeries(sh, msgs, g)]
+    return cases + [{nm: [g.getrandbits(16) for _ in range(n)] for nm, n in RS.ports(sh)}]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("sh", [RS.Shape(2, 6, 1, 1), RS.Shape(1, 6, 2, 0), RS.Shape(2, 6, 0, 1)], ids=str)
+def test_the_unit_is_the_definitions_ands_and_computes_the_reference(sh):
+    """The M0 unit (through its layout, what C-Flock proves) on an honest rep, each forgery and random words equals the reference;
+    its inputs are the ports' bits, and its ANDs are the Definition's (`ands`: 2,187 a product and the selects) and
+    `copy_rows`' rows of ``B = 1`` (the leaf sums and the committed operands; one stacked slot's all-ones ``w_t`` is one AND)."""
+    from verity.ml.circuits.boolean.forms import ONE
+
+    low = RS.lowering(sh)
+    C = low.circuit
+    ands = [v for v in C.live() if C.kind[v] == "and"]
+    copies = sum(1 for v in ands if C.data[v][1].key() == ONE.key())
+    assert (len(ands) - copies, copies) == (RS.ands(sh), RS.copy_rows(sh))
+    assert C.counts()["inputs"] == 16 * sum(n for _, n in RS.ports(sh))
+    cases = _cases(sh)
+    got, _cut, ok = low.evaluate(np.array([sum((c[nm] for nm, _ in RS.ports(sh)), []) for c in cases], np.uint64))
+    assert int(ok) == (1 << len(cases)) - 1
+    for i, c in enumerate(cases):
+        assert got[i].astype(np.uint16).tolist() == RS.sparse_ref(sh, c), i
+    assert RS.sparse_ref(sh, cases[0]) == [0] * RS.out_words(sh) and all(any(RS.sparse_ref(sh, c)) for c in cases[1:])
+
+
+def test_the_copy_rows_at_the_binding_shape():
+    """`copy_rows` at the circuit-check binding: 6 residuals of several products (H1, the 3 H3 rounds, the plane batch, the
+    registered claim) and 35 committed operands (6 H2 claims, 2 H3 claims, 25 in Φ's tree of 14 factors, 2 ``w_t``)."""
+    assert RS.copy_rows(RS.Shape(2, 6, 1, 1)) == 6 * 2187 + 128 * 35 == 17_602
+
+
+BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+
+
+def _lean_statement(d: Path):
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                           "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"),
+                           "--program", str(d / "program.json"), "--registered", str(d / "registered.json")],
+                          capture_output=True, text=True, check=False)
+
+
+@pytest.mark.slow
+def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(tmp_path):
+    """One RecSparse statement over two reps of one session (`stage`): every row port is a read of the prover's registration, τ
+    at row 0 of its one row in both instances and every other port at row r; ``v`` is the verifier's own and ``out`` its zero
+    rows. Both instances hold and the unit agrees with the reference; with rep 1's first H3 round forged (the prover's
+    registration of another row), rep 1 alone fails at H3. When Lean is built, its `statement` accepts the honest files, and
+    refuses the forged prover's row against the verifier's own entry of the row the firewall committed (one salt each)."""
+    from verity.ml.commitments import hm96
+
+    sh = RS.Shape(2, 6, 1, 1)
+    g = random.Random(3)
+    tables = [_template(g, sh) for _ in range(sh.T)]
+    tau = [1, 0]
+    reps = [session(sh, seed, tau=tau, tables=tables) for seed in (0, 1)]
+    msgs = [{k: x for k, x in m.items() if k != "tau"} for _, m, _ in reps]
+    inst = RS.session_rows(sh, msgs, [RS.verifier_row(sh, c) for c, _, _ in reps], tau)
+    program = "ab" * 64
+    salts = {nm: [hm96.SHA512.fresh_salt() for _ in range(1 if nm == "tau" else 2)] for nm, _ in RS.ports(sh) if nm != "v"}
+    honest = RS.registrations(sh, program, inst, salts)
+    s = RS.stage(sh, inst, tmp_path / "honest", program, regs=honest)
+    assert s["holds"] == [True, True] and s["unit_agrees"] == [True, True] and s["nonzero_residuals"] == [[], []]
+    assert s["unit"] == "rec-sparse/n2-e6-s1-t1" and s["template"] == "RecSparse_v1{NU=2,ELL=6,S_LOG=1,T_LOG=1}"
+    reads = json.loads((tmp_path / "honest" / "registered.json").read_text())["ports"]
+    assert sorted(reads) == sorted([nm for nm, _ in RS.ports(sh)] + ["out"])
+    assert reads["tau"]["reads"] == [0, 0] and reads["tau"]["leaves"] == 1
+    assert all(reads[nm]["reads"] == [0, 1] for nm in reads if nm != "tau")
+    assert all(reads[nm]["root"] == honest[nm].root.hex() for nm in honest)
+    bad = [dict(r) for r in inst]
+    bad[1]["sc0"] = [bad[1]["sc0"][0] ^ 1] + bad[1]["sc0"][1:]
+    forged = RS.registrations(sh, program, bad, salts)["sc0"]
+    f = RS.stage(sh, inst, tmp_path / "forged", program, regs={**honest, "sc0": forged}, own={"sc0": honest["sc0"].entry()})
+    assert f["holds"] == [True, False] and f["nonzero_residuals"] == [[], ["h3"]] and f["unit_agrees"] == [True, True]
+    if not BIN.exists():
+        pytest.skip("the Lean verifier is not built")
+    p = _lean_statement(tmp_path / "honest")
+    assert p.returncode == 0, p.stdout + p.stderr
+    line = json.loads(p.stdout.splitlines()[0])
+    assert line["registered"] == {nm: {"value": e["value"], "root": e["root"]} for nm, e in reads.items()}
+    p = _lean_statement(tmp_path / "forged")
+    assert p.returncode == 1 and "sc0" in p.stdout, p.stdout + p.stderr
+
+
+# --- the prover at T = 1 -----------------------------------------------------------------------------------------------------
+
+TOY = RS.Shape(10, 7, 2, 0)
+
+
+class _Replay:
+    """`_sumcheck`'s generator, answering the coins a run drew."""
+
+    def __init__(self, coins):
+        self.coins = iter(coins)
+
+    def getrandbits(self, _n):
+        return next(self.coins)
+
+
+def _toy(seed: int, sh: RS.Shape = TOY, pos0: int = 2, count: int = 3):
+    """A hidden circuit of 100 rows (one cell in both A and B, one held twice in A), its range of ``count`` slots at
+    ``pos0`` in a block of 2^(ELL + 3) rows, the rep's fold points drawn, and h as the relay folds it
+    (`rec_session.hidden_fold`): ``(entries, points, U, h)``."""
+    from verity_flock.rec_session import hidden_fold
+
+    g, E = random.Random(seed), sh.ELL
+    a = [[g.randrange(1 << E) for _ in range(g.randrange(4))] for _ in range(100)]
+    b = [[g.randrange(1 << E) for _ in range(g.randrange(4))] for _ in range(100)]
+    a[0], b[0], a[1] = [5, 9], [5], [7, 7, 3]
+    rng = {"type": "unit", "net": "unit", "slot_log": E, "pos0": pos0, "count": count}
+    alpha, z = g.getrandbits(128), g.getrandbits(128)
+    rho, ts = ([g.getrandbits(128) for _ in range(E - 3)] for _ in range(2))
+    h = hidden_fold({"unit": {"unit_log": E, "a": a, "b": b}}, [rng], alpha, skip_weights(z), rho, ts)
+    pts = {"alpha": alpha, "z": z, "x_rest": rho, "y_rest": ts[::-1]}
+    return RS.entries(sh, a, b), pts, RS.layout_factors(sh, rho, ts[::-1], rng), h
+
+
+def _draws(seed: int):
+    g, drawn = random.Random(seed), []
+
+    def draw(elems, n):
+        drawn.append((list(elems), n))
+        return [g.getrandbits(128) for _ in range(n)]
+
+    return draw, drawn
+
+
+def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
+    """On a hidden circuit's entries, h as the relay folds it, and coins drawn a round at a time: the reference accepts the
+    rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG and u's P_LOG; the registered claim is
+    R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
+    B is one entry, the one held twice in A none."""
+    sh = TOY
+    ents, pts, U, h = _toy(0)
+    assert (0, 5, 1, 1) in ents and (0, 9, 1, 0) in ents and (1, 3, 1, 0) in ents and not any(e[:2] == (1, 7) for e in ents)
+    draw, drawn = _draws(1)
+    coins, msgs = RS.prove(sh, ents, pts, U, h, draw)
+    assert RS.sparse_ref(sh, RS.rows(sh, msgs, RS.verifier_row(sh, coins))) == [0] * RS.out_words(sh)
+    shape = [(len(e), n) for e, n in drawn]
+    assert shape == [(0, 6)] + [(2, 1)] * 6 + [(1, 0)] + [(d, 1) for d in sh.degrees] + [(sh.PP, sh.P_LOG)]
+    point = list(coins.rounds[:sh.NU]) + list(coins.zeta_p)
+    assert RS.table_value(RS.table(sh, ents, pad_to=0), point) == msgs["claim"]
+    c = RS.registered_claim(sh, coins, 0, pad_to=16)
+    assert c.pad == 2 and RS.table_value(RS.table(sh, ents, pad_to=16), point + [0, 0]) == msgs["claim"]
+    assert RS.table_value(RS.table(sh, ents, pad_to=0), point[:-1] + [point[-1] ^ 1]) != msgs["claim"]
+
+
+def test_the_provers_h3_rounds_are_the_generic_provers():
+    """H3's messages are `_sumcheck`'s on the same coins, over Q (each slot the template's planes, the entry bits low) and the
+    slots' Ũ; with 4 workers the messages are the same."""
+    sh, n = TOY, 1 << TOY.NU
+    ents, pts, U, h = _toy(2)
+    draw, _ = _draws(3)
+    coins, msgs = RS.prove(sh, ents, pts, U, h, draw)
+    E = sh.ELL
+    planes = [list(RS._planes(sh, e)) + [0] * (sh.PP - sh.P) for e in ents]
+    Q = [[planes[k][p] for _ in range(sh.S) for k in range(n)] for p in range(sh.PP)]
+    x_lo, y_lo = coins.x_lo(sh), coins.y_lo(sh)
+
+    def factors(t):
+        q = t[:-1]
+        return ([t[-1], mul(pts["alpha"], q[2 * E]) ^ q[2 * E + 1]] + [x_lo[j] ^ 1 ^ q[j] for j in range(E)]
+                + [y_lo[j] ^ 1 ^ q[E + j] for j in range(E)])
+
+    sc, rounds, _, _ = _sumcheck(_Replay(coins.rounds), Q + [[U[j // n] for j in range(n * sh.S)]], factors, msgs["v2"],
+                                 sh.degrees)
+    assert sc == msgs["sc"] and tuple(rounds) == coins.rounds
+    replay = iter([c for c in [coins.zeta_c, *[(r,) for r in coins.pre], (), *[(r,) for r in coins.rounds], coins.zeta_p]])
+    coins4, msgs4 = RS.prove(sh, ents, pts, U, h, lambda _e, _n: list(next(replay)), workers=4)
+    assert msgs4 == msgs and coins4 == coins
+
+
+def test_the_prover_refuses_entries_that_are_not_hs_circuit():
+    """Entries with one cell's B side flipped are not the circuit h was folded from: H1's sum fails before any message."""
+    ents, pts, U, h = _toy(4)
+    i = next(i for i, e in enumerate(ents) if e[2])
+    bad = list(ents)
+    bad[i] = bad[i][:3] + (bad[i][3] ^ 1,)
+    draw, drawn = _draws(5)
+    with pytest.raises(AssertionError, match="H1"):
+        RS.prove(TOY, bad, pts, U, h, draw)
+    assert drawn == [([], 6)]

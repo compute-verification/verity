@@ -54,6 +54,15 @@ def frameBytes (tag : String) (parts : List ByteArray) : ByteArray :=
 
 def frameHash (h : Hash) (tag : String) (parts : List ByteArray) : ByteArray := h.run (frameBytes tag parts)
 
+/-- `merkle._frame`'s hash, refusing what it refuses: a tag of `2 ^ 32` bytes or more, or a part of `2 ^ 64` or more, whose
+length overflows its field (Python's `int.to_bytes` raises `OverflowError`, where `frameBytes` wraps it). The trees' frames
+(`Domain`) are of constant tags and of digests, minimal integers and values under `max_proof_bytes`, which it never
+refuses. -/
+def frameHash? (h : Hash) (tag : String) (parts : List ByteArray) : Except String ByteArray :=
+  if 2 ^ 32 ≤ tag.toUTF8.size then throw "frame tag must be shorter than 2^32 bytes"
+  else if parts.any (2 ^ 64 ≤ ·.size) then throw "frame part must be shorter than 2^64 bytes"
+  else pure (frameHash h tag parts)
+
 /-- `RangeIndexedDomain(count)`'s identity: its canonical manifest `{"start":0,"step":1,"stop":count}` under the frame's
 tagged hash, tag `veritor/indexed-domain/range/v1`. -/
 def rangeIdentity (h : Hash) (count : Nat) : ByteArray :=
