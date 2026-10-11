@@ -832,6 +832,11 @@ def _planes(sh: Shape, e: tuple[int, int, int, int]) -> tuple[int, ...]:
     return tuple((row >> j) & 1 for j in range(sh.ELL)) + tuple((col >> j) & 1 for j in range(sh.ELL)) + (a, b)
 
 
+def table_m(sh: Shape, pad_to: int = PAD_TO) -> int:
+    """R's variables: its cells' (``NU + P_LOG + T_LOG``), at least ``pad_to`` (`registered_claim`'s padded point)."""
+    return max(pad_to, sh.NU + sh.P_LOG + sh.T_LOG)
+
+
 def table(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pad_to: int = PAD_TO) -> bytes:
     """R's bytes (``flock-circuit stacked --table``): cell ``k + 2^NU p`` is entry k's plane p (its row bits, column bits, a and
     b, then zero planes to P'), cell i at byte ``i >> 3``, bit ``i & 7``, then zero cells to ``2^pad_to`` (`registered_claim`'s
@@ -841,7 +846,7 @@ def table(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pad_to: int = PA
     n = 1 << sh.NU
     if sh.stacked or len(ents) != n:
         raise ValueError(f"{sh}: R of one template's 2^NU entries, not {len(ents)}")
-    m = max(pad_to, sh.NU + sh.P_LOG)
+    m = table_m(sh, pad_to)
     e = np.array(ents, dtype=np.int64).reshape(n, 4)
     bits = np.zeros((1 << (m - sh.NU), n), np.uint8)
     for j in range(sh.ELL):

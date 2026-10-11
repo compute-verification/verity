@@ -25,6 +25,10 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 public part's fold, the shape is holo (`rec_algebra.Shape.holo`), and h's round is one of the message rounds, its row
 registered as the others' are; z_partial's round draws no coins, which `rec_algebra.Coins` skips.
 
+**The sparse phase and R** (``--sparse``, with ``--circuit``): RecSparse over both reps' sparse streams (`stage_sparse`) and,
+when the session committed the stacked table R, R's levels as RecOpen statements, its openings on the chain after both
+reps' (rep `STACKED_REP`), and its registered opening (`stage_stacked`), which reads the ``rec-claim`` RecSparse reads.
+
 **Forgeries** (``--forge``), staged under ``OUT/forged-<kind>/``, each beside the verifier's files of the honest session:
 
 * ``message``: the prover opens rep 0's first message round to another row (one bit of its first word), under the salt and
@@ -55,6 +59,7 @@ refused before anything is staged (`rec_shape.check`, exit 2).
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import shutil
@@ -143,20 +148,20 @@ def verifier(public: dict, fold: dict, pts: dict | None = None) -> SimpleNamespa
     return SimpleNamespace(sh=sh, extras=extras, reps=reps)
 
 
-def message_rounds(public: dict, private: dict, sh: A.Shape) -> list[dict]:
+def message_rounds(public: dict, private: dict, sh: A.Shape, streams: list[str] | None = None) -> list[dict]:
     """Per round that absorbs message elements (`rec_algebra.rounds`), both reps' ``c_k`` (the verifier's) and their rows and
-    salts (the prover's), checked to be one row a round of the algebra's element counts."""
+    salts (the prover's), checked to be one row a round of the algebra's element counts. ``streams``: other streams than
+    the reps' (row r stream r's)."""
     prv = {(p["stream"], p["k"]): p for p in private["rounds"]}
     want = [len(x) for x in A.rounds(sh)]
     per = []
-    for r in range(2):
-        rs = [x for x in _stream(public, r) if x["commits"]]
+    for stream in streams or [f"{TABLE}/rep{r}" for r in range(2)]:
+        rs = sorted((x for x in public["rounds"] if x["stream"] == stream and x["commits"]), key=lambda x: x["k"])
         ps = [prv[(x["stream"], x["k"])] for x in rs]
         if [len(p["elements"]) for p in ps] != want or any(len(x["commits"]) != 1 or len(p["rows"]) != 1 for x, p in zip(rs, ps)):
-            raise ValueError(f"rep {r}: its message rounds are not one row a round of {want} elements")
+            raise ValueError(f"{stream}: its message rounds are not one row a round of {want} elements")
         per.append([(bytes.fromhex(x["commits"][0]), p["rows"][0], bytes.fromhex(p["salts"][0])) for x, p in zip(rs, ps)])
-    return [{"commits": [per[r][i][0] for r in range(2)], "rows": [per[r][i][1] for r in range(2)],
-             "salts": [per[r][i][2] for r in range(2)]} for i in range(len(want))]
+    return [{k: [p[i][j] for p in per] for j, k in enumerate(("commits", "rows", "salts"))} for i in range(len(want))]
 
 
 def messages(program: str, mrs: list[dict], ports: list[tuple[str, str]] | None = None) -> tuple[dict, dict]:
@@ -234,6 +239,41 @@ def stage_sparse(public: dict, private: dict, vf: SimpleNamespace, program: str,
     if claim is not None:
         sregs["claim"] = claim
     return SP.stage(sp, inst, out, program, regs=sregs, own=sown, evaluate=evaluate)
+
+
+#: R's openings follow both reps' in the chain (`rec_outer.chain_order` is rep-major)
+STACKED_REP = 2
+
+
+def stacked_reads(inner: Path, public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict) -> SimpleNamespace:
+    """The stacked table R's registered opening (``flock-circuit stacked``'s proof on ``stacked/rep0``) as the verifier reads
+    it: its opening-only shape at R's m (`rec_sparse.table_m`), its points both reps' registered claims (`sparse_reps`), its v
+    and query rows from the stream's coins (`rec_algebra.verifier_rows`), its openings as rep `STACKED_REP`'s, their
+    coefficients and R's tops."""
+    sh = A.Shape(SP.table_m(sp), 6, RL.REPS, salt_len=0, opening_only=True)
+    reps_ = sparse_reps(public, private, vf, sp, rng)
+    stream = f"{RL.STACKED}/rep0"
+    rounds = [[G.of_hex(c) for c in r["coins"]] for r in sorted((r for r in public["rounds"] if r["stream"] == stream), key=lambda r: r["k"])]
+    v, info = A.verifier_rows(sh, rounds, [SP.registered_claim(sp, c, r) for r, (c, _) in enumerate(reps_)], [])
+    qs = [dataclasses.replace(q, rep=STACKED_REP) for q in V.queries(public, private, V.load(inner, RL.STACKED)[2], RL.STACKED)]
+    coefs = coefficients(SimpleNamespace(reps={STACKED_REP: SimpleNamespace(info=info)}), qs)
+    return SimpleNamespace(sh=sh, reps=reps_, qs=qs, coefs=coefs, tops=V.tops(public, private, stream, RL.STACKED), v=v)
+
+
+def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace, chain: O.Chain, coefs: dict, claim, out: Path,
+                  evaluate: bool = True) -> dict:
+    """R's levels as RecOpen statements on the chain (their tops ``rec-top-stacked-L<level>``) and its registered opening
+    (`rec_residuals.stage_opening`): the stacked stream's messages (``rec-stacked-c<i>``), ``claim`` the prover's
+    ``rec-claim``, which RecSparse reads too, and the chain's rows either side of R's openings."""
+    levels = {}
+    for lv in O.levels(sr.qs):
+        tops = O.TopValue.build(program, lv["level"], {STACKED_REP: sr.tops[lv["level"]]}, f"rec-top-stacked-L{lv['level']}")
+        levels[f"L{lv['level']}"] = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops)
+    mrs = message_rounds(public, private, sr.sh, [f"{RL.STACKED}/rep0"])
+    regs, own = messages(program, mrs, [(f"m{i}", f"rec-stacked-c{i}") for i in range(len(mrs))])
+    acc = (chain.reg, *chain.rep_ends(STACKED_REP))
+    opening = RR.stage_opening(sr.sh, {**regs, "claim": claim}, acc, sr.v, out / "open", evaluate, own)
+    return {"m": sr.sh.m, "openings": len(sr.qs), "levels": levels, "opening": opening}
 
 
 def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
@@ -356,7 +396,8 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
     session whose V* is not the cap's shape (`rec_shape.check`) before staging. ``sparse``: the bucket's `rec_sparse.Shape`
     and META's range of the hidden circuit; the sparse phase's RecSparse statement over both reps (`sparse_reps`), its
-    messages read as the firewall committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``.
+    messages read as the firewall committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``; with
+    R in the session, `stage_stacked` under ``out/stacked``.
     Returns what each statement costs and holds, and the verifier's own seconds."""
     inner, out = Path(inner), Path(out)
     t = {}
@@ -375,9 +416,12 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
 
         rec_shape.check(sh, lvls, cap)
     coefs = coefficients(vf, qs)
+    sr = stacked_reads(inner, public, private, vf, *sparse) if sparse and RL.STACKED in public["link"]["roots"] else None
+    allq = qs + (sr.qs if sr else [])
+    coefs |= sr.coefs if sr else {}
     t["coefficients_s"] = round(time.perf_counter() - t0, 2)
     ts = {rep: V.tops(public, private, f"{TABLE}/rep{rep}", TABLE) for rep in sorted(proofs)}
-    chain = O.Chain.build(program, qs, coefs, None if salts is None else acc_salts(Path(salts), len(qs) + 1))
+    chain = O.Chain.build(program, allq, coefs, None if salts is None else acc_salts(Path(salts), len(allq) + 1))
     res: dict = {"shape": [sh.m, sh.k_log, sh.claims], "holo": sh.holo, "openings": len(qs), "chain_rows": chain.reg.leaves,
                  "acc_root": chain.reg.root.hex(), "program": program, "verifier": t} | ({"cap": cap.spec()} if cap else {})
     p_last = chain.rep_ends(0)[1] - 1
@@ -424,8 +468,16 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
         t["entries_s"] = round(time.perf_counter() - t0, 2)
     if sparse:
         t0 = time.perf_counter()
-        res["sparse"] = stage_sparse(public, private, vf, program, regs, own, *sparse, out / "sparse", evaluate)
+        claim = None
+        if sr is not None:
+            inst = SP.session_rows(sparse[0], [m for _, m in sr.reps], [SP.verifier_row(sparse[0], c) for c, _ in sr.reps])
+            claim = SP.registrations(sparse[0], program, inst)["claim"]
+        res["sparse"] = stage_sparse(public, private, vf, program, regs, own, *sparse, out / "sparse", evaluate, claim)
         res["sparse"]["stage_s"] = round(time.perf_counter() - t0, 1)
+        if sr is not None:
+            t0 = time.perf_counter()
+            res["stacked"] = stage_stacked(public, private, program, sr, chain, coefs, claim, out / "stacked", evaluate)
+            res["stacked"]["stage_s"] = round(time.perf_counter() - t0, 1)
     if algebra:
         a0, a1 = zip(*(chain.rep_ends(r) for r in range(2)))
         reads = {nm: (regs[nm], [0, 1]) for nm in regs}
@@ -503,7 +555,9 @@ def main(argv=None) -> int:
     if a.forge is not None:
         return 0
     held = all(not s["not_opened"] and not s["not_summed"] for s in res["levels"].values())
-    sp = res.get("sparse")
+    sp, sr = res.get("sparse"), res.get("stacked")
+    held = held and (sr is None or (all(not s["not_opened"] and not s["not_summed"] for s in sr["levels"].values())
+                                    and all(all(p["holds"]) for p in sr["opening"])))
     return 0 if held and all(all(p["holds"]) for p in alg) and (sp is None or all(sp["holds"])) else 1
 
 
