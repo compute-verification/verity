@@ -1,4 +1,5 @@
 import VStar.Compose
+import VStar.Holo
 import VStar.Json
 import VStar.Menu.Pinned
 import VStar.Stage
@@ -17,7 +18,8 @@ A statement's bindings are `{"partition", "program", "program_digests"}`: its `v
 SHA-512 and its `program_digests` (`circuit.program_digests`: the program digest keyed by the descriptor id core's codec
 names the Definition by, which for `InnerRepCheck_v2{S}` holds S), as core's descriptor codec gives them. `BINDINGS` is a
 JSON file of one statement's, or for `stage` a list of them in `statements`' order. Each file is written line by line; its
-SHA-512, size and unit rows go to stdout as JSON.
+SHA-512, size and unit rows go to stdout as JSON. `--holo` after `inner`'s, `statements`' or `stage`'s arguments: the inner
+session is holo (`statementsHolo`), and each `InnerRepCheck` file says so in META (`emitCircuitHolo`).
 -/
 
 namespace VStar.Cli
@@ -38,13 +40,13 @@ def bindingsOf (j : Json) : Except String Bindings := do
   let o ← jObj j ["partition", "program", "program_digests"] "bindings"
   pure ⟨← jStr (o "partition") "partition", ← jStr (o "program") "program", o "program_digests"⟩
 
-def write (u : UnitC) (sub : Sub) (b : Bindings) (out : String) : IO Json := do
+def write (u : UnitC) (sub : Sub) (b : Bindings) (out : String) (holo : Bool := false) : IO Json := do
   let l ← orFail u.laid
   let h ← IO.FS.Handle.mk out .write
   let put : String → StateT Digests IO Unit := fun s => do
     h.putStr s
     modify (·.update s)
-  let e ← orFail (emitCircuit put u l sub b)
+  let e ← orFail (emitCircuitOf holo put u l sub b)
   let ((), d) ← e.run {}
   h.flush
   pure (Json.mkObj [("sha512", Flock.hexOf d.sha512.finish), ("bytes", (d.bytes : Json)), ("unit_rows", (l.useful : Json))])
@@ -81,22 +83,24 @@ def shapes : List String → IO (Array (Algebra.Shape × Array String))
   | _ => throw (IO.userError "menu: shapes are M K_LOG CLAIMS triples")
 
 def cmd (args : List String) : IO UInt32 := do
-  match args with
+  let holo := args.getLast? == some "--holo"
+  match if holo then args.dropLast else args with
   | ["rec-open", L, H, b, out] =>
+    if holo then throw (IO.userError "rec-open: a level's statement is not holo")
     let L ← parseNat L
     let H ← parseNat H
     IO.println (← write (← orFail (recOpenUnit L H)) (recOpenSub L H) (← orFail (bindingsOf (← readJson b))) out).compress
     pure 0
   | ["inner", s, name, b, out] =>
     let S ← orFail (RepS.ofJson (← readJson s))
-    IO.println (← write (← orFail (innerUnit S name)) (innerSub S name) (← orFail (bindingsOf (← readJson b))) out).compress
+    IO.println (← write (← orFail (innerUnit S name)) (innerSub S name) (← orFail (bindingsOf (← readJson b))) out holo).compress
     pure 0
   | ["statements", m, k, c] =>
-    let st ← orFail (statements (← shape m k c))
+    let st ← orFail (statementsOf (← shape m k c) holo)
     IO.println (Json.arr (st.map stmtJson)).compress
     pure 0
   | ["stage", m, k, c, b, out] =>
-    let st ← orFail (statements (← shape m k c))
+    let st ← orFail (statementsOf (← shape m k c) holo)
     let bj ← readJson b
     let bs ← orFail (do (← jArr bj "bindings").mapM bindingsOf)
     unless bs.size == st.size do throw (IO.userError s!"{bs.size} bindings for {st.size} statements")
@@ -104,11 +108,12 @@ def cmd (args : List String) : IO UInt32 := do
     for (s, bb) in st.zip bs do
       let dir := s!"{out}/{s.dir}"
       IO.FS.createDirAll dir
-      let j ← write (← orFail s.unit) s.sub bb s!"{dir}/circuit.txt"
+      let j ← write (← orFail s.unit) s.sub bb s!"{dir}/circuit.txt" (holo && s matches .inner ..)
       res := res.push (j.mergeObj (Json.mkObj [("name", s.name), ("dir", s.dir)]))
     IO.println (Json.arr res).compress
     pure 0
   | "menu" :: given =>
+    if holo then throw (IO.userError "menu: the pinned menus' sessions are plain")
     let mut refused := false
     let todo ← if given.isEmpty then pure menuSessions else shapes given
     let runs := todo.map fun (sh, ws) => (sh, ws, Task.spawn fun _ => statements sh)
@@ -122,8 +127,9 @@ def cmd (args : List String) : IO UInt32 := do
         IO.println (Json.mkObj (base ++ [("refused", (e : Json))])).compress
     pure (if refused then 1 else 0)
   | _ =>
-    IO.eprintln ("usage: vstar rec-open LANES H BINDINGS OUT | vstar inner S NAME BINDINGS OUT | "
-      ++ "vstar statements M K_LOG CLAIMS | vstar stage M K_LOG CLAIMS BINDINGS OUT | vstar menu [M K_LOG CLAIMS ...]")
+    IO.eprintln ("usage: vstar rec-open LANES H BINDINGS OUT | vstar inner S NAME BINDINGS OUT [--holo] | "
+      ++ "vstar statements M K_LOG CLAIMS [--holo] | vstar stage M K_LOG CLAIMS BINDINGS OUT [--holo] | "
+      ++ "vstar menu [M K_LOG CLAIMS ...]")
     pure 2
 
 end VStar.Cli

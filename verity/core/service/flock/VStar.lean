@@ -11,4 +11,5 @@ import VStar.Stream
 import VStar.PyJson
 import VStar.Compose
 import VStar.Json
+import VStar.Holo
 import VStar.Cli
