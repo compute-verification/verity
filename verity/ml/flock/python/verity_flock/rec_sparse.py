@@ -742,8 +742,10 @@ def statement(sh: Shape, n: int):
 
 def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]]], salts: Mapping | None = None) -> dict:
     """The prover's registered values of the row ports, from `session_rows`' instances: each port as ``rec-sparse-<port>``, row r
-    rep r's, but ``tau``, the session's one row. ``salts``: per port, its rows' salts (default fresh)."""
+    rep r's, but ``tau``, the session's one row, and ``claim``, ``rec-claim`` (`rec_outer.CLAIM_VALUE`, which the registered
+    opening reads too). ``salts``: per port, its rows' salts (default fresh)."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from .rec_outer import CLAIM_VALUE
 
     sh = _shape(sh)
     out = {}
@@ -751,7 +753,7 @@ def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]
         if nm == "v":
             continue
         rows = [list(inst[0][nm])] if nm == "tau" else [list(r[nm]) for r in inst]
-        out[nm] = RG.Registered.commit(program, f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
+        out[nm] = RG.Registered.commit(program, CLAIM_VALUE if nm == "claim" else f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
     return out
 
 
