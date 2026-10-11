@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Scratch job (cursor/rec-hello-integration-8c79, never a PR): main + #1770 + #1786 + cursor/rec-session-hello-8c79.
+# Scratch job (cursor/rec-c3-hello-integration-8d57, never a PR): main + #1793 + #1786 + #1798 (cursor/rec-session-hello-8c79).
 # 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 with the relay that keeps the prover's Hello (R's root a round
 # commitment on stacked/rep0), then over its inner session: the two records' Hellos, rec-transcript (innerCommits), rec-coins
 # (check 5) on the relay's record and on the prover's, L3 staged (c3_e2e.py stage level3), proved by C-Flock --zk under the
 # verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify under --rec-inner (plain) with check 5's
-# inputs, with and without the inner transcript, on each record. Outputs under out/: honest/ (88's), e2e/, exits.txt.
+# inputs on the prover's record (option (b)), with and without the inner transcript. Outputs under out/: honest/ (88's), e2e/, exits.txt.
 #   research run --on vy-cpu-1 --mem-gb 40 --source . --cwd source --declared-output 'out/*' -- \
 #     python3 tools/verity/check/slot.py --by rec-hello -- bash $0
 set -uxo pipefail
@@ -38,8 +38,10 @@ print(json.dumps({"same_bytes": v["hello"] == p["hello"], "canonical": p["hello"
 EOF
 echo "hello exit $?" | tee -a $X
 
-$LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/session > $E/rec-transcript.txt 2>&1
-echo "rec-transcript session exit $?" | tee -a $X
+for s in prover session; do
+  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s > $E/rec-transcript-$s.txt 2>&1
+  echo "rec-transcript $s exit $?" | tee -a $X
+done
 for s in session prover; do
   $LEAN_BIN rec-coins --rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/$s \
     > $E/rec-coins-$s.json 2> $E/rec-coins-$s.err
@@ -99,10 +101,8 @@ v() {  # v NAME ARGS...: Lean verify on the drawn session
   /usr/bin/time -v -o $D/time-lean-$n.txt $LEAN_BIN verify "${LV[@]}" "$@" --session $SESS > $D/lean-$n.log 2>&1
   echo "lean $n exit $?" | tee -a $X
 }
-v session-transcript "${IN[@]}" --rec-inner-session $H/inner/session --rec-inner-transcript $H/inner/public.json
-v session "${IN[@]}" --rec-inner-session $H/inner/session
-v prover "${IN[@]}" --rec-inner-session $H/inner/prover
 v prover-transcript "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json
+v prover "${IN[@]}" --rec-inner-session $H/inner/prover
 cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt | cut -c1-300 > $D/unit.txt; du -sb $C/* > $D/sizes.txt
 grep -h "^VERDICT" $D/lean-*.log | cut -c1-600 > $E/verdicts.txt
 for f in $D/lean-*.log; do echo "== $f"; grep -v "^VERDICT" $f | tail -3; done >> $E/verdicts.txt
