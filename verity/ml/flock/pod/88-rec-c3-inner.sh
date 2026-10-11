@@ -17,6 +17,8 @@
 # which cpu-slices.sh's ranges assume):
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
+#   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
+#   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
@@ -24,7 +26,7 @@ export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
 
-N=${N:-16}; D=$S/stage; V=$S/v
+N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 (
@@ -42,8 +44,8 @@ python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --
 cat $O/stage.json
 
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
-python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo > $O/schedule.json || exit 1
-python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt \
+python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA > $O/schedule.json || exit 1
+python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt $SPA \
   > $O/session.log 2>&1 &
 PP=$!
 ADDR=
@@ -68,7 +70,7 @@ wait $FP || { tail -30 $O/build-fold.log; exit 1; }
 echo "fold exit $?"
 python3 -m verity_flock.rec_session --check-fold $O/fold.json --inner $O/inner > $O/check-fold.json; echo "check-fold exit $?"
 /usr/bin/time -v -o $O/time-vstage.txt python3 -m verity_flock.rec_vstage stage $O/inner $O/fold.json $V --points $O/points.json \
-  --levels none > $O/vstage.json 2> $O/vstage.err
+  --levels none $SPA ${SPARSE:+--circuit $D/circuit.txt} > $O/vstage.json 2> $O/vstage.err
 echo "vstage exit $?"
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage-sizes.txt 2>&1
 
@@ -78,7 +80,7 @@ $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $D/circ
 echo "lean exit $?" | tee $O/lean-exit.txt
 
 python3 - $O <<'EOF'
-import json, re, sys
+import json, os, re, sys
 from pathlib import Path
 from verity_flock import rec_live as RL
 o = Path(sys.argv[1])
@@ -104,7 +106,9 @@ s = {"stage": stage, "served": served[0] if served else text("session.log")[-150
      "fold": {k: v for k, v in (js("fold.json") or {}).items() if k in ("m", "k_log", "hidden")} or text("fold.err")[-600:],
      "check_fold": js("check-fold.json"),
      "vstage": {k: vs.get(k) for k in ("shape", "holo", "openings", "chain_rows")} | {
-         "algebra": [{k: p.get(k) for k in ("part", "holds", "unit_agrees", "instances", "of_residuals")} for p in vs.get("algebra", [])]}
+         "algebra": [{k: p.get(k) for k in ("part", "holds", "unit_agrees", "instances", "of_residuals")} for p in vs.get("algebra", [])],
+         "sparse": vs.get("sparse") and {k: vs["sparse"].get(k) for k in ("template", "unit", "instances", "ands", "holds", "unit_agrees",
+                                                                         "nonzero_residuals")}}
      if vs else text("vstage.err")[-1500:], "vstage_sizes": text("vstage-sizes.txt"),
      "lean": {"exit": text("lean-exit.txt").strip(), "tail": text("lean.log")[-400:]},
      "prover_peak_gb": int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", t).group(1)) / 2**20 if t else None,
@@ -115,6 +119,9 @@ ok = {"session": bool(served) and bool(served[0].get("session")), "schedule": s[
       "replay": bool(up) and up["verdict"].get("accepted") is True, "vstar": isinstance(s["vstar"], dict) and s["vstar"].get("accepted") is True,
       "check_fold": bool(s["check_fold"]) and all(s["check_fold"]["comb_plus_h_is_full"]) and all(s["check_fold"]["h_nonzero"]),
       "vstage": bool(vs) and vs.get("holo") is True and bool(vs.get("algebra")) and all(all(p["holds"]) for p in vs["algebra"])}
+if os.environ.get("SPARSE"):
+    ok["sparse"] = bool(served) and (served[0].get("sparse") or {}).get("reps") == RL.REPS and bool(vs.get("sparse")) \
+        and vs["sparse"]["holds"] == [True] * RL.REPS
 s["ok"] = ok
 (o / "summary.json").write_text(json.dumps(s, indent=1))
 print(json.dumps(s))
