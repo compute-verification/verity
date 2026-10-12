@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.HoloValues.Reps
 import Proofs.Flock.C3.PubRows.Prefix
 import Proofs.Flock.C3.Compose.Honest
+import Proofs.Flock.Soundness.Refine.HoloRepConverse
 
 /-!
 # n2: the holo values at the honest family
@@ -10,9 +11,15 @@ the inner transcript the verifier holds). Its route is C's holo forms, not `repP
 `zclc_of_residuals_dec` and `lincheck_of_residuals_hw` (through `decode_check_holo`, `decode_part_holo` and `ResZeroAtH`,
 with `build_eval`, `residuals_eq_run`, `zerocheck_of_residuals`, `ringSwitch_of_residuals`, `ligerito_of_residuals` and
 `hlg_of_frames` as C generalized them). `prog_of_zclc`, `prog_of_algebra`, `run_of_algebra` and `run_of_frames` conclude
-that the plain `repProg` accepts, and a holo record's `h` round before r′ fails it, so a play of `holoRepC` needs a
-transcript-level holo rep program and its converse (`Soundness/Refine/RepConverse.lean`'s `repProg` with that round;
-gap n2a), which no definition states yet.
+that the plain `repProg` accepts, and a holo record's `h` round before r′ fails it, so a play of `holoRepC` goes through
+the transcript-level holo rep program (n2a): `holoRepProg` (`Soundness/Refine/HoloRep.lean`), its refinement to
+`holoRepC` (`holoRep_refines`, `HoloRefines.lean`) and its run from the stages' checks (`holoProg_of_checks`,
+`HoloRepConverse.lean`).
+
+As stated the stub is false: no hypothesis reads the decoder `dec`. At `dec := fun _ _ => []` every step of the inner
+transcript is a coin, `repsOf` finds no play of `holoRepC` (its zerocheck receives messages first) and returns its
+default, and `HReps` fails at every accepted outcome. It needs `dec` tied to V*'s layers: each rep's segment of the
+tape is its proof's messages (`holoRepMsgs`) at its rounds' coins.
 -/
 
 namespace FlockC3.HoloValues
