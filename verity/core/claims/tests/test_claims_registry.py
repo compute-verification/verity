@@ -56,6 +56,14 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
+def test_bandwidth_device_claims_are_measured_and_cited_separately() -> None:
+    device, inst = get("bandwidth-device"), get("bandwidth-instantiation")
+    assert (device.kind, device.standing) == ("model", None)
+    assert all((get(i).kind, get(i).standing) == ("assumption", "measured")
+               for i in ("bandwidth-s-chip", "bandwidth-side-cap", "bandwidth-regen-time"))
+    assert (inst.kind, inst.standing) == ("assumption", "conjectured") and "uniformly random blocks" in inst.name
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")

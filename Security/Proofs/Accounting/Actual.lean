@@ -6,6 +6,7 @@ import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Transducer
 import Proofs.Accounting.Actual.Ticks
+import Proofs.Accounting.Actual.Source
 
 /-!
 # The actual circuit's guarantees
@@ -37,4 +38,6 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Ticks.lean`: memory accounting's `held_tick` (a width-0 held gate at a coin-dependent tick, causal under
   v2.2's state as seen) is closed by v2.4's content: no holding makes it causal from every tick (`held_tick_closed`),
   and it admits one (`tick_holding`).
+* `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
+  `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
 -/
