@@ -221,6 +221,11 @@ def ops : Openings :=
 
 theorem rows_size (ℓ : ℕ) : ((M.ops sh l kap cl k₀ c).rows ℓ).size = (sh.sched.levels[ℓ]!).q := Array.size_ofFn
 
+theorem rows_get {ℓ j : ℕ} (hj : j < (sh.sched.levels[ℓ]!).q) :
+    ((M.ops sh l kap cl k₀ c).rows ℓ)[j]! = M.row l ℓ j := by
+  rw [getElem!_pos _ j (by rw [rows_size]; exact hj)]
+  exact Array.getElem_ofFn ..
+
 /-- `SessionAt`'s coefficient conjunct at `kap := o.kappa`, by definition. -/
 theorem coef_eq (ℓ j : ℕ) : (M.ops sh l kap cl k₀ c).coef ℓ j =
     RecCoins.coefAt (kap[ℓ]!) (levelLanes sh ℓ) (eqTable ((M.ops sh l kap cl k₀ c).alpha ℓ))[j]! := rfl
