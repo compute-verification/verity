@@ -26,6 +26,15 @@ observations so far, and so do its sends to the rest, as `Ticked` allows: neithe
 from every tick: the probability that the chip's committed tags pass while `reads + M + 1 + βs T + m b + λ < k b` is at most
 `((k − 1)/N)^s + C(N, m) 2^{βs T}/2^{h m} + C(T q, k − m)/2^λ`. `audit_reads_ro` is `AuditInteractiveRO`'s when the rest's
 signal ignores the oracle, and `audit_ingress` reads HBM's widths as ingress from HBM's leaves (`ingressFrom`).
+
+`splits_of_links` derives `Splits` when every wire into the chip runs on a port of HBM, of the rest or of the oracle:
+the rest's ports from the model's `Alphabet` (their signals at a tick are one of `2^{βs}`, `βs` their capacities summed),
+and the other two from what the model has yet to state:
+- `PassiveMemory`: HBM's ports deliver a function of the store and of what the chip did, at most `2^{wd}` signals for
+  each such `a`, `wd` the width the chip's requests fix;
+- `OracleLocation`: the oracle's ports deliver a function of what the chip did and of the oracle's answers to the
+  queries that fixes.
+`audit_links` and `audit_links_ro` are B3 from these.
 -/
 
 namespace Bandwidth
@@ -177,6 +186,27 @@ def reads {L : Type*} {N b h : ℕ} (I : Interface L N b h) (S : Store N b × Or
     (t₀ T : ℕ) (r : Store N b × Oracle N b h) : ℕ :=
   ∑ i ∈ Finset.range T, I.width (t₀ + i) ((S r).acts ↑X (Set.Ico t₀ (t₀ + i)))
 
+/-- **Passive memory** at HBM's ports over the window: what they deliver to the chip at each tick `u` is a function `G`
+of the store and of what the chip did since `t₀`, and given what the chip did, `a`, takes at most `2^{wd u a}` values:
+a reply carries only its values, at the width the chip's requests fix. -/
+def PassiveMemory {L K : Type*} {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (hbmPorts : List (K × L))
+    (wd : ℕ → Acts L → ℕ) : Prop :=
+  ∃ G : Store N b → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ)),
+    (∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
+      G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))) ∧
+    ∀ u a, (Set.range fun E => G E u a).encard ≤ ((2 ^ wd u a : ℕ) : ℕ∞)
+
+/-- **The oracle as a location** at its ports over the window: what they deliver to the chip at each tick `u` is a
+function of what the chip did since `t₀`, `a`, and of the oracle's answers to the queries `Q u a`. -/
+def OracleLocation {L K : Type*} {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (orPorts : List (K × L))
+    (Q : ℕ → Acts L → List (Fin N × Bits b)) : Prop :=
+  ∃ R : ℕ → Acts L → List (Bits h) → List (Set (ℕ × L × ℕ × ℕ)),
+    ∀ E O, ∀ i < T, portSignals S link orPorts (E, O) (t₀ + i) =
+      R (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
+        ((Q (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))).map O)
+
 end Causal
 
 namespace SecurityProofs.Causal
@@ -283,6 +313,132 @@ theorem audit_ingress (S : Store N b × Oracle N b h → Actual.Run L) (hc : Cau
     Finset.sum_le_sum fun i hi => hw _ i (Finset.mem_range.1 hi)
   have := hx.2
   omega
+
+/-- A set of at most `2^w` elements injects into `Bits w`. -/
+theorem exists_bits {α : Type*} (s : Set α) (w : ℕ) (hs : s.encard ≤ ((2 ^ w : ℕ) : ℕ∞)) :
+    ∃ f : α → Bits w, Set.InjOn f s := by
+  obtain ⟨f, -, hf⟩ := (Set.finite_of_encard_le_coe hs).exists_injOn_of_encard_le (t := (Set.univ : Set (Bits w)))
+    (by rw [Set.encard_univ, ENat.card_eq_coe_fintype_card]; simpa [Pous.Bits] using hs)
+  exact ⟨f, hf⟩
+
+/-- `w` bits read out as a list, highest index first, are the bits. -/
+theorem bits_inj {w : ℕ} {v v' : Bits w}
+    (h : (List.range w).reverse.map (fun j => if hj : j < w then v ⟨j, hj⟩ else false) =
+      (List.range w).reverse.map (fun j => if hj : j < w then v' ⟨j, hj⟩ else false)) : v = v' := by
+  funext ⟨j, hj⟩
+  have := List.map_inj_left.1 h j (by simp [hj])
+  simpa [hj] using this
+
+omit [LinearOrder L] in
+/-- **The links split what crosses into the chip**: when every wire into `X` runs on a port of HBM, the rest or the
+oracle, the links are alphabets, HBM's ports are passive memory of widths `wd` and the oracle's ports a location asked
+`Q`, then `Splits` holds for an interface of widths `wd`, queries `Q` and `βs` the rest's ports' capacities summed, whose
+rest's signal ignores the oracle when the rest's ports' signals do. -/
+theorem splits_of_links (S : Store N b × Oracle N b h → Actual.Run L) {K : Type*} (β : K → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T : ℕ)
+    (hbmPorts sidePorts orPorts : List (K × L))
+    (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X →
+      (link r g a, (S r).A.x g) ∈ hbmPorts ++ sidePorts ++ orPorts)
+    (wd : ℕ → Acts L → ℕ) (hpm : PassiveMemory S link X t₀ T hbmPorts wd)
+    (Q : ℕ → Acts L → List (Fin N × Bits b)) (hor : OracleLocation S link X t₀ T orPorts Q) :
+    ∃ I : Interface L N b h, I.width = wd ∧ I.ask = Q ∧
+      Splits S X t₀ T (sidePorts.map fun p => β p.1).sum I ∧
+      ((∀ E O O' u, portSignals S link sidePorts (E, O) u = portSignals S link sidePorts (E, O') u) →
+        ∀ E O O' u a, I.side E O u a = I.side E O' u a) := by
+  obtain ⟨G, hG, hGc⟩ := hpm
+  obtain ⟨R, hR⟩ := hor
+  set βs := (sidePorts.map fun p => β p.1).sum
+  choose fH hfH using fun u a => exists_bits _ _ (hGc u a)
+  choose fS hfS using fun u => exists_bits _ βs (portSignals_encard_le S β link hα u sidePorts)
+  let I₀ : Interface L N b h :=
+    { width := wd
+      hbm := fun E u a j => if hj : j < wd u a then fH u a (G E u a) ⟨j, hj⟩ else false
+      side := fun E O u _ j => if hj : j < βs then fS u (portSignals S link sidePorts (E, O) u) ⟨j, hj⟩ else false
+      ask := Q
+      cross := fun _ _ _ => ∅ }
+  let key : ℕ → Store N b × Oracle N b h → Acts L × Ticked.Obs h := fun u r =>
+    ((S r).acts ↑X (Set.Ico t₀ u), I₀.obs βs r.1 r.2 u ((S r).acts ↑X (Set.Ico t₀ u)))
+  let cross : ℕ → Acts L → Ticked.Obs h → Cross L := fun u a x =>
+    Function.extend (key u) (fun r => (S r).crossing (↑X)ᶜ ↑X {u}) (fun _ => ∅) (a, x)
+  refine ⟨{ I₀ with cross := cross }, rfl, rfl, fun E O i hi => ?_, fun h0 E O O' u a => ?_⟩
+  swap
+  · funext j
+    simp only [I₀, h0 E O O' u]
+  have hf : Function.FactorsThrough (fun r => (S r).crossing (↑X)ᶜ ↑X {t₀ + i}) (key (t₀ + i)) := by
+    rintro ⟨E₁, O₁⟩ ⟨E₂, O₂⟩ hk
+    have hG1 := hG E₁ O₁ i hi
+    have hG2 := hG E₂ O₂ i hi
+    have hR1 := hR E₁ O₁ i hi
+    have hR2 := hR E₂ O₂ i hi
+    simp only [key] at hk
+    generalize (S (E₁, O₁)).acts ↑X (Set.Ico t₀ (t₀ + i)) = a at hk hG1 hR1
+    generalize (S (E₂, O₂)).acts ↑X (Set.Ico t₀ (t₀ + i)) = a₂ at hk hG2 hR2
+    obtain ⟨rfl, hx⟩ := Prod.mk.inj hk
+    simp only [Interface.obs, Prod.mk.injEq, I₀] at hx
+    obtain ⟨h1, h2, h3⟩ := hx
+    have hH : G E₁ (t₀ + i) a = G E₂ (t₀ + i) a :=
+      hfH _ _ ⟨E₁, rfl⟩ ⟨E₂, rfl⟩ (bits_inj h1)
+    have hS : portSignals S link sidePorts (E₁, O₁) (t₀ + i) = portSignals S link sidePorts (E₂, O₂) (t₀ + i) :=
+      hfS _ ⟨_, rfl⟩ ⟨_, rfl⟩ (bits_inj h2)
+    have hall : portSignals S link (hbmPorts ++ sidePorts ++ orPorts) (E₁, O₁) (t₀ + i) =
+        portSignals S link (hbmPorts ++ sidePorts ++ orPorts) (E₂, O₂) (t₀ + i) := by
+      have e : ∀ r, portSignals S link (hbmPorts ++ sidePorts ++ orPorts) r (t₀ + i) =
+          portSignals S link hbmPorts r (t₀ + i) ++ portSignals S link sidePorts r (t₀ + i) ++
+            portSignals S link orPorts r (t₀ + i) := fun r => by
+        simp only [portSignals, List.map_append]
+      rw [e, e, hG1, hG2, hR1, hR2, hH, hS, h3]
+    exact crossing_of_ports S link X _ hports (t₀ + i) _ _ hall
+  show (S (E, O)).crossing (↑X)ᶜ ↑X {t₀ + i} =
+    Function.extend (key (t₀ + i)) (fun r => (S r).crossing (↑X)ᶜ ↑X {t₀ + i}) (fun _ => ∅) (key (t₀ + i) (E, O))
+  exact (hf.extend_apply (fun _ => ∅) (E, O)).symm
+
+/-- **B3 on a strategy causal from every tick, from the links**: with the chip's state at `t₀` at most `M` bits and
+fixed by the store, every wire into it on a port of HBM, the rest or the oracle, the links alphabets, HBM passive memory
+of widths `wd` and the oracle a location asked at most `qt` queries a tick, the probability that the chip's tags pass
+while `∑ wd + M + 1 + βs T + m b + λ < k b` is at most `AuditInteractive`'s bound at `c = βs T`, `βs` the rest's ports'
+capacities summed. -/
+theorem audit_links (S : Store N b × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*} (β : K → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T M qt : ℕ)
+    (hM : ∀ r, (S r).mem X t₀ ≤ M) (hpre : ∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀)
+    (hbmPorts sidePorts orPorts : List (K × L))
+    (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X →
+      (link r g a, (S r).A.x g) ∈ hbmPorts ++ sidePorts ++ orPorts)
+    (wd : ℕ → Acts L → ℕ) (hpm : PassiveMemory S link X t₀ T hbmPorts wd)
+    (Q : ℕ → Acts L → List (Fin N × Bits b)) (hq : ∀ u a, (Q u a).length ≤ qt)
+    (hor : OracleLocation S link X t₀ T orPorts Q) (τ : Acts L → Fin N → Bits h) (s k m lam : ℕ) :
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
+          (∑ i ∈ Finset.range T, wd (t₀ + i) ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + i)))) + (M + 1) +
+            (sidePorts.map fun p => β p.1).sum * T + m * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s +
+          (N.choose m : ℝ≥0∞) * 2 ^ (T * (sidePorts.map fun p => β p.1).sum) / 2 ^ (h * m)
+        + (((T * qt).choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam := by
+  obtain ⟨I, hw, hQ, hs, -⟩ := splits_of_links S β link hα X t₀ T hbmPorts sidePorts orPorts hports wd hpm Q hor
+  subst hw hQ
+  exact audit_reads S hc X t₀ T M _ qt hM hpre I hq hs τ s k m lam
+
+/-- **B3 from the links at `e = 0`**: when the rest's ports' signals ignore the oracle too, `AuditInteractiveRO`'s bound,
+with no relayed-tag term. -/
+theorem audit_links_ro (S : Store N b × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*} (β : K → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T M qt : ℕ)
+    (hM : ∀ r, (S r).mem X t₀ ≤ M) (hpre : ∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀)
+    (hbmPorts sidePorts orPorts : List (K × L))
+    (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X →
+      (link r g a, (S r).A.x g) ∈ hbmPorts ++ sidePorts ++ orPorts)
+    (wd : ℕ → Acts L → ℕ) (hpm : PassiveMemory S link X t₀ T hbmPorts wd)
+    (Q : ℕ → Acts L → List (Fin N × Bits b)) (hq : ∀ u a, (Q u a).length ≤ qt)
+    (hor : OracleLocation S link X t₀ T orPorts Q)
+    (h0 : ∀ E O O' u, portSignals S link sidePorts (E, O) u = portSignals S link sidePorts (E, O') u)
+    (τ : Acts L → Fin N → Bits h) (s k lam : ℕ) :
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
+          (∑ i ∈ Finset.range T, wd (t₀ + i) ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + i)))) + (M + 1) +
+            (sidePorts.map fun p => β p.1).sum * T + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (((T * qt).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam := by
+  obtain ⟨I, hw, hQ, hs, hside⟩ :=
+    splits_of_links S β link hα X t₀ T hbmPorts sidePorts orPorts hports wd hpm Q hor
+  subst hw hQ
+  exact audit_reads_ro S hc X t₀ T M _ qt hM hpre I hq (hside h0) hs τ s k lam
 
 end SecurityProofs.Causal
 
