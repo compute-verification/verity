@@ -5,9 +5,11 @@ IMAD.SHL) and A every other instruction but the loop's control. Fitted twice: ev
 the pipe probe's 4.02. The coefficients are what an instruction costs in these mixes, where the pipes overlap, not
 its pipe's occupancy (the free fit's w is under the probe's 4.02). Each run directory is a fetched `sq.sh` run (`out/sass-mix.json`, `out/time.jsonl`); a later
 directory's form replaces an earlier one's. Then it prices FOLD 5 with its MOV and SEL removed, the per-column overhead
-the column form's 713-cycle ceiling leaves out.
+the column form's 713-cycle ceiling leaves out. Each run after `--price` (a wide word's, say) is priced with both fits,
+not fitted: every form against its measured cycles, and each form with its MOV and SEL removed.
 
-    python3 cycle_fit.py ~/.research/runs/r20261012-175857-517b ... ~/.research/runs/r20261012-185914-35f2
+    python3 cycle_fit.py ~/.research/runs/r20261012-175857-517b ... ~/.research/runs/r20261012-185914-35f2 \
+      [--price ~/.research/runs/r20261012-194528-b277 ...]
 """
 
 from __future__ import annotations
@@ -52,7 +54,21 @@ def forms(runs: list[Path]) -> dict[int, tuple[tuple[int, int, int], float, dict
     return out
 
 
+def price(run: Path, free: np.ndarray, held: np.ndarray) -> None:
+    bits = json.loads((run / "out/time.jsonl").read_text().splitlines()[0]).get("bits", 512)
+    print(f"{run.name}, {bits} bits, priced by the fit:")
+    for f, ((w, m, a), cyc, full) in sorted(forms([run]).items()):
+        x = np.array([w, m, a], float)
+        p, q = x @ free, x @ held
+        cut = full.get("MOV", 0) + full.get("SEL", 0)
+        print(f"  FOLD {f:2}: W {w:3} M {m:3} A {a:4}  measured {cyc:5.0f}  free {p:5.0f} ({100 * (p - cyc) / cyc:+5.1f}%)"
+              f"  held {q:5.0f} ({100 * (q - cyc) / cyc:+5.1f}%)  less its {cut} MOV and SEL: {cyc - free[2] * cut:5.0f}"
+              f" (free) / {cyc - held[2] * cut:5.0f} (held)")
+
+
 def main(argv: list[str]) -> None:
+    cut = argv.index("--price") if "--price" in argv else len(argv)
+    argv, priced = argv[:cut], argv[cut + 1:]
     data = forms([Path(a) for a in argv])
     folds = sorted(data)
     x = np.array([data[f][0] for f in folds], float)
@@ -73,6 +89,8 @@ def main(argv: list[str]) -> None:
             c = cyc - co[2] * cut
             print(f"FOLD 5 less its {cut} MOV and SEL ({name} fit): {c:.0f} cycles, "
                   f"{rate_of_cycles(c):.3e}/s, s {s_of(rate_of_cycles(c)):.2f}")
+    for run in priced:
+        price(Path(run), free, held)
 
 
 if __name__ == "__main__":
