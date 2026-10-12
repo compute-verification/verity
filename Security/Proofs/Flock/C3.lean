@@ -3,12 +3,15 @@ import Proofs.Flock.C3.Compose.Bridge
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.SrcClauses
+import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Compose.Custody
+import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
 import Proofs.Flock.C3.Sparse.SrcTie
 import Proofs.Flock.C3.Sparse.SrcLayer
+import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -19,12 +22,23 @@ import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.Opening.Rows
 import Proofs.Flock.C3.HoloValues.Read
 import Proofs.Flock.C3.Reps.Tie
+import Proofs.Flock.C3.Reps.Vals
+import Proofs.Flock.C3.Reps.Steps
+import Proofs.Flock.C3.HoloValues.Frames
+import Proofs.Flock.C3.HoloValues.Runs
+import Proofs.Flock.C3.HoloValues.Shift
+import Proofs.Flock.C3.Reps.Frames
+import Proofs.Flock.C3.Reps.AlgL
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
 import Proofs.Flock.C3.Opening.ClaimTie
 import Proofs.Flock.C3.Opening.SrcLayer
+import Proofs.Flock.C3.Opening.SrcCover
 import Proofs.Flock.C3.RegLevels.SrcTie
 import Proofs.Flock.C3.RegLevels.SrcRun
+import Proofs.Flock.C3.RegLevels.SrcOpened
+import Proofs.Flock.C3.RegLevels.SrcConss
+import Proofs.Flock.C3.RegLevels.SrcUnits
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
@@ -38,13 +52,15 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
   `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
-  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), and the fixed decoder at which n6 states the
-  read facts (`C3/Compose/Decoder.lean`).
+  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), the fixed decoder at which n6 states the
+  read facts (`C3/Compose/Decoder.lean`), and `SrcOK`'s decode fixed point where each stage plays on its steps to the
+  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3), and its read fact on
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source
   tied to V*'s accepted RecSparse units gives (`SrcSparseTie`, `srcSparseOK_of_tie`), and the tie from the unit's copy
-  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`).
+  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`), that copy from V*'s sessions (`SparseSessionAt`,
+  `sparseTieL_of_session`).
 * (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from
   its read fact (`OpeningRead`, `hOpening_of_read`), and that fact from the `rec-opening` unit's residuals
   (`residuals_eq_runO`, `openingRead_of_rows`), and from V*'s sessions and the verifier's coins but the claim tie and
