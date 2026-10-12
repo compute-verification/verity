@@ -56,7 +56,7 @@ os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from bench import MODES, RUN_SEED, Codec, K, Topup, codec_gate  # noqa: E402
+from bench import FILL_WARPS, RUN_SEED, Codec, K, Topup, codec_gate, mode_of  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
 TOKEN_WORDS = KV_TOKEN_BYTES // 64
@@ -413,8 +413,9 @@ def main() -> int:
             offset_ms = 0.0
             grecs: list[tuple[float, float, int]] = []
             if top not in ("none", "gemm"):
-                chunk = (a.fill_chunk_mib if mode == "fill" else a.chunk_mib) << 20
-                tu.start(regions, MODES[mode], chunk, 3, least, RUN_SEED, ctas=ctas if top == "always" else 0)
+                chunk = (a.fill_chunk_mib if mode in FILL_WARPS else a.chunk_mib) << 20
+                tu.start(regions, mode_of(mode), chunk, 3, least, RUN_SEED, ctas=ctas if top == "always" else 0,
+                         warps=FILL_WARPS.get(mode, 4))
                 if a.token_gate:
                     if top == "idle":
                         tu.so.tu_pause(1)
@@ -425,7 +426,8 @@ def main() -> int:
                         gate_ref.extend(gate_ids)
                     cur["token_gate"] = gate_ids == list(gate_ref)
                     log(f"{policy}/{mode}: token gate {'passed' if cur['token_gate'] else 'FAILED'}")
-                    tu.so.tu_throttle(0)
+                    if top == "throttle":
+                        tu.so.tu_throttle(0)
                 if top in ("idle", "throttle"):
                     tu.so.tu_pause(1)
                 g = tu.now(0)
