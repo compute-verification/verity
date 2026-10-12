@@ -11,7 +11,9 @@
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). MODEL (8b, 70b) and BATCH name the point (kv.cu
 # is built at the model's query heads, KV_QHEADS), GEMM_M the linears' M past a batch of 32 (step.py --gemm-m),
 # STEP_ARGS passes through to step.py; SANITIZE=0 skips the smoke run. RECEIPT=1 builds wt.cu's sketch warps with
-# sketch-sha512 (WT_RECEIPT) and reader.cu for its commit. Each library's `cuobjdump -res-usage` goes in OUT/*.res.
+# sketch-sha512 (WT_RECEIPT) and reader.cu for its commit. Each library's `cuobjdump -res-usage` goes in OUT/*.res, and
+# after the step write_gate.py (Nsight Compute) checks its linears' launches' L2 writes (WRITE_GATE=0 skips it;
+# WG_STEP, a step.json's text, runs only the gate at that step's picks).
 set -uxo pipefail
 MODEL=${MODEL:-8b}
 case $MODEL in 70b) QHEADS=64 ;; *) QHEADS=32 ;; esac
@@ -23,7 +25,8 @@ export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bi
 CT=benchmarks/codec_tensor
 B=$(mktemp -d /tmp/hbm-step.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B PY CT MODEL QHEADS BATCH=${BATCH:-32} GEMM_M=${GEMM_M:-0} STEP_ARGS=${STEP_ARGS:-} SANITIZE=${SANITIZE:-1} \
-  NVFLAGS=${NVFLAGS:-} COMPILE_ONLY=${COMPILE_ONLY:-} RECEIPT=${RECEIPT:-0}
+  NVFLAGS=${NVFLAGS:-} COMPILE_ONLY=${COMPILE_ONLY:-} RECEIPT=${RECEIPT:-0} WRITE_GATE=${WRITE_GATE:-1} \
+  WG_STEP=${WG_STEP:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -49,14 +52,24 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
   q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
           --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
-  if [ "$SANITIZE" = 1 ]; then
-    env -u RESEARCH_RUN_ID compute-sanitizer --tool memcheck --error-exitcode 9 --print-limit 20 \
-      "$PY" $CT/step.py "${LIBS[@]}" --out "$O/smoke" --model tiny --batch "$BATCH" --gemm-m "$GEMM_M" --ctx 256 --reps 1 \
-      --gemm-reps 1 --gate-words 4096 > "$O/smoke.log" 2>&1
-    rc=$?; q
-    [ $rc = 0 ] || { tail -60 "$O/smoke.log"; exit 9; }
+  rc=0 WG_JSON=$O/step.json
+  if [ -n "$WG_STEP" ]; then
+    printf %s "$WG_STEP" > "$O/wg-step.json"; WG_JSON=$O/wg-step.json
+  else
+    if [ "$SANITIZE" = 1 ]; then
+      env -u RESEARCH_RUN_ID compute-sanitizer --tool memcheck --error-exitcode 9 --print-limit 20 \
+        "$PY" $CT/step.py "${LIBS[@]}" --out "$O/smoke" --model tiny --batch "$BATCH" --gemm-m "$GEMM_M" --ctx 256 \
+        --reps 1 --gemm-reps 1 --gate-words 4096 > "$O/smoke.log" 2>&1
+      rc=$?; q
+      [ $rc = 0 ] || { tail -60 "$O/smoke.log"; exit 9; }
+    fi
+    # shellcheck disable=SC2086
+    "$PY" $CT/step.py "${LIBS[@]}" --out "$O" --model "$MODEL" --batch "$BATCH" --gemm-m "$GEMM_M" $STEP_ARGS; rc=$?
+    q
   fi
-  # shellcheck disable=SC2086
-  "$PY" $CT/step.py "${LIBS[@]}" --out "$O" --model "$MODEL" --batch "$BATCH" --gemm-m "$GEMM_M" $STEP_ARGS; rc=$?
-  q
+  if [ "$WRITE_GATE" = 1 ] && [ -f "$WG_JSON" ]; then
+    WG=(--wt-lib "$B/wt-512.so" --step-json "$WG_JSON" --out "$O")
+    [ "$RECEIPT" = 1 ] && WG+=(--reader-lib "$B/reader.so")
+    "$PY" $CT/write_gate.py "${WG[@]}" > "$O/write-gate.log" 2>&1; echo "write gate: rc $?"; tail -5 "$O/write-gate.log"
+  fi
   exit $rc'
