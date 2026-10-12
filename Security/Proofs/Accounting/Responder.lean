@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Responder
 import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Memory
 
 /-!
 # B2, proved
@@ -351,5 +352,13 @@ theorem B2Determines : Guarantees.B2Determines := by
   simp only [stateOf]
   rw [unpack_pack, decodeLen_lengthCode ((Actual.content_length_le _ _ _).trans (hm z x ⟨j, hj⟩))]
   exact hζ z x ⟨j, hj⟩
+
+theorem B2Adds : Guarantees.B2Adds := by
+  intro L _ B w p _ sch N k δ ε hsec q κ W S X t ans α help ζ M H hc ht h0 hw hh hm hζ
+  obtain ⟨A₁, A₂, π, hdet, hans⟩ := B2Determines sch k q W S X t ans help ζ M H hc ht h0 hw hh hm hζ
+  refine (pr_mono fun x hx => ⟨?_, hx.2⟩).trans
+    (Memory.AddsOn sch N 0 0 0 k δ ε hsec (M + 1) H q κ W π A₁ A₂ hdet)
+  simp only [Pous.seqAcceptsOn, hans]
+  exact congrArg List.ofFn (funext fun j => hx.1 j)
 
 end Accounting.SecurityProofs

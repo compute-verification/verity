@@ -34,6 +34,10 @@ at each challenge tick is a function of its state at the previous one and of wha
   M's adversaries: an `(M + 1) + H`-bit state (lemma M's `M` is `M + 1`, its `H` is `H`), from which a map reads `z`
   before every challenge on every outcome. The conjunct `∀ z x j, j < k → π j (seqState …) = z` is lemma M's
   `Determines sch k W π A₁ (fun z => (A₂ z).step)` unfolded.
+* `B2Adds`, `B2Determines` composed with lemma M's `AddsOn`: when PoUS's sequential audit accepts every `N`-bit
+  responder that makes no query with probability at most `δ + ε`, a uniform `z` and the family's run pass with
+  `q + N ≥ M + 1 + H + κ` with probability at most `δ + ε + k · 2^-κ`: on a pass, except with that error, the
+  location's `M` bits and the help's `H` hold `z` on top of what the audit needs, `M + 1 + H > q + N − κ`.
 
 The help is whatever the setup fixes that, with the challenge, determines what reaches `X`: under isolation nothing,
 and when the rest of the prover learns nothing that depends on the challenges (the model's `e = 0` across the audit),
@@ -134,5 +138,27 @@ def B2Determines : Prop :=
       ∀ z x, Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
           (List.ofFn x.2.2) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
         List.ofFn fun j : Fin k => ans j ((S z x).acts X (window t j))
+
+/-- **B2 with lemma M: the location's memory adds.** For a family of strategies `S z`, one for each `q`-bit value `z`
+that `X` keeps, meeting `B2Determines`' hypotheses, when PoUS's sequential audit accepts every `N`-bit responder that
+makes no query with probability at most `δ + ε`: with a uniform `z`, the run passes the audit and `q + N ≥ M + 1 + H + κ`
+with probability at most `δ + ε + k · 2^-κ`. -/
+def B2Adds : Prop :=
+  ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N k : ℕ)
+    (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε →
+    ∀ (q κ : ℕ) (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L)
+      (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*}
+      (help : Pous.Bits q → Pous.Outcome sch k → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
+      (∀ z, CausalFrom (S z)) → StrictMono t →
+      (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
+        (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
+      (∀ z x x' (j : Fin k), help z x = help z x' → x.2.2 j = x'.2.2 j →
+        (S z x).crossing (↑X)ᶜ ↑X (window t j) = (S z x').crossing (↑X)ᶜ ↑X (window t j)) →
+      (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
+      (∀ z x (j : Fin k), (S z x).mem X (t j) ≤ M) →
+      (∀ z x (j : Fin k), ζ j ((S z x).content X (t j)) = z) →
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch k =>
+          Passes sch W (S x.1) X t ans x.2 ∧ ¬ q + N < M + 1 + H + κ) ≤
+        δ + ε + k * (2⁻¹ : ℝ≥0∞) ^ κ
 
 end Accounting.Guarantees
