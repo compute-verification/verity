@@ -363,4 +363,9 @@ theorem B2Adds : Guarantees.B2Adds := by
   rw [hans x.1 x.2]
   exact congrArg List.ofFn (funext hx.1)
 
+theorem B2AddsP2Ring : Guarantees.B2AddsP2Ring := by
+  intro hsec L _ q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
+  have := B2Adds _ _ _ _ _ hsec q k W S X t ans help ζ M H hc ht hset hin hcount hm hζ
+  rwa [Nat.cast_ofNat] at this
+
 end Accounting.SecurityProofs

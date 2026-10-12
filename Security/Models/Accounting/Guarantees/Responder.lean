@@ -34,7 +34,8 @@ at each challenge tick is a function of its state at the previous one and of wha
   before every challenge on every outcome. The conjunct `∀ z x j, j < k → π j (seqState …) = z` is lemma M's
   `Determines sch k W π A₁ (fun z => (A₂ z).step)` unfolded.
 * `B2Adds`, lemma M through `B2Determines`: under `AuditSecureOn … N 0 0 0 c δ ε`, a location that keeps a uniform
-  `q`-bit `z` passes while `q + N ≥ M + 1 + H + k` with probability at most `δ + ε + c·2^-k`.
+  `q`-bit `z` passes while `q + N ≥ M + 1 + H + k` with probability at most `δ + ε + c·2^-k`; `B2AddsP2Ring`, the same
+  at P2's deployed point under `P2RingAuditSecure 0 0 0`, with `δ + 2^-129 + 2^-130 + 105·2^-k`.
 
 The help is whatever the setup fixes that, with the challenge, determines what reaches `X`: under isolation nothing,
 and when the rest of the prover learns nothing that depends on the challenges (the model's `e = 0` across the audit),
@@ -157,5 +158,27 @@ def B2Adds : Prop :=
       (∀ z x (j : Fin c), ζ j ((S z x).content X (t j)) = z) →
       Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Passes sch W (S x.1) X t ans x.2 ∧ ¬ q + N < M + 1 + H + k) ≤ δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
+
+
+/-- **`B2Adds` at P2's deployed point.** Under `P2RingAuditSecure 0 0 0` (P2 in the ring model, 2,054 payload bytes per
+block, 105 challenges, state bound `⌊ρ·|C|⌋`), a location meeting `B2Adds`' hypotheses passes while
+`q + ⌊ρ·|C|⌋ ≥ M + 1 + H + k` with probability at most `δ + 2^-129 + 2^-130 + 105 · 2^-k`. -/
+def B2AddsP2Ring : Prop :=
+  Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
+    ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
+      (S : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+      (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ) {α : Type*}
+      (help : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
+      (∀ z, CausalFrom (S z)) → StrictMono t →
+      (∀ z x x', x.1 = x'.1 → (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 = (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
+        (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
+      (∀ z x x' (j : Fin 105), help z x = help z x' → x.2.2 j = x'.2.2 j →
+        (S z x).crossing (↑X)ᶜ ↑X (window t j) = (S z x').crossing (↑X)ᶜ ↑X (window t j)) →
+      (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
+      (∀ z x (j : Fin 105), (S z x).mem X (t j) ≤ M) →
+      (∀ z x (j : Fin 105), ζ j ((S z x).content X (t j)) = z) →
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+          Passes (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W (S x.1) X t ans x.2 ∧ ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + 1 + H + k) ≤
+        ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
 
 end Accounting.Guarantees
