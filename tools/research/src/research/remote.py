@@ -1814,8 +1814,11 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
     return None
 
 
-def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
-    """Copy records (or everything) from the machine into the local run dir.  Unreachable -> observed_utc unchanged, reason recorded."""
+def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
+    records (plain names: the workload's own small progress files).  Unreachable -> observed_utc unchanged, reason recorded."""
+    if bad := [n for n in also if not n or "/" in n or n.startswith(".")]:
+        raise Refused(f"--also takes plain file names in the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
@@ -1824,7 +1827,7 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     if everything:
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
     else:
-        names = " ".join(shlex.quote(n) for n in SMALL_FILES)
+        names = " ".join(shlex.quote(n) for n in (*SMALL_FILES, *also))
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]
 
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory

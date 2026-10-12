@@ -102,16 +102,50 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
 
-def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None]]:
-    """Each run's (state, rc, ended_utc) from `research status RUN --json`; a run it can't read is ("unknown", None, None)."""
+#: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
+#: `--json`), fetched with its records
+PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
+
+
+def failing(run_dir: Path) -> str | None:
+    """What has failed so far in a check still running under `--keep-going`, which fails it whatever else it finds, or None."""
+    out = []
+    try:
+        lines = (run_dir / PROGRESS[0]).read_text().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if rec.get("status") == "failed":
+            out.append(f"step {rec.get('step')}")
+    for name in PROGRESS[1:]:
+        try:
+            doc = json.loads((run_dir / name).read_text())
+        except (OSError, ValueError):
+            continue
+        for s in doc if isinstance(doc, list) else ():
+            tests = s.get("failed_tests") or []
+            out.append(f"suite {s.get('name')}" + (f" ({', '.join(tests[:2])}{' ...' if len(tests) > 2 else ''})" if tests else ""))
+    return "; ".join(out) or None
+
+
+def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None, str | None]]:
+    """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`) from `research status RUN --json`, which
+    fetches `PROGRESS` with its records; a run it can't read is ("unknown", None, None, None)."""
     out = {}
+    also = [x for n in PROGRESS for x in ("--also", n)]
     for rid in ids:
-        r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json"], cwd=repo, capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
         try:
             run = json.loads(r.stdout)["runs"][0]
-            out[rid] = (run.get("state") or "unknown", run.get("rc"), run.get("ended_utc"))
+            state = run.get("state") or "unknown"
+            out[rid] = (state, run.get("rc"), run.get("ended_utc"),
+                        failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
         except (ValueError, KeyError, IndexError):
-            out[rid] = ("unknown", None, None)
+            out[rid] = ("unknown", None, None, None)
     return out
 
 
@@ -189,15 +223,19 @@ class Driver:
         if not launch:
             return Verdict("none")
         states = self._states(launch["ids"])
-        if any(st in ACTIVE for st, _, _ in states.values()):
+        if early := next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None):
+            launch["failing"] = early
+            return Verdict("failed", " ".join(launch["ids"]), f"{' '.join(launch['ids'])} is still running (`--keep-going`, for "
+                                                              f"the full picture) and has already failed: {early}")
+        if any(st in ACTIVE for st, *_ in states.values()):
             return Verdict("running", " ".join(launch["ids"]))
-        if all(rc == NOT_STARTED for _, rc, _ in states.values()):
+        if all(rc == NOT_STARTED for _, rc, *_ in states.values()):
             return Verdict("none", why="every twin exited without starting")
-        ended = max((_utc(e) or launch["at"] for _, _, e in states.values()), default=launch["at"])
+        ended = max((_utc(e) or launch["at"] for _, _, e, *_ in states.values()), default=launch["at"])
         if self.now() - ended < PUBLISH_GRACE_S:
             return Verdict("running", " ".join(launch["ids"]), "ended; its attempt isn't in the store yet")
         return Verdict("failed", " ".join(launch["ids"]),
-                       f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, _ in states.values())}) "
+                       f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, *_ in states.values())}) "
                        f"and no attempt reached the store in {PUBLISH_GRACE_S // 60} min")
 
     # -- landing
@@ -366,9 +404,12 @@ class Driver:
         on_chain = {m.commit for m in members}
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run:
-                live = [rid for rid, (st, _, _) in self._states(v["ids"]).items()
+                live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
                         if st in ACTIVE and st != "unknown"]
-                if live:
+                if live and v.get("failing"):
+                    q.log(f"research queue drive: {' '.join(live)} of {c[:12]}, no longer on `{q.branch}`, keeps going for the "
+                          f"full picture of its failure ({v['failing']})")
+                elif live:
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}

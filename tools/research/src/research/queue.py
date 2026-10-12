@@ -677,7 +677,7 @@ class Queue:
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready":
-                e.why = "admitted: ready for a train (the queue does not land trains yet)"
+                e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
 
 

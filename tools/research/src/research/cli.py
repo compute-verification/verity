@@ -1264,6 +1264,8 @@ def cmd_status(argv: list[str]) -> int:
                                                           "active one's memory on its machine (research.scopemem)")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--also", action="append", default=[], metavar="FILE",
+                    help="with RUN: fetch this file of its run dir with its records (repeatable): a workload's own progress file")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     ledger = None
@@ -1287,7 +1289,7 @@ def cmd_status(argv: list[str]) -> int:
         for s in [R.summarize(one)] if one else R.list_runs(root):
             if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
                 try:
-                    remote.fetch(Path(s["dir"]))
+                    remote.fetch(Path(s["dir"]), also=tuple(ns.also) if one else ())
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
     rows = [R.summarize(one)] if one else R.list_runs(root)

@@ -186,6 +186,45 @@ def test_a_dry_run_tells_nobody_and_a_real_tick_after_it_still_does(world, monke
     assert len(h.posts) == 1 and "failed its check" in h.posts[0]
 
 
+def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_rebuild_cancels_it_not(world, monkeypatch):
+    """12 Oct: cc39's repository suite failed at 20:25Z and drive told it at 20:55Z, when `--keep-going` let the check end.  What
+    a running check has failed so far is a failure now; once the PR is ejected, the check runs on for the full picture."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.d.train_size = 2
+    h.tick()
+    (rid,) = h.run_state
+    h.run_state[rid] = ("running", None, None, "suite repository (tests/test_repository.py::test_x)")
+    h.tick()
+    assert len(h.posts) == 1 and "failed its check" in h.posts[0] and "has already failed: suite repository" in h.posts[0]
+    h.tick()
+    assert len(h.posts) == 1 and h.cancelled == []
+    h.q.eject(2, "breaks the repository suite", "ci")
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled == []
+    assert any("keeps going for the full picture" in x for x in world.logs)
+
+
+def test_what_a_running_check_has_failed_is_read_from_its_steps_and_its_suites_failures(tmp_path):
+    import json
+
+    from research.drive import failing
+
+    assert failing(tmp_path) is None
+    (tmp_path / "steps.jsonl").write_text('{"step": "pytest", "status": "passed"}\n{"step": "circuit-check", "status": "failed"}\n')
+    (tmp_path / "suites-lean.failed.json").write_text(json.dumps([{"name": "repository", "failed_tests": ["a", "b", "c"]}]))
+    assert failing(tmp_path) == "step circuit-check; suite repository (a, b ...)"
+
+
+def test_status_fetches_only_plain_names_of_the_run_dir_beside_its_records(tmp_path):
+    from research import remote
+
+    for bad in ("../x", "a/b", ".fetched", ""):
+        with pytest.raises(remote.Refused, match="plain file names"):
+            remote.fetch(tmp_path, also=(bad,))
+
+
 def test_each_launched_runs_state_is_read_once_a_tick(world, monkeypatch):
     """A tick asks of a running launch for `held`, before the sync, for the running count and for its train; each read is a
     `research status` over ssh (12 Oct: 4 of them were 25 s of a 52 s tick)."""
