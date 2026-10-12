@@ -39,8 +39,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "word_codec"))
 
-import wide as W  # noqa: E402
-import wide_sketch as WS  # noqa: E402
+import wide as W
+import wide_sketch as WS
 
 NAME = "ro-bound-sketch-blake3/v0"
 K = WS.K

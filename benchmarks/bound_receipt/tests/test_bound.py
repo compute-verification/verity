@@ -14,7 +14,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-import bound as BR  # noqa: E402
+import bound as BR
 
 W, WS = BR.W, BR.WS
 F = BR.FIELD
