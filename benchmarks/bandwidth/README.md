@@ -54,10 +54,10 @@ measure what is left of each on the card.
   beside the tag pass (`fold`), behind a frontier the host's generators advance after σ (`foldlive`), and from the
   challenger's own process beside the prover's (`foldtwo`, under an MPS daemon that `run_stream.sh` starts with
   `MPS=1`; `--challenger-first` makes the challenger's context and buffers before the prover's). Their transports:
-  zero copy from non-temporal or, with `--temporal`, cached generator stores, or the copy engines into HBM
-  (`--dma-piece-kib`, `--dma-streams`). `attack` is `foldtwo`'s premise tried as an attack, the prover's process
-  reading the challenger's mapped buffer through the CUDA API, the OS and a kernel; `egress` is D2H against H2D and
-  the timing a device can give its egress. `run_stream.sh` is one Attempt: the gates first (the generators against the
+  zero copy from non-temporal or, with `--temporal`, cached generator stores (`--clwb`: written back and left clean),
+  or the copy engines into HBM (`--dma-piece-kib`, `--dma-streams`; `carry` times that path alone). `attack` is
+  `foldtwo`'s premise tried as an attack, the prover's process reading the challenger's mapped buffer through the CUDA
+  API, the OS and a kernel; `egress` is D2H against H2D and the timing a device can give its egress. `run_stream.sh` is one Attempt: the gates first (the generators against the
   vectors, the absorb and both fold kernels against the reference, the tag pass's root), then the timings. Its header
   lists the environment and outputs.
 - `chip.cu` (`bwchip`) measures the on-chip stores that S_chip has to cover: the instruction caches (code-footprint
