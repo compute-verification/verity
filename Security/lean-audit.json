@@ -2523,11 +2523,21 @@
    "assumptions": [],
    "type_hash": "05bf449ca7a72f4551d03acdd98f3572f4d629baf10ecc648236c2b7512006f5"
   },
+  "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide : Pous.Guarantees.P2SlackFamilyFreeBlocksWide"],
+   "assumptions": []
+  },
   "Pous.SecurityProofs.P2SlackFamilyUncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2SlackFamilyUncond : Pous.Guarantees.P2SlackFamilyUncond"],
    "assumptions": [],
    "type_hash": "a7362ea74a7037fe8af6f390997f4cf697055cf410f55bde27c35526c4b2b7c4"
+  },
+  "Pous.SecurityProofs.P2SlackFamilyWide": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2SlackFamilyWide : Pous.Guarantees.P2SlackFamilyWide"],
+   "assumptions": []
   },
   "Pouw.NCP.GameProofs.gammaFromTTNCP": {
    "owner": "@compute-accounting",
@@ -3522,7 +3532,9 @@
    "Pous.SecurityProofs.P2SlackB19Uncond": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2SlackFamilyFreeBlocks": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
+   "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide": "frozen (no-function,hash): It is about the abstract m1p model in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:19-21 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2SlackFamilyUncond": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
+   "Pous.SecurityProofs.P2SlackFamilyWide": "frozen (no-function,hash): It is about the abstract m1p model in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:19-21 says none states that the deployed P2 is secure.",
    "Pouw.Guarantees.PearlCSampledByDeadline": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
