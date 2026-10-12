@@ -758,7 +758,7 @@ CAP_PLANS = {"p": {}, "px": PX, "psy": PX, "psy2": PX}
 LEAVE_PLANS: dict[str, dict[str, str]] = {}
 # tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 a CTA's warps in step (a barrier a quad; at M <= 8 it
 # wins, r20261012-133232-185b: 1.051 vs 1.064 at M = 1, and at M = 16 it loses, 1.073 vs 1.056), 5 a barrier every
-# second quad
+# second quad (the same, r20261012-135511-0c2b: 1.051 vs 1.052 at M = 1, 1.072 vs 1.073 at M = 16)
 PROBE_PLANS = {"psy": 3, "psy2": 5}
 TRACE_BATCHES = (1, 8)
 
