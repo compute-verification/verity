@@ -74,10 +74,9 @@ class Lib:
             "tf_init": [v, v], "tf_fused": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
-            "tf_fused3d": [i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
             "tf_fused3p": [i, i, i, v, v, v, v, i, i, i, u64, v, i, v, i, i, i, i, v, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
-            "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_leaves_gs": [v, u64, u64, v, i, v], "tf_tree": [v, u64, v],
+            "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_commit": [v, u64, u64, v, v],
             "tf_chain": [i, i, i, u64, v, i, i, v], "tf_b3_one": [i, v, v, v], "tf_keccak_one": [v, v],
             "tf_read": [v, u64, v, i, v], "tf_spin": [ctypes.c_longlong, v], "tf_empty": [i, v],
@@ -737,8 +736,9 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
-# Per pipe arm, the plan of its tag chain and its leaves' grid as SMs over a divisor (0: tf_leaves, a thread a leaf).
-PIPE_PLANS = {"px": ("px", 0), "pxh": ("px", 2), "pxq": ("px", 4)}
+# The leaves beside the chain on SMs / 2 or SMs / 4 long-lived CTAs (a grid-stride b3_leaves, gated node for node) are a
+# wash (r20261012-130143-799b: 1.098, 1.096 vs 1.096 at M = 1): the commit costs its issue wherever it runs.
+PIPE_PLANS = ("px",)
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
 # one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones. So do two quads
 # of register prefetch on gate_up and down (r20261012-114545-aca3: 1.089 vs 1.065 at M = 1), letting the next launch
@@ -773,9 +773,8 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     tagpL    tagrL as such a chain: each launch's chunk ends overlap the next launch's loads; its tags must equal
              tagrL's, or it is dropped
     commitpL tagpL, then commitsL's leaves and tree
-    pipeAL   PIPE_PLANS[A]'s tagPL with the step before's leaves and tree on a low-priority stream beside it (the
-             commit pipelined a step behind; the tags in two buffers, the second's gated like tagk; leaves on a
-             grid of SMs / divisor CTAs gated node for node against tf_leaves')
+    pipePL   tagPL (P in PIPE_PLANS) with the step before's leaves and tree on a low-priority stream beside it (the
+             commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
              ceil(CTAs / SMs) + plan[shape] CTAs an SM
 At TRACE_BATCHES, nativepx and tagpx4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
@@ -935,50 +934,30 @@ At TRACE_BATCHES, nativepx and tagpx4 once more with tf.cu's trace (globaltimer 
                         lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
                         lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
                     arms[f"commit{p}{g}"] = commitp
-            for pp, (p, div) in PIPE_PLANS.items():
+            for p in PIPE_PLANS:
                 if not gates[g].get(f"tag{p}"):
                     continue
-                other = run(seq_pdl(g, None, p, tbs2[g]), f"pipe{pp}{g}")
+                other = run(seq_pdl(g, None, p, tbs2[g]), f"pipe{p}{g}")
                 tbs2[g].zero_()
                 other()
                 torch.cuda.synchronize()
                 ok = bool(torch.equal(tbs2[g], want))
-                log(f"gate step M={mb} pipe{pp}{g}: {'ok' if ok else 'FAIL'} (the second buffer's tags)")
+                log(f"gate step M={mb} pipe{p}{g}: {'ok' if ok else 'FAIL'} (the second buffer's tags)")
                 if not ok:
                     continue
-                grid = sms // div if div else 0
-
-                def leaves(tb, st, g=g, grid=grid):
-                    if grid:
-                        lib.call("tf_leaves_gs", ptr(tb), nleaves[g] * 16, 0, ptr(nodes[g]), grid, st)
-                    else:
-                        lib.call("tf_leaves", ptr(tb), nleaves[g] * 16, 0, ptr(nodes[g]), st)
-                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], st)
-                if grid:
-                    lib.call("tf_leaves", ptr(tbs2[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
-                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
-                    torch.cuda.synchronize()
-                    serial = nodes[g].clone()
-                    nodes[g].zero_()
-                    leaves(tbs2[g], stream(torch))
-                    torch.cuda.synchronize()
-                    ok = bool(torch.equal(nodes[g], serial))
-                    del serial
-                    log(f"gate step M={mb} pipe{pp}{g}: {'ok' if ok else 'FAIL'} (tf_leaves_gs's nodes on {grid} CTAs, "
-                        "tf_leaves')")
-                    if not ok:
-                        continue
                 state = [0]
 
-                def pipe(chains=(other, arms[f"tag{p}{g}"]), g=g, state=state, leaves=leaves):
+                def pipe(chains=(other, arms[f"tag{p}{g}"]), g=g, state=state):
                     k = state[0]
                     state[0] ^= 1
                     cur = torch.cuda.current_stream()
                     side.wait_stream(cur)
-                    leaves(tbs[g] if k == 0 else tbs2[g], side.cuda_stream)
+                    lib.call("tf_leaves", ptr(tbs[g] if k == 0 else tbs2[g]), nleaves[g] * 16, 0, ptr(nodes[g]),
+                             side.cuda_stream)
+                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], side.cuda_stream)
                     chains[k]()
                     cur.wait_stream(side)
-                arms[f"pipe{pp}{g}"] = pipe
+                arms[f"pipe{p}{g}"] = pipe
         if 4 in groups:
             arms["prober4"] = run(seq(lambda name: "u4kr1", 4), "prober4")
             arms["noend4"] = run(seq(lambda name: "n4kr1"), "noend4")
