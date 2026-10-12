@@ -27,6 +27,7 @@ import ctypes
 import hashlib
 import json
 import random
+import re
 import statistics
 import sys
 import time
@@ -147,6 +148,7 @@ class Seq:
         so.sq_step_end_phase.argtypes = [i, v]
         so.sq_progress.argtypes = [v]
         so.sq_prefill_reader.argtypes = [i]
+        so.sq_probe.argtypes = [i]
         so.sq_now_ms.argtypes = [v]
         so.sq_now_ms.restype = d
 
@@ -676,7 +678,8 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
     16-byte loads or its TMA reader of S stages, each prefill bracketed as serve.py brackets a prefilling step) and `readers.cu`'s plain readers (`PC_READERS`: 16-byte loads, and TMA bulk
     copies into S stages of 16 KiB of shared memory), each a train of launches timed by events. Each cell gives the
     prefill's slowdown, the reader's bytes inside the prefills' span, and their cost: the span's added time at R per
-    reader byte."""
+    reader byte. A length of 0 is a sleep in the prefill's place (each reader's rate alone), and `v2...p<k>` runs v2
+    under `sq_probe(k)` (no hash, no MMAs, or neither: where a warp's time goes; receipts wrong)."""
     rows = []
     high = torch.cuda.Stream(priority=greatest)
     side = torch.cuda.Stream(priority=greatest)
@@ -685,13 +688,14 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
     for m in args.pc_prefill:
         model.kv = None
         torch.cuda.empty_cache()
-        x = torch.randn(m, HIDDEN, device="cuda", dtype=torch.bfloat16)
+        x = torch.randn(max(m, 1), HIDDEN, device="cuda", dtype=torch.bfloat16)
+        step = (lambda: model.prefill(x)) if m else (lambda: torch.cuda._sleep(250_000_000))
         n = args.pc_steps
         with torch.cuda.stream(high):
             for _ in range(2):
-                model.prefill(x)
+                step()
         torch.cuda.synchronize()
-        ts = step_times(torch, lambda: model.prefill(x), high, n)
+        ts = step_times(torch, step, high, n)
         alone_ms = statistics.median(ts)
         span_alone = sum(ts)
         rows.append({"prefill": m, "reader": None, "ctas": 0, "step_ms_median": alone_ms, "span_ms": span_alone})
@@ -700,15 +704,16 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
             for ctas in args.pc_ctas:
                 torch.cuda.synchronize()
                 if reader.startswith("v2"):
+                    spec = re.fullmatch(r"v2(?:b(\d))?(?:p(\d))?", reader)
                     sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, priority=least,
                              step_priority=greatest)
-                    if sq.prefill_reader(int(reader[3:] or 0)):
-                        raise RuntimeError(f"prefill_reader({reader}) refused")
+                    if sq.prefill_reader(int(spec[1] or 0)) or tu.so.sq_probe(int(spec[2] or 0)):
+                        raise RuntimeError(f"{reader} refused")
                     time.sleep(0.02)
 
                     def one():
                         tu.so.sq_step_begin_phase(0, 1, ctas, high.cuda_stream)
-                        model.prefill(x)
+                        step()
                         tu.so.sq_step_end_phase(1, high.cuda_stream)
 
                     t0 = sq.now(high.cuda_stream)
@@ -735,7 +740,7 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
                     high.wait_event(ref)
                     with torch.cuda.stream(high):
                         a.record()
-                    ts = step_times(torch, lambda: model.prefill(x), high, n)
+                    ts = step_times(torch, step, high, n)
                     with torch.cuda.stream(high):
                         b.record()
                     torch.cuda.synchronize()

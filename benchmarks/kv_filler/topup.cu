@@ -775,7 +775,8 @@ constexpr auto IDLE_BACKOFF = std::chrono::microseconds(200);
 
 struct State {
   int device = 0, warps = 4, base_ctas = 0, sms = 0;
-  std::atomic<int> prefill_stages{0};  // the PREFILL role's TMA stages (fill.cu's fill_seq_bulk_kernel), 0: 16-byte loads
+  std::atomic<int> prefill_stages{0};
+  std::atomic<int> probe{0};  // fill.cu's PROBE for every launch from now (sq_probe; the receipts are then wrong)  // the PREFILL role's TMA stages (fill.cu's fill_seq_bulk_kernel), 0: 16-byte loads
   uint32_t shift = 8;
   uint64_t base_budget = 4096, idle_budget = 1ull << 22, step_budget = 1ull << 22;
   std::atomic<int> idle_on{0};
@@ -808,6 +809,24 @@ static int launch(State& st, int role, int grid, unsigned long long* taken, uint
   if (e != cudaSuccess) return (int)e;
 #define SQ_B(S) \
   fl::fill_seq_bulk_kernel<S><<<grid, 32, S * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
+  if (const int pr = st.probe.load()) {  // the probes run at 4 warps and 3 stages only
+    const int stages = role == fl::PREFILL ? st.prefill_stages.load() : 0;
+#define SQ_P(PR)                                                                                                       \
+  if (stages)                                                                                                         \
+    fl::fill_seq_bulk_kernel<3, PR><<<grid, 32, 3 * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, \
+                                                                       taken, budget);                                \
+  else                                                                                                                \
+    fl::fill_seq_kernel<4, PR><<<grid, 128, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
+    if ((stages && stages != 3) || (!stages && st.warps != 4)) return -1;
+    switch (pr) {
+      case 1: SQ_P(1); break;
+      case 2: SQ_P(2); break;
+      case 3: SQ_P(3); break;
+      default: return -1;
+    }
+#undef SQ_P
+    return (int)cudaGetLastError();
+  }
   if (const int stages = role == fl::PREFILL ? st.prefill_stages.load() : 0) {
     switch (stages) {
       case 2: SQ_B(2); break;
@@ -1003,10 +1022,19 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
 int sq_prefill_reader(int stages) {
   if (!sq::S || (stages != 0 && (stages < 2 || stages > 4))) return -1;
   for (const void* k : {(const void*)fl::fill_seq_bulk_kernel<2>, (const void*)fl::fill_seq_bulk_kernel<3>,
-                        (const void*)fl::fill_seq_bulk_kernel<4>})
+                        (const void*)fl::fill_seq_bulk_kernel<4>, (const void*)fl::fill_seq_bulk_kernel<3, 1>,
+                        (const void*)fl::fill_seq_bulk_kernel<3, 2>, (const void*)fl::fill_seq_bulk_kernel<3, 3>})
     if (cudaError_t e = cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, 4 * (int)fl::TB_STAGE))
       return (int)e;
   sq::S->prefill_stages = stages;
+  return 0;
+}
+
+// A timing probe for every launch from now: fill.cu's NO_HASH (1), NO_MMA (2), both (3) or none (0). Under one, every
+// receipt is wrong: for timing only.
+int sq_probe(int probe) {
+  if (!sq::S || probe < 0 || probe > 3) return -1;
+  sq::S->probe = probe;
   return 0;
 }
 

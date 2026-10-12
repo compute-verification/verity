@@ -123,9 +123,18 @@ __device__ __forceinline__ void mma(int (&d)[4], uint32_t a0, uint32_t a1, uint3
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
 }
 
+// A timing probe's switches (fill_seq_kernel and fill_seq_bulk_kernel's PROBE; every receipt is wrong under one):
+// NO_HASH skips the SHA-512, NO_MMA the sketch's MMAs (the bytes are XOR-folded instead).
+constexpr int NO_HASH = 1, NO_MMA = 2;
+
 // One offset o (64 bytes of each block) of a group's 8 blocks: lane (g, c)'s 16 bytes `cur` of block g at 64 o + 16 c.
+template <int PROBE = 0>
 __device__ __forceinline__ void sketch_step(int (&acc)[4], const uint32_t* sg, const uint32_t* sg8, int sh, int o,
                                             uint4 cur) {
+  if (PROBE & NO_MMA) {
+    acc[0] ^= (int)(cur.x ^ cur.y ^ cur.z ^ cur.w);
+    return;
+  }
   // plain loads, not __ldg: v2 rewrites a slot of signs while kernels run (see `acquire_signs`)
   const uint32_t r0 = (sg[2 * o] >> sh) & 0xFFFFu, r8 = (sg8[2 * o] >> sh) & 0xFFFFu;
   const uint32_t a0 = expand(r0 & 15), a2 = expand((r0 >> 4) & 15), a1 = expand(r8 & 15), a3 = expand((r8 >> 4) & 15);
@@ -153,6 +162,7 @@ __device__ __forceinline__ void gather(const int (&acc)[4][4], uint32_t (&m)[16]
 }
 
 // The sketches of 32 blocks at `p` (block 8q + g of group q): lane n's block n, its 16 sums into m.
+template <int PROBE = 0>
 __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* signs, uint64_t pol,
                                        uint32_t (&m)[16]) {
   const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
@@ -182,7 +192,7 @@ __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint
       for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + DEPTH), pol);
     }
 #pragma unroll
-    for (int q = 0; q < 4; ++q) sketch_step(acc[q], sg, sg8, sh, o, cur[q]);
+    for (int q = 0; q < 4; ++q) sketch_step<PROBE>(acc[q], sg, sg8, sh, o, cur[q]);
   }
   gather(acc, m);
 }
@@ -342,8 +352,10 @@ __device__ void derive_signs(const Signs& sg, uint64_t q, uint64_t P) {
 }
 
 // The v2 word of the unit whose lane n holds block j0 + n's sums in pass `pass` (every lane).
+template <int PROBE = 0>
 __device__ __forceinline__ uint32_t words_v2(const uint32_t (&m)[16], uint64_t j0, uint64_t pass) {
   const int lane = threadIdx.x & 31;
+  if (PROBE & NO_HASH) return m[0] ^ m[15];
   uint64_t w[16];
   w[0] = TAG_HI, w[1] = TAG_BLK;
 #pragma unroll
@@ -359,11 +371,12 @@ __device__ __forceinline__ uint32_t words_v2(const uint32_t (&m)[16], uint64_t j
   return x;
 }
 
+template <int PROBE = 0>
 __device__ __forceinline__ uint32_t unit_v2(const uint8_t* __restrict__ p, uint64_t j0, uint64_t pass,
                                         const uint32_t* signs, uint64_t pol) {
   uint32_t m[16];
-  sketch(p, signs, pol, m);
-  return words_v2(m, j0, pass);
+  sketch<PROBE>(p, signs, pol, m);
+  return words_v2<PROBE>(m, j0, pass);
 }
 
 constexpr unsigned long long NONE = ~0ull;
@@ -429,7 +442,7 @@ __device__ __forceinline__ void finish(const Signs& sg, const Ring& ring, unsign
   if (U == 0) derive_signs(sg, pass + 1, P);
 }
 
-template <int W>
+template <int W, int PROBE = 0>
 __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs sg, const Gate* gate, Seq* seq,
                                                           Ring ring, int role, unsigned long long* taken,
                                                           unsigned long long budget) {
@@ -443,7 +456,7 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs
     const uint64_t U = s % P, pass = s / P;
     acquire_signs(sg, pass, &have);
     const uint32_t* signs = sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS;
-    finish(sg, ring, s, P, unit_v2(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
+    finish(sg, ring, s, P, unit_v2<PROBE>(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
   }
 }
 
@@ -463,7 +476,7 @@ __device__ __forceinline__ void issue_piece(uint8_t* stage, uint64_t* bar, const
                  pol);
 }
 
-template <int S>
+template <int S, int PROBE = 0>
 __global__ void __launch_bounds__(32) fill_seq_bulk_kernel(const Regions R, Signs sg, const Gate* gate, Seq* seq,
                                                            Ring ring, int role, unsigned long long* taken,
                                                            unsigned long long budget) {
@@ -503,7 +516,7 @@ __global__ void __launch_bounds__(32) fill_seq_bulk_kernel(const Regions R, Sign
       const uint8_t* b = sm + st * TB_STAGE + g * TB_STRIDE + 16 * c;
 #pragma unroll 4
       for (int o = 0; o < 32; ++o)
-        sketch_step(acc[k >> 1], sgp, sgp8, sh, 32 * (k & 1) + o, *reinterpret_cast<const uint4*>(b + 64 * o));
+        sketch_step<PROBE>(acc[k >> 1], sgp, sgp8, sh, 32 * (k & 1) + o, *reinterpret_cast<const uint4*>(b + 64 * o));
       ++used;
       __syncwarp();
       if (k + S < 8) {
@@ -522,7 +535,7 @@ __global__ void __launch_bounds__(32) fill_seq_bulk_kernel(const Regions R, Sign
     }
     uint32_t m[16];
     gather(acc, m);
-    finish(sg, ring, s, P, words_v2(m, U * UNIT_BLOCKS, pass));
+    finish(sg, ring, s, P, words_v2<PROBE>(m, U * UNIT_BLOCKS, pass));
     if (nx == NONE) return;
     s = nx;
     p = np;
