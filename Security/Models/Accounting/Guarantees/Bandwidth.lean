@@ -125,7 +125,8 @@ determine in the window, it reads on top of what the audit certifies, up to what
 proof is `AuditRO`'s, with the compression run over the pair (store, `z`): the chip's state, the bits it read and which
 `k` of its queries named blocks determine those `k` blocks and `z`, `n` bits more than the store's alone. This is Mbw
 of `note:console/20261012T0645Z-draft-actual-circuit-model` (section 5) for a device of this game; for the chip as a
-tick transducer whose view in the window determines `z`, it is `Bandwidth.SecurityProofs.Ticked.audit_joint`. Proof:
+tick transducer whose view in the window determines `z`, it is `Bandwidth.SecurityProofs.Ticked.audit_joint`, and for
+the chip of a strategy causal from every tick, `Bandwidth.SecurityProofs.Causal.audit_joint`. Proof:
 `Bandwidth.SecurityProofs.AuditJoint`.
 
 Frozen (no-function, hash): as `AuditRO`. -/
