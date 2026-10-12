@@ -13,6 +13,7 @@
 # "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4; densev0: the tags in BLAKE3's
 # plain form, V0, not V1's IMAD adds)
 # and WC_KMAX (default 8) the largest k they hold.
+# KV=1 runs the KV cache's codec instead: kv.cu built at both of kv.FIELDS, then kv_bench.py with KV_ARGS.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -23,6 +24,20 @@ NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu}
 WC=benchmarks/word_codec
 export LIBSET=${LIBSET:-split wide dense}
 B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
+if [ "${KV:-0}" = 1 ]; then
+  for n in 512 768; do
+    nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
+      -o "$B/kv-p$n.so" $WC/kv.cu > "$O/kv-p$n.ptxas" 2>&1 || { tail -30 "$O/kv-p$n.ptxas"; exit 4; }
+  done
+  sha256sum "$B"/*.so > "$O/libs.sha256"
+  if "$PY" -c 'import pytest' 2> /dev/null; then
+    "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
+  fi
+  # shellcheck disable=SC2086
+  gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
+    "$PY" $WC/kv_bench.py --lib p512="$B/kv-p512.so" --lib p768="$B/kv-p768.so" --out "$O" ${KV_ARGS:-}
+  exit $?
+fi
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX="${WC_KMAX:-8}")
 declare -A DEFS=([split]="-DWC_SQR=0" [wide]="-DWC_SQR=1" [dense]="-DWC_SQR=0 -DWC_PB=60"
                 [split8]="-DWC_SQR=0 -DWC_G=8" [dense8]="-DWC_SQR=0 -DWC_PB=60 -DWC_G=8"
