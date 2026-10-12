@@ -132,7 +132,8 @@
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
-        "benchmarks/word_codec/"
+        "benchmarks/word_codec/",
+        "benchmarks/codec_mix/"
       ]
     },
     {
