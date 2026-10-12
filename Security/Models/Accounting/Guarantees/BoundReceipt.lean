@@ -248,8 +248,8 @@ the bound entries, `boundEntries P keep`, gives it for the full set `P` and for 
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableMono`.
 
-Frozen (no-function): an implication between hypotheses over PoUW's game, about no Lean function of the protocol's
-code. -/
+Frozen (no-function, hash): an implication between hypotheses over PoUW's game with a uniform oracle, about no Lean
+function of the protocol's code. -/
 def TileUnpredictableMono : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P P' : Pouw.Protocol Q R S) (credit credit' : Pouw.Shape → ℝ) (D : Pouw.Layout → Prop) (γ₀ : ℝ)
