@@ -134,7 +134,8 @@ class Install:
         alloc0 = torch.cuda.memory_allocated()
         gen = torch.Generator(device="cuda")
         cands: dict[tuple, list[K.Config]] = {}
-        gates = {"layers": 0, "configs_checked": 0, "python_words": 0, "tags_checked": 0, "max_rel_err": 0.0}
+        gates = {"layers": 0, "configs_checked": 0, "reps": args.gate_reps, "python_words": 0, "tags_checked": 0,
+                 "max_rel_err": 0.0}
         base, tag_base, plain_bytes, store_bytes, encode_s = 0, 0, 0, 0, 0.0
         self.hooks = Hooks(tag="ra-vllm-encoded")
         for idx, (name, layer) in enumerate(layers):
@@ -167,7 +168,8 @@ class Install:
                 ref = plain.gemm(x8, K.Config(0))
                 for op in (plain, lin) if lin is not plain else (plain,):
                     for cfg in cands.setdefault((type(op).__name__, op.k, m, nch), op.candidates(m)):
-                        if not bits_equal(op.gemm(x8, cfg), ref):
+                        reps = args.gate_reps if op is lin else 1
+                        if not all(bits_equal(op.gemm(x8, cfg), ref) for _ in range(reps)):
                             bad.append({"op": type(op).__name__, "config": cfg.name, "m": m,
                                         **diagnose(op, x8, cfg, ref, w, ws)})
                         gates["configs_checked"] += 1
@@ -530,6 +532,8 @@ def main() -> None:
     ap.add_argument("--tag", action="store_true",
                     help="wide and tensor arms: tag every block of the store the GEMMs read (ro-blake3/v1)")
     ap.add_argument("--python-tags", type=int, default=3, help="sampled tags a layer checked against the reference")
+    ap.add_argument("--gate-reps", type=int, default=1,
+                    help="launches of each of the arm's GEMM configs a capture size in the gates, each bit for bit")
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
     ap.add_argument("--batches", default="1,4,8,16,32")
