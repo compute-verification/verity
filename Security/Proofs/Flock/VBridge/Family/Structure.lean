@@ -239,7 +239,7 @@ theorem forIn_pushes {ε α β : Type} (f : α → Array β → Except ε (ForIn
     simp at this ⊢
     omega
 
-/-- **V*'s parts are nonempty where its S has residuals** (`parts`, `Parts.lean:51-100`): residual 0 opens or joins a
+/-- **V*'s parts are nonempty where its S has residuals** (`parts`, `Parts.lean:54-105`): residual 0 opens or joins a
 group, and each group is one part. -/
 theorem parts_size {S : VStar.RepS} {ps : Array VStar.Part} (h : VStar.parts S = .ok ps)
     (hr : 0 < S.gf.res.length) : 0 < ps.size := by
@@ -470,7 +470,7 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
 gs.size`.
 **The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
 `k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,
-`VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:51-100`), and its own, `groups (structureOf sh) (portSizes sh)`
+`VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:54-105`), and its own, `groups (structureOf sh) (portSizes sh)`
 (`partsOf`, `RecResiduals.lean:119-139`), and refuses when they number differently. Both are the same first-fit packing,
 V*'s over the supports it computes (`Algebra.supports`), the verifier's over its symbolic algebra (`structureOf`). -/
 def HPartCount : Prop :=

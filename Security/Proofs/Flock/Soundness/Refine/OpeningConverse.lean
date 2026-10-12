@@ -3,10 +3,10 @@ import Proofs.Flock.Soundness.Refine.Opening
 /-!
 # Ring switching's checks make the executable's ring-switch stage return (PROTOCOL.md §12)
 
-The converse of `opening_refines`' first step. `ringSwitch_run`: when every claim's ring switch has the verifier's shape
-and passes its value check (`dot w s == c.value`, Opening.lean:80), and the record holds ring switching's rounds from
+The converse of `opening_refines`' first step. `ringSwitch_run`: when every claim's ring switch passes the verifier's
+value check (`dot w s == c.value`, Opening.lean:78), and the record holds ring switching's rounds from
 `t` (`RsRounds`: claim `k`'s round issued 7 coins `rpp k`, the batching round issued `n` coins `gamma`, and each answers
-the bytes framed before it), then `ringSwitch` (Opening.lean:66–90) run from `t` returns the batched value
+the bytes framed before it), then `ringSwitch` (Opening.lean:66–88) run from `t` returns the batched value
 `T = Σ_k γ_k·β_k` with `β_k = Σ_u eq(rpp k, u)·t_k[u]` (`Refine.tOf`), the switched claims, and `t` with the `n + 1`
 rounds consumed. `opening_of_checks` then applies `opening_refines` to that run: the model's opening, played with the
 ring switches and the coins `rpp 0, …, rpp (n − 1), gamma`, returns the executable's batched value and basis.
@@ -84,13 +84,13 @@ theorem forIn_range_run {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (s
 /-- The pending bytes after `label l` (Transcript.lean:42). -/
 def labelled (p : ByteArray) (l : String) : ByteArray := p ++ header 2 0 l.toUTF8.size ++ padded l.toUTF8
 
-/-- What is pending when claim `k`'s step begins (Opening.lean:68, 81): the batching label after `p` before the first
+/-- What is pending when claim `k`'s step begins (Opening.lean:68, 79): the batching label after `p` before the first
 claim, nothing after a squeeze. -/
 def rsPending (p : ByteArray) : ℕ → ByteArray
   | 0 => labelled p "flock-pcs-open-batch-v0"
   | _ + 1 => ByteArray.empty
 
-/-- The bytes claim `k`'s coins `r''` answer (Opening.lean:76–81): what was pending, the ring-switch label, the ring
+/-- The bytes claim `k`'s coins `r''` answer (Opening.lean:74–79): what was pending, the ring-switch label, the ring
 switch absorbed as one slice, and the squeeze's header. -/
 def rsFramed (p : ByteArray) (s : Array F128) : ByteArray :=
   s.foldl F128.pushBytes (labelled p "flock-ring-switch-v0" ++ header 3 2 s.size) ++ header 4 2 7
@@ -100,7 +100,7 @@ def rsAt (t : Transcript) (k : ℕ) : Transcript := { t with pending := rsPendin
 
 /-- **The record holds ring switching's rounds from `t`**, for `n` claims with ring switches `rs`: round `t.k + k`
 issued claim `k`'s 7 coins `rpp k` and answers the bytes framed before them, and round `t.k + n` issued the `n` batching
-coins `gamma` and answers the bytes framed before them (Opening.lean:81, 87). -/
+coins `gamma` and answers the bytes framed before them (Opening.lean:79, 85). -/
 structure RsRounds (t : Transcript) (rs : Array (Array F128)) (n : ℕ) (rpp : ℕ → Array F128) (gamma : Array F128) :
     Prop where
   size : t.k + n < t.rounds.size
@@ -122,10 +122,11 @@ theorem RsRounds.consumed_eq {t : Transcript} {rs : Array (Array F128)} {n : ℕ
 
 /-! ## The stage -/
 
-/-- **Ring switching's checks make `ringSwitch` return** (Opening.lean:66–90). When every claim's ring switch has the
-verifier's shape (Opening.lean:75) and passes its value check `Σ_v w[v]·ŝ[v] = value` (Opening.lean:80), and the record
-holds ring switching's rounds from `t` (`RsRounds`), `ringSwitch` returns `T = Σ_k γ_k·β_k` with
-`β_k = Σ_u eq(rpp k, u)·t_k[u]`, the switched claims `(γ_k, rpp k, x_k[1 …])`, and `t` with `n + 1` rounds consumed. -/
+/-- **Ring switching's checks make `ringSwitch` return** (Opening.lean:66–88). When every claim's ring switch passes its
+value check `Σ_v w[v]·ŝ[v] = value` (Opening.lean:78), and the record holds ring switching's rounds from `t`
+(`RsRounds`), `ringSwitch` returns `T = Σ_k γ_k·β_k` with `β_k = Σ_u eq(rpp k, u)·t_k[u]`, the switched claims
+`(γ_k, rpp k, x_k[1 …])`, and `t` with `n + 1` rounds consumed. The run reads neither `hrs` nor `hshape`, the shapes
+the proof's decoders and the claims' construction fix. -/
 theorem ringSwitch_run (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array F128)) (t : Transcript)
     (rpp : ℕ → Array F128) (gamma : Array F128) (hn : claims.size ≠ 0) (hrs : rs.size = claims.size)
     (hshape : ∀ k < claims.size, rs[k]!.size = 128 ∧ claims[k]!.skip.size = 64 ∧ claims[k]!.x.size = m - 6)
@@ -140,13 +141,8 @@ theorem ringSwitch_run (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array
   obtain ⟨hs1, hs2⟩ := oStep_fold claims rs rpp (List.range' 0 claims.size) (#[], #[])
   unfold ringSwitch
   refine Eq.trans (bind_run (label_run _ _)) ?_
-  refine Eq.trans (bind_run (check_run ?_)) ?_
-  · simp [hrs]
   refine Eq.trans (bind_run (forIn_range_run _ (oStep claims rs) rpp (rsAt t) claims.size _ rfl ?_)) ?_
   · intro i st hi
-    obtain ⟨h1, h2, h3⟩ := hshape i hi
-    refine Eq.trans (bind_run (check_run ?_)) ?_
-    · simp [h1, h2, h3]
     refine Eq.trans (bind_run (label_run _ _)) ?_
     refine Eq.trans (bind_run (absorbSlice_run _ _)) ?_
     refine Eq.trans (bind_run (check_run ?_)) ?_
