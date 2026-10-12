@@ -464,6 +464,9 @@
    "assumptions": [],
    "type_hash": "849d30be76280a0ab4a8ae51adf34e9a5a18b570632f2ce11674f327f675531a"
   },
+  "Accounting.SecurityProofs.B2Adds": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.B2Audit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.B2Audit.{u_1, u_2} : Accounting.Guarantees.B2Audit"],
@@ -4226,6 +4229,7 @@
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks increasing, the location's state at the first challenge fixed by the setup, and what reaches it during each window fixed by the help and that window's challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2Audit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2's hypotheses on the strategy (CausalFrom, increasing challenge ticks, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2Determines": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list, and concludes the existence of PoUS adversaries (lemma M's Determines), not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list; it composes B2Determines with lemma M's AddsOn, PoUS's AuditSecureOn over the ring model taken as a hypothesis, about no function of the code.",
    "Accounting.SecurityProofs.B2P2Ring": "frozen (no-function,world-unlisted): It is B2Audit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure 0 0 0, and takes B2's hypotheses on the strategy (CausalFrom, increasing challenge ticks, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.Memory.Adds": "frozen (no-function): It composes PoUS's own guarantee, AuditSecure over the abstract audit game (Security/Definitions/Pous/Model/Audit.lean) taken as a hypothesis, with the counting core: lemma M of the actual-circuit model, counting the help (an (M + H)-bit responder), about no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsOn": "frozen (no-function): It composes PoUS's AuditSecureOn over the ring model (Security/Definitions/Pous/P2/Cost.lean), taken as a hypothesis, with the counting core: lemma M counting the help, about no function of the code.",
