@@ -432,7 +432,8 @@ def model_check(res: dict, lib_name: str, m: dict) -> dict:
     lr = res["libs"][lib_name]
     r = res["read"]["gbps"] * 1e9
     wb = K.field(lib_name.split("-")[0]).word_bytes
-    x1 = r / (lr["rates"]["encode"][1]["per_s"] * wb) if 1 in lr["rates"]["encode"] else None
+    enc = lr["rates"]["encode"]
+    x1 = r / (enc[min(enc)]["per_s"] * min(enc) * wb)
     out = {"x1": x1, "rows": []}
     w = lr.get("write", {})
     for cell in lr.get("exhaust", {}).values():
@@ -442,7 +443,7 @@ def model_check(res: dict, lib_name: str, m: dict) -> dict:
         f_kv = kv_bytes / (kv_bytes + w.get("weight_bytes", 0))
         for k, kr in w.get(b, {}).get("k", {}).items():
             out["rows"].append({"batch": b, "context": ctx, "k": k, "f_kv": f_kv, "step_read_s": step_read,
-                                "predicted": f_kv * k * x1 / ctx if x1 else None,
+                                "predicted": f_kv * k * x1 / ctx,
                                 "measured_alone": kr["alone_s"] / step_read,
                                 "measured_exposed": kr["exposed_s"] / step_read,
                                 "measured_exposed_carved": kr["exposed_carved_s"] / step_read})
