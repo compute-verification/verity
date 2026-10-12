@@ -409,14 +409,14 @@
    "why": "a guarantee is a Prop over Mathlib, never over a proof"
   },
   "Definitions.Accounting": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Definitions.Accounting"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Definitions.Pous", "Definitions.Accounting"],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), and they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), B2's and lemma M's vocabulary reads PoUS's audit game (Definitions.Pous.Model.Audit), and they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "Models.Nci.Assumptions", "Definitions.Accounting", "Models.Accounting.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "Models.Nci.Assumptions", "Definitions.Pous", "Models.Pous.Assumptions", "Definitions.Accounting", "Models.Accounting.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses"
+   "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Models.Pous.Assumptions.P2) as a hypothesis"
   }
  },
  "reads_exempt": {
