@@ -57,7 +57,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
     lib=${LIBSET%% *}
     "$NCU_BIN" "${S[@]}" -k "regex:sk_ws_kernel|gemm_ws_kernel|sk_hash_kernel|b3_leaves" -c 80 -f -o "$O/ncu-$lib" \
       "$PY" $SK/bench.py --lib $lib="$B/sk-$lib.so" --out "$O/ncu" --mode ncu --shapes gate_up --batches 1,32 \
-      --ks 16 --ns 4096 --cfgs 4x2,8x1 > "$O/ncu-$lib.log" 2>&1
+      --ks 16 --ns 4096 --cfgs 6x1,8x1 > "$O/ncu-$lib.log" 2>&1
     "$NCU_BIN" --import "$O/ncu-$lib.ncu-rep" --csv --page raw > "$O/ncu-$lib.csv" 2>&1
     q
   fi

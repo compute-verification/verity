@@ -97,6 +97,14 @@ class Sketch:
     def name(self) -> str:
         return f"{self.ks}_{self.n_target}"
 
+    def window_buffers(self, lib: Lib, torch, calls: int):
+        """One sketch buffer and one commit workspace for `calls` calls' vectors (call c's vector v at c nvec + v)."""
+        if getattr(self, "_window", (None, None, 0))[2] != calls:
+            self._window = None
+            self._window = (torch.zeros(calls * self.nvec * self.ks, dtype=torch.int32, device="cuda"),
+                            WB.Commit(lib, torch, calls * self.nvec), calls)
+        return self._window[:2]
+
     def side_buffers(self, lib: Lib, torch, count: int) -> list:
         """count (sketch buffer, commit workspace) pairs for the side-stream commit, the first two the gated ones."""
         if not hasattr(self, "_side"):
@@ -160,6 +168,7 @@ def gate_sketch(lib: Lib, torch, sko: Sketch, store_np: np.ndarray, n: int, kd: 
         out["leaves_ok"] = sko.commit.leaf_list() == leaves
         out["root_ok"] = bytes(root) == WB.rfc6962_root(leaves)
     sko.digest = digest(ys, leaves)
+    sko.words = S.sketch_words(ref)
     # the committer warps, at each configuration: call 1 sketches into sk, call 2 into sk2 while hashing sk into commit2
     clear = sko.run < sko.t
     for c in [cfg, *extra]:
@@ -427,6 +436,42 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                     digest(c.tag_list(), c.leaf_list()) == sko.digest for _, c in sko.side_buffers(lib, torch, nbuf))
             return f
 
+        def arm_window(lay, sko, ks):
+            """The window-pass commit: call c of the ring sketches into its own slice of one buffer (vector c nvec + v),
+            then one hash and one leaves pass over all the calls' vectors."""
+            kr = layouts[lay][0]
+            ps = [WB.ptr(b) for b in ring[lay]]
+            fp = WB.ptr(sko.frag)
+            big, cmt = sko.window_buffers(lib, torch, len(ps))
+            nv, stride, bp = sko.nvec * len(ps), sko.nvec * ks * 4, WB.ptr(big)
+            clear = int(sko.run < sko.t)
+            lc = ctypes.c_int(0)
+            lib.call("sk_gemm", kr, ks, ps[0], xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, ctypes.byref(lc), sko.t,
+                     sko.run, fp, bp, 1, SKETCH_SEED, 0, None, 0, 0, None, 0, st)
+            groups = lc.value // nch
+
+            def f():
+                rc = 0
+                for i, p in enumerate(ps):
+                    rc |= so.sk_gemm(kr, ks, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, sko.t, sko.run,
+                                     fp, bp + i * stride, 1, SKETCH_SEED, 0, None, 0, 0, None, 0, st)
+                rc |= so.sk_hash(ks, bp, nv, SKETCH_SEED, 0, cmt.tags, clear, st)
+                rc |= so.sk_leaves(cmt.ptr, nv, SKETCH_SEED, st)
+                if rc:
+                    raise RuntimeError(f"sk_gemm window {lay} {ks}: error {rc}")
+            if mb == a.batches[0] and a.mode == "bench" and (lay, ks, sko.n_target) == focus_of[lay]:
+                # a pass's tags at j = c nvec + v are the reference's of vector v, and its leaves are theirs
+                big.zero_()
+                f()
+                torch.cuda.synchronize()
+                ys = cmt.tag_list()
+                keyed, rng = S.TAG.keyed(SKETCH_SEED), random.Random(nv)
+                js = sorted({0, 1, sko.nvec - 1, sko.nvec, nv - 1, *(rng.randrange(nv) for _ in range(27))})
+                res.setdefault("window_equal", {})[lay] = (
+                    all(ys[j] == keyed(j, sko.words[j % sko.nvec].tobytes()) for j in js)
+                    and cmt.leaf_list() == S.leaves(SKETCH_SEED, ys))
+            return f
+
         def arm_hash(lay, sko, leaves_only=False):
             copies = len(ring[lay])
             skp, nvec, cptr, tags = WB.ptr(sko.sk), sko.nvec, sko.commit.ptr, sko.commit.tags
@@ -466,6 +511,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                 arms[f"stack_{lay}_{sko.name()}"] = arm_sk(lay, sko, ks, stack=True)
                 arms[f"fused_{lay}_{sko.name()}"] = arm_fused(lay, sko, ks)
                 arms[f"side_{lay}_{sko.name()}"] = arm_side(lay, sko, ks)
+                arms[f"window_{lay}_{sko.name()}"] = arm_window(lay, sko, ks)
                 if (l2, ks, nt) == focus_of[lay]:
                     for c in extra:
                         arms[f"base_{lay}@{cfg_name(c)}"] = arm_sk(lay, first, 0, decode=0, cfg=c)
@@ -506,7 +552,8 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                             "native_s": native, "launched": launched,
                             "host_enqueue_max_s": host_max, "host_bound": host_max > 0.8 * spin_s,
                             "ratio_vs_native": {k: v / native for k, v in med.items()}}
-        best = {lay: min((min(med[f"{m}_{lay}_{s.name()}"] for m in ("stack", "fused", "side")) / native, s.name())
+        best = {lay: min((min(med[f"{m}_{lay}_{s.name()}"] for m in ("stack", "fused", "side", "window")) / native,
+                          s.name())
                          for (l2, _, _), s in sks.items() if l2 == lay) for lay in layouts}
         log(f"gemm {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain_ws {med['plain_ws'] * 1e6:.1f} us, "
             f"native {native * 1e6:.1f} us; base_plain {med['base_plain'] / native:.3f}x; "
@@ -514,6 +561,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                         f" stack {med[f'stack_{lay}_{s.name()}'] / native:.3f}x"
                         f" fused {med[f'fused_{lay}_{s.name()}'] / native:.3f}x"
                         f" side {med[f'side_{lay}_{s.name()}'] / native:.3f}x"
+                        f" window {med[f'window_{lay}_{s.name()}'] / native:.3f}x"
                         for (lay, ks, nt), s in sks.items() if s.name() == "16_4096")
             + (f"; dec_enc {med['dec_enc'] / native:.3f}x, dt_enc {med['dt_enc'] / native:.3f}x, "
                f"dtc_enc {med['dtc_enc'] / native:.3f}x" if "enc" in layouts else "")
@@ -521,14 +569,16 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
     res["sketches"] = {f"{lay}_{s.name()}": {"n": s.n, "T": s.t, "run": s.run, "vectors": s.nvec, "tiles": s.tiles,
                                              "sign_bytes": s.frag.numel(), "sketch_bytes": s.sk.numel() * 4}
                        for (lay, ks, nt), s in sks.items()}
-    res["ok"] = all(res.get("side_equal", {}).values())
+    res["ok"] = all(res.get("side_equal", {}).values()) and all(res.get("window_equal", {}).values())
     del ring, wring, layouts, plain, w, sks, tagcm
     torch.cuda.empty_cache()
     return res
 
 
 def frontier(res: dict, lib: Lib, a) -> list[dict]:
-    """Layer-weighted (the four linears' sum) per layout, k, n and batch: y_total = stack / native - 1, split as base,
+    """Layer-weighted (the four linears' sum) per layout, k, n and batch: y_total = the sum of each linear's fastest
+    commit (separate kernels behind the GEMM, committer warps inside it, a side stream, or one pass over the window's
+    sketches) / native - 1, split as base,
     decode, sketch, hash, commit (leaves; the tree above them is a window's, under 0.1% of it)."""
     cases = res["gemm"]
     points = []
@@ -537,7 +587,8 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
             for ks in a.ks:
                 for nt in a.ns:
                     tot = {"native": 0.0, "base": 0.0, "dec": 0.0, "sk": 0.0, "hash": 0.0, "leaves": 0.0, "stack": 0.0,
-                           "fused": 0.0, "side": 0.0, "dt": 0.0, "dtc": 0.0}
+                           "fused": 0.0, "side": 0.0, "window": 0.0, "best": 0.0, "dt": 0.0, "dtc": 0.0}
+                    modes = {}
                     ok = True
                     for name, g in cases.items():
                         tm = g.get("times", {}).get(mb)
@@ -554,6 +605,11 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                         tot["stack"] += med[f"stack_{lay}_{ks}_{nt}"]
                         tot["fused"] += med[f"fused_{lay}_{ks}_{nt}"]
                         tot["side"] += med[f"side_{lay}_{ks}_{nt}"]
+                        tot["window"] += med[f"window_{lay}_{ks}_{nt}"]
+                        mode = {"separate": med[f"stack_{lay}_{ks}_{nt}"], "fused": med[f"fused_{lay}_{ks}_{nt}"],
+                                "side": med[f"side_{lay}_{ks}_{nt}"], "window": med[f"window_{lay}_{ks}_{nt}"]}
+                        modes[name] = min(mode, key=mode.get)
+                        tot["best"] += mode[modes[name]]
                         if lay == "enc":
                             tot["dt"] += med["dt_enc"]
                             tot["dtc"] += med["dtc_enc"]
@@ -565,11 +621,10 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                           "b": 61 if lay == "enc" else 8, "k": a.kr if lay == "enc" else 0,
                           "arithmetic": f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/{lib.name}/pb{lib.bits}"
                                         if lay == "enc" else f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/plain",
-                          "batch": int(mb), "y_total": min(tot["stack"], tot["fused"], tot["side"]) / nat - 1,
-                          "commit_mode": min(("separate", "fused", "side"),
-                                             key=lambda m: tot["stack" if m == "separate" else m]),
+                          "batch": int(mb), "y_total": tot["best"] / nat - 1, "commit_mode": modes,
                           "y_total_separate": tot["stack"] / nat - 1, "y_total_fused": tot["fused"] / nat - 1,
-                          "y_total_side": tot["side"] / nat - 1,
+                          "y_total_side": tot["side"] / nat - 1, "y_total_window": tot["window"] / nat - 1,
+                          "y_commit_window": (tot["window"] - tot["sk"]) / nat,
                           "y_base": tot["base"] / nat - 1, "y_decode": (tot["dec"] - tot["base"]) / nat,
                           "y_tag": (tot["sk"] - tot["dec"]) / nat + tot["hash"] / nat,
                           "y_sketch": (tot["sk"] - tot["dec"]) / nat, "y_hash": tot["hash"] / nat,
@@ -578,7 +633,7 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                           "label": f"sketch-then-hash k={ks} n={sk0['n']} ({'encoded' if lay == 'enc' else 'plain'})",
                           "sketch_k": ks, "sketch_n": sk0["n"], "hashed_fraction": 4 * ks / sk0["n"],
                           "native_step_s": nat, "stack_step_s": tot["stack"], "fused_step_s": tot["fused"],
-                          "side_step_s": tot["side"],
+                          "side_step_s": tot["side"], "window_step_s": tot["window"],
                           "run": os.environ.get("RESEARCH_RUN_ID"), "art": None}
                     if lay == "enc":
                         pt["y_fullbyte_tag"] = (tot["dt"] - tot["dec"]) / nat
@@ -597,7 +652,8 @@ def write_result(ok: bool, points: list[dict], libs: list[Lib], out: Path) -> No
         lay = "enc" if p["b"] == 61 else "plain"
         stem = f"{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}"
         ms += [{"name": f"y_{f}_{stem}", "value": p[f"y_{f}"], "unit": "1"}
-               for f in ("total", "total_fused", "total_side", "total_separate", "sketch", "hash", "commit") if p.get(f"y_{f}") is not None]
+               for f in ("total", "total_fused", "total_side", "total_window", "total_separate", "sketch", "hash",
+                         "commit", "commit_window") if p.get(f"y_{f}") is not None]
     rel = os.path.relpath(out, run_dir)
     files = [f"{rel}/sketch-tag.json", f"{rel}/codec-frontier-points.json", f"{rel}/bench.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
@@ -621,7 +677,7 @@ def main() -> int:
     ap.add_argument("--kr", type=int, default=2, help="the word codec's rounds on the encoded store (0: plain only)")
     ap.add_argument("--ks", default="8,16,32")
     ap.add_argument("--ns", default="1024,4096,16384")
-    ap.add_argument("--cfgs", default="4x2,8x1,6x1",
+    ap.add_argument("--cfgs", default="6x1,4x2,8x1",
                     help="consumer warps x stages each: every arm at the first, base, decode, sketch and fused also at "
                          "the rest for k=16, n=4096 (each arm's fastest is the frontier's)")
     ap.add_argument("--committers", type=int, default=2, help="committer warps a CTA in the fused arm")
