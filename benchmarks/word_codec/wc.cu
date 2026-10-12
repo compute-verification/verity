@@ -941,29 +941,44 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
 }
 
 // Lane block j's tag straight from the store (32 q + l's words are q TASK_WORDS + 32 w + l, a warp's loads coalesced),
-// its words loaded a compression at a time, into out's 8 words; jj = jbase + j, its index in the tag.
+// its words loaded a compression at a time (PIPE: the next compression's while this one runs), into out's 8 words;
+// jj = jbase + j, its index in the tag.
+template <bool PIPE = false>
 __device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ store, const bw::Key3& key, uint64_t j,
                                                uint64_t jj, uint32_t* out) {
   constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
   const unsigned long long* src =
       reinterpret_cast<const unsigned long long*>(store) + (j / LANES) * TASK_WORDS + j % LANES;
+  const auto word = [&](int u) -> uint64_t {
+    return u == 0 ? 0 : u < MSG ? __ldcs(src + (size_t)((u - 2) / 2) * LANES) : 0;
+  };
   uint32_t cv[8];
 #pragma unroll
   for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+  uint64_t v[8], nv[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) v[i] = word(2 * i);
 #pragma unroll
   for (int b = 0; b < BLOCKS; ++b) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      if (!PIPE && b) v[i] = word(16 * b + 2 * i);
+      if (PIPE && b + 1 < BLOCKS) nv[i] = word(16 * (b + 1) + 2 * i);
+    }
     uint32_t m[16];
 #pragma unroll
-    for (int i = 0; i < 16; i += 2) {
-      const int u = 16 * b + i, w = (u - 2) / 2;
-      const uint64_t v = u == 0 ? 0 : u < MSG ? __ldcs(src + (size_t)w * LANES) : 0;
-      m[i] = u == 0 ? bw::bswap32((uint32_t)(jj >> 32)) : (uint32_t)v;
-      m[i + 1] = u == 0 ? bw::bswap32((uint32_t)jj) : (uint32_t)(v >> 32);
+    for (int i = 0; i < 8; ++i) {
+      const bool first = b == 0 && i == 0;
+      m[2 * i] = first ? bw::bswap32((uint32_t)(jj >> 32)) : (uint32_t)v[i];
+      m[2 * i + 1] = first ? bw::bswap32((uint32_t)jj) : (uint32_t)(v[i] >> 32);
     }
     const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
     const uint32_t flags =
         bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
     b3c<WC_B3V>(cv, m, 0, len, flags, cv);
+    if (PIPE && b + 1 < BLOCKS)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) v[i] = nv[i];
   }
   uint4* o = reinterpret_cast<uint4*>(out);
   o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
@@ -1028,21 +1043,23 @@ __global__ void __launch_bounds__(256) audit_commit_kernel(const uint64_t* __res
   }
 }
 
-// audit_commit_kernel over warp tasks [g0, g1) into a workspace's nodes (the leaves first). With scratch, the tags go
-// to the warp's own 512 there (16 KiB a warp, reused every warp task, so they stay in L2) instead of the workspace:
-// the leaves and the tree are the audit's answer, and an opened leaf's tags are recomputed from the store.
-__global__ void __launch_bounds__(256) audit_answer_kernel(const uint64_t* __restrict__ store, uint64_t g0, uint64_t g1,
-                                                           bw::Key3 key, bw::Mid mid, uint64_t jbase, uint32_t* tags,
-                                                           uint64_t* nodes, uint32_t* scratch) {
+// audit_commit_kernel into a workspace's nodes (the leaves first), the tags loaded as audit_lane_tag<PIPE>, at least
+// MINB blocks an SM. With scratch, the tags go to the warp's own 512 there (16 KiB a warp, reused every warp task, so
+// they stay in L2) instead of the workspace: the leaves and the tree are the audit's answer, and an opened leaf's tags
+// are recomputed from the store.
+template <bool PIPE, int MINB>
+__global__ void __launch_bounds__(256, MINB) audit_answer_kernel(const uint64_t* __restrict__ store, uint64_t tasks,
+                                                                 bw::Key3 key, bw::Mid mid, uint64_t jbase,
+                                                                 uint32_t* tags, uint64_t* nodes, uint32_t* scratch) {
   const int lane = threadIdx.x % 32;
   const uint64_t warps = (uint64_t)gridDim.x * (blockDim.x / 32);
   const uint64_t w = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) / 32;
-  for (uint64_t g = g0 + w; g < g1; g += warps) {
+  for (uint64_t g = w; g < tasks; g += warps) {
     uint32_t* T = scratch ? scratch + w * 512 * 8 : tags + g * 512 * 8;
 #pragma unroll 1
     for (int u = 0; u < 16; ++u) {
       const uint64_t j = g * 512 + 32 * u + lane;
-      audit_lane_tag(store, key, j, jbase + j, T + 8 * (32 * u + lane));
+      audit_lane_tag<PIPE>(store, key, j, jbase + j, T + 8 * (32 * u + lane));
     }
     __syncwarp();
     const uint64_t c = g * 32 + lane;
@@ -1372,58 +1389,35 @@ int wc_audit_commit(const void* store, uint64_t blocks, const uint8_t* seed, uin
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The audit's answer in one call: the workspace's leaves and every tree level, and with keep_tags its tags, as
-// wc_audit_commit and wc_commit_tree leave them; without keep_tags each warp's tags stay in a scratch slot of its own.
-// With part_log2 > 0 the pass runs in parts of 2^part_log2 warp tasks (32 · 2^part_log2 leaves, a subtree of the
-// tree), each part's subtree built on a second stream while the next part's pass runs, then the tree's top on s.
-// blocks % 512 == 0, at most 64 parts.
+// The audit's answer in one call: the pass, then the tree (tree_from), leaving the workspace's leaves and every level,
+// and with keep_tags its tags, as wc_audit_commit and wc_commit_tree do; without keep_tags each warp's tags stay in a
+// scratch slot of its own. form: bit 0 loads each compression's words during the one before (audit_lane_tag<true>),
+// bit 1 asks for 3 blocks an SM. blocks % 512 == 0.
 int wc_audit_tree(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, void* workspace,
-                  int part_log2, int keep_tags, int grid, cudaStream_t s) {
-  if (!store || !seed || !workspace || !blocks || grid < 1 || blocks % 512 || part_log2 < 0 || part_log2 > 24) return 1;
-  constexpr int MAX_PARTS = 64;
+                  int keep_tags, int form, int grid, cudaStream_t s) {
+  if (!store || !seed || !workspace || !blocks || grid < 1 || blocks % 512 || form < 0 || form > 3) return 1;
   static uint32_t* scratch = nullptr;
   static uint64_t scratch_warps = 0;
-  static cudaStream_t side = nullptr;
-  static cudaEvent_t ev[MAX_PARTS + 2];
-  const uint64_t warps = (uint64_t)grid * 8, tasks = blocks / 512;
-  const uint64_t part = part_log2 ? 1ull << part_log2 : tasks, parts = (tasks + part - 1) / part;
-  if (parts > MAX_PARTS) return 1;
+  const uint64_t warps = (uint64_t)grid * 8;
   if (!keep_tags && scratch_warps < warps) {
     if (scratch) cudaFree(scratch);
     if (cudaMalloc(&scratch, warps * 512 * 32)) return 4;
     scratch_warps = warps;
   }
-  if (!side) {
-    if (cudaStreamCreateWithFlags(&side, cudaStreamNonBlocking)) return 4;
-    for (cudaEvent_t& e : ev)
-      if (cudaEventCreateWithFlags(&e, cudaEventDisableTiming)) return 4;
-  }
   const WsTag& tg = ws_tag_keys(seed);
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   const auto* E = static_cast<const uint64_t*>(store);
   uint32_t* sc = keep_tags ? nullptr : scratch;
-  if (parts == 1) {
-    audit_answer_kernel<<<grid, 256, 0, s>>>(E, 0, tasks, tg.key, tg.leafmid, jbase, p.tags, p.nodes, sc);
-    tree_from(p, 0, s);
-    return cudaGetLastError() ? 4 : 0;
+#define AK(PIPE, MINB) \
+  audit_answer_kernel<PIPE, MINB><<<grid, 256, 0, s>>>(E, blocks / 512, tg.key, tg.leafmid, jbase, p.tags, p.nodes, sc)
+  switch (form) {
+    case 0: AK(false, 1); break;
+    case 1: AK(true, 1); break;
+    case 2: AK(false, 3); break;
+    default: AK(true, 3); break;
   }
-  const size_t low = (size_t)part_log2 + 5;
-  cudaEventRecord(ev[MAX_PARTS], s);
-  cudaStreamWaitEvent(side, ev[MAX_PARTS], 0);
-  for (uint64_t q = 0; q < parts; ++q) {
-    audit_answer_kernel<<<grid, 256, 0, s>>>(E, q * part, std::min(tasks, (q + 1) * part), tg.key, tg.leafmid, jbase,
-                                             p.tags, p.nodes, sc);
-    cudaEventRecord(ev[q], s);
-    cudaStreamWaitEvent(side, ev[q], 0);
-    for (size_t t = 0; t < low; ++t) {
-      const uint64_t span = (32 * part) >> t, i0 = q * span, m = std::min(span, p.lv.n[t] - i0);
-      bw::node_level<<<(unsigned)(((m + 1) / 2 + 127) / 128), 128, 0, side>>>(p.nodes + (p.lv.off[t] + i0) * 8, m,
-                                                                            p.nodes + (p.lv.off[t + 1] + i0 / 2) * 8);
-    }
-  }
-  cudaEventRecord(ev[MAX_PARTS + 1], side);
-  cudaStreamWaitEvent(s, ev[MAX_PARTS + 1], 0);
-  tree_from(p, low, s);
+#undef AK
+  tree_from(p, 0, s);
   return cudaGetLastError() ? 4 : 0;
 }
 

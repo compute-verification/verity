@@ -46,12 +46,12 @@ TAG_SEED = hashlib.sha256(b"verity/word-codec/bench/tag-seed").digest()
 B3_LANE_COMPRESSIONS = 5  # a lane block's message, 8 + 8 L bytes, at either packing
 SHA_LEAF_COMPRESSIONS = 5  # a leaf's 16 tags and index after the prefix's midstate, 8 + 512 bytes
 SHA_NODE_COMPRESSIONS = 2  # RFC 6962's node, 0x01 ‖ L ‖ R, 129 bytes
+ROOT_SQUARINGS = C.ROOT_EXP.bit_length() - 1  # a root a^(2^59), the adversary's floor a round: 59 squarings
 DESIGNS = ("fused", "passes", "audit", "audit-commit", "audit-tree")
-# wc_audit_tree's sweep: log2 of a part's warp tasks (0: one pass, then the tree), the tags kept in the workspace (1) or
-# each warp's in a scratch slot (0), blocks an SM
-AUDIT_TREE_CFGS = ((0, 1, 2), (0, 0, 2), (0, 0, 8), (11, 0, 2), (12, 0, 2), (13, 0, 2), (14, 0, 2), (12, 0, 8),
-                   (13, 0, 8), (14, 0, 8))
-AUDIT_TREE_GATE_TASKS = (1, 3, 37, 167, 1029, 2 * 2048 + 5)  # the last: 3 parts of 2^11 and 2 of 2^12, each ending odd
+# wc_audit_tree's sweep: the tags kept in the workspace (1) or each warp's in a scratch slot (0); its form (bit 0: each
+# compression's words loaded during the one before, bit 1: 3 blocks an SM); blocks an SM
+AUDIT_TREE_CFGS = ((1, 0, 2), (0, 0, 2), (0, 0, 8), (0, 1, 2), (0, 1, 8), (0, 2, 3), (0, 2, 8), (0, 3, 3), (0, 3, 8))
+AUDIT_TREE_GATE_TASKS = (1, 3, 37, 167, 1029, 4101)
 WS_MAX_WARPS = 10         # wc.cu's: consumers, the producer and the committers
 TAG_MODES = ((1, ""), (2, "i"))  # wc_gemm_ws_tag's decode: the tag then the decode, or interleaved (a cfg's suffix)
 LAYERS = 32               # Llama-3.1-8B's, each with the four linears
@@ -807,16 +807,16 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
     tree_gate = audit_tree_gate(lib, torch, log)
     trees = {}
     c = Commit(lib, torch, blocks)
-    for part, keep, per_sm in AUDIT_TREE_CFGS:
-        name, g = audit_tree_name(part, keep, per_sm), sms * per_sm
+    for keep, form, per_sm in AUDIT_TREE_CFGS:
+        name, g = audit_tree_name(keep, form, per_sm), sms * per_sm
         c.buf.zero_()
-        lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, part, keep, g, st)
+        lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, keep, form, g, st)
         torch.cuda.synchronize()
         o = 0 if keep else c.leaves - c.ptr
         same = bool(torch.equal(c.buf[o:], b.buf[o:]))
-        t = timed(torch, lambda: lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, part, keep, g, st),
+        t = timed(torch, lambda: lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, keep, form, g, st),
                   reps)
-        trees[name] = {"part_log2": part, "keep_tags": keep, "grid": g, "ok": same,
+        trees[name] = {"keep_tags": keep, "form": form, "grid": g, "ok": same,
                        "s": statistics.median(t), "times_s": t}
         ok &= same
     best = min(trees, key=lambda n: trees[n]["s"])
@@ -835,14 +835,13 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
     return out
 
 
-def audit_tree_name(part: int, keep: int, per_sm: int) -> str:
-    return f"p{part}{'t' if keep else 's'}x{per_sm}"
+def audit_tree_name(keep: int, form: int, per_sm: int) -> str:
+    return f"{'t' if keep else 's'}f{form}x{per_sm}"
 
 
 def audit_tree_gate(lib: Lib, torch, log) -> dict:
     """wc_audit_tree's workspace (every tree level, and the tags when it keeps them) byte for byte wc_audit_commit's and
-    wc_commit_tree's, at sizes whose parts and levels end odd, in every configuration and with parts of 4 warp
-    tasks."""
+    wc_commit_tree's, at sizes whose levels end odd, in every configuration."""
     st, sms = stream(torch), torch.cuda.get_device_properties(0).multi_processor_count
     bad = []
     for tasks in AUDIT_TREE_GATE_TASKS:
@@ -851,18 +850,16 @@ def audit_tree_gate(lib: Lib, torch, log) -> dict:
         ref, c = Commit(lib, torch, blocks), Commit(lib, torch, blocks)
         lib.call("wc_audit_commit", ptr(store), blocks, TAG_SEED, 7, ref.tags, ref.leaves, sms * 8, st)
         lib.call("wc_commit_tree", ref.ptr, blocks, None, st)
-        for part, keep, per_sm in {*AUDIT_TREE_CFGS, (2, 0, 2), (2, 1, 8)}:
-            if -(-tasks // (1 << part)) > 64:
-                continue
+        for keep, form, per_sm in AUDIT_TREE_CFGS:
             c.buf.zero_()
-            lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 7, c.ptr, part, keep, sms * per_sm, st)
+            lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 7, c.ptr, keep, form, sms * per_sm, st)
             torch.cuda.synchronize()
             o = 0 if keep else c.leaves - c.ptr
             if not torch.equal(c.buf[o:], ref.buf[o:]):
-                bad.append(audit_tree_name(part, keep, per_sm) + f"@{tasks}")
+                bad.append(audit_tree_name(keep, form, per_sm) + f"@{tasks}")
     out = {"tasks": list(AUDIT_TREE_GATE_TASKS), "cfgs": [list(x) for x in AUDIT_TREE_CFGS], "bad": bad, "ok": not bad}
     log(f"audit tree gate {lib.name}: {'ok' if not bad else 'FAIL ' + str(bad)} (the workspace = wc_audit_commit's and "
-        f"wc_commit_tree's at {', '.join(map(str, AUDIT_TREE_GATE_TASKS))} warp tasks, {len(AUDIT_TREE_CFGS) + 2} "
+        f"wc_commit_tree's at {', '.join(map(str, AUDIT_TREE_GATE_TASKS))} warp tasks, {len(AUDIT_TREE_CFGS)} "
         "configurations)")
     return out
 
@@ -876,8 +873,8 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
     window's passes; audit, a step that only decodes, the tags an audit pass of their own over the store (wc_audit_tag)
     and the commit its passes, the step the fastest decode-only kernel of the shape (simple, pipelined or
     warp-specialized); audit-commit, the same step, the tags and leaves one audit pass (wc_audit_commit), the tree after
-    it; audit-tree, the same step, the tags, leaves and the tree's lower levels one audit pass and the tree's top after it
-    (wc_audit_tree at its fastest configuration). The audit passes are timed over one store of the step's lane blocks
+    it; audit-tree, the same step and one call, wc_audit_tree at its fastest configuration (the tags and leaves one pass,
+    each warp's tags kept in L2 rather than written out, then the tree). The audit passes are timed over one store of the step's lane blocks
     (audit_window); `window_per_call` is the
     audit design's window from the per-call passes instead. Each shape takes the configuration whose step is fastest; a
     window pass is its time in proportion to the blocks.
@@ -896,6 +893,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                 best[int(k)] = max(best.get(int(k), 0.0), e["per_s"])
     b3_best = max((r["b3"]["compressions_s"] for r in rates_of.values() if "b3" in r), default=None)
     sha_best = max((r["sha512"]["compressions_s"] for r in rates_of.values() if "sha512" in r), default=None)
+    sq_best = max((v["per_s"] for r in rates_of.values() for v in r.get("square", {}).values()), default=None)
     form_rates = {}
     for r in rates_of.values():
         for f, v in r.get("b3", {}).get("by_form", {}).items():
@@ -983,6 +981,10 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                         pt["mu_rebuild_native"] = (1 - pt["tau_native"]) / pt["x_native"]
                         pt["mu_rebuild_window"] = ((window - pt["tau_native"] - pt.get("c_commit_native", 0.0))
                                                    / pt["x_native"])
+                        if sq_best:
+                            pt["x_floor_native"] = blocks * lw * k * ROOT_SQUARINGS / sq_best / nat
+                            pt["mu_rebuild_window_floor"] = (pt["mu_rebuild_window"] * pt["x_native"]
+                                                             / pt["x_floor_native"])
                     if add and form_rates and "c_commit_native" in pt and "x_native" in pt:
                         cost = {f: max(0.0, 2 * add[f"blake3_{f}"]["additivity"] - 1) for f in form_rates
                                 if f"blake3_{f}" in add}
@@ -999,13 +1001,14 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                "y_tag": p["stack"]["tag"], "y_commit": p["stack"]["commit"], "x": p["x_native"],
                "delta": p.get("delta_native"), "tau": p["tau_native"], "measured": True,
                "window": p["window"], "c_commit": p.get("c_commit_native"), "mu_window": p.get("mu_rebuild_window"),
-               "mu_window_overlap": p.get("mu_rebuild_window_overlap"),
+               "mu_window_overlap": p.get("mu_rebuild_window_overlap"), "x_floor": p.get("x_floor_native"),
+               "mu_window_floor": p.get("mu_rebuild_window_floor"),
                "label": f"Sloth p61, {p['payload_bits']}-bit packing, warp-specialized, "
                         + {"audit": "decode-only step, the tags an audit pass of their own, the leaves and the tree "
                                     "passes after it",
                            "audit-commit": "decode-only step, the tags and leaves one audit pass, the tree after it",
-                           "audit-tree": "decode-only step, the tags, leaves and the tree's lower levels one audit "
-                                         "pass, the tree's top after it"}
+                           "audit-tree": "decode-only step, one call: the tags (not kept) and leaves one audit pass, "
+                                         "the tree after it"}
                           .get(p["commit"], f"{p['commit']} commit")
                         + ", " + ",".join(sorted({s['cfg'] for s in p['shapes'].values()})),
                "run": os.environ.get("RESEARCH_RUN_ID"), "art": None}
@@ -1188,7 +1191,8 @@ def main() -> int:
                 f"commit compute {p.get('c_commit_native', 0):.3f}, window {p['window']:.3f}, rebuild "
                 f"{p.get('mu_rebuild_native', float('nan')):.4f} at one native pass, "
                 f"{p.get('mu_rebuild_window', float('nan')):.4f} in the window, "
-                f"{p.get('mu_rebuild_window_overlap', float('nan')):.4f} with the measured overlap")
+                f"{p.get('mu_rebuild_window_overlap', float('nan')):.4f} with the measured overlap, "
+                f"{p.get('mu_rebuild_window_floor', float('nan')):.4f} at the squaring floor")
     (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
     write_result(res, libs, out_dir)
     log("done" if res["ok"] else "done with a failed gate")
@@ -1247,8 +1251,9 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
     for p in res.get("frontier", {}).get("points", ()):
         name = f"{p['lib']}_{p['commit']}_k{p['k']}_m{p['batch']}"
         ms.append({"name": f"{name}_y", "value": p["y"], "unit": "1"})
-        if "mu_rebuild_window" in p:
-            ms.append({"name": f"{name}_mu_window", "value": p["mu_rebuild_window"], "unit": "1"})
+        for key, short in (("mu_rebuild_window", "mu_window"), ("mu_rebuild_window_floor", "mu_window_floor")):
+            if key in p:
+                ms.append({"name": f"{name}_{short}", "value": p[key], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/word-codec.json", f"{rel}/bench.log"]
     if (out_dir / "codec-frontier-points.json").exists():
