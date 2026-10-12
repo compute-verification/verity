@@ -305,6 +305,12 @@ class Queue:
             self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
         # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
         _git(self.workdir, "remote", "set-url", "origin", self.remote)
+        # `.gitattributes` names this driver for every lean-audit.json; without it in the clone's config git merges the records
+        # as text, and any two PRs that each add a record conflict (12 Oct: #1806 dropped from `next`)
+        from .clone import RECORD_DRIVER
+
+        for k, v in RECORD_DRIVER.items():
+            _git(self.workdir, "config", k, v)
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")

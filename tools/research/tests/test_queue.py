@@ -156,6 +156,27 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
     assert [m.commit for m in again] == [m.commit for m in members]
 
 
+def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world):
+    """`.gitattributes` names `lean-audit` for every lean-audit.json; the queue's own clone must define it, or two PRs that each
+    add a record conflict as text (12 Oct: #1806)."""
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    for n, g in ((1, "A"), (2, "B")):
+        world.gh.put(n, world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}))
+    q = world.queue()
+    members, entries = q.sync()
+    for k, v in RECORD_DRIVER.items():
+        assert _git(q.workdir, "config", "--get", k) == v
+    assert [m.pr for m in members] == [1, 2], entries[2].why
+    merged = json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))
+    assert set(merged["guarantees"]) == {"T", "A", "B"}
+
+
 def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched_the_file(world):
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
