@@ -418,7 +418,7 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketchers: str = "1,4") ->
     from the start, at 4 fewer stages; sketched, for each k_s in `sketch` and W in `sketchers`, W of those warps
     sketching, at 4 fewer stages. Four or more tag warps (with the decoders that leave) fail some gates in some runs,
     on early tasks of random CTAs, unexplained, so auto leaves them out."""
-    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 8 - 64 * ks) // (lib.sb + 48)  # noqa: E731
+    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 16 - 64 * ks) // (lib.sb + 48)  # noqa: E731
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":

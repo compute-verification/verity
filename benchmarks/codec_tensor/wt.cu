@@ -1569,7 +1569,7 @@ constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a ta
 
 template <int NB8, int SKK>
 __host__ __device__ constexpr int fused_smem_bytes(int stages) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 6 * stages * 8 + 8 + 64 * SKK;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 6 * stages * 8 + 16 + 64 * SKK;
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -1690,6 +1690,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
 // skbuf; sk_out, if given, gets the tile's 16 × k_s int32 at 16 k_s tile, and a lane a vector hashes y_v into
 // tags[8 v ..] (tag index jbase + v). The CTA's tiles past its last task are zero vectors, and are tagged as such.
 constexpr int SK_STEP = 512, SK_M = (SB + SK_STEP - 1) / SK_STEP, SK_HOLD = 5;
+static_assert(SB % 16 == 0, "a stage's lane loads (uint4) and the shared memory after the stages stay 16-byte aligned");
 template <int KS>
 __host__ __device__ constexpr int sk_words() {
   return (KS / 4 + 5) / 6 == 3 ? 4 : (KS / 4 + 5) / 6;
@@ -1830,7 +1831,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages, *ready = empty + stages;
   u64 *sketched = ready + stages;
   u32 *tagq = reinterpret_cast<u32 *>(sketched + stages);
-  int *skbuf = reinterpret_cast<int *>(tagq + 2);
+  int *skbuf = reinterpret_cast<int *>(tagq + 4);   // 16-byte aligned: sk_flush reads it as int4
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
