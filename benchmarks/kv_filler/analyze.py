@@ -42,8 +42,14 @@ def arms(enc: dict, grids=(64, 128)) -> dict:
     return out
 
 
+def phases(steps: list[dict]) -> list[dict]:
+    """A step's prefill tokens as its tokens beyond one a request: a decode request schedules one. Records from before
+    serve.py counted it so (vLLM's batch queue puts `num_computed_tokens` a step ahead) miss most prefill chunks."""
+    return [{**s, "prefill_tokens": max(s["prefill_tokens"], s["tokens"] - s["reqs"])} for s in steps]
+
+
 def price(run: dict, a: dict, R: float) -> dict:
-    steps = run["step_records"]
+    steps = phases(run["step_records"])
     t1 = run["seconds"]
     res = {}
     for name, p in a.items():

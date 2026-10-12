@@ -242,7 +242,8 @@ def main() -> int:
             if r is None:
                 continue
             kv_tokens += int(r.num_computed_tokens)
-            if r.num_computed_tokens <= r.num_prompt_tokens:
+            # a decode request schedules one token; with the batch queue, num_computed_tokens is a step ahead
+            if n > 1:
                 prefill += n
         try:
             free = int(sched.kv_cache_manager.block_pool.get_num_free_blocks())
