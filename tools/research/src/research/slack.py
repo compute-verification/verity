@@ -142,7 +142,11 @@ BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
 TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
 RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
 HISTORY_S = 86400                                                # how far back a reply's thread counts for `pr_watchers`
-GH, GH_REPO = "gh", "danielreuter/verity"                       # `pr_branches` asks gh for PR branches
+GH = "gh"                                                        # `pr_branches` asks gh for PR branches
+try:
+    from .repo import SLUG as GH_REPO
+except ImportError:                                                 # run as a single file
+    GH_REPO = "compute-verification/verity"
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
@@ -388,7 +392,7 @@ def broker_error(method: str, e: urllib.error.HTTPError) -> str:
     if e.code == 401:
         return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
     if e.code == 403:
-        return f"{method}: the Slack broker refused the call ({why}): it serves danielreuter/verity's agents and BROKER_METHODS only"
+        return f"{method}: the Slack broker refused the call ({why}): it serves {GH_REPO}'s agents and BROKER_METHODS only"
     if e.code == 413:
         return f"{method}: the request is larger than the broker takes ({why}); put the content in a file and link it"
     if e.code == 429:
@@ -2015,7 +2019,7 @@ def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]
 def route_error(what: str, e: urllib.error.HTTPError) -> str:
     why = f"HTTP {e.code}{_code(e)}"
     if e.code == 401:
-        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on danielreuter/verity only"
+        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on {GH_REPO} only"
     if e.code == 403:
         return f"{what}: the route refused ({why}): only a card's own asker may resolve it"
     if e.code == 429:

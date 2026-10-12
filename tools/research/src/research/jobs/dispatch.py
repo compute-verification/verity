@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
+from ..repo import SLUG, same
 from .client import TOKEN_ENV, WORKER_TOKEN_ENV, Unreachable
 
 KINDS = ("merge-check", "lean-regen", "audit-main")
@@ -413,7 +414,7 @@ print(json.dumps(caps))
 
 @dataclass
 class ResearchRunner:
-    repo: str = "danielreuter/verity"
+    repo: str = SLUG
     workdir: Path = WORKDIR
     python: str = sys.executable
     environ: dict | None = None
@@ -578,7 +579,7 @@ def command(job: dict, pod: str, python: str, pack: Path | None, preflight: bool
 
 def validate(job: dict, repo: str) -> None:
     p = job["payload"]
-    if p.get("repo", repo) != repo:
+    if not same(p.get("repo", repo), repo):
         raise ValueError(f"the job is for {p.get('repo')}, and this dispatcher checks {repo}")
     if not SHA.fullmatch(str(p.get("commit", ""))):
         raise ValueError("payload.commit must be a full commit sha")

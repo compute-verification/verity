@@ -389,6 +389,12 @@ nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
+path = "/usr/local/lib/vy-monitoring/research/repo.py"
+src = "tools/research/src/research/repo.py"
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+owner = "infra"
+
+[[file]]
 path = "/usr/local/lib/vy-monitoring/research/pods/__init__.py"
 src = "tools/research/src/research/pods/__init__.py"
 nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]

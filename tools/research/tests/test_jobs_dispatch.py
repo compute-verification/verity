@@ -336,9 +336,17 @@ def test_the_commands_each_kind_runs(tmp_path):
 ])
 def test_a_payload_the_dispatcher_cant_run_is_an_error(payload, why):
     with pytest.raises(ValueError, match=why):
-        D.validate({"kind": "merge-check", "payload": payload}, "danielreuter/verity")
+        D.validate({"kind": "merge-check", "payload": payload}, D.SLUG)
     with pytest.raises(ValueError, match="package directories"):
-        D.validate({"kind": "lean-regen", "payload": {"commit": C1, "packages": ["../etc"]}}, "danielreuter/verity")
+        D.validate({"kind": "lean-regen", "payload": {"commit": C1, "packages": ["../etc"]}}, D.SLUG)
+
+
+def test_a_payload_naming_the_repository_s_former_name_is_its_own():
+    for named in ("danielreuter/verity", "compute-verification/verity"):
+        for checks in ("danielreuter/verity", "compute-verification/verity"):
+            D.validate({"kind": "merge-check", "payload": {"commit": C1, "base": BASE, "repo": named}}, checks)
+    with pytest.raises(ValueError, match="this dispatcher checks"):
+        D.validate({"kind": "merge-check", "payload": {"commit": C1, "base": BASE, "repo": "danielreuter/other"}}, D.SLUG)
 
 
 def _git(cwd: Path, *args: str) -> str:

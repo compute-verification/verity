@@ -95,7 +95,7 @@ def test_the_note_has_alert_sinks_front_matter_and_names_its_monitor(tmp_path):
     text = next((tmp_path / "outbox").iterdir()).read_text()
     fm = M.front_matter(text)
     assert {k: fm[k] for k in ("campaign", "lane", "kind", "status", "repo")} == {
-        "campaign": "nebius-monitoring", "lane": "infra", "kind": "finding", "status": "open", "repo": "danielreuter/verity"}
+        "campaign": "nebius-monitoring", "lane": "infra", "kind": "finding", "status": "open", "repo": "compute-verification/verity"}
     assert fm["monitor"] == "m" and fm["key"] == '"m|a"' and fm["owners"] == "[infra]" and fm["id"] + ".md" == events(tmp_path)[0]["note"]
     assert "# a is wrong" in text and "What to do: do the thing" in text
 

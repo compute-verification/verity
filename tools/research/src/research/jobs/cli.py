@@ -44,8 +44,8 @@ from pathlib import Path
 from .client import WORKER_TOKEN_ENV, HTTPClient, Unreachable, load_token, worker_token_file
 from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
 from .dispatch import KINDS as DISPATCH_KINDS
+from ..repo import SLUG as REPO
 
-REPO = "danielreuter/verity"
 LEAN_TOOL = "tools/verity/lean/"
 LEAN_KEY_SCHEMA = "lean-regen-inputs/v1"
 

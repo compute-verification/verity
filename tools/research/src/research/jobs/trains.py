@@ -40,9 +40,9 @@ import re
 from dataclasses import dataclass, field
 
 from ..merge import REFUSED_KINDS, rule_touches
+from ..repo import SLUG as REPO
 from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused, check_line
 
-REPO = "danielreuter/verity"
 HOLD = "hold"
 RECORD = "lean-audit.json"
 #: audit.py's ORDER and merge.py's SORTED / NESTED, for the stand-in record merge
