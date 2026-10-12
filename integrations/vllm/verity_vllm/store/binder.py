@@ -9,7 +9,8 @@ BlockPool.free_blocks               after: kv_free of the pages it freed, moved 
                                     reuse, so a page freed inside a window is reused as late as the pool allows)
 BlockPool.touch                     refused: a prefix-cache hit would bring a page back with its KV (run without it)
 Scheduler.schedule                  after: kv_append of the scheduled tokens' slots, then begin_pass over the
-                                    allocated pages (a pass still open from an earlier schedule is ended first)
+                                    allocated pages (a pass still open from an earlier schedule is ended first; with
+                                    a challenge, a window ends after its passes and the next begins)
 Scheduler.update_from_output        before: end_pass, with the device reader's segment roots
 ~~~
 
@@ -30,7 +31,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.store.interface import IDENTITY, Append, Codec, PageLayout, Receipt
+from verity_vllm.store.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
 from verity_vllm.store.registry import Store, TagReceipt
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
@@ -173,17 +174,27 @@ def _unwrap(m: Any) -> Any:
 
 class Binder:
     """The store's hooks.  ``weights(runner)`` lists the weight regions after load (default `model_weights`);
-    ``reader()``, if given, returns the step's segment roots (by segment number) for `end_pass`; ``fifo`` reuses
-    freed pages in the order they were freed."""
+    ``reader(segments)``, if given, returns the step's segment roots (by segment number) for `end_pass`; ``fifo``
+    reuses freed pages in the order they were freed.  With ``challenge``, the steps run in windows of ``window_passes``
+    passes, window ``t`` under ``challenge(t)``, each window's record handed to ``on_window``; without a reader, a
+    window's receipts are the reference's, every block read on the CPU."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
-                 reader: Callable[[], dict[int, bytes] | None] | None = None, fifo: bool = True) -> None:
+                 reader: Callable[[Sequence[Segment]], dict[int, bytes] | None] | None = None, fifo: bool = True,
+                 challenge: Callable[[int], bytes] | None = None, window_passes: int = 0,
+                 on_window: Callable[[WindowRecord], None] | None = None) -> None:
+        if challenge is not None and window_passes < 1:
+            raise ValueError("a window is at least one pass")
         self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
         self.receipt = receipt or default_receipt()
         self.weights, self.reader, self.fifo = weights, reader, fifo
+        self.challenge, self.window_passes, self.on_window = challenge, window_passes, on_window
         self.hooks: Hooks | None = None
         self.step = 0
+        self.windows = 0
+        self._in_window = 0
+        self._segments: Sequence[Segment] = ()
         self.unregistered: dict[str, int] = {}
         self.slots = 0
 
@@ -268,11 +279,27 @@ class Binder:
         self.store.counters.add("appends", time.perf_counter() - t)
         self.store.kv_append(apps, self.step)
         self.step += 1
-        self.store.begin_pass(None)
+        if self.challenge is not None:
+            if self._in_window == self.window_passes:
+                self.end_window()
+            if not self._in_window:
+                self.store.begin_window(self.challenge(self.windows))
+            self._in_window += 1
+        self._segments = self.store.begin_pass(None).segments
 
     def end(self) -> None:
         if self.store.in_pass:
-            self.store.end_pass(self.reader() if self.reader else None)
+            self.store.end_pass(self.reader(self._segments) if self.reader else None)
+
+    def end_window(self) -> None:
+        """Close the open window (after its last pass), if one is."""
+        self.end()
+        if self._in_window:
+            rec = self.store.end_window()
+            self.windows += 1
+            self._in_window = 0
+            if self.on_window is not None:
+                self.on_window(rec)
 
     # --- install ----------------------------------------------------------------------------------------------------
 
@@ -366,6 +393,6 @@ class Binder:
         return {"regions": len(lay.regions), "blocks": lay.blocks, "block_bytes": self.block_bytes,
                 "bytes_by_tier": lay.bytes_by_tier, "bytes_by_kind": kinds,
                 "unregistered_bytes": sum(self.unregistered.values()), "unregistered": len(self.unregistered),
-                "registration": self.store.registration().count, "steps": self.step,
+                "registration": self.store.registration().count, "steps": self.step, "windows": self.windows,
                 "hooks": {k: {"calls": c.calls[k], "seconds": c.seconds[k], "us_per_call": 1e6 * c.seconds[k] / c.calls[k]}
                           for k in sorted(c.calls)}}

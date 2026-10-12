@@ -132,3 +132,22 @@ def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     b.on_free(pool, a)
     assert [x.block_id for x in pool.free_block_queue.q] == [4, 5, 1, 2]
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
+
+
+def test_steps_run_in_chained_windows_with_the_readers_roots():
+    from verity_vllm.store.registry import chain
+    s, recs = Store(), []
+    sigma = [bytes([t]) * 32 for t in range(3)]
+    b = Binder(s, block_bytes=1024, challenge=sigma.__getitem__, window_passes=2, on_window=recs.append,
+               reader=lambda segments: dict.fromkeys(range(len(segments)), b"\x01" * 64))
+    r = runner()
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(
+        single_type_managers=[SimpleNamespace(req_to_blocks={})])), requests={})
+    for _ in range(5):
+        b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
+    b.end_window()
+    assert [len(w.passes) for w in recs] == [2, 2, 1] and [w.challenge for w in recs] == sigma
+    assert recs[1].passes[0].seed == chain(sigma[1], recs[0].passes[-1].root, 0)
+    assert recs[0].passes[0].segment_roots == (b"\x01" * 64,) and b.stats()["windows"] == 3
