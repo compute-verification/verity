@@ -652,12 +652,14 @@ __device__ __forceinline__ void attn_tile(const uint8_t *src, const uint8_t *qs,
     }
   }
   const float sc = lane % TT < nt ? s[0] : -INFINITY;
-  float gm = fmaxf(sc, __shfl_xor_sync(0xffffffffu, sc, 1));
-  gm = fmaxf(gm, __shfl_xor_sync(0xffffffffu, gm, 2));
+  float gm = sc;
+#pragma unroll
+  for (int o = 1; o < TT; o <<= 1) gm = fmaxf(gm, __shfl_xor_sync(0xffffffffu, gm, o));
   const float m_new = fmaxf(m_own, gm);
   const float scale = exp2f(m_own - m_new), p = exp2f(sc - m_new);
-  float ps = p + __shfl_xor_sync(0xffffffffu, p, 1);
-  ps += __shfl_xor_sync(0xffffffffu, ps, 2);
+  float ps = p;
+#pragma unroll
+  for (int o = 1; o < TT; o <<= 1) ps += __shfl_xor_sync(0xffffffffu, ps, o);
   l_own = __fmaf_rn(l_own, scale, ps);
   m_own = m_new;
 #pragma unroll
