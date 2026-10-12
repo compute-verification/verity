@@ -9,7 +9,8 @@ too):
 - `mu_rebuild`: words the adversary doesn't read but re-encodes from a compressed source, paid in work under the
   direct-sum conjecture W. On-chip sources and HBM sources give the same saving per unit of compute (see `saving`),
   so the term is s_word · f_cap, s_word the share of its slot a rebuilt word saves (`s_word`). s_c, the payload's
-  compressibility, is an assumption about data the operator chooses: a compressor bounds it from one side only.
+  compressibility, is an assumption about data the operator chooses: a compressor bounds it from one side only. W can
+  be registered with its s_c; the prompts can't, so the KV cache's payloads count as free (`rebuild_free_kv`).
 - `mu_slot`: slot bits that carry no information (the top 3 bits of a word mod 2^61 − 1), which an adversary drops.
 - `mu_sample`: wrong sketches the verifier's spot checks miss, for a time-averaged claim with total rejection.
 - `mu_lambda`: the random oracle's guessing allowance per tile (AuditRO's λ).
@@ -146,6 +147,24 @@ def saving(mu_chip_: float, f_cap: float, s_c: float) -> float:
     return mu_chip_ + s_c * min(f_cap, 1.0 - mu_chip_)
 
 
+def rebuild(budget: float, keep: float, options: list[tuple[float, float, float]]) -> float:
+    """Bytes an adversary avoids reading by re-encoding, as a share of the certified store: the LP over regions.
+
+    The budget, κ·d·(1 + θ) − τ passes, first pays `keep`, the decode owed on words whose payloads the adversary
+    needs. Each option is (share of the store, passes per pass to rebuild it, share of a word it saves), the cost net
+    of the decode a rebuilt word no longer owes; the LP spends what is left on the best saving per pass first.
+    """
+    left = budget - keep
+    saved = 0.0
+    for share, cost, s in sorted(options, key=lambda o: o[2] / o[1], reverse=True):
+        if share <= 0 or left <= 0:
+            continue
+        f = min(1.0, left / (cost * share))
+        saved += share * f * s
+        left -= cost * share * f
+    return saved
+
+
 def mu_sample(delta: float, samples_per_window: int, windows: int) -> float:
     """Skipped fraction f with (1 − f)^(sN) ≥ δ: the most a prover cheats in a time-averaged claim that rejects on
     any wrong opened sketch."""
@@ -188,13 +207,23 @@ def packed(c: Codec) -> Codec:
 
 
 # Wide words at k = 1, measured by ra-codec-tensor (r20261012-073450-68ab, r20261012-080525-4dcf): ε is the decode's
-# CUDA-core time per native pass, y the fused GEMM's today (warp-specialized, no tag) at batch 1–16, lower end.
+# CUDA-core time per native pass, y the fused GEMM's today (warp-specialized, no tag) at batch 1–8, weighted by bytes
+# over Llama-3.1's four linears with the best variant for each.
 WIDE = {
     "p255": Codec(0.71, 135, 1.51, 0.15, p_bits=255, payload_bits=248, slot_bits=256),
-    "p511": Codec(0.84, 295, 1.47, 0.15, p_bits=511, payload_bits=504, slot_bits=512),
-    "m521": Codec(0.87, 292, 1.55, 0.15, p_bits=521, payload_bits=520, slot_bits=528),
+    "p511": Codec(0.84, 295, 1.49, 0.15, p_bits=511, payload_bits=504, slot_bits=512),
+    "m521": Codec(0.87, 292, 1.56, 0.15, p_bits=521, payload_bits=520, slot_bits=528),
     "p767": Codec(0.98, 503, 1.75, 0.15, p_bits=767, payload_bits=760, slot_bits=768),
 }
+# The same y at batch 32 (same runs, same weighting). Nothing is measured above 32, so these stand in, as a lower
+# bound, for larger batches.
+MEASURED_Y32 = {1: 1.18, 2: 1.25, 3: 1.34, 4: 1.44, 5: 1.61}
+WIDE_Y32 = {"p255": 1.59, "p511": 1.74, "m521": 1.66, "p767": 1.79}
+
+
+def at_batch(c: Codec, y32: float, batch: int) -> Codec:
+    """The codec with its fused step measured at the batch: the batch-1–8 figure below 32, else the batch-32 one."""
+    return c if batch < 32 else replace(c, y=y32)
 # The adversary's tensor-core help on encode, x_cuda / x_add − 1 (same runs), and the standalone decode-from-HBM
 # ratio, native 1,420 GB/s over the decode's: what a kernel that hides decode under the read could reach.
 WIDE_THETA = {"p255": 85 / 83 - 1, "p511": 233 / 219 - 1, "m521": 0.0, "p767": 449 / 407 - 1}
@@ -209,7 +238,7 @@ class Point:
     kv_certified: bool
     codec: Codec
     s_c: float = 0.19  # FP8 weights per payload byte: measured 0.17 (8B, art:23672ef9), 0.19 (70B, art:f989de1d)
-    s_c_kv: float = 0.30  # BF16 KV, an estimate
+    kv_rounds: int = 1  # Sloth rounds on the KV cache's words, k for E: its payloads are free, so it may want more
     kappa: float = 1.0
     theta: float = 0.0
     other: float = 0.0  # μ_sample + μ_λ (+ μ_side, zero under isolation)
@@ -222,16 +251,27 @@ class Point:
         kv = self.batch * self.context * self.shape.kv_bytes_per_token()
         act = self.act_crossing * self.shape.activation_bytes(self.batch)
         cert = e + kv if self.kv_certified else e
-        # d, the window in passes of the certified bytes: their fused pass, the uncertified KV read at the native
-        # rate, and the idle time, all of which the adversary may spend on re-encoding.
-        d = c.y + ((0.0 if self.kv_certified else kv) + self.idle * e) / cert
-        f = f_cap_keep_decode(d, c.tau, c.eps, c.r, self.kappa, self.theta)
-        f_free = f_cap_decode_free(d, c.tau, c.eps, c.r, self.kappa, self.theta)
-        s_c = (e * s_word(c, self.s_c) + (kv * s_word(c, self.s_c_kv) if self.kv_certified else 0.0)) / cert
+        a, b = e / cert, (kv / cert if self.kv_certified else 0.0)
+        # d, the window in passes of the certified bytes: E's fused pass, the KV cache's (each extra round adds its
+        # decode) or its uncertified read at the native rate, and the idle time; the adversary may spend all of it.
+        y_kv = c.y + (self.kv_rounds - 1) * c.eps if self.kv_certified else 1.0
+        d = (c.y * e + y_kv * kv + self.idle * e) / cert
+        budget = d * self.kappa * (1 + self.theta) - c.tau
         chip = mu_chip(cert)
-        lost = min(1.0, saving(chip, f, s_c) + mu_slot(c.p_bits, c.slot_bits) + self.other)
+        slot = mu_slot(c.p_bits, c.slot_bits)
+        enc_kv = self.kv_rounds * c.r * c.eps
+        # W is registered with its s_c, so the E words kept are decoded; the prompts aren't, so no KV word is.
+        rebuilt = min(1.0 - chip, rebuild(budget, c.eps * a, [(a, (c.r - 1) * c.eps, s_word(c, self.s_c)),
+                                                              (b, enc_kv, s_word(c, 1.0))]))
+        # Without the assumption on s_c (an unvetted model): every payload free, nothing decoded.
+        rebuilt_free = min(1.0 - chip, rebuild(budget, 0.0, [(a, c.r * c.eps, s_word(c, 1.0)),
+                                                              (b, enc_kv, s_word(c, 1.0))]))
         q_honest = e + kv + act
         stock = (e + kv) / e + self.idle
+
+        def gamma(lost: float) -> float:
+            return 1 - cert * (1 - min(1.0, lost)) / q_honest
+
         return {
             "slowdown": (d * cert / e) / stock,
             "E_GB": e / 1e9,
@@ -239,13 +279,11 @@ class Point:
             "fits": e + kv <= M_DEVICE,
             "d": d,
             "mu_chip": chip,
-            "mu_rebuild": saving(chip, f, s_c) - chip,
-            "mu_slot": mu_slot(c.p_bits, c.slot_bits),
+            "mu_rebuild": rebuilt,
+            "mu_slot": slot,
             "uncertified_reads": 1 - cert / q_honest,
-            "gamma_bw": 1 - cert * (1 - lost) / q_honest,
-            # Without the assumption on s_c (an unvetted model, duplicated prompts): every payload free, nothing decoded.
-            "gamma_decode_free": 1 - cert * (1 - min(1.0, saving(chip, f_free, 1.0) + mu_slot(c.p_bits, c.slot_bits)
-                                                     + self.other)) / q_honest,
-            # The joint view's compute residual: the window's ALU that decode and tag don't force.
-            "alu_idle": max(0.0, 1 - (c.eps + c.tau) / (self.kappa * d * (1 + self.theta))),
+            "gamma_bw": gamma(chip + rebuilt + slot + self.other),
+            "gamma_decode_free": gamma(chip + rebuilt_free + slot + self.other),
+            # The joint view's compute residual: the window's ALU beyond what decoding E and the tag force.
+            "alu_idle": max(0.0, 1 - (c.eps * a + c.tau) / (self.kappa * d * (1 + self.theta))),
         }

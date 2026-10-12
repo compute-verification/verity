@@ -120,13 +120,35 @@ def test_s_word_per_codeword():
 
 def test_gamma_points():
     packed = G.Point(G.LLAMA_70B, 1, 4096, True, G.packed(G.MEASURED[3]), idle=0.10).terms()
-    assert packed["fits"] and packed["gamma_bw"] == pytest.approx(0.0090, abs=3e-4)
-    assert packed["gamma_decode_free"] > 6 * packed["gamma_bw"]
+    assert packed["fits"] and packed["gamma_bw"] == pytest.approx(0.0238, abs=3e-4)
+    assert packed["gamma_decode_free"] > 2 * packed["gamma_bw"]
     unpacked = G.Point(G.LLAMA_70B, 1, 4096, True, G.MEASURED[3], idle=0.10).terms()
-    assert unpacked["gamma_bw"] - packed["gamma_bw"] == pytest.approx(3 / 64, abs=1e-3)
+    assert unpacked["mu_slot"] - packed["mu_slot"] == pytest.approx(3 / 64)
     kv_open = G.Point(G.LLAMA_8B, 1, 4096, False, G.packed(G.MEASURED[3]), idle=0.37).terms()
     assert kv_open["uncertified_reads"] == pytest.approx(0.066, abs=1e-3) and kv_open["gamma_bw"] > 0.09
     assert not G.Point(G.LLAMA_70B, 32, 4096, True, G.MEASURED[3]).terms()["fits"]
+
+
+def test_free_kv_payloads():
+    """The operator picks the prompts, so the KV cache's words are rebuilt first, from free payloads: at 70B batch 1
+    the term is min(b, (budget − εa)/(k_KV·rε)), and more rounds on the KV words alone buy most of it back."""
+    c = replace(G.WIDE["p511"], tau=0.011, p_bits=512, payload_bits=512)
+    th = G.WIDE_THETA["p511"]
+    t = G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10, theta=th).terms()
+    a = t["E_GB"] / (t["E_GB"] + t["kv_GB"])
+    budget = t["d"] * (1 + th) - c.tau
+    assert t["mu_rebuild"] == pytest.approx(min(1 - a, (budget - c.eps * a) / (c.r * c.eps)))
+    assert t["mu_rebuild"] == pytest.approx(0.0034, abs=1e-4)
+    four = G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10, theta=th, kv_rounds=4).terms()
+    assert four["mu_rebuild"] < t["mu_rebuild"] / 3 and four["slowdown"] < 1.04 * t["slowdown"]
+    packed = G.Point(G.LLAMA_70B, 1, 4096, True, G.packed(G.MEASURED[3]), idle=0.10, kv_rounds=4).terms()
+    assert packed["gamma_bw"] == pytest.approx(0.0106, abs=3e-4)
+
+
+def test_at_batch():
+    c = G.WIDE["p511"]
+    assert G.at_batch(c, G.WIDE_Y32["p511"], 8) is c and G.at_batch(c, G.WIDE_Y32["p511"], 32).y == 1.74
+    assert all(G.MEASURED_Y32[k] > G.MEASURED[k].y for k in G.MEASURED)
 
 
 def test_wide_words_without_the_data_assumption():
@@ -134,14 +156,15 @@ def test_wide_words_without_the_data_assumption():
     def point(name):
         c = replace(G.WIDE[name], tau=0.011, p_bits=G.WIDE[name].slot_bits, payload_bits=G.WIDE[name].slot_bits)
         c = replace(c, y=G.WIDE_HIDDEN_Y[name])
-        return G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10, theta=G.WIDE_THETA[name]).terms()
+        return G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10, theta=G.WIDE_THETA[name], kv_rounds=4).terms()
     assert point("p511")["gamma_decode_free"] < 0.01 < point("p255")["gamma_decode_free"]
-    assert point("p511")["gamma_bw"] == pytest.approx(0.0038, abs=2e-4)
+    assert point("p511")["gamma_bw"] == pytest.approx(0.0040, abs=2e-4)
 
 
 def test_alu_idle_falls_with_k():
-    """The joint view: μ_rebuild drops out, and k sets the compute the window leaves unforced."""
+    """The joint priced residual's compute side: k sets the ALU the window leaves unforced (KV decode isn't forced,
+    since its payloads are free)."""
     hidden = {k: replace(G.MEASURED[k], y=max(1.05, G.MEASURED[k].eps + 0.011 + 0.05), tau=0.011) for k in (1, 4, 5)}
     idle = {k: G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10).terms()["alu_idle"] for k, c in hidden.items()}
     assert idle[1] == pytest.approx(0.75, abs=0.01)
-    assert idle[1] > idle[4] > idle[5] and idle[5] == pytest.approx(0.12, abs=0.01)
+    assert idle[1] > idle[4] > idle[5] and idle[5] == pytest.approx(0.14, abs=0.01)
