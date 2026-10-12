@@ -607,6 +607,9 @@ def audit_cmd(a: argparse.Namespace) -> int:
         doc["fit"] = fit_beside(a, backend, c, stores[h_max], out, scratch, script)
         dump(out, "audit.json", doc)
     accepted = all(r.get("honest", {}).get("audits_accepted") == r.get("honest", {}).get("audits") for r in doc["stores"].values())
+    if a.fit_python:
+        beside = doc["fit"].get("audit_beside") or {}
+        accepted &= doc["fit"].get("driver_rc") == 0 and bool(beside) and beside.get("audits_accepted") == beside.get("audits")
     print(json.dumps({e: {k: doc["stores"][e]["honest"].get(k) for k in ("audits_accepted", "late")} for e in doc["stores"]}))
     return 0 if accepted else 1
 
