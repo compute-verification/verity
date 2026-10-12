@@ -1348,6 +1348,36 @@ __global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict_
 // The tree levels a linear's leaves fold into (`ww_sketch_fold`) before the pass's tree goes on from level SUB.
 constexpr int SUB = 6;
 
+struct Levels {
+  uint64_t off[SUB + 1];  // in nodes: level t's node for the range's first, t = 0..SUB
+};
+
+// `sketch_leaves` and the levels 1 … SUB above them in one launch: block b's 2^SUB threads hash the range's leaves
+// [b·2^SUB, (b + 1)·2^SUB) and fold them in shared memory, one level per barrier, writing every level to the workspace
+// (for openings). The range's first leaf and its count are multiples of 2^SUB, so every node is the hash of two.
+__global__ void __launch_bounds__(1 << SUB) sketch_leaves_fold(const uint32_t* __restrict__ tags, uint64_t B,
+                                                               uint64_t leaf0, bw::Mid leafmid,
+                                                               uint64_t* __restrict__ nodes, Levels lv) {
+  __shared__ uint64_t sm[1 << SUB][8];
+  const int x = threadIdx.x;
+  const uint64_t i = blockIdx.x * (uint64_t)(1 << SUB) + x;
+  uint64_t s[8];
+  sketch_leaf(tags + 16 * i * 8, B, leaf0 + i, leafmid, s);
+#pragma unroll
+  for (int e = 0; e < 8; ++e) nodes[(lv.off[0] + i) * 8 + e] = sm[x][e] = s[e];
+#pragma unroll 1
+  for (int t = 1; t <= SUB; ++t) {
+    const int w = (1 << SUB) >> t;
+    __syncthreads();
+    if (x < w) bw::node_hash(sm[2 * x], sm[2 * x + 1], s);
+    __syncthreads();
+    if (x < w) {
+#pragma unroll
+      for (int e = 0; e < 8; ++e) nodes[(lv.off[t] + blockIdx.x * (uint64_t)w + x) * 8 + e] = sm[x][e] = s[e];
+    }
+  }
+}
+
 __global__ void dtw_kernel(uint32_t* out) {
   uint32_t v[N], dv[N];
   tw_init(v, dv, 0, LANES);
@@ -1719,6 +1749,22 @@ int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n,
     sp.n[t] = c >> t;
   }
   bw::node_span<<<(unsigned)((c + 2 * bw::SPAN_THREADS - 1) / (2 * bw::SPAN_THREADS)), bw::SPAN_THREADS, 0, s>>>(p.nodes, sp);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// `ww_sketch_leaves` then `ww_sketch_fold` over the same tags in one launch (`sketch_leaves_fold`): no second launch
+// waits for the first, and the leaves are folded from shared memory. Same conditions as `ww_sketch_fold`.
+int ww_sketch_leaves_fold(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
+                          const uint8_t* seed, cudaStream_t s) {
+  const uint64_t span = 16ull << SUB;
+  if (jbase % span || n % span || jbase + n > blocks) return 2;
+  if (!n) return 0;
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  if (p.lv.n.size() <= (size_t)SUB) return 2;
+  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
+  Levels lv;
+  for (int t = 0; t <= SUB; ++t) lv.off[t] = p.lv.off[t] + ((jbase / 16) >> t);
+  sketch_leaves_fold<<<(unsigned)(n / span), 1 << SUB, 0, s>>>(tags, blocks, jbase / 16, lm, p.nodes, lv);
   return cudaGetLastError() ? 4 : 0;
 }
 
