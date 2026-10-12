@@ -1,5 +1,7 @@
-"""One-stage audit, run A5: a served Commit's own window. The registration is over the roots serving committed to its own
-values, bound to the Commit's vllm-v1 run root, and the drawn units go to M0's prover and the Lean verifier of record.
+"""One-stage audit, run A5: a served Commit's own window. The registration is over serving rows of the Commit's own values
+(read from its sealed replay bundle opened against its record), bound to its vllm-v1 run root, and the drawn units go to M0's
+prover and the Lean verifier of record. That the rows hold the values under the vllm-v1 roots is the committer's opening,
+not proved.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --partition F --window DIR --template-sets DIR \\
