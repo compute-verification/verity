@@ -645,19 +645,23 @@ def short_arms(sms: int, ks: list[int]) -> list[dict]:
     return out
 
 
-def gc_targets(sms: int, quick: bool) -> list[int]:
-    """Family `gc`: the step's green context's SMs (the driver rounds up to its granularity); the filler gets the rest."""
-    cut = (0, 8, 16, 32, 64) if quick else (0, 4, 8, 12, 16, 24, 32, 48, 64, 94)
+def gc_targets(sms: int, quick: bool, cuts: str = "") -> list[int]:
+    """Family `gc`: the step's green context's SMs (the driver rounds up to its granularity); the filler gets the rest
+    (`cuts`, the SMs asked for the filler, else the defaults)."""
+    cut = [int(x) for x in cuts.split(",") if x] if cuts else (0, 8, 16, 32, 64) if quick else (0, 4, 8, 12, 16, 24, 32, 48, 64, 94)
     return [sms - d for d in cut]
 
 
 def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: float, rate128: float) -> list[dict]:
     """The persistent filler on the `fsms` SMs beside the step's green context: (store, tile, CTAs an SM, duty). A duty < 1 is
     the throttle: each CTA idles `gap_ns` = its tile time x (1 / duty - 1) after each tile, its tile time taken from the
-    filler alone on every SM (`rate*` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one."""
+    filler alone on every SM (`rate*` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one. The 64 x 64
+    tile runs only on the smallest partitions, where it was the η line's best (r20261012-231033-73f3)."""
     out = []
-    for store, T, per_sm, duty in (("fold", 64, 2, 1.0), ("fold", 128, 1, 1.0), ("all", 128, 1, 1.0), ("fold", 128, 1, 0.5),
-                                   ("fold", 128, 1, 0.25), ("fold", 128, 1, 0.1), ("fold", 64, 2, 0.5)):
+    plan = [("fold", 128, 1, 1.0), ("all", 128, 1, 1.0), ("fold", 128, 1, 0.5), ("fold", 128, 1, 0.25)]
+    if fsms <= 12:
+        plan += [("fold", 64, 2, 1.0), ("fold", 64, 2, 0.5)]
+    for store, T, per_sm, duty in plan:
         rate = rate128 if T == 128 else rate64
         tile_ns = per_sm * sms / rate * 1e9
         out.append({"family": "gc", "mode": "persist", "tile": T, "grid": per_sm * fsms, "store": store, "prio": "low",
@@ -767,6 +771,8 @@ def main() -> int:
     ap.add_argument("--window-ms", type=float, default=150.0, help="each arm's window, at least")
     ap.add_argument("--starve-s", type=float, default=5.0)
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--gc-cuts", default="", help="family gc: the filler's SMs asked for, e.g. 0,4,12,20,28,44,60,92")
+    ap.add_argument("--repeats", type=int, default=1, help="family gc: each filled arm this many times (rows carry `rep`)")
     ap.add_argument("--budgets", default="1.01,1.02,1.05,1.10,1.25,1.5,2,4")
     ap.add_argument("--l2", type=Path, help="l2_gate.py's verdict, reported beside every timing")
     ap.add_argument("--l2-probe", type=Path, help="only the L2 write gate's launches (run under ncu), declared sectors to this file")
@@ -837,7 +843,7 @@ def run(args: argparse.Namespace, log) -> int:
 
     greens: dict[int, dict] = {}
     if "gc" in families:
-        for n in gc_targets(sms, args.quick):
+        for n in gc_targets(sms, args.quick, args.gc_cuts):
             g = lib.gc_split(n, hi.priority, lo.priority)
             if "error" not in g:
                 g["spread_step"] = lib.sm_spread(g["step"], 4 * sms, graph=False)
@@ -893,7 +899,8 @@ def run(args: argparse.Namespace, log) -> int:
             if g["fill"] is None:
                 continue
             span_s = 3 * reps * row["step_ms"] * 1e-3
-            for arm in gc_arms(gsms, fsms, span_s, sms, alone[K]["fold"], alone_w["fold"]):
+            for arm in (dict(a, rep=r) for r in range(args.repeats)
+                        for a in gc_arms(gsms, fsms, span_s, sms, alone[K]["fold"], alone_w["fold"])):
                 ff, rr, cc = (wide, refs_w, credit_w) if arm["tile"] == 128 else (f, refs[K], credits[K])
                 row = run_arm(lib, ff, rr, cc, step, reps, base, arm, g["fill"], peer, clock, args.starve_s, head, log, l2)
                 failed |= bool(row["mismatched"]) or not row["identical"]

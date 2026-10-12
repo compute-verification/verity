@@ -4,7 +4,9 @@ queue declare (`lts__t_sectors_op_atom.sum` + `lts__t_sectors_op_red.sum`); ther
 
 The verdict is per store mode too (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
 can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not. A `control` launch
-(no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs.
+(no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs (13-15 a launch on
+sm_120, r20261012-231033-73f3), and each judged launch is allowed its own kernel's control floor beside its declared sectors
+(`floor`; a persistent filler is one launch a window, so the floor doesn't grow with its tiles).
 
   python3 l2_gate.py DECLARED_JSON NCU_CSV OUT_JSON      exit 0 passed, 7 refused, 3 unmeasured (no ncu rows)
 """
@@ -44,6 +46,7 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     launches = declared["launches"]
     if len(rows) != len(launches):
         return {"status": "unmeasured", "why": f"{len(rows)} profiled launches, {len(launches)} declared"}
+    floors = {d["kernel"]: m.get(WRITE) or 0.0 for d, m in zip(launches, rows) if d.get("control")}
     out, bad = [], []
     for d, m in zip(launches, rows):
         w, a = m.get(WRITE), (m.get(ATOM) or 0.0) + (m.get(RED) or 0.0)
@@ -52,10 +55,11 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         row = {**d, "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
                "read_sectors": m.get("lts__t_sectors_op_read.sum"), "dram_read_bytes": m.get("dram__bytes_read.sum"),
                "write_ratio": ratio(w, d["declared_write_sectors"]), "atom_ratio": ratio(a, d["declared_atom_sectors"])}
-        row["pass"] = w <= d["declared_write_sectors"] and a <= d["declared_atom_sectors"]
+        row["floor"] = 0.0 if d.get("control") else floors.get(d["kernel"], 0.0)
+        row["pass"] = w <= d["declared_write_sectors"] + row["floor"] and a <= d["declared_atom_sectors"]
         out.append(row)
         if not row["pass"] and not d.get("control"):
-            bad.append(f"{d['kernel']}: {w:.0f} write / {d['declared_write_sectors']} declared, "
+            bad.append(f"{d['kernel']}: {w:.0f} write / {d['declared_write_sectors']} declared + {row['floor']:.0f} floor, "
                        f"{a:.0f} atomic / {d['declared_atom_sectors']} declared")
     by_store = {}
     judged = [r for r in out if not r.get("control")]
