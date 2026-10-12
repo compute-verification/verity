@@ -29,7 +29,7 @@ least \((1 - \gamma) R \Sigma\), with
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U_t b / (R\Sigma)\): the span the receipts don't fill (round trip, the tail, chaining gaps, blocks a plan leaves out) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: `queries_log2` bits per certified receipt and `slack_log2` per pass | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: `queries_log2` bits per certified receipt and `slack_log2` per pass; 0.195% at 64 bits a 4 KiB block, more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | re-encoding blocks from their payloads with leftover compute | a model, on `WorkHardness(p, k)` |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | relays that meet \(z\) and a copy of the block over a link (§5) | a model |
@@ -253,8 +253,14 @@ plus the node's capacities.
 - **The challenger's state.** v0's on-site audit keeps a challenger state on disk so that no nonce repeats across
   restarts. Here every nonce is drawn fresh from the verifier's randomness, and one session over a registration is
   open at a time. Persisting that across verifier restarts is out of scope.
-- **Lean.** Nothing here is stated in Lean yet. The guarantee to state is §1 over chained passes: AuditRO per pass, the
-  chain's ordering, and the profile at δ.
+- **Keeping receipts for the draws.** Any receipt of a window may be drawn after its roots are final, so the prover
+  keeps them: 64 bytes a 4 KiB block, 1/64 of what it read in the window. Keeping each tree above its leaves and
+  re-reading an opened leaf's 16 blocks instead costs a small fraction of the reads again (ra-openings puts it at
+  0.06–0.1%). The reference keeps every pass whole.
+- **Lean.** The statements are ra-remote-theorem's (`Accounting.Remote`: `Conservation`, `NodeLevel` on the
+  actual-circuit model), with the per-pass routes ra-remote-lean and ra-bound-lean prove. Nothing here is proved yet;
+  what this code supplies is the chain's ordering (each seed after the root before it, across windows), the plan's
+  distinctness, one tile a receipt, and the profile at δ.
 
 ## 9. What chaining forces, and the timing
 
@@ -281,5 +287,12 @@ of 20–150 ms. With a 100 µs gap:
 
 **Openings** at \(\varepsilon_s = 0.1\%\), δ = \(2^{-40}\): \(s = 27{,}726\) per window, about 8.1–8.7 KB each (block,
 leaf, both paths). That is 224–242 MB a window per node: 1.8–1.9 Gb/s at \(T\) = 1 s, 0.19 Gb/s at \(T\) = 10 s.
-PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same tiles. Drawing once per session over
-all its passes divides the bandwidth by \(n\), at the price of one profile per session instead of per window.
+PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same tiles.
+
+That is the per-window reading, each window's profile at its own δ. Read over a horizon instead, the total is what
+counts: with every window drawing \(s\) after its own roots from live coins, the mean of the windows' wrong fractions is
+below \(\bar d\) except with probability \((1-\bar d)^{\sum_t s}\), however the prover adapts each window to the draws
+before it (ra-openings' causal horizon bound; a paper proof, not yet in Lean). So 27,726 openings serve a whole
+horizon: 47 a window over 10 minutes at \(T\) = 1 s, about 400 kB/s (3.2 Mb/s) whatever \(T\), and 68 kB/s over an
+hour. The wrong receipts are then at most \(n \bar d \max_t U_t\). The reference records each window's profile, which
+both readings start from; `ledger` takes the per-window one.
