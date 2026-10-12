@@ -34,7 +34,10 @@ and the other two from what the model has yet to state:
   each such `a`, `wd` the width the chip's requests fix;
 - `OracleLocation`: the oracle's ports deliver a function of what the chip did and of the oracle's answers to the
   queries that fixes.
-`audit_links` and `audit_links_ro` are B3 from these.
+`audit_links` and `audit_links_ro` are B3 from these. `audit_capacity` is the capacity form, with only `HearsChip` (HBM's
+ports deliver a function of the store and of what the chip did) in place of `PassiveMemory`: with HBM's links alphabets
+it gives passive memory at `βm` bits a tick (`passiveMemory_of_hearsChip`), and the bound holds at `βm T` in place of
+`∑ wd`.
 -/
 
 namespace Bandwidth
@@ -196,6 +199,14 @@ def PassiveMemory {L K : Type*} {N b h : ℕ} (S : Store N b × Oracle N b h →
     (∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
       G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))) ∧
     ∀ u a, (Set.range fun E => G E u a).encard ≤ ((2 ^ wd u a : ℕ) : ℕ∞)
+
+/-- **HBM hears only the chip** at its ports over the window: what they deliver to the chip at each tick `u` is a
+function `G` of the store and of what the chip did since `t₀` (the capacity form's passive memory: no width). -/
+def HearsChip {L K : Type*} {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (hbmPorts : List (K × L)) : Prop :=
+  ∃ G : Store N b → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ)),
+    ∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
+      G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
 
 /-- **The oracle as a location** at its ports over the window: what they deliver to the chip at each tick `u` is a
 function of what the chip did since `t₀`, `a`, and of the oracle's answers to the queries `Q u a`. -/
@@ -439,6 +450,54 @@ theorem audit_links_ro (S : Store N b × Oracle N b h → Actual.Run L) (hc : Ca
     splits_of_links S β link hα X t₀ T hbmPorts sidePorts orPorts hports wd hpm Q hor
   subst hw hQ
   exact audit_reads_ro S hc X t₀ T M _ qt hM hpre I hq (hside h0) hs τ s k lam
+
+omit [LinearOrder L] in
+/-- **The capacity form's passive memory**: when HBM hears only the chip and its links are alphabets, HBM's ports are
+passive memory of width `βm` a tick, `βm` their capacities summed. -/
+theorem passiveMemory_of_hearsChip (S : Store N b × Oracle N b h → Actual.Run L) {K : Type*} (β : K → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T : ℕ)
+    (hbmPorts : List (K × L)) (hhc : HearsChip S link X t₀ T hbmPorts) :
+    PassiveMemory S link X t₀ T hbmPorts fun _ _ => (hbmPorts.map fun p => β p.1).sum := by
+  classical
+  obtain ⟨G, hG⟩ := hhc
+  let O₀ : Oracle N b h := fun _ _ => false
+  refine ⟨fun E u a => if h : ∃ O, (S (E, O)).acts ↑X (Set.Ico t₀ u) = a then
+      portSignals S link hbmPorts (E, h.choose) u else portSignals S link hbmPorts (E, O₀) u,
+    fun E O i hi => ?_, fun u a => ?_⟩
+  · dsimp only
+    split_ifs with h
+    · rw [hG E O i hi, hG E h.choose i hi, h.choose_spec]
+    · exact absurd ⟨O, rfl⟩ h
+  · refine (Set.encard_le_encard ?_).trans (portSignals_encard_le S β link hα u hbmPorts)
+    rintro _ ⟨E, rfl⟩
+    dsimp only
+    split_ifs
+    · exact ⟨_, rfl⟩
+    · exact ⟨_, rfl⟩
+
+/-- **B3 from the links, in the capacity form**: as `audit_links`, with HBM hearing only the chip in place of passive
+memory, and every tick's HBM signal counted at `βm` bits, its ports' capacities summed. -/
+theorem audit_capacity (S : Store N b × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*} (β : K → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T M qt : ℕ)
+    (hM : ∀ r, (S r).mem X t₀ ≤ M) (hpre : ∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀)
+    (hbmPorts sidePorts orPorts : List (K × L))
+    (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X →
+      (link r g a, (S r).A.x g) ∈ hbmPorts ++ sidePorts ++ orPorts)
+    (hhc : HearsChip S link X t₀ T hbmPorts)
+    (Q : ℕ → Acts L → List (Fin N × Bits b)) (hq : ∀ u a, (Q u a).length ≤ qt)
+    (hor : OracleLocation S link X t₀ T orPorts Q) (τ : Acts L → Fin N → Bits h) (s k m lam : ℕ) :
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
+          (hbmPorts.map fun p => β p.1).sum * T + (M + 1) + (sidePorts.map fun p => β p.1).sum * T + m * b + lam <
+            k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s +
+          (N.choose m : ℝ≥0∞) * 2 ^ (T * (sidePorts.map fun p => β p.1).sum) / 2 ^ (h * m)
+        + (((T * qt).choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam := by
+  refine (pr_mono fun x hx => ⟨hx.1, ?_⟩).trans (audit_links S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts
+    orPorts hports _ (passiveMemory_of_hearsChip S β link hα X t₀ T hbmPorts hhc) Q hq hor τ s k m lam)
+  simp only [Finset.sum_const, Finset.card_range, smul_eq_mul]
+  have := hx.2
+  nlinarith
 
 end SecurityProofs.Causal
 

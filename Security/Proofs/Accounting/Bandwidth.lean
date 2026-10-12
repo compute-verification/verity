@@ -14,4 +14,5 @@ circuit given a simulation (`Bandwidth.SecurityProofs.Actual.audit`, B3), and fo
 the links' signals (B3: `Bandwidth.SecurityProofs.Ticked.audit_reads` in the reads form, given passive memory, and
 `Ticked.audit` in the capacity form), and for the chip of a strategy causal from every tick whose links split what
 crosses into it (`Bandwidth.SecurityProofs.Causal.audit_reads`, with the chip's state `M + 1` bits), and from the links'
-alphabets, passive memory and the oracle as a location (`Causal.audit_links`). -/
+alphabets, passive memory and the oracle as a location (`Causal.audit_links`; `Causal.audit_capacity`, the capacity
+form). -/
