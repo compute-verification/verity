@@ -69,7 +69,7 @@ theorem card_closeL_ud_le (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.F
     intro M hM
     simp only [closeL, Finset.mem_filter, Finset.mem_univ, true_and] at hM
     unfold Model.Close at hM
-    exact ⟨_, hM, fun q hq => (Finset.mem_filter.1 hq).2⟩
+    exact ⟨_, hM, fun q hq => by simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hq; exact hq⟩
   refine Finset.card_le_one.2 fun M hM M' hM' => ?_
   obtain ⟨T, hT, hTM⟩ := hagree M hM
   obtain ⟨T', hT', hTM'⟩ := hagree M' hM'
@@ -103,8 +103,7 @@ theorem card_closeL_ud_le (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.F
         ((max_lt (rowPoly_natDegree A hA hf.1 _) (rowPoly_natDegree A hA hf.1 _)).trans hcap)
   have hsum : ∑ c', (M ℓ c' - M' ℓ c') • xP A hA l.logCols hf.1 c' = 0 := by
     rw [← hp]
-    simp only [rowPoly, ← Finset.sum_sub_distrib, sub_smul, Polynomial.smul_eq_C_mul, ← sub_mul,
-      Polynomial.C_sub]
+    simp only [rowPoly, ← Finset.sum_sub_distrib, sub_smul, Polynomial.smul_eq_C_mul, ← sub_mul]
   have := Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA l.logCols hf.1) _ hsum c
   exact sub_eq_zero.1 this
 
@@ -119,7 +118,7 @@ theorem udDecode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lan
     (hag : ∀ q ∈ T, foldColumn A ch (fun ℓ => C ℓ q.val) = encK A l.logCols G q.val) :
     ∃ M ∈ closeL A δ lanes l.logCols l.logLen C, ∀ x < 2 ^ l.logCols, G x = foldMsg A ch M x := by
   classical
-  haveI : CharP K 2 := hA.charTwoK
+  have : CharP K 2 := hA.charTwoK
   have hTJ : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.radius) :=
     le_trans (mul_le_mul_of_nonneg_left (by linarith) (Nat.cast_nonneg _)) hT
   have hfold : ∀ q : Fin (2 ^ l.logLen), foldAllRows lanes ch (rowsK A lanes l.logLen C) q =
@@ -134,7 +133,7 @@ theorem udDecode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lan
       ∀ q ∈ T, A.encodeAt l.logCols m q.val = C ℓ q.val := by
     intro ℓ
     obtain ⟨c, hc, hcT⟩ := hrows ℓ
-    haveI : NeZero (2 ^ l.logCols) := ⟨(Nat.two_pow_pos _).ne'⟩
+    have : NeZero (2 ^ l.logCols) := ⟨(Nat.two_pow_pos _).ne'⟩
     obtain ⟨P, hPdeg, hPc⟩ := ReedSolomon.mem_code_iff_eval_of_ne_zero.1 hc
     obtain ⟨P₀, P₁, hP₀, hPl⟩ := poly_limbs A hA P
     obtain ⟨m, hm⟩ := xP_span A hA l.logCols hf.1 P₀ (lt_of_le_of_lt hP₀ hPdeg)
@@ -254,7 +253,7 @@ theorem udQueryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd : l.
         consGap A l.logCols C ch (G M) (List.ofFn α) (positions A l.queries l.logLen w) = 0) :
     value P (queryAndBatch A l C ch start st true) ≤
       ENNReal.ofReal ε + ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F + S.card / Fintype.card F) := by
-  haveI : CharP K 2 := hA.charTwoK
+  have : CharP K 2 := hA.charTwoK
   set Q := l.queries
   set pos := fun w : Fin Q → F => positions A Q l.logLen w
   set gap := fun (M : ι) (w : Fin Q → F) (α : Fin (ceilLog2 Q) → F) =>
@@ -289,7 +288,7 @@ theorem udQueryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd : l.
         encK A l.logCols (G M) ((pos w).getD j 0)
       have hgap : ∀ α, gap M w α = ∑ j ∈ Finset.range Q, A.embed (eqList (List.ofFn α) j) * v j := by
         intro α
-        simp only [gap, consGap, List.zipIdx]
+        simp only [gap, consGap]
         rw [sum_map_zipIdx (fun pj => A.embed (eqList (List.ofFn α) pj.2) *
           (foldColumn A ch (fun ℓ => C ℓ pj.1) - encK A l.logCols (G M) pj.1)) (pos w) 0, hlen]
         simp only [zero_add, v]
@@ -390,7 +389,7 @@ theorem udPhaseA (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (ini
     value (fun r => r = true) (midRound A l dim ch st k) ≤
       ENNReal.ofReal (midA l l') + ENNReal.ofReal (udQueryError l) + εk := by
   subst hd
-  haveI : CharP K 2 := hA.charTwoK
+  have : CharP K 2 := hA.charTwoK
   have hdim' : l'.logCols + l'.lanes = l.logCols + 1 := by omega
   show value _ (Game.send (Oracle F) fun C' => _) ≤ _
   rw [value_send]
@@ -449,7 +448,7 @@ theorem udPhaseB0 (A : Arith F K) (hA : A.Correct) (n : ℕ)
         ⟨out.2.1, out.2.2, dim, [], [⟨z₀, β₀, none⟩], [], C, l⟩) (foldRounds A k0 s₀ q₀) ≤
       ENNReal.ofReal (l.foldError l.listBound) := by
   classical
-  haveI : CharP K 2 := hA.charTwoK
+  have : CharP K 2 := hA.charTwoK
   set S := closeL A (udRadius l) k0 l.logCols l.logLen C
   have hS : S.card ≤ l.listBound := (card_closeL_ud_le A hA l hf k0 C).trans (by
     unfold Level.listBound; have := Nat.one_le_two_pow (n := l.logInvRate); omega)
@@ -518,7 +517,7 @@ theorem ligerito_sound_ud (A : Arith F K) (hA : A.Correct) (sch : Schedule)
     value (fun r => r = true) (ligerito A sch T b C) ≤
       ENNReal.ofReal (1 / qF + udQueryError sch.level₀ + ligeritoError sch.levels) := by
   classical
-  haveI : CharP K 2 := hA.charTwoK
+  have : CharP K 2 := hA.charTwoK
   obtain ⟨m, k0, levels, ext⟩ := sch
   obtain ⟨hlen, hk0, hn, hchain⟩ := hshape
   rcases levels with _ | ⟨l₀, _ | ⟨l₁, rest⟩⟩
@@ -591,7 +590,7 @@ theorem ligerito_sound_ud (A : Arith F K) (hA : A.Correct) (sch : Schedule)
           refine add_le_add ?_ (add_le_add (ENNReal.ofReal_le_ofReal
             (foldError_mono l₀ (le_max_left _ _))) le_rfl)
           calc (S₀.card : ℝ≥0∞) / Fintype.card F ≤ ((1 : ℕ) : ℝ≥0∞) / Fintype.card F := by
-                gcongr <;> exact_mod_cast hS₀
+                gcongr
             _ = ENNReal.ofReal (1 / qF) := by
                 rw [show (1 : ℝ) / qF = ((1 : ℕ) : ℝ) / qF by simp, ofReal_nat_div_qF', hA.card_F]
                 norm_num
@@ -650,7 +649,8 @@ theorem regOpen_sound (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (rsch 
               exact hn ⟨hall _ (by simp), hall _ (by simp)⟩)
         _ ≤ 1 * (((7 * [c₁.toClaim, c₂.toClaim].length + 1 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
             rw [Finset.sum_const, nsmul_eq_mul]
-            gcongr <;> exact_mod_cast hS₀
+            gcongr
+            exact_mod_cast hS₀
         _ = _ := one_mul _
   unfold regOpening
   refine (value_bind_le (opening A hreg [c₁.toClaim, c₂.toClaim]) _ _ D
