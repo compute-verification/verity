@@ -288,18 +288,21 @@ def store_bytes(words: list[list[int]], f: Field) -> bytes:
     return bytes(out)
 
 
-def block(words: list[list[int]], j: int, f: Field) -> bytes:
-    """E_j: lane j mod 32's words of task j div 32."""
-    return b"".join(word_bytes(y, f) for y in words[j])
+def block(words: list[list[int]], j: int, f: Field, tb: int = 1) -> bytes:
+    """E_j: lane j mod 32's words of tasks tb·(j div 32) … tb·(j div 32) + tb − 1 (tb adjacent K-chunks of the same
+    rows, which one warp of the fused GEMM steps through)."""
+    q, lane = divmod(j, LANES)
+    return b"".join(word_bytes(y, f) for t in range(tb) for y in words[LANES * (tb * q + t) + lane])
 
 
 # --- the bandwidth audit's tags over the encoded words ---------------------------------------------------------------
 
-def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0) -> list[bytes]:
+def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0, tb: int = 1) -> list[bytes]:
     from verity.core.protocols.bandwidth import tags
 
+    assert len(words) % (LANES * tb) == 0
     keyed = tags.get("ro-blake3/v1").keyed(seed)
-    return [keyed(base + j, block(words, j, f)) for j in range(len(words))]
+    return [keyed(base + j, block(words, j, f, tb)) for j in range(len(words) // tb)]
 
 
 def leaves_of(ys: list[bytes], seed: bytes) -> list[bytes]:

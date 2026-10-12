@@ -69,7 +69,7 @@ def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the
     import wide
     import wide_bench
 
-    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=0, b3u=0, name="p521s1r")
+    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=0, b3u=0, tb=1, name="p521s1r")
     fq = {1: {"x": 332.0, "delta": 0.9, "tau": 0.82, "mu_rebuild": 0.0005}}
     bd = {1: {1: {"y_total": 2.5, "y_decode": 0.5, "y_tag": 0.6, "y_commit": 0.4, "y_commit_linear": 0.9,
                   "y_base": 1.0}}, 32: {1: {"y_total": 2.6, "y_decode": 0.5, "y_tag": 0.7, "y_commit": 0.4,
@@ -80,3 +80,16 @@ def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the
         (1, False), (1, True), (32, False)]
     assert pts[0]["y_total"] == pytest.approx(2.5) and pts[1]["y_total"] == pytest.approx(2.2)
     assert pts[1]["y_commit"] == pytest.approx(0.1) and pts[1]["label"].endswith("/commit-overlapped")
+    lib.tb, lib.cc, lib.b3u = 2, 1, 1
+    assert wide_bench.points(lib, fq, bd, "r", "gpu")[0]["arithmetic"] == (
+        "cuda-int32/mersenne/sqr1/rolled/cc/b3u2/tb2")
+
+
+def test_tau_counts_a_batched_tags_compressions_over_its_records():
+    import wide
+    import wide_bench
+
+    f = wide.field(521)
+    one = wide_bench.frontier_quantities(f, 4, 5, 1600.0, 1e9, {1: 1e9}, 4e10, [1])[1]
+    two = wide_bench.frontier_quantities(f, 4, 9 / 2, 1600.0, 1e9, {1: 1e9}, 4e10, [1])[1]
+    assert two["tau"] == pytest.approx(one["tau"] * 0.9) and two["x"] == one["x"]

@@ -36,7 +36,7 @@ def main() -> int:
     w = B.fp8_weights(torch, n, kd, 100 + n + kd)
     pay = WB.payload_store(torch, w.view(torch.uint8), f)
     nwords = pay.numel() // f.limbs
-    blocks = nwords // lib.lane_words
+    blocks = nwords // lib.lane_words // lib.tb
     lib.set_key(W.key(f, WB.SEED, k))
     store = torch.empty_like(pay)
     lib.call("ww_encode", WB.ptr(pay), WB.ptr(store), nwords, 0, k, 188 * 4, WB.stream(torch))

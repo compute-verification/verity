@@ -140,6 +140,25 @@ def test_tags_are_ro_blake3_over_the_encoded_words():
     assert len(W.leaves_of(ys, SEED)) == 2 and len(W.root_of(ys, SEED)) == 64
 
 
+def test_batched_tags_cover_a_lane_of_adjacent_tasks():
+    from verity.core.protocols.bandwidth import tags as T
+    from verity.ml.crypto import blake3
+
+    f = W.FIELDS[521]
+    n, kd = 16, 1024
+    words = W.encode_store(W.fragment_payloads(W.random_weights(n, kd, 5), n, kd, f), W.key(f, SEED, 1))
+    ys = W.tags_of(words, f, SEED, base=32, tb=2)
+    assert len(ys) == 32
+    key = hashlib.sha512(T.prefix(T.TAG_DOMAIN, "ro-blake3/v1", SEED)).digest()[:32]
+    for lane in (0, 13, 31):
+        block = W.block(words, lane, f, tb=2)
+        assert block == W.block(words, lane, f) + W.block(words, 32 + lane, f)
+        assert len(block) == 552 - 8  # one BLAKE3 chunk: 9 compressions, the last over 40 bytes
+        assert ys[lane] == blake3.keyed(key, (32 + lane).to_bytes(8, "big") + block)
+    with pytest.raises(AssertionError):
+        W.tags_of(words[:W.LANES], f, SEED, tb=2)
+
+
 def test_kernel_constants_match():
     src = (HERE.parent / "wide.cu").read_text()
     for bits, f in W.FIELDS.items():

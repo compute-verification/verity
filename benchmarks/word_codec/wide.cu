@@ -73,6 +73,14 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #ifndef WW_B3U
 #define WW_B3U 0
 #endif
+// WW_TB = 2: one tag over a lane's records in two adjacent K-chunks of the same rows (`wide.block`'s tb), which one warp
+// of the fused GEMM steps through: half the tags to commit, and a compression fewer a record. Rolled builds only.
+#ifndef WW_TB
+#define WW_TB 1
+#endif
+#if WW_TB != 1 && (WW_TB != 2 || !WW_ROLL)
+#error "WW_TB is 1, or 2 with WW_ROLL"
+#endif
 
 namespace ww {
 
@@ -104,8 +112,13 @@ constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES, TASK_CO
 constexpr int L = (8 * LANE_BYTES + PB - 1) / PB;  // words a lane a task
 constexpr int GEMM_WARPS = 4;
 constexpr int XS_STRIDE = TASK_COLS + 16;
-constexpr int MSG = 2 + L * N;                     // a block's message in u32: u64be j, then the words
-constexpr int MSG_BLOCKS = (4 * MSG + 63) / 64;
+constexpr int MSG = 2 + L * N;                     // a record's part of a message in u32: u64be j, then the words
+constexpr int TB = WW_TB;
+constexpr int TAG_MSG = 2 + TB * L * N;            // a block's message: u64be j, then its TB records' words
+constexpr int TAG_BLOCKS = (4 * TAG_MSG + 63) / 64;
+constexpr int SPLIT = MSG / 16;                    // TB = 2: compressions 0 … SPLIT − 1 read only the first record,
+constexpr int TAIL = MSG - 16 * SPLIT;             // and compression SPLIT the first record's last TAIL words
+static_assert(TAIL > 0, "a record's message ends inside a compression");
 static_assert(32 * N > M, "a spare bit above p");
 static_assert(C != 1 || (MB == N - 1 && MS > 0), "a Mersenne p's top bit is inside the last limb");
 
@@ -899,26 +912,44 @@ __device__ __forceinline__ void b3_compress_rolled(uint32_t (&cv)[8], uint32_t (
   cv[4] = v4 ^ v12, cv[5] = v5 ^ v13, cv[6] = v6 ^ v14, cv[7] = v7 ^ v15;
 }
 
-// Compression b of ro-blake3/v1 over block j (one chunk: the message is under 1,024 bytes), from the lane's registers;
+// Compression b of ro-blake3/v1 over a block (one chunk: the message is under 1,024 bytes) on its message words m;
 // cv starts as the key, and after the last compression it is the tag.
+__device__ __forceinline__ void tag_compress(uint32_t (&cv)[8], uint32_t (&m)[16], int b) {
+  static_assert(4 * TAG_MSG <= 1024, "a block is one BLAKE3 chunk");
+  const uint32_t len = b + 1 < TAG_BLOCKS ? 64 : 4 * TAG_MSG - 64 * (TAG_BLOCKS - 1);
+  const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
+                         (b + 1 == TAG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+  if constexpr (WW_ROLL) b3_compress_rolled(cv, m, len, flags);
+  else bw::b3_compress(cv, m, 0, len, flags, cv);
+}
+
+// Compression b of block j, b reading only header and the first record (b < SPLIT when TB = 2), from its registers.
 __device__ __forceinline__ void tag_step(uint32_t (&cv)[8], const uint32_t (&w)[L][N], uint64_t j, int b) {
-  static_assert(4 * MSG <= 1024, "a block is one BLAKE3 chunk");
   uint32_t m[16];
 #pragma unroll
   for (int i = 0; i < 16; ++i) m[i] = msg_word(w, j, 16 * b + i);
-  const uint32_t len = b + 1 < MSG_BLOCKS ? 64 : 4 * MSG - 64 * (MSG_BLOCKS - 1);
-  const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
-                         (b + 1 == MSG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-  if constexpr (WW_ROLL) b3_compress_rolled(cv, m, len, flags);
-  else bw::b3_compress(cv, m, 0, len, flags, cv);
+  tag_compress(cv, m, b);
+}
+
+// TB = 2: compression b ≥ SPLIT, from the first record's last TAIL words (kept from its task) and the second record.
+__device__ __forceinline__ void tag_step_second(uint32_t (&cv)[8], const uint32_t (&tail)[TAIL], const uint32_t (&w)[L][N],
+                                                int b) {
+  uint32_t m[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) {
+    const int x = 16 * b + i;
+    m[i] = x < MSG ? tail[x - 16 * SPLIT] : x < TAG_MSG ? w[(x - MSG) / N][(x - MSG) % N] : 0;
+  }
+  tag_compress(cv, m, b);
 }
 
 // The rolled decode (WW_ROLL, p521's few wide words): word 0 decoded, then the words rotated down one, L times.
 constexpr bool ROLL_DECODE = WW_ROLL && L <= 4;
 
-// One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk. TAG: lane l's block j = jbase + 32q + l
-// (its L encoded words) is hashed before it is decoded, and its tag written to tags[8 (32q + l) …]. ahead > 0: once its
-// own record is in registers, each warp prefetches into the L2 the record of the same warp `ahead` CTAs on (a wave
+// One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk; each warp steps through TB tasks, its
+// rows' K-chunks kt·TB … kt·TB + TB − 1. TAG: lane l's block j = jbase + 32qt + l (its L encoded words in each of the
+// TB tasks, `wide.block`) is hashed before they are decoded, and its tag written to tags[8 (32qt + l) …]. ahead > 0: once
+// its own record is in registers, each warp prefetches into the L2 the record of the same warp `ahead` CTAs on (a wave
 // later when ahead is the resident CTAs), so the next wave's HBM reads overlap this wave's arithmetic.
 template <int KR, int NB8, bool PARTIALS, bool TAG>
 __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
@@ -926,111 +957,142 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
                                                                uint32_t* __restrict__ tags, int ahead) {
   __shared__ __align__(16) uint8_t xs[NB8 * 8][XS_STRIDE];
-  const int nchunks = Kd / TASK_COLS;
-  const int kc = blockIdx.x % nchunks;
-  const int nb = (blockIdx.x / nchunks) * GEMM_WARPS + threadIdx.x / 32;
+  const int nchunks = Kd / TASK_COLS, nk = nchunks / TB;
+  const int kt = blockIdx.x % nk;
+  const int nb = (blockIdx.x / nk) * GEMM_WARPS + threadIdx.x / 32;  // < Nn / 16: `ww_gemm`'s grid
   const int lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
-  const uint64_t q = (uint64_t)nb * nchunks + kc;
-  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += GEMM_WARPS * 32) {
-    int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
-    uint4 v = make_uint4(0, 0, 0, 0);
-    if (b < Mb) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
-    *reinterpret_cast<uint4*>(&xs[b][16 * c]) = v;
-  }
-  __syncthreads();
-  if (nb * 16 >= Nn) return;
-  uint32_t w[L][N];
-  const uint32_t* rec = E + q * (32ull * L * N) + lane;
-#pragma unroll
-  for (int i = 0; i < L; ++i)
-#pragma unroll
-    for (int e = 0; e < N; ++e) w[i][e] = __ldcs(rec + 32 * (i * N + e));
-  const uint32_t* nxt = nullptr;
-  if (ahead > 0) {
-    const unsigned bx = blockIdx.x + (unsigned)ahead;
-    const int nb2 = (int)(bx / nchunks) * GEMM_WARPS + threadIdx.x / 32;
-    if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + bx % nchunks) * (32ull * L * N);
-  }
-
-  // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
-  // the decode's multiplies and the hash's ALU work are independent instructions in one stream.
-  uint32_t cv[8], t[N], t32[N];
-  const uint64_t j = jbase + q * 32 + lane;
+  const uint64_t qt = (uint64_t)nb * nk + kt;
+  const uint64_t j = jbase + qt * 32 + lane;
+  uint32_t cv[8], tail[TAIL];
   if constexpr (TAG) {
 #pragma unroll
     for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
   }
-  if constexpr (KR > 0) tw_init(t, t32, wbase + q * (32ull * L) + lane, LANES);
-  // a record is L·N rows of 128 bytes, one L2 line each
-  auto prefetch = [&] {
-    if (nxt)
-      for (int r = lane; r < L * N; r += 32) asm volatile("prefetch.global.L2 [%0];" ::"l"(nxt + 32 * r));
-  };
-  if constexpr (WW_ROLL) {
-    if constexpr (TAG) {
-#pragma unroll
-      for (int b = 0; b < MSG_BLOCKS; ++b) tag_step(cv, w, j, b);
-    }
-    prefetch();
-    if constexpr (KR > 0 && ROLL_DECODE) {
-#pragma unroll 1
-      for (int i = 0; i < L; ++i) {
-        decode_tw<KR>(w[0], t);
-        tw_step(t, kDTw);
-        uint32_t w0[N];
-        copy_k<N>(w0, w[0]);
-#pragma unroll
-        for (int ii = 0; ii + 1 < L; ++ii) copy_k<N>(w[ii], w[ii + 1]);
-        copy_k<N>(w[L - 1], w0);
-      }
-    } else if constexpr (KR > 0) {
-#pragma unroll
-      for (int i = 0; i < L; ++i) {
-        decode_tw<KR>(w[i], t);
-        tw_step(t, kDTw);
-      }
-    }
-  } else {
-#pragma unroll
-    for (int b = 0; b < MSG_BLOCKS; ++b) {
-      if constexpr (TAG) tag_step(cv, w, j, b);
-      if (b == 0) prefetch();
-      if constexpr (KR > 0) {
-#pragma unroll
-        for (int i = 0; i < L; ++i)
-          if ((1 + (i + 1) * N) / 16 == b) {
-            decode_tw<KR>(w[i], t);
-            tw_step(t, t32);
-          }
-      }
-    }
-  }
-  if constexpr (TAG) {
-    uint4* o = reinterpret_cast<uint4*>(tags + 8 * (q * 32 + lane));
-    o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
-    o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
-  }
   float acc[NB8][4];
 #pragma unroll
   for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+#pragma unroll 1
+  for (int s = 0; s < TB; ++s) {
+    const int kc = kt * TB + s;
+    const uint64_t q = (uint64_t)nb * nchunks + kc;
+    if (s) __syncthreads();
+    for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += GEMM_WARPS * 32) {
+      int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
+      uint4 v = make_uint4(0, 0, 0, 0);
+      if (b < Mb) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
+      *reinterpret_cast<uint4*>(&xs[b][16 * c]) = v;
+    }
+    __syncthreads();
+    uint32_t w[L][N];
+    const uint32_t* rec = E + q * (32ull * L * N) + lane;
 #pragma unroll
-  for (int tt = 0; tt < TASK_TILES; ++tt) {
-    const uint32_t a[4] = {take4(w, 128 * tt), take4(w, 128 * tt + 32), take4(w, 128 * tt + 64), take4(w, 128 * tt + 96)};
+    for (int i = 0; i < L; ++i)
 #pragma unroll
-    for (int j = 0; j < NB8; ++j) {
-      uint32_t b0 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 4 * tq]);
-      uint32_t b1 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
-      mma_e4m3(acc[j], a, b0, b1);
+      for (int e = 0; e < N; ++e) w[i][e] = __ldcs(rec + 32 * (i * N + e));
+    const uint32_t* nxt = nullptr;
+    if (ahead > 0) {
+      const unsigned bx = blockIdx.x + (unsigned)ahead;
+      const int nb2 = (int)(bx / nk) * GEMM_WARPS + threadIdx.x / 32;
+      if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + (bx % nk) * TB + s) * (32ull * L * N);
+    }
+
+    // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
+    // the decode's multiplies and the hash's ALU work are independent instructions in one stream.
+    uint32_t t[N], t32[N];
+    if constexpr (KR > 0) tw_init(t, t32, wbase + q * (32ull * L) + lane, LANES);
+    // a record is L·N rows of 128 bytes, one L2 line each
+    auto prefetch = [&] {
+      if (nxt)
+        for (int r = lane; r < L * N; r += 32) asm volatile("prefetch.global.L2 [%0];" ::"l"(nxt + 32 * r));
+    };
+    if constexpr (WW_ROLL) {
+      if constexpr (TAG) {
+        if (TB == 1 || s == 0) {
+#pragma unroll
+          for (int b = 0; b < (TB == 1 ? TAG_BLOCKS : SPLIT); ++b) tag_step(cv, w, j, b);
+          if constexpr (TB > 1) {
+#pragma unroll
+            for (int i = 0; i < TAIL; ++i) tail[i] = msg_word(w, j, 16 * SPLIT + i);
+          }
+        }
+        if constexpr (TB > 1) {
+          if (s == 1) {
+#pragma unroll
+            for (int b = SPLIT; b < TAG_BLOCKS; ++b) tag_step_second(cv, tail, w, b);
+          }
+        }
+      }
+      prefetch();
+      if constexpr (KR > 0 && ROLL_DECODE) {
+#pragma unroll 1
+        for (int i = 0; i < L; ++i) {
+          decode_tw<KR>(w[0], t);
+          tw_step(t, kDTw);
+          uint32_t w0[N];
+          copy_k<N>(w0, w[0]);
+#pragma unroll
+          for (int ii = 0; ii + 1 < L; ++ii) copy_k<N>(w[ii], w[ii + 1]);
+          copy_k<N>(w[L - 1], w0);
+        }
+      } else if constexpr (KR > 0) {
+#pragma unroll
+        for (int i = 0; i < L; ++i) {
+          decode_tw<KR>(w[i], t);
+          tw_step(t, kDTw);
+        }
+      }
+    } else {
+#pragma unroll
+      for (int b = 0; b < TAG_BLOCKS; ++b) {
+        if constexpr (TAG) tag_step(cv, w, j, b);
+        if (b == 0) prefetch();
+        if constexpr (KR > 0) {
+#pragma unroll
+          for (int i = 0; i < L; ++i)
+            if ((1 + (i + 1) * N) / 16 == b) {
+              decode_tw<KR>(w[i], t);
+              tw_step(t, t32);
+            }
+        }
+      }
+    }
+    if constexpr (TAG) {
+      if (s + 1 == TB) {
+        uint4* o = reinterpret_cast<uint4*>(tags + 8 * (qt * 32 + lane));
+        o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+        o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+      }
+    }
+#pragma unroll
+    for (int tt = 0; tt < TASK_TILES; ++tt) {
+      const uint32_t a[4] = {take4(w, 128 * tt), take4(w, 128 * tt + 32), take4(w, 128 * tt + 64),
+                             take4(w, 128 * tt + 96)};
+#pragma unroll
+      for (int j = 0; j < NB8; ++j) {
+        uint32_t b0 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 4 * tq]);
+        uint32_t b1 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
+        mma_e4m3(acc[j], a, b0, b1);
+      }
+    }
+    if constexpr (PARTIALS) {
+#pragma unroll
+      for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+        for (int e = 0; e < 4; ++e) {
+          int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+          if (b < Mb) y[((size_t)kc * Mb + b) * Nn + n] = acc[j][e];
+          acc[j][e] = 0.f;
+        }
+      }
     }
   }
+  if constexpr (!PARTIALS) {
 #pragma unroll
-  for (int j = 0; j < NB8; ++j) {
+    for (int j = 0; j < NB8; ++j) {
 #pragma unroll
-    for (int e = 0; e < 4; ++e) {
-      int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
-      if (b < Mb) {
-        if constexpr (PARTIALS) y[((size_t)kc * Mb + b) * Nn + n] = acc[j][e];
-        else atomicAdd(y + (size_t)b * Nn + n, acc[j][e]);
+      for (int e = 0; e < 4; ++e) {
+        int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+        if (b < Mb) atomicAdd(y + (size_t)b * Nn + n, acc[j][e]);
       }
     }
   }
@@ -1127,8 +1189,8 @@ extern "C" {
 
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
-  out[7] = KMAX; out[8] = WW_SQR; out[9] = MSG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
-  out[13] = WW_B3U;
+  out[7] = KMAX; out[8] = WW_SQR; out[9] = TAG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
+  out[13] = WW_B3U; out[14] = TB;
   return 0;
 }
 
@@ -1218,12 +1280,12 @@ int ww_spin(long long cycles, cudaStream_t s) {
 // `ww_gemm_occupancy` × the SMs).
 int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn, int Kd, uint64_t wbase, int partials,
             const uint8_t* tag_seed, uint32_t* tags, int ahead, cudaStream_t s) {
-  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || k < 0 || k > KMAX || ahead < 0) return 1;
+  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % (TB * TASK_COLS) || k < 0 || k > KMAX || ahead < 0) return 1;
   if (tag_seed && !tags) return 1;
-  if (wbase % (32ull * L)) return 1;
-  const uint64_t jbase = wbase / L;
+  if (wbase % (32ull * L * TB)) return 1;
+  const uint64_t jbase = wbase / (L * TB);
   const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
-  const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS);
+  const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS / TB);
   bw::Key3 key = {};
   if (tag_seed) key = key_of(tag_seed);
 #define G(KR, NB, T)                                                                                             \

@@ -79,10 +79,10 @@ class WLib:
         so.ww_workspace_tags.argtypes = [v, q]
         so.ww_workspace_tags.restype = v
         so.ww_commit.argtypes = [v, q, v, v, v]
-        cs = (ctypes.c_int * 14)()
+        cs = (ctypes.c_int * 15)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,
-         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u) = list(cs)
+         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb) = list(cs)
         self.field = W.field(self.bits)
         f = self.field
         if (self.limbs, self.payload, self.lane_words, lanes, tiles) != (f.limbs, f.payload, f.lane_words(), W.LANES,
@@ -178,12 +178,15 @@ def payload_store(torch, wb, f: W.Field):
     return out.view(tasks, W.LANES, lw, nl).permute(0, 2, 3, 1).contiguous().view(-1)
 
 
-def record_block(store, f: W.Field, j: int) -> bytes:
-    """E_j from the device store: lane j mod 32's L words of task j div 32."""
+def record_block(store, f: W.Field, j: int, tb: int = 1) -> bytes:
+    """E_j from the device store: lane j mod 32's L words of tasks tb·(j div 32) … tb·(j div 32) + tb − 1."""
     lw, nl = f.lane_words(), f.limbs
     q, lane = divmod(j, W.LANES)
-    rec = store[q * W.LANES * lw * nl:(q + 1) * W.LANES * lw * nl].view(lw, nl, W.LANES)[:, :, lane]
-    return b"".join((x & 0xFFFFFFFF).to_bytes(4, "little") for x in rec.flatten().cpu().tolist())
+    out = b""
+    for t in range(tb * q, tb * q + tb):
+        rec = store[t * W.LANES * lw * nl:(t + 1) * W.LANES * lw * nl].view(lw, nl, W.LANES)[:, :, lane]
+        out += b"".join((x & 0xFFFFFFFF).to_bytes(4, "little") for x in rec.flatten().cpu().tolist())
+    return out
 
 
 def tag_bytes(tags_u32) -> list[bytes]:
@@ -297,8 +300,9 @@ def rates(lib: WLib, torch, ks: list[int], sms: int, reps: int, log) -> dict:
     return out
 
 
-def frontier_quantities(f: W.Field, lw: int, msg_blocks: int, read_gbps: float, roots_s: float, dec: dict,
+def frontier_quantities(f: W.Field, lw: int, msg_blocks: float, read_gbps: float, roots_s: float, dec: dict,
                         comp_s: float, ks: list[int]) -> dict:
+    """msg_blocks: the tag's compressions a lane's record (a tag over tb records: its compressions over tb)."""
     r = read_gbps * 1e9
     tau = msg_blocks / W.LANE_BYTES * r / comp_s
     out = {}
@@ -318,7 +322,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     pay = payload_store(torch, wb, f)
     nwords = pay.numel() // f.limbs
     tasks = nwords // (W.LANES * lib.lane_words)
-    blocks = tasks * W.LANES
+    blocks = tasks * W.LANES // lib.tb
     stores = {}
     for k in ks:
         lib.set_key(W.key(f, SEED, k))
@@ -393,7 +397,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
                 rng = random.Random(k)
                 sample = sorted({0, blocks - 1, *rng.sample(range(blocks), 30)})
                 dev = tags.view(-1, 8)
-                bad = [j for j in sample if keyed(j, record_block(stores[k], f, j))
+                bad = [j for j in sample if keyed(j, record_block(stores[k], f, j, lib.tb))
                        != dev[j].cpu().numpy().tobytes()]
                 entry["tags_vs_reference"][k] = {"sampled": len(sample), "mismatch": bad[:8]}
                 root = ctypes.create_string_buffer(64)
@@ -527,7 +531,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
 
 def pass_blocks(lib: WLib) -> int:
     """The tag blocks of one pass over Llama-3.1-8B's linears: LAYERS layers of the four shapes."""
-    return LAYERS * sum(n * kd // W.LANE_BYTES for n, kd in B.SHAPES.values())
+    return LAYERS * sum(n * kd // W.LANE_BYTES for n, kd in B.SHAPES.values()) // lib.tb
 
 
 def pass_commit(lib: WLib, torch, reps: int, log) -> dict:
@@ -567,7 +571,7 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log)
         s = torch.empty_like(pay)
         lib.call("ww_encode", ptr(pay), ptr(s), pay.numel() // f.limbs, 0, k, 188 * 4, stream(torch))
         torch.cuda.synchronize()
-        blocks = pay.numel() // f.limbs // lib.lane_words
+        blocks = pay.numel() // f.limbs // lib.lane_words // lib.tb
         ws = torch.empty(lib.so.ww_workspace_bytes(blocks), dtype=torch.uint8, device="cuda")
         stores[name], wss[name] = s, (ws, lib.so.ww_workspace_tags(ptr(ws), blocks))
         del pay
@@ -678,7 +682,7 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
-             + ("/cc" if lib.cc else "") + ("/b3u2" if lib.b3u else ""))
+             + ("/cc" if lib.cc else "") + ("/b3u2" if lib.b3u else "") + (f"/tb{lib.tb}" if lib.tb > 1 else ""))
     out = []
 
     def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str) -> dict:
@@ -792,9 +796,13 @@ def main() -> int:
         roots = max(res["libs"][lib.name]["rates"]["best"]["roots_s"] for lib in group)
         comp = max(res["libs"][lib.name]["rates"]["best"]["compressions_s"] for lib in group)
         dec = {k: max(res["libs"][lib.name]["rates"]["best"]["decode_words_s"].get(k, 0.0) for lib in group) for k in ks}
-        fq = frontier_quantities(group[0].field, group[0].lane_words, group[0].msg_blocks, res["read"]["gbps"], roots,
-                                 dec, comp, ks)
+        fq = frontier_quantities(group[0].field, group[0].lane_words, group[0].msg_blocks / group[0].tb,
+                                 res["read"]["gbps"], roots, dec, comp, ks)
         res["frontier"][W.field(bits).name] = fq
+        for lib in group:
+            res["libs"][lib.name]["frontier"] = frontier_quantities(
+                lib.field, lib.lane_words, lib.msg_blocks / lib.tb, res["read"]["gbps"], roots, dec, comp,
+                [k for k in ks if k <= lib.kmax])
         for k, q in fq.items():
             log(f"{W.field(bits).name} k={k}: x {q['x']:.1f}, delta {q['delta']:.3f}, tau {q['tau']:.3f}, "
                 f"mu_rebuild {q['mu_rebuild'] * 100:.2f}%")
@@ -821,7 +829,7 @@ def main() -> int:
                 fb = [mb for mb in (1, 32) if mb in batches]
                 po = {k: pass_overlap(lib, torch, cases, k, fb, a.reps, log) for k in ks}
                 res["libs"][lib.name]["pass_overlap"] = po
-                fq = res["frontier"][lib.field.name]
+                fq = res["libs"][lib.name]["frontier"]
                 res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name,
                                         res["libs"][lib.name].get("clock", {}).get("sm_mhz"), po)
                 for mb, row in bd.items():
