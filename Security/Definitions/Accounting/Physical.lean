@@ -3,7 +3,8 @@ import Definitions.Accounting.Confidence
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.6), sections 1 and 3.
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.6, `SequentialSpeed`
+and `Links` v2.7), sections 1 and 3.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
 certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
@@ -14,7 +15,7 @@ resource:
 | --- | --- | --- |
 | `Causal ℓ` | a gate reads `a` at least `ℓ (x a) (x g)` ticks after `a` | answers before questions |
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
-| `SequentialSpeed root t_root` | a path that computes a P2 root spans at least `t_root` ticks | rebuilding a block in time |
+| `SequentialSpeed ring D span` | a path through more than `D` computed gates at the ring's location spans more than `span` (`Δ + RTT`) ticks | answering faster than `D` sequential multiplications modulo `p` |
 | `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
 | `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱` are the protocol's; what the certifiers send outside during `[a, b)` is a function of their record before `b` and of a jitter word, one of `χ` classes a bucket | forged records, timing channels |
@@ -26,8 +27,8 @@ leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified*
 (`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`Accounting.SecurityProofs.Actual.ingress_le`,
 `egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
 
-Four constraints read what the circuit doesn't carry, taken as parameters: which link each wire runs on (`link`), which
-paths of `A` compute a P2 root (`root`, a predicate on paths), the certifiers' leaves (`cert`) and record cells
+Four constraints read what the circuit doesn't carry, taken as parameters: which link each wire runs on (`link`), the
+ring's oracle location (`ring`, where `A` computes modulo `p`), the certifiers' leaves (`cert`) and record cells
 (`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
 what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a certifier's jitter is
 counted. `Hardware` bundles the parameters that don't depend on `A`, and `Annotation A` those of the constraints on one
@@ -54,10 +55,15 @@ def Causal (ℓ : L → L → ℕ) : Prop :=
 def ComputeRate (𝒳 : Set (Finset L)) (π : Fin A.N → ℕ) (compute : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ a b, A.work π (A.region X (Set.Ico a b)) ≤ compute X * (b - a)
 
-/-- **Sequential speed**: a path of `A` that computes a P2 root (`root k p`, the data of which paths do) spans at least
-`tRoot` (`t_root`) ticks. -/
-def SequentialSpeed (root : (k : ℕ) → (Fin (k + 1) → Fin A.N) → Prop) (tRoot : ℕ) : Prop :=
-  ∀ k (p : Fin (k + 1) → Fin A.N), A.IsPath p → root k p → A.t (p 0) + tRoot ≤ A.t (p (Fin.last k))
+open Classical in
+/-- **Sequential speed** (v2.7): a path of `A` through more than `D` multiplications modulo `p` spans more than `span`
+(`Δ + RTT`) ticks. A multiplication modulo `p` is a computed gate placed at the ring's oracle location `ring`, the one
+location at which `A` computes modulo `p` (the ring model's idealization, made explicit), not an operation class of a
+pricing. -/
+def SequentialSpeed (ring : Finset L) (D span : ℕ) : Prop :=
+  ∀ k (p : Fin (k + 1) → Fin A.N), A.IsPath p →
+    D < (univ.filter fun i => A.isInput (p i) = false ∧ A.x (p i) ∈ ring).card →
+    A.t (p 0) + span < A.t (p (Fin.last k))
 
 /-- **Memory**: each location `X` of `𝒳` carries at most `M X` bits across every tick. -/
 def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
@@ -134,9 +140,10 @@ end Links
 
 /-- The hardware a run's physical assumptions are about: the tree's locations `units`, the latencies, each location's
 compute `compute` (`Φ`) and memory `M` (work a tick and bits), the links `E` with their ends and capacities `β` (bits a
-tick), the span `tRoot` (`t_root`) of a P2 root's computation, the certifiers' leaves, the trusted devices' leaves, the
-buckets of ticks, the jitter bits a bucket, and the record cells `record y` each certifier's leaf `y` declares (v2.6:
-its record is its gates in them, `Actual.Run.record`). -/
+tick), the ring's oracle location `ring` with the sequential depth `D` and the span `Δ + RTT` (`span`) of
+`SequentialSpeed` (v2.7), the certifiers' leaves, the trusted devices' leaves, the buckets of ticks, the jitter bits a
+bucket, and the record cells `record y` each certifier's leaf `y` declares (v2.6: its record is its gates in them,
+`Actual.Run.record`). -/
 structure Hardware (L : Type*) (E : Type*) where
   units : Set (Finset L)
   ℓ : L → L → ℕ
@@ -144,7 +151,9 @@ structure Hardware (L : Type*) (E : Type*) where
   M : Finset L → ℕ
   ends : E → L × L
   β : E → ℕ
-  tRoot : ℕ
+  ring : Finset L
+  D : ℕ
+  span : ℕ
   cert : Finset L
   trusted : Finset L
   bucket : ℕ → ℕ
@@ -155,17 +164,16 @@ structure Hardware (L : Type*) (E : Type*) where
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
   X ∈ H.units ∧ uncertifiedCapacity H.ends H.β H.cert X = 0
 
-/-- What the physical assumptions on one run read about `A` that its gates don't carry: the pricing `π`, which link
-each wire runs on and which paths compute a P2 root. -/
+/-- What the physical assumptions on one run read about `A` that its gates don't carry: the pricing `π` and which link
+each wire runs on. -/
 structure Annotation {L : Type*} (A : Placed L) (E : Type*) where
   π : Fin A.N → ℕ
   link : Fin A.N → Fin A.N → E
-  root : (k : ℕ) → (Fin (k + 1) → Fin A.N) → Prop
 
 /-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `ann`.
 `TrustedUnits`, on a strategy, is taken beside it. -/
 def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (ann : Annotation A E) : Prop :=
-  A.Causal H.ℓ ∧ A.ComputeRate H.units ann.π H.compute ∧ A.SequentialSpeed ann.root H.tRoot ∧
+  A.Causal H.ℓ ∧ A.ComputeRate H.units ann.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
     A.Memory H.units H.M ∧ A.Links H.ends H.β ann.link
 
 end Accounting
