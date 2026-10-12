@@ -1237,6 +1237,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
       mbar_wait(full + b, (tile / MNB) & 1);
       if (nt > 16 * w)
         mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
+      mbar_arrive(empty + b);
       if constexpr (RC > 0) {
         const int jt = tile + RLAG;
         u32 *bs = bbuf + tile % ZB * ZW;
@@ -1262,7 +1263,6 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         }
         if (jt < ntiles) mbar_arrive(bfull + tile % ZB);
       }
-      mbar_arrive(empty + b);
     }
     mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
   }
