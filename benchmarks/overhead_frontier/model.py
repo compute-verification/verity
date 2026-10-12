@@ -23,8 +23,11 @@ The step, per GPU (``step``):
   c differently keyed copies of the weights and KV, a pass spans c steps, each reading its own copy (so no block twice
   in a pass), and the KV append encodes c times;
 - under ``cap``, memory left idle is filled with receipt-only reads of the store (τ_fill a pass, no decode: top-up),
-  and the step may be padded with more of them (``pad``) when its ephemeral traffic is too large a share of it;
-  under ``pass`` neither: the pass is the step's own reads, W + KV.
+  and the step may be padded with more of them (``pad``) when its ephemeral traffic is too large a share of it; a
+  filler at τ_fill ≥ 1 can't keep the bus busy, so it fills only what free time it has and the rest stays unread
+  (μ_unfilled); under ``pass`` neither: the pass is the step's own reads, W + KV.
+- the receipt's ``receipt`` kind sets τ_w, τ_kv and τ_fill (sketch-sha512 by measurement, block-sha512 one
+  standalone kernel's cost on every byte), each with the commit's leaves and tree (``tau_commit``).
 - the word: ``bits`` wide, with ra-codec-mix's σ_K between rounds if ``masked`` (its XOR a decoded byte, and partial
   completion at ``theta_masked``). x₁(b) is kv.cu's root time a byte at b against p512's (ra-squaring-ceiling's
   ``wide.x1_ref``), the honest append's x₁_h scales with it, a decode's cost a byte scales by ``dec_ratio`` (its
@@ -132,11 +135,24 @@ def margins(bits: int) -> dict[str, float]:
 def decode(o: float, k: int, v: dict[str, Any]) -> float:
     """A decode form's cost a pass at ``v``'s word width and squaring speed, from its cost ``o`` at 512 bits on kv.cu's
     squaring: the floor c·k − 1 where the decode outlasts the read, plus the share of c·k the form exposes beyond it,
-    c·k scaled by the width's decode a byte (``dec_ratio``). ra-codec-mix's σ_K adds its XOR a byte (``mask_cost``)."""
+    c·k scaled by the width's decode a byte (``dec_ratio``), the whole over the squaring's speed (FOLD 6's attention
+    at 1,024 bits measures the exposed cost falling with the squaring, not only the part past the read).
+    ra-codec-mix's σ_K adds its XOR a byte (``mask_cost``)."""
     x0 = 1.0 + v["decode_floor"][k]
     f = max(0.0, o - max(0.0, x0 - 1.0)) / x0
-    x = x0 * at_width(v, "dec_ratio") / at_width(v, "sq_speed")
-    return max(0.0, x - 1.0) + f * x + (v["mask_cost"][k] if v["masked"] else 0.0)
+    x = x0 * at_width(v, "dec_ratio")
+    return (max(0.0, x - 1.0) + f * x) / at_width(v, "sq_speed") + (v["mask_cost"][k] if v["masked"] else 0.0)
+
+
+def receipts(p: Params, m: int, v: dict[str, Any]) -> tuple[float, float, float]:
+    """The receipt's cost a pass over the weights, the KV and the filler at ``v``'s kind, its commit included."""
+    blk = 0.75 + 0.25 * 4096 / p.block
+    c = v["tau_commit"]
+    if v["receipt"] == "block-sha512":
+        t = (v["tau_block"] + c) * blk
+        return t, t, (v["tau_block_fill"] + c) * blk
+    return ((interp(v["tau_w"][p.k], m) + c) * blk, (interp(v["tau_kv"][p.k], m) + c) * blk,
+            (v["tau_fill"] + c) * blk)
 
 
 def interp(table: Any, m: float) -> float:
@@ -197,11 +213,7 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     t_ar = _allreduce(w, tp, v)
     plain = max(t_rd, t_tc) + t_kv + (act0 + wr0) / R + t_ar
 
-    blk = 0.75 + 0.25 * 4096 / p.block
-    ksr = v["ks_ratio"][p.k_s]
-    tau_w = interp(v["tau_w"][p.k], m) * ksr * blk
-    tau_kv = interp(v["tau_kv"][p.k], m) * ksr * blk
-    tau_fill = v["tau_fill"][p.k_s] * blk
+    tau_w, tau_kv, tau_fill = receipts(p, m, v)
     o_w = decode(interp(v["o_w"][p.k], m), p.k, v)
     o_kv = decode(interp(v["o_kv"][p.k], m), p.k, v)
     x1_h = v["x1_h"] * at_width(v, "x1") / at_width(v, "x1", 512) / at_width(v, "sq_speed")
@@ -222,13 +234,16 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     busy = t_rd + t_kv + t_act
     idle = max(0.0, core - busy)
     free = slack + t_ar
-    topup = max(0.0, tau_fill * idle - free) / (1.0 - tau_fill)
+    if tau_fill < 1.0:
+        topup, unfilled = max(0.0, tau_fill * idle - free) / (1.0 - tau_fill), 0.0
+    else:
+        topup, unfilled = 0.0, max(0.0, idle - free / tau_fill)
     cap = core + topup + gap / p.copies
     return {
         "tp": tp, "plain": plain, "cap": cap, "pass": core + gap / p.copies, "copies": p.copies,
         "t_rd": t_rd, "t_tc": t_tc,
         "t_kv": t_kv, "t_act": t_act, "t_ar": t_ar, "lin": lin, "enc": enc, "attn": attn, "idle": idle,
-        "topup": topup, "pad": 0.0, "gap": gap,
+        "topup": topup, "unfilled": unfilled, "tau_fill": tau_fill, "pad": 0.0, "gap": gap,
         "o_w": o_w, "o_kv": o_kv, "bits": v["bits"], "W": W, "KV": KV,
         "act": act + wr, "eph_read": act, "eph_write": wr,
         "f_kv_hbm": KV / v["H"],
@@ -241,7 +256,8 @@ def _per_pass(v: dict[str, Any], st: dict[str, float]) -> dict[str, float]:
     boundary on chip and the chaining gap, once a pass of ``copies`` steps, and the step's ephemeral traffic."""
     R = v["R"] * 1e9
     c = st["copies"]
-    return {"mu_chip": v["s_chip"] / R / c, "mu_unreg": st["act"] / R, "gap": st["gap"] / c}
+    return {"mu_chip": v["s_chip"] / R / c, "mu_unreg": st["act"] / R, "mu_unfilled": st["unfilled"],
+            "gap": st["gap"] / c}
 
 
 def pad(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float], limit: float) -> dict[str, float]:
@@ -249,7 +265,7 @@ def pad(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float], limit: 
     terms fall as 1/t and the session's tail grows as t/(nT); unchanged if γ is already within it or no length is."""
     t0 = st["cap"]
     g = gamma_cap(w, p, v, st)["gamma"]
-    if g <= limit:
+    if g <= limit or st["tau_fill"] >= 1.0:
         return st
     b = sum(_per_pass(v, st).values())
     c = st["copies"] / (v["n_session"] * v["t_window"])
@@ -287,7 +303,7 @@ def _common(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
         "mu_sample": ln / (s * v["horizon"]),
         "mu_serve": v["mu_serve"],
         "lambda": _lambda(p, v, n_blocks),
-        "mu_sketch": 2.0 ** -p.k_s,
+        "mu_sketch": 0.0 if v["receipt"] == "block-sha512" else 2.0 ** -p.k_s,
         "openings": s,
         "window_sample": ln / s,
     }
@@ -320,6 +336,7 @@ def gamma_cap(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -
         "mu_rebuild": _rebuild(p, v),
         "mu_partial": _partial(p, v),
         "mu_unreg": once["mu_unreg"] / st["cap"],
+        "mu_unfilled": once["mu_unfilled"] / st["cap"],
         "mu_timing": _timing(st["cap"] * st["copies"], st["gap"], v),
         "mu_eta": eta(v) if v["eta_counted"] else 0.0,
         **_common(w, p, v),

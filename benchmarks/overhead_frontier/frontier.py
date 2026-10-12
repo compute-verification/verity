@@ -1,7 +1,8 @@
 """The overhead frontier: per workload, the fastest audited decode step with γ ≤ 1%, the parameters that reach it, and
 which input, improved by a realistic amount, lowers it most.
 
-    uv run python benchmarks/overhead_frontier/frontier.py --out DIR     writes DIR/frontier.json, prints the summary
+    uv run python benchmarks/overhead_frontier/frontier.py --out DIR [--receipt sketch-sha512|block-sha512]
+                                                                    writes DIR/frontier.json, prints the summary
 
 Two frontiers under Conservation over HBM's R·T (``C``): ``cap/C`` (γ against the capacity over time, top-up filling
 idle memory: the ruling's reading, and the headline) and ``pass/C`` (the design's per-pass γ, for comparison with the
@@ -41,12 +42,13 @@ MASKED = {"k2m", "k3m"}
 STATED = "k3m"
 BUDGET = 3.0
 BLOCKS = (2048, 4096, 8192, 16384, 32768, 65536)
-K_S = (8, 12, 16, 32)
+K_S = (16,)
 BINDINGS = (0, 32, 64, 128, 256)
 COPIES = (1, 2, 4, 8)
 BATCHES = (1, 4, 16, 64, 256)
 CONTEXTS = (2048, 8192, 32768, 131072)
 FRONTIERS = ("cap", "pass")
+RECEIPTS = ("sketch-sha512", "block-sha512")
 ETA_PHASES = ("eta_decode", "eta_prefill", "eta_gaps", "eta_idle")
 ETA_BUDGETS = (0.0, 0.0025, 0.005)
 WIDTHS = (512, 768, 1024)
@@ -123,7 +125,7 @@ def _point(w, p, st, g, v, definition, feasible, limit) -> dict[str, Any]:
                    "openings": g["openings"],
                    "verifier_mb_s": g["openings"] * (p.block + v["opening_bytes"]) / v["t_window"] / 1e6},
         "parts": {n: st[n] / plain for n in ("t_rd", "t_tc", "t_kv", "t_act", "t_ar", "lin", "enc", "attn", "topup",
-                                             "pad")},
+                                             "unfilled", "pad")},
         "gamma_limit": limit,
         "plain_ms": plain * 1e3,
     }
@@ -243,7 +245,7 @@ def sensitivity(inputs: dict[str, I.Input], key: str = "cap/C", rounds: str = ST
         back.append({"input": lever, "lever": inputs[lever].lever, **c})
     back.sort(key=_rank)
     risks = []
-    for name, (value, why) in I.RISKS.items():
+    for name, value, why in ((n, value, why) for n, each in I.RISKS.items() for value, why in each):
         for label, base_inputs, base in (("today", inputs, today), ("projected", projected_inputs, projected)):
             alt_inputs = dict(base_inputs)
             alt_inputs[name] = replace(base_inputs[name], value=value)
@@ -295,24 +297,26 @@ def counts(points: list[dict[str, Any]]) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--receipt", choices=RECEIPTS, default=I.INPUTS["receipt"].value)
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
-    projected = I.all_improved(I.INPUTS)
-    scenarios = {"today": I.INPUTS}
+    inputs = {**I.INPUTS, "receipt": replace(I.INPUTS["receipt"], value=args.receipt)}
+    projected = I.all_improved(inputs)
+    scenarios = {"today": inputs}
     for e in ETA_BUDGETS:
-        scenarios[f"today η={100 * e:g}%"] = with_eta(I.INPUTS, e)
+        scenarios[f"today η={100 * e:g}%"] = with_eta(inputs, e)
     for e in ETA_BUDGETS:
         scenarios[f"projected η={100 * e:g}%"] = with_eta(projected, e)
-    scenarios["floor"] = I.at_floor(I.INPUTS)
+    scenarios["floor"] = I.at_floor(inputs)
     frontiers = {name: {r: frontier(codec(I.values(inp), r), ks) for r, ks in ROUNDS.items()}
                  for name, inp in scenarios.items()}
     width_sweep = {name: widths(I.values(scenarios[name])) for name in ("today η=0%", "projected η=0%", "floor")}
-    base = with_eta(I.INPUTS, 0.0)
+    base = with_eta(inputs, 0.0)
     sens = {label: sensitivity(inp, key, r, steps)
             for label, key, r, steps, inp in (("cap/C k3m η=0", "cap/C", "k3m", 8, base),
                                               ("cap/C k2m η=0", "cap/C", "k2m", 0, base),
                                               ("pass/C k3m η=0", "pass/C", "k3m", 0, base),
-                                              ("cap/C k3m R·T", "cap/C", "k3m", 0, I.INPUTS))}
+                                              ("cap/C k3m R·T", "cap/C", "k3m", 0, inputs))}
     phases = {name: {n: I.values(inp)[n] for n in ETA_PHASES} for name, inp in scenarios.items()}
     tally = {name: {r: {key: counts(points) for key, points in fr.items()} for r, fr in by_rounds.items()}
              for name, by_rounds in frontiers.items()}
@@ -322,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
                  for name in scenarios}
     doc = {"schema": "verity/overhead-frontier/v2", "gamma_max": GAMMA_MAX, "stated_rounds": STATED,
            "budget_overhead": BUDGET, "claim": "Conservation over HBM's R·T, the hybrid's openings",
-           "inputs": describe(I.INPUTS),
+           "receipt": args.receipt, "inputs": describe(inputs),
            "floor_inputs": {n: {"value": v, "why": why} for n, (v, why) in I.FLOOR.items()},
            "grid": {"rounds": ROUNDS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "copies": COPIES,
                     "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [I.values()["bits"]], "widths": WIDTHS,

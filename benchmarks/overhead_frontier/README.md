@@ -18,15 +18,16 @@ receipts to z is an opt-in. The codec is the stated one, masked p1024 at k = 3, 
   lever moves; the encoded kernels' own (`eph_read`, `eph_write`) is μ_unreg. η, the share of R·T the honest engine
   leaves unread, is counted by phase on the GPU's clock (decode, prefill, gaps, idle); `eta_allowance` is what the
   rest of γ leaves for it.
-- `frontier.py`: the search over block size, k_s, binding granularity (when bound) and the number of keyed copies, per
-  workload, at today's inputs (η as measured and at budgets of 0, 0.25% and 0.5%), with every lever improved and at
+- `frontier.py`: the search over block size, binding granularity (when bound) and the number of keyed copies, per
+  workload, under one receipt kind (`--receipt`: sketch-sha512, whose 16 sign rows fix k_s, or block-sha512, whose
+  filler can't keep the bus busy, so under `cap` its idle memory stays unread, μ_unfilled), at today's inputs (η as measured and at budgets of 0, 0.25% and 0.5%), with every lever improved and at
   the floor; steps past 4× the plain one are flagged as over the budget; the word width swept with the rounds, plain
   and masked, at 512, 768 and 1,024 bits (`widths`); per pass, the largest d that keeps γ ≤ 1% (`d_cap`); and the
   sensitivity from η = 0 (one lever at a time, the greedy path, one reverted from projected, the risks) and again
   from today's measured η.
 
 ```text
-uv run python benchmarks/overhead_frontier/frontier.py --out DIR    # DIR/frontier.json, and the tables on stdout
+uv run python benchmarks/overhead_frontier/frontier.py --out DIR [--receipt block-sha512]  # DIR/frontier.json, tables on stdout
 uv run tools/verity/check/suites.py benchmarks/overhead_frontier
 ```
 

@@ -26,7 +26,8 @@ def _eta0(inputs=I.INPUTS) -> dict:
 def _measured_step() -> dict:
     """ra-codec-tensor's step at p512: one GPU, bf16 KV, no KV receipt, no ephemeral traffic, no prompt to encode."""
     v = I.values()
-    v.update(P512, **NONE_EPHEMERAL, tau_kv={2: 0.0, 3: 0.0}, t_gap=0.0, p_over_o=0.0)
+    v.update(P512, **NONE_EPHEMERAL, tau_kv={2: 0.0, 3: 0.0}, t_gap=0.0, p_over_o=0.0, tau_commit=0.0,
+             tau_w={2: ((8, 0.083), (32, 0.134)), 3: ((8, 0.074), (32, 0.079))}, tau_fill=0.019)
     return v
 
 
@@ -116,8 +117,8 @@ def test_conservation_over_hbm_has_no_host_link_or_identity_term():
     p = Params(3, 4096, 16, 0)
     st = step(w, p, v)
     terms = {n for n in gamma_cap(w, p, v, st) if n.startswith("mu_")} | {"lambda"}
-    assert terms == {"mu_chip", "mu_rebuild", "mu_partial", "mu_unreg", "mu_timing", "mu_eta", "mu_sample",
-                     "mu_serve", "mu_sketch", "lambda"}
+    assert terms == {"mu_chip", "mu_rebuild", "mu_partial", "mu_unreg", "mu_unfilled", "mu_timing", "mu_eta",
+                     "mu_sample", "mu_serve", "mu_sketch", "lambda"}
     assert "mu_link_n" not in evaluate(w, p, v)
 
 
@@ -129,8 +130,8 @@ def test_the_rebuild_is_ra_squaring_ceilings_wide_adversaries(bits, stated, cons
     v = {**I.values(), "bits": bits}
     factor = at_width(v, "s_adv") * (1 + at_width(v, "h_host_sq"))
     assert factor == pytest.approx(stated, abs=0.002)
-    assert at_width({**v, "s_adv": I.RISKS["s_adv"][0]}, "s_adv") * (1 + at_width(v, "h_host_sq")) == pytest.approx(
-        conservative, abs=0.002)
+    assert at_width({**v, "s_adv": I.RISKS["s_adv"][0][0]}, "s_adv") * (1 + at_width(v, "h_host_sq")) == (
+        pytest.approx(conservative, abs=0.002))
     assert at_width(v, "x1") / factor == pytest.approx(x1_adv, abs=0.2)
     w = Workload(SHAPES["70B"], 8, 8192)
     p = Params(3, 4096, 16, 0)
@@ -202,15 +203,54 @@ def test_at_512_bits_the_decode_is_as_measured_and_at_1024_it_is_ra_codec_mixs_a
             assert decode(o, k, v) == pytest.approx(o)
         # no form decodes below the standalone floor
         assert decode(0.0, k, v) == pytest.approx(v["decode_floor"][k])
-    # ra-codec-mix's masked p1024 attention at 8B B80 (r20261012-190027-eaee)
-    wide = I.values()
+    # ra-codec-mix's masked p1024 attention at 8B B80 on kv.cu's squaring (r20261012-190027-eaee)
+    wide = {**I.values(), "sq_speed": 1.0}
     for k, measured in ((2, 0.989), (3, 1.829)):
         o = F.interp(wide["o_kv"][k], 80)
         assert decode(o, k, wide) == pytest.approx(measured, abs=0.01)
     # a faster squaring cuts the wide decode, and the wide word decodes a byte dearer than p512 at equal k
-    fast = {**wide, "sq_speed": I.INPUTS["sq_speed"].improved}
-    assert decode(0.651, 3, fast) < decode(0.651, 3, wide)
+    assert decode(0.651, 3, I.values()) < decode(0.651, 3, wide)
     assert decode(0.651, 3, {**wide, "masked": False}) > 0.651
+
+
+@pytest.mark.parametrize("batch, k, measured", [
+    (80, 3, 1.454), (80, 2, 0.769),  # 8B B80 × 8k, mma-phased with FOLD 6 (r20261012-222917-6e61)
+    (8, 3, 1.585), (8, 2, 0.878),  # 70B B8 × 9,280 (r20261012-222917-b1cb)
+])
+def test_the_stated_codecs_attention_is_ra_word_codecs_fold_6(batch, k, measured):
+    v = I.values()
+    assert decode(F.interp(v["o_kv"][k], batch), k, v) == pytest.approx(measured, abs=0.025)
+
+
+@pytest.mark.parametrize("name, batch, ctx, k, d", [
+    ("8B", 80, 8192, 3, 3.029), ("8B", 80, 8192, 2, 2.233), ("70B", 8, 9280, 2, 2.302),
+    ("70B", 8, 9280, 3, 2.839),
+])
+def test_d_is_ra_word_codecs_from_above(name, batch, ctx, k, d):
+    """ra-word-codec's d with FOLD 6 and SHA-512 receipts (bf16 KV, no prompt, no commit): the model's is within
+    0.03 above, but 0.29 above at 70B k = 3, where it decodes the weights from ra-codec-tensor's in-step 0.849 at p512
+    rather than off p512's curve."""
+    v = I.values()
+    v.update(**NONE_EPHEMERAL, t_gap=0.0, p_over_o=0.0, tau_commit=0.0)
+    s = SHAPES[name]
+    bf16_kv = Shape(s.name, s.layers, s.hidden, s.inter, s.linear_params, kv_heads=2 * s.kv_heads)
+    st = step(Workload(bf16_kv, batch, ctx, tp=1), Params(k, 4096, 16, 0), v)
+    ours = st["pass"] * v["R"] * 1e9 / (st["W"] + st["KV"])
+    assert d <= ours <= d + (0.30 if (name, k) == ("70B", 3) else 0.04)
+
+
+def test_block_sha512_cannot_keep_the_bus_busy():
+    """A full-block receipt's filler is ALU-bound below R, even at its fused issue-slot bound, so under ``cap`` memory
+    stays unread and no point reaches γ ≤ 1%; under ``pass`` it is a dearer step."""
+    for inputs in (I.INPUTS, I.all_improved(I.INPUTS)):
+        v = {**I.values(inputs), "receipt": "block-sha512"}
+        w, p = Workload(SHAPES["70B"], 8, 8192), Params(3, 4096, 16, 0)
+        st = step(w, p, v)
+        assert st["tau_fill"] >= 1.0 and st["topup"] == 0.0 and st["unfilled"] > 0.0
+        assert gamma_cap(w, p, v, st)["mu_unfilled"] > 0.1
+        sketch = step(w, p, {**v, "receipt": "sketch-sha512"})
+        assert st["pass"] > sketch["pass"]
+    assert not F.best(w, {**_eta0(), "receipt": "block-sha512"}, "cap", (3,))["feasible"]
 
 
 @pytest.mark.parametrize("bits, fplll, centre, low", [(512, 12.3, 1.2, 0.75), (640, 8.7, 0.8, 0.50),

@@ -45,10 +45,11 @@ INPUTS: dict[str, Input] = {
                 "scaled by kv.cu's root bytes a second at each width (`wide.x1_ref`; ra-codec-mix's kv-codec.json, "
                 "r20261012-183859-2055, art:c1625f3cebececb0)", "measured"),
     "s_adv": Input(((512, 1.388), (768, 1.394), (1024, 1.420)), "× R_ref(b), clock-matched",
-                   "assumption 5 per width (`wide.adversaries`' stated row): the best form less its MOV and SEL; the "
-                   "best forms measure 1.268 / 1.260 / 1.309 (FOLD 5 at 512, r20261012-183030-b044; FOLD 6 at 768, "
-                   "r20261012-194528-b277, and at 1,024, r20261012-194557-c72f), so no measurement can lower it",
-                   "assumption"),
+                   "assumption 5 per width (`wide.adversaries`' stated row): the best form less its MOV and SEL, an "
+                   "absolute ceiling; the best forms measure 1.268 / 1.260 / 1.309 (FOLD 5 at 512, "
+                   "r20261012-183030-b044; FOLD 6 at 768, r20261012-194528-b277, and at 1,024, r20261012-194557-c72f), "
+                   "and the honest FOLD 6 in `kv.cu` 1.362 at 1,024 (2.05e10/s, ra-word-codec r20261012-214833-7c28), "
+                   "1.043× below it", "assumption"),
     "h_host_sq": Input(((512, 0.129), (768, 0.120), (1024, 0.125)), "of the GPUs' squaring rate",
                        "assumption 6 per width (h at the host's IFMA bound, `wide.h_of`); the host's IFMA measures "
                        "7.6% / 7.5% / 6.4% (r20261012-183544-2d44, r20261012-195420-b71d, r20261012-195829-3929)",
@@ -71,11 +72,14 @@ INPUTS: dict[str, Input] = {
                           "0/200 words at every width (200/200 plain); a completion must compute the inner root, "
                           "≥ 1.515 at the floor and ≥ 1.0 with Coppersmith to b/2 for free (art:ffca24ef); assumption "
                           "7 becomes 'no completion skips the inner root'", "estimate"),
-    "sq_speed": Input(1.0, "× kv.cu's squaring", "the honest kernels' squaring: kv.cu's carry chains", "measured",
-                      ((512, 1.162), (768, 1.154), (1024, 1.226)),
-                      "the best measured squaring forms (FOLD 5 at 512, FOLD 6 at 768 and 1,024: `wide.py`'s "
-                      "\"× kv.cu\", r20261012-183030-b044, -194528-b277, -194557-c72f) in the decode and encode "
-                      "kernels"),
+    "sq_speed": Input(((512, 1.0), (768, 1.0), (1024, 1.280)), "× kv.cu's squaring",
+                      "the honest kernels' squaring: at 1,024 bits FOLD 6 in `kv.cu`'s decode and encode, 2.049e10/s "
+                      "against kv.cu's carry chains' 1.6003e10 (ra-word-codec r20261012-214833-7c28, art:102907db; the "
+                      "encode measures 6.33e6 words/s, 633 read-times a byte a round against the model's 643), the "
+                      "weights taken at attention's (no p1024 weight kernel yet); kv.cu's carry chains below",
+                      "measured", ((512, 1.162), (768, 1.154), (1024, 1.280)),
+                      "the best measured squaring forms at 512 and 768 (FOLD 5, FOLD 6: `wide.py`'s \"× kv.cu\", "
+                      "r20261012-183030-b044, -194528-b277) in the decode and encode kernels"),
     "dec_ratio": Input(((512, 1.0), (768, 1.33), (1024, 1.68)), "× p512's decode a byte at equal k",
                        "1,024: ra-codec-mix's masked attention at 8B B80, +0.989 / +1.829 a KV byte at k = 2 / 3 "
                        "(r20261012-190027-eaee, art:f940d8b9a4b6c43b), 1.684 / 1.678 through `decode` (kv.cu's "
@@ -91,26 +95,46 @@ INPUTS: dict[str, Input] = {
                  "70B at M = 8 (r20261012-203305-7dfa) and M = 32 (r20261012-203315-5252, r20261012-212703-cb89), "
                  "8B at M = 1 (r20261012-212713-6524)", "measured", {2: ((8, 0.20), (32, 0.20)), 3: ((8, 0.64), (32, 0.64))},
                  "the fused kernel at its decode alone (1.20 / 1.64 reads at k = 2 / 3, ra-codec-tensor §2)"),
-    "tau_w": Input({2: ((8, 0.083), (32, 0.134)), 3: ((8, 0.074), (32, 0.079))},
-                   "per weight pass, k_s = 16, n = 4 KiB",
-                   "ra-codec-tensor 21:35Z (e55995f5f): the receipt re-keyed every pass in the step, its SHA-512 commit "
-                   "(0.030) included, 70B at M = 8 (r20261012-203305-7dfa) and M = 32 (r20261012-203315-5252); 8B at "
-                   "M = 1 pays 0.17, per-pass costs that don't shrink with the weights (inferred)",
-                   "measured",
-                   {2: ((8, 0.083), (32, 0.083)), 3: ((8, 0.074), (32, 0.079))},
-                   "a 21-warp kernel at M = 32 (ra-codec-tensor, estimate, not built); the commit stays SHA-512 "
-                   "(21:45Z), so BLAKE3's 0.02 is not a lever"),
-    "tau_kv": Input({2: 0.107, 3: 0.115}, "per KV pass, k_s = 16",
-                    "ra-word-codec 21:35Z: an unbound sketch inside mma-ws attention, then two receipts a block of 8 "
-                    "vectors each, +0.268 / +0.765 against +0.161 / +0.650 unreceipted at k = 2 / 3 "
-                    "(r20261012-212502-016a, art:96819a51); hiding the hash beside the next layer's attention "
-                    "measured no gain (r20261012-211626-0945)", "measured"),
-    "ks_ratio": Input({8: 0.73, 12: 0.87, 16: 1.0, 32: 3.54}, "× the k_s = 16 receipt",
-                      "ra-sketch-tag: encoded store M=1, +21.1 / +22.35 / +34.3% at k_s 8 / 16 / 32 over the codec's "
-                      "17.65%", "measured"),
-    "tau_fill": Input({8: 0.002, 12: 0.010, 16: 0.019, 32: 0.085}, "per filler pass by k_s",
-                      "ra-sketch-tag: the sketch receipt on a store that is read and not decoded (plain store M=32, "
-                      "r20261012-133311-b8e1)", "measured"),
+    # The receipt over every registered byte a pass (weights, KV, filler), of one of two kinds, then the commit: its
+    # leaves and tree (ra-codec-tensor 22:40Z, `cursor/ra-device-reader-0f7a` at 9ad527837).
+    "receipt": Input("sketch-sha512", "kind", "ra-codec-tensor's two candidates, Daniel choosing: sketch-sha512 "
+                     "(each 4 KiB block's 16-row ±1 sketch, then one SHA-512 compression with its index; rests on "
+                     "`RateAuditSketch`, #1849) or block-sha512 (33 compressions over the block, the driver's current "
+                     "receipt, no sketch argument); `frontier.py --receipt` prices either", "policy"),
+    "tau_commit": Input(0.25, "per receipted pass", "ra-codec-tensor 22:40Z: the leaves and tree, the same for both "
+                        "kinds, 0.25 of sketch-sha512's 1.35 reads a pass standalone (r20261012-223835-d0e8, "
+                        "art:f216baf2); ra-word-codec's in-attention receipts don't build them yet", "measured", 0.15,
+                        "a per-level node midstate and messages built a word at a time (ra-codec-tensor, about 0.1 "
+                        "off, not built)"),
+    "tau_w": Input({2: ((8, 0.109), (32, 0.160)), 3: ((8, 0.100), (32, 0.105))},
+                   "per weight pass, k_s = 16, n = 4 KiB, before the commit",
+                   "sketch-sha512 fused in the GEMM, derived (ra-codec-tensor 22:40Z §3): the in-step sketch warps "
+                   "at e55995f5f (70B at M = 8, r20261012-203305-7dfa, and M = 32, r20261012-203315-5252) with "
+                   "BLAKE3's commit (0.030) replaced by the measured per-block SHA-512 (0.056); not measured fused, "
+                   "since the GEMM's tiles must line up with the store's 4 KiB blocks", "derived",
+                   {2: ((8, 0.109), (32, 0.109)), 3: ((8, 0.100), (32, 0.105))},
+                   "a 21-warp kernel at M = 32 (ra-codec-tensor, estimate, not built)"),
+    "tau_kv": Input({2: ((8, 0.429), (80, 0.213)), 3: ((8, 0.417), (80, 0.243))}, "per KV pass, before the commit",
+                    "ra-word-codec 22:40Z at the stated codec (masked p1024, FOLD 6): sketch-sha512 in attention, "
+                    "two 8-vector receipts a block, over the best unreceipted form (mma-phased): 8B (B160 × 4k, "
+                    "B80 × 8k) +1.697 / +0.982 against +1.454 / +0.769 at k = 3 / 2 (r20261012-220633-98e3, "
+                    "r20261012-222917-6e61), 70B (B8 × 9,280) +2.002 / +1.307 against +1.585 / +0.878 "
+                    "(r20261012-222917-b1cb), keyed by batch", "measured",
+                    {2: ((8, 0.299), (80, 0.163)), 3: ((8, 0.276), (80, 0.152))},
+                    "the receipts on mma-phased rather than mma-ws (ra-word-codec: their cost over mma-ws, a "
+                    "projection, not built)"),
+    "tau_fill": Input(0.10, "per filler pass, before the commit", "sketch-sha512 on a store that is only read: "
+                      "1.35 reads a pass standalone less the read and the commit (the sketch at memory speed, 1.04, "
+                      "and the per-block hash, 0.06; ra-codec-tensor r20261012-223835-d0e8)", "measured"),
+    "tau_block": Input(1.76, "per pass, before the commit", "block-sha512 in its own kernel: 2.01 reads a pass "
+                       "standalone, ALU-bound at 7.0e9 compressions/s (0.87 TB/s), less the commit, on the weights, "
+                       "the KV and the filler alike (ra-codec-tensor r20261012-221354-6f4f, art:91c4dff0; "
+                       "r20261012-223835-d0e8)", "measured", 0.83,
+                       "fused at its issue slots, 0.535 × 2.01 = 1.08 reads less the commit, if the decoders leave "
+                       "the ALU pipe room (ra-codec-tensor's lower bound, estimate)"),
+    "tau_block_fill": Input(1.76, "per filler pass, before the commit", "block-sha512 on a store that is only read: "
+                            "the filler has no decode to share issue slots with, so it runs at the standalone "
+                            "kernel's ALU rate (2.01 reads a pass, ra-codec-tensor r20261012-221354-6f4f)", "measured"),
     "bound": Input(False, "switch", "Daniel 21:00Z: binding receipts to z isn't needed for Conservation; it stays the "
                    "optional PoUW join (one hash), priced by ``tau_bind`` and ``tau_bind_kv`` when on", "policy"),
     "tau_bind": Input(0.06, "per weight pass", "ra-bound-receipt (ro-bound-sketch-blake3/v0, B = R ⊕ M) on "
@@ -122,7 +146,9 @@ INPUTS: dict[str, Input] = {
     "o_kv": Input({2: ((32, 0.225), (40, 0.177), (80, 0.162), (160, 0.159)),
                    3: ((32, 0.761), (40, 0.670), (80, 0.651), (160, 0.649))}, "per KV pass",
                   "ra-word-codec mma-ws (r20261012-172911-1184, art:47c171ef) at B40–160; ra-codec-tensor at B32 "
-                  "ctx 20k (r20261012-175841-5578)", "measured",
+                  "ctx 20k (r20261012-175841-5578); through `decode` at masked p1024 and FOLD 6 it gives mma-phased's "
+                  "+1.445 / +0.776 at 8B B80 and +1.589 / +0.858 at 70B B8 (measured +1.454 / +0.769 and "
+                  "+1.585 / +0.878, ra-word-codec r20261012-222917-6e61, -b1cb)", "measured",
                   {2: ((32, 0.087), (160, 0.087)), 3: ((32, 0.534), (160, 0.534))},
                   "a persistent mma-ws attention kernel (the 16-warp floor, 0.087 / 0.534)"),
     "x1_h": Input(240.0, "read-times per round", "the honest KV append: ra-word-codec 226 (3.39 GB/s at k = 2), "
@@ -231,11 +257,12 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "o_w": ({2: ((8, 0.052), (32, 0.052)), 3: ((8, 0.505), (32, 0.505))},
             "the mma-ws decode floor with 24 warps (ra-word-codec r20261012-172911-1184) on the weights too"),
     "o_kv": ({2: ((32, 0.052), (160, 0.052)), 3: ((32, 0.505), (160, 0.505))}, "the same floor on the KV"),
-    "tau_w": ({2: ((8, 0.049), (32, 0.049)), 3: ((8, 0.049), (32, 0.049))},
+    "tau_w": ({2: ((8, 0.075), (32, 0.075)), 3: ((8, 0.075), (32, 0.075))},
               "the sketch's cost on a store that is only read (ra-sketch-tag plain store M=32, +1.7..1.9%) and the "
-              "SHA-512 commit, which stays (0.030, ra-codec-tensor)"),
-    "tau_kv": ({2: ((8, 0.046), (32, 0.046)), 3: ((8, 0.046), (32, 0.046))},
-               "the same sketch on the KV and two 8-vector hashes a block (0.027, ra-word-codec)"),
+              "per-block SHA-512 (0.056, ra-codec-tensor)"),
+    "tau_kv": ({2: ((8, 0.125), (80, 0.044)), 3: ((8, 0.125), (80, 0.044))},
+               "the receipts' SHA-512 kernel alone (ra-word-codec: 0.125–0.134 of the read at 70B, 0.044 at 8B)"),
+    "tau_commit": (0.0, "the leaves and tree hidden under memory time (ra-codec-tensor's fused 0.11)"),
     "eph_read": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte read from DRAM"),
     "eph_write": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte written to DRAM"),
     "eta_decode": (0.0, "every phase reads at R, as the frontier's step does"),
@@ -244,17 +271,21 @@ FLOOR: dict[str, tuple[Any, str]] = {
 }
 
 # Values an input may take that make the frontier worse, each with why it is plausible.
-RISKS: dict[str, tuple[Any, str]] = {
-    "s_adv": (((512, 1.535), (768, 1.514), (1024, 1.676)), "Karatsuba at the probe's mix at its best depth "
-              "(`wide.adversaries`' conservative row, 1.885 at 1,024 bits with h at the bound)"),
-    "dec_ratio": (((512, 1.0), (768, 1.42), (1024, 1.83)), "the decode a byte at ra-squaring-ceiling's cycle model "
-                  "(a squaring's cycles over the word's bytes), above both measurements"),
-    "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
-    "v_budget": (0.2, "a 200 Mb/s verifier link, which carries the hybrid's 2,773 openings a window at blocks of "
-                 "4 KiB at most"),
-    "t_gap": (500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)"),
-    "p_over_o": (3.63, "ra-kv-filler's trace 1 (160,256 prompt and 44,160 output tokens), where the prompt encode was "
-                       "+17% / +25% of busy time at k = 2 / 3"),
+RISKS: dict[str, list[tuple[Any, str]]] = {
+    "s_adv": [(((512, 1.535), (768, 1.514), (1024, 1.676)), "Karatsuba at the probe's mix at its best depth "
+               "(`wide.adversaries`' conservative row, 1.885 at 1,024 bits with h at the bound)"),
+              (((512, 1.388), (768, 1.394), (1024, 1.934)), "the ceiling read as 1.42× the best measured, now the "
+               "honest FOLD 6 at 2.05e10/s (1.362 × R_ref)"),
+              (((512, 1.535), (768, 1.514), (1024, 2.288)), "the conservative ceiling read as 1.68× the best "
+               "measured (1.68 × 1.362)")],
+    "dec_ratio": [(((512, 1.0), (768, 1.42), (1024, 1.83)), "the decode a byte at ra-squaring-ceiling's cycle model "
+                   "(a squaring's cycles over the word's bytes), above both measurements")],
+    "write_bus": [(1.5, "a write costs half a read more in bus turnaround")],
+    "v_budget": [(0.2, "a 200 Mb/s verifier link, which carries the hybrid's 2,773 openings a window at blocks of "
+                  "4 KiB at most")],
+    "t_gap": [(500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)")],
+    "p_over_o": [(3.63, "ra-kv-filler's trace 1 (160,256 prompt and 44,160 output tokens), where the prompt encode "
+                  "was +17% / +25% of busy time at k = 2 / 3")],
 }
 
 
