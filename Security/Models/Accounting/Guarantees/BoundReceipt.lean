@@ -20,6 +20,8 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
   compute is within `F`, whose rest's tile work is within `F_z` and whose GPU's HBM footprint is short of `RateAudit`'s
   floor at `k − m` blocks, with `m` blocks the rest's link and tile work can't cover, has probability at most
   `((k − 1)/N)^s + 2s/2^h + C(q, k − m)/2^λ + C(q_z, m + 1)/2^λ`.
+* `BoundReceiptLinkInteractive`: the same bound when the locations' answers to each other depend on the mix (`e > 0`),
+  for a node the mix reaches only through its queries.
 * `BoundReceiptShare`: the link's share. At `m = covered`, the link bits each way stand in for at most
   `|E|/min(|z|, |E|)` times their number of the store's bits, so `μ_link ≤ (link capacity/ΣR)·|E|/min(|z|, |E|)`.
 * `TileUnpredictableOfTT` and `TileUnpredictableOfNCPU`: PoUW's `TT` and `TT_NCP_U` each give `TileUnpredictable`.
@@ -115,6 +117,36 @@ def BoundReceiptLink : Prop :=
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.tileWork w x.1 x.2.1 x.2.2.1 ≤ Fz ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + 2 * (s : ℝ≥0∞) / 2 ^ h + (q.choose (k - m) : ℝ≥0∞) / 2 ^ lam +
+        (qz.choose (m + 1) : ℝ≥0∞) / 2 ^ lam
+
+/-- **The link relay when the locations' answers to each other depend on the mix (`e > 0`): the same bound.** For
+every `InteractiveNode` whose answers between the locations reach the mix only through the node's queries
+(`QueryDetermined`), with `BoundReceiptLink`'s parameters and its hypothesis on `m`: the probability that the verifier
+accepts, the GPU's compute is within `F`, the rest's tile work within `F_z`, and the GPU's HBM footprint short of
+`RateAudit`'s floor at `k − m` blocks, each under the node at the drawn mix, is at most
+
+  `((k − 1)/N)^s + 2s/2^h + C(q, k − m)/2^λ + C(q_z, m + 1)/2^λ`.
+
+**The reading.** Relayed mix answers change nothing. A receipt is right only where some location queried the mix at
+its point: off the node's queries the mix doesn't reach either location, so `2s/2^h` covers the receipts made nowhere.
+The compressions run at each value of the mix, where what each location is sent is a function of the other's input,
+paid for in `L` or `L_z` bits as at `e = 0`. A receipt one location made and the other committed is the maker's, so the
+receipts the rest relays to the GPU are among the at most `m` blocks the rest can make.
+
+Proof: `Accounting.SecurityProofs.BoundReceiptLinkInteractive`, as `BoundReceiptLink`'s, with the guess taken over the
+node's queries.
+
+Frozen (no-function, hash): as `Colocation`, a bound in the random-oracle model over abstract chip programs. -/
+def BoundReceiptLinkInteractive : Prop :=
+  ∀ (N a b h S L q Lz qz s k m F cTag cEnc w Fz lam : ℕ) (A : InteractiveNode N a b h S L q Lz qz),
+    A.QueryDetermined →
+    (Lz + lam) * w + Fz * a < (m + 1) * a * w →
+    pr (fun x : Store N b × BoundReceipt.Coins N a b h s =>
+        (A.under x.2.2.1).Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧
+          (A.under x.2.2.1).compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
+          (A.under x.2.2.1).tileWork w x.1 x.2.1 x.2.2.1 ≤ Fz ∧
+          (A.under x.2.2.1).footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + 2 * (s : ℝ≥0∞) / 2 ^ h + (q.choose (k - m) : ℝ≥0∞) / 2 ^ lam +
         (qz.choose (m + 1) : ℝ≥0∞) / 2 ^ lam
 

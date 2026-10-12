@@ -27,7 +27,9 @@ the tile outputs. The links between them carry at most `L` bits to the GPU and `
 The answers that cross between the locations ignore the mix: a location's receipts depend on the mix through its own
 queries only. A receipt one location made and the other committed is the one it made, and the verifier takes each
 sampled block's receipt from either location (`Node.Accepts`), so that choice is the node's, after the fact. A mix
-answer relayed across the link and used inside a location's computation is outside this game.
+answer relayed across the link and used inside a location's computation is outside this game, and inside
+`InteractiveNode`'s: there the answers may depend on the mix, which reaches the node only through its queries
+(`InteractiveNode.QueryDetermined`).
 
 **The ideal tile.** The tile outputs are uniform, and the rest has none of them except over the link or by tile work:
 that is the PoUW tile's unpredictability below its work (`Accounting.Guarantees.TileUnpredictable`, from PoUW's
@@ -126,6 +128,58 @@ def tileWork (A : Node N a b h S L q Lz qz) (w : ℕ) (E : Store N b) (z : Store
   (A.rest E).chip.rebuilds ((A.rest E).world E z G) * w
 
 end Node
+
+namespace Node
+
+variable {S L q Lz qz : ℕ}
+
+/-- The GPU's mix queries in the window, each a block and contents, under the tile outputs it holds. -/
+def gpuQueries (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+    List (Bits 0 × Fin N × Bits b) :=
+  ((A.gpu z).chip ((A.gpu z).state E)).queries ((A.gpu z).world E noStream (atZ G z))
+
+/-- The rest's mix queries in the window, each a block and a tile output, under the store it holds. -/
+def restQueries (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+    List (Bits 0 × Fin N × Bits a) :=
+  (A.rest E).chip.queries ((A.rest E).world E z G)
+
+end Node
+
+/-! ## Answers between the locations that depend on the mix (`e > 0`) -/
+
+/-- A node whose locations answer each other as functions of the mix too (`e > 0`): `node`'s programs, state and
+memory, fixed before the mix is drawn, with what the rest answers the GPU (`gpuSide`) and what the GPU sends the rest
+(`restSide`) any functions of the mix, the store and the tile outputs. -/
+structure InteractiveNode (N a b h S L q Lz qz : ℕ) where
+  node : Node N a b h S L q Lz qz
+  gpuSide : Store N a → Mix N a b h → Store N b → ℕ → Bool
+  restSide : Store N b → Mix N a b h → Store N a → ℕ → Bool
+
+namespace InteractiveNode
+
+variable {S L q Lz qz : ℕ}
+
+/-- The node under the mix `G`: its locations answer each other as they do under `G`. -/
+def under (A : InteractiveNode N a b h S L q Lz qz) (G : Mix N a b h) : Node N a b h S L q Lz qz where
+  gpu z := { A.node.gpu z with side := A.gpuSide z G }
+  rest E := { A.node.rest E with side := A.restSide E G }
+
+/-- **The mix reaches the node only through its queries** (the oracle as a location, as B3's `OracleLocation`): for
+every store, tile outputs and two mixes that agree at every point either location queried under the first, both
+locations commit the same receipts under both. An interleaved run of the two locations over one mix, each answering
+the other from what it computed and was sent, has this property; the game takes it as a hypothesis on the node. -/
+def QueryDetermined (A : InteractiveNode N a b h S L q Lz qz) : Prop :=
+  ∀ (E : Store N b) (z : Store N a) (G G' : Mix N a b h),
+    (∀ x ∈ (A.under G).gpuQueries E z G, G' (x.2.1, x.2.2, z x.2.1) = G (x.2.1, x.2.2, z x.2.1)) →
+    (∀ y ∈ (A.under G).restQueries E z G, G' (y.2.1, E y.2.1, y.2.2) = G (y.2.1, E y.2.1, y.2.2)) →
+    (A.under G').gpuReceipts E z G' = (A.under G).gpuReceipts E z G ∧
+      (A.under G').restReceipts E z G' = (A.under G).restReceipts E z G
+
+/-- A node whose locations answer each other as they do at every mix (`e = 0`). -/
+def ofNode (A : Node N a b h S L q Lz qz) : InteractiveNode N a b h S L q Lz qz :=
+  ⟨A, fun z _ => (A.gpu z).side, fun E _ => (A.rest E).side⟩
+
+end InteractiveNode
 
 /-- The blocks the rest's link and tile work cover: `⌊((L_z + λ)·w + F_z·a)/(a·w)⌋`, the tile outputs that `L_z` bits
 from the GPU, `λ` bits of slack and `F_z/w` tiles' work give it, at `a` bits each. -/
