@@ -1691,15 +1691,11 @@ constexpr int FUSED_WARPS = FULL_SLOT ? (NL <= 24 ? 16 : (NL <= 48 ? 12 : 8)) : 
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
-// At k_s = 16 the signs (skt tasks' steps, a u32 a lane) sit in shared memory after the buffers when they take at
-// most 24 KB (skt <= 11 at SB = 8,256), which leaves room for the stages; larger tiles load them from global memory.
-__host__ __device__ constexpr int sk_smem_signs(int skt, int skk) {
-  return skk == 16 && skt * ((SB + 511) / 512) * 128 <= 24576 ? skt * ((SB + 511) / 512) * 32 : 0;
-}
+// sgs sign words (k_s = 16's signs, skt tasks' steps, a u32 a lane) after the sketch's buffers: wt_fused_sketch puts
+// them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0).
 template <int NB8, int SKK>
-__host__ __device__ constexpr int fused_smem_bytes(int stages, int skt) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK +
-         4 * sk_smem_signs(skt, SKK);
+__host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
+  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK + 4 * sgs;
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -1870,7 +1866,7 @@ __device__ __forceinline__ void sk_begin(SkPart<KS> &P, int x, bool mine, int w,
         const uint2 v = __ldg(reinterpret_cast<const uint2 *>(sp));
         P.sw[h][0] = v.x, P.sw[h][1] = v.y;
       } else {
-        P.sw[h][0] = *sp;   // shared memory (sk_smem_signs)
+        P.sw[h][0] = *sp;   // shared or global memory (fused_kernel's sgs)
       }
     }
   }
@@ -1998,7 +1994,7 @@ template <int K, int NB8, bool PARTIALS, int SKK>
 __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
-    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt) {
+    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
@@ -2011,9 +2007,9 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   load_xs<NB8>(xs, x, M, Kd, kc);
   for (int e = threadIdx.x; e < SK_BUFS * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
   u32 *sksg = reinterpret_cast<u32 *>(skbuf + SK_BUFS * 16 * SKK);
-  if (sk_smem_signs(skt, SKK) && signs)
-    for (int e = threadIdx.x; e < sk_smem_signs(skt, SKK); e += blockDim.x) sksg[e] = __ldg(signs + e);
-  const u32 *sgn = sk_smem_signs(skt, SKK) ? sksg : signs;
+  if (sgs && signs)
+    for (int e = threadIdx.x; e < sgs; e += blockDim.x) sksg[e] = __ldg(signs + e);
+  const u32 *sgn = sgs ? sksg : signs;
   if (threadIdx.x == 0) {
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
@@ -2283,15 +2279,22 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers) * 32;
-  auto go = [&](auto kern, int smem) -> int {
+  int dev = 0, optin = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
+  const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
+  auto go = [&](auto kern, int smem, int sgs) -> int {
     return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
       kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
-                                               stages, tsteps, tags, tag_base, signs, sk_out, skt);
+                                               stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
     });
   };
-#define G(KK, NB, SK) \
-  return partials ? go(fused_kernel<KK, NB, true, SK>, fused_smem_bytes<NB, SK>(stages, skt)) \
-                  : go(fused_kernel<KK, NB, false, SK>, fused_smem_bytes<NB, SK>(stages, skt))
+#define G(KK, NB, SK)                                                                              \
+  do {                                                                                             \
+    const int sg = fused_smem_bytes<NB, SK>(stages, signs16) <= optin ? signs16 : 0;               \
+    return partials ? go(fused_kernel<KK, NB, true, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg) \
+                    : go(fused_kernel<KK, NB, false, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg); \
+  } while (0)
 #define GN(KK, SK) do { if (nb8 == 1) G(KK, 1, SK); else if (nb8 == 2) G(KK, 2, SK); else G(KK, 4, SK); } while (0)
   if (sketch_k == 16) GN(1, 16);
   if (sketch_k == 64) GN(1, 64);
