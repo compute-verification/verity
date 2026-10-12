@@ -20,7 +20,7 @@ artifacts whose manifests are in the public bucket, each run that produced one (
 `PUBLIC_LABEL_KEYS` labels on those targets (cut to `PUBLIC_LABEL_FIELDS`). Both are whitelists.
 
 `db` is a SQLite file (`SqliteIndex`) or a schema of a Postgres database (`PostgresIndex`, written through `psql` with the URL
-in libpq's environment). The public rebuild reads the private index one record at a time, cheap in SQLite only.
+in libpq's environment). The public rebuild reads the private index IN_BATCH ids per query, six psql calls whatever its size.
 """
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ MANIFESTS, ATTEMPTS, LABELS = "manifests/", "attempts/", "labels/"
 RUNS_TAIL = "attempts/>"                                # the listings row of the start-after listing of runs
 FULL_RUNS_EVERY = timedelta(hours=1)
 FIELD_MAX = 1024
+IN_BATCH = 500                                          # ids per IN (...) list: under SQLite's 999 bound parameters
 ENVELOPE_ONLY = frozenset({"redteam-findings/v1"})     # meta (the findings' text) stays in the bucket
 EDGE_SECTIONS = {"artifact": ("refs",), "run": ("inputs", "outputs", "telemetry")}
 PUBLIC_LABEL_KEYS = ("verified", "verifier", "proof_class")
@@ -214,21 +215,43 @@ class SqliteIndex:
         r = self.db.execute("SELECT listed_at FROM listings WHERE prefix=?", (prefix,)).fetchone()
         return r[0] if r else None
 
+    def _each(self, query: str, ids: Iterable[str], *extra) -> list[tuple]:
+        """`query`'s rows for `ids`, IN_BATCH at a time: `query` holds `{ids}` where the placeholders go, then `extra`'s."""
+        ids, out = sorted(set(ids)), []
+        for i in range(0, len(ids), IN_BATCH):
+            part = ids[i:i + IN_BATCH]
+            out += self.db.execute(query.format(ids=",".join("?" * len(part))), (*part, *extra)).fetchall()
+        return out
+
+    def rows(self, rids: Iterable[str]) -> dict[str, Row]:
+        return {r[0]: Row(r[0], r[1], r[2], r[3], json.loads(r[4]))
+                for r in self._each("SELECT id, type, kind, time, doc FROM records WHERE id IN ({ids})", rids)}
+
     def row(self, rid: str) -> Row | None:
-        r = self.db.execute("SELECT id, type, kind, time, doc FROM records WHERE id=?", (rid,)).fetchone()
-        return Row(r[0], r[1], r[2], r[3], json.loads(r[4])) if r else None
+        return self.rows([rid]).get(rid)
 
-    def producers(self, art: str) -> list[str]:
-        return [r[0] for r in self.db.execute("SELECT DISTINCT src FROM edges WHERE dst=? AND name LIKE 'outputs.%' ORDER BY src", (art,))]
+    def producers(self, arts: Iterable[str]) -> dict[str, list[str]]:
+        """Each artifact's producing runs (the runs with an `outputs.*` edge to it)."""
+        out: dict[str, list[str]] = {}
+        for dst, src in sorted(set(self._each("SELECT dst, src FROM edges WHERE dst IN ({ids}) AND name LIKE 'outputs.%'", arts))):
+            out.setdefault(dst, []).append(src)
+        return out
 
-    def labels_on(self, target: str, keys: Iterable[str]) -> list[str]:
+    def labels_on(self, targets: Iterable[str], keys: Iterable[str]) -> list[str]:
+        """The ids of the labels with one of `keys` on any of `targets`."""
         keys = list(keys)
-        return [r[0] for r in self.db.execute(
-            "SELECT e.src FROM edges e JOIN records r ON r.id = e.src WHERE e.dst=? AND e.name='target' "
-            f"AND r.kind IN ({','.join('?' * len(keys))}) ORDER BY e.src", (target, *keys))]
+        return sorted({r[0] for r in self._each(
+            "SELECT e.src FROM edges e JOIN records r ON r.id = e.src WHERE e.dst IN ({ids}) AND e.name='target' "
+            f"AND r.kind IN ({','.join('?' * len(keys))})", targets, *keys)})
+
+    def edges_from(self, rids: Iterable[str]) -> dict[str, list[tuple[str, str, str]]]:
+        out: dict[str, list[tuple[str, str, str]]] = {}
+        for e in sorted(self._each("SELECT src, name, dst FROM edges WHERE src IN ({ids})", rids)):
+            out.setdefault(e[0], []).append(tuple(e))
+        return out
 
     def edges_of(self, rid: str) -> list[tuple[str, str, str]]:
-        return list(self.db.execute("SELECT src, name, dst FROM edges WHERE src=? ORDER BY name, dst", (rid,)))
+        return self.edges_from([rid]).get(rid, [])
 
     def add(self, rows: list[Row], edges: Callable[[Row], list[tuple]] = Row.edges) -> int:
         """Insert the rows not already present, in one transaction.  How many were new."""
@@ -355,20 +378,44 @@ class PostgresIndex:
         r = self.select(f"SELECT {_UTC.format(col='listed_at')} FROM {self.schema}.listings WHERE prefix={_lit(prefix)}")
         return r[0][0] if r else None
 
+    def _each(self, query: str, ids: Iterable[str]) -> list[tuple]:
+        """`query`'s rows for `ids`, IN_BATCH ids per SELECT and every SELECT in one psql call: `query` holds `{ids}`."""
+        ids = sorted(set(ids))
+        if not ids:
+            return []
+        return [tuple(_uncopy(f) for f in row) for row in self.run("".join(
+            f"COPY ({query.format(ids=','.join(_lit(x) for x in ids[i:i + IN_BATCH]))}) TO STDOUT;\n"
+            for i in range(0, len(ids), IN_BATCH)))]
+
+    def rows(self, rids: Iterable[str]) -> dict[str, Row]:
+        return {r[0]: Row(*r[:4], json.loads(r[4])) for r in self._each(
+            f"SELECT id, type, kind, {_UTC.format(col='time')}, doc::text FROM {self.schema}.records WHERE id IN ({{ids}})", rids)}
+
     def row(self, rid: str) -> Row | None:
-        r = self.select(f"SELECT id, type, kind, {_UTC.format(col='time')}, doc::text FROM {self.schema}.records WHERE id={_lit(rid)}")
-        return Row(*r[0][:4], json.loads(r[0][4])) if r else None
+        return self.rows([rid]).get(rid)
 
-    def producers(self, art: str) -> list[str]:
-        return [r[0] for r in self.select(f"SELECT DISTINCT src FROM {self.schema}.edges WHERE dst={_lit(art)} AND name LIKE 'outputs.%' ORDER BY src")]
+    def producers(self, arts: Iterable[str]) -> dict[str, list[str]]:
+        """Each artifact's producing runs (the runs with an `outputs.*` edge to it)."""
+        out: dict[str, list[str]] = {}
+        for dst, src in sorted(set(self._each(f"SELECT dst, src FROM {self.schema}.edges WHERE dst IN ({{ids}}) AND name LIKE 'outputs.%'",
+                                              arts))):
+            out.setdefault(dst, []).append(src)
+        return out
 
-    def labels_on(self, target: str, keys: Iterable[str]) -> list[str]:
-        return [r[0] for r in self.select(
-            f"SELECT e.src FROM {self.schema}.edges e JOIN {self.schema}.records r ON r.id = e.src WHERE e.dst={_lit(target)} "
-            f"AND e.name='target' AND r.kind IN ({','.join(_lit(k) for k in keys)}) ORDER BY e.src")]
+    def labels_on(self, targets: Iterable[str], keys: Iterable[str]) -> list[str]:
+        """The ids of the labels with one of `keys` on any of `targets`."""
+        return sorted({r[0] for r in self._each(
+            f"SELECT e.src FROM {self.schema}.edges e JOIN {self.schema}.records r ON r.id = e.src WHERE e.dst IN ({{ids}}) "
+            f"AND e.name='target' AND r.kind IN ({','.join(_lit(k) for k in keys)})", targets)})
+
+    def edges_from(self, rids: Iterable[str]) -> dict[str, list[tuple[str, str, str]]]:
+        out: dict[str, list[tuple[str, str, str]]] = {}
+        for e in sorted(self._each(f"SELECT src, name, dst FROM {self.schema}.edges WHERE src IN ({{ids}})", rids)):
+            out.setdefault(e[0], []).append(e)
+        return out
 
     def edges_of(self, rid: str) -> list[tuple[str, str, str]]:
-        return self.select(f"SELECT src, name, dst FROM {self.schema}.edges WHERE src={_lit(rid)} ORDER BY name, dst")
+        return self.edges_from([rid]).get(rid, [])
 
     def _insert(self, rows: list[Row], edges: Callable[[Row], list[tuple]]) -> str:
         """One statement inserting the records not yet present and the fields and edges of those only; it returns how many were new.
@@ -477,29 +524,18 @@ def _private(remote, idx, *, jobs: int, full: bool, now: datetime, batch: int, l
 
 def _public(public_remote, idx, private, *, jobs: int, now: datetime) -> dict:
     listed = public_remote.list_times(MANIFESTS)
-    arts, missing = {}, []
-    for key, modified in listed:
-        rid = record_id(key)
-        row = private.row(rid)
-        if row is None:
-            missing.append((key, modified))
-        else:
-            arts[rid] = row
+    arts = private.rows(record_id(key) for key, _ in listed)
+    missing = [(key, modified) for key, modified in listed if record_id(key) not in arts]
     fetched, errors = _read(public_remote, missing, jobs)
     arts.update({r.id: r for r in fetched})
-    runs = {}
-    for art in sorted(arts):
-        for rid in private.producers(art):
-            if rid not in runs and (row := private.row(rid)) is not None:
-                runs[rid] = public_run(row)
-    labels = {}
-    for target in sorted(arts) + sorted(runs):
-        for lid in private.labels_on(target, PUBLIC_LABEL_KEYS):
-            if (row := private.row(lid)) is not None:
-                labels[lid] = public_label(row)
-    shown = set(arts) | set(runs)
+    arts = {rid: arts[rid] for rid in sorted(arts)}
+    found = private.rows({rid for rids in private.producers(arts).values() for rid in rids})
+    runs = {rid: public_run(found[rid]) for rid in sorted(found)}
+    found = private.rows(private.labels_on([*arts, *runs], PUBLIC_LABEL_KEYS))
+    labels = {lid: public_label(found[lid]) for lid in sorted(found)}
+    shown, run_edges = set(arts) | set(runs), private.edges_from(runs)
     idx.replace([(list(arts.values()), Row.edges),
-                 (list(runs.values()), lambda r: [e for e in private.edges_of(r.id) if e[2] in shown]),
+                 (list(runs.values()), lambda r: [e for e in run_edges.get(r.id, []) if e[2] in shown]),
                  (list(labels.values()), Row.edges)], {MANIFESTS: (_stamp(now), len(listed))})
     return {"listed": {MANIFESTS: len(listed)}, "read": len(fetched), "added": {"artifact": len(arts), "run": len(runs), "label": len(labels)},
             "errors": errors}

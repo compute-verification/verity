@@ -190,13 +190,14 @@ listings(prefix, listed_at, keys)    the last listing of each prefix: the index 
 
 `index(remote, db)` lists `manifests/`, `labels/` and the runs after the newest indexed one (a full `attempts/` listing
 hourly), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
-and never touches `objects/`. One pass and pass by pass give the same rows (tested). `index(public, db, policy=PUBLIC,
+and never touches `objects/`. One pass and pass by pass agree. `index(public, db, policy=PUBLIC,
 private=db)` rebuilds the public tables: the artifacts whose manifests are in the public bucket, their producing runs cut to
 `PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
 `research data index` builds `<store>/index.sqlite` (`--public`: `index-public.sqlite`; `--from DIR`: a directory as bucket;
 `--postgres`: both schemas of `$STORE_INDEXER_DATABASE_URL` through `psql`, rows only, so grants survive). The control pod runs
-it every 5 minutes (`infra/control/store_index.sh`). Displays read it via `reader` (Neon's `store_private` with
-`$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the records only here.
+it every 5 minutes, `--public` once `store-export.env` exists (`infra/control/store_index.sh`). Displays read it via `reader`
+(Neon's `store_private` with `$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the
+records only here.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
