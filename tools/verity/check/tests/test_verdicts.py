@@ -50,6 +50,7 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # lean_changed.py's built tree
     _write(r["check"] / "lean-changed" / "links.json", "{}")                 # check's early Lean step's tree
     _write(r["check"] / "lean-records" / "build-0" / "p" / "lean-audit.json", "{}")   # the Lean fast path's
+    _write(r["check"] / "lean-artifacts" / "outputs" / "p" / "h.json", "{}")   # Lake's cache of built modules
 
 
 VERDICTS = ["check/circuit-check/v1/d/e1.json", "check/lean-agreement/k3.json", "check/lean-audit/k2.json", "tests/k1.json"]
@@ -128,7 +129,8 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
 @pytest.mark.parametrize("member", ["../escape.json", "/abs.json", "other/x.json", "check/lean-deps/m.json", "tests/logs/a.json",
                                     "check/lean-changed/links.json", "check/lean-records/build-0/p/lean-audit.json",
                                     "tests/durations.json", "check/.hidden.json", "tests/k.txt", "link",
-                                    "check/lean-audit-scratch-x1/p/lake-manifest.json", "check/lean-changed/p/lean-audit.json"])
+                                    "check/lean-audit-scratch-x1/p/lake-manifest.json", "check/lean-changed/p/lean-audit.json",
+                                    "check/lean-artifacts/outputs/p/h.json"])
 def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, monkeypatch, member):
     r = _machine(tmp_path, monkeypatch, "b")
     pack = tmp_path / "bad.tar.gz"
