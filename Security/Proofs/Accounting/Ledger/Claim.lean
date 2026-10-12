@@ -152,6 +152,39 @@ theorem Pin.union_part (hm : m.NoCrossing) {p q : Finset Λ} {T : Finset ℕ} (h
 theorem Pin.add_meter (h : E.Pin ρ m π ε) (h' : E.Pin ρ m' π' ε') : E.Pin ρ (m + m') (π + π') (ε + ε') :=
   Pin.add_of_le (fun a ω => by simp only [read, Meter.eval_add_meter, le_refl]) h h'
 
+/-- **Additivity across shares, per run.** If an actual circuit's meter is at least the sum of two shares' (two
+accounts of the device model), a pin on the first share and a requirement of task `P` on the second pin the whole
+circuit alongside `P` at the sum. This is additivity by attribution: it needs no independence condition, since the
+attribution already says which share ran `P`. -/
+theorem Pin.add_of_shares {E₁ E₂ : Experiment Λ G Adv Ω} {P : Task Adv Ω} {R : ℝ}
+    (hacc : ∀ a ω, E.accepts a ω → E₁.accepts a ω) (hsum : ∀ a ω, E₁.read ρ m a ω + E₂.read ρ m a ω ≤ E.read ρ m a ω)
+    (h : E₁.Pin ρ m π ε) (hreq : E₂.Requires P ρ m R) : (E.alongside P).Pin ρ m (π + R) ε := by
+  intro a
+  refine (pr_mono fun ω hω => ⟨hacc a ω hω.1.1, ?_⟩).trans (h a)
+  have h1 : (E₁.read ρ m a ω : ℝ) + E₂.read ρ m a ω ≤ E.read ρ m a ω := by exact_mod_cast hsum a ω
+  have h2 := hreq a ω hω.1.2
+  have h3 : (E.read ρ m a ω : ℝ) < π + R := hω.2
+  linarith
+
+/-- **Additivity across shares, in budget form**, for a requirement the second share meets on every coin: an adversary
+whose whole meter is at most `B` on every coin has the first share's at most `B − R` on every coin. A requirement met
+only on the coins where `P` runs gives nothing here, since the first share's worst case may sit on a coin where `P`
+doesn't run; the device model's residuals quantify over every coin (`Run.ComputeCovert`) for this reason. -/
+theorem PinBudget.add_of_shares {E₁ E₂ : Experiment Λ G Adv Ω} {R : ℝ}
+    (hacc : ∀ a ω, E.accepts a ω → E₁.accepts a ω) (hsum : ∀ a ω, E₁.read ρ m a ω + E₂.read ρ m a ω ≤ E.read ρ m a ω)
+    (h : E₁.PinBudget ρ m π ε) (hreq : ∀ a ω, R ≤ (E₂.read ρ m a ω : ℝ)) : E.PinBudget ρ m (π + R) ε := by
+  intro a B _ hle
+  have hB1 : ∀ ω, (E₁.read ρ m a ω : ℝ) ≤ B - R := fun ω => by
+    have h1 : (E₁.read ρ m a ω : ℝ) + E₂.read ρ m a ω ≤ E.read ρ m a ω := by exact_mod_cast hsum a ω
+    linarith [hle ω, hreq a ω]
+  by_cases hΩ : Nonempty Ω
+  · obtain ⟨ω₀⟩ := hΩ
+    exact (pr_mono fun ω hω => ⟨hacc a ω hω.1, by linarith [hω.2]⟩).trans
+      (h a (B - R) ((Nat.cast_nonneg _).trans (hB1 ω₀)) hB1)
+  · rw [not_nonempty_iff] at hΩ
+    have hε : 0 ≤ ε := (pr_nonneg _).trans (h a 0 le_rfl fun ω => (IsEmpty.false ω).elim)
+    exact (pr_eq_zero fun ω => (IsEmpty.false ω).elim).le.trans hε
+
 end Compose
 
 end Experiment

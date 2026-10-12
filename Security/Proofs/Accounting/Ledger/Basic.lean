@@ -171,6 +171,29 @@ theorem eval_mono_part [Fintype G] {m : Meter G} (hm : m.NoCrossing) {p q : Fins
   · exact ledger_mono_part_gates A h T g
   · exact ledger_mono_part_held A h T
 
+theorem ledger_singleton_gates (l₀ : Λ) (T : Finset ℕ) (g : G) :
+    A.ledger ⟨{l₀}, T⟩ (.gates g) = ∑ t ∈ T, A.gates l₀ t g := by
+  simp [Annotation.ledger]
+
+theorem ledger_singleton_held (l₀ : Λ) (T : Finset ℕ) : A.ledger ⟨{l₀}, T⟩ .held = ∑ t ∈ T, A.held l₀ t := by
+  simp [Annotation.ledger]
+
+/-- A leaf with no link to itself takes in, over its boundary, what every leaf sends it. -/
+theorem ledger_singleton_crossIn {l₀ : Λ} (h : ∀ t, A.link l₀ l₀ t = 0) (T : Finset ℕ) :
+    A.ledger ⟨{l₀}, T⟩ .crossIn = ∑ t ∈ T, ∑ l, A.link l l₀ t := by
+  simp only [Annotation.ledger, Finset.sum_singleton]
+  refine Finset.sum_congr rfl fun t _ => Finset.sum_subset (Finset.subset_univ _) fun l _ hl => ?_
+  rw [Finset.mem_compl, Finset.mem_singleton, not_not] at hl
+  rw [hl, h]
+
+/-- A leaf with no link to itself sends out, over its boundary, what it sends every leaf. -/
+theorem ledger_singleton_crossOut {l₀ : Λ} (h : ∀ t, A.link l₀ l₀ t = 0) (T : Finset ℕ) :
+    A.ledger ⟨{l₀}, T⟩ .crossOut = ∑ t ∈ T, ∑ l, A.link l₀ l t := by
+  simp only [Annotation.ledger, Finset.sum_singleton]
+  refine Finset.sum_congr rfl fun t _ => Finset.sum_subset (Finset.subset_univ _) fun l _ hl => ?_
+  rw [Finset.mem_compl, Finset.mem_singleton, not_not] at hl
+  rw [hl, h]
+
 /-- The ledger of a circuit made of accounts' shares is the sum of the shares' ledgers. -/
 theorem ledger_sum {α : Type} [Fintype α] (A : α → Annotation Λ G) (ρ : Region Λ) :
     (Annotation.sum A).ledger ρ = ∑ a, (A a).ledger ρ := by

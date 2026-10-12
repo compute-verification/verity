@@ -28,11 +28,13 @@ Each audit of a joint run is an experiment (`Run.computeExperiment`, `Run.bandwi
 know them), the actual circuit is the audit's account's share, and the verdict is the audit's. Each audit's guarantee
 (`Run.ComputeSound`, `Run.BandwidthSound`, `Run.CapacitySound`) is a budget-form pin of that experiment: work at price
 `p` on the cores over the compute window, device memory's crossing outward over the bandwidth window, and device
-memory's bits held over the capacity window (`Accounting.Ledger.computeSound_iff` and its two companions).
+memory's bits held over the capacity window (`Accounting.Run.computeSound_iff` and its two companions).
 
 So the device model is the ledger plus an attribution: each unit of every resource is charged to one account, and a pin
-is about one account's share, not about the region. Additivity across accounts then holds by construction
-(`Accounting.Ledger.pin_add_of_shares`); it is what the ledger names an assumption (`Experiment.Additive`).
+is about one account's share, not about the region. Additivity across accounts then holds by construction, per run
+(`Accounting.Ledger.Experiment.Pin.add_of_shares`) and in budget form for a requirement met on every coin
+(`Accounting.Ledger.Experiment.PinBudget.add_of_shares`); without the attribution it is what the ledger names an
+assumption (`Experiment.Additive`).
 -/
 
 namespace Accounting
