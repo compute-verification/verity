@@ -738,7 +738,7 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 TR_WORDS = 8  # tf.cu's trace words a chain link
 # The leaves beside the chain on SMs / 2 or SMs / 4 long-lived CTAs (a grid-stride b3_leaves, gated node for node) are a
 # wash (r20261012-130143-799b: 1.098, 1.096 vs 1.096 at M = 1): the commit costs its issue wherever it runs.
-PIPE_PLANS = ("px", "psy")
+PIPE_PLANS = ("px", "psy", "psy2")
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
 # one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones. So do two quads
 # of register prefetch on gate_up and down (r20261012-114545-aca3: 1.089 vs 1.065 at M = 1), letting the next launch
@@ -753,12 +753,13 @@ PIPE_PLANS = ("px", "psy")
 # and 1.186 vs 1.064, their chains 2.45 and 2.85 TB/s vs V1's 3.11: the wide multiply costs the FMA pipe more than the
 # ALU instruction it saves).
 PX = {"qkv": 0, "o": 0, "gate_up": 0}
-CAP_PLANS = {"p": {}, "px": PX, "psy": PX}
+CAP_PLANS = {"p": {}, "px": PX, "psy": PX, "psy2": PX}
 # Per plan, shapes whose padding leaves room for one CTA of the named next shape (its CTAs then start beside them).
 LEAVE_PLANS: dict[str, dict[str, str]] = {}
 # tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 a CTA's warps in step (a barrier a quad; at M <= 8 it
-# wins, r20261012-133232-185b: 1.051 vs 1.064 at M = 1, and at M = 16 it loses, 1.073 vs 1.056)
-PROBE_PLANS = {"psy": 3}
+# wins, r20261012-133232-185b: 1.051 vs 1.064 at M = 1, and at M = 16 it loses, 1.073 vs 1.056), 5 a barrier every
+# second quad
+PROBE_PLANS = {"psy": 3, "psy2": 5}
 TRACE_BATCHES = (1, 8)
 
 
