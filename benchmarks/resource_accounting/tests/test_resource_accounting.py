@@ -90,7 +90,7 @@ def _doc() -> dict:
     o = {"key": "o-n4096-k4096-b1-L32", "shape": "o", "n": 4096, "k": 4096, "batch": 1, "length": 32, "macs": 4096 * 4096 * 32,
          "gates": [], "refused": {"pearl-c": "a gate"}, "arms": {"native-fp8": _arm(0.0004), "native-fp8-gemm": _arm(0.0003)}}
     return {"schema": R.SCHEMA, "run": "r-test", "status": "complete",
-            "identity": {"name": "test", "memory_bytes": 96 << 30, "l2_bytes": 128 << 20, "sms": 188},
+            "identity": {"name": "test", "memory_bytes": 96 << 30, "l2_bytes": 128 << 20, "sms": 188, "regs_per_sm": 65_536},
             "read_rate": {"bytes_per_s": 1.6e12, "kernel": "test"}, "points": [cube, o, {"key": "x", "skipped": "budget"}]}
 
 
@@ -107,12 +107,14 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert by[("cube8192-n8192-k8192-b32-L32", "native-fp8")]["gemm_tflops"] == pytest.approx(2 * 32 * 8192 ** 2 * 32 / 0.0019 / 1e12)
     assert by[("cube8192-n8192-k8192-b32-L32", "pearl-c-nohash")].get("w_cert") is None
     assert ("x", None) in by
-    md = R.markdown(_doc(), {"pass": "ACCEPT x"}, "fixture")
+    md, doc_no_regs = R.markdown(_doc(), {"pass": "ACCEPT x"}, "fixture"), _doc()
     assert "| cube8192 B=32 L=32 | pearl-c | whole |" in md and "failed or skipped" in md
     assert f"| compute {C.RESIDUAL} (honest + slack) | Q_cert | S_cert |" in md and "| pending | none |" in md
     assert "Q_cert: pending: parameters not reviewed (Bandwidth.SecurityProofs.AuditRO is proved" in md
-    assert ("S_chip 306.7 MB = the protocol's L2 + SMs × 384 KiB 208.1 MB + 98.6 MB for the constant and instruction "
-            "caches") in md
+    assert ("S_chip 239,992,832 bytes = l2 + sms * (regs_per_sm * 4 + 128 KiB + 160 KiB) + 1 MiB, the bandwidth harness's "
+            "count with the constant and instruction caches") in md
+    del doc_no_regs["identity"]["regs_per_sm"]
+    assert "S_chip – (this run recorded no registers a SM)" in R.markdown(doc_no_regs, {}, "fixture")
     assert "T = 1,354,057 ns with the RTT at P2's cap, 354,000 ns, so T + RTT = 1,708,057 ns" in md
     assert "not a per-run covert bound; lane ra-per-run is proving the per-run form" in md
 
@@ -208,8 +210,8 @@ def test_a_bandwidth_window_holds_the_rtt_at_p2_s_cap_under_the_floor_and_s_chip
     p = C.window_params("ro-blake3/v1")
     assert (p.samples, p.rtt_allowance_ns, p.limit_ns) == (audit.SAMPLES, RTT_ALLOWANCE_CAP_NS, audit.REGEN_FLOOR_NS - 1)
     assert p.deadline_ns == audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1 == 1_354_057
-    chip = C.chip(128 << 20, 188)
-    assert chip["protocol_bytes"] == 208_142_336 and chip["s_chip_bytes"] == 208_142_336 + 188 * (512 << 10)
+    chip = C.chip({"l2_bytes": 128 << 20, "sms": 188, "regs_per_sm": 65_536})
+    assert chip["s_chip_bytes"] == 239_992_832 and "160 KiB" in chip["formula"]
     bw = C.bandwidth(1e12, 0.001, 5e8)
     assert (bw["q_cert"], bw["pending"], bw["theorem"]) == (None, C.PENDING_Q, "Bandwidth.SecurityProofs.AuditRO")
 
@@ -261,6 +263,9 @@ class _Prover:
     def scrub(self) -> None:
         self.calls.append(("scrub",))
 
+    def poison(self, tag: str, slot: int) -> None:
+        self.calls.append(("poison", tag, slot))
+
     def raw_read(self, reps: int) -> dict:
         return {"kernel": "none", "bytes": self.blocks * self.store.params.block_bytes, "device_ms": [0.25] * reps}
 
@@ -292,8 +297,9 @@ def test_proof_only_reads_time_every_tag_and_reject_the_skip_control(small_store
     assert blake["skip"]["accepted"] is False and blake["skip"]["failure"] == "tag-mismatch" and blake["skip"]["tagged"] == 12
     one = prover.calls[1:prover.calls.index(("release", "ro-blake3/v1"))]
     assert one[:3] == [("pass", "ro-blake3/v1", 0, None), ("scrub",), ("pass", "ro-blake3/v1", 0, None)]
-    assert one[-3:] == [("pass", "ro-blake3/v1", 0, None), ("scrub",), ("pass", "ro-blake3/v1", 0, 12)]
-    assert one.count(("scrub",)) == 3 + 3
+    assert one[-4:] == [("pass", "ro-blake3/v1", 0, None), ("poison", "ro-blake3/v1", 0), ("scrub",),
+                        ("pass", "ro-blake3/v1", 0, 12)]
+    assert one.count(("scrub",)) == 3 + 3 and one.count(("poison", "ro-blake3/v1", 0)) == 1
 
 
 def test_joint_windows_commit_while_the_audit_runs_and_are_judged_after(small_store):

@@ -105,7 +105,7 @@ def identity(uuid: str | None) -> dict:
     import torch
     p = torch.cuda.get_device_properties(0)
     out = {"name": p.name, "cc": [p.major, p.minor], "sms": p.multi_processor_count, "memory_bytes": p.total_memory,
-           "l2_bytes": p.L2_cache_size, "uuid": uuid, "torch": torch.__version__, "cuda": torch.version.cuda,
+           "l2_bytes": p.L2_cache_size, "regs_per_sm": getattr(p, "regs_per_multiprocessor", None), "uuid": uuid, "torch": torch.__version__, "cuda": torch.version.cuda,
            "visible": os.environ.get("CUDA_VISIBLE_DEVICES")}
     try:
         import pynvml as N

@@ -12,8 +12,9 @@ certifies beside what it did.
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
   form (worst case over each audit's own coins; the per-run form is not proved yet). S_cert is the PoUS arm's storage
   profile when it is certified (`storage`); Q_cert is pending until the red team has reviewed the bandwidth protocol's
-  parameters, and `chip` and `window_params` are the device inputs it will take (S_chip with a cache allowance, the RTT
-  at P2's cap inside the window).
+  parameters, and `chip` and `window_params` are the device inputs it will take (S_chip as the bandwidth harness counts
+  it, `summarize.s_chip_bytes`, with the caches beside L2 and the SMs' registers and memory; the RTT at P2's cap inside
+  the window).
 - `joint.py`: the bandwidth audit's arms inside the PoUS harness's process: (d), the tag pass over the PoUS store as
   proof-only reads, every tag timed alone; (e), joint v0, `ro-blake3/v1`'s windows beside the chain and P2's audit.
 - `run.sh`: the recorded run on node 2: GPU 1's ship built outside the lease, `chain.py` under one `gpu-lease 1`

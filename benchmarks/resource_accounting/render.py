@@ -401,14 +401,14 @@ def joint_lines(name: str, e: dict) -> list[str]:
 def q_cert_lines(ident: dict) -> list[str]:
     """Q_cert pending, and the device inputs it will take with the red team's conditions applied."""
     p = C.window_params(JOINT_TAG)
-    chip = C.chip(ident["l2_bytes"], ident["sms"]) if ident.get("l2_bytes") and ident.get("sms") else None
+    known = all(ident.get(k) for k in ("l2_bytes", "sms", "regs_per_sm"))
+    chip = C.chip(ident) if known else None
     return [(f"Q_cert: {C.PENDING_Q} ({C.Q_THEOREM} is proved; no certified bandwidth rate is cited until the red team has "
              "re-read the bandwidth protocol's parameters at the BLAKE3 head): times and raw rates only. Its device inputs "
              "hold the red team's conditions: S_chip "
-             + ("–" if chip is None else
-                f"{chip['s_chip_bytes'] / 1e6:.1f} MB = the protocol's L2 + SMs × 384 KiB {chip['protocol_bytes'] / 1e6:.1f} MB "
-                f"+ {chip['allowance_bytes'] / 1e6:.1f} MB for the constant and instruction caches it leaves out (512 KiB a "
-                "SM, an allowance, not measured)")
+             + ("– (this run recorded no registers a SM)" if chip is None else
+                f"{chip['s_chip_bytes']:,} bytes = {chip['formula']}, the bandwidth harness's count with the constant and "
+                "instruction caches")
              + f"; a window's T = {p.deadline_ns:,} ns with the RTT at P2's cap, {p.rtt_allowance_ns:,} ns, so T + RTT = "
              f"{p.limit_ns:,} ns stays under the rebuild floor of {p.regen_floor_ns:,} ns.")]
 

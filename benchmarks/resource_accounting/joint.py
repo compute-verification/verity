@@ -5,9 +5,10 @@
   running): `E`'s raw read (torch's sum of it as int64), then every tag the tagger has, `PASSES` passes each from a clean L2
   (`SCRUB_BYTES` of another buffer read first, as the bandwidth harness does), timed on the device by the tagger's events
   (`Tagger.last_pass_ms`: its tags, and the pass to its root) and on the host from the call to the root on the host; then
-  `WINDOWS` windows through `audit.Verifier` and a skip control (`SKIP` of the blocks untagged), which must be rejected, each
-  after an untimed pass under a throwaway seed and the scrub (the bandwidth harness's ``--warm-pass``: the last verdict's
-  seconds of Python otherwise leave host time inside the next window).
+  `WINDOWS` windows through `audit.Verifier` and a skip control (`SKIP` of the blocks untagged over a poisoned workspace),
+  which must be rejected, each prepared as the bandwidth harness's `Prover` prepares, before its seed: an untimed pass under
+  a throwaway seed (the last verdict's seconds of Python otherwise leave host time inside the next window), the skip
+  control's poisoning, then the scrub.
 * **(e), joint v0.**  The chain on plain W (the harness's honest-audit load), P2's timed audit (its responder in this process)
   and `ro-blake3/v1`'s windows at once: a thread opens one window at a time at random gaps (mean `GAP_S`) until the honest
   audit ends, each tag pass on a stream of the highest priority with a workspace of its own, and commits at once, with no
@@ -16,7 +17,8 @@
 
 A window's verifier is in this process, so it sees no network round trip.  `window_params` puts the RTT at P2's cap inside
 the rebuild floor, and a window is on time here when it committed within `T`, the most a prover may take when the round trip
-uses the whole allowance.
+uses the whole allowance.  The store is the harness's, under PoUS's salt rather than `audit.draw_salt`'s (which binds the
+device's identity in, so that devices holding one W hold different stores); on one device the salt changes no time.
 """
 
 from __future__ import annotations
@@ -74,7 +76,8 @@ class Pass(Protocol):
 
 
 class Prover(Protocol):
-    """The honest bandwidth prover: `tag_pass` tags every block (or the first `tagged`, a skip control) into workspace `slot`."""
+    """The honest bandwidth prover: `tag_pass` tags every block (or the first `tagged`, a skip control, over a workspace
+    `poison` filled first) into workspace `slot`."""
 
     blocks: int
 
@@ -83,6 +86,8 @@ class Prover(Protocol):
     def release(self, tag: str) -> None: ...
 
     def scrub(self) -> None: ...
+
+    def poison(self, tag: str, slot: int) -> None: ...
 
     def raw_read(self, reps: int) -> dict: ...
 
@@ -146,9 +151,11 @@ def alone(prover: Prover, vk: VerifierKey, names: Sequence[str], source: bytes, 
         v = verifier(vk, name, source, clock)
         judged = []
         for n in range(windows + 1):
-            prover.tag_pass(name, throwaway, 0)
-            prover.scrub()
             tagged = None if n < windows else prover.blocks - round(SKIP * prover.blocks)
+            prover.tag_pass(name, throwaway, 0)
+            if tagged is not None:
+                prover.poison(name, 0)
+            prover.scrub()
             judged.append(judge(open_window(v, n, prover, 0, tagged, clock), v.params.deadline_ns))
         out["tags"][name] = {"certified": tags.get(name).certified, **params_record(v.params), "passes": timed,
                              "windows": judged[:-1], "skip": {**judged[-1], "fraction": SKIP}}
@@ -259,6 +266,11 @@ class GpuProver:
     def scrub(self) -> None:
         self.tagger.read_scrub(self.scrub_buf.data_ptr(), SCRUB_BYTES)
 
+    def poison(self, tag: str, slot: int) -> None:
+        with self.torch.cuda.stream(self.stream):
+            self.ws[tag][slot].fill_(0xA5)
+        self.stream.synchronize()
+
     def _events(self) -> tuple[Any, Any]:
         return self.torch.cuda.Event(enable_timing=True), self.torch.cuda.Event(enable_timing=True)
 
@@ -279,9 +291,6 @@ class GpuProver:
     def tag_pass(self, tag: str, seed: bytes, slot: int, tagged: int | None = None) -> GpuPass:
         """One pass on the prover's stream, which the tagger synchronizes once the root is on the host."""
         ws, st = self.ws[tag][slot], self.stream
-        if tagged is not None:
-            with self.torch.cuda.stream(st):
-                ws.fill_(0xA5)
         c = (self.tagger.tag_pass(tag, self.c.data_ptr(), self.blocks, seed, ws.data_ptr(), st.cuda_stream) if tagged is None
              else self.tagger.tag_pass_prefix(tag, self.c.data_ptr(), self.blocks, tagged, seed, ws.data_ptr(), st.cuda_stream))
         return GpuPass(c, self.tree, *self.tagger.last_pass_ms())

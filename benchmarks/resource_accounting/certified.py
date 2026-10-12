@@ -12,8 +12,8 @@
 * **Q_cert, bandwidth**: pending.  The guarantee is ``Bandwidth.SecurityProofs.AuditRO``, but no certified bandwidth rate is
   cited until the red team has re-read the bandwidth protocol's parameters at the BLAKE3 head, so only times and raw rates
   are reported.  The device inputs it will take (`chip`, `window_params`) carry the red team's conditions already: S_chip is
-  the protocol's (L2, registers, L1 and shared memory) plus an allowance per SM for the constant and instruction caches it
-  leaves out, and a window's `T + RTT` holds the RTT at P2's cap (`RTT_ALLOWANCE_CAP_NS`) under the rebuild floor.
+  the bandwidth harness's count, which holds the constant and instruction caches beside L2, registers, L1 and shared
+  memory, and a window's `T + RTT` holds the RTT at P2's cap (`RTT_ALLOWANCE_CAP_NS`) under the rebuild floor.
 * **S_cert, capacity**: the PoUS arm's storage profile (`storage`), when the harness issued one and it is certified: a
   server holding fewer than ⌊ρ·|C|⌋ bits passes the audit of record's k challenges within its limit with probability at most
   δ + 2^eps_log2, by the certificate's theorem (P2's is ``Pous.SecurityProofs.P2SlackFamilyUncond``), under its claims,
@@ -47,17 +47,19 @@ RESIDUAL = "residual, worst case over the audit's coins; per-run form pending"
 S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "
            "#1790) is held")
 NO_POUS = "no PoUS arm in this run"
-SM_BYTES = (256 + 128) << 10
-"""The bandwidth protocol's S_chip per SM (its PROTOCOL.md §4): 256 KiB of registers and 128 KiB of L1 and shared memory."""
-SM_CACHE_ALLOWANCE = 512 << 10
-"""An allowance per SM for the constant and instruction caches (and the smaller buffers) the protocol's S_chip leaves out:
-not a measured size; the red team's number replaces it."""
+SUMMARIZE = ROOT / "benchmarks" / "bandwidth" / "summarize.py"
 
 
-def chip(l2_bytes: int, sms: int) -> dict:
-    """S_chip on a device with `l2_bytes` of L2 and `sms` SMs: the protocol's L2 + SMs × `SM_BYTES`, and the cache allowance."""
-    protocol, allowance = l2_bytes + sms * SM_BYTES, sms * SM_CACHE_ALLOWANCE
-    return {"protocol_bytes": protocol, "allowance_bytes": allowance, "s_chip_bytes": protocol + allowance}
+def chip(device: dict) -> dict:
+    """S_chip of a device (its `l2_bytes`, `sms` and `regs_per_sm`), the bandwidth harness's count (`summarize.s_chip_bytes`:
+    L2, registers, L1 and shared memory, and the red team's allowance for the caches and buffers beside them)."""
+    if "bandwidth_summarize" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("bandwidth_summarize", SUMMARIZE)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["bandwidth_summarize"] = mod
+        spec.loader.exec_module(mod)
+    s = sys.modules["bandwidth_summarize"]
+    return {"s_chip_bytes": s.s_chip_bytes(device), "formula": s.S_CHIP_FORMULA}
 
 
 def window_params(tag: str):
