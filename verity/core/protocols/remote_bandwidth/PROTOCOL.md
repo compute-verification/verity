@@ -45,7 +45,8 @@ data are at least \((1 - \gamma) R \Sigma\), with
 The protocol bounds the first four and passes the last three through: the record can't bound them (a protocol carries
 no policy parameter). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt.
+receipt. That is for the default receipt kind, block-sha512. Under sketch-sha512 a receipt also rests on
+`RateAuditSketch`, and its terms are added to the failure probability, per pass (§4).
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
@@ -75,6 +76,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `delta` | δ of each window's profile |
 | `min_passes` | the fewest passes a window may certify |
 | `codec` | the store's codec, the one its registration names (§3): `p1024/k3/masked` unless another is named |
+| `receipt` | the receipt kind, the one its registration names (§4): `block-sha512` unless `sketch-sha512` is named |
 
 The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by window. It is not a parameter.
 
@@ -89,12 +91,14 @@ The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by
    `node` is the node's id, 1 to 64 bytes. This is the leaf PoUS's answer circuit proves over a block.
 2. Only after the payload root has arrived does the verifier draw the codec seed from its own secret and a fresh
    32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
-   32)`, `codec` the name of the codec the registration names.
+   32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind (§4),
+   which is not in this context: the store doesn't depend on it.
 3. The prover encodes every block under that seed with that codec (`codec.py`, below):
    \(E_j = \text{encode}(\text{payload}_j)\).
 4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
-   codec seed ‖ frame(codec name))`, `frame` being `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8).
-   A record cites this digest, each session's coin commitment binds it, and each session's chain starts from it.
+   codec seed ‖ frame(codec name) ‖ frame(receipt kind))`, `frame` being `verity.ml.randomness.frame` ("s" ‖ u64be
+   length ‖ the name in UTF-8). A record cites this digest, each session's coin commitment binds it, and each session's
+   chain starts from it, so a session's coins and seeds are bound to its kind.
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -163,8 +167,14 @@ seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ 
 plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
             the one before it ends.  Position p is the p-th block of the runs concatenated; L positions in all.
             digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
-y_(i,p)     SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j)))),
-            j = plan_(t,i)[p]
+y_(i,p)     block-sha512: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
+            (E_j ⊕ spread(z_(i,j)))),  j = plan_(t,i)[p]
+            sketch-sha512: SHA512(Z("verity/remote-bandwidth/sketch-receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ σ_(i,j))
+S_(t,i)     sketch-sha512's 16 × 4096 signs: K = derive(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v0",
+            {"tag": "sketch-sha512", "k": 16, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u
+            (byte u // 8, LSB first) 1 → −1 and 0 → +1
+σ_(i,j)     S_(t,i) · e, e the 4096 bytes of E_j ⊕ spread(z_(i,j)) as int8, over the integers (|σ[c]| ≤ 2^19):
+            16 int32 little-endian, 64 bytes
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
 leaf c      v_c = y_(i,16c) ‖ … ‖ y_(i,16c+15), positions in plan order, the last leaf short; committed as
             hm96-sha512/row/v2: x_c = sha512/row/v2(v_c), value tree_leaf(key, commit_string(key, x_c, salt_c)),
@@ -183,10 +193,60 @@ that breaks its format rejects with `plan`.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path. A chosen seed buys
-nothing against the full SHA-512 receipt, because no seed makes a receipt cheaper to compute without the block's
+nothing against the block-sha512 receipt, because no seed makes a receipt cheaper to compute without the block's
 bytes after the seed. The queries a grinding prover makes are counted by AuditRO's `queries_log2` bits a certified
 receipt (λ). Two other users of the seed must hold for a seed chosen among \(Q\): PoUW's noise for the pass (§8), and
-any sketch matrix (§8).
+sketch-sha512's signs (below).
+
+**The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
+block-sha512 is the default until Daniel rules between them. sketch-sha512 is ra-codec-tensor's `sketch_receipt.py`
+(#1916, at 5b8decfc5), byte for byte: the suite pins its numpy outputs, and `receipts.SketchReceipter` computes the
+same in pure Python. Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is
+what is hashed after the seed's block: block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions;
+sketch-sha512 hashes \(j\) and the 64-byte sketch, one compression. The sketch's signs come from the pass's seed, so
+like the seed they exist only once the root before it does.
+
+What each kind rests on:
+
+- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed,
+  so it bounds the reads by AuditRO (`Bandwidth.Guarantees.AuditRO`, applied per pass), with λ's slack. It assumes
+  nothing about the device: the prover may hold any function of the store.
+- **sketch-sha512** also rests on `RateAuditSketch` (ra-rate-audit-lean, #1849, open). The random oracle takes a
+  correct receipt to a correct \(\sigma_j\). `RateAuditSketch` takes a correct \(\sigma_j\) to the block's 128
+  sectors of 32 bytes having been obtained, except for a guess. A query made without one of them is right with
+  chance at most \(g/2^{256}\) per query, \(g\) the largest fiber of one sector under the signs. The signs bind
+  that far except with \(\Pr_S[g < \text{fib}_S]\). Four conditions come with it:
+  - **The verbatim class.** The device obtains a sector only whole and as it is (`rate-sketch-verbatim`). A device
+    that holds blocks' sketches, or a host that computes sketches once the signs are out and relays them, is outside
+    the class. Window isolation must keep such a host off the link.
+  - **Signs fresh per pass.** \(S_{(t,i)}\) comes from each pass's chained seed, never once per window (F29, §8).
+    The statement's window is this protocol's pass.
+  - **Grinding.** The statement takes the signs uniform. Here they are derived from a seed the prover can choose
+    among \(Q\) (above), so \(\Pr_S[g < \text{fib}_S]\) is counted \(Q\) times, by the union bound.
+  - **The 16 rows.** At \(k_s = 16\) no \(16 \times 32\) block of signs is injective (Siegel's lemma). So
+    `SketchBinds` doesn't apply, and the bound is read at the sketch's largest fiber \(g\), whose law over the signs
+    isn't evaluated yet. At \(k_s = 64\) the signs bind except for a column dependency (`RateAuditTensorSketch`), at
+    256 bytes a block.
+
+  #1849's tag is \(H(R, t, \text{dig}_S(e_t))\): the stream \(R\) is hashed verbatim, beside the tile's sketch. Here
+  \(z\) enters before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires. XOR with a fixed
+  \(z\) permutes each sector, so each sector's fiber is the same. But the statement's digest is of the tile alone,
+  so applying it here needs the digest restated over the block and \(z\) together. The ledger computes neither
+  `RateAuditSketch`'s terms nor that restatement (`ledger`).
+
+What each costs on the GPU (#1916): one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
+3, run r20261012-224926-17ce at 5b8decfc5 (art:dea3a309). τ is a pass's time over one plain read of the same
+bytes, 5.60 ms.
+
+| kind | receipts | leaves and tree | τ a pass | τ, a 4 KiB \(z\) on every block |
+| --- | --- | --- | --- | --- |
+| block-sha512 | 9.87 ms, ALU-bound (33 compressions a block, \(7.0 \cdot 10^9\)/s) | 0.90 ms | 1.93 | 2.26 |
+| sketch-sha512 | 5.82 ms for the sketch (1,475 GB/s, memory-bound) and 0.33 ms for the hash | 0.90 ms | 1.26 | 2.27 |
+
+Fused into the weight GEMM, sketch-sha512 is estimated at about 0.27 reads a pass, or 0.11 if the commit hides under
+the GEMM's memory time; that is estimated, not measured. The GEMM's sketch warps add 0.053 at a 70B model, batch 8, and
+the hash, leaves and tree were measured at 0.22. The reference's pure-Python sketch takes about 0.25 ms a block, against
+0.013 ms for block-sha512's hash. That cost is the reference's, and the GPU's is the table's.
 
 **The plan** is the prover's choice and public. A decode step reads every weight block and only the live KV pages, and
 a block being written in the pass can't be receipted as registered, so a pass need not cover the store; the record
@@ -309,7 +369,10 @@ The verifier checks each opening in order (`Session.verify`):
 3. the block, read as the registered codec's words, has every word below \(p\) (`codec`), and its decoding's leaf under
    the payload salt has its path to the payload root at \(j\) (`payload-path`);
 4. PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
-5. \(y_{(i,p)}\), recomputed from \(j\), the block and \(z\), is the leaf's receipt at \(p\) (`receipt`).
+5. \(y_{(i,p)}\), recomputed from \(j\), the block and \(z\) under the registration's kind, is the leaf's receipt at
+   \(p\) (`receipt`). Under sketch-sha512 the verifier derives the pass's signs \(S_{(t,i)}\) from
+   \(\text{seed}_{(t,i)}\), once for each pass it draws from, and recomputes \(\sigma_j\) from the opened block and
+   \(z\) before hashing it. It takes no sketch from the prover: the opening is the same under either kind.
 
 **What the codec changes in check 3.** Under `p512/k2` a block was 64 words of 64 bytes, each below \(2^{512} - 569\),
 and each word's decode two squarings. Under the default it is 32 words of 128 bytes, each below \(2^{1024} - 105\): a
@@ -328,7 +391,8 @@ opening.
 ## 7. The record
 
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
-commitment's root, \(N\), \(b\), each window's passes and receipts \(U_t\), and the session's span. Each `WindowRecord`
+commitment's root, \(N\), \(b\), the receipt kind, each window's passes and receipts \(U_t\), and the session's span. The
+digest binds the kind already, but the record names it as well, since what its receipts rest on depends on it (§4). Each `WindowRecord`
 carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\), its openings coin's
 release, and an `IntegrityProfile`. `Record.end_ns` is the last deadline, which the next session over the store waits
 out.
@@ -391,7 +455,10 @@ node's capacities.
   - The matrix must resist a seed the prover chose among \(Q\), since it can grind the seed through its previous root.
   - \(z\) must enter before the sketch, because a linear sketch of \(E \oplus Z\) splits.
 
-  The reference has only the full SHA-512 receipt, which the pass's seed keys from its first block.
+  The reference's sketch-sha512 (§4) meets the first and third: its signs come from each pass's seed, and \(z\) is
+  XORed into the block before the sketch. For the second it counts the signs' failure to bind \(Q\) times.
+  block-sha512 stays the default until Daniel rules between them. In the proof unit, check 5 under sketch-sha512 is
+  16 signed sums over the block's 4,096 bytes and one compression, in place of 33 compressions.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
 - **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover
