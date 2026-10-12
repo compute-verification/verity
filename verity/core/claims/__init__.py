@@ -118,9 +118,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's challenger) runs "
-          "its stated code on its Nebius host, and its host never restores an earlier copy of the state the device keeps "
-          "there", "Trusted Nebius host", "standard"),
+          "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
+          "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
+          "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
