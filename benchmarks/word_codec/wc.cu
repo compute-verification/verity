@@ -508,6 +508,31 @@ __device__ __forceinline__ void bulk_load(void* dst, const void* src, uint32_t b
                : "memory");
 }
 
+#ifndef WC_G
+#define WC_G 4
+#endif
+
+// A lane's words decoded WC_G at a time, round by round across the group, so a warp has WC_G independent chains in
+// flight; word w's tweak is t0 + 32 w tau.
+template <int KR>
+__device__ __forceinline__ void decode_lane(uint64_t (&xw)[LANE_WORDS], uint64_t t, uint64_t t32) {
+#pragma unroll
+  for (int w0 = 0; w0 < LANE_WORDS; w0 += WC_G) {
+    uint64_t nt[WC_G];
+#pragma unroll
+    for (int i = 0; i < WC_G; ++i) {
+      nt[i] = ~t;
+      t = addmod(t, t32);
+    }
+#pragma unroll
+    for (int j = KR - 1; j >= 0; --j) {
+#pragma unroll
+      for (int i = 0; i < WC_G; ++i)
+        if (w0 + i < LANE_WORDS) xw[w0 + i] = dec_round(xw[w0 + i], nt[i], j);
+    }
+  }
+}
+
 constexpr int WS_MAX_CONSUMERS = 8;
 template <int KR>
 __host__ __device__ constexpr int ws_stage_bytes() { return KR > 0 ? TASK_WORDS * 8 : TASK_TILES * LANES * 16; }
@@ -593,12 +618,7 @@ __global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(co
       for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
-      uint64_t t = mulmod(kTau, (base + q * TASK_WORDS + lane) % P);
-#pragma unroll
-      for (int w = 0; w < LANE_WORDS; ++w) {
-        xw[w] = decode_word<KR>(xw[w], ~t);
-        t = addmod(t, t32);
-      }
+      decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),

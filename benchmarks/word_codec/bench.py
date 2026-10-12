@@ -562,7 +562,7 @@ def main() -> int:
                     help="the warp-specialized GEMM's configurations, CONSUMERSxSTAGES (stages a consumer), "
                          "comma-separated ('' for none)")
     ap.add_argument("--gemm-only", action="store_true",
-                    help="after the gates, only the GEMM: no read, decode, rates or analysis")
+                    help="after the gates, only the GEMM, with every library: no read, decode, rates or analysis")
     a = ap.parse_args()
 
     import torch
@@ -636,7 +636,7 @@ def main() -> int:
     else:
         gemm_lib = measure(res, libs, torch, a, sms, store_words, log, out_dir)
     res["gemm_lib"] = gemm_lib.name
-    for lib in [gemm_lib, *(l for l in libs if l.bits != gemm_lib.bits)]:
+    for lib in [gemm_lib, *(l for l in libs if l is not gemm_lib and (a.gemm_only or l.bits != gemm_lib.bits))]:
         key = "gemm" if lib is gemm_lib else f"gemm_{lib.name}"
         res[key] = {}
         log(f"gemm with {lib.name} ({lib.bits} payload bits a word)")

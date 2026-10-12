@@ -9,7 +9,8 @@
 #     -- taskset -c 48-95 bash benchmarks/word_codec/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
-# the profiles; LIBSET (default "split wide dense") names the builds and WC_KMAX (default 8) the largest k they hold.
+# the profiles; LIBSET (default "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4)
+# and WC_KMAX (default 8) the largest k they hold.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -21,7 +22,8 @@ WC=benchmarks/word_codec
 export LIBSET=${LIBSET:-split wide dense}
 B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX="${WC_KMAX:-8}")
-declare -A DEFS=([split]="-DWC_SQR=0" [wide]="-DWC_SQR=1" [dense]="-DWC_SQR=0 -DWC_PB=60")
+declare -A DEFS=([split]="-DWC_SQR=0" [wide]="-DWC_SQR=1" [dense]="-DWC_SQR=0 -DWC_PB=60"
+                [split8]="-DWC_SQR=0 -DWC_G=8" [dense8]="-DWC_SQR=0 -DWC_PB=60 -DWC_G=8")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086
