@@ -93,6 +93,7 @@ RULES = "ci/queue.toml"
 RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
+DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -106,8 +107,12 @@ class QueueError(Exception):
 
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+    full = git_env(GIT_TERMINAL_PROMPT="0", **(env or {}))
+    if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
+        for k in DATES:
+            full.pop(k, None)
     r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       errors="surrogateescape", env=git_env(GIT_TERMINAL_PROMPT="0", **(env or {})))
+                       errors="surrogateescape", env=full)
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
