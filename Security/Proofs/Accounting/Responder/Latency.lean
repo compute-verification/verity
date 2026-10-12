@@ -1,5 +1,6 @@
 import Definitions.Accounting.Window
 import Models.Accounting.Guarantees.Responder
+import Proofs.Accounting.Responder
 
 /-!
 # B2's oracle-location form, proved: a window as a ring responder
@@ -17,6 +18,10 @@ rounds with a multiplication are at least `ℓ` ticks apart, so there are at mos
 it asks every query the window asks once (`sim_spec`'s counts). `cap` stops a program with a default once it would
 exceed `(D, Q, L)`, so that it is `RingBounded` on every primitive, and leaves its run alone where it stays within them
 (`cap_bounded`, `cap_run`). `window_responder` puts them together for one window, and `B2Window` picks one for each.
+
+`B2WindowAudit` applies PoUS's guarantee to that responder: where every window stays within `(Q, L)`, its answers are
+the windows' results (`seqAnswers_congr`), so an outcome the windows answer correctly is one it does.
+`B2WindowP2Ring` is that at P2's deployed point.
 -/
 
 namespace Accounting.SecurityProofs
@@ -411,6 +416,15 @@ theorem window_responder (W : RingWindow B w α) (ℓ D Q L : ℕ) (d : α) (h�
   rw [cap_run d f _ D Q L (le_trans hd (by simpa using hD)) (by omega) (by omega)]
   exact h1
 
+theorem seqAnswers_congr {I : IdealModel} {ℓ' S B' : ℕ} (f : I.Qry → I.Ans)
+    (step step' : ℕ → Bits S → Fin B' → Prog I (Bits ℓ' × Bits S))
+    (h : ∀ j σ i, (step j σ i).run f = (step' j σ i).run f) :
+    ∀ (is : List (Fin B')) j σ, seqAnswers f step j is σ = seqAnswers f step' j is σ := by
+  intro is
+  induction is with
+  | nil => intro j σ; rfl
+  | cons i is ih => intro j σ; simp only [seqAnswers, h j σ i, ih]
+
 end Latency
 
 open Pous in
@@ -420,5 +434,20 @@ theorem B2Window : Guarantees.B2Window := by
     Latency.window_responder (p := p) (Wd W pp j σ i) ℓ D Q L (fun _ => false, fun _ => false) hℓ (hlat W pp j σ i)
       (hspan W pp j σ i)
   exact ⟨⟨P, hP⟩, hrun⟩
+
+theorem B2WindowAudit : Guarantees.B2WindowAudit := by
+  intro B w p _ sch N D Q L ℓ k δ ε hsec W A₁ Wd hℓ hlat hspan hbud
+  obtain ⟨A₂, hA₂⟩ := B2Window sch N D Q L ℓ Wd hℓ hlat hspan
+  refine (pr_mono fun x hx => ?_).trans (hsec W A₁ A₂)
+  unfold Pous.seqAcceptsOn
+  dsimp only
+  refine Eq.trans (Latency.seqAnswers_congr ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1)
+    (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
+    (fun j σ i => hA₂ W (sch.enc W x.1 x.2.1).1 j σ i _ (hbud x.1 _ _ j σ i).1 (hbud x.1 _ _ j σ i).2)
+    (List.ofFn x.2.2) 0 _) hx
+
+theorem B2WindowP2Ring : Guarantees.B2WindowP2Ring := by
+  intro D Q L ℓ hsec W A₁ Wd hℓ hlat hspan hbud
+  exact B2WindowAudit _ _ _ _ _ _ _ _ _ hsec W A₁ Wd hℓ hlat hspan hbud
 
 end Accounting.SecurityProofs

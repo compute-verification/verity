@@ -497,6 +497,12 @@
   "Accounting.SecurityProofs.B2Window": {
    "owner": "@memory-accounting"
   },
+  "Accounting.SecurityProofs.B2WindowAudit": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.B2WindowP2Ring": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.B4": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.B4.{u_1, u_2, u_3} : Accounting.Guarantees.B4"],
@@ -4227,6 +4233,8 @@
    "Accounting.SecurityProofs.B2Determines": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list, and concludes the existence of PoUS adversaries (lemma M's Determines), not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2P2Ring": "frozen (no-function,world-unlisted): It is B2Audit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure 0 0 0, and takes B2's hypotheses on the strategy (CausalFrom, increasing challenge ticks, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2Window": "frozen (no-function,world-unlisted): It is stated over arbitrary families of a location's windows with the ring's oracle locations (Accounting.RingWindow), takes the multiplications' latency and the windows' span as hypotheses that are not on the premises list, and concludes the existence of a PoUS sequential responder (SeqResponderOn), not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2WindowAudit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2Window's hypotheses on an arbitrary family of windows (the multiplications' latency, the windows' span and their query budgets), which are not on the premises list; the event it bounds is the windows' answering every challenge, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2WindowP2Ring": "frozen (no-function,world-unlisted): It is B2WindowAudit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure D Q L, and takes B2Window's hypotheses on an arbitrary family of windows, which are not on the premises list; the event it bounds is the windows' answering every challenge, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.Memory.Adds": "frozen (no-function): It composes PoUS's own guarantee, AuditSecure over the abstract audit game (Security/Definitions/Pous/Model/Audit.lean) taken as a hypothesis, with the counting core: lemma M of the actual-circuit model, counting the help (an (M + H)-bit responder), about no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsOn": "frozen (no-function): It composes PoUS's AuditSecureOn over the ring model (Security/Definitions/Pous/P2/Cost.lean), taken as a hypothesis, with the counting core: lemma M counting the help, about no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsP2Ring": "frozen (no-function): It is AddsOn at P2's deployed point (105 challenges), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",

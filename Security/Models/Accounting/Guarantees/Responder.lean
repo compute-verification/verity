@@ -42,6 +42,11 @@ at each challenge tick is a function of its state at the previous one and of wha
   answer and which spans at most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the
   additions, `one` and the keys at once and holds each multiplication until the earliest held one could be due. With
   `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`.
+  `B2WindowAudit`: so under `AuditSecureOn … N D Q L`, a location that starts in an `N`-bit state and answers with such
+  windows, each within `(Q, L)`, answers every challenge with probability at most `δ + ε`; `B2WindowP2Ring`, the same at
+  P2's deployed point under `P2RingAuditSecure D Q L`, with `δ + 2^-129 + 2^-130`. What is not stated yet: the windows
+  read off a strategy's runs (oracle locations on `Actual.Run`, `Wd` from `CausalFrom` with the state's content, the
+  help and the answers in flight coded into `N` bits).
 
 The help is whatever the setup fixes that, with the challenge, determines what reaches `X`: under isolation nothing,
 and when the rest of the prover learns nothing that depends on the challenges (the model's `e = 0` across the audit),
@@ -201,5 +206,56 @@ def B2Window : Prop :=
     ∃ A₂ : Pous.SeqResponderOn sch N D Q L, ∀ W pp j σ i (f : Pous.RingQry B w → Pous.Bits w),
       (Wd W pp j σ i).keys f ≤ Q → (Wd W pp j σ i).ops f ≤ L →
       (A₂.step W pp j σ i).run f = (Wd W pp j σ i).result f
+
+/-- **B2's oracle-location form, against PoUS's guarantee.** When PoUS's sequential audit with `k` challenges accepts
+every `N`-bit `(D, Q, L)` responder with probability at most `δ + ε`: a location that starts the audit in an `N`-bit
+state set up from the codeword (`A₁`) and answers each challenge with a window of `Wd`, whose multiplications take at
+least `ℓ > 0` ticks to answer, which spans at most `D·ℓ` ticks and asks at most `Q` key and `L` ring queries, answers
+every challenge with its block with probability at most `δ + ε`. Its answers are `seqAnswers` of the windows' results:
+each window yields the answer and the state the next one starts in. -/
+def B2WindowAudit : Prop :=
+  ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N D Q L ℓ k : ℕ) (δ ε : ℝ≥0∞),
+    Pous.AuditSecureOn sch .sequential N D Q L k δ ε →
+    ∀ (W : Pous.Bits sch.n) (A₁ : Pous.Preprocessor sch N)
+      (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
+        RingWindow B w (Pous.Bits sch.ℓ × Pous.Bits N)),
+      0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry B w), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
+      (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
+      (∀ (ω : (Pous.ringRO B w p).Ω) W pp j σ i, (Wd W pp j σ i).keys ((Pous.ringRO B w p).answer ω) ≤ Q ∧
+        (Wd W pp j σ i).ops ((Pous.ringRO B w p).answer ω) ≤ L) →
+      Pous.pr (fun x : Pous.Outcome sch k =>
+        Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
+            (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
+            0 (List.ofFn x.2.2) (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
+          List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) ≤ δ + ε
+
+/-- **`B2WindowAudit` at P2's deployed point.** Under `P2RingAuditSecure D Q L` (P2 in the ring model, 2,054 payload
+bytes per block, 105 challenges, state bound `⌊ρ·|C|⌋`), a location meeting `B2WindowAudit`'s hypotheses with a
+`⌊ρ·|C|⌋`-bit state answers every challenge with its block with probability at most `δ + 2^-129 + 2^-130`. -/
+def B2WindowP2Ring : Prop :=
+  ∀ D Q L ℓ : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
+      (A₁ : Pous.Preprocessor (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432)
+        ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ))
+      (Wd : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n →
+        Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).t → ℕ →
+        Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ) →
+        Fin (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).B →
+        RingWindow (2 ^ 19) 16448 (Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ ×
+          Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ))),
+      0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry (2 ^ 19) 16448), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
+      (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
+      (∀ (ω : (Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) W pp j σ i,
+        (Wd W pp j σ i).keys ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ Q ∧
+        (Wd W pp j σ i).ops ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ L) →
+      Pous.pr (fun x : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+        Pous.seqAnswers ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
+            (fun j σ i => Pous.Prog.ret ((Wd W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1
+              x.2.1).1 j σ i).result ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)))
+            0 (List.ofFn x.2.2)
+            (A₁ W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1).1
+              ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1).2 x.1) =
+          List.ofFn fun j => ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1).2 (x.2.2 j)) ≤
+        ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)
 
 end Accounting.Guarantees
