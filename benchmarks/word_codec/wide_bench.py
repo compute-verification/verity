@@ -711,8 +711,9 @@ def clocks(lib: WLib, torch, log, what: str, squarings_s: float) -> dict:
 def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: float | None = None,
            po: dict | None = None, mx: dict | None = None) -> list[dict]:
     """One point per batch and k with the commit serial after the pass, and, where `pass_overlap` measured it, one
-    with the commit beside the next pass (arithmetic ".../commit-overlapped"); one per non-uniform row of `mixed`
-    (".../mixed-k")."""
+    with the commit beside the next pass (arithmetic ".../commit-overlapped"); and from `mixed`'s envelope
+    (".../mixed-k"), for each quarter step of the mean k, the first non-uniform assignment at or above it (the whole
+    envelope is in wide.json)."""
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
@@ -738,9 +739,12 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
             if o is not None:
                 out.append(point(k, mb, q, row[k], max(0.0, o["y_commit_overlap"]), "/commit-overlapped"))
     for mb, rows in (mx or {}).items():
-        for r in rows:
-            if len(set(r["ks"].values())) == 1:
-                continue
+        picked = []
+        for g in (i / 4 for i in range(4, 4 * max(fq) + 1)):
+            r = next((r for r in rows if r["k_mean"] >= g - 1e-9), None)
+            if r is not None and len(set(r["ks"].values())) > 1 and r not in picked:
+                picked.append(r)
+        for r in picked:
             km = r["k_mean"]
             q = {"x": km * fq[min(fq)]["x"] / min(fq), "tau": fq[min(fq)]["tau"],
                  "delta": sum(sh * fq[r["ks"][nm]]["delta"] for nm, sh in r["share"].items())}
