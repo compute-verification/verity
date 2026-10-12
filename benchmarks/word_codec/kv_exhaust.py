@@ -298,7 +298,7 @@ def attn_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: int |
                 for sp in SPLITS:
                     for fm in forms:
                         o[fm].fill_(float("nan"))
-                        attn_call(lib, st, pad if fm in RTOL else enc, fm, q, o[fm], part, b, ctx, layers, layer, sp, k)
+                        attn_call(lib, st, plain if fm in RTOL else enc, fm, q, o[fm], part, b, ctx, layers, layer, sp, k)
                     torch.cuda.synchronize()
                     for fm in forms:
                         if fm in RTOL:
