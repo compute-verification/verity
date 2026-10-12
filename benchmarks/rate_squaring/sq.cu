@@ -10,6 +10,8 @@
 //   FOLD 3  the fold inside the column square: the high columns first, then each low column takes 569 h_m as one more
 //           product, so the fold is 16 IMAD.WIDE and the columns' carries.
 //   FOLD 4  one level of Karatsuba over the column square (the red team's `sqr_kara`), then FOLD 1's fold.
+//   FOLD 5  the off-diagonal products' columns chained by their carries, one doubling, the squares in one chain,
+//           then FOLD 1's fold: fewer integer-ALU instructions beside the same multiplies.
 // All keep x lazily below 2^512; the host reduces below p.
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
@@ -171,10 +173,21 @@ __device__ __forceinline__ void fold_shift(const u32 (&t)[2 * NL], u32 (&x)[NL])
   if (add_small(x, hl)) add_small(x, CF);
 }
 
+// x += lo + hi 2^32 into NL limbs; returns the carry out of 2^512. Past limb 1 the carry is a branch.
+__device__ __forceinline__ u32 add_small2(u32 (&x)[NL], u32 lo, u32 hi) {
+  x[0] = add_cc(x[0], lo);
+  x[1] = addc_cc(x[1], hi);
+  if (!addc(0u, 0u)) return 0u;
+  x[2] = add_cc(x[2], 1u);
+#pragma unroll
+  for (int k = 3; k < NL; ++k) x[k] = addc_cc(x[k], 0u);
+  return addc(0u, 0u);
+}
+
 // FOLD 3: the fold inside the column square. The high columns first, alone (no carry in from column NL - 1), give
 // h = (their sum) < 2^512 since h 2^512 <= a^2; then each low column m takes h_m c as one more product after its
-// doubling, so x = lo + c h comes out of the columns' own carries. Column NL - 1 carries out e < c + 1 at 2^512, folded
-// as e c like FOLD 1's h.
+// doubling, so x = lo + c h comes out of the columns' own carries. Column NL - 1 carries out e = (c1, c0) at 2^512:
+// the low columns' raw sums, below 17 2^544 + c 2^512, so e < 2^37 and e c < 2^47 folds as two words.
 __device__ __forceinline__ void sqr_fused(const u32 (&a)[NL], u32 (&x)[NL]) {
   u32 h[NL];
   u32 c0 = 0, c1 = 0;
@@ -210,7 +223,39 @@ __device__ __forceinline__ void sqr_fused(const u32 (&a)[NL], u32 (&x)[NL]) {
     c0 = r[1];
     c1 = r[2];
   }
-  if (add_small(x, c0 * CF)) add_small(x, CF);
+  if (add_small2(x, c0 * CF, __umulhi(c0, CF) + c1 * CF)) add_small(x, CF);
+}
+
+// FOLD 5: the square with one doubling. The off-diagonal products alone, column by column, each column's accumulator
+// starting at the previous one's carry (so a column ends in no add), give S = sum_{i<j} a_i a_j 2^(32(i+j)) < 2^1023;
+// then y = 2 S + sum a_i^2 2^(64 i) in one carry chain (a funnel shift a word for the doubling, the squares as
+// multiply-adds), then FOLD 1's fold.
+__device__ __forceinline__ void sqr_dbl(const u32 (&a)[NL], u32 (&y)[2 * NL]) {
+  u32 s[2 * NL];
+  u32 c0 = 0, c1 = 0;
+  s[0] = 0;
+#pragma unroll
+  for (int m = 1; m < 2 * NL - 2; ++m) {
+    u32 r[3] = {c0, c1, 0};
+#pragma unroll
+    for (int i = (m < NL ? 0 : m - NL + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    s[m] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  s[2 * NL - 2] = c0;
+  s[2 * NL - 1] = c1;
+  u32 d[2 * NL];
+  d[0] = 0;
+#pragma unroll
+  for (int k = 1; k < 2 * NL; ++k) d[k] = __funnelshift_l(s[k - 1], s[k], 1);
+  y[0] = madlo_cc(a[0], a[0], d[0]);
+  y[1] = madchi_cc(a[0], a[0], d[1]);
+#pragma unroll
+  for (int i = 1; i < NL; ++i) {
+    y[2 * i] = madclo_cc(a[i], a[i], d[2 * i]);
+    y[2 * i + 1] = madchi_cc(a[i], a[i], d[2 * i + 1]);
+  }
 }
 
 template <int N>
@@ -291,9 +336,10 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   }
   u32 t[2 * NL];
   if (FOLD == 4) sqr_kara(a, t);
+  else if (FOLD == 5) sqr_dbl(a, t);
   else sqr_cols(a, t);
   if (FOLD == 0) fold_cols(t, x);
-  else if (FOLD == 1 || FOLD == 4) fold_ptx(t, x);
+  else if (FOLD == 1 || FOLD == 4 || FOLD == 5) fold_ptx(t, x);
   else fold_shift(t, x);
 }
 
@@ -413,7 +459,7 @@ static void fill(std::vector<uint32_t> &h, int n) {
 using Kernel = void (*)(uint32_t *, int, int);
 static Kernel kernel(int fold, int ilp) {
 #define K_(F, I) if (fold == F && ilp == I) return sq::chain<F, I>;
-  K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2)
+  K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2) K_(5, 1) K_(5, 2)
 #undef K_
   fprintf(stderr, "no kernel for fold %d ilp %d\n", fold, ilp);
   exit(2);
