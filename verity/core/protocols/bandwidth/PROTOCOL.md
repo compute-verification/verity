@@ -181,26 +181,46 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
 
 - **`random-oracle`** (assumption): the tag is a random oracle fresh at `σ`. For `ro-blake3/v1` the instance is keyed
   BLAKE3 under a key derived from `σ` by SHA-512; for `ro-sha512/v1`, SHA-512 after a prefix that holds `σ`. The
-  seed, the samples and both trees use SHA-512 and its collision resistance as before.
+  seed, the samples and both trees use SHA-512 and its collision resistance as before. The proof's oracle is one call,
+  `H(σ, j, E_j)`, while BLAKE3 is a tree of compressions; indifferentiability does not carry a bound like this one over
+  to the tree (Ristenpart, Shacham and Shrimpton), so that step rests on `bandwidth-instantiation`.
 - **`bandwidth-instantiation`** (assumption, conjectured): the blocks of `E` are no easier to hold information about
-  than uniform blocks, except by rebuilding them from setup. This is where P2's incompressibility enters.
+  than uniform blocks, except by rebuilding them from setup. This is where P2's incompressibility enters. It also
+  covers a property of `ro-blake3/v1`'s tree: its message's chunks 1 and 2 (`E_j[1016:2040]` and the 16-byte tail)
+  hold no byte of `j`, so blocks with equal aligned chunks share that chunk's chaining value within a window, and a
+  device tags them with less work. P2's blocks don't repeat (near-uniform values mod `p` under a fresh key per block;
+  the 37-block vector store has no repeated chunk or tail), so the saving on `E` is nil. A store with repeated
+  aligned chunks is not an instance.
 - **`bandwidth-s-chip`**, **`bandwidth-side-cap`**, **`bandwidth-regen-time`** (assumptions, measured): `S`, `c` and the
   rebuild time on the stated device, each falsified by a measurement (a larger on-chip working set, a faster path in,
-  a faster root).
+  a faster root). The device for all three is a whole GPU, not a MIG slice: slices share the chip's L2 and crossbar,
+  so a co-resident slice's path in is on chip, not over PCIe. The RTX PRO 6000 Server's only link is its PCIe Gen 5
+  x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the device attests (it supports confidential
+  computing) beside its identity (§2).
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
-  A deployment is an instance when two conditions hold, which the registry's text should state:
-  1. *Side sources carry data only.* A side source (NVMe, NIC, a peer GPU) delivers bits, which `c` counts, but no tag
-     and nothing else computed from `E` elsewhere. A helper with a copy of `E` that sends 32-byte tags delivers a
-     block's share of the audit in 32 of its 2,056 bytes, which `c` undercounts 64 times.
-  2. *Every device that could hold a copy of `E` is audited in the same window, or the device is isolated*: its side
-     links carry nothing from such a device during the window.
 
-  The residual of condition 2 is a helper's slack. A device audited in the same window that finishes its own pass at
-  `t < T + RTT` has the rest of the window free. The side link does not limit what it could send (63 GB/s × 1.2 ms
-  is 2.4 million tags, more than `N`); its reads do, at most `(T + RTT − t)` × its read rate / 2,056 bytes blocks:
-  about 144,000 blocks (27% of `N`) at `T = 1.2 ms`, a 1.0 ms pass and 1,476 GB/s. Condition 1 excludes it; a
-  deployment that cannot enforce condition 1 isolates the device, or charges that many blocks against `k`.
+  A tag computed elsewhere from a copy of a store and sent in is outside the model: `c` counts bits, and a helper's
+  32-byte tags deliver a block's share of the audit in 1/64 of its bytes. What a helper can deliver is limited by its
+  reads, not its link (63 GB/s × 1.2 ms is 2.4 million tags, more than `N`). A helper that interleaves reads of a copy
+  of another device's store with its own pass, at its measured read rate (1,476 GB/s), covers
+  `(T + RTT)` × 1,476 GB/s less its own `I`: about 500,000 blocks, 96% of `N`, at `T = 1.2 ms` (the red team counted
+  92% at the earlier `I`). Charging that against `k` leaves nothing, so a per-device figure means something only for
+  a device no helper reaches. **Which of two readings `bandwidth-device` states is a model choice for Daniel:**
+
+  1. **A co-audited set** (the red team's recommendation). The devices of a set run their windows at the same time,
+     with one start and one deadline (an offset is a helper's time); their stores are pairwise distinct (§2); and
+     every device that could hold a copy of any of their stores is in the set or isolated. The set's chips are then
+     one chip, and the same compression argument gives
+     `Σ_i I_i ≥ Σ_i k·b − Σ_i S_i − c_ext − Σ_i λ` bits, except with probability the sum of the devices' errors,
+     where `c_ext` counts only links from outside the set. Traffic between the set's devices stays inside it, so a
+     helper's slack is counted and the residual disappears. For `m` RTX PRO 6000s, each on its own PCIe link,
+     `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is `m` times the per-device figure: 741,353,308 bytes a
+     device at `T = 1.2 ms`, certified for the set's total, not for any one device. AuditRO is stated for one store;
+     this reading needs it for `m` stores sampled separately, which is not in Lean yet.
+  2. **Per device, for isolated devices only.** `I ≥ k·b − S − c − λ` for one device whose side links carry nothing
+     computed from any copy of its store during the window. This is the statement AuditRO makes now. A device that is
+     neither isolated nor in a co-audited set gets no figure.
 
 Host RAM is not part of the allowed hardware (Daniel, 3 Oct 2026); the RTX PRO 6000 Server has no NVLink, so its side
 paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
@@ -286,8 +306,9 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88 (notes
    `kb/sm120/tried-techniques.md`, run `r20260930-061717-3e84`), a compute floor of 0.56 ms on this store against
    0.51 ms.
-3. **The helper-in-slack residual** of `bandwidth-device` (§5) is not in the Lean statement; the model claim excludes
-   it. A red team should say whether a deployment should charge it against `k` instead.
+3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so `bandwidth-device`
+   states either the bound for a co-audited set or a per-device bound for isolated devices only. Daniel picks; the
+   set's reading needs AuditRO for `m` stores.
 4. **The store's leaves are PoUS's, not P2 spec §4's.** `vk`'s leaf is the 99-byte little-endian leaf of
    `pous.verifier`; the P2 spec's is 107 bytes, big-endian (`benchmarks/pous/p2_v1/wire.py`). The audit uses what PoUS
    uses on `main` and inherits its resolution.
