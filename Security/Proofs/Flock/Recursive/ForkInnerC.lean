@@ -115,7 +115,7 @@ theorem zk_sessions_recursive_fork_innerC
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
   · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
-  have hZ : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
+  have hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (fun a b => k + 1 < I.r → a = b) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
       ∃ m, l.zip (t.map Prod.snd) = relabelL (ref ω) m t := by
     intro ref ω t l ht h
@@ -125,7 +125,7 @@ theorem zk_sessions_recursive_fork_innerC
     exact ⟨m, zip_eq_relabelL (ref ω) m t l hm fun k hk =>
       option_eq_of_rel (R := fun a b => k + 1 < I.r → a = b) (fun _ _ hab => hab (by omega)) (h k (by omega))⟩
   rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun i _ a b => i + 1 < I.r → a = b)
-      (fun ref ω t u => ∃ m, u = relabelL (ref ω) m t) hZ (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt msg
+      (fun ref ω t u => ∃ m, u = relabelL (ref ω) m t) hrd (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt msg
       hbr.2.1 hbr.2.2.1 hbr.2.2.2
       (fun ref => InnerAtLeavesL.toZ (innerAtLeavesL_of_forkOn σ (fun R ω t o => AcceptsV (zs R ω t) o) x
         (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω))

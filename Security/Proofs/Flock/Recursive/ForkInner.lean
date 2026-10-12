@@ -13,7 +13,7 @@ the relabelled transcript is accepted and that some outer outcome the leaf reach
 
 * `commit_and_prove_on`, `recursive_sound_on`, `zk_sessions_recursive_upto_on`, `zk_sessions_recursive_full_on`,
   `zk_sessions_recursive_fork_on`: the chain at `InnerAtLeavesZ` for every choice of reference openings, at a reading
-  `Z` of the decoded transcript that holds wherever each round's message is `same` as the reference opening's: the
+  `rd` of the decoded transcript that holds wherever each round's message is `same` as the reference opening's: the
   relabelled transcript with `same` equality (`InnerAtLeaves`, as `Flock.Assumptions.VBridge` has it), or with any last
   message where the last round is not committed (`zk_sessions_recursive_fork_innerC`), on V*'s bridge off
   an event `Bad` whose probability is added to the outer term (`zk_sessions_recursive_upto_off`); the fork form takes
@@ -61,18 +61,18 @@ def InnerAtLeaves (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω
             (t.map Prod.snd) = relabel (ref ω) t then 1 else 0) (σ.2 ω) ≤ εin
 
 open Classical in
-/-- **The inner bound at the prover's own leaves, at a reading `Z` of the decoded transcript**: at every draw, the
+/-- **The inner bound at the prover's own leaves, at a reading `rd` of the decoded transcript**: at every draw, the
 leaves' average of the indicator that the statement is false and some outer outcome the leaf reaches accepts, decodes to
-a transcript `Z` holds of, and the inner verifier accepts that transcript, is at most `εin`. `InnerAtLeaves` is it at
-`Z` := the relabelled transcript (`InnerAtLeaves.toZ`). -/
+a transcript `rd` holds of, and the inner verifier accepts that transcript, is at most `εin`. `InnerAtLeaves` is it at
+`rd` := the relabelled transcript (`InnerAtLeaves.toZ`). -/
 def InnerAtLeavesZ (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop)
     (x : Reg → L.Ω → I.Stmt) {W : Type} (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wmsg : W → List I.Msg)
-    (Z : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop) (εin : ℝ≥0∞) : Prop :=
+    (rd : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop) (εin : ℝ≥0∞) : Prop :=
   ∀ ω, leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
     (fun t s => if ¬ I.holds (x σ.1 ω) ∧
         ∃ b, Game.Outcome (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b ∧
           Acc σ.1 ω t b ∧
-          Z ω t ((wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b)).zip
+          rd ω t ((wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b)).zip
             (t.map Prod.snd)) ∧
           I.accepts (x σ.1 ω) ((wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b)).zip
             (t.map Prod.snd)) then 1 else 0) (σ.2 ω) ≤ εin
@@ -90,29 +90,29 @@ theorem InnerAtLeaves.toZ {σ : Strategy (recGame L Reg I Cm outer)}
   exact ⟨hx, by rw [← hz]; exact hq, b, hb, ha, hz⟩
 
 /-- **Commit-and-prove composition, with the inner term at the prover's own leaves**: `commit_and_prove_upto` with
-`InnerAtLeavesZ` in place of `InnerSound`, at a reading `Z` that holds of the decoded transcript wherever every round's
-message is `same` as the reference opening's (`hZ`). -/
+`InnerAtLeavesZ` in place of `InnerSound`, at a reading `rd` that holds of the decoded transcript wherever every round's
+message is `same` as the reference opening's (`hrd`). -/
 theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
     (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
     (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
-    (Z : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
-    (hZ : ∀ ω t (l : List I.Msg), t.length = I.r → (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]?
-      ((t[k]?).map fun e => ref ω (t.take k) e.1)) → Z ω t (l.zip (t.map Prod.snd)))
+    (rd : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
+    (hrd : ∀ ω t (l : List I.Msg), t.length = I.r → (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]?
+      ((t[k]?).map fun e => ref ω (t.take k) e.1)) → rd ω t (l.zip (t.map Prod.snd)))
     {εo εP εin : ℝ≥0∞} (εb : ℕ → ℝ≥0∞)
     (hout : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
       ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) ≤ εo)
     (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) ≤ εP)
     (hb : ∀ k < I.r, probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
       (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) ≤ εb k)
-    (hin : InnerAtLeavesZ σ Acc x dec wmsg Z εin) :
+    (hin : InnerAtLeavesZ σ Acc x dec wmsg rd εin) :
     prob (fun o => Acc o.1 o.2.1 o.2.2.1 o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) (recGame L Reg I Cm outer) σ ≤
       εo + εP + ∑ k ∈ Finset.range I.r, εb k + εin := by
   classical
   rw [prob_recGame]
   set zLeaf : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → ℝ≥0∞ := fun ω t s =>
     if ¬ I.holds (x σ.1 ω) ∧ ∃ b, Game.Outcome (outer σ.1 ω t) s b ∧ Acc σ.1 ω t b ∧
-        Z ω t ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd)) ∧
+        rd ω t ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd)) ∧
         I.accepts (x σ.1 ω) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd)) then 1 else 0
   have hleaf : ∀ ω t (s : Strategy (outer σ.1 ω t)), t.length = I.r →
       prob (fun b => Acc σ.1 ω t b ∧ ¬ I.holds (x σ.1 ω)) (outer σ.1 ω t) s ≤
@@ -130,7 +130,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
         (∃ k ∈ Finset.range I.r, Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
           (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) ∨
         (¬ I.holds (x σ.1 ω) ∧ ∃ b, Game.Outcome (outer σ.1 ω t) s b ∧ Acc σ.1 ω t b ∧
-          Z ω t ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd)) ∧
+          rd ω t ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd)) ∧
           I.accepts (x σ.1 ω) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))))
       fun b hr hb => ?_).trans (prob_le_union _ _ _ _ _ _ _ _ fun _ h => h)
     by_cases h1 : I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))
@@ -139,7 +139,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
             (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)
         · exact Or.inr (Or.inr (Or.inl h3))
         · refine Or.inr (Or.inr (Or.inr ⟨hb.2, b, hr, hb.1,
-            hZ ω t _ ht fun k hk => not_not.1 fun hn => h3 ⟨k, Finset.mem_range.2 hk, hb.1, hn⟩, ?_⟩))
+            hrd ω t _ ht fun k hk => not_not.1 fun hn => h3 ⟨k, Finset.mem_range.2 hk, hb.1, hn⟩, ?_⟩))
           rw [← h2]
           exact h1
       · exact Or.inr (Or.inl ⟨hb.1, h2⟩)
@@ -189,10 +189,10 @@ theorem recursive_sound_on [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
     (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
-    (Z : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
-    (hZ : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
+    (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
+    (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
-      Z ref ω t (l.zip (t.map Prod.snd)))
+      rd ref ω t (l.zip (t.map Prod.snd)))
     (cmt : Cm → Pos → ob.Dg) (msg : ℕ → (Pos → V) → I.Msg)
     (T : ℕ → ∀ R ω t, Strategy (outer R ω t) → Pos → Finder (Finset ob.Op))
     (εtr : ℕ → ∀ R ω t, Strategy (outer R ω t) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
@@ -207,7 +207,7 @@ theorem recursive_sound_on [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos
         εtr k σ.1 ω t s +
           ∑ pos, κ k pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T k σ.1 ω t s pos).g (T k σ.1 ω t s pos).s)
     (hCR : ∀ k < I.r, ∀ ω pos, (forkAt ob σ cmt (T k) k ω pos).CR H (q k))
-    (hin : ∀ ref, InnerAtLeavesZ σ Acc x dec wmsg (Z ref) εin) :
+    (hin : ∀ ref, InnerAtLeavesZ σ Acc x dec wmsg (rd ref) εin) :
     prob (fun o => Acc o.1 o.2.1 o.2.2.1 o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) (recGame L Reg I Cm outer) σ ≤
       εo + εP + ∑ k ∈ Finset.range I.r,
         (expAt σ (εtr k σ.1) + (∑ pos, κ k pos) * ENNReal.ofReal (Real.sqrt (q k ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
@@ -232,7 +232,7 @@ theorem recursive_sound_on [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos
     if hk : k < I.r then (hst k hk ω).choose else fun _ _ _ => Classical.arbitrary V
   have hrefAll : ∀ k (hk : k < I.r) ω, refAll k ω = (hst k hk ω).choose := fun k hk ω => dite_eq_left hk
   refine commit_and_prove_on σ Acc x dec wstmt wmsg (fun ω p c => msg p.length (refAll p.length ω p c)) same
-    (Z fun ω p c => msg p.length (refAll p.length ω p c)) (hZ _) _ hout hP (fun k hk => ?_) (hin _)
+    (rd fun ω p c => msg p.length (refAll p.length ω p c)) (hrd _) _ hout hP (fun k hk => ?_) (hin _)
   unfold probAt expAt
   calc avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
@@ -399,9 +399,9 @@ def InnerAtLeavesV (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j 
 def InnerAtLeavesVZ (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (Z : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop) (εin : ℝ≥0∞) : Prop :=
+    (rd : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop) (εin : ℝ≥0∞) : Prop :=
   InnerAtLeavesZ σ (fun R ω t o => AcceptsV (zs R ω t) o) x (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt)
-    (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) Z εin
+    (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) rd εin
 
 /-- **`zk_sessions_recursive_upto` with the inner term at the prover's own leaves** (`recursive_sound_on`). -/
 theorem zk_sessions_recursive_upto_on
@@ -424,10 +424,10 @@ theorem zk_sessions_recursive_upto_on
       εX)
     -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
-    (Z : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
-    (hZ : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
+    (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
+    (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
-      Z ref ω t (l.zip (t.map Prod.snd)))
+      rd ref ω t (l.zip (t.map Prod.snd)))
     -- the stages: commitments' openings, transfer, and cr/sha-512 for the fork finders
     {V Pos : Type} [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] (ob : Openings H512 V)
     (cmt : Cm → Pos → ob.Dg) (msg : ℕ → (Pos → V) → I.Msg)
@@ -440,7 +440,7 @@ theorem zk_sessions_recursive_upto_on
           ∑ pos, κ i pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T i σ.1 ω t s pos).g (T i σ.1 ω t s pos).s)
     (hCR : ∀ i < I.r, ∀ ω pos, (forkAt ob σ cmt (T i) i ω pos).CR H512 (q i))
     -- the inner protocol
-    {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (Z ref) εin) :
+    {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
@@ -449,7 +449,7 @@ theorem zk_sessions_recursive_upto_on
           (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   have h := recursive_sound_on ob σ (fun R ω t o => AcceptsV (zs R ω t) o) x
     (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω))
-    Prod.snd (fun w => wmsg w.1) same Z hZ cmt msg T εtr κ q
+    Prod.snd (fun w => wmsg w.1) same rd hrd cmt msg T εtr κ q
     (εo := expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
       (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) + εX) (εP := 0)
     ?_ ?_ htr hCR hin
@@ -503,10 +503,10 @@ theorem zk_sessions_recursive_full_on
       εX)
     -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
-    (Z : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
-    (hZ : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
+    (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
+    (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
-      Z ref ω t (l.zip (t.map Prod.snd)))
+      rd ref ω t (l.zip (t.map Prod.snd)))
     -- the stages: their commit strings, commitments and messages, V*'s registration and decoding of them, the units
     -- they are read from, and cr/sha-512 for the fork finders
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -517,7 +517,7 @@ theorem zk_sessions_recursive_full_on
     (hCR : ∀ i < I.r, ∀ ω pos,
       (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
     -- the inner protocol
-    {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (Z ref) εin) :
+    {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
@@ -526,7 +526,7 @@ theorem zk_sessions_recursive_full_on
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto_on hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg Bad hbr hX same Z hZ
+  refine zk_sessions_recursive_upto_on hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg Bad hbr hX same rd hrd
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
@@ -551,15 +551,15 @@ theorem zk_sessions_recursive_fork_on
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : VBridgeOff (RegColl zs) zs dg N k Rw x wmsg)
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
-    (Z : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
-    (hZ : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
+    (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
+    (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
-      Z ref ω t (l.zip (t.map Prod.snd)))
+      rd ref ω t (l.zip (t.map Prod.snd)))
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
-    {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (Z ref) εin) :
+    {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
@@ -592,7 +592,7 @@ theorem zk_sessions_recursive_fork_on
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
   refine (zk_sessions_recursive_full_on hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg (RegColl zs) hbr
-    (prob_regColl_le zs dg N σ (Finder.cr_of_not_finds h0 0)) same Z hZ Sk cmt msg hcmt hdec hfull (fun _ => 0)
+    (prob_regColl_le zs dg N σ (Finder.cr_of_not_finds h0 0)) same rd hrd Sk cmt msg hcmt hdec hfull (fun _ => 0)
     (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0) hin).trans
     (add_le_add (add_le_add ?_ ?_) le_rfl)
   · simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, ENNReal.ofReal_zero, add_zero]
