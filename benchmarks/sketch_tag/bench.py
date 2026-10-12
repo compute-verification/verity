@@ -658,9 +658,10 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
 
         # the deferred commit's tags and leaves are the separate kernels' over the same sketches
         mb0 = a.batches[0]
+        f0 = plan("fused", mb0)
         for b in rest + gu:
             b.zero_()
-        plan("fused", mb0)()
+        f0()
         sep_r, sep_g = torch.zeros_like(rest[0]), torch.zeros_like(gu[0])
         cr, cg = WB.Commit(lib, torch, nrest), WB.Commit(lib, torch, ngu)
         for name in SEQ:
