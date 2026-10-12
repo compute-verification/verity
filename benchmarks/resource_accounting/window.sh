@@ -18,7 +18,9 @@
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}/out}; mkdir -p "$OUT"
 LEGS=${LEGS:-A,B,C,F}; LEASE=${LEASE:-8 --wait --timed}; MINUTES=${MINUTES:-60}; HOST_CPUS=${HOST_CPUS-128-159}
-CHAIN_GPU=${CHAIN_GPU-4}; TUNED=${TUNED:-art:8c62b39115de880aaaf5383f56863c48b04999ee65f6e60427fa03d991819a53}
+# TUNED: art:8c62b39115de880aaaf5383f56863c48b04999ee65f6e60427fa03d991819a53's build where node 2 keeps it (a workload has no
+# store remote to fetch it from)
+CHAIN_GPU=${CHAIN_GPU-4}; TUNED=${TUNED:-/workspace/pouw/harness/build/05a44c565456c043}
 WINDOWS=${GPU_LEASE_WINDOWS:-/workspace/pouw/fill/windows}
 [ "$MINUTES" -le 60 ] || { echo "RUN_FAIL_LEASE: MINUTES=$MINUTES is over the booked 60" >&2; exit 2; }
 stamp() { echo "ra-window: $* at $(date -u +%H:%M:%SZ)"; }
