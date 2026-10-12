@@ -160,8 +160,9 @@ def main() -> int:
                       for n in ("decode", "prefill", "empty")) + f", idle {g['idle_s']:.1f} s, {g['eta_idle']:.3f}"
                      if g else ""))
             for k, ar in by_k.items():
-                row = {"pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k, "shortfall": eta,
-                       "arms": price(run, ar, R)}
+                row = {"source": str(path), "seed": s["args"]["seed"], "async_scheduling": s.get("async_scheduling"),
+                       "shared_prefix": s["args"].get("shared_prefix", 0), "pool": pool, "policy": run["policy"],
+                       "mode": run["mode"], "k": k, "shortfall": eta, "arms": price(run, ar, R)}
                 out["runs"].append(row)
                 print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} k={k}: " + "; ".join(
                     f"{n} +{v['overhead']:.1%} γ_lag {v['gamma_lag_mean']:.3%} (1 s max {v['gamma_lag_max_1s']:.3%})"
