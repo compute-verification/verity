@@ -31,6 +31,6 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   (`content_length_le`).
 * `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
-  `crossing_of_signals`), so it takes at most `2^{M + 1 + β_X n}` values (`acts_encard_le_links`; the `+ 1` is the
-  content's length).
+  `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
+  (`acts_encard_le_links`; the `+ 1` is the content's length).
 -/

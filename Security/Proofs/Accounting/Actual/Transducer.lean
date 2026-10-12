@@ -9,7 +9,9 @@ In a strategy causal from every tick (v2.4 of `note:console/20261012T0645Z-draft
 `[t, t + n)` (`transducer`), read through any per-tick observation that fixes what crosses in. What crosses in at a tick
 is fixed by the signals the links deliver to `X`'s leaves then (`crossing_of_signals`). So `X` is a transducer whose state
 is its content and whose input at each tick is its links' signals: the step "`X` is the prover of the protocol's model"
-of B2 and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins.
+of B2 and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins. With `X`'s
+state at most `M` bits, the content padded to `M + 1` bits (`pad`, injective on such strings) serves as the state
+(`transducer_bits`): the model prover with a state of `Bits (M + 1)`, as B2's responder and B3's `Ticked.Chip` take it.
 
 Counting (`acts_encard_le`): with `mem X t ≤ M` in every run and at most `2^β` observations a tick, what `X` does during
 `[t, t + n)` takes at most `2^{M + 1 + β n}` values across the coins. The `+ 1` is the content's length: a state of at
@@ -122,6 +124,29 @@ theorem portSignals_encard_le {E : Type*} (S : Ω → Actual.Run L) (β : E → 
           mul_le_mul' (hα p.1 p.2 u) (portSignals_encard_le S β link hα u ps)
       _ = _ := by simp [List.map_cons, List.sum_cons, pow_add]
 
+/-- A string of at most `M` bits as exactly `M + 1`: `M − |c|` zeros, a one, then `c`. -/
+def pad (M : ℕ) (c : List Bool) : Fin (M + 1) → Bool := fun i =>
+  (List.replicate (M - c.length) false ++ true :: c).getD i false
+
+theorem replicate_cancel : ∀ (a a' : ℕ) (c c' : List Bool),
+    List.replicate a false ++ true :: c = List.replicate a' false ++ true :: c' → c = c'
+  | 0, 0, c, c', h => by simpa using h
+  | 0, a' + 1, c, c', h => by simp [List.replicate_succ] at h
+  | a + 1, 0, c, c', h => by simp [List.replicate_succ] at h
+  | a + 1, a' + 1, c, c', h => replicate_cancel a a' c c' (by simpa [List.replicate_succ] using h)
+
+/-- Padding is injective on strings of at most `M` bits. -/
+theorem pad_inj {M : ℕ} {c c' : List Bool} (hc : c.length ≤ M) (hc' : c'.length ≤ M) (h : pad M c = pad M c') :
+    c = c' := by
+  refine replicate_cancel (M - c.length) (M - c'.length) c c'
+    (List.ext_getElem (by simp only [List.length_append, List.length_replicate, List.length_cons]; omega)
+      fun i h1 h2 => ?_)
+  have h1' := h1
+  simp only [List.length_append, List.length_replicate, List.length_cons] at h1'
+  have := congrFun h ⟨i, by omega⟩
+  simp only [pad] at this
+  rwa [List.getD_eq_getElem _ _ h1, List.getD_eq_getElem _ _ h2] at this
+
 variable [LinearOrder L]
 
 /-- **A location is a transducer over what reaches it**: in a strategy causal from every tick, if what crosses into `X`
@@ -141,6 +166,29 @@ theorem transducer {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X
       (crossing_Ico_congr fun i hi => hobs _ r r' (List.map_inj_left.1 h.2 i (List.mem_range.2 hi)))
   exact ⟨fun n c os => Function.extend (fun r => ((S r).content X t, (List.range n).map fun i => obs r (t + i)))
     (fun r => (S r).acts ↑X (Set.Ico t (t + n))) (fun _ => (∅, ∅, ∅)) (c, os),
+    fun r n => ((hf n).extend_apply _ r).symm⟩
+
+/-- **The transducer with an `(M + 1)`-bit state**: with `X`'s state at `t` at most `M` bits in every run, what `X` does
+during `[t, t + n)` is a function of its content padded to `M + 1` bits and of its first `n` observations from `t`. This
+is the model prover with a state of `Bits (M + 1)` that B2's responder and B3's `Ticked.Chip` take. -/
+theorem transducer_bits {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X : Finset L) (t : ℕ)
+    (obs : Ω → ℕ → Ob)
+    (hobs : ∀ u r r', obs r u = obs r' u → (S r).crossing (↑X)ᶜ ↑X {u} = (S r').crossing (↑X)ᶜ ↑X {u})
+    (M : ℕ) (hM : ∀ r, (S r).mem X t ≤ M) :
+    ∃ F : ℕ → (Fin (M + 1) → Bool) → List Ob →
+        Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ),
+      ∀ r n, (S r).acts ↑X (Set.Ico t (t + n)) =
+        F n (pad M ((S r).content X t)) ((List.range n).map fun i => obs r (t + i)) := by
+  obtain ⟨F, hF⟩ := transducer hc X t obs hobs
+  have hf : ∀ n, Function.FactorsThrough (fun r => (S r).acts ↑X (Set.Ico t (t + n)))
+      (fun r => (pad M ((S r).content X t), (List.range n).map fun i => obs r (t + i))) := by
+    intro n r r' h
+    simp only [Prod.mk.injEq] at h
+    simp only
+    rw [hF r n, hF r' n, pad_inj ((content_length_le _ _ _).trans (hM r)) ((content_length_le _ _ _).trans (hM r'))
+      h.1, h.2]
+  exact ⟨fun n b os => Function.extend (fun r => (pad M ((S r).content X t), (List.range n).map fun i => obs r (t + i)))
+    (fun r => (S r).acts ↑X (Set.Ico t (t + n))) (fun _ => (∅, ∅, ∅)) (b, os),
     fun r n => ((hf n).extend_apply _ r).symm⟩
 
 /-- Bit strings of length at most `M` number `2^{M + 1} − 1`. -/
