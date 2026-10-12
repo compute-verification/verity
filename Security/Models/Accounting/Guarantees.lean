@@ -1,4 +1,5 @@
 import Models.Accounting.Guarantees.Actual
+import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Sketch
