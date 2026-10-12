@@ -178,6 +178,96 @@ void launch_receipts(int mode, const uint4 *data, const uint4 *zs, u64 j0, u64 n
   }
 }
 
+// --- sketch-sha512 receipts (`sketch_receipt.py`) ----------------------------------------------------------------
+//
+// sketch_kernel: a CTA of 256 threads a block at a time, SK_BATCH blocks a step, thread t holding bytes 16 t … 16 t + 15
+// of each and their 16 rows of signs (int8 ±1, 64 registers, loaded once); 64 dp4a a block, then the warp's 16 sums
+// reduced by halving (lane l ends with row l / 2) and the 8 warps' added in shared memory. sketch_hash_kernel: a
+// thread a block, y = one compression of u64be j ‖ σ_j from the seed block's midstate.
+
+constexpr int SK_THREADS = 256, SK_BATCH = 4, SK_ROWS = 16;
+__constant__ u64 kSketchMid[8];
+
+template <bool Z>
+__global__ void __launch_bounds__(SK_THREADS, 2) sketch_kernel(const uint4 *__restrict__ data,
+                                                               const uint4 *__restrict__ zs, u64 n,
+                                                               const uint4 *__restrict__ signs, int *__restrict__ sk) {
+  __shared__ int red[SK_BATCH][SK_THREADS / 32][SK_ROWS];
+  const int t = threadIdx.x, lane = t & 31, warp = t >> 5;
+  int sg[SK_ROWS][4];
+#pragma unroll
+  for (int c = 0; c < SK_ROWS; ++c) {
+    const uint4 v = __ldg(signs + c * SK_THREADS + t);
+    sg[c][0] = (int)v.x, sg[c][1] = (int)v.y, sg[c][2] = (int)v.z, sg[c][3] = (int)v.w;
+  }
+  for (u64 b0 = blockIdx.x * (u64)SK_BATCH; b0 < n; b0 += (u64)gridDim.x * SK_BATCH) {
+    uint4 d[SK_BATCH];
+#pragma unroll
+    for (int i = 0; i < SK_BATCH; ++i) {
+      d[i] = make_uint4(0, 0, 0, 0);
+      if (b0 + i < n) {
+        d[i] = __ldcs(data + (b0 + i) * (BLOCK / 16) + t);
+        if (Z) {
+          const uint4 x = __ldcs(zs + (b0 + i) * (BLOCK / 16) + t);
+          d[i].x ^= x.x, d[i].y ^= x.y, d[i].z ^= x.z, d[i].w ^= x.w;
+        }
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < SK_BATCH; ++i) {
+      int a[SK_ROWS];
+#pragma unroll
+      for (int c = 0; c < SK_ROWS; ++c) {
+        a[c] = __dp4a((int)d[i].x, sg[c][0], 0);
+        a[c] = __dp4a((int)d[i].y, sg[c][1], a[c]);
+        a[c] = __dp4a((int)d[i].z, sg[c][2], a[c]);
+        a[c] = __dp4a((int)d[i].w, sg[c][3], a[c]);
+      }
+#pragma unroll
+      for (int w = 8, bit = 16; w >= 1; w /= 2, bit /= 2) {
+        const bool hi = lane & bit;
+#pragma unroll
+        for (int c = 0; c < w; ++c) {
+          const int keep = hi ? a[c + w] : a[c], send = hi ? a[c] : a[c + w];
+          a[c] = keep + __shfl_xor_sync(~0u, send, bit);
+        }
+      }
+      a[0] += __shfl_xor_sync(~0u, a[0], 1);
+      if (!(lane & 1)) red[i][warp][lane >> 1] = a[0];
+    }
+    __syncthreads();
+    if (t < SK_BATCH * SK_ROWS) {
+      const int i = t / SK_ROWS, c = t % SK_ROWS;
+      int s = 0;
+#pragma unroll
+      for (int w = 0; w < SK_THREADS / 32; ++w) s += red[i][w][c];
+      if (b0 + i < n) sk[(b0 + i) * SK_ROWS + c] = s;
+    }
+    __syncthreads();
+  }
+}
+
+__global__ void __launch_bounds__(128) sketch_hash_kernel(const uint4 *__restrict__ sk, u64 j0, u64 n,
+                                                          u64 *__restrict__ ys) {
+  const u64 q = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (q >= n) return;
+  u64 w[16], s[8];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = 0;
+  w[0] = j0 + q;
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const uint4 v = __ldg(sk + 4 * q + i);
+    w[1 + 2 * i] = be_word(v.x, v.y), w[2 + 2 * i] = be_word(v.z, v.w);
+  }
+  w[9] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK_ROWS) * 8;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
+  sha512_compress(s, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
+}
+
 // --- framed messages ---------------------------------------------------------------------------------------------
 
 struct Msg {
@@ -471,6 +561,41 @@ int rb_receipts(const void *data, const void *zs, uint64_t j0, uint64_t n, uint6
     launch_receipts<true>(mode, (const uint4 *)data, (const uint4 *)zs, j0, n, ys, s);
   else
     launch_receipts<false>(mode, (const uint4 *)data, nullptr, j0, n, ys, s);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// sketch-sha512's pass constant: the seed block Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed)).
+int rb_sketch_set(const uint8_t *sketch_prefix, cudaStream_t s) {
+  static u64 mid[8];
+  midstate(sketch_prefix, mid);
+  return cudaMemcpyToSymbolAsync(kSketchMid, mid, sizeof mid, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
+}
+
+// The sketches of n blocks at data (each XORed with its spread z in zs, or not when zs is null) into sk (16 int32 a
+// block) under signs (16 rows of 4096 int8 ±1 on the device), on ctas CTAs (0: as many as are resident at once).
+int rb_sketch(const void *data, const void *zs, uint64_t n, const void *signs, int *sk, int ctas, cudaStream_t s) {
+  if (!data || !signs || !sk || n < 1 || ctas < 0) return 1;
+  if (!ctas) {
+    int dev, sms, per;
+    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) return 4;
+    if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, zs ? sketch_kernel<true> : sketch_kernel<false>,
+                                                      SK_THREADS, 0))
+      return 4;
+    ctas = sms * per;
+  }
+  const u64 most = (n + SK_BATCH - 1) / SK_BATCH;
+  const unsigned g = (unsigned)(most < (u64)ctas ? most : (u64)ctas);
+  if (zs)
+    sketch_kernel<true><<<g, SK_THREADS, 0, s>>>((const uint4 *)data, (const uint4 *)zs, n, (const uint4 *)signs, sk);
+  else
+    sketch_kernel<false><<<g, SK_THREADS, 0, s>>>((const uint4 *)data, nullptr, n, (const uint4 *)signs, sk);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The sketch-sha512 receipts of n sketches (store indices j0 …) into ys (8 words a receipt).
+int rb_sketch_hash(const int *sk, uint64_t j0, uint64_t n, uint64_t *ys, cudaStream_t s) {
+  if (!sk || !ys || n < 1) return 1;
+  sketch_hash_kernel<<<grid(n, 128), 128, 0, s>>>((const uint4 *)sk, j0, n, ys);
   return cudaGetLastError() ? 4 : 0;
 }
 

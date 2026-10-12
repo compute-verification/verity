@@ -30,6 +30,8 @@ from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
+import sketch_receipt as skr
+
 BLOCK = 4096
 SALT_DOMAIN = b"verity/store/salt/v0\0"
 # reader.cu's LOAD_* modes: the first four compute receipts, the last two are ceilings that read other bytes or none.
@@ -61,6 +63,9 @@ class Reader:
         self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
         self.so.rb_tree.argtypes = [v, u64, u64, v, v]
         self.so.rb_read.argtypes = [v, u64, v, i, v]
+        self.so.rb_sketch_set.argtypes = [b, v]
+        self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
+        self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
         self.kept: dict[int, tuple[int, object, list]] = {}
 
     def call(self, fn: str, *args) -> None:
@@ -84,6 +89,22 @@ class Reader:
         """Receipts of n blocks at `data` (store indices j0 …) into ys (n x 8), each bound to its spread z in zs."""
         self.call("rb_receipts", data.data_ptr(), zs.data_ptr() if zs is not None else None, j0, n, ys.data_ptr(),
                   LOADS.index(load or self.load))
+
+    def sketch_begin(self, seed: bytes) -> None:
+        """Pass `seed`'s sketch-sha512 constants: its signs on the device and its seed block's midstate."""
+        self.signs = self.torch.from_numpy(skr.signs(seed)).cuda()
+        self.call("rb_sketch_set", skr.prefix(seed))
+
+    def sketches(self, data, n: int, sk, zs=None, ctas: int = 0) -> None:
+        """The sketches of n blocks at `data` into sk (n x 16 int32), each block XORed with its spread z in zs."""
+        self.call("rb_sketch", data.data_ptr(), zs.data_ptr() if zs is not None else None, n, self.signs.data_ptr(),
+                  sk.data_ptr(), ctas)
+
+    def sketch_receipts(self, data, j0: int, n: int, ys, zs=None, sk=None) -> None:
+        """sketch-sha512 receipts of n blocks at `data` (store indices j0 …) into ys (n x 8)."""
+        sk = self.torch.empty((n, skr.ROWS), dtype=self.torch.int32, device="cuda") if sk is None else sk
+        self.sketches(data, n, sk, zs)
+        self.call("rb_sketch_hash", sk.data_ptr(), j0, n, ys.data_ptr())
 
     def commit(self, ys, c0: int, nl: int, salts=None):
         dig = self.torch.empty((nl, 8), dtype=self.torch.int64, device="cuda")
@@ -211,6 +232,57 @@ def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
     return out
 
 
+def sketch_gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
+    """sketch-sha512 byte for byte against `sketch_receipt.SketchReceipter`: a partial plan out of store order, every
+    receipt bound to a z of its own length and to z's of zero bytes, their sketches, the device's leaves and root
+    against `rb.tree` over the reference's receipts, and openings through the device's tree by `rb.verify_leaf`."""
+    host = rng.integers(0, 256, blocks * BLOCK, dtype=np.uint8)
+    host[:BLOCK], host[BLOCK:2 * BLOCK] = 0x80, 0x7F
+    data = torch.from_numpy(host).cuda()
+    key = rng.bytes(32)
+    seed = rb.seed(rng.bytes(32), 5, rng.bytes(64))
+    runs = ((blocks // 2 + 7, blocks // 8 + 3), (0, blocks // 4 - 29), (blocks - blocks // 8, blocks // 16 + 5))
+    plan = rb.Plan(runs, blocks)
+    order = list(plan)
+    zs = [rng.bytes(int(rng.integers(1, 2 * BLOCK))) for _ in order]
+    spread = torch.from_numpy(np.frombuffer(b"".join(rb.spread(z) for z in zs), np.uint8).copy()).cuda()
+    reader.begin(seed, plan, key)
+    reader.sketch_begin(seed)
+    ys, plain = (torch.zeros((plan.length, 8), dtype=torch.int64, device="cuda") for _ in range(2))
+    sk = torch.zeros((plan.length, skr.ROWS), dtype=torch.int32, device="cuda")
+    p = 0
+    for first, count in plan.runs:
+        reader.sketch_receipts(data[first * BLOCK:], first, count, ys[p:], spread[p * BLOCK:], sk=sk[p:])
+        reader.sketch_receipts(data[first * BLOCK:], first, count, plain[p:])
+        p += count
+    receipter = skr.SketchReceipter(seed)
+    blk = [host[j * BLOCK:(j + 1) * BLOCK].tobytes() for j in order]
+    ref_ys = [receipter(j, b, z) for j, b, z in zip(order, blk, zs)]
+    ref_plain = [receipter(j, b, bytes(BLOCK)) for j, b in zip(order, blk)]
+    ref_sk = [skr.sketch(receipter.signs, b, z) for b, z in zip(blk, zs)]
+    salts = torch.empty(reader.leaves * rb.SALT_BYTES, dtype=torch.uint8, device="cuda")
+    levels = reader.levels(reader.commit(ys, 0, reader.leaves, salts), 0, pad=True)
+    tree = rb.tree(seed, plan, ref_ys, [store_salt(key, seed, c) for c in range(reader.leaves)])
+    root = digest(levels[-1][0])
+    got = [digest(y) for y in ys]
+    sl = salts.cpu().numpy().tobytes()
+    opened = []
+    for p in sorted({0, 1, 17, plan.length // 2, plan.length - 1, *map(int, rng.integers(0, plan.length, 6))}):
+        c = p // rb.PER_LEAF
+        leaf = b"".join(got[c * rb.PER_LEAF:(c + 1) * rb.PER_LEAF])
+        path = tuple(digest(levels[h][(c >> h) ^ 1]) for h in range(len(levels) - 1))
+        opened.append(rb.verify_leaf(seed, plan, root, p, leaf, sl[c * rb.SALT_BYTES:(c + 1) * rb.SALT_BYTES], path))
+    out = {
+        "kind": skr.KIND, "positions": plan.length, "leaves": reader.leaves,
+        "sketches": sk.cpu().numpy().astype("<i4").tobytes() == b"".join(ref_sk),
+        "receipts": got == ref_ys, "receipts_plain": [digest(y) for y in plain] == ref_plain,
+        "root": root == tree.commitment.root, "openings": len(opened), "openings_ok": all(opened),
+        "extremes_in_plan": 0 in order and 1 in order,
+    }
+    out["ok"] = all(v for v in out.values() if isinstance(v, bool))
+    return out
+
+
 def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     """One pass over gib GiB as a device reader does it, against reading the same bytes: receipts (z of zero bytes,
     and over half of it each block bound to a spread z the other half holds), leaves, the whole tree."""
@@ -223,9 +295,15 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     plan = rb.Plan.whole(n)
-    reader.begin(rb.seed(bytes(32), 0, bytes(64)), plan, bytes(32))
+    seed = rb.seed(bytes(32), 0, bytes(64))
+    reader.begin(seed, plan, bytes(32))
+    reader.sketch_begin(seed)
+    sk = torch.empty((n, skr.ROWS), dtype=torch.int32, device="cuda")
     half = n // 2
     steps = {"read": lambda: reader.call("rb_read", data.data_ptr(), n * BLOCK, xr.data_ptr(), 16 * sms)}
+    steps["sketch"] = lambda: reader.sketches(data, n, sk)
+    steps["sketch_z_half"] = lambda: reader.sketches(data, half, sk, data[half * BLOCK // 4:])
+    steps["sketch_hash"] = lambda: reader.call("rb_sketch_hash", sk.data_ptr(), 0, n, ys.data_ptr())
     for load in LOADS:
         steps[f"receipts/{load}"] = lambda load=load: reader.receipts(data, 0, n, ys, load=load)
         steps[f"receipts_z_half/{load}"] = lambda load=load: reader.receipts(data, 0, half, ys,
@@ -284,7 +362,20 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     plain, z = ms[f"receipts/{best}"], ms[f"receipts_z_half/{best_z}"] * n / half
     reader_ms = plain + ms["leaves"] + ms["tree"]
     compressions = n * 33 + n // rb.PER_LEAF * 15
+    commit, read = ms["leaves"] + ms["tree"], ms["read"]
+    sketch_z = ms["sketch_z_half"] * n / half
+    sketch = {
+        "kind": skr.KIND, "sketch_gb_s": nbytes / ms["sketch"] / 1e6, "sketch_z_gb_s": nbytes / sketch_z / 1e6,
+        "tau_per_pass": (ms["sketch"] + ms["sketch_hash"] + commit) / read,
+        "tau_z_per_pass": (sketch_z + ms["sketch_hash"] + commit) / read,
+        "tau_sketch": ms["sketch"] / read, "tau_sketch_z": sketch_z / read, "tau_hash": ms["sketch_hash"] / read,
+        "tau_leaves_and_tree": commit / read,
+        # what a kernel that sketches the bytes it already holds (the weight GEMM's) adds past its sketch warps
+        "tau_after_sketch": (ms["sketch_hash"] + commit) / read,
+        "compressions_per_block": (n + n // rb.PER_LEAF * 15) / n,
+    }
     return {
+        "sketch_sha512": sketch,
         "blocks": n, "bytes": nbytes, "ms": ms, "by_load": by_load, "best_load": best, "best_load_z": best_z,
         "read_gb_s": nbytes / ms["read"] / 1e6, "receipts_gb_s": nbytes / plain / 1e6,
         "receipts_z_gb_s": nbytes / z / 1e6,
@@ -314,7 +405,11 @@ def main() -> int:
     reader = Reader(a.lib, torch)
     g = gate(reader, torch, a.gate_blocks, np.random.default_rng(20261012))
     print("reader gate:", json.dumps(g), flush=True)
-    result = {"schema": "verity/device-reader/v0", "device": torch.cuda.get_device_name(0), "gate": g}
+    sg = sketch_gate(reader, torch, a.gate_blocks, np.random.default_rng(20261013))
+    print("sketch-sha512 gate:", json.dumps(sg), flush=True)
+    g["ok"] = g["ok"] and sg["ok"]
+    result = {"schema": "verity/device-reader/v0", "device": torch.cuda.get_device_name(0), "gate": g,
+              "sketch_gate": sg}
     if g["ok"] and a.gib > 0:
         result["measure"] = m = measure(reader, torch, a.gib, a.reps)
         print("reader measure:", json.dumps(m), flush=True)
