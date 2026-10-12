@@ -398,6 +398,17 @@ __device__ __forceinline__ int ld_acquire(const int* p) {
   return v;
 }
 
+__device__ __forceinline__ unsigned long long globaltimer() {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  return t;
+}
+
+// A chain link's trace, 8 words of globaltimer ns: its CTAs' first and last start, last past the wait for x, first and
+// last end of loop, last y written, last chunk end, last exit; TR_START_MIN and TR_LOOP_MIN set to ~0 before, the rest
+// to 0.
+enum { TR_START_MIN, TR_START_MAX, TR_WAITED, TR_LOOP_MIN, TR_LOOP_MAX, TR_Y, TR_ENDS, TR_EXIT, TR_WORDS };
+
 constexpr int MODE_GEMM = 0, MODE_TAGS = 1, MODE_SINK = 2, MODE_TAGONLY = 3;
 
 // A CTA of FW warps takes span s of row blocks nb = FW * (blockIdx.x / nspans) + warp, x's columns of the span in shared
@@ -1001,39 +1012,41 @@ struct TailJob {
 // the grid finishes tl's deferred warps gw, gw + the grid's warps, ..., one phase an iteration from the second quad on
 // (the rest after the loop), and with DOWN defers its own ends to cvo and dout instead of finishing them.
 template <int V, int L, int NB8, int MODE, int PD, bool PK = false, bool DF = false, bool DOWN = false, int R = 7,
-          bool NE = false, int U = 1>
+          bool NE = false>
 __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                             float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N, int Kd,
                                             uint64_t jbase, unsigned int* __restrict__ xr, const Tail tl = Tail{},
                                             uint4* __restrict__ cvo = nullptr, uint2* __restrict__ dout = nullptr,
-                                            const int* wait_ctr = nullptr, int wait_n = 0, int* done_ctr = nullptr) {
+                                            const int* wait_ctr = nullptr, int wait_n = 0, int* done_ctr = nullptr,
+                                            unsigned long long* trace = nullptr) {
   static_assert(!DF || (MODE == MODE_TAGS && PD == 1 && !PK), "deferred ends: tags, one quad ahead");
   static_assert(DF || !DOWN, "own ends deferred only in a deferring launch");
   static_assert(!NE || (MODE == MODE_SINK && !DF && !PK), "no chunk ends: a sink diagnostic");
-  static_assert(U == 1 || (!DF && !PK && !NE), "several units a warp: the plain finish");
   constexpr bool GEMM = MODE != MODE_TAGONLY, TAG = MODE != MODE_GEMM;
   constexpr int NQ = CHUNK_TILES / 4, DEPTH = PD + 1;
   extern __shared__ __align__(16) uint8_t xs[];
   const int nspans = Kd / CCOLS, rts = N / 16;
   const int s = bid % nspans;
+  const int nb = (bid / nspans) * FW + threadIdx.x / 32;
   const int lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
-  const int gstride = rts / FW / U;
-  auto unit_nb = [&](int ui) { return (bid / nspans + ui * gstride) * FW + threadIdx.x / 32; };
-  auto unit_wp = [&](int ui) {
-    return wstore + ((size_t)unit_nb(ui) * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
-  };
-  const uint4* wp = unit_wp(0);
+  const uint4* wp = wstore + ((size_t)nb * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
   uint4 buf[DEPTH][4];
   auto load = [&](uint4 (&q)[4], int qd) {
 #pragma unroll
     for (int i = 0; i < 4; ++i) q[i] = ldw(wp + (4 * qd + i) * LANES);
   };
+  if (trace && threadIdx.x == 0) {
+    const unsigned long long t = globaltimer();
+    atomicMin(trace + TR_START_MIN, t);
+    atomicMax(trace + TR_START_MAX, t);
+  }
 #pragma unroll
   for (int p = 0; p < PD; ++p) load(buf[p], p);
   if (wait_ctr) {
     if (threadIdx.x == 0)
       while (ld_acquire(wait_ctr) < wait_n) __nanosleep(32);
     __syncthreads();
+    if (trace && threadIdx.x == 0) atomicMax(trace + TR_WAITED, globaltimer());
   }
   if constexpr (GEMM) {
     for (int e = threadIdx.x; e < M * CCOLS / 16; e += FW * 32) {
@@ -1044,115 +1057,109 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
     __syncthreads();
   }
   const Mul k = muls();
+  const uint64_t u = (uint64_t)s * rts + nb;
   const int pos = lane % L;
-#pragma unroll 1
-  for (int ui = 0; ui < U; ++ui) {
-    const int nb = unit_nb(ui);
-    const uint64_t u = (uint64_t)s * rts + nb;
-    const uint64_t jl = u * (32 / L) + lane / L;
-    float acc[NB8][4];
+  const uint64_t jl = u * (32 / L) + lane / L;
+  float acc[NB8][4];
 #pragma unroll
-    for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
-    ChunkTag<V, L, R> ct;
-    if constexpr (TAG) ct.begin();
-    auto step = [&](const uint4 (&q)[4], int qd) {
-      if constexpr (GEMM) {
-#pragma unroll
-        for (int i = 0; i < 4; ++i) {
-          const uint32_t a[4] = {q[i].x, q[i].y, q[i].z, q[i].w};
-          const int col = 32 * (4 * qd + i) + 4 * tq;
-#pragma unroll
-          for (int j = 0; j < NB8; ++j) {
-            const bool live = 8 * j + g8 < M;
-            const uint8_t* row = xs + (live ? 8 * j + g8 : 0) * CXS;
-            const uint32_t b0 = *reinterpret_cast<const uint32_t*>(row + col),
-                           b1 = *reinterpret_cast<const uint32_t*>(row + col + 16);
-            mma_e4m3(acc[j], a, live ? b0 : 0u, live ? b1 : 0u);
-          }
-        }
-      }
-      if constexpr (TAG) {
-        if (!(DOWN || NE) || qd < NQ - 1) ct.absorb(q, qd, pos, jbase + jl, k);
-      }
-    };
-    [[maybe_unused]] TailJob<V, L> tj;
-    [[maybe_unused]] const int gw = bid * FW + threadIdx.x / 32, gws = gridDim.x * FW;
-    constexpr int INLOOP = (NQ - 1) / TailJob<V, L>::PHASES;
-#pragma unroll 1
-    for (int qb = 0; qb < NQ; qb += DEPTH) {
-#pragma unroll
-      for (int v = 0; v < DEPTH; ++v) {
-        const int qd = qb + v;
-        if (NQ % DEPTH == 0 || qd < NQ) {
-          if (qd + PD < NQ) load(buf[(v + PD) % DEPTH], qd + PD);
-          step(buf[v], qd);
-          if constexpr (DF) {
-            const int p = qd - 1, ji = p / TailJob<V, L>::PHASES, pw = gw + ji * gws;
-            if (p >= 0 && ji < INLOOP && pw < tl.warps) tj.phase(tl, pw, p % TailJob<V, L>::PHASES, lane, k);
-          }
-        }
-      }
-    }
-    if constexpr (DF) {
-      for (int pw = gw + INLOOP * gws; pw < tl.warps; pw += gws) {
-#pragma unroll 1
-        for (int ph = 0; ph < TailJob<V, L>::PHASES; ++ph) tj.phase(tl, pw, ph, lane, k);
-      }
-    }
-    if (ui + 1 < U) {
-      wp = unit_wp(ui + 1);
-      const char* nx = reinterpret_cast<const char*>(wp - lane);
-#pragma unroll
-      for (int i = 0; i < 8; ++i) asm volatile("prefetch.global.L2 [%0];" ::"l"(nx + 128 * (lane + 32 * i)));
-#pragma unroll
-      for (int p = 0; p < PD; ++p) load(buf[p], p);
-    }
-    const bool last = ui == U - 1;
-    if (done_ctr && last) asm volatile("griddepcontrol.launch_dependents;");
+  for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+  ChunkTag<V, L, R> ct;
+  if constexpr (TAG) ct.begin();
+  auto step = [&](const uint4 (&q)[4], int qd) {
     if constexpr (GEMM) {
 #pragma unroll
-      for (int j = 0; j < NB8; ++j) {
+      for (int i = 0; i < 4; ++i) {
+        const uint32_t a[4] = {q[i].x, q[i].y, q[i].z, q[i].w};
+        const int col = 32 * (4 * qd + i) + 4 * tq;
 #pragma unroll
-        for (int e = 0; e < 4; ++e) {
-          const int n = nb * 16 + g8 + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
-          if (b < M) atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+        for (int j = 0; j < NB8; ++j) {
+          const bool live = 8 * j + g8 < M;
+          const uint8_t* row = xs + (live ? 8 * j + g8 : 0) * CXS;
+          const uint32_t b0 = *reinterpret_cast<const uint32_t*>(row + col),
+                         b1 = *reinterpret_cast<const uint32_t*>(row + col + 16);
+          mma_e4m3(acc[j], a, live ? b0 : 0u, live ? b1 : 0u);
         }
       }
     }
-    if (done_ctr && last) {
-      __threadfence();
-      __syncthreads();
-      if (threadIdx.x == 0) atomicAdd(done_ctr, 1);
+    if constexpr (TAG) {
+      if (!(DOWN || NE) || qd < NQ - 1) ct.absorb(q, qd, pos, jbase + jl, k);
     }
-    if constexpr (DOWN) {
-      cvo[(2 * gw) * 32 + lane] = make_uint4(ct.cv[0], ct.cv[1], ct.cv[2], ct.cv[3]);
-      cvo[(2 * gw + 1) * 32 + lane] = make_uint4(ct.cv[4], ct.cv[5], ct.cv[6], ct.cv[7]);
-      if (pos == L - 1) dout[gw * (32 / L) + lane / L] = make_uint2(ct.d0, ct.d1);
-    } else if constexpr (NE) {
-      uint32_t a = ct.cv[0] ^ ct.cv[1] ^ ct.cv[2] ^ ct.cv[3] ^ ct.cv[4] ^ ct.cv[5] ^ ct.cv[6] ^ ct.cv[7] ^ ct.d0 ^ ct.d1;
+  };
+  [[maybe_unused]] TailJob<V, L> tj;
+  [[maybe_unused]] const int gw = bid * FW + threadIdx.x / 32, gws = gridDim.x * FW;
+  constexpr int INLOOP = (NQ - 1) / TailJob<V, L>::PHASES;
+#pragma unroll 1
+  for (int qb = 0; qb < NQ; qb += DEPTH) {
 #pragma unroll
-      for (int dd = 16; dd; dd >>= 1) a ^= __shfl_xor_sync(FULL, a, dd);
-      if (lane == 0) atomicXor(xr, a);
-    } else if constexpr (PK) {
-      static_assert(MODE == MODE_TAGS, "the packed finish writes tags");
-      __syncthreads();
-      f3_finish<V, L>(reinterpret_cast<uint32_t*>(xs), ct, pos, bid, tags,
-                      ((uint64_t)s * rts + (uint64_t)(bid / nspans) * FW) * (32 / L), k);
-    } else if constexpr (TAG) {
-      uint32_t t[8];
-      ct.finish(t, pos, k);
-      if constexpr (MODE == MODE_SINK) {
-        uint32_t a = pos ? 0u : t[0] ^ t[1] ^ t[2] ^ t[3] ^ t[4] ^ t[5] ^ t[6] ^ t[7];
-#pragma unroll
-        for (int dd = 16; dd; dd >>= 1) a ^= __shfl_xor_sync(FULL, a, dd);
-        if (lane == 0) atomicXor(xr, a);
-      } else if (pos == 0) {
-        uint4* o = reinterpret_cast<uint4*>(tags + jl * 8);
-        o[0] = make_uint4(t[0], t[1], t[2], t[3]);
-        o[1] = make_uint4(t[4], t[5], t[6], t[7]);
+    for (int v = 0; v < DEPTH; ++v) {
+      const int qd = qb + v;
+      if (NQ % DEPTH == 0 || qd < NQ) {
+        if (qd + PD < NQ) load(buf[(v + PD) % DEPTH], qd + PD);
+        step(buf[v], qd);
+        if constexpr (DF) {
+          const int p = qd - 1, ji = p / TailJob<V, L>::PHASES, pw = gw + ji * gws;
+          if (p >= 0 && ji < INLOOP && pw < tl.warps) tj.phase(tl, pw, p % TailJob<V, L>::PHASES, lane, k);
+        }
       }
     }
   }
+  if constexpr (DF) {
+    for (int pw = gw + INLOOP * gws; pw < tl.warps; pw += gws) {
+#pragma unroll 1
+      for (int ph = 0; ph < TailJob<V, L>::PHASES; ++ph) tj.phase(tl, pw, ph, lane, k);
+    }
+  }
+  if (trace && (threadIdx.x & 31) == 0) {
+    const unsigned long long t = globaltimer();
+    atomicMin(trace + TR_LOOP_MIN, t);
+    atomicMax(trace + TR_LOOP_MAX, t);
+  }
+  if (done_ctr) asm volatile("griddepcontrol.launch_dependents;");
+  if constexpr (GEMM) {
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+      for (int e = 0; e < 4; ++e) {
+        const int n = nb * 16 + g8 + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+        if (b < M) atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+      }
+    }
+  }
+  if (done_ctr) {
+    __threadfence();
+    __syncthreads();
+    if (threadIdx.x == 0) atomicAdd(done_ctr, 1);
+    if (trace && threadIdx.x == 0) atomicMax(trace + TR_Y, globaltimer());
+  }
+  if constexpr (DOWN) {
+    cvo[(2 * gw) * 32 + lane] = make_uint4(ct.cv[0], ct.cv[1], ct.cv[2], ct.cv[3]);
+    cvo[(2 * gw + 1) * 32 + lane] = make_uint4(ct.cv[4], ct.cv[5], ct.cv[6], ct.cv[7]);
+    if (pos == L - 1) dout[gw * (32 / L) + lane / L] = make_uint2(ct.d0, ct.d1);
+  } else if constexpr (NE) {
+    uint32_t a = ct.cv[0] ^ ct.cv[1] ^ ct.cv[2] ^ ct.cv[3] ^ ct.cv[4] ^ ct.cv[5] ^ ct.cv[6] ^ ct.cv[7] ^ ct.d0 ^ ct.d1;
+#pragma unroll
+    for (int dd = 16; dd; dd >>= 1) a ^= __shfl_xor_sync(FULL, a, dd);
+    if (lane == 0) atomicXor(xr, a);
+  } else if constexpr (PK) {
+    static_assert(MODE == MODE_TAGS, "the packed finish writes tags");
+    __syncthreads();
+    f3_finish<V, L>(reinterpret_cast<uint32_t*>(xs), ct, pos, bid, tags,
+                    ((uint64_t)s * rts + (uint64_t)(bid / nspans) * FW) * (32 / L), k);
+  } else if constexpr (TAG) {
+    uint32_t t[8];
+    ct.finish(t, pos, k);
+    if constexpr (MODE == MODE_SINK) {
+      uint32_t a = pos ? 0u : t[0] ^ t[1] ^ t[2] ^ t[3] ^ t[4] ^ t[5] ^ t[6] ^ t[7];
+#pragma unroll
+      for (int dd = 16; dd; dd >>= 1) a ^= __shfl_xor_sync(FULL, a, dd);
+      if (lane == 0) atomicXor(xr, a);
+    } else if (pos == 0) {
+      uint4* o = reinterpret_cast<uint4*>(tags + jl * 8);
+      o[0] = make_uint4(t[0], t[1], t[2], t[3]);
+      o[1] = make_uint4(t[4], t[5], t[6], t[7]);
+    }
+  }
+  if (trace && (threadIdx.x & 31) == 0) atomicMax(trace + TR_ENDS, globaltimer());
 }
 
 template <int V, int L, int NB8, int MODE, int PD, bool PK = false, int R = 7, bool NE = false>
@@ -1165,17 +1172,16 @@ __global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict
 // fused3_kernel in a chain of programmatic dependent launches: it reads x once *wait_ctr reaches wait_n (the CTAs of
 // the launch before it that have written their y), lets the next launch start after its loop, counts itself into
 // *done_ctr once its y is written, and before exiting waits for the launch before it to complete (so each launch's
-// completion implies every earlier one's). Its chunk ends overlap the next launch's loads. Each warp takes U units, row
-// blocks a U-th of the grid apart, the next unit's 32 KiB prefetched to L2 before the unit's chunk ends.
-template <int V, int L, int NB8, int MODE, int U>
+// completion implies every earlier one's). Its chunk ends overlap the next launch's loads.
+template <int V, int L, int NB8, int MODE>
 __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
-                                                          int* done_ctr) {
-  fused3_body<V, L, NB8, MODE, 1, false, false, false, 7, false, U>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
-                                                                     nullptr, Tail{}, nullptr, nullptr, wait_ctr,
-                                                                     wait_n, done_ctr);
+                                                          int* done_ctr, unsigned long long* trace) {
+  fused3_body<V, L, NB8, MODE, 1>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, nullptr, Tail{}, nullptr, nullptr,
+                                  wait_ctr, wait_n, done_ctr, trace);
   asm volatile("griddepcontrol.wait;" ::: "memory");
+  if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
 }
 
 template <int V, int L, int NB8, bool DOWN>
@@ -1681,30 +1687,26 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 
 // fused3p_kernel: tf_fused3's g0kr1 (mode GEMM), t4kr1 and t8kr1 (mode tags, lanes 4 or 8) as a link of a chain of
 // programmatic dependent launches (pdl 1; 0 a plain launch). wait_ctr null for the chain's first link; done_ctr
-// counts this launch's CTAs once their y is written, (N / 16 / FW / units) (Kd / 2,048) of them; units (1, 2 or 4)
-// a warp, N / 16 / FW a multiple of units.
-int tf_fused3p(int lanes, int mode, int units, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
-               int Kd, uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, cudaStream_t st) {
-  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr ||
-      (units != 1 && units != 2 && units != 4) || (N / 16 / FW) % units)
+// counts this launch's CTAs once their y is written, (N / 16 / FW) (Kd / 2,048) of them. trace: null, or this launch's
+// TR_WORDS words.
+int tf_fused3p(int lanes, int mode, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
+               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, unsigned long long* trace,
+               cudaStream_t st) {
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr)
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
   using KernP = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, const int*, int,
-                         int*);
+                         int*, unsigned long long*);
   KernP kern = nullptr;
-#define F3PU(L, MD, U)                                                                                                 \
-  if ((MD == MODE_GEMM || lanes == L) && mode == MD && units == U)                                                     \
-    kern = nb8 == 1   ? fused3p_kernel<1, L, 1, MD, U>                                                                 \
-           : nb8 == 2 ? fused3p_kernel<1, L, 2, MD, U>                                                                 \
-                      : fused3p_kernel<1, L, 4, MD, U>;
-#define F3P(L, MD) F3PU(L, MD, 1) F3PU(L, MD, 2) F3PU(L, MD, 4)
+#define F3P(L, MD)                                                                                                     \
+  if ((MD == MODE_GEMM || lanes == L) && mode == MD)                                                                   \
+    kern = nb8 == 1 ? fused3p_kernel<1, L, 1, MD> : nb8 == 2 ? fused3p_kernel<1, L, 2, MD> : fused3p_kernel<1, L, 4, MD>;
   F3P(1, MODE_GEMM) F3P(4, MODE_TAGS) F3P(8, MODE_TAGS)
 #undef F3P
-#undef F3PU
   if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
   cudaLaunchConfig_t cfg = {};
-  cfg.gridDim = dim3((N / 16 / FW / units) * (Kd / CCOLS));
+  cfg.gridDim = dim3((N / 16 / FW) * (Kd / CCOLS));
   cfg.blockDim = dim3(FW * 32);
   cfg.dynamicSmemBytes = M * CXS;
   cfg.stream = st;
@@ -1713,7 +1715,7 @@ int tf_fused3p(int lanes, int mode, int units, const void* w, const uint8_t* x, 
   attr[0].val.programmaticStreamSerializationAllowed = pdl ? 1 : 0;
   cfg.attrs = attr;
   cfg.numAttrs = 1;
-  if (cudaLaunchKernelEx(&cfg, kern, (const uint4*)w, x, y, tags, M, N, Kd, jbase, wait_ctr, wait_n, done_ctr))
+  if (cudaLaunchKernelEx(&cfg, kern, (const uint4*)w, x, y, tags, M, N, Kd, jbase, wait_ctr, wait_n, done_ctr, trace))
     return 2;
   return cudaGetLastError() ? 2 : 0;
 }
