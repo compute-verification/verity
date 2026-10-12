@@ -1,8 +1,9 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
 a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold different stores.
 
-1. The verifier draws a fresh nonce from its own randomness, derives the window's key from its own secret, bound to
-   `vk`, the tag and the nonce, and sends the seed `σ` (`Window.start`, which starts its clock).
+1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk,
+   derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and sends the seed `σ`
+   (`Window.start`, which starts its clock).
 2. Before `T = deadline_ns` (plus `rtt_allowance_ns`) the prover computes `y_j = Tag(σ, j, E_j)` for every block and
    returns the root of the tags' tree (`tag_pass`, then `Window.commit`, which stops the clock).
 3. Only then does the verifier draw `s = samples` indices, uniform with replacement, from the same key.  A late
@@ -13,7 +14,9 @@ a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold
 
 A window is used once: a second start or commitment is refused, a nonce is never drawn twice, and nothing is redrawn.
 One window over a store is open at a time, from its seed to its commitment or until `T + RTT` has passed without one:
-the verifier refuses to start another before then, so no read serves two windows' ingress.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
+the verifier refuses to start another before then, so no read serves two windows' ingress.  Both rules hold for every
+verifier of a store, whatever its tag, and across restarts, because all of them share the store's `ChallengerState`, a
+file that fails closed.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
 (SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it, for a certified tag
 only (`tags.Tag.certified`).
@@ -21,12 +24,16 @@ only (`tags.Tag.certified`).
 
 from __future__ import annotations
 
+import fcntl
 import math
+import os
+import re
 import secrets
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
+from pathlib import Path
 
 from verity.core.protocols.pous.codec import Geometry
 from verity.core.protocols.pous.params import SALT_BITS
@@ -40,6 +47,7 @@ from .tags import SEED_BYTES
 WINDOW_DOMAIN = "verity/bandwidth/window/v2"
 SALT_DOMAIN = "verity/bandwidth/salt/v1"
 NONCE_BYTES = 32
+STATE_FORMAT = "verity/bandwidth/challenger-state/v1"
 
 REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
@@ -178,28 +186,193 @@ class Verdict:
         return {"accepted": self.accepted}
 
 
-class Verifier:
-    """The verifier of one store `vk`: it opens each window once, under a fresh nonce from `nonces` (its own
-    randomness) and its own secret `source`, and one at a time."""
+class StateError(RuntimeError):
+    """A refusal to open a window: the store's challenger state is missing, unreadable, another store's, held by
+    another challenger, changed under this one, or closed."""
 
-    def __init__(self, vk: VerifierKey, params: Params, source: bytes,
-                 clock: Callable[[], int] = time.perf_counter_ns,
+
+_NONCE = re.compile(rb"[0-9a-f]{64}")
+
+
+def _head(root: bytes, salt: bytes) -> bytes:
+    return f"{STATE_FORMAT} {root.hex()} {salt.hex()}".encode()
+
+
+class ChallengerState:
+    """The challenger's state for one store, shared by every verifier of the store (every tag's) and kept across
+    restarts, in a file of its own that fails closed: passed explicitly, on the challenger's host, never in a signer's key
+    directory.  The file is `STATE_FORMAT`'s line with the store's root and salt, then one record a line: `open NONCE TAG`
+    when a window takes its nonce, appended and fsynced before its `σ` leaves, and `close NONCE` when that window closes
+    (its commitment; `T + RTT` without one, recorded when the next window opens; or its challenger stopping first).
+
+    Opening takes the file's lock for the object's life, so one challenger holds a store's state at a time, and refuses a
+    file that is missing, unreadable (a first line that is not the format's, a record that is neither, a nonce opened
+    twice, a close that is not the open window's, a last line cut short) or another store's.  A window the file shows
+    open was its last challenger's, which no longer runs, so opening closes it: no live verifier can accept it.  Each
+    window's nonce comes from `nonces`, the challenger's own randomness (`secrets.token_bytes`), and a nonce the file
+    holds is refused, so no two windows over the store share a key.  Before each record the file must be as this object
+    left it.  Nothing here rewrites or truncates the file, and `create` refuses one that exists.  A restore of the file
+    from a snapshot is past what a file can see; that the file is never rolled back rests on the challenger's host
+    (`trusted-nebius-host`), and a rollback alone repeats no key while the nonces are fresh."""
+
+    def __init__(self, path: str | os.PathLike, vk: VerifierKey, *,
                  nonces: Callable[[int], bytes] = secrets.token_bytes) -> None:
-        tags.get(params.tag).check_block(vk.params.block_bytes)
-        self.vk, self.params, self.source, self.clock, self._nonces = vk, params, source, clock, nonces
-        self._used: set[bytes] = set()
+        self.path, self.store, self._nonces = Path(path), (vk.root, vk.salt), nonces
         self._open: Window | None = None
+        try:
+            fd = os.open(self.path, os.O_RDWR | os.O_APPEND)
+        except FileNotFoundError:
+            raise StateError(f"{self.path}: missing") from None
+        except OSError as e:
+            raise StateError(f"{self.path}: unwritable ({type(e).__name__})") from None
+        self._file = os.fdopen(fd, "ab", buffering=0)
+        try:
+            fcntl.flock(self._file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self._file.close()
+            raise StateError(f"{self.path} is held by another challenger") from None
+        try:
+            self._used, dangling = self._read()
+            if dangling is not None:
+                self._append(f"close {dangling.hex()}\n")
+        except BaseException:
+            self.close()
+            raise
+
+    @staticmethod
+    def create(path: str | os.PathLike, vk: VerifierKey) -> None:
+        """A new store's state, with no window; refused when the file exists: a store's state is never made again."""
+        p = Path(path)
+        try:
+            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            raise StateError(f"{p} exists: a store's challenger state is never made again") from None
+        try:
+            os.write(fd, _head(vk.root, vk.salt) + b"\n")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        d = os.open(p.parent, os.O_RDONLY)
+        try:
+            os.fsync(d)
+        finally:
+            os.close(d)
+
+    def _read(self) -> tuple[set[bytes], bytes | None]:
+        """The nonces used and the nonce of a window open at the end of the file, from the locked file itself."""
+        fd = self._file.fileno()
+        try:
+            self._stat = os.fstat(fd)
+            data = os.pread(fd, self._stat.st_size, 0)
+        except OSError as e:
+            raise StateError(f"{self.path}: unreadable ({type(e).__name__})") from None
+        bad = StateError(f"{self.path}: unreadable (not a {STATE_FORMAT} state of whole records)")
+        if len(data) != self._stat.st_size or not data.endswith(b"\n"):
+            raise bad
+        head, *records = data[:-1].split(b"\n")
+        fields = head.split(b" ")
+        if len(fields) != 3 or fields[0] != STATE_FORMAT.encode():
+            raise bad
+        if head != _head(*self.store):
+            raise StateError(f"{self.path} is another store's")
+        used: set[bytes] = set()
+        open_: bytes | None = None
+        for r in records:
+            f = r.split(b" ")
+            if len(f) == 3 and f[0] == b"open" and _NONCE.fullmatch(f[1]) and f[2].decode("ascii", "replace") in tags.TAGS:
+                n = bytes.fromhex(f[1].decode())
+                if open_ is not None or n in used:
+                    raise bad
+                used.add(n)
+                open_ = n
+            elif len(f) == 2 and f[0] == b"close" and open_ is not None and f[1] == open_.hex().encode():
+                open_ = None
+            else:
+                raise bad
+        return used, open_
+
+    def _check(self) -> None:
+        """The file is the one this object locked, as it left it."""
+        if self._file.closed:
+            raise StateError(f"{self.path}: closed")
+        try:
+            now, at = os.fstat(self._file.fileno()), os.stat(self.path)
+        except OSError as e:
+            raise StateError(f"{self.path}: unreadable ({type(e).__name__})") from None
+        if now.st_size != self._stat.st_size or (now.st_dev, now.st_ino) != (at.st_dev, at.st_ino):
+            raise StateError(f"{self.path}: changed under this challenger")
+
+    def _append(self, record: str) -> None:
+        line = record.encode()
+        try:
+            written = self._file.write(line)
+            os.fsync(self._file.fileno())
+            self._stat = os.fstat(self._file.fileno())
+        except OSError as e:
+            raise StateError(f"{self.path}: unwritable ({type(e).__name__})") from None
+        if written != len(line):
+            raise StateError(f"{self.path}: a short write")
+
+    def _close(self, w: Window) -> None:
+        self._open = None
+        self._append(f"close {w._nonce.hex()}\n")
 
     def _claim(self, w: Window) -> bytes:
+        """A fresh nonce for `w`, recorded open and fsynced before this returns; refused while another window over the
+        store is open."""
         o = self._open
         if o is not None and o._live():
             raise RuntimeError("another window over this store is open: it closes at its commitment or at T + RTT")
+        self._check()
+        if o is not None:
+            self._close(o)
         nonce = self._nonces(NONCE_BYTES)
+        if type(nonce) is not bytes or len(nonce) != NONCE_BYTES:
+            raise StateError(f"the challenger's randomness gave no {NONCE_BYTES}-byte nonce")
         if nonce in self._used:
-            raise RuntimeError("the verifier drew a nonce it has used: a window's key is never reused")
+            raise StateError(f"nonce {nonce.hex()} is in {self.path}: a window's nonce is never drawn twice")
+        self._append(f"open {nonce.hex()} {w._v.params.tag}\n")
         self._used.add(nonce)
         self._open = w
         return nonce
+
+    def _release(self, w: Window) -> None:
+        """`w` has its commitment: its record closes, unless it closed already (past `T + RTT`)."""
+        if self._file.closed:
+            raise StateError(f"{self.path}: closed while the window was open")
+        if self._open is w:
+            self._check()
+            self._close(w)
+
+    def close(self) -> None:
+        """Release the file; a window still open closes with it, and its commitment is refused."""
+        if self._file.closed:
+            return
+        try:
+            if self._open is not None:
+                self._close(self._open)
+        finally:
+            fcntl.flock(self._file, fcntl.LOCK_UN)
+            self._file.close()
+
+    def __enter__(self) -> ChallengerState:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+
+class Verifier:
+    """The verifier of one tag's windows over one store `vk`, from its own secret `source`.  Every verifier of a store
+    takes the store's one `state`, which draws each window's nonce, records it before `σ` leaves, and keeps one window
+    over the store open at a time, whichever verifier opens it."""
+
+    def __init__(self, vk: VerifierKey, params: Params, source: bytes, state: ChallengerState,
+                 clock: Callable[[], int] = time.perf_counter_ns) -> None:
+        tags.get(params.tag).check_block(vk.params.block_bytes)
+        if not isinstance(state, ChallengerState) or state.store != (vk.root, vk.salt):
+            raise ValueError("a verifier takes its store's challenger state")
+        self.vk, self.params, self.source, self.state, self.clock = vk, params, source, state, clock
 
     def window(self) -> Window:
         return Window(self)
@@ -211,6 +384,7 @@ class Window:
 
     def __init__(self, verifier: Verifier) -> None:
         self._v = verifier
+        self._nonce: bytes | None = None
         self._key: Key | None = None
         self._started: int | None = None
         self._root: bytes | None = None
@@ -227,8 +401,8 @@ class Window:
         """`σ`, and the clock starts; refused, and the window left unstarted, while another over the store is open."""
         if self._key is not None:
             raise RuntimeError("the window has started")
-        nonce = self._v._claim(self)
-        self._key = window_key(self._v.source, self._v.vk, self._v.params.tag, nonce)
+        self._nonce = self._v.state._claim(self)
+        self._key = window_key(self._v.source, self._v.vk, self._v.params.tag, self._nonce)
         s = seed(self._key)
         self._started = self._v.clock()
         return s
@@ -240,6 +414,7 @@ class Window:
             raise RuntimeError("the window has not started")
         if self._elapsed is not None:
             raise RuntimeError("the window has a commitment")
+        self._v.state._release(self)
         self._elapsed = stop - self._started
         if type(root) is not bytes or len(root) != tags.DIGEST_BYTES:
             self._verdict = Verdict(False, self._elapsed, "malformed")

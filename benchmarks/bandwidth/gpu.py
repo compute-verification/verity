@@ -231,35 +231,37 @@ def _windows(a: argparse.Namespace) -> dict:
     source = bytes.fromhex(a.source)
     out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "scrub_mib": SCRUB_BYTES >> 20,
                  "results": [], "openings_check": []}
-    for name in a.tags:
-        ws = t.alloc(t.workspace_bytes(name, a.blocks))
-        prover = Prover(t, name, store, a.blocks, ws, scrub)
-        p = audit.Params(name, a.samples, a.deadline_ns)
-        verifier = audit.Verifier(vk, p, source)
-        for n, f in enumerate([0.0] * a.windows + a.skip):
-            w = verifier.window()
-            tagged = a.blocks - round(f * a.blocks)
-            commitment, drawn, call_ms = prover.commit(w, tagged)
-            tags_ms, pass_ms = t.last_pass_ms()
-            o0 = time.perf_counter_ns()
-            openings = [commitment.open(j, store_tree) for j in drawn]
-            o1 = time.perf_counter_ns()
-            v = w.verdict(openings)
-            o2 = time.perf_counter_ns()
-            out["results"].append({"tag": name, "window": n, "skipped_fraction": f, "tagged": tagged,
-                                   "deadline_ns": p.deadline_ns, "elapsed_ns": v.elapsed_ns, "accepted": v.accepted,
-                                   "failure": v.failure, "index": v.index, "device_tags_ms": tags_ms,
-                                   "device_pass_ms": pass_ms, "call_ms": call_ms, "open_ms": (o1 - o0) / 1e6,
-                                   "verdict_ms": (o2 - o1) / 1e6})
-        # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
-        # honest pass is late still has its openings checked by the verifier.
-        loose = audit.Params(name, a.samples, LOOSE_NS, regen_floor_ns=LOOSE_NS + 1)
-        w = audit.Verifier(vk, loose, source + b"/openings-check").window()
-        commitment, drawn, _ = prover.commit(w)
-        v = w.verdict([commitment.open(j, store_tree) for j in drawn])
-        out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
-                                      "elapsed_ns": v.elapsed_ns, "accepted": v.accepted, "failure": v.failure})
-        t.free(ws)
+    audit.ChallengerState.create(a.state, vk)
+    with audit.ChallengerState(a.state, vk) as state:
+        for name in a.tags:
+            ws = t.alloc(t.workspace_bytes(name, a.blocks))
+            prover = Prover(t, name, store, a.blocks, ws, scrub)
+            p = audit.Params(name, a.samples, a.deadline_ns)
+            verifier = audit.Verifier(vk, p, source, state)
+            for n, f in enumerate([0.0] * a.windows + a.skip):
+                w = verifier.window()
+                tagged = a.blocks - round(f * a.blocks)
+                commitment, drawn, call_ms = prover.commit(w, tagged)
+                tags_ms, pass_ms = t.last_pass_ms()
+                o0 = time.perf_counter_ns()
+                openings = [commitment.open(j, store_tree) for j in drawn]
+                o1 = time.perf_counter_ns()
+                v = w.verdict(openings)
+                o2 = time.perf_counter_ns()
+                out["results"].append({"tag": name, "window": n, "skipped_fraction": f, "tagged": tagged,
+                                       "deadline_ns": p.deadline_ns, "elapsed_ns": v.elapsed_ns,
+                                       "accepted": v.accepted, "failure": v.failure, "index": v.index,
+                                       "device_tags_ms": tags_ms, "device_pass_ms": pass_ms, "call_ms": call_ms,
+                                       "open_ms": (o1 - o0) / 1e6, "verdict_ms": (o2 - o1) / 1e6})
+            # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
+            # honest pass is late still has its openings checked by the verifier.
+            loose = audit.Params(name, a.samples, LOOSE_NS, regen_floor_ns=LOOSE_NS + 1)
+            w = audit.Verifier(vk, loose, source, state).window()
+            commitment, drawn, _ = prover.commit(w)
+            v = w.verdict([commitment.open(j, store_tree) for j in drawn])
+            out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
+                                          "elapsed_ns": v.elapsed_ns, "accepted": v.accepted, "failure": v.failure})
+            t.free(ws)
     t.free(store)
     t.free(scrub)
     return out
@@ -278,6 +280,8 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))
     w.add_argument("--source", default=b"verity bandwidth gpu windows".hex())
+    w.add_argument("--state", type=Path, required=True,
+                   help="the store's challenger state, made here: refused if the file exists")
     w.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     result = _windows(a)

@@ -102,7 +102,7 @@ def test_every_window_of_the_harness_is_prepared(monkeypatch, tmp_path) -> None:
     leaves = tmp_path / "leaves.bin"
     leaves.write_bytes(bytes(range(64)) * 37)
     a = SimpleNamespace(lib="fake", leaves=leaves, blocks=37, samples=4, deadline_ns=1_200_000, windows=3, skip=[0.1],
-                        tags=sorted(gpu.TAG_IDS), source=b"s".hex())
+                        tags=sorted(gpu.TAG_IDS), source=b"s".hex(), state=tmp_path / "state")
     out = gpu._windows(a)
     starts = [i for i, e in enumerate(log) if e == ("start",)]
     assert len(starts) == len(a.tags) * (a.windows + len(a.skip) + 1)

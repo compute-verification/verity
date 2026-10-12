@@ -101,8 +101,24 @@ and never redraws. One window over a store is open at a time: from `σ` until it
 arrives, or until `T + RTT` has passed without one, the verifier refuses to start another window over the same store,
 which stays unstarted and may start once the first has closed. Two windows open at once could both be answered from
 one read of each block, so their ingress would not add; with one open at a time, each window's ingress is read within
-its own interval. A deployment keeps one `Verifier` per store, which enforces this
-(`test_one_window_over_a_store_is_open_at_a_time`). The verdict publishes one bit (`Verdict.public`); which check failed,
+its own interval (`test_one_window_over_a_store_is_open_at_a_time`).
+
+**The challenger's state.** Both rules hold across every verifier of a store, whatever its tag, and across restarts:
+every verifier of a store takes the store's one challenger state (`audit.ChallengerState`), a file of its own on the
+challenger's host, passed explicitly and never in the LMS key directory. Its first line names the format and the store
+(`vk.root`, `vk.salt`); then each window appends `open NONCE TAG`, fsynced before its `σ` leaves, and `close NONCE` when
+it closes (its root, or `T + RTT` without one). The file is append-only: nothing rewrites or truncates it, and
+`ChallengerState.create` refuses a file that exists, so a store's state is never reset. A state that is missing,
+unreadable (a record cut short, a nonce opened twice, a close that is not the open window's), another store's, or
+changed since this challenger last wrote it opens no window. The challenger holds the file's lock while it runs, so one
+challenger holds a store's state at a time. A nonce in the file is never drawn again, and one window over the store is
+open at a time, whichever verifier opens it. A window the file shows open when the state is reopened belonged to a
+challenger that stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being
+restored from a snapshot. That the challenger's state is never rolled back rests on `trusted-nebius-host`, the same
+assumption PoUS's memory challenger cites for its session-id log, and a rolled-back state still repeats no key unless
+the challenger's randomness also repeats a nonce.
+
+The verdict publishes one bit (`Verdict.public`); which check failed,
 which sample and the elapsed time stay with the verifier. Openings reveal blocks of `C*` to the verifier, so the
 verifier that runs this is PoUS's memory challenger, which already holds `vk` and publishes only verdicts.
 
@@ -204,6 +220,8 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   so a co-resident slice's path in is on chip, not over PCIe. The RTX PRO 6000 Server's only link is its PCIe Gen 5
   x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the device attests (it supports confidential
   computing) beside its identity (§2).
+- **`trusted-nebius-host`** (assumption, core's): the challenger runs its stated code on its Nebius host, which offers
+  no attesting hardware. The audit cites it for one property: the challenger's state is never rolled back (§3).
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
 
@@ -344,8 +362,10 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 - `tags.py`: `get(name)`, each construction's `keyed(σ)(j, block)`, `certified`, `guess`, `info_bits`; the tag tree
   (`leaves`).
 - `audit.py`: a device's salt (`draw_salt`), the prover's reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
-  `open(j) -> Opening`), the verifier (`Verifier(vk, params, source).window()`: `start() -> σ`, `commit(root) ->
-  samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
+  `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(path, vk)` once, then
+  `ChallengerState(path, vk)`, shared by every verifier of the store), the verifier
+  (`Verifier(vk, params, source, state).window()`: `start() -> σ`, `commit(root) -> samples`,
+  `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
   `certified_blocks`, `samples_for`) and `bound`.
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
   salts, window seeds and samples, and a whole window over 37 blocks.

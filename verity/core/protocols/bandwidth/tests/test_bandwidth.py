@@ -47,11 +47,27 @@ def _params(tag: str, samples: int = 8, deadline_ns: int = 1_000_000) -> audit.P
     return audit.Params(tag, samples, deadline_ns, rtt_allowance_ns=100_000)
 
 
-def _run(store: audit.Store, vk, params: audit.Params, *, step: int = 1_000, nonces=None,
+@pytest.fixture
+def state_of(tmp_path):
+    """`state_of(vk)`: a new store's challenger state, in a file of its own, with test nonces; closed after the test."""
+    opened = []
+
+    def make(vk, nonces=None):
+        path = tmp_path / f"state-{len(opened)}"
+        audit.ChallengerState.create(path, vk)
+        opened.append(audit.ChallengerState(path, vk, nonces=nonces or _nonces(path.name.encode())))
+        return opened[-1]
+
+    yield make
+    for s in opened:
+        s.close()
+
+
+def _run(store: audit.Store, vk, params: audit.Params, state, *, step: int = 1_000,
          prover=None) -> tuple[audit.Verdict, tuple[int, ...]]:
     """One window, the clock advancing `step` ns per reading; `prover(seed) -> TagCommitment` defaults to the honest
     pass."""
-    verifier = audit.Verifier(vk, params, b"verifier secret", clock=_ticks(step), nonces=nonces or _nonces())
+    verifier = audit.Verifier(vk, params, b"verifier secret", state, clock=_ticks(step))
     w = verifier.window()
     seed = w.start()
     commitment = (prover or (lambda s: audit.tag_pass(store, params.tag, s)))(seed)
@@ -191,17 +207,17 @@ def test_tag_tree_packs_a_leaf_of_tags(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", TAGS)
-def test_honest_window_over_a_p2_store_is_accepted(p2_store, name: str) -> None:
+def test_honest_window_over_a_p2_store_is_accepted(p2_store, state_of, name: str) -> None:
     store, vk = p2_store
-    verdict, drawn = _run(store, vk, _params(name))
+    verdict, drawn = _run(store, vk, _params(name), state_of(vk))
     assert verdict.accepted and verdict.failure is None and len(drawn) == 8
     assert verdict.public() == {"accepted": True}
 
 
 @pytest.mark.parametrize("name", TAGS)
-def test_honest_window_at_p2_width_is_accepted(big_store, name: str) -> None:
+def test_honest_window_at_p2_width_is_accepted(big_store, state_of, name: str) -> None:
     store, vk = big_store
-    verdict, drawn = _run(store, vk, _params(name, samples=37))
+    verdict, drawn = _run(store, vk, _params(name, samples=37), state_of(vk))
     assert verdict.accepted and len(set(drawn)) > 1
 
 
@@ -212,12 +228,12 @@ def test_last_leaf_opens_short(big_store) -> None:
     assert len(commitment.open(36).leaf_tags) == 5 and len(commitment.open(0).leaf_tags) == 16
 
 
-def test_samples_come_after_the_commitment_from_the_window_key(big_store) -> None:
+def test_samples_come_after_the_commitment_from_the_window_key(big_store, state_of) -> None:
     """The window's key binds its tag and the nonce the verifier drew for it, and changes with either."""
     store, vk = big_store
     params = _params("ro-sha512/v1")
     nonce = bytes(range(32))
-    _, drawn = _run(store, vk, params, nonces=lambda n: nonce)
+    _, drawn = _run(store, vk, params, state_of(vk, nonces=lambda n: nonce))
     key = audit.window_key(b"verifier secret", vk, params.tag, nonce)
     assert drawn == audit.samples(key, 37, 8)
     other_tag = audit.window_key(b"verifier secret", vk, "gf31-poly/v1", nonce)
@@ -228,19 +244,20 @@ def test_samples_come_after_the_commitment_from_the_window_key(big_store) -> Non
             audit.window_key(b"verifier secret", vk, params.tag, bad)
 
 
-def test_late_commitment_is_rejected_and_draws_nothing(big_store) -> None:
+def test_late_commitment_is_rejected_and_draws_nothing(big_store, state_of) -> None:
     store, vk = big_store
     params = _params("gf31-poly/v1")
-    verdict, drawn = _run(store, vk, params, step=params.limit_ns + 1)
+    state = state_of(vk)
+    verdict, drawn = _run(store, vk, params, state, step=params.limit_ns + 1)
     assert drawn == () and not verdict.accepted and verdict.failure == "late"
     assert verdict.elapsed_ns == params.limit_ns + 1
-    on_time, _ = _run(store, vk, params, step=params.limit_ns)
+    on_time, _ = _run(store, vk, params, state, step=params.limit_ns)
     assert on_time.accepted
 
 
-def test_malformed_root_is_rejected(big_store) -> None:
+def test_malformed_root_is_rejected(big_store, state_of) -> None:
     _, vk = big_store
-    w = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", clock=_ticks(1)).window()
+    w = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", state_of(vk), clock=_ticks(1)).window()
     w.start()
     assert w.commit(b"\0" * 63) == () and w.verdict().failure == "malformed"
 
@@ -255,31 +272,31 @@ class _Corrupt(audit.TagCommitment):
 
 
 @pytest.mark.parametrize("name", TAGS)
-def test_guessed_tags_are_caught(big_store, name: str) -> None:
+def test_guessed_tags_are_caught(big_store, state_of, name: str) -> None:
     store, vk = big_store
-    verdict, _ = _run(store, vk, _params(name), prover=lambda s: _Corrupt(store, name, s, lambda j: True))
+    verdict, _ = _run(store, vk, _params(name), state_of(vk), prover=lambda s: _Corrupt(store, name, s, lambda j: True))
     assert not verdict.accepted and verdict.failure == "tag-mismatch"
     assert verdict.public() == {"accepted": False}
 
 
-def test_a_skipped_fraction_passes_only_when_no_sample_lands_in_it(big_store) -> None:
+def test_a_skipped_fraction_passes_only_when_no_sample_lands_in_it(big_store, state_of) -> None:
     """Skipping blocks `0..k-1` passes exactly the windows whose samples all miss them."""
     store, vk = big_store
     params = _params("gf31-poly/v1", samples=4)
     outcomes = set()
-    nonces = _nonces(b"skipped")
+    state = state_of(vk)
     for _ in range(12):
-        verdict, drawn = _run(store, vk, params, nonces=nonces,
+        verdict, drawn = _run(store, vk, params, state,
                               prover=lambda s: _Corrupt(store, params.tag, s, lambda j: j < 9))
         assert verdict.accepted == all(i >= 9 for i in drawn)
         outcomes.add(verdict.accepted)
     assert outcomes == {True, False}
 
 
-def test_wrong_block_fails_the_store_path(big_store) -> None:
+def test_wrong_block_fails_the_store_path(big_store, state_of) -> None:
     store, vk = big_store
     params = _params("ro-sha512/v1")
-    w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window()
+    w = audit.Verifier(vk, params, b"s", state_of(vk), clock=_ticks(1)).window()
     c = audit.tag_pass(store, params.tag, w.start())
     drawn = w.commit(c.root)
     openings = [c.open(i) for i in drawn]
@@ -287,10 +304,10 @@ def test_wrong_block_fails_the_store_path(big_store) -> None:
     assert w.verdict(openings).failure == "store-path"
 
 
-def test_wrong_tag_path_fails(big_store) -> None:
+def test_wrong_tag_path_fails(big_store, state_of) -> None:
     store, vk = big_store
     params = _params("gf31-poly/v1")
-    w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window()
+    w = audit.Verifier(vk, params, b"s", state_of(vk), clock=_ticks(1)).window()
     c = audit.tag_pass(store, params.tag, w.start())
     drawn = w.commit(c.root)
     openings = [c.open(i) for i in drawn]
@@ -298,20 +315,21 @@ def test_wrong_tag_path_fails(big_store) -> None:
     assert w.verdict(openings).failure == "tag-path"
 
 
-def test_openings_must_answer_the_samples_in_order(big_store) -> None:
+def test_openings_must_answer_the_samples_in_order(big_store, state_of) -> None:
     store, vk = big_store
     params = _params("ro-sha512/v1")
+    state = state_of(vk)
     for mutate in (lambda o: o[1:], lambda o: o[::-1] if o[0].index != o[-1].index else o[1:],
                    lambda o: [replace(o[0], leaf_tags=o[0].leaf_tags * 2), *o[1:]]):
-        w = audit.Verifier(vk, params, b"s", clock=_ticks(1), nonces=_nonces()).window()
+        w = audit.Verifier(vk, params, b"s", state, clock=_ticks(1)).window()
         c = audit.tag_pass(store, params.tag, w.start())
         drawn = w.commit(c.root)
         assert w.verdict(mutate([c.open(i) for i in drawn])).failure == "malformed"
 
 
-def test_a_window_runs_once(big_store) -> None:
+def test_a_window_runs_once(big_store, state_of) -> None:
     store, vk = big_store
-    verifier = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", clock=_ticks(1))
+    verifier = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", state_of(vk), clock=_ticks(1))
     w = verifier.window()
     with pytest.raises(RuntimeError):
         w.commit(bytes(64))
@@ -327,13 +345,13 @@ def test_a_window_runs_once(big_store) -> None:
     assert first.accepted and w.verdict([]) is first
 
 
-def test_one_window_over_a_store_is_open_at_a_time(big_store) -> None:
+def test_one_window_over_a_store_is_open_at_a_time(big_store, state_of) -> None:
     """While one window over a store is open the verifier refuses to start another, which stays unstarted and starts
     once the first has its commitment: one read of each block never answers two windows."""
     store, vk = big_store
     params = _params("ro-blake3/v1")
     clock = _Clock()
-    verifier = audit.Verifier(vk, params, b"s", clock=clock)
+    verifier = audit.Verifier(vk, params, b"s", state_of(vk), clock=clock)
     first, second = verifier.window(), verifier.window()
     c1 = audit.tag_pass(store, params.tag, first.start())
     with pytest.raises(RuntimeError, match="open"):
@@ -352,14 +370,14 @@ def test_one_window_over_a_store_is_open_at_a_time(big_store) -> None:
     verifier.window().start()
 
 
-def test_one_devices_commitment_fails_anothers_window(p2_store) -> None:
+def test_one_devices_commitment_fails_anothers_window(p2_store, state_of) -> None:
     """Two devices holding one `W` under one setup secret hold different stores, seeds and tags: device a's
     commitment, or its store tagged under b's seed, fails b's window, while each device passes its own, both open."""
     store_a, vk_a = p2_store
     store_b, vk_b = _p2_setup("GPU-b")
     assert store_a.salt != store_b.salt and store_a.blocks != store_b.blocks and vk_a.root != vk_b.root
     params = _params("ro-blake3/v1")
-    va, vb = (audit.Verifier(vk, params, b"window secret", clock=_ticks(1)) for vk in (vk_a, vk_b))
+    va, vb = (audit.Verifier(vk, params, b"window secret", state_of(vk), clock=_ticks(1)) for vk in (vk_a, vk_b))
     win_a, win_b = va.window(), vb.window()
     seed_a, seed_b = win_a.start(), win_b.start()
     assert seed_a != seed_b
@@ -376,11 +394,11 @@ def test_one_devices_commitment_fails_anothers_window(p2_store) -> None:
         audit.draw_salt(b"setup secret", bytes(64), "")
 
 
-def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store) -> None:
+def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store, state_of) -> None:
     store, vk = big_store
     params = _params("ro-blake3/v1")
     clock = _Clock()
-    verifier = audit.Verifier(vk, params, b"s", clock=clock)
+    verifier = audit.Verifier(vk, params, b"s", state_of(vk), clock=clock)
     first, second = verifier.window(), verifier.window()
     s1 = first.start()
     clock.now = params.limit_ns + 1
@@ -389,6 +407,89 @@ def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store) -> None:
     assert first.commit(c1.root) == () and first.verdict().failure == "late"
     c2 = audit.tag_pass(store, params.tag, s2)
     assert second.verdict([c2.open(i) for i in second.commit(c2.root)]).accepted
+
+
+# --- the challenger's state ------------------------------------------------------------------------------------------
+
+
+def test_the_state_records_a_window_before_its_seed(big_store, tmp_path, monkeypatch) -> None:
+    """`open NONCE TAG` is written and fsynced before `σ` is derived, and `close NONCE` follows the commitment."""
+    store, vk = big_store
+    path = tmp_path / "state"
+    audit.ChallengerState.create(path, vk)
+    events: list = []
+    fsync, seed = audit.os.fsync, audit.seed
+    monkeypatch.setattr(audit.os, "fsync", lambda fd: (events.append(path.read_text().splitlines()[-1]), fsync(fd))[1])
+    monkeypatch.setattr(audit, "seed", lambda key: (events.append("seed"), seed(key))[1])
+    nonce = bytes(range(32))
+    with audit.ChallengerState(path, vk, nonces=lambda n: nonce) as state:
+        w = audit.Verifier(vk, _params("ro-blake3/v1"), b"s", state, clock=_ticks(1)).window()
+        s = w.start()
+        assert events == [f"open {nonce.hex()} ro-blake3/v1", "seed"]
+        c = audit.tag_pass(store, "ro-blake3/v1", s)
+        assert w.verdict([c.open(i) for i in w.commit(c.root)]).accepted
+    assert path.read_text().splitlines()[1:] == [f"open {nonce.hex()} ro-blake3/v1", f"close {nonce.hex()}"]
+
+
+def test_the_state_fails_closed(big_store, tmp_path) -> None:
+    """A state that is missing, unreadable, another store's, held by another challenger or changed under this one
+    opens no window, and a store's state is never made again."""
+    store, vk = big_store
+    path = tmp_path / "state"
+    with pytest.raises(audit.StateError, match="missing"):
+        audit.ChallengerState(path, vk)
+    audit.ChallengerState.create(path, vk)
+    with pytest.raises(audit.StateError, match="never made again"):
+        audit.ChallengerState.create(path, vk)
+    other = bv.vk_of(bv.store(5))
+    with pytest.raises(audit.StateError, match="another store"):
+        audit.ChallengerState(path, other)
+    with audit.ChallengerState(path, vk) as state:
+        with pytest.raises(audit.StateError, match="held"):
+            audit.ChallengerState(path, vk)
+        with pytest.raises(ValueError, match="challenger state"):
+            audit.Verifier(other, _params("ro-blake3/v1"), b"s", state)
+    head = path.read_bytes()
+    a, b = bytes(32).hex().encode(), bytes(range(32)).hex().encode()
+    for i, body in enumerate((b"", head[:-1], head + b"open " + a + b" ro-blake3/v1", head + b"open " + a + b" nope/v1\n",
+                              head + b"open " + a + b" ro-blake3/v1\nclose " + a + b"\nopen " + a + b" ro-blake3/v1\n",
+                              head + b"close " + a + b"\n", head + b"open " + a + b" gf31-poly/v1\nopen " + b + b" gf31-poly/v1\n",
+                              head + b"open " + b.upper() + b" ro-blake3/v1\n", head.replace(b"/v1 ", b"/v0 "))):
+        bad = tmp_path / f"bad-{i}"
+        bad.write_bytes(body)
+        with pytest.raises(audit.StateError, match="unreadable"):
+            audit.ChallengerState(bad, vk)
+    with audit.ChallengerState(path, vk) as state:
+        v = audit.Verifier(vk, _params("ro-blake3/v1"), b"s", state, clock=_ticks(1))
+        with open(path, "ab") as f:
+            f.write(b"open " + a + b" ro-blake3/v1\n")
+        with pytest.raises(audit.StateError, match="changed under"):
+            v.window().start()
+
+
+def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_path) -> None:
+    """A window still open when its state closes, or when its challenger dies, closes with it: its commitment is
+    refused, and reopening the state records the dead challenger's window closed."""
+    store, vk = big_store
+    path = tmp_path / "state"
+    audit.ChallengerState.create(path, vk)
+    params = _params("ro-blake3/v1")
+    with audit.ChallengerState(path, vk, nonces=_nonces(b"closed")) as state:
+        w = audit.Verifier(vk, params, b"s", state, clock=_ticks(1)).window()
+        c = audit.tag_pass(store, params.tag, w.start())
+    with pytest.raises(audit.StateError, match="closed"):
+        w.commit(c.root)
+    state = audit.ChallengerState(path, vk, nonces=_nonces(b"died"))
+    w = audit.Verifier(vk, params, b"s", state, clock=_ticks(1)).window()
+    c = audit.tag_pass(store, params.tag, w.start())
+    state._file.close()
+    nonce = w._nonce.hex()
+    assert path.read_text().splitlines()[-1] == f"open {nonce} {params.tag}"
+    with audit.ChallengerState(path, vk):
+        assert path.read_text().splitlines()[-1] == f"close {nonce}"
+    with pytest.raises(audit.StateError, match="closed"):
+        w.commit(c.root)
+    assert len(path.read_text().splitlines()) == 5
 
 
 def test_params_refuse_a_window_that_fits_a_root() -> None:
@@ -401,10 +502,10 @@ def test_params_refuse_a_window_that_fits_a_root() -> None:
         audit.Params("ro-sha512/v1", 0, 1)
 
 
-def test_verifier_refuses_a_tag_the_store_cannot_carry() -> None:
-    store = bv.store(4, 18)
+def test_verifier_refuses_a_tag_the_store_cannot_carry(state_of) -> None:
+    vk = bv.vk_of(bv.store(4, 18))
     with pytest.raises(ValueError):
-        audit.Verifier(bv.vk_of(store), _params("gf31-poly/v1"), b"s")
+        audit.Verifier(vk, _params("gf31-poly/v1"), b"s", state_of(vk))
 
 
 # --- the bound -------------------------------------------------------------------------------------------------------

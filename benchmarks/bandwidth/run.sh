@@ -16,7 +16,7 @@
 # Env: BLOCKS (default 524,288, the certificate's store), SEED (hex, default 00..1f), REPS (default 100), WINDOWS (20),
 # DEADLINE_NS, WORKERS (the reference's processes, default 32), TIMED.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, expect.json, gpu.txt, env.txt, smi.csv, device.json, validation.json,
-# timing.json, windows.json, summary.json.
+# timing.json, windows.json, challenger-state (the store's, every window's nonce), summary.json.
 set -euo pipefail
 cd "$(dirname "$0")"
 export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
@@ -49,7 +49,8 @@ EOF
     "${A[@]:3}" || rc=$?
   [ $rc = 0 ] || { echo "bwtag exited $rc: nothing more runs"; exit $rc; }
   "$PY" gpu.py windows --lib "$S/libbwtag.so" --leaves "$S/store_leaves.bin" --blocks "${A[0]}" \
-    --windows "${WINDOWS:-20}" ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"} --out "$O/windows.json" > "$O/windows.jsonl"
+    --windows "${WINDOWS:-20}" ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"} --state "$O/challenger-state" \
+    --out "$O/windows.json" > "$O/windows.jsonl"
   exit 0
 fi
 
