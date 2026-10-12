@@ -19,7 +19,11 @@ work).
   `Accounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
   W, so a compute account that did `W` of work leaves `F·T − W` for them.
-* `RateOfAuditPartialPasses`: the same with the rebuild term in passes, `μ_rebuild ≤ (1 − τ)·d/(k·x₁) ≤ d/(k·x₁)`.
+* `RateOfAuditPartialPasses`: the same with the rebuild term in passes,
+  `μ_rebuild ≤ (1 − τ)·d/(rounds·x₁) ≤ d/(rounds·x₁)`.
+
+`rounds` is the codec's round count, the `k` of `WorkHardness(p, k)` and of `μ_rebuild ≤ d/(k·x₁)` in the claims; the
+statements' `k` is `RateAudit`'s, the `⌈(1 − ε_s)·N⌉` words the sample needs.
 
 **At one round (`rounds = 1`) these say nothing about a deployed codec.** They hold at every `rounds`, but their
 hypothesis `WorkHardness b 1 c_root cost` is false for Sloth at one round with the payload known, at every width (the
@@ -50,8 +54,8 @@ is at most `RateAudit`'s error
 
 **The reading.** `RateAudit`'s, with `μ_rebuild = (F − tagging)/(N·c_word)`: a device that keeps the top `b − x` bits of
 a word and completes the bottom `x` pays `cost x ≥ (x/b)·c_word` for them, so per bit completed it pays what a whole
-rebuild pays per bit, and partial completion buys it nothing over rebuilding. At Sloth's `k = 2` rounds over
-`p = 2^512 − 569`, `c_word = 2·c_root` and a completed bit costs `2·c_root/512`, the red team's price; at `k = 1` the
+rebuild pays per bit, and partial completion buys it nothing over rebuilding. At Sloth's two rounds over
+`p = 2^512 − 569`, `c_word = 2·c_root` and a completed bit costs `2·c_root/512`, the red team's price; at one round the
 hypothesis is false (F27) and the bound is about no deployed codec.
 
 **The proof** (`Accounting.SecurityProofs.RateAuditPartial`) is `RateAudit`'s with completions in place of rebuilds. The
@@ -121,7 +125,7 @@ window.
 
 **The reading.** W says the compute audit's certified work is not available to complete words: whatever the device
 completes in the window, it completes with the idle compute `F·T − W`. So `μ_rebuild = (F·T − W − tagging)/(N·c_word)`,
-`(1 − τ)/(k·x)` with `τ = (W + tagging)/(F·T)` and `x = N·c_root/(F·T)`, the one-round encode time of the store in
+`(1 − τ)/(rounds·x)` with `τ = (W + tagging)/(F·T)` and `x = N·c_root/(F·T)`, the one-round encode time of the store in
 units of the window's compute. The compute audit's per-run certificate makes `W` hold, as in `RateOfAudit`.
 `RateOfAuditPartialPasses` restates the term in passes. Proof: `Accounting.SecurityProofs.RateOfAuditPartial`, from
 `RateAuditPartial`.
@@ -141,7 +145,7 @@ def RateOfAuditPartial : Prop :=
         ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h +
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
 
-/-- **The rebuild term in passes: `μ_rebuild ≤ (1 − τ)·d/(k·x₁) ≤ d/(k·x₁)`.** `RateOfAuditPartial`, with the codec's
+/-- **The rebuild term in passes: `μ_rebuild ≤ (1 − τ)·d/(rounds·x₁) ≤ d/(rounds·x₁)`.** `RateOfAuditPartial`, with the codec's
 one-round encode of a word at least `x₁` times its read (`x₁ · b/BW ≤ c_root/F` per word, written
 `x₁ · b · F ≤ c_root · BW` with `F` the device's priced work and `BW` its device-memory bandwidth, per tick): the
 probability over the bandwidth coins that the bandwidth audit accepts, the compute account did at least `W`, and
@@ -150,16 +154,16 @@ probability over the bandwidth coins that the bandwidth audit accepts, the compu
 
 is at most `RateOfAuditPartial`'s error, at `S = S_chip`, `L = ∑ cap_i · T_bw` and `T` the compute window.
 
-**The reading.** Divide by `rounds·x₁·F` and by `|E| = N·b`, with `rounds = k` the codec's rounds and `d = BW·T/(N·b)`
-the compute window in passes over the store: an accepted device read at least `(1 − μ)·|E|` bits, with
+**The reading.** Divide by `rounds·x₁·F` and by `|E| = N·b`, with `k = ⌈(1 − ε_s)·N⌉` as in `RateAudit` and
+`d = BW·T/(N·b)` the compute window in passes over the store: an accepted device read at least `(1 − μ)·|E|` bits, with
 `RateAudit`'s `μ` and
 
-  `μ_rebuild = (1 − τ)·d/(k·x₁) ≤ d/(k·x₁)`,  `τ = (W + k·c_tag)/(F·T)`,
+  `μ_rebuild = (1 − τ)·d/(rounds·x₁) ≤ d/(rounds·x₁)`,  `τ = (W + k·c_tag)/(F·T)`,
 
-so idle compute `F·T − W` completes at most `d/(k·x₁)` of the store per window, however the device splits it into
-partial words. At the deployed `x₁ ≈ 175` and `k = 2` that is `d/350`. A natural `x₁` at most the true ratio suffices:
-rounding it down only weakens the bound. Proof: `Accounting.SecurityProofs.RateOfAuditPartialPasses`, from
-`RateOfAuditPartial`: `(F·T − W − k·c_tag)·b/(k·c_root) ≤ BW·(F·T − W − k·c_tag)/(k·x₁·F)`.
+so idle compute `F·T − W` completes at most `d/(rounds·x₁)` of the store per window, however the device splits it into
+partial words. At the deployed `x₁ ≈ 175` and two rounds that is `d/350`. A natural `x₁` at most the true ratio
+suffices: rounding it down only weakens the bound. Proof: `Accounting.SecurityProofs.RateOfAuditPartialPasses`, from
+`RateOfAuditPartial`: `(F·T − W − k·c_tag)·b/(rounds·c_root) ≤ BW·(F·T − W − k·c_tag)/(rounds·x₁·F)`.
 
 Frozen (no-function, hash): as `RateOfAuditPartial`. -/
 def RateOfAuditPartialPasses : Prop :=

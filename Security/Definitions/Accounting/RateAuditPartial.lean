@@ -13,9 +13,9 @@ needs in its on-chip state, device memory or side sources, which the audit count
 `complete j b _ id`, at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
 
 The cost is a parameter of the game, as `c_enc` is in `RateAudit.lean`. What it must be for a deployed codec is the
-named assumption `Accounting.Assumptions.WorkHardness` (`Models/Accounting/Assumptions/RateAudit.lean`): completing `x` of a word's
-`b` bits costs at least `x/b` of a word's price, `k·c_root` at `k` rounds. The game is generous to the device: a completion returns its bits
-whether or not the device holds the rest of the word, and its cost does not depend on what it holds, so a device that
+named assumption `Accounting.Assumptions.WorkHardness` (`Models/Accounting/Assumptions/RateAudit.lean`): completing `x`
+of a word's `b` bits costs at least `x/b` of a word's price, `rounds·c_root` for a codec of `rounds` rounds. The game is
+generous to the device: a completion returns its bits whether or not the device holds the rest of the word, and its cost does not depend on what it holds, so a device that
 completes from a hint is a device of this game whose hint it reads as before. A completion takes one word, so the game
 has no amortization across words (the claim `rate-codec-work`).
 
