@@ -12,9 +12,9 @@ The step, per GPU (``step``):
   for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h read-times a byte) hides
   in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind_kv a KV pass; the host tier slows the step by
   τ_host per b_zero_copy of host stream per GPU, and the all-reduce gets what the host stream leaves of each GPU's
-  PCIe receive side, min(b_p2p, b_pcie − stream); the host's loop (its CPUs' receipts, with or without the GPUs'
-  stream: ra-host-tier measured the same 0.89 either way) covers ``host_cpu`` of the DRAM ceiling at no cost to the
-  step, and the GPUs' stream adds only what exceeds it;
+  PCIe receive side, min(b_p2p, b_pcie − stream); the host's loop (its CPUs' receipts beside the GPUs' stream,
+  ra-host-tier's) covers ``host_cpu`` of the DRAM ceiling at no cost to the step, and the GPUs' zero-copy stream
+  adds only what exceeds it;
 - each pass waits ``t_gap`` for the previous pass's root (its seed), less S_chip/R with ``prefetch``; with ``copies``
   c differently keyed copies of the weights and KV, a pass spans c steps, each reading its own copy (so no block twice
   in a pass), and the KV append encodes c times;
@@ -31,8 +31,8 @@ The step, per GPU (``step``):
   the host's caches over ΣR·t_pass, the state carried across each pass boundary (a pass is one step's plan, since a
   plan reads a block at most once, so short steps pay them most), μ_rebuild = s·(1+h)/(k·x₁(b)), μ_partial = μ_rebuild·(1/θ(b) − 1), μ_host = the host DRAM the loop
   leaves over ΣR, μ_unreg = the step's ephemeral bus time over its capacity, μ_timing = (RTT + pass)/(nT) + gap/pass,
-  μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_cpu = the host CPUs' tile work if this
-  audit must count it (0: under C it buys nothing without bytes from off the node), μ_link (0 under the identity statement
+  μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_cpu = the host CPUs' tile work by batch if
+  this audit must count it (0: under C it buys nothing without bytes from off the node), μ_link (0 under the identity statement
   ``C``; ``link_n`` prices memory-only helpers over the NIC). The step reads at R by construction, so the honest
   engine's read shortfall η is what γ leaves (``eta_allowance``) when exhaustion is against a declared load; against
   R·T (``eta_counted``) μ_eta adds ra-kv-filler's phases (decode, prefill, the engine's gaps, idle).
@@ -329,7 +329,7 @@ def gamma_cap(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -
         "mu_host": (v["b_host"] - st["host_stream"] - st["host_cpu"]) / sigma,
         "mu_unreg": once["mu_unreg"] / st["cap"],
         "mu_timing": _timing(st["cap"] * st["copies"], st["gap"], v),
-        "mu_cpu": v["mu_cpu"],
+        "mu_cpu": interp(v["mu_cpu"], w.batch),
         "mu_eta": eta(v) if v["eta_counted"] else 0.0,
         **_common(w, p, v),
     }
@@ -351,7 +351,7 @@ def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) 
         "mu_rebuild": d * _rebuild(p, v),
         "mu_partial": d * _partial(p, v),
         "mu_host": d * (v["b_host"] - st["host_stream"] - st["host_cpu"]) / (v["gpus"] * v["R"]),
-        "mu_cpu": v["mu_cpu"],
+        "mu_cpu": interp(v["mu_cpu"], w.batch),
         **_common(w, p, v),
     }
     t["gamma"] = sum(x for n, x in t.items() if n.startswith("mu_") or n == "lambda")

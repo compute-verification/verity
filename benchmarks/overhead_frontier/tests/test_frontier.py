@@ -82,10 +82,10 @@ def test_gamma_terms_match_the_red_team():
     assert g["mu_sketch"] == 2.0 ** -16
     n = 8 * v["H"] / 4096
     assert g["lambda"] == pytest.approx((64 + math.log2(math.e) - math.log2(n)) / (8 * 4096))
-    # ra-host-tier's loop covers 0.89 of the ceiling with or without the GPUs' stream.
+    # ra-host-tier's loop covers 0.96 of the ceiling, and the GPUs' zero-copy stream adds only what exceeds it.
     none = Params(2, 4096, 16, 0, 0.0)
     for q in (none, p):
-        assert gamma_cap(w, q, v, step(w, q, v))["mu_host"] == pytest.approx(0.11 * 819 / sigma)
+        assert gamma_cap(w, q, v, step(w, q, v))["mu_host"] == pytest.approx(0.04 * 819 / sigma)
 
 
 def test_more_openings_with_a_bigger_budget_and_fewer_with_bigger_blocks():
@@ -217,6 +217,8 @@ def test_the_cpus_tile_work_adds_to_gamma_when_counted():
     v["mu_cpu"] = 0.005
     assert gamma_cap(w, p, v, st)["gamma"] == pytest.approx(g + 0.005)
     assert gamma_pass(w, p, v, st)["mu_cpu"] == 0.005
+    v["mu_cpu"] = I.RISKS["mu_cpu"][0]
+    assert gamma_cap(w, p, v, st)["mu_cpu"] == pytest.approx(0.006)  # ra-host-cpu's Pearl-C rate at batch 16
 
 
 def test_eta_counts_its_phases_only_against_r_t():
@@ -241,7 +243,8 @@ def test_where_nothing_is_feasible_a_lever_is_scored_by_the_least_gamma():
     better = F.best(w, I.values(I.improved("host_cpu")), "cap", "C", (3,))
     assert not today["feasible"] and today["gamma_least"] == today["gamma"]
     c = F.compare([today], [better])
-    assert c["median_gain"] == 0.0 and c["gamma_drop"] > 0.004
+    # every parameter choice loses the 0.02 of host DRAM the better loop covers
+    assert c["median_gain"] == 0.0 and c["gamma_drop"] >= 0.02 * 819 / (8 * 1540 + 819) - 1e-12
 
 
 def test_timing_is_the_drivers():

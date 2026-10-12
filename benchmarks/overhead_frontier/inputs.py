@@ -44,12 +44,13 @@ INPUTS: dict[str, Input] = {
     "b_pcie": Input(56.4, "GB/s per GPU", "red team: PCIe H2D per GPU, 451 total (r20261012-165405-1810)", "measured"),
     "b_pcie_down": Input(25.6, "GB/s per GPU", "ra-host-tier: D2H beside a zero-copy read stream, 25.2–25.7 "
                          "(r20261012-183019-a547; 57.3 alone), the PCIe-down F30 has for z", "measured"),
-    "host_cpu": Input(0.89, "of the host DRAM ceiling", "ra-host-tier v0: the honest loop (GPU zero-copy receipts + 44 "
-                      "CPU threads' receipts under the latest z) reads 228–229 GB/s against the adversary's 253–256 on "
-                      "the same CPUs and GPU, half a socket (r20261012-181656-d1cc); 0.89 with CPUs alone too; the node "
-                      "taken at the same ratio", "measured", 0.98,
-                      "ra-host-tier v1: CPU receipts four streams wide (10.4 against 8.2 GB/s a thread on the agent "
-                      "VM; μ_host ≤ 0.1% needs 0.985–0.989), estimate"),
+    "host_cpu": Input(0.96, "of the host DRAM ceiling", "ra-host-tier v3–v4: the honest loop (GPU H2D receipts + the "
+                      "CPUs' receipts under the latest z, masked from all of z) reads 259.9–261.4 GB/s against the "
+                      "adversary's C = 264.2–266.4 on half a socket with two GPUs, 244–250 against 254–257 with one, "
+                      "2–4% below C from 10 to 22 cores (r20261012-190920-6238, r20261012-193152-cee9, "
+                      "r20261012-194238-4d34); the node taken at the same ratio", "measured", 0.98,
+                      "the loop's best reps (0.976–0.989 of C on two GPUs), which the quiet whole-node window measures "
+                      "(μ_host ≤ 0.1% needs 0.992–0.994), estimate"),
     "b_nic": Input(100.0, "GB/s, node", "ra-link-pricing: one ConnectX VF at 400 Gb/s each way, and inbound bytes "
                    "into a small GPU or host ring land in neither counted tier, so both directions count "
                    "(r20261012-183152-39a5, art:d1040f91)", "measured"),
@@ -114,10 +115,11 @@ INPUTS: dict[str, Input] = {
     "tau_fill": Input({8: 0.002, 12: 0.010, 16: 0.019, 32: 0.085}, "per filler pass by k_s",
                       "ra-sketch-tag: the sketch receipt on a store that is read and not decoded (plain store M=32, "
                       "r20261012-133311-b8e1)", "measured"),
-    "tau_bind": Input(0.05, "per weight pass", "ra-bound-receipt (ro-bound-sketch-blake3/v0, B = R ⊕ M): binding adds "
-                      "11–28% of the unbound receipt's own instructions, a static SASS count, not a timing; × τ_W ≈ "
-                      "0.23", "estimate", 0.02, "the bound sketch on wt.cu's sketch warps (the R ⊕ M functor, "
-                      "ra-codec-tensor's SkB interface)"),
+    "tau_bind": Input(0.06, "per weight pass", "ra-bound-receipt (ro-bound-sketch-blake3/v0, B = R ⊕ M) on "
+                      "Llama-3.1-70B's linears, against cuBLASLt FP8: the bound receipt over the unbound at batch 1 and "
+                      "8, +0.04 at k = 2 and +0.05–0.06 at k = 3; +0.05–0.08 at every mode and batch "
+                      "(r20261012-191645-25bd)", "measured", 0.02,
+                      "the bound sketch on wt.cu's sketch warps (the R ⊕ M functor, ra-codec-tensor's SkB interface)"),
     "tau_bind_kv": Input({2: 0.069, 3: 0.063}, "per KV pass", "ra-word-codec: the receipt bound to attention's prior "
                          "PV output (ro-bound-sketch/v0), +0.388 / +0.871 against the unbound +0.319 / +0.808 "
                          "(r20261012-185147-b5db)", "measured", {2: 0.03, 3: 0.03},
@@ -200,7 +202,7 @@ INPUTS: dict[str, Input] = {
     "mu_cpu": Input(0.0, "of capacity", "the host CPUs' tile work (Daniel 18:55Z: a capacity to exhaust or count). "
                     "Under C they are counted: their squarings in μ_rebuild (h), their DRAM in ΣR, their caches as "
                     "per-pass state, and tile work buys nothing without bytes from off the node, which C excludes; "
-                    "ra-host-cpu, which would price it, is stopped by the usage filter", "policy"),
+                    "ra-host-cpu's first result prices it as a risk", "policy"),
     # Chained passes (μ_timing): a pass is one step's plan, and its seed needs the previous pass's root.
     "t_gap": Input(100e-6, "s per pass", "ra-remote-driver: the root's reduction (an all-gather of the GPUs' subtree "
                    "roots, one SHA-512, a broadcast), 25–100 µs, unmeasured", "estimate"),
@@ -250,8 +252,10 @@ RISKS: dict[str, tuple[Any, str]] = {
     "b_host": (1024.0, "ra-host-tier's four halves of a socket at 256 GB/s (above DDR5-6400 spec, so only with faster "
                        "DIMMs the adversary may provision)"),
     "s_adv": (1.61, "the column form with every add free (ra-squaring-ceiling)"),
-    "mu_cpu": (0.005, "the host CPUs' tile work counted against this audit at ra-pouw-zero's low end (a dual-socket "
-                      "AMX host is 0.5–2% of node HBM, extrapolated and untuned, r20261012-181859-f096)"),
+    "mu_cpu": (((1, 0.017), (8, 0.009), (16, 0.006), (32, 0.002), (64, 0.0012), (128, 0.0006)),
+               "the host CPUs' exact Pearl-C tile work counted against this audit: ra-host-cpu's whole-host rate over "
+               "ΣR by batch, 24 busy cores × 4 (r20261012-200416-57d5, art:d604d1da); NCP's 1.2–2.8% is host DRAM / 3 "
+               "and comes out of μ_host's slack, not on top"),
     "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
     "v_budget": (1.0, "a 1 Gb/s verifier link"),
     "t_gap": (500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)"),
