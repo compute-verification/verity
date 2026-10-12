@@ -169,6 +169,15 @@ def rebuild(budget: float, keep: float, options: list[tuple[float, float, float]
     return saved
 
 
+def held_in_part(share: float, cost: float, save: float, partial: tuple[float, float]) -> list[tuple[float, float, float]]:
+    """A rebuild option split into holding all but a share f of each word, recomputed at a share c_f of the encode
+    (F27), and the rest of the rebuild; the LP takes the first while f / c_f beats a whole rebuild's 1."""
+    f, cf = partial
+    if f <= cf:
+        return [(share, cost, save)]
+    return [(share, cf * cost, f * save), (share, (1 - cf) * cost, (1 - f) * save)]
+
+
 def mu_sample(delta: float, samples_per_window: int, windows: int) -> float:
     """Skipped fraction f with (1 − f)^(sN) ≥ δ: the most a prover cheats in a time-averaged claim that rejects on
     any wrong opened sketch."""
@@ -280,6 +289,10 @@ class Point:
     out_tokens: int = 0  # tokens a sequence generates, over which its prompt's KV encode is spread (0: not counted)
     adversary: Codec | None = None  # the adversary's ε and r on E's words (`at_floor`); the honest's when None
     kv_adversary: Codec | None = None  # the same on the KV words, at one round; E's adversary's when no kv_codec
+    # A known-payload word at one round held in part (the red team's F27): the share of the word freed and its cost as
+    # a share of the word's encode, for E's prime and the KV's; (0, 1) when nothing cheaper than a rebuild is known.
+    partial: tuple[float, float] = (0.0, 1.0)
+    kv_partial: tuple[float, float] = (0.0, 1.0)
     kappa: float = 1.0
     theta: float = 0.0
     other: float = 0.0  # μ_sample + μ_λ (+ μ_side, zero under isolation)
@@ -310,11 +323,12 @@ class Point:
         ka = self.kv_adversary or (kc if self.kv_codec else ca)
         enc_kv_a = self.kv_rounds * ka.r * ka.eps
         # W is registered with its s_c, so the E words kept are decoded; the prompts aren't, so no KV word is.
-        rebuilt = min(1.0 - chip, rebuild(budget, ca.eps * a, [(a, (ca.r - 1) * ca.eps, s_word(c, self.s_c)),
-                                                               (b, enc_kv_a, s_word(kc, 1.0))]))
+        kv_opts = held_in_part(b, enc_kv_a, s_word(kc, 1.0), self.kv_partial if self.kv_rounds == 1 else (0.0, 1.0))
+        # A registered payload costs more to hold than the part of a word it frees, so E's words are rebuilt whole.
+        rebuilt = min(1.0 - chip, rebuild(budget, ca.eps * a, [(a, (ca.r - 1) * ca.eps, s_word(c, self.s_c))] + kv_opts))
         # Without the assumption on s_c (an unvetted model): every payload free, nothing decoded.
-        rebuilt_free = min(1.0 - chip, rebuild(budget, 0.0, [(a, ca.r * ca.eps, s_word(c, 1.0)),
-                                                              (b, enc_kv_a, s_word(kc, 1.0))]))
+        rebuilt_free = min(1.0 - chip, rebuild(budget, 0.0, held_in_part(a, ca.r * ca.eps, s_word(c, 1.0), self.partial)
+                                                + kv_opts))
         q_honest = e + kv + act
         stock = (e + kv) / e + self.idle
         served = d + (prefill / self.out_tokens if self.out_tokens else 0.0)

@@ -30,10 +30,11 @@ FUSED_768_Y = 1.159
 FUSED_768_Y32 = 1.386
 FUSED_512_Y = 1.051
 FUSED_1023_Y = 2.025
-# The point's codec as ra-codec-tensor built it (r20261012-115146-b886): 2^1536 − 3453 fused at k = 1 on 6 decoder
-# warps, batch 1 / 32, untagged and with the k_s = 16 sketch tag and the commit [measured].
-FUSED_1536_Y = (1.96, 1.92)
-SKETCH_1536_Y = (2.403, 2.421)
+# The point's codec as ra-codec-tensor built it: 2^1536 − 3453 fused at k = 1 on 12 warps (1c03b4778,
+# r20261012-132420-9a2f; 6 decoder warps measured 1.96 / 1.92 and 2.403 / 2.421, b886), batch 1 / 32, untagged and with
+# the k_s = 16 sketch tag (T = 32) and the commit [measured].
+FUSED_1536_Y = (1.758, 1.817)
+SKETCH_1536_Y = (2.155, 2.415)
 # Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits ra-word-codec's 2.81e10/s,
 # 1,536 and 2,048 the red team's F22 (r20261012-102430-ee3a: 8.3e9/s, 5.05e9/s with one level of Karatsuba).
 SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 5.05e9)}
@@ -42,6 +43,10 @@ SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 
 # team's F24, r20261012-111728-cc57]. Taken at 2,048 bits too [estimate].
 SHARED = 6.72e9 / 8.28e9
 KAPPA = g.CLOCK_MAX_MHZ / g.CLOCK_LOCKED_MHZ  # Φ_cores is declared at the max clock
+# F27, the red team's (r20261012-131252-f431, -132841-565e): at one round a known payload's word gives up its bottom
+# third to a lattice from the top two-thirds, at 0.094 of a root at 1,536 bits and 0.059 at 2,048; at 768 bits it
+# costs a root, so nothing [measured]. Coppersmith's bound for c^(2^k) = m is p^(1/2^k) [standard]; k >= 2 is left out.
+PARTIAL = {1536: (1 / 3, 0.094), 2048: (1 / 3, 0.059)}
 
 
 def _square(limbs: int) -> int:
@@ -177,20 +182,24 @@ def kv_codec(bits: int, batch: int, off: float = OFF_ISSUE[0]) -> g.Codec:
 
 
 def options(shape: g.Shape, batch: int, c: g.Codec, ops: float | None = None, kv_widths=(1536, 2048),
-            kappa: float = KAPPA, off: float = OFF_ISSUE[0], tag: float = TAG) -> dict[str, dict]:
+            kappa: float = KAPPA, off: float = OFF_ISSUE[0], tag: float = TAG,
+            partial: bool = True) -> dict[str, dict]:
     """Every KV option at E's codec `c` (its own prime at k_KV rounds, or a wider KV prime at one, its kernel `off`
     times the issue bound), the adversary at the floor on both (`sq`'s `ops`)."""
     bits = math.ceil(c.p_bits)
     adv = g.at_floor(c, sq(bits, ops))
     c = replace(c, y=c.y + tag)
+    none = (0.0, 1.0)
     common = dict(idle=IDLE[shape.name], theta=g.WIDE_THETA["p767"], out_tokens=OUT_TOKENS, adversary=adv,
-                  kappa=kappa)
-    out = {f"k{kr}": g.Point(shape, batch, 4096, True, c, kv_rounds=kr, kv_extra=kv_attn(kr), **common).terms()
+                  kappa=kappa, partial=PARTIAL.get(bits, none) if partial else none)
+    out = {f"k{kr}": g.Point(shape, batch, 4096, True, c, kv_rounds=kr, kv_extra=kv_attn(kr),
+                             kv_partial=PARTIAL.get(bits, none) if partial else none, **common).terms()
            for kr in (1, 2, 4)}
     for n in kv_widths:
         kc = kv_codec(n, batch, off)
         out[f"w{n}"] = g.Point(shape, batch, 4096, True, c, kv_codec=kc, kv_adversary=g.at_floor(kc, sq(n, ops)),
-                               kv_extra=kv_attn(1), **common).terms()
+                               kv_extra=kv_attn(1), kv_partial=PARTIAL.get(n, none) if partial else none,
+                               **common).terms()
     return out
 
 

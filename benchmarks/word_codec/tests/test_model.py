@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 import random
 import sys
@@ -236,7 +237,7 @@ def test_alu_idle_falls_with_k():
     assert idle[1] > idle[4] > idle[5] and idle[5] == pytest.approx(0.14, abs=0.01)
 
 
-def test_frontier_at_the_floor():
+def test_frontier_at_the_floor(monkeypatch):
     """The design note's point and its neighbours at the squaring floor (70B batch 1, the adversary at the measured
     pipes' floor and the max clock): no squaring reaches the issue bound; the decode rule meets the measured fused
     steps at 512, 768 and 1023 bits; the measured 1023-bit kernel buys nothing over 768 for 0.8 more step; E on 1,536
@@ -270,6 +271,8 @@ def test_frontier_at_the_floor():
     assert t["gamma_decode_free"] - t1023["gamma_decode_free"] < 0.001 and t1023["slowdown"] > t["slowdown"] + 0.7
     assert F.SQUARING[768] == pytest.approx(0.552, abs=0.001)
     assert F.apart_off(1536) == pytest.approx((4.68, 6.06), abs=0.01)
+    assert F.point()["gamma_decode_free"] > 0.019  # F27; the predictions below are before it
+    monkeypatch.setattr(F, "options", functools.partial(F.options, partial=False))
     p = F.point()
     assert p["gamma_bw"] == pytest.approx(0.0043, abs=2e-4)
     assert p["gamma_decode_free"] == pytest.approx(0.0078, abs=2e-4)
@@ -286,27 +289,34 @@ def test_frontier_at_the_floor():
 
 
 def test_built_point():
-    """The point's codec as ra-codec-tensor built it: its untagged step lands inside the predicted decode bracket at the
-    locked clock, its tag (0.44) above the modelled 0.227, and γ_bw stays under 1% with no assumption on W at the pipe
-    floor at batch 1 and 32 (the red team's 12:22Z reprice: 0.87% / 0.79%)."""
+    """The point's codec as ra-codec-tensor built it (12 warps): its untagged step lands inside the predicted decode
+    bracket at the locked clock and its tag (0.40) above the modelled 0.227. With W registered and the KV at 4 rounds
+    γ_bw is 0.44%; F27 (a known payload's word at one round held in part) takes the no-assumption number from 0.81% to
+    2.0%, and the batch-32 KV at one round to 2.0% (the red team's 2.1% and 1.98%), which two KV rounds fix."""
     lo, hi = F.apart_off(1536)
     assert F.fused_y(1536, 1, lo) < F.FUSED_1536_Y[0] < F.fused_y(1536, 1, hi)
-    assert F.SKETCH_1536_Y[0] - F.FUSED_1536_Y[0] == pytest.approx(0.443) and F.TAG < 0.443
-    b1, b32 = F.built(), F.built(batch=32)
-    assert b1["gamma_bw"] == pytest.approx(0.0045, abs=1e-4)
-    assert b1["gamma_decode_free"] == pytest.approx(0.0086, abs=1e-4)
-    assert b1["slowdown"] == pytest.approx(2.30, abs=0.01)
-    assert b32["gamma_bw"] == pytest.approx(0.0073, abs=1e-4)
-    assert b32["gamma_decode_free"] == pytest.approx(0.0077, abs=1e-4)
-    assert b32["slowdown"] == pytest.approx(2.58, abs=0.01)
-    assert F.built(ops=1.0)["gamma_decode_free"] > 0.01 > F.built(batch=32, ops=1.0)["gamma_decode_free"]
+    assert F.SKETCH_1536_Y[0] - F.FUSED_1536_Y[0] == pytest.approx(0.397) and F.TAG < 0.397
+    b1 = F.built()
+    assert b1["gamma_bw"] == pytest.approx(0.0044, abs=1e-4) and b1["slowdown"] == pytest.approx(2.09, abs=0.01)
+    assert b1["gamma_decode_free"] == pytest.approx(0.0203, abs=2e-4)
+    opts = F.built_options(batch=32)
+    assert opts["k1"]["gamma_bw"] == pytest.approx(0.0204, abs=2e-4)
+    assert opts["k2"]["gamma_bw"] == pytest.approx(0.0054, abs=1e-4) and opts["k2"]["slowdown"] == pytest.approx(3.18,
+                                                                                                                abs=0.01)
+    before = functools.partial(F.options, partial=False)
+    off = (F.FUSED_1536_Y[0] - F.FUSED_768_Y + G.WIDE["p767"].eps) / F.sq(1536)
+    c = F.e_codec(1536, 1, off)
+    assert c.p_bits == 1536 and F.PARTIAL[1536] == pytest.approx((1 / 3, 0.094))
+    free = F.pick(before(G.LLAMA_70B, 1, replace(c, y=F.FUSED_1536_Y[0]), off=off,
+                         tag=F.SKETCH_1536_Y[0] - F.FUSED_1536_Y[0]))[1]["gamma_decode_free"]
+    assert free < 0.01 < b1["gamma_decode_free"]
 
 
 def test_kv_on_a_narrower_prime():
     """The KV words on a prime narrower than E's are rebuilt first (their payloads are free): on 2^512 − 569 the whole
     KV fits the adversary's budget at batch 1, so γ_bw rises by its share, and every batch goes over 1%."""
-    for batch, low in ((1, 0.022), (32, 0.029)):
+    for batch, k, low in ((1, "k4", 0.022), (32, "k2", 0.028)):
         opts = F.built_options(batch=batch, kv_widths=(512, 768))
-        assert opts["k1"]["gamma_bw"] < 0.008 and opts["k1"]["gamma_decode_free"] < 0.0085
-        assert opts["w768"]["gamma_bw"] > 0.016 and opts["w512"]["gamma_bw"] > low
-        assert opts["w512"]["slowdown"] < opts["k1"]["slowdown"]
+        assert opts[k]["gamma_bw"] < 0.0055
+        assert opts["w768"]["gamma_bw"] > 0.015 and opts["w512"]["gamma_bw"] > low
+        assert opts["w512"]["slowdown"] < opts[k]["slowdown"]
