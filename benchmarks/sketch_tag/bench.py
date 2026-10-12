@@ -366,9 +366,10 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                     raise RuntimeError(f"sk_gemm {lay} {ks}: error {rc}")
             return f
 
-        def arm_fused(lay, sko, ks, cfg=cfg):
+        def arm_fused(lay, sko, ks, cfg=cfg, split=False):
             """Call i sketches into buffer i mod 2 while its committer warps hash buffer (i + 1) mod 2, the previous
-            call's, into that buffer's commit (tags and leaves)."""
+            call's, into that buffer's commit: tags and leaves, or (split) tags and the leaves of the tags call i - 1
+            wrote."""
             kr = layouts[lay][0]
             ps = [WB.ptr(b) for b in ring[lay]]
             fp = WB.ptr(sko.frag)
@@ -383,10 +384,21 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                 rc = 0
                 for i, p in enumerate(ps):
                     cur, prev = bufs[i % 2], bufs[1 - i % 2]
-                    rc |= so.sk_gemm(kr, ks, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, sko.t, sko.run,
-                                     fp, cur[0], 1, SKETCH_SEED, cn, prev[0], sko.nvec, 0, prev[1], clear, st)
+                    lv = (sko.nvec, cur[1]) if split else (0, None)
+                    rc |= so.sk_gemm_deferred(kr, ks, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, sko.t,
+                                              sko.run, fp, cur[0], 1, SKETCH_SEED, cn, prev[0], sko.nvec, 0, prev[1],
+                                              clear, *lv, st)
                 if rc:
                     raise RuntimeError(f"sk_gemm fused {lay} {ks}: error {rc}")
+            if split and mb == a.batches[0] and a.mode == "bench" and (lay, ks, sko.n_target) == focus_of[lay]:
+                # two passes over the ring: every call's sketches, tags and leaves are then the gated ones
+                for b in (sko.sk, sko.sk2, sko.commit.buf, sko.commit2.buf):
+                    b.zero_()
+                f()
+                f()
+                torch.cuda.synchronize()
+                res.setdefault("split_equal", {})[lay] = all(
+                    digest(c.tag_list(), c.leaf_list()) == sko.digest for c in (sko.commit, sko.commit2))
             return f
 
         def arm_side(lay, sko, ks, nbuf=4):
@@ -511,6 +523,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                 arms[f"sk_{lay}_{sko.name()}"] = arm_sk(lay, sko, ks)
                 arms[f"stack_{lay}_{sko.name()}"] = arm_sk(lay, sko, ks, stack=True)
                 arms[f"fused_{lay}_{sko.name()}"] = arm_fused(lay, sko, ks)
+                arms[f"split_{lay}_{sko.name()}"] = arm_fused(lay, sko, ks, split=True)
                 arms[f"side_{lay}_{sko.name()}"] = arm_side(lay, sko, ks)
                 arms[f"window_{lay}_{sko.name()}"] = arm_window(lay, sko, ks)
                 if (l2, ks, nt) == focus_of[lay]:
@@ -520,6 +533,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                             arms[f"dec_enc@{cfg_name(c)}"] = arm_sk(lay, first, 0, decode=1, cfg=c)
                         arms[f"sk_{lay}_{sko.name()}@{cfg_name(c)}"] = arm_sk(lay, sko, ks, cfg=c)
                         arms[f"fused_{lay}_{sko.name()}@{cfg_name(c)}"] = arm_fused(lay, sko, ks, cfg=c)
+                        arms[f"split_{lay}_{sko.name()}@{cfg_name(c)}"] = arm_fused(lay, sko, ks, cfg=c, split=True)
                 if mb == a.batches[0]:
                     arms[f"hash_{lay}_{sko.name()}"] = arm_hash(lay, sko)
                     if ks == a.ks[0]:
@@ -553,7 +567,8 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                             "native_s": native, "launched": launched,
                             "host_enqueue_max_s": host_max, "host_bound": host_max > 0.8 * spin_s,
                             "ratio_vs_native": {k: v / native for k, v in med.items()}}
-        best = {lay: min((min(med[f"{m}_{lay}_{s.name()}"] for m in ("stack", "fused", "side", "window")) / native,
+        best = {lay: min((min(med[f"{m}_{lay}_{s.name()}"] for m in ("stack", "fused", "split", "side", "window"))
+                          / native,
                           s.name())
                          for (l2, _, _), s in sks.items() if l2 == lay) for lay in layouts}
         log(f"gemm {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain_ws {med['plain_ws'] * 1e6:.1f} us, "
@@ -561,6 +576,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
             + "; ".join(f"sk_{lay}_{s.name()} {med[f'sk_{lay}_{s.name()}'] / native:.3f}x"
                         f" stack {med[f'stack_{lay}_{s.name()}'] / native:.3f}x"
                         f" fused {med[f'fused_{lay}_{s.name()}'] / native:.3f}x"
+                        f" split {med[f'split_{lay}_{s.name()}'] / native:.3f}x"
                         f" side {med[f'side_{lay}_{s.name()}'] / native:.3f}x"
                         f" window {med[f'window_{lay}_{s.name()}'] / native:.3f}x"
                         for (lay, ks, nt), s in sks.items() if s.name() == "16_4096")
@@ -570,7 +586,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
     res["sketches"] = {f"{lay}_{s.name()}": {"n": s.n, "T": s.t, "run": s.run, "vectors": s.nvec, "tiles": s.tiles,
                                              "sign_bytes": s.frag.numel(), "sketch_bytes": s.sk.numel() * 4}
                        for (lay, ks, nt), s in sks.items()}
-    res["ok"] = all(res.get("side_equal", {}).values()) and all(res.get("window_equal", {}).values())
+    res["ok"] = all(all(res.get(f"{m}_equal", {}).values()) for m in ("side", "window", "split"))
     del ring, wring, layouts, plain, w, sks, tagcm
     torch.cuda.empty_cache()
     return res
@@ -754,8 +770,8 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
 
 def frontier(res: dict, lib: Lib, a) -> list[dict]:
     """Layer-weighted (the four linears' sum) per layout, k, n and batch: y_total = the sum of each linear's fastest
-    commit (separate kernels behind the GEMM, committer warps inside it, a side stream, or one pass over the window's
-    sketches) / native - 1, split as base,
+    commit (separate kernels behind the GEMM, committer warps inside it with their leaves or an earlier call's, a side
+    stream, or one pass over the window's sketches) / native - 1, split as base,
     decode, sketch, hash, commit (leaves; the tree above them is a window's, under 0.1% of it)."""
     cases = res["gemm"]
     points = []
@@ -764,7 +780,7 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
             for ks in a.ks:
                 for nt in a.ns:
                     tot = {"native": 0.0, "base": 0.0, "dec": 0.0, "sk": 0.0, "hash": 0.0, "leaves": 0.0, "stack": 0.0,
-                           "fused": 0.0, "side": 0.0, "window": 0.0, "best": 0.0, "dt": 0.0, "dtc": 0.0}
+                           "fused": 0.0, "split": 0.0, "side": 0.0, "window": 0.0, "best": 0.0, "dt": 0.0, "dtc": 0.0}
                     modes = {}
                     ok = True
                     for name, g in cases.items():
@@ -781,10 +797,12 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                         tot["leaves"] += first[f"leaves_{lay}_{nt}"]
                         tot["stack"] += med[f"stack_{lay}_{ks}_{nt}"]
                         tot["fused"] += med[f"fused_{lay}_{ks}_{nt}"]
+                        tot["split"] += med[f"split_{lay}_{ks}_{nt}"]
                         tot["side"] += med[f"side_{lay}_{ks}_{nt}"]
                         tot["window"] += med[f"window_{lay}_{ks}_{nt}"]
                         mode = {"separate": med[f"stack_{lay}_{ks}_{nt}"], "fused": med[f"fused_{lay}_{ks}_{nt}"],
-                                "side": med[f"side_{lay}_{ks}_{nt}"], "window": med[f"window_{lay}_{ks}_{nt}"]}
+                                "split": med[f"split_{lay}_{ks}_{nt}"], "side": med[f"side_{lay}_{ks}_{nt}"],
+                                "window": med[f"window_{lay}_{ks}_{nt}"]}
                         modes[name] = min(mode, key=mode.get)
                         tot["best"] += mode[modes[name]]
                         if lay == "enc":
@@ -800,7 +818,8 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                                         if lay == "enc" else f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/plain",
                           "batch": int(mb), "y_total": tot["best"] / nat - 1, "commit_mode": modes,
                           "y_total_separate": tot["stack"] / nat - 1, "y_total_fused": tot["fused"] / nat - 1,
-                          "y_total_side": tot["side"] / nat - 1, "y_total_window": tot["window"] / nat - 1,
+                          "y_total_split": tot["split"] / nat - 1, "y_total_side": tot["side"] / nat - 1,
+                          "y_total_window": tot["window"] / nat - 1,
                           "y_commit_window": (tot["window"] - tot["sk"]) / nat,
                           "y_base": tot["base"] / nat - 1, "y_decode": (tot["dec"] - tot["base"]) / nat,
                           "y_tag": (tot["sk"] - tot["dec"]) / nat + tot["hash"] / nat,
