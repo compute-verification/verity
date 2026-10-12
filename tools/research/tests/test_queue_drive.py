@@ -2,6 +2,7 @@
 goes to the lander once.  On `test_queue`'s throwaway origin, with the launch, the runs' states and the merge-thread post injected."""
 from __future__ import annotations
 
+import os
 import pytest
 
 from research import merge
@@ -87,6 +88,23 @@ def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(w
     assert since == before and set(runs.values()) == {next(iter(runs.values()))} and tip in runs
     lines = merge.landing_lines(h.q.workdir, before, tip, runs=runs)
     assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
+
+
+def test_the_steps_after_a_landing_run_with_the_queues_credentials_and_git_never_prompts(world, monkeypatch):
+    """12 Oct 08:49Z: `caught_up`'s `ls-remote` in the queue's clone, which has no credential helper, waited on a password."""
+    h = Harness(world, monkeypatch)
+    seen = []
+    monkeypatch.setattr(merge, "caught_up", lambda *a, **kw: seen.append({k: os.environ.get(k) for k in
+                                                                           ("GIT_TERMINAL_PROMPT", "GIT_CONFIG_COUNT")}))
+    monkeypatch.delenv("GIT_TERMINAL_PROMPT", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
+    h.q.auth = ("-c", "credential.helper=!h get")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world))
+    assert h.tick().startswith("landed #1")
+    assert seen == [{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1"}]
+    assert "GIT_TERMINAL_PROMPT" not in os.environ and "GIT_CONFIG_COUNT" not in os.environ
 
 
 def test_a_tip_checked_before_main_moved_lands_as_a_merge_commit_when_they_share_no_file(world, monkeypatch):

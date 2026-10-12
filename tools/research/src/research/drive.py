@@ -21,6 +21,7 @@ and passed but lacks a step the gate needs, a launch that registered no run.  Th
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import os
@@ -71,6 +72,24 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     for i, (k, v) in enumerate(pairs, n):
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
     return env if pairs else {}
+
+
+@contextlib.contextmanager
+def authed(auth: tuple[str, ...]):
+    """os.environ with the queue's credentials (`auth_env`) and git never prompting, for the steps after a landing
+    (`merge.caught_up`, `_sweep_after`), whose git children read os.environ (12 Oct 08:49Z: `caught_up`'s `ls-remote` in the
+    queue's clone waited on a password at the tty and held drive for 13 min)."""
+    extra = {**auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
+    was = {k: os.environ.get(k) for k in extra}
+    os.environ.update(extra)
+    try:
+        yield
+    finally:
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = ()) -> tuple[list[str], str]:
@@ -264,9 +283,10 @@ class Driver:
             q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})")
             from .merge import _sweep_after, caught_up
 
-            caught_up(self.repo, "origin", "check", since=main, log=q.log,
-                      runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
-            _sweep_after(self.repo, "main", "origin")
+            with authed(q.auth):
+                caught_up(self.repo, "origin", "check", since=main, log=q.log,
+                          runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
+                _sweep_after(self.repo, "main", "origin")
             return m
         return None
 
