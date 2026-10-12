@@ -33,33 +33,54 @@ INPUTS: dict[str, Input] = {
     "phi": Input(370e12, "FLOP/s per GPU, FP8", "ra-word-codec: cuBLASLt's sm89 FP8 kernels at B160 (datasheet dense "
                  "935.6 TFLOPS at 2,430 MHz)", "measured", 600e12, "a native sm_120 FP8 GEMM"),
     "s_chip": Input(263.2e6, "B per GPU", "ra-pcie-exhaust: SMEM + L2 + registers (art:f3457bd3)", "measured"),
-    "b_host": Input(372.0, "GB/s, node", "red team F28: 186 on one socket at 48 threads (r20261012-165009-4f56), "
-                    "two sockets at that rate; 819 at DDR5 spec", "measured"),
+    "b_host": Input(819.0, "GB/s, node", "the adversary's host DRAM read at DDR5-6400 spec (red team F28): half of "
+                    "socket 0 already reads 266 with two GPUs' copy engines and still rises with cores (ra-host-tier "
+                    "r20261012-183019-a547), so the spec is the bound until the whole-node run", "derived"),
     "b_zero_copy": Input(51.0, "GB/s per GPU", "ra-pcie-exhaust: zero-copy host read (H2D 56.4, r20261012-165405-1810)",
                          "measured"),
     "tau_host": Input(0.06, "of the step at b_zero_copy per GPU", "ra-pcie-exhaust: the HBM receipt pass 0.977–0.987 → "
                       "1.043–1.063 ms beside the 8-SM host fold (r20261012-114836-4a56, art:f3457bd3)", "measured",
                       0.03, "a host-tier receipt lighter than the 8-SM fold"),
-    "b_pcie": Input(56.4, "GB/s per GPU", "red team: PCIe H2D per GPU, 451 total (r20261012-165405-1810); D2H taken "
-                    "equal", "measured"),
-    "host_cpu": Input(0.0, "of the host DRAM the GPUs don't stream", "no host-CPU receipt exists yet", "estimate", 1.0,
-                      "receipt host DRAM on the host CPUs, as F28's adversary sketches it (a VNNI ±1 sketch, ~19 GB/s a "
-                      "core: ~20 of 192 cores for 372 GB/s, estimate), z shipped down for statement N (F30)"),
-    "b_nic": Input(50.0, "GB/s, node", "red team: one ConnectX VF at 400 Gb/s (r20261012-171910-14ba)", "measured"),
+    "b_pcie": Input(56.4, "GB/s per GPU", "red team: PCIe H2D per GPU, 451 total (r20261012-165405-1810)", "measured"),
+    "b_pcie_down": Input(25.6, "GB/s per GPU", "ra-host-tier: D2H beside a zero-copy read stream, 25.2–25.7 "
+                         "(r20261012-183019-a547; 57.3 alone), the PCIe-down F30 has for z", "measured"),
+    "host_cpu": Input(0.89, "of the host DRAM ceiling", "ra-host-tier v0: the honest loop (GPU zero-copy receipts + 44 "
+                      "CPU threads' receipts under the latest z) reads 228–229 GB/s against the adversary's 253–256 on "
+                      "the same CPUs and GPU, half a socket (r20261012-181656-d1cc); 0.89 with CPUs alone too; the node "
+                      "taken at the same ratio", "measured", 0.98,
+                      "ra-host-tier v1: CPU receipts four streams wide (10.4 against 8.2 GB/s a thread on the agent "
+                      "VM; μ_host ≤ 0.1% needs 0.985–0.989), estimate"),
+    "b_nic": Input(100.0, "GB/s, node", "ra-link-pricing: one ConnectX VF at 400 Gb/s each way, and inbound bytes "
+                   "into a small GPU or host ring land in neither counted tier, so both directions count "
+                   "(r20261012-183152-39a5, art:d1040f91)", "measured"),
+    "s_hostcache": Input(0.906e9, "B, node", "ra-link-pricing §4: the host's L3 672 MiB + L2 192 MiB, a store outside "
+                         "both tiers, read back at 51–57 GB/s a GPU (r20261012-181459-46ae)", "derived"),
     "b_p2p": Input(25.0, "GB/s", "PCIe peer all-reduce bus bandwidth, no NVLink", "estimate"),
     "t_allreduce": Input(40e-6, "s per all-reduce", "NCCL small-message all-reduce over PCIe", "estimate"),
     # The adversary's rebuild (μ_rebuild).
     "x1": Input(175.0, "read-times per round", "ra-codec-tensor's p512 encode at the max clock "
                 "(r20261012-095329-3aac ÷ 1.16), the red team's x₁", "measured"),
-    "s_adv": Input(1.2, "×", "red team assumption 5: the adversary's squaring ≤ 1.2× the best measured (the multiply "
-                   "pipe at 100%; 1.45 the issue bound)", "assumption", 1.0,
-                   "a measured or proved squaring floor at 512 bits"),
-    "h_host_sq": Input(0.003, "of the GPUs' squaring rate", "red team: host CPUs with GMP, 1.12e7 squarings/s/core × "
-                       "128 (IFMA port bound 0.067)", "measured"),
-    "mu_partial": Input({2: 0.0015, 3: 0.0015}, "of capacity", "red team: partial completion at 512 bits, k = 2 "
-                        "(margin 0.75× at the GPU floor's low end, 0.12–0.17 points); k = 3 taken at k = 2's price, "
-                        "an upper bound (its completion window is narrower; unpriced, ra-partial-lean)", "estimate",
-                        {2: 0.0, 3: 0.0}, "price partial completion at 512 bits (assumption 7; no agent may measure it)"),
+    "s_adv": Input(1.38, "× 5.13e10/s, clock-matched", "assumption 5 as ra-squaring-ceiling re-states it: the column "
+                   "form's ceiling at the measured instruction mix; FOLD 5 measures 1.27 (6.53e10/s, "
+                   "r20261012-182613-5df1, r20261012-183030-b044, art:38bdc4ec), above the old 1.2 cap",
+                   "assumption", 1.27,
+                   "a ceiling at FOLD 5's measured rate (its gap to 1.38 is per-column MOV and SEL, 1–2% recoverable)"),
+    "h_host_sq": Input(0.076, "of the GPUs' squaring rate", "ra-squaring-ceiling: AVX-512 IFMA, 2.84e8 squarings/s a "
+                       "physical core × 128 (r20261012-183544-2d44); 0.129 at the IFMA-only bound", "measured"),
+    "theta": Input(0.75, "of the per-bit claim", "red team: partial completion's cost at the 4D reduction's floor on "
+                   "the GPU at 512 bits, k = 2, low end (centre 1.2, range 0.75–2.7, r20261012-170958-f49a); "
+                   "ra-partial-lean's WorkHardness at θ·c_root divides the rebuild term by θ. k = 3 taken at k = 2's "
+                   "θ (its completion window is narrower; unpriced)", "estimate", 1.0,
+                   "price assumption 7 at or above the per-bit claim (the floor's centre is 1.2; no agent may "
+                   "measure it)"),
+    "bits": Input(512, "bits", "the codec's word, p = 2^512 − 569 (ruling); `frontier.widths` sweeps it", "policy"),
+    "sq_speed": Input(1.0, "× kv.cu's squaring", "the honest kernels' squaring: kv.cu's carry chains (FOLD 1 in "
+                      "ra-squaring-ceiling's harness, 5.71e10/s)", "measured", 1.14,
+                      "FOLD 5's column-chained squaring (6.53e10/s, ra-squaring-ceiling, art:38bdc4ec) in the decode "
+                      "and encode kernels"),
+    "decode_floor": Input({2: 0.052, 3: 0.503}, "per pass at 512 bits", "ra-word-codec: the standalone "
+                          "read-and-decode at 24 warps, c·k − 1 with c = 0.526 / 0.501 (r20261012-172911-1184); "
+                          "below it a form exposes a share of c·k (mma-ws: 0.10)", "measured"),
     # The honest prover's codec costs, per pass over the bytes they cover.
     "o_w": Input({2: ((8, 0.36), (32, 0.73)), 3: ((8, 0.97), (32, 1.00))}, "per weight pass",
                  "ra-codec-tensor 17:58Z: wt.cu decode at M=8 (70B, r20261012-175923-0080) and M=32 (8B, "
@@ -133,6 +154,17 @@ INPUTS: dict[str, Input] = {
     "receipt_bits": Input(512, "bits", "a SHA-512 receipt", "policy"),
     "eta_reserve": Input(0.0, "of capacity", "the honest read shortfall under cap: unmeasured (plain attention alone "
                          "reads at 97.1% of the pass's rate; top-up beside it may close the gap)", "estimate"),
+    # Chained passes (μ_timing): a pass is one step's plan, and its seed needs the previous pass's root.
+    "t_gap": Input(100e-6, "s per pass", "ra-remote-driver: the root's reduction (an all-gather of the GPUs' subtree "
+                   "roots, one SHA-512, a broadcast), 25–100 µs, unmeasured", "estimate"),
+    "prefetch": Input(False, "switch", "the GPUs wait for the seed", "estimate", True,
+                      "prefetch the next pass's first blocks on chip across the gap (ra-remote-driver: 0.52% → "
+                      "0.04% at 20 ms passes), hiding up to S_chip/R"),
+    "rtt": Input(0.020, "s", "ra-remote-driver's verifier round trip", "policy"),
+    "n_session": Input(100, "windows", "ra-remote-driver's session of chained windows", "policy", 1000,
+                       "sessions of 1,000 chained windows (17 minutes), so a padded pass's tail costs a tenth"),
+    "p_over_o": Input(0.0, "prompt tokens per output token", "the frontier's KV is written by decode: a step encodes "
+                      "only the token it appends", "policy"),
 }
 
 # The floor: each lever past its realistic improvement to the best any measurement or bound supports, so that the
@@ -148,8 +180,8 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "tau_host": (0.0, "the host tier's stream costs the HBM stream nothing"),
     "eph_read": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte read from DRAM"),
     "eph_write": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte written to DRAM"),
-    "mu_partial": ({2: 0.0, 3: 0.0}, "partial completion costs its share of an encode"),
-    "s_adv": (1.0, "the adversary squares no faster than the best measured"),
+    "s_adv": (1.27, "the adversary squares no faster than FOLD 5, the best measured"),
+    "host_cpu": (1.0, "the honest loop reads host DRAM at the adversary's ceiling"),
     "v_budget": (10.0, "a 10 Gb/s verifier link"),
     "x_from_transcript": (True, "z from PoUW's transcript"),
     "lambda_named": (True, "named λ"),
@@ -159,10 +191,15 @@ FLOOR: dict[str, tuple[Any, str]] = {
 # Values an input may take that make the frontier worse, each with why it is plausible.
 RISKS: dict[str, tuple[Any, str]] = {
     "eta_reserve": (0.0025, "the honest prover reads at 99.75% of the adversary's best stream"),
-    "b_host": (819.0, "the host DRAM at DDR5-6400 spec (no trusted hardware: the adversary may provision it)"),
-    "s_adv": (1.45, "the adversary's squaring at the issue bound"),
+    "b_host": (1024.0, "ra-host-tier's four halves of a socket at 256 GB/s (above DDR5-6400 spec, so only with faster "
+                       "DIMMs the adversary may provision)"),
+    "s_adv": (1.61, "the column form with every add free (ra-squaring-ceiling)"),
+    "h_host_sq": (0.129, "the host's IFMA-only bound (ra-squaring-ceiling)"),
     "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
     "v_budget": (1.0, "a 1 Gb/s verifier link"),
+    "t_gap": (500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)"),
+    "p_over_o": (8.0, "prompts 8× the output: each step also encodes 8 prompt tokens a sequence (ra-kv-filler: the "
+                      "prompt encode is +17% / +25% of busy time at k = 2 / 3 on a vLLM trace)"),
 }
 
 

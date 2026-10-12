@@ -9,6 +9,7 @@ the ruling's reading, and the headline), ``pass/C`` (the design's per-pass γ, f
 (``projected``) and at every lever at its floor (``floor``, ``inputs.FLOOR``: how fast the audit can get on this node
 with this codec). Each at three rounds (``k3``, the stated guarantee) and at two (``k2``, the upgrade once assumption
 7 is measured). The sensitivity takes one lever at a time from today, and reverts one at a time from projected.
+``widths`` sweeps the word width with the rounds at 8B and 70B, beside the red team's partial-completion margins.
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import inputs as I  # noqa: E402
-from model import GAMMA_MAX, SHAPES, Params, Workload, gamma_cap, gamma_pass, layout, link_n, pad, step  # noqa: E402
+from model import (GAMMA_MAX, SHAPES, Params, Workload, decode, gamma_cap, gamma_pass, interp, layout,  # noqa: E402
+                   link_n, margins, pad, sq_ratio, step)
 
 KS = (2, 3)
 # Every stated guarantee is at three rounds (STEERING 18:35Z); two rounds is the upgrade behind assumption 7.
@@ -38,6 +40,9 @@ HOST_SHARES = (0.0, 0.5, 0.8, 0.9, 0.95, 1.0)
 BATCHES = (1, 4, 16, 64, 256)
 CONTEXTS = (2048, 8192, 32768, 131072)
 FRONTIERS = (("cap", "C"), ("pass", "C"), ("cap", "N"))
+WIDTHS = (256, 320, 384, 448, 512, 576, 640)
+WIDTH_WORKLOADS = (("8B", 1, 8192), ("8B", 16, 8192), ("8B", 64, 8192), ("70B", 1, 8192), ("70B", 16, 8192),
+                   ("70B", 64, 8192))
 
 
 def workloads(v: dict[str, Any]) -> list[Workload]:
@@ -63,11 +68,8 @@ def best(w: Workload, v: dict[str, Any], definition: str, statement: str, ks: tu
             p = Params(k, block, k_s, binding, share)
             st = st0
             if definition == "cap":
+                st = pad(w, p, v, st, limit)
                 g = gamma_cap(w, p, v, st)
-                rest = limit - (g["gamma"] - g["mu_unreg"])
-                if rest > 0:
-                    st = pad(st, rest, v)
-                    g = gamma_cap(w, p, v, st)
             else:
                 g = gamma_pass(w, p, v, st)
             link = link_n(w, p, v, st) if statement == "N" else 0.0
@@ -91,7 +93,7 @@ def _point(w, p, st, g, link, definition, feasible, limit) -> dict[str, Any]:
         "workload": w.label, "model": w.shape.name, "batch": w.batch, "ctx": w.ctx, "tp": st["tp"],
         "f_kv_hbm": st["f_kv_hbm"], "f_kv_reads": st["f_kv_reads"], "feasible": feasible,
         "overhead": st[definition] / plain - 1, "gamma": g["gamma"] + link, "terms": terms,
-        "params": {"k": p.k, "width_bits": 512, "block": p.block, "k_s": p.k_s, "binding": p.binding_label,
+        "params": {"k": p.k, "width_bits": st["bits"], "block": p.block, "k_s": p.k_s, "binding": p.binding_label,
                    "host_share": p.host_share, "openings": g["openings"]},
         "parts": {n: st[n] / plain for n in ("t_rd", "t_tc", "t_kv", "t_act", "t_ar", "lin", "enc", "attn", "topup",
                                              "pad")},
@@ -109,6 +111,31 @@ def _point(w, p, st, g, link, definition, feasible, limit) -> dict[str, Any]:
 def frontier(v: dict[str, Any], ks: tuple[int, ...] = KS) -> dict[str, list[dict[str, Any]]]:
     ws = workloads(v)
     return {f"{d}/{s}": [best(w, v, d, s, ks) for w in ws] for d, s in FRONTIERS}
+
+
+def widths(v: dict[str, Any]) -> list[dict[str, Any]]:
+    """The word width and the rounds swept together (STEERING 18:47Z), each point the whole store at one (b, k): its
+    codec's cost a byte, the adversary's rebuild, the red team's partial-completion margin (k = 2's table, an
+    estimate) and the fastest ``cap/C`` step for 8B and 70B at ctx 8k. Mixing widths across weights, KV and filler
+    gains nothing: the adversary rebuilds the weakest class, and at equal strength k·x₁(b) the wider word decodes
+    cheaper."""
+    out = []
+    for bits, k in itertools.product(WIDTHS, KS):
+        vb = {**v, "bits": bits}
+        points = [best(Workload(SHAPES[n], b, c), vb, "cap", "C", (k,)) for n, b, c in WIDTH_WORKLOADS]
+        feasible = [r["overhead"] for r in points if r["feasible"]]
+        x1_adv = v["x1"] * sq_ratio(bits) / (v["s_adv"] * (1 + v["h_host_sq"]))
+        out.append({
+            "bits": bits, "k": k, "x1_adv": x1_adv, "strength": k * x1_adv,
+            "decode_c": (1 + v["decode_floor"][k]) / k * sq_ratio(bits) * 512 / bits / v["sq_speed"],
+            "o_kv": decode(interp(v["o_kv"][k], 80), k, vb), "o_w": decode(interp(v["o_w"][k], 32), k, vb),
+            "mu_rebuild": points[0]["terms"]["mu_rebuild"], "mu_partial": points[0]["terms"]["mu_partial"],
+            "margins_k2": margins(bits), "feasible": len(feasible),
+            "median_overhead": statistics.median(feasible) if feasible else None,
+            "points": [{"workload": r["workload"], "feasible": r["feasible"], "overhead": r["overhead"],
+                        "gamma": r["gamma"], "params": r["params"]} for r in points],
+        })
+    return out
 
 
 def compare(base: list[dict], alt: list[dict]) -> dict[str, Any]:
@@ -197,15 +224,29 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     scenarios = {"today": I.INPUTS, "projected": I.all_improved(I.INPUTS), "floor": I.at_floor(I.INPUTS)}
     frontiers = {name: {r: frontier(I.values(inp), ks) for r, ks in ROUNDS.items()} for name, inp in scenarios.items()}
+    width_sweep = {name: widths(I.values(inp)) for name, inp in scenarios.items()}
     sens = {f"{key} {r}": sensitivity(I.INPUTS, key, r) for key, r in (("cap/C", "k3"), ("cap/C", "k2"),
                                                                        ("pass/C", "k3"))}
     doc = {"schema": "verity/overhead-frontier/v1", "gamma_max": GAMMA_MAX, "stated_rounds": STATED,
            "inputs": describe(I.INPUTS),
            "floor_inputs": {n: {"value": v, "why": why} for n, (v, why) in I.FLOOR.items()},
            "grid": {"rounds": ROUNDS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "host_share": HOST_SHARES,
-                    "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512]},
-           "frontiers": frontiers, "sensitivity": sens}
+                    "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512], "widths": WIDTHS,
+                    "width_workloads": WIDTH_WORKLOADS},
+           "frontiers": frontiers, "widths": width_sweep, "sensitivity": sens}
     (args.out / "frontier.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    for name, rows in width_sweep.items():
+        print(f"\n== widths {name} (cap/C; 8B and 70B at B1/B16/B64 ctx 8k; margins are k = 2's, estimates)")
+        print(f"  {'bits':>4} {'k':>1} {'x1adv':>6} {'k·x1':>6} {'c':>5} {'o_kv':>5} {'o_w':>5} {'μ_reb':>6} "
+              f"{'μ_part':>6} {'fplll':>6} {'floor':>6} {'low':>5} {'ok':>2} {'median':>7}  overheads")
+        for r in rows:
+            m = r["margins_k2"]
+            med = "—" if r["median_overhead"] is None else f"{100 * r['median_overhead']:6.1f}%"
+            each = " ".join("—" if not q["feasible"] else f"{100 * q['overhead']:.0f}" for q in r["points"])
+            print(f"  {r['bits']:>4} {r['k']:>1} {r['x1_adv']:6.1f} {r['strength']:6.0f} {r['decode_c']:5.3f} "
+                  f"{r['o_kv']:5.3f} {r['o_w']:5.3f} {100 * r['mu_rebuild']:5.3f}% {100 * r['mu_partial']:5.3f}% "
+                  f"{m['fplll']:5.1f}× {m['floor_centre']:5.2f}× {m['floor_low']:4.2f}× {r['feasible']:>2} {med:>7}"
+                  f"  {each}")
     for name, by_rounds in frontiers.items():
         for r, fr in by_rounds.items():
             for key, points in fr.items():

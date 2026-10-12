@@ -12,21 +12,28 @@ The step, per GPU (``step``):
   for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h read-times a byte) hides
   in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind a KV pass; the host tier slows the step by
   τ_host per b_zero_copy of host stream per GPU, and the all-reduce gets what the host stream leaves of each GPU's
-  PCIe receive side, min(b_p2p, b_pcie − stream); the host CPUs receipt ``host_cpu`` of the DRAM the GPUs don't
-  stream, at no cost to the step.
+  PCIe receive side, min(b_p2p, b_pcie − stream); the host's loop (its CPUs' receipts, with or without the GPUs'
+  stream: ra-host-tier measured the same 0.89 either way) covers ``host_cpu`` of the DRAM ceiling at no cost to the
+  step, and the GPUs' stream adds only what exceeds it;
+- each pass waits ``t_gap`` for the previous pass's root (its seed), less S_chip/R with ``prefetch``.
 - under ``cap``, memory left idle is filled with receipt-only reads of the store (τ_fill a pass, no decode: top-up),
   and the step may be padded with more of them (``pad``) when its ephemeral traffic is too large a share of it;
   under ``pass`` neither: the pass is the step's own reads, W + KV.
+- the word width ``bits`` scales the squaring by ``sq_ratio``: the encode a byte (x₁, the adversary's and the honest
+  append's) as the squaring, the decode a byte as the squaring over the word's bytes (``decode``); ``sq_speed`` is
+  the honest kernels' squaring against kv.cu's.
 
 γ (``gamma_cap``, ``gamma_pass``), as fractions of the node's read capacity ΣR = 8·R + b_host:
-- ``cap`` (the ruling: 99% of read bandwidth goes to registered data): μ_chip = S_chip/H, μ_rebuild = s·(1+h)/(k·x₁),
-  μ_partial, μ_host = the host DRAM neither tier receipts over ΣR, μ_unreg = the step's ephemeral bus time over its capacity,
-  μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_link (0 under the identity
-  statement ``C``; ``link_n`` prices memory-only helpers over the NIC). The honest read shortfall η is unmeasured:
-  the frontier holds ``eta_reserve`` back for it and reports what is left (``eta_allowance``).
+- ``cap`` (the ruling: 99% of read bandwidth goes to registered data): μ_chip = S_chip/(R·t_pass) and μ_hostcache =
+  the host's caches over ΣR·t_pass, the state carried across each pass boundary (a pass is one step's plan, since a
+  plan reads a block at most once, so short steps pay them most), μ_rebuild = s·(1+h)/(k·x₁(b)), μ_partial = μ_rebuild·(1/θ(b) − 1), μ_host = the host DRAM the loop
+  leaves over ΣR, μ_unreg = the step's ephemeral bus time over its capacity, μ_timing = (RTT + pass)/(nT) + gap/pass,
+  μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_link (0 under the identity statement
+  ``C``; ``link_n`` prices memory-only helpers over the NIC). The honest read shortfall η is unmeasured: the frontier
+  holds ``eta_reserve`` back for it and reports what is left (``eta_allowance``).
 - ``pass`` (the design's and the red team's): μ_chip = S_chip/(W + KV), μ_rebuild = d·s·(1+h)/(k·x₁) and
-  μ_host = d·(1 − share)·b_host/(8R) with d = the audited step in read passes of W + KV, no μ_unreg, and the capacity
-  left idle reported as ``residual`` = 1 − (1 − γ)/d (F9).
+  μ_host = d·(b_host − covered)/(8R) with d = the audited step in read passes of W + KV, no μ_unreg, and the capacity
+  left idle, the chaining gap's included, reported as ``residual`` = 1 − (1 − γ)/d (F9).
 """
 
 from __future__ import annotations
@@ -102,6 +109,34 @@ class Params:
         return "tile" if self.binding == 0 else f"k-slice {self.binding}"
 
 
+def sq_ratio(bits: int) -> float:
+    """A modular squaring's cost at ``bits`` over its cost at 512, by ra-squaring-ceiling's cycle model at n 32-bit limbs:
+    n(n+1)/2 products with their carries at 4.63 cycles, an n-product fold at 4.02 and the doubling's 2n − 1 shifts at
+    0.6 (713 cycles at 512, which FOLD 5 runs at 774)."""
+    def cycles(b: int) -> float:
+        n = b / 32
+        return n * (n + 1) / 2 * 4.63 + 4.02 * n + 0.6 * (2 * n - 1)
+    return cycles(bits) / cycles(512)
+
+
+def margins(bits: int) -> dict[str, float]:
+    """The red team's partial-completion margin at k = 2 (cost over the per-bit claim), an estimate: its table at 512,
+    640 and 768 bits (fplll 12.3 / 8.7 / 6.7; the GPU floor's centre 1.2 / 0.8 / 0.6 and low end 0.75 / 0.50 / 0.37),
+    fitted as b^-1.55 and b^-1.8, extrapolated below 512."""
+    r = 512 / bits
+    return {"fplll": 12.3 * r ** 1.55, "floor_centre": 1.2 * r ** 1.8, "floor_low": 0.75 * r ** 1.8}
+
+
+def decode(o: float, k: int, v: dict[str, Any]) -> float:
+    """A decode form's cost a pass at ``v``'s word width and squaring speed, from its cost ``o`` at 512 bits on kv.cu's
+    squaring: the floor c·k − 1 where the decode outlasts the read, plus the share of c·k the form exposes beyond it.
+    A round decodes a word with one squaring, so c scales as the squaring's cost over the word's bytes."""
+    x0 = 1.0 + v["decode_floor"][k]
+    f = (o - max(0.0, x0 - 1.0)) / x0
+    x = x0 * sq_ratio(v["bits"]) * 512 / v["bits"] / v["sq_speed"]
+    return max(0.0, x - 1.0) + f * x
+
+
 def interp(table: Any, m: float) -> float:
     if isinstance(table, (int, float)):
         return float(table)
@@ -160,49 +195,71 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     tau_w = interp(v["tau_w"][p.k], m) * ksr * blk
     tau_kv = interp(v["tau_kv"][p.k], m) * ksr * blk
     tau_fill = v["tau_fill"][p.k_s] * blk
-    o_w = interp(v["o_w"][p.k], m)
-    o_kv = interp(v["o_kv"][p.k], m)
+    o_w = decode(interp(v["o_w"][p.k], m), p.k, v)
+    o_kv = decode(interp(v["o_kv"][p.k], m), p.k, v)
+    x1_h = v["x1_h"] * sq_ratio(v["bits"]) / v["sq_speed"]
 
     tau_bind = v["tau_bind"] * max(1.0, z_ratio(w, p))
     cuda_w = t_rd * (o_w + tau_w + tau_bind)
     slack = v["beta"] * max(0.0, t_tc - t_rd)
     lin = max(t_rd, t_tc) + max(0.0, cuda_w - slack)
     slack = max(0.0, slack - cuda_w)
-    t_enc = m * s.kv_bytes_per_token / tp * p.k * v["x1_h"] / R
+    t_enc = m * s.kv_bytes_per_token / tp * (1.0 + v["p_over_o"]) * p.k * x1_h / R
     enc = max(0.0, t_enc - slack)
     slack = max(0.0, slack - t_enc)
     attn = t_kv * (1.0 + o_kv) + KV / R * (tau_kv + v["tau_bind"])
 
     r_h = min(p.host_share * v["b_host"] / v["gpus"], v["b_zero_copy"])
     host = v["tau_host"] * r_h / v["b_zero_copy"]
-    host_cpu = v["host_cpu"] * max(0.0, v["b_host"] - v["gpus"] * r_h)
+    stream = v["gpus"] * r_h
+    host_cpu = max(0.0, v["host_cpu"] * v["b_host"] - stream)
     t_ar = _allreduce(w, tp, max(1.0, min(v["b_p2p"], v["b_pcie"] - r_h)), v)
+    gap = max(0.0, v["t_gap"] - (v["s_chip"] / R if v["prefetch"] else 0.0))
 
     core = lin + enc + attn + t_act + t_ar
     busy = t_rd + t_kv + t_act
     idle = max(0.0, core - busy)
     free = slack + t_ar
     topup = max(0.0, tau_fill * idle - free) / (1.0 - tau_fill)
-    cap = (core + topup) * (1.0 + host)
+    cap = (core + topup) * (1.0 + host) + gap
     return {
-        "tp": tp, "plain": plain, "cap": cap, "pass": core * (1.0 + host), "t_rd": t_rd, "t_tc": t_tc,
+        "tp": tp, "plain": plain, "cap": cap, "pass": core * (1.0 + host) + gap, "t_rd": t_rd, "t_tc": t_tc,
         "t_kv": t_kv, "t_act": t_act, "t_ar": t_ar, "lin": lin, "enc": enc, "attn": attn, "idle": idle,
-        "topup": topup, "pad": 0.0, "host": host, "host_stream": v["gpus"] * r_h, "host_cpu": host_cpu, "W": W, "KV": KV,
+        "topup": topup, "pad": 0.0, "gap": gap, "host": host, "host_stream": stream, "host_cpu": host_cpu,
+        "o_w": o_w, "o_kv": o_kv, "bits": v["bits"], "W": W, "KV": KV,
         "act": act + wr, "eph_read": act, "eph_write": wr,
         "f_kv_hbm": KV / v["H"],
         "f_kv_reads": t_kv / plain,
     }
 
 
-def pad(st: dict[str, float], unreg_budget: float, v: dict[str, Any]) -> dict[str, float]:
-    """The step padded with receipt-only reads until its ephemeral traffic is ``unreg_budget`` of its capacity
-    (μ_unreg under ``cap`` falls as the step grows); unchanged if it already is."""
-    sigma = v["gpus"] * v["R"] + v["b_host"]
-    hbm = v["gpus"] * v["R"] / sigma
-    need = st["act"] * hbm / (v["R"] * 1e9 * unreg_budget) if unreg_budget > 0 else math.inf
-    if need <= st["cap"]:
+def _per_pass(v: dict[str, Any], st: dict[str, float]) -> dict[str, float]:
+    """γ's terms under ``cap`` that a pass pays once, as B in μ = B/t_pass (s): the state carried across its boundary on
+    chip and in the host's caches, its ephemeral traffic, and the chaining gap."""
+    sigma = (v["gpus"] * v["R"] + v["b_host"]) * 1e9
+    hbm = v["gpus"] * v["R"] * 1e9 / sigma
+    R = v["R"] * 1e9
+    return {"mu_chip": v["s_chip"] / R * hbm, "mu_hostcache": v["s_hostcache"] / sigma,
+            "mu_unreg": st["act"] / R * hbm, "gap": st["gap"]}
+
+
+def pad(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float], limit: float) -> dict[str, float]:
+    """The step padded with receipt-only reads to the shortest pass whose γ under ``cap`` is ``limit``: the per-pass
+    terms fall as 1/t and the session's tail grows as t/(nT); unchanged if γ is already within it or no length is."""
+    t0 = st["cap"]
+    g = gamma_cap(w, p, v, st)["gamma"]
+    if g <= limit:
         return st
-    return {**st, "cap": need, "pad": need - st["cap"]}
+    b = sum(_per_pass(v, st).values())
+    c = 1.0 / (v["n_session"] * v["t_window"])
+    room = limit - (g - b / t0 - c * t0)
+    disc = room * room - 4 * b * c
+    if room <= 0 or disc < 0:
+        return st
+    t = (room - math.sqrt(disc)) / (2 * c)
+    if t <= t0:
+        return st
+    return {**st, "cap": t, "pad": t - t0}
 
 
 def _openings(w: Workload, p: Params, v: dict[str, Any]) -> tuple[float, float]:
@@ -223,7 +280,6 @@ def _lambda(p: Params, v: dict[str, Any], n_blocks: float) -> float:
 def _common(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     s, n_blocks = _openings(w, p, v)
     return {
-        "mu_partial": v["mu_partial"][p.k],
         "mu_sample": math.log(2) * v["log2_inv_delta"] / (s * v["horizon"]),
         "lambda": _lambda(p, v, n_blocks),
         "mu_sketch": 2.0 ** -p.k_s,
@@ -232,17 +288,34 @@ def _common(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
 
 
 def _rebuild(p: Params, v: dict[str, Any]) -> float:
-    return v["s_adv"] * (1 + v["h_host_sq"]) / (p.k * v["x1"])
+    return v["s_adv"] * (1 + v["h_host_sq"]) / (p.k * v["x1"] * sq_ratio(v["bits"]))
+
+
+def _partial(p: Params, v: dict[str, Any]) -> float:
+    """What completing a word's dropped tail adds to the rebuild: WorkHardness at θ·c_root divides the rebuild term by
+    θ (ra-partial-lean), with θ at this width from the red team's floor."""
+    theta = v["theta"] * margins(v["bits"])["floor_low"] / margins(512)["floor_low"]
+    return _rebuild(p, v) * max(0.0, 1.0 / theta - 1.0)
+
+
+def _timing(t_pass: float, gap: float, v: dict[str, Any]) -> float:
+    """ra-remote-driver's μ_timing for a session of chained windows: its start and tail, (RTT + pass)/(nT), and the
+    chaining gap's share of each pass."""
+    return (v["rtt"] + t_pass) / (v["n_session"] * v["t_window"]) + gap / t_pass
 
 
 def gamma_cap(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -> dict[str, float]:
     sigma = v["gpus"] * v["R"] + v["b_host"]
     hbm = v["gpus"] * v["R"] / sigma
+    once = _per_pass(v, st)
     t = {
-        "mu_chip": v["s_chip"] / v["H"] * hbm,
+        "mu_chip": once["mu_chip"] / st["cap"],
+        "mu_hostcache": once["mu_hostcache"] / st["cap"],
         "mu_rebuild": _rebuild(p, v) * hbm,
+        "mu_partial": _partial(p, v) * hbm,
         "mu_host": (v["b_host"] - st["host_stream"] - st["host_cpu"]) / sigma,
-        "mu_unreg": st["act"] / (v["R"] * 1e9 * st["cap"]) * hbm,
+        "mu_unreg": once["mu_unreg"] / st["cap"],
+        "mu_timing": _timing(st["cap"], st["gap"], v),
         **_common(w, p, v),
     }
     t["gamma"] = sum(x for n, x in t.items() if n.startswith("mu_") or n == "lambda")
@@ -255,7 +328,9 @@ def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) 
     d = st["pass"] * v["R"] * 1e9 / store
     t = {
         "mu_chip": min(1.0, v["s_chip"] / store),
+        "mu_hostcache": v["s_hostcache"] / (v["gpus"] * store),
         "mu_rebuild": d * _rebuild(p, v),
+        "mu_partial": d * _partial(p, v),
         "mu_host": d * (v["b_host"] - st["host_stream"] - st["host_cpu"]) / (v["gpus"] * v["R"]),
         **_common(w, p, v),
     }
@@ -281,7 +356,7 @@ def link_n(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -> f
     topup = max(0.0, st["cap"] - st["t_rd"] - st["t_kv"] - st["t_act"]) / st["cap"] * hbm
     host_gpu, host_cpu = st["host_stream"] / sigma, st["host_cpu"] / sigma
     bound_gpu = min(topup + host_gpu, surplus)
-    bound_cpu = min(host_cpu, surplus - bound_gpu, v["gpus"] * v["b_pcie"] / sigma)
+    bound_cpu = min(host_cpu, surplus - bound_gpu, v["gpus"] * v["b_pcie_down"] / sigma)
     classes = [
         (st["t_rd"] / st["cap"] * hbm, min(1.0, r)),
         (st["t_kv"] / st["cap"] * hbm, min(1.0, 4.0 * w.shape.hidden / (w.ctx * w.shape.kv_bytes_per_token))),
