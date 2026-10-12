@@ -545,7 +545,8 @@ __device__ __forceinline__ void attn_tile(const uint8_t *src, const uint8_t *qs,
     bf16x4(src + t * RAW + g * HEAD_DIM * 2 + lane * 8, kk);
 #pragma unroll
     for (int h = 0; h < GROUP; ++h)
-      s[h * TT + t] = qf[h][0] * kk[0] + qf[h][1] * kk[1] + qf[h][2] * kk[2] + qf[h][3] * kk[3];
+      s[h * TT + t] = __fmaf_rn(qf[h][3], kk[3],
+                                __fmaf_rn(qf[h][2], kk[2], __fmaf_rn(qf[h][1], kk[1], __fmul_rn(qf[h][0], kk[0]))));
   }
   // reduce-scatter: lane L ends with the whole sum of s[L], the score of head L / TT at token L % TT
 #pragma unroll
@@ -564,13 +565,13 @@ __device__ __forceinline__ void attn_tile(const uint8_t *src, const uint8_t *qs,
   const float scale = exp2f(m_own - m_new), p = exp2f(sc - m_new);
   float ps = p + __shfl_xor_sync(0xffffffffu, p, 1);
   ps += __shfl_xor_sync(0xffffffffu, ps, 2);
-  l_own = l_own * scale + ps;
+  l_own = __fmaf_rn(l_own, scale, ps);
   m_own = m_new;
 #pragma unroll
   for (int h = 0; h < GROUP; ++h) {
     const float sh = __shfl_sync(0xffffffffu, scale, h * TT);
 #pragma unroll
-    for (int i = 0; i < 4; ++i) acc[h][i] *= sh;
+    for (int i = 0; i < 4; ++i) acc[h][i] = __fmul_rn(acc[h][i], sh);
   }
 #pragma unroll
   for (int t = 0; t < TT; ++t) {
@@ -581,7 +582,7 @@ __device__ __forceinline__ void attn_tile(const uint8_t *src, const uint8_t *qs,
       for (int h = 0; h < GROUP; ++h) {
         const float ph = __shfl_sync(0xffffffffu, p, h * TT + t);
 #pragma unroll
-        for (int i = 0; i < 4; ++i) acc[h][i] += ph * vv[i];
+        for (int i = 0; i < 4; ++i) acc[h][i] = __fmaf_rn(ph, vv[i], acc[h][i]);
       }
     }
   }
