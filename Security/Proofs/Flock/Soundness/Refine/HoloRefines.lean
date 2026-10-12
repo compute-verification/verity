@@ -212,7 +212,8 @@ theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldR
 /-- **One rep with hidden units refines the model's** (§9–§14 with L4′). When `holoRepProg` returns from `t` to `t'`,
 on a statement whose `m`, `k_log` and circuit fold are the model's `S`, with the extra claims `extras` the model's
 `extra` claim by claim, and on a schedule whose dimensions and levels are the model's and whose levels' consistency
-coins are not one word, one round `kz` in between issued no coins (`z_partial`'s). At the proof's openings `o`, the
+coins are not one word, one round `kz` in between issued no coins (`z_partial`'s), the lincheck's `k_log − 6 + 2`
+rounds past the zerocheck's end. At the proof's openings `o`, the
 model's `holoRepC`, played with the proof's messages and `h` (`holoRepMsgs`) and the coins of every round from `t.k` to
 `t'.k` but `kz`, returns the zerocheck's and the lincheck's outputs, `h` the lincheck's, and a result whose verdict
 is true, whose caps are the proof's and whose requests passed the executable's Merkle checks. -/
@@ -228,6 +229,8 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
     (ho : ∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
       (o r ℓ j).1 = ((openAt p.ligerito (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf) :
     t'.rounds = t.rounds ∧ ∃ kz, t.k ≤ kz ∧ kz < t'.k ∧ (t.rounds[kz]!).n = 0 ∧
+      (∀ zc₁ t₁, Flock.bindAndZerocheck st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck t =
+        .ok (zc₁, t₁) → kz = t₁.k + 2 + (S.kLog - 6)) ∧
       ∃ (zc : Model.ZcOut 𝔽 S.m) (lc : HoloLcOut 𝔽 S.m (S.kLog - 6)) (pend : PendL 𝔽 D),
         Plays fOf (Model.holoRepC execArith r S (schedOf sch) hm extra)
           (holoRepMsgs st sch (2 + extra.length) p hpart capD)
@@ -239,6 +242,7 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
   obtain ⟨zc, t₁, h₁, hrun⟩ := bind_ok hrun
   obtain ⟨lc, t₂, h₂, hrun⟩ := bind_ok hrun
   obtain ⟨⟨T, sws⟩, t₃, h₃, h₄⟩ := bind_ok hrun
+  have h₁₀ := h₁
   rw [hmS] at h₁
   obtain ⟨hr₁, hk₁, zc', hpl₁, hzc⟩ := zerocheck_refines S.m h15 _ _ _ _ _ zc hwf h₁
   obtain ⟨hr₂, hk₂, hz₂, lc', hpl₂, hab, hh⟩ := holoLincheck_refines S st.fold hfold zc zc' hzc p.lincheck hpart
@@ -269,8 +273,10 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
   have e2 : t₂.rounds = t.rounds := hr₂.trans hr₁
   have e3 : t₃.rounds = t.rounds := hr₃.trans e2
   have e4 : t'.rounds = t.rounds := hr₄.trans e3
-  refine ⟨e4, t₁.k + 2 + (S.kLog - 6), by omega, by omega, by rw [← hr₁]; exact hz₂, zc', lc', pend, ?_, hh,
-    hcaps, hreqs, hver⟩
+  refine ⟨e4, t₁.k + 2 + (S.kLog - 6), by omega, by omega, by rw [← hr₁]; exact hz₂, fun zc₁ t₁' h' => ?_, zc',
+    lc', pend, ?_, hh, hcaps, hreqs, hver⟩
+  · obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj (h₁₀.symm.trans h'))
+    rfl
   have hcs : consumed t.rounds t.k (t₁.k + 2 + (S.kLog - 6)) ++
       consumed t.rounds (t₁.k + 2 + (S.kLog - 6) + 1) t'.k =
         consumed t.rounds t.k t₁.k ++ ((consumed t₁.rounds t₁.k (t₁.k + 2 + (S.kLog - 6)) ++

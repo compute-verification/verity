@@ -13,6 +13,7 @@ import Proofs.Flock.C3.Opening.Read
 import Proofs.Flock.C3.RegLevels.Read
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.Opening.Rows
+import Proofs.Flock.C3.HoloValues.Read
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
