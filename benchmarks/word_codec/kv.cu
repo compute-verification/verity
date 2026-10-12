@@ -127,11 +127,14 @@ __device__ __forceinline__ u32 madchi(u32 a, u32 b, u32 c) {
   u32 r; asm volatile("madc.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
 }
 
-// x += a (a < 2^32) into NL limbs; returns the carry out of 2^n.
+// x += a (a < 2^32) into NL limbs; returns the carry out of 2^n. The carry leaves limb 0 with probability a / 2^32
+// (every caller's a is at most c^2 + c < 2^24), so the rest of the chain is a branch.
 __device__ __forceinline__ u32 add_small(u32 (&x)[NL], u32 a) {
-  x[0] = add_cc(x[0], a);
+  x[0] += a;
+  if (x[0] >= a) return 0u;
+  x[1] = add_cc(x[1], 1u);
 #pragma unroll
-  for (int k = 1; k < NL; ++k) x[k] = addc_cc(x[k], 0u);
+  for (int k = 2; k < NL; ++k) x[k] = addc_cc(x[k], 0u);
   return addc(0u, 0u);
 }
 
@@ -299,8 +302,10 @@ __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 
   }
 }
 
-// x mod p for x < 2^n: x - p = x + c - 2^n when that carries out.
+// x mod p for x < 2^n: x - p = x + c - 2^n when that carries out, which needs x's top limb all ones (p's limbs above
+// the lowest are, c < 2^32).
 __device__ __forceinline__ void canon(u32 (&x)[NL]) {
+  if (x[NL - 1] != 0xffffffffu) return;
   u32 z[NL];
   z[0] = add_cc(x[0], CF);
 #pragma unroll
@@ -310,42 +315,44 @@ __device__ __forceinline__ void canon(u32 (&x)[NL]) {
   for (int k = 0; k < NL; ++k) x[k] = ge ? z[k] : x[k];
 }
 
-// x + b mod p, both canonical: s = x + b < 2p, and s - p = s + c - 2^n when s carried out of 2^n or s + c does.
+// x + b mod p, both canonical: s = x + b < 2p. When s carried out of 2^n, s - p = (s - 2^n) + c < p, which carries out
+// of limb 0 only rarely (add_small); otherwise s < 2^n and canon takes off p if s >= p.
 __device__ __forceinline__ void add_mod(u32 (&x)[NL], const u32 (&b)[NL]) {
-  u32 z[NL];
   x[0] = add_cc(x[0], b[0]);
 #pragma unroll
   for (int k = 1; k < NL; ++k) x[k] = addc_cc(x[k], b[k]);
-  const u32 co = addc(0u, 0u);
-  z[0] = add_cc(x[0], CF);
-#pragma unroll
-  for (int k = 1; k < NL; ++k) z[k] = addc_cc(x[k], 0u);
-  const bool ge = (co | addc(0u, 0u)) != 0;
-#pragma unroll
-  for (int k = 0; k < NL; ++k) x[k] = ge ? z[k] : x[k];
+  add_small(x, CF & (0u - addc(0u, 0u)));
+  canon(x);
 }
 
-// x - b mod p, both canonical: a borrow adds p (limbs 2^32 - c, then all ones), masked by the borrow.
+// x - b mod p, both canonical: on a borrow, r = x - b + 2^n >= c + 1 and x - b + p = r - c, which borrows past limb 0
+// only when r's low limb is below c.
 __device__ __forceinline__ void sub_mod(u32 (&x)[NL], const u32 (&b)[NL]) {
   x[0] = sub_cc(x[0], b[0]);
 #pragma unroll
   for (int k = 1; k < NL; ++k) x[k] = subc_cc(x[k], b[k]);
-  const u32 m = subc(0u, 0u);
-  x[0] = add_cc(x[0], (0u - CF) & m);
+  const u32 d = CF & subc(0u, 0u), lo = x[0];
+  x[0] = lo - d;
+  if (lo >= d) return;
+  x[1] = sub_cc(x[1], 1u);
 #pragma unroll
-  for (int k = 1; k < NL - 1; ++k) x[k] = addc_cc(x[k], m);
-  x[NL - 1] = addc(x[NL - 1], m);
+  for (int k = 2; k < NL; ++k) x[k] = subc_cc(x[k], 0u);
 }
 
-// s = p - s when on, s canonical (0 becomes p).
+// s = p - s when on, s canonical (0 becomes p). p's limbs above the lowest are all ones, so p - s complements them
+// unless the lowest limb borrows (s[0] > 2^32 - c, rare).
 __device__ __forceinline__ void neg_if(u32 (&s)[NL], bool on) {
-  u32 z[NL];
-  z[0] = sub_cc(0u - CF, s[0]);
+  if (on && s[0] > 0u - CF) {
+    s[0] = sub_cc(0u - CF, s[0]);
 #pragma unroll
-  for (int k = 1; k < NL - 1; ++k) z[k] = subc_cc(0xffffffffu, s[k]);
-  z[NL - 1] = subc(0xffffffffu, s[NL - 1]);
+    for (int k = 1; k < NL - 1; ++k) s[k] = subc_cc(0xffffffffu, s[k]);
+    s[NL - 1] = subc(0xffffffffu, s[NL - 1]);
+    return;
+  }
+  const u32 m = 0u - (u32)on;
+  s[0] = on ? (0u - CF) - s[0] : s[0];
 #pragma unroll
-  for (int k = 0; k < NL; ++k) s[k] = on ? z[k] : s[k];
+  for (int k = 1; k < NL; ++k) s[k] ^= m;
 }
 
 __device__ __forceinline__ bool eq(const u32 (&a)[NL], const u32 (&b)[NL]) {
@@ -544,6 +551,26 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const u32 *__restrict__ in,
     }
   }
   if (!out) xor_out(acc, xr);
+}
+
+// The field's primitives a word a thread, for the gate at their rare carries: op 0 add_mod(a, b), 1 sub_mod(a, b),
+// 2 neg_if(a, b odd), 3 canon(a), 4 sqr(a).
+__global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict__ a, const u32 *__restrict__ b,
+                                                   u32 *__restrict__ out, int n) {
+  const int w = blockIdx.x * WPB + threadIdx.x;
+  if (w >= n) return;
+  u32 x[NL], y[NL];
+  load(a + (u64)w * NL, x);
+  load(b + (u64)w * NL, y);
+  if (op == 0) add_mod(x, y);
+  else if (op == 1) sub_mod(x, y);
+  else if (op == 2) neg_if(x, y[0] & 1);
+  else if (op == 3) canon(x);
+  else {
+    sqr(x, y);
+    copy(x, y);
+  }
+  store(out + (u64)w * NL, x);
 }
 
 __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ s, u64 n16, unsigned long long *xr) {
@@ -1219,6 +1246,13 @@ int kv_decode_occ(const void *in, uint64_t n, uint64_t base, int k, int grid, un
   cudaFuncSetAttribute(kv::decode_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(got, kv::decode_kernel, kv::WPB, smem);
   kv::decode_kernel<<<grid, kv::WPB, smem, s>>>((const uint32_t *)in, nullptr, n, base, k, xr);
+  return launched();
+}
+
+int kv_prim(int op, const void *a, const void *b, void *out, int n, cudaStream_t s) {
+  if (op < 0 || op > 4 || n < 1) return -1;
+  kv::prim_kernel<<<(n + kv::WPB - 1) / kv::WPB, kv::WPB, 0, s>>>(op, (const uint32_t *)a, (const uint32_t *)b,
+                                                                  (uint32_t *)out, n);
   return launched();
 }
 

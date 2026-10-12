@@ -172,6 +172,34 @@ def test_twin_add_sub_neg_and_tweak(name):
     assert K.from_limbs(T.tweak((1 << 64) - 1, big, f)) == (f.p - 1) * ((1 << 64) - 1) % f.p
 
 
+def _takes_rare(f: K.Field, op: int, a: int, b: int) -> bool:
+    m32, n, c = (1 << 32) - 1, f.n, f.c
+    if op == 0:
+        return bool((a + b) >> n) and ((a + b) & m32) + c > m32
+    if op == 1:
+        return a < b and ((a - b) & m32) < c
+    if op == 2:
+        return bool(b & 1) and (a & m32) > (1 << 32) - c
+    if op == 3:
+        return a >> (n - 32) == m32
+    s1 = (a * a & ((1 << n) - 1)) + c * (a * a >> n)
+    return (s1 & m32) + (s1 >> n) * c > m32
+
+
+@pytest.mark.parametrize("name", ["p512", "p1536"])
+def test_twin_primitives_at_their_rare_branches(name):
+    """The kernel's fast paths leave a carry chain to a branch when it carries or borrows past limb 0 (or canon's
+    top limb is all ones); the device gate (kv_exhaust's prim_gate) runs these same inputs through kv_prim."""
+    f = K.field(name)
+    cases = T.rare_cases(f, random.Random(f.n + 7))
+    for op, rows in cases.items():
+        assert sum(_takes_rare(f, op, a, b) for a, b in rows) >= 4, T.PRIMS[op]
+        for a, b in rows:
+            assert T.prim_twin(f, op, a, b) == T.prim_want(f, op, a, b), (T.PRIMS[op], a, b)
+    sq = [a for a, _ in cases[4]]
+    assert all(K.from_limbs(T.sqr(K.to_limbs(a, f), f)) % f.p == a * a % f.p for a in sq)
+
+
 @pytest.mark.parametrize("name", NAMES)
 def test_twin_root_is_the_chain(name):
     f = K.field(name)
