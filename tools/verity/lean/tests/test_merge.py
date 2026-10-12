@@ -204,6 +204,28 @@ def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict
     assert rec.read_text() == A.text(branches["c"])
 
 
+def test_a_layer_both_sides_changed_merges_to_what_each_allows():
+    """Three trains refused on `layers` overnight Oct 11: two branches each adding a module of `Definitions.Accounting` widened
+    its imports and wrote their own `why`. Each side's additions and removals apply, both `why`s stay, and the merged rule is
+    reported for the PR; a rule one side removed and the other changed is still refused."""
+    rule = lambda imports, why, exc=(): {"imports": list(imports), "except": list(exc), "why": why}
+    base = {"layers": {"D.A": rule(["Mathlib", "D.A"], "trusted text"), "D.B": rule([], "nothing")}}
+    ours = {"layers": {"D.A": rule(["Mathlib", "D.A", "D.Tag"], "trusted text: the tags"), "D.B": rule([], "nothing"),
+                       "D.C": rule(["D.A"], "the device", ["D.C.Old"])}}
+    theirs = {"layers": {"D.A": rule(["D.A", "D.Game"], "trusted text: the game"), "D.B": rule([], "nothing at all"),
+                         "D.C": rule(["D.B"], "the device model")}}
+    notes = []
+    merged, why = M.merge(base, ours, theirs, notes)
+    assert why == []
+    assert merged["layers"] == {"D.A": rule(["D.A", "D.Tag", "D.Game"], "trusted text: the tags; trusted text: the game"),
+                                "D.B": rule([], "nothing at all"),
+                                "D.C": rule(["D.A", "D.B"], "the device; the device model", ["D.C.Old"])}
+    assert [n.split(":")[0] for n in notes] == ["layers[D.A]", "layers[D.C]"]
+    assert notes[0].endswith(json.dumps(merged["layers"]["D.A"]))
+    _, why = M.merge(base, {"layers": {"D.B": base["layers"]["D.B"]}}, theirs)
+    assert why == ["layers[D.A]: removed on one side and changed on the other"]
+
+
 def test_shape_entries_and_frozen_names_merge_one_by_one():
     """Two branches that each freeze or enter a different guarantee merge; one entry set two ways is refused."""
     base = {"shape": {"premises": [], "properties": {}, "frozen": {"P.a": "RESTATE"}}}

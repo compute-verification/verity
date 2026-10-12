@@ -11,7 +11,9 @@ A guarantee's record (its `owner` aside, which merges on its own) and a dependen
 read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as sets, and its digest
 is recomputed from the merged definitions (`audit.module_digest`). The merge also refuses when one side stops reading a
 definition in a module the other side changed: the record does not say which guarantees read which definition. A side
-written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`).
+written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`). A `layers` rule both
+sides changed, or both added, merges too (`layers`): its `imports` and `except` as sets, each side's additions and removals
+applied, and both `why`s kept; the driver prints the merged rule, for the PR.
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
@@ -92,6 +94,39 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
+def members(o: list, a: list, b: list) -> list:
+    """A list merged as a set, three ways: each side's additions and removals apply; ours' order, then theirs' new ones."""
+    keep = (set(a) & set(b)) | (set(a) - set(o)) | (set(b) - set(o))
+    return [x for x in a if x in keep] + [x for x in b if x in keep and x not in a]
+
+
+def layers(o: dict, a: dict, b: dict, why: list[str], notes: list[str]) -> dict:
+    """The `layers` rules entry by entry. A rule both sides changed (or both added) merges its `imports` and `except` as sets,
+    each side's additions and removals applied, so it allows what each side allows, and keeps both `why`s; ``notes`` gets it
+    as merged, for the PR. A rule removed on one side and changed on the other is refused."""
+    out = {}
+    for k in keys("layers", a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        if MISSING in (y, z) or y == z or x in (y, z) or not all(isinstance(r, dict) for r in (y, z, {} if x is MISSING else x)):
+            v = one(f"layers[{k}]", x, y, z, why)
+        else:
+            base = {} if x is MISSING else x
+            v = {}
+            for f in keys("", y, z):
+                p, q, r = base.get(f, MISSING), y.get(f, MISSING), z.get(f, MISSING)
+                if f in ("imports", "except") and all(isinstance(s, list) for s in (q, r)):
+                    v[f] = members([] if p is MISSING else p, q, r)
+                elif f == "why" and all(isinstance(s, str) for s in (q, r)) and q != r and p not in (q, r):
+                    v[f] = "; ".join(s for s in (q, r) if s)
+                elif (w := one(f"layers[{k}].{f}", p, q, r, why)) is not MISSING:
+                    v[f] = w
+            notes.append(f"layers[{k}]: changed on both sides; merged as each side's imports and except together, with both "
+                         f"whys: {json.dumps(v, ensure_ascii=False)}")
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
 def core(group):
     """What a `reads` entry says, its digest (which it determines) aside."""
     return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
@@ -137,14 +172,18 @@ def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
-def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
-    """(the merged record, why it is refused: empty when it merged).  A pure function of the three records."""
+def merge(base: dict, ours: dict, theirs: dict, notes: list[str] | None = None) -> tuple[dict, list[str]]:
+    """(the merged record, why it is refused: empty when it merged).  A pure function of the three records; ``notes`` gets
+    what the PR should show of the merge (`layers`)."""
     why: list[str] = []
+    notes = [] if notes is None else notes
     out = {}
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why)
+        elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = layers({} if o is MISSING else o, a, b, why, notes)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
@@ -206,14 +245,18 @@ def main(argv: list[str]) -> int:
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
+    notes: list[str] = []
     try:
-        merged, why = merge(load(base), load(ours), load(theirs))
+        merged, why = merge(load(base), load(ours), load(theirs), notes)
     except ValueError as e:
         why = [f"a side is not JSON ({e})" if isinstance(e, json.JSONDecodeError) else f"a side: {e}"]
     if why:
         print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`audit.py --update`):", file=sys.stderr)
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)
         return 1
+    if notes:
+        print(f"merge.py: {path}: merged; put these in the PR:", file=sys.stderr)
+        print("\n".join(f"  {n}" for n in notes), file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
 
