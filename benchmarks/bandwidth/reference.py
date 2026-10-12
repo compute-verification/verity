@@ -1,12 +1,13 @@
 """The GPU tagger's expected roots, from the core reference (`verity.core.protocols.bandwidth`), on CPU processes.
 
-    python reference.py --blocks 524288 --seed HEX --out expect.json [--leaves store_leaves.bin] [--workers 32]
+    python reference.py --blocks 524288 --seed HEX --out expect.json [--workers 32]
 
 The store is the generated test store of `bandwidth_vectors.py` (`block`), which `tagger.cu`'s `fill_store` writes on the
 device.  `expect.json` holds every tag's roots over `--blocks` blocks under `--seed`, and the same over 37 blocks under
-`SEED`, recomputed here and checked against `vectors.json`'s roots before anything is written.  `--leaves`
-also writes the store's PoUS leaf digests (64 bytes each, block order) under `geometry(blocks)` and `SALT`, from which
-`gpu.py windows` builds `vk` and the store's audit paths.
+`SEED`, recomputed here and checked against `vectors.json`'s roots before anything is written.  `store_leaves` gives the
+store's PoUS leaf digests under `geometry(blocks)` and a salt, from which `gpu.py windows` builds `vk` and the store's
+audit paths once it knows its device: the salt is `audit.draw_salt` for that device under `COMMITMENT`, the test
+store's stand-in for the commitment to `W`.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
 BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"
 BLOCK_BYTES = 2056
-SALT = bytes(range(100, 124))
+COMMITMENT = hashlib.sha512(BLOCK_DOMAIN).digest()
 SEED = bytes(range(32))
 SMALL = 37
 CHUNK = 4096
@@ -50,42 +51,49 @@ def geometry(blocks: int) -> P2Params:
     return P2Params(w, c0, per, blocks // per)
 
 
-def _chunk(args: tuple[int, int, int, bytes, bool]) -> tuple[dict[str, list[bytes]], list[bytes]]:
-    lo, hi, blocks, seed, want_leaves = args
+def _chunk(args: tuple[int, int, bytes]) -> dict[str, list[bytes]]:
+    lo, hi, seed = args
     keyed = {name: tags.get(name).keyed(seed) for name in tags.TAGS}
-    params = geometry(blocks) if want_leaves else None
     ys: dict[str, list[bytes]] = {name: [] for name in tags.TAGS}
-    store_leaves = []
     for j in range(lo, hi):
         b = block(j)
         for name in tags.TAGS:
             ys[name].append(keyed[name](j, b))
-        if want_leaves:
-            store_leaves.append(leaf_hash(params, SALT, j, b))
-    return ys, store_leaves
+    return ys
 
 
-def roots(blocks: int, seed: bytes, workers: int, leaves_out: Path | None = None) -> dict[str, str]:
-    """Every tag's root over the first `blocks` generated blocks under `seed`; `leaves_out` gets the store's leaves."""
+def roots(blocks: int, seed: bytes, workers: int) -> dict[str, str]:
+    """Every tag's root over the first `blocks` generated blocks under `seed`."""
     ys: dict[str, list[bytes]] = {name: [] for name in tags.TAGS}
-    store_leaves: list[bytes] = []
-    jobs = [(lo, min(lo + CHUNK, blocks), blocks, seed, leaves_out is not None) for lo in range(0, blocks, CHUNK)]
+    jobs = [(lo, min(lo + CHUNK, blocks), seed) for lo in range(0, blocks, CHUNK)]
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        for part, sl in pool.map(_chunk, jobs):
+        for part in pool.map(_chunk, jobs):
             for name, v in part.items():
                 ys[name] += v
-            store_leaves += sl
-    if leaves_out is not None:
-        leaves_out.write_bytes(b"".join(store_leaves))
     return {name: MerkleTree(tags.leaves(tags.get(name), seed, v)).root.hex() for name, v in ys.items()}
+
+
+def _leaves_chunk(args: tuple[int, int, int, bytes]) -> list[bytes]:
+    lo, hi, blocks, salt = args
+    params = geometry(blocks)
+    return [leaf_hash(params, salt, j, block(j)) for j in range(lo, hi)]
+
+
+def store_leaves(blocks: int, salt: bytes, workers: int) -> list[bytes]:
+    """The generated store's PoUS leaf digests under `geometry(blocks)` and `salt`, in block order."""
+    jobs = [(lo, min(lo + CHUNK, blocks), blocks, salt) for lo in range(0, blocks, CHUNK)]
+    if workers <= 1:
+        return [leaf for job in jobs for leaf in _leaves_chunk(job)]
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        return [leaf for part in pool.map(_leaves_chunk, jobs) for leaf in part]
 
 
 def small() -> dict:
     """The 37-block case under `SEED`, recomputed and held to `vectors.json`'s roots."""
     vectors = json.loads(VECTORS.read_text())
     pinned = {r["tag"]: r["tag_root"] for r in vectors["roots"] if r["blocks"] == SMALL and r["seed"] == SEED.hex()}
-    blocks = [block(j) for j in range(SMALL)]
-    got = {name: audit.tag_pass(audit.Store(geometry(SMALL), SALT, blocks), name, SEED).root.hex() for name in tags.TAGS}
+    store = audit.Store(geometry(SMALL), bytes.fromhex(vectors["salts"][0]["salt"]), [block(j) for j in range(SMALL)])
+    got = {name: audit.tag_pass(store, name, SEED).root.hex() for name in tags.TAGS}
     if got != pinned:
         raise SystemExit(f"the reference disagrees with vectors.json over {SMALL} blocks: {got} != {pinned}")
     return {"blocks": SMALL, "seed": SEED.hex(), "roots": got}
@@ -97,16 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", default=SEED.hex())
     ap.add_argument("--workers", type=int, default=min(32, os.cpu_count() or 1))
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--leaves", type=Path)
     a = ap.parse_args(argv)
     seed = bytes.fromhex(a.seed)
     if len(seed) != tags.SEED_BYTES:
         raise SystemExit(f"a seed is {tags.SEED_BYTES} bytes")
     out = {"format": "verity-bandwidth/expect/v1", "block_bytes": BLOCK_BYTES, "small": small(),
-           "full": {"blocks": a.blocks, "seed": seed.hex(), "roots": roots(a.blocks, seed, a.workers, a.leaves)}}
-    if a.leaves is not None:
-        out["full"]["store_leaves_sha256"] = hashlib.sha256(a.leaves.read_bytes()).hexdigest()
-        out["full"]["salt"] = SALT.hex()
+           "full": {"blocks": a.blocks, "seed": seed.hex(), "roots": roots(a.blocks, seed, a.workers)}}
     a.out.write_text(json.dumps(out, indent=1) + "\n")
     json.dump(out, sys.stdout, indent=1)
     print()

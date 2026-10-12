@@ -6,15 +6,16 @@
 #   (a timed run: `--no-sampler` on research run, and TIMED=1 here, which takes the lease with --timed)
 #
 # Outside the lease: build `bwtag` and `libbwtag.so` (refused on any register spill), and compute with the core reference
-# the expected roots over the full store and over the pinned vectors' 37 blocks, and the store's PoUS leaves.  Under
+# the expected roots over the full store and over the pinned vectors' 37 blocks.  Under
 # `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's and keyed BLAKE3's known answers; every tag's roots
 # against the reference with the output buffers poisoned; a control without the tag kernel that must not match), then its
-# timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: honest windows through `audit.Verifier` at
-# DEADLINE_NS (default the largest it allows), each after an untimed warm pass and a read scrub, and windows that tag
-# only part of the store.  After the lease:
+# timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: the store's salt for the leased GPU and its PoUS
+# leaves under it (the GPU is known only here), then honest windows through `audit.Verifier` at DEADLINE_NS (default the
+# largest it allows), each after an untimed warm pass and a read scrub, and windows that tag only part of the store,
+# every window recorded in the store's one challenger state.  After the lease:
 # `summarize.py`.
 # Env: BLOCKS (default 524,288, the certificate's store), SEED (hex, default 00..1f), REPS (default 100), WINDOWS (20),
-# DEADLINE_NS, WORKERS (the reference's processes, default 32), TIMED.
+# DEADLINE_NS, WORKERS (the reference's processes and the store leaves', default 32), TIMED.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, expect.json, gpu.txt, env.txt, smi.csv, device.json, validation.json,
 # timing.json, windows.json, challenger-state (the store's, every window's nonce), summary.json.
 set -euo pipefail
@@ -48,7 +49,7 @@ EOF
   "$S/bwtag" --out "$O" --blocks "${A[0]}" --reps "${REPS:-100}" --seed "${A[1]}" --small-seed "${A[2]}" \
     "${A[@]:3}" || rc=$?
   [ $rc = 0 ] || { echo "bwtag exited $rc: nothing more runs"; exit $rc; }
-  "$PY" gpu.py windows --lib "$S/libbwtag.so" --leaves "$S/store_leaves.bin" --blocks "${A[0]}" \
+  "$PY" gpu.py windows --lib "$S/libbwtag.so" --blocks "${A[0]}" --workers "${WORKERS:-32}" \
     --windows "${WINDOWS:-20}" ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"} --state "$O/challenger-state" \
     --out "$O/windows.json" > "$O/windows.jsonl"
   exit 0
@@ -67,7 +68,7 @@ if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kerne
 sha256sum tagger.cu "$S/bwtag" "$S/libbwtag.so" >> "$O/build.txt"
 
 "$PY" reference.py --blocks "${BLOCKS:-524288}" --seed "${SEED:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}" \
-  --workers "${WORKERS:-32}" --out "$O/expect.json" --leaves "$S/store_leaves.bin" > /dev/null
+  --workers "${WORKERS:-32}" --out "$O/expect.json" > /dev/null
 
 rc=0
 GPU_LEASE_WHO=ra-bandwidth-protocol gpu-lease 1 --wait ${TIMED:+--timed} --max-min 20 -- bash "$PWD/run.sh" leased "$S" || rc=$?

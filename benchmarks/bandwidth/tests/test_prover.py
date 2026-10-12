@@ -39,6 +39,9 @@ class _Tagger:
     def free(self, ptr: int) -> None:
         pass
 
+    def device(self) -> bytes:
+        return bytes(range(16))
+
     def fill_test_store(self, store: int, blocks: int) -> None:
         pass
 
@@ -99,10 +102,8 @@ def test_every_window_of_the_harness_is_prepared(monkeypatch, tmp_path) -> None:
         return start(self)
 
     monkeypatch.setattr(audit.Window, "start", logged)
-    leaves = tmp_path / "leaves.bin"
-    leaves.write_bytes(bytes(range(64)) * 37)
-    a = SimpleNamespace(lib="fake", leaves=leaves, blocks=37, samples=4, deadline_ns=1_200_000, windows=3, skip=[0.1],
-                        tags=sorted(gpu.TAG_IDS), source=b"s".hex(), state=tmp_path / "state")
+    a = SimpleNamespace(lib="fake", blocks=37, workers=1, samples=4, deadline_ns=1_200_000, windows=3, skip=[0.1],
+                        tags=sorted(gpu.TAG_IDS), state=tmp_path / "state")
     out = gpu._windows(a)
     starts = [i for i, e in enumerate(log) if e == ("start",)]
     assert len(starts) == len(a.tags) * (a.windows + len(a.skip) + 1)

@@ -65,7 +65,10 @@ salt as an input and needs only that it is drawn after the commitment to `W`, fr
 beacon round, which this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different
 stores, so their `vk`, seeds and tags differ, and one device's commitment fails another's window
 (`test_one_devices_commitment_fails_anothers_window`). Without it, two such devices hold byte-identical stores, and one
-device's root passes the other's windows.
+device's root passes the other's windows. So the verifier refuses any other store: `audit.Verifier` takes the device's
+id, the commitment to `W` and the source the salt was drawn from, and refuses `vk` unless `vk.salt` is `draw_salt`'s
+for them, before any window. A store set up under PoUS's own salt, another device's store, or one salted under another
+commitment is never audited as this device's (`test_a_store_not_salted_for_its_device_is_refused`).
 
 **The device's id** is the 16 bytes of its GPU's UUID, nothing else: `draw_salt` refuses any other value, and
 `audit.device_id` reads it only from the one spelling nvidia-smi prints, `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in
@@ -372,16 +375,17 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 
 - `tags.py`: `get(name)`, each construction's `keyed(σ)(j, block)`, `certified`, `guess`, `info_bits`; the tag tree
   (`leaves`).
-- `audit.py`: a device's salt (`draw_salt`), the prover's reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
+- `audit.py`: a device's id and salt (`device_id(uuid)`, `draw_salt(source, commitment, device)`), the prover's
+  reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
   `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(path, vk)` once, then
   `ChallengerState(path, vk)`, shared by every verifier of the store), the verifier
-  (`Verifier(vk, params, source, state).window()`: `start() -> σ`, `commit(root) -> samples`,
-  `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
-  `certified_blocks`, `samples_for`) and `bound`.
+  (`Verifier(vk, params, source, state, device=, commitment=, salt_source=).window()`: `start() -> σ`,
+  `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point
+  (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`, `certified_blocks`, `samples_for`) and `bound`.
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
-  salts, window seeds and samples, and a whole window over 37 blocks.
+  ids and salts, window seeds and samples over the first device's store, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
-  (`gpu.py`: `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
+  (`gpu.py`: `Tagger.device()` is the GPU's id; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
   `Opening` this verifier checks; `Prover.commit(window)` prepares, then takes `σ` and commits; `windows` runs every
   window through it), its Python twins
   (`benchmarks/bandwidth/tests/test_tagger_twin.py`), and the runs of §6.

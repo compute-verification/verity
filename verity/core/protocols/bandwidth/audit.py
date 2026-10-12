@@ -1,6 +1,6 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
 a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`), so devices holding one `W` hold
-different stores.
+different stores, and the verifier refuses a store whose salt is not its device's (`Verifier`).
 
 1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk,
    derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and sends the seed `σ`
@@ -379,13 +379,17 @@ class ChallengerState:
 
 
 class Verifier:
-    """The verifier of one tag's windows over one store `vk`, from its own secret `source`.  Every verifier of a store
+    """The verifier of one tag's windows over one store `vk`, from its own secret `source`.  The store must be the one
+    `device` holds: its salt is `draw_salt(salt_source, commitment, device)`, or the verifier refuses it, so a store set
+    up under any other salt (PoUS's own, another device's) is never audited as this device's.  Every verifier of a store
     takes the store's one `state`, which draws each window's nonce, records it before `σ` leaves, and keeps one window
     over the store open at a time, whichever verifier opens it."""
 
-    def __init__(self, vk: VerifierKey, params: Params, source: bytes, state: ChallengerState,
-                 clock: Callable[[], int] = time.perf_counter_ns) -> None:
+    def __init__(self, vk: VerifierKey, params: Params, source: bytes, state: ChallengerState, *, device: bytes,
+                 commitment: bytes, salt_source: bytes, clock: Callable[[], int] = time.perf_counter_ns) -> None:
         tags.get(params.tag).check_block(vk.params.block_bytes)
+        if vk.salt != draw_salt(salt_source, commitment, device):
+            raise ValueError("the store's salt is not draw_salt's for this device and commitment: refused")
         if not isinstance(state, ChallengerState) or state.store != (vk.root, vk.salt):
             raise ValueError("a verifier takes its store's challenger state")
         self.vk, self.params, self.source, self.state, self.clock = vk, params, source, state, clock

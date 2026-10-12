@@ -843,6 +843,17 @@ int bw_last_pass_ms(float* tags_ms, float* pass_ms) {
   return 0;
 }
 
+// The current device's 16-byte UUID as its driver reports it (nvidia-smi prints it as GPU-xxxxxxxx-...): the device's id,
+// which its store's salt binds (`audit.draw_salt`).
+int bw_device_uuid(uint8_t* out) {
+  int d = 0;
+  cudaDeviceProp p;
+  CK(cudaGetDevice(&d));
+  CK(cudaGetDeviceProperties(&p, d));
+  memcpy(out, p.uuid.bytes, 16);
+  return 0;
+}
+
 // Block j's 2,056 bytes.
 int bw_read_block(const void* store, uint64_t j, uint8_t* out) {
   CK(cudaMemcpy(out, (const uint8_t*)store + j * bw::BLOCK_BYTES, bw::BLOCK_BYTES, cudaMemcpyDeviceToHost));

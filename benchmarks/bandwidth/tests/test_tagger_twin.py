@@ -491,13 +491,26 @@ def test_reference_small_case_is_the_pinned_vectors():
     assert out["roots"] == {r["tag"]: r["tag_root"] for r in vectors["roots"]}
 
 
-def test_reference_roots_across_chunks(monkeypatch, tmp_path):
+def test_reference_roots_and_leaves_across_chunks(monkeypatch):
     monkeypatch.setattr(reference, "CHUNK", 16)
-    leaves_out = tmp_path / "leaves.bin"
-    got = reference.roots(70, SEED, 2, leaves_out)
-    store = audit.Store(reference.geometry(70), reference.SALT, [reference.block(j) for j in range(70)])
-    assert got == {name: audit.tag_pass(store, name, SEED).root.hex() for name in tags.TAGS}
-    assert leaves_out.read_bytes() == b"".join(store.tree.leaves)
+    salt = audit.draw_salt(b"run secret", reference.COMMITMENT, bytes(range(16)))
+    store = audit.Store(reference.geometry(70), salt, [reference.block(j) for j in range(70)])
+    assert reference.roots(70, SEED, 2) == {name: audit.tag_pass(store, name, SEED).root.hex() for name in tags.TAGS}
+    for workers in (1, 2):
+        assert reference.store_leaves(70, salt, workers) == list(store.tree.leaves)
+    assert reference.store_leaves(70, bytes(24), 1) != list(store.tree.leaves)
+
+
+def test_the_device_id_is_the_drivers_uuid():
+    """`bw_device_uuid` copies the 16 bytes of `cudaDeviceProp.uuid` of the current device, and `uuid_text` spells them
+    as nvidia-smi does, the one spelling `audit.device_id` reads."""
+    body = CU[CU.index("int bw_device_uuid(uint8_t* out)"):]
+    body = body[:body.index("\n}\n")]
+    assert "cudaGetDevice(&d)" in body and "cudaGetDeviceProperties(&p, d)" in body
+    assert "memcpy(out, p.uuid.bytes, 16)" in body
+    device = bytes.fromhex("7e28035c3c3bb7aad6550dad098bab62")
+    assert gpu.uuid_text(device) == "GPU-7e28035c-3c3b-b7aa-d655-0dad098bab62"
+    assert audit.device_id(gpu.uuid_text(device)) == device
 
 
 def test_s_chip_counts_every_on_chip_store():

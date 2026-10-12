@@ -20,9 +20,10 @@ PATH = Path(__file__).with_name("vectors.json")
 BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"
 SEED = bytes(range(32))
 SOURCE = b"verity bandwidth vector source"
-SALT = bytes(range(100, 124))
 COMMITMENT = hashlib.sha512(b"verity bandwidth vector commitment").digest()
 DEVICES = ("GPU-00112233-4455-6677-8899-aabbccddeeff", "GPU-ffeeddcc-bbaa-9988-7766-554433221100")
+DEVICE = audit.device_id(DEVICES[0])
+SALT = audit.draw_salt(SOURCE, COMMITMENT, DEVICE)
 NONCES = (bytes(32), bytes(range(32)), bytes([0xFF]) * 32)
 BLOCK_BYTES = 2056
 
@@ -34,7 +35,7 @@ def block(j: int, block_bytes: int = BLOCK_BYTES) -> bytes:
 
 
 def store(blocks: int, block_bytes: int = BLOCK_BYTES) -> audit.Store:
-    """`blocks` generated blocks under a one-segment P2 geometry and `SALT`."""
+    """`blocks` generated blocks under a one-segment P2 geometry and `SALT`, `DEVICE`'s salt under `COMMITMENT`."""
     params = P2Params(8 * block_bytes, 21065 if block_bytes == BLOCK_BYTES else 173, blocks, 1)
     return audit.Store(params, SALT, [block(j, block_bytes) for j in range(blocks)])
 

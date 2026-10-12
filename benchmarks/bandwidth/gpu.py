@@ -12,10 +12,14 @@
 `PATH(c)` read from the tree levels the pass left in the workspace.  `store_tree` is the store's own tree under `vk`
 (`pous.verifier.MerkleTree`), which the prover keeps from setup.  The checks are the core verifier's (`audit.Window`).
 
-    python gpu.py windows --lib libbwtag.so --leaves store_leaves.bin --blocks N --out windows.json
+    python gpu.py windows --lib libbwtag.so --blocks N --state challenger-state --out windows.json [--workers 32]
 
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
-`--deadline-ns` (default the largest `audit.Params` allows), negative controls that tag only part of the store, and one
+`--deadline-ns` (default the largest `audit.Params` allows).  The store is this device's: a fresh secret, never written
+out, draws its salt for the GPU the tagger runs on (`Tagger.device`, `audit.draw_salt` under `reference.COMMITMENT`) and
+every window's key; the store's leaves under that salt are computed here (`reference.store_leaves`, on `--workers`
+processes), and the store's one challenger state is made at `--state`.  Then negative controls that tag only part of the
+store, and one
 window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.  Every
 window goes through `Prover`, which prepares before it asks for the seed: one untimed pass under a throwaway seed, then
 a read of `SCRUB_BYTES` of another buffer, so the window starts with its launch path warm and L2 clean and holding no
@@ -29,11 +33,13 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import secrets
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from reference import SALT, geometry
+import reference
+from reference import COMMITMENT, geometry
 from verity.core.protocols.bandwidth import audit, tags
 from verity.core.protocols.pous.verifier import DIGEST_BYTES, MerkleTree, VerifierKey
 
@@ -84,13 +90,14 @@ class Tagger:
         L.bw_levels.argtypes, L.bw_levels.restype = [i32, u64, ctypes.POINTER(u64)], ctypes.c_uint32
         L.bw_fill_test_store.argtypes = [vp, u64]
         L.bw_read_block.argtypes = [vp, u64, ctypes.c_char_p]
+        L.bw_device_uuid.argtypes = [ctypes.c_char_p]
         L.bw_alloc.argtypes, L.bw_alloc.restype = [ctypes.c_size_t], vp
         L.bw_free.argtypes = [vp]
         L.bw_memset.argtypes = [vp, i32, ctypes.c_size_t]
         L.bw_read_scrub.argtypes = [vp, ctypes.c_size_t]
         L.bw_last_pass_ms.argtypes = [ctypes.POINTER(ctypes.c_float)] * 2
         for f in ("bw_tag_pass", "bw_tag_pass_prefix", "bw_read_tags", "bw_read_node", "bw_fill_test_store",
-                  "bw_read_block", "bw_free", "bw_memset", "bw_read_scrub", "bw_last_pass_ms"):
+                  "bw_read_block", "bw_device_uuid", "bw_free", "bw_memset", "bw_read_scrub", "bw_last_pass_ms"):
             getattr(L, f).restype = i32
 
     def _ok(self, rc: int, what: str) -> None:
@@ -118,6 +125,12 @@ class Tagger:
         tags_ms, pass_ms = ctypes.c_float(), ctypes.c_float()
         self._ok(self.lib.bw_last_pass_ms(ctypes.byref(tags_ms), ctypes.byref(pass_ms)), "last pass time")
         return tags_ms.value, pass_ms.value
+
+    def device(self) -> bytes:
+        """The id of the device the tagger runs on (`audit.device_id`): its GPU's 16-byte UUID, from the driver."""
+        out = ctypes.create_string_buffer(audit.DEVICE_BYTES)
+        self._ok(self.lib.bw_device_uuid(out), "device UUID")
+        return out.raw
 
     def fill_test_store(self, store: int, blocks: int) -> None:
         self._ok(self.lib.bw_fill_test_store(store, blocks), "fill_test_store")
@@ -217,27 +230,34 @@ class Prover:
         return commitment, window.commit(commitment.root), (c1 - c0) / 1e6
 
 
+def uuid_text(device: bytes) -> str:
+    """A device's id as nvidia-smi prints it, the one spelling `audit.device_id` reads."""
+    h = device.hex()
+    return f"GPU-{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+
+
 def _windows(a: argparse.Namespace) -> dict:
-    params = geometry(a.blocks)
-    raw = a.leaves.read_bytes()
-    store_leaves = [raw[i:i + DIGEST_BYTES] for i in range(0, len(raw), DIGEST_BYTES)]
-    store_tree = MerkleTree(store_leaves)
-    vk = VerifierKey(params, SALT, store_tree.root, tuple(store_leaves))
     t = Tagger(a.lib)
+    device = t.device()
+    secret = secrets.token_bytes(32)
+    salt = audit.draw_salt(secret, COMMITMENT, device)
+    store_leaves = reference.store_leaves(a.blocks, salt, a.workers)
+    store_tree = MerkleTree(store_leaves)
+    vk = VerifierKey(geometry(a.blocks), salt, store_tree.root, tuple(store_leaves))
     store = t.alloc(a.blocks * BLOCK_BYTES)
     t.fill_test_store(store, a.blocks)
     scrub = t.alloc(SCRUB_BYTES)
     t.memset(scrub, 0, SCRUB_BYTES)
-    source = bytes.fromhex(a.source)
-    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "scrub_mib": SCRUB_BYTES >> 20,
-                 "results": [], "openings_check": []}
+    out: dict = {"blocks": a.blocks, "device": uuid_text(device), "salt": salt.hex(), "store_root": vk.root.hex(),
+                 "samples": a.samples, "scrub_mib": SCRUB_BYTES >> 20, "results": [], "openings_check": []}
+    bind = {"device": device, "commitment": COMMITMENT, "salt_source": secret}
     audit.ChallengerState.create(a.state, vk)
     with audit.ChallengerState(a.state, vk) as state:
         for name in a.tags:
             ws = t.alloc(t.workspace_bytes(name, a.blocks))
             prover = Prover(t, name, store, a.blocks, ws, scrub)
             p = audit.Params(name, a.samples, a.deadline_ns)
-            verifier = audit.Verifier(vk, p, source, state)
+            verifier = audit.Verifier(vk, p, secret, state, **bind)
             for n, f in enumerate([0.0] * a.windows + a.skip):
                 w = verifier.window()
                 tagged = a.blocks - round(f * a.blocks)
@@ -256,7 +276,7 @@ def _windows(a: argparse.Namespace) -> dict:
             # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
             # honest pass is late still has its openings checked by the verifier.
             loose = audit.Params(name, a.samples, LOOSE_NS, regen_floor_ns=LOOSE_NS + 1)
-            w = audit.Verifier(vk, loose, source, state).window()
+            w = audit.Verifier(vk, loose, secret, state, **bind).window()
             commitment, drawn, _ = prover.commit(w)
             v = w.verdict([commitment.open(j, store_tree) for j in drawn])
             out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
@@ -272,14 +292,13 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     w = sub.add_parser("windows", help="honest windows and skip controls through audit.Verifier")
     w.add_argument("--lib", type=Path, required=True)
-    w.add_argument("--leaves", type=Path, required=True)
     w.add_argument("--blocks", type=int, required=True)
+    w.add_argument("--workers", type=int, default=1, help="processes for the store's leaves")
     w.add_argument("--samples", type=int, default=audit.SAMPLES)
     w.add_argument("--deadline-ns", type=int, default=audit.REGEN_FLOOR_NS - 1)
     w.add_argument("--windows", type=int, default=20)
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))
-    w.add_argument("--source", default=b"verity bandwidth gpu windows".hex())
     w.add_argument("--state", type=Path, required=True,
                    help="the store's challenger state, made here: refused if the file exists")
     w.add_argument("--out", type=Path, required=True)
