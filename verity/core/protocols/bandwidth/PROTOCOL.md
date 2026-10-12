@@ -4,12 +4,14 @@ Status: v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`
 `f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), fixing `T` and
 `s`, then objected at `5c62196c1` (art:dbbce953a1916411304d1f4558010b6c18cbcb4b69c2c514e32ca83a2bc6b9c5): windows over
 one store could share a key across verifiers, tags and restarts, and the verifier accepted a store not salted for its
-device. The fixes (§2, §3) await its re-review, and no rate is certified until it grants. The Python reference and verifier are `audit.py`
-and `tags.py`, pinned by `tests/vectors.json`; the GPU tagger is `benchmarks/bandwidth`, checked bit for bit against
-them and timed on the RTX PRO 6000 (§6). The guarantee is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of
-`Security/`'s guarantees, proved as `Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane
-`ra-bandwidth-lean` (PR #1806); its completeness is `HonestPasses`. Until #1806 is on `main`, the statement is that
-PR's.
+device. It granted `5761861fd`, with those fixes, with two conditions
+(art:c67e2351ef1718c239e20fca8ddc6d92fc3ded80941fb0f1e50812cd6892cb18): one challenger state per store (§3) and a
+device id the challenger reads itself (§2). Both are fixed and await its check; §6 quotes the rate granted at
+`5761861fd`. The Python reference and verifier are `audit.py` and `tags.py`, pinned by `tests/vectors.json`; the GPU
+tagger is `benchmarks/bandwidth`, checked bit for bit against them and timed on the RTX PRO 6000 (§6). The guarantee
+is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of `Security/`'s guarantees, proved as
+`Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane `ra-bandwidth-lean` (PR #1806); its completeness
+is `HonestPasses`. Until #1806 is on `main`, the statement is that PR's.
 
 ## 1. What a window certifies
 
@@ -44,8 +46,8 @@ At the deployed point, `ε_s = 1/64`, `s = 1,849`, `h = 256` (`ro-blake3/v1`), `
 | error | `2^-42.01` (samples) + `2^-245.1` (guesses) + `2^-41` (compression) ≤ `2^-40.42` |
 
 `G = 0`, because `Params` refuses `T + RTT` at or past one rebuild (§5). `S` and `c` are the device's (§5).
-`audit.bound` computes `I` and the error, and §6 evaluates it at the measured `S` and `c`; that is the formula's
-arithmetic, not a certified rate, and none is quoted until the red team grants.
+`audit.bound` computes `I` and the error, and §6 evaluates it at the measured `S` and `c` and quotes the rate the red
+team granted at `5761861fd`.
 `test_bound_is_the_guarantee_at_the_proofs_point` checks `bound` against the formula.
 
 `gf31-poly/v1` is an uncertified fast check: nothing bounds a device's ingress through it (§4), and `bound` refuses it.
@@ -305,10 +307,12 @@ paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
 rebuild floor. The parameters: **`ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`**, which leaves up to 0.5 ms for `RTT`,
 fixed by the red team at `f18c1854a`.
 
-**No certified rate is quoted.** The red team objected at `5c62196c1` (Status), and no rate is certified until it
-grants a head. The last table of this section is `bound` evaluated at the measured parameters, the formula's
-arithmetic for the red team to check; whichever reading of `bandwidth-device` Daniel picks (§5) decides whether such a
-figure is per device or a share of a co-audited set's total.
+**The certified rate, granted at `5761861fd`** (art:c67e2351ef1718c239e20fca8ddc6d92fc3ded80941fb0f1e50812cd6892cb18).
+An accepted `ro-blake3/v1` window at `T = 1.2 ms` and `s = 1,849` certifies that the device's memory delivered at least
+741,353,308 bytes of `E` (68.8%) within `T + RTT`: 618 GB/s with `RTT = 0`, and 722,448,693 bytes (67.0%), 482 GB/s,
+with a 0.3 ms `RTT` allowance. The error is `2^-40.42`. The last table of this section is `audit.bound` at these
+parameters. Which reading of `bandwidth-device` Daniel picks (§5) decides whether the rate is per device or a share of
+a co-audited set's total.
 
 The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
 timed lease, SM clock 2,085 to 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and
@@ -356,7 +360,11 @@ one at the 100 ms deadline), 159 nonces in all, each opened and closed once and 
 `Window.open`, fsynced the state between the prover's scrub and `σ` (§3). Its gates passed and every skipping device
 was rejected, but honest `ro-blake3/v1` windows took 1.095 ms at the median on the verifier's clock (1.221 ms at most)
 with the device's pass at 1.007 ms, and one of 50 was late; three of 50 `gf31-poly/v1` windows were late. It is the
-finding behind §3's ordering, not a measurement of the audit.
+finding behind §3's ordering, not a measurement of the audit. Run `r20261012-034853-e233`
+(art:6efb3ebf776e10ced6fe6ad128185373189cfc0cedeae3e5fbb67a4f63856737) at `a677eaf3c` checked the grant's two
+conditions on the node and timed nothing: nvidia-smi gave the leased GPU's `GPU-…` UUID with MIG disabled,
+`challenger_device` accepted the tagger running on it, and 15 windows over the pinned vectors' 37-block store went
+through the one state file the store names.
 
 `ro-blake3/v1`'s pass depends on L2's state when it starts. Its loads fetch 256 bytes into L2 per miss
 (`ld.global.nc.L1::no_allocate.L2::256B`), which helps when L2's lines are clean and costs 0.6 ms when they are dirty
@@ -374,7 +382,7 @@ device that skips 1% or 5% of the blocks was rejected in every run, for every ta
 probability `0.99^1849 ≈ 2^-26.8` or `0.95^1849 ≈ 2^-136.8`.
 
 `bound` at `s = 1,849`, `q ≤ 2^64`, `S = 239,992,832` bytes and `cap_side = 63.0 GB/s` (error `2^-40.42`
-throughout), the formula's arithmetic and not a certified rate:
+throughout); the rows at `T = 1.2 ms` are the rate granted at `5761861fd`, and the others are the formula's arithmetic:
 
 | `T` | `RTT` | `I` | share of `E` | `I / (T + RTT)` |
 |---|---|---|---|---|
