@@ -33,6 +33,8 @@ CLASSES = [
     ("kv_write", r"reshape_and_cache|concat_and_cache"),
     ("attention", r"kernel_mha|xqa|flashinfer|BatchDecode|BatchPrefill|[Aa]ttention|flash_fwd|fmha|paged_attention|merge_state|"
                   r"VariableLength|unified_attention|kernel_paged|decode_kernel|split_kv"),
+    # Inductor names a fused kernel after every op it took in, the scaled_mm whose output it rescales among them
+    ("triton", r"^triton_"),
     ("gemm", r"gemm|gemv|cutlass|cublas|nvjet|Kernel2|matmul|_mm_|sm90_|sm100_|sm120_|xmma|wgrad|dgrad"),
     ("norm", r"rms_norm|rmsnorm|layer_norm|RMSNorm"),
     ("quant", r"quant|fp8|scaled_fp8"),
@@ -41,7 +43,6 @@ CLASSES = [
     ("sampler", r"argmax|topk|top_k|sort|sampl|softmax|logsumexp|log_softmax|max_kernel|reduce_kernel|"
                 r"gumbel|exponential|penalt"),
     ("embed", r"embedding|index_select|indexSelect|gather"),
-    ("triton", r"triton_"),
 ]
 LAYERED = ("graph", "gemm", "attention", "kv_write", "norm", "quant", "act", "rope", "triton")
 

@@ -90,6 +90,8 @@ def test_attention_kernel_is_not_the_lm_head_however_large():
     assert A.classify(MHA, 10**12, 500) == "attention"
     assert A.classify(GEMM, 440.0, 500) == "gemm"
     assert A.classify(GEMM, 460.0, 500) == "lm_head"
+    fused = "triton_red_fused__to_copy_abs_clamp_cutlass_scaled_mm_div_fused_add_rms_norm_max_mul_reciprocal_unsqueeze_1"
+    assert A.classify(fused, 1.0, 500) == "triton"
 
 
 def test_attn_bytes_attribute(tmp_path: Path):
