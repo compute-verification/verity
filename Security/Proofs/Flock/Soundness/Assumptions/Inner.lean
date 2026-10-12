@@ -21,7 +21,7 @@ open Flock
 
 /-- **The `b ‖ c` the verifier holds at a registered value's row**: `RecVStar.fixedRow` at its hold of the inner
 transcript `cs`, by the value's prefix, at the inner shape's sparse entry; none where it holds none. -/
-def heldRow (cs : Except String RecVStar.InnerCommits) (sparse : Option RecSparse.Shape) (value : String) (x : ℕ) :
+def heldRow (cs : Except String RecVStar.InnerCommits) (sparse : Option RecSparse.Shape) (value : String) (x : Nat) :
     Option (List UInt8) :=
   match cs with
   | .ok cs => match RecVStar.fixedRow cs value x sparse with
@@ -33,7 +33,7 @@ def heldRow (cs : Except String RecVStar.InnerCommits) (sparse : Option RecSpars
 `cs` (`InnerCommits.streams`: candidate 3's every stream, the table's reps' held to the session record's coins by
 `innerCommits`, and `sparse/rep<r>` and `stacked/rep0`, which check 5 reads as `RecCoins.C3.coins`); none where it holds
 none. -/
-def heldCoins (cs : Except String RecVStar.InnerCommits) (s : String) (k : ℕ) : Option (Array F128) :=
+def heldCoins (cs : Except String RecVStar.InnerCommits) (s : String) (k : Nat) : Option (Array F128) :=
   match cs with
   | .ok cs => (cs.stream? s).bind (·.coins[k]?)
   | .error _ => none
@@ -42,10 +42,10 @@ def heldCoins (cs : Except String RecVStar.InnerCommits) (s : String) (k : ℕ) 
 commitment (`sel i v x`) as its `b ‖ c` (`bc`), round `k` of stream `s` holds round `i`'s coin (`selC i s k`) as its
 coins (`coin`), and the first round's coin is the session's link points (`points`). -/
 structure InnerRecordMap (Cm Coin : Type) where
-  sel : ℕ → String → ℕ → Prop
-  bc : Cm → String → ℕ → List UInt8
-  selC : ℕ → String → ℕ → Prop
-  coin : Coin → String → ℕ → Array F128
+  sel : Nat → String → Nat → Prop
+  bc : Cm → String → Nat → List UInt8
+  selC : Nat → String → Nat → Prop
+  coin : Coin → String → Nat → Array F128
   points : Coin → Array (Array F128)
 
 /-- **The coin server's records of the inner session are the live history's** (`live-verifier` at the inner session):
