@@ -12,6 +12,7 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
   idle      the top-up paused while the engine has work, running at full grid when it has none
   throttle  the idle policy, plus a CTA cap (`--throttle-ctas`) while the engine has work
   full      the top-up at full grid throughout (the interference bound)
+  always    the top-up at `--throttle-ctas` throughout, busy or idle (the fill-sk16/v0 reader's resident form)
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -33,6 +34,10 @@ requests at once), the same for every policy; a step's time is the host's betwee
 each model step's interval on the GPU is recorded beside it (`gpu_steps`: events before its forward and after its
 sampling). `--shared-prefix` puts one seeded prefix before every prompt, with prefix caching on; `--async-scheduling`
 sets vLLM's, which the record states either way. The prefix cache is emptied before each policy.
+
+`--token-gate N` checks, before each policy's trace, that the top-up changes no token: N fixed prompts, generated
+together (so the schedule doesn't depend on time) with the top-up in the state it has while the engine works, give the
+same token ids as the first policy's (`token_gate` in each run; a mismatch refuses the run's timing).
 """
 from __future__ import annotations
 
@@ -147,6 +152,8 @@ def main() -> int:
     ap.add_argument("--outputs", type=lambda s: [int(v) for v in s.split(",")], default=[64, 256, 512])
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--chunk-mib", type=int, default=256)
+    ap.add_argument("--fill-chunk-mib", type=int, default=512)
+    ap.add_argument("--token-gate", type=int, default=0)
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
@@ -157,7 +164,7 @@ def main() -> int:
     encode_ks = set()
     for p in a.policies:
         top, _, enc = p.partition("+")
-        if top not in ("none", "idle", "throttle", "full", "gemm") or (enc and not enc.removeprefix("fused").isdigit()):
+        if top not in ("none", "idle", "throttle", "full", "gemm", "always") or (enc and not enc.removeprefix("fused").isdigit()):
             ap.error(f"unknown policy {p}")
         if enc:
             encode_ks.add(int(enc.removeprefix("fused")))
@@ -362,6 +369,17 @@ def main() -> int:
     llm.generate([TokensPrompt(prompt_token_ids=[1000 + i for i in range(64)])], warm, use_tqdm=False)
     prefix = [random.Random(a.seed + 7).randrange(1000, vocab - 1000) for _ in range(a.shared_prefix)]
 
+    gate_rng = random.Random(a.seed + 11)
+    gate_prompts = [TokensPrompt(prompt_token_ids=[gate_rng.randrange(1000, vocab - 1000)
+                                                   for _ in range(gate_rng.choice(a.prompts))])
+                    for _ in range(a.token_gate)]
+    gate_ref: list = []
+
+    def gate_tokens() -> list:
+        sp = SamplingParams(max_tokens=64, ignore_eos=True, temperature=0.0)
+        outs = llm.generate(gate_prompts, sp, use_tqdm=False)
+        return [list(o.outputs[0].token_ids) for o in sorted(outs, key=lambda o: int(o.request_id))]
+
     reqs = trace(a.seed, a.seconds, a.burst_gap_s, a.burst_mean, a.prompts, a.outputs)
     res["trace"] = {"requests": len(reqs), "prompt_tokens": sum(a.shared_prefix + r["prompt"] for r in reqs),
                     "output_tokens": sum(r["output"] for r in reqs), "shared_prefix": a.shared_prefix}
@@ -378,6 +396,12 @@ def main() -> int:
             cur["enc_prefill_tokens"] = cur["enc_decode_tokens"] = 0
             if ek:
                 codec.set_key(K.key("p512", RUN_SEED, ek))
+            if a.token_gate and top in ("none", "gemm"):
+                gate_ids = gate_tokens()
+                if not gate_ref:
+                    gate_ref.extend(gate_ids)
+                cur["token_gate"] = gate_ids == list(gate_ref)
+                log(f"{policy}/{mode}: token gate {'passed' if cur['token_gate'] else 'FAILED'}")
             if a.shared_prefix:
                 log(f"{policy}: prefix cache reset {llm.reset_prefix_cache()}")
             # a step's interval runs from its engine.step call, or the previous step's update if later, to its update
@@ -385,7 +409,19 @@ def main() -> int:
             offset_ms = 0.0
             grecs: list[tuple[float, float, int]] = []
             if top not in ("none", "gemm"):
-                tu.start(regions, MODES[mode], a.chunk_mib << 20, 3, least, RUN_SEED, ctas=0)
+                chunk = (a.fill_chunk_mib if mode == "fill" else a.chunk_mib) << 20
+                tu.start(regions, MODES[mode], chunk, 3, least, RUN_SEED, ctas=a.throttle_ctas if top == "always" else 0)
+                if a.token_gate:
+                    if top == "idle":
+                        tu.so.tu_pause(1)
+                    elif top == "throttle":
+                        tu.so.tu_throttle(a.throttle_ctas)
+                    gate_ids = gate_tokens()
+                    if not gate_ref:
+                        gate_ref.extend(gate_ids)
+                    cur["token_gate"] = gate_ids == list(gate_ref)
+                    log(f"{policy}/{mode}: token gate {'passed' if cur['token_gate'] else 'FAILED'}")
+                    tu.so.tu_throttle(0)
                 if top in ("idle", "throttle"):
                     tu.so.tu_pause(1)
                 g = tu.now(0)
@@ -451,7 +487,8 @@ def main() -> int:
             ttft = [first[i] - (by_id[i]["t"] + t_start) for i in first]
             tpot = [(done[i] - first[i]) / max(1, by_id[i]["output"] - 1) for i in done if i in first]
             dec = [s["t1"] - s["t0"] for s in steps if s["prefill_tokens"] == 0 and s["reqs"] > 0]
-            run = {"policy": policy, "mode": mode, "seconds": t_end - t_start, "steps": len(steps),
+            run = {"policy": policy, "mode": mode, "token_gate": cur.get("token_gate"), "seconds": t_end - t_start,
+                   "steps": len(steps),
                    "requests_done": len(done), "ttft_s_median": statistics.median(ttft) if ttft else None,
                    "ttft_s_p90": sorted(ttft)[int(0.9 * (len(ttft) - 1))] if ttft else None,
                    "tpot_ms_median": statistics.median(tpot) * 1e3 if tpot else None,
