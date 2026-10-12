@@ -26,7 +26,7 @@ namespace fl {
 constexpr uint32_t BLK = 4096, UNIT_BLOCKS = 32, UNIT_BYTES = BLK * UNIT_BLOCKS, ROWS = 16;
 constexpr uint32_t SIGN_WORDS = ROWS * BLK / 32;  // 2,048 u32
 constexpr uint32_t F_START = 1, F_END = 2, F_PARENT = 4, F_KEYED = 16;
-constexpr int WARPS = 4, DEPTH = 2;
+constexpr int DEPTH = 2;
 
 struct Key {
   uint32_t k[8];
@@ -188,9 +188,10 @@ __device__ __forceinline__ void unit(const uint8_t* __restrict__ p, uint64_t j0,
   }
 }
 
-// Units [unit0, unit0 + units) of the plan over `R`, taken a warp at a time from `ctr` (zeroed before the launch); unit
+// Units [unit0, unit0 + units) of the plan over `R`, W warps a CTA, taken a warp at a time from `ctr` (zeroed before the launch); unit
 // u's root at roots[8 (u − unit0)], and the XOR of the roots' first words into *xr (the chunk's check word).
-__global__ void __launch_bounds__(WARPS * 32) fill_kernel(const Regions R, uint64_t unit0, uint64_t units,
+template <int W>
+__global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t unit0, uint64_t units,
                                                            const uint32_t* __restrict__ signs, Key K,
                                                            uint32_t* __restrict__ roots, unsigned long long* ctr,
                                                            uint32_t* xr) {

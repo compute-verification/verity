@@ -241,6 +241,9 @@ static fl::Regions fill_regions(const std::vector<Region>& regions) {
   return R;
 }
 
+// Warps a fill CTA (4, 8 or 16; tu_fill_warps): at 16 one CTA holds a whole SM's registers.
+static std::atomic<int> fill_warps{4};
+
 // One fill chunk: units [unit0, unit0 + units) of the plan, roots into ws, the check word into ws's tail.
 static int fill_launch(const fl::Regions& R, uint64_t unit0, uint64_t units, const uint32_t* signs,
                        const uint8_t seed[32], void* ws, int ctas, cudaStream_t st) {
@@ -254,7 +257,13 @@ static int fill_launch(const fl::Regions& R, uint64_t unit0, uint64_t units, con
     cudaGetDevice(&d);
     cudaDeviceGetAttribute(&grid, cudaDevAttrMultiProcessorCount, d);
   }
-  fl::fill_kernel<<<grid, fl::WARPS * 32, 0, st>>>(R, unit0, units, signs, fill_key(seed), roots, ctr, xr);
+  const fl::Key K = fill_key(seed);
+  switch (fill_warps.load()) {
+    case 4: fl::fill_kernel<4><<<grid, 128, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr); break;
+    case 8: fl::fill_kernel<8><<<grid, 256, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr); break;
+    case 16: fl::fill_kernel<16><<<grid, 512, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr); break;
+    default: return -1;
+  }
   return (int)cudaGetLastError();
 }
 
@@ -667,6 +676,12 @@ int tu_fill_units(const uint64_t* ptrs, const uint64_t* bytes, int n, uint64_t u
   cudaFree(ws);
   cudaFree(signs);
   return rc;
+}
+
+int tu_fill_warps(int w) {
+  if (w != 4 && w != 8 && w != 16) return -1;
+  tu::fill_warps = w;
+  return 0;
 }
 
 // The 8 KiB of fill-sk16/v0 signs from `seed`, for the reference to check against.

@@ -41,6 +41,11 @@ GATE_SEED = bytes(range(32))
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
 BLOCK = 2056
 MODES = {"read": -1, "gf31": 0, "b3": 2, "sk16": 3, "fill": 4}
+FILL_WARPS = {"fill": 4, "fill8": 8, "fill16": 16}  # fill-sk16/v0 at that many warps a CTA
+
+
+def mode_of(name: str) -> int:
+    return MODES["fill"] if name in FILL_WARPS else MODES[name]
 TAG_NAMES = {0: "gf31-poly/v1", 2: "ro-blake3/v1"}
 # Llama-3.1-8B: 32 layers, hidden 4,096, 32 query heads on 8 KV heads of 128, MLP 14,336.
 LAYERS, HIDDEN, HEADS, KV_HEADS, HEAD_DIM, MLP = 32, 4096, 32, 8, 128, 14336
@@ -81,7 +86,9 @@ class Topup:
         return [raw[32 * k:32 * k + 32] for k in range(units)], int.from_bytes(raw[32 * units:32 * units + 4], "little")
 
     def start(self, regions, mode: int, chunk: int, depth: int, priority: int, seed: bytes, tile: int = 1 << 16,
-              ctas: int = 0, device: int = 0) -> None:
+              ctas: int = 0, device: int = 0, warps: int = 4) -> None:
+        if mode == MODES["fill"] and self.so.tu_fill_warps(warps):
+            raise RuntimeError(f"tu_fill_warps({warps}) refused")
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
         sizes = (ctypes.c_uint64 * len(regions))(*[n for _, n in regions])
         rc = self.so.tu_start(device, ptrs, sizes, len(regions), mode, chunk, tile, depth, priority, seed, ctas)
@@ -219,7 +226,7 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
 
 def fill_gate(tu: Topup, torch) -> dict:
     """fill-sk16/v0 against `fill_ref`: the signs; every unit root and the check word of a chunk over three regions of
-    random bytes (one ending mid-unit), at 3 CTAs and at the default grid; and the top-up thread's check words, chunk
+    random bytes (one ending mid-unit), at 3 CTAs and at the default grid, at each warp count; and the top-up thread's check words, chunk
     after chunk, the plan wrapping."""
     import fill_ref as F
     out = {}
@@ -237,9 +244,12 @@ def fill_gate(tu: Topup, torch) -> dict:
     seed = hashlib.sha256(b"verity/kv-filler/fill-gate").digest()
     want, wx = F.chunk(blobs, 2, 11, seed, RUN_SEED)
     ok = True
-    for ctas in (3, 0):
-        got, gx = tu.fill_units(regions, 2, 11, seed, RUN_SEED, ctas)
-        ok &= got == want and gx == wx
+    for warps in sorted(set(FILL_WARPS.values())):
+        tu.so.tu_fill_warps(warps)
+        for ctas in (3, 0):
+            got, gx = tu.fill_units(regions, 2, 11, seed, RUN_SEED, ctas)
+            ok &= got == want and gx == wx
+    tu.so.tu_fill_warps(4)
     out["fill_units"] = ok
     # the thread: chunks of 4 units over the 15-unit plan
     tu.start(regions, 4, 4 * F.UNIT_BYTES, 2, 0, RUN_SEED, ctas=2)
@@ -306,12 +316,13 @@ def read_rate(tu: Topup, torch, filler, reps: int) -> dict:
 
 
 def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, least: int, fill_chunk: int = 1 << 30,
-          fill_ctas=()) -> dict:
+          fill_ctas=(), fill_modes=("fill",)) -> dict:
     out = {}
-    runs = [(name, mode, 0) for name, mode in MODES.items()] + [(f"fill@{c}", MODES["fill"], c) for c in fill_ctas]
-    for name, mode, ctas in runs:
+    runs = [(name, mode, 0, 4) for name, mode in MODES.items()]
+    runs += [(f"{f}@{c}", MODES["fill"], c, FILL_WARPS[f]) for f in fill_modes for c in fill_ctas]
+    for name, mode, ctas, warps in runs:
         tu.start([(filler.data_ptr(), filler.numel())], mode, fill_chunk if mode == MODES["fill"] else chunk, depth,
-                 least, RUN_SEED, ctas=ctas)
+                 least, RUN_SEED, ctas=ctas, warps=warps)
         time.sleep(seconds)
         tu.stop()
         recs = tu.log()[1:]  # the first chunk's start includes the thread's start
@@ -394,7 +405,7 @@ def cell(tu: Topup, torch, fn, stream, n: int, topup: dict | None, filler, regis
     torch.cuda.synchronize()
     if topup:
         tu.start([(filler.data_ptr(), filler.numel())], topup["mode"], topup["chunk"], topup["depth"],
-                 topup["priority"], RUN_SEED, ctas=topup.get("ctas", 0))
+                 topup["priority"], RUN_SEED, ctas=topup.get("ctas", 0), warps=topup.get("warps", 4))
         time.sleep(0.05)
     t0 = tu.now(stream.cuda_stream) if topup else 0.0
     ts = step_times(torch, fn, stream, n)
@@ -492,8 +503,9 @@ def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int,
         rows.append({"phase": kind, "size": size, "ctx": ctx, "topup": None, "ctas": 0, **base, "slowdown": 0.0})
         for mode in args.throttle_modes:
             for ctas in args.throttle_ctas:
-                tp = {"mode": MODES[mode], "chunk": (args.fill_chunk_mib if mode == "fill" else 64) << 20,
-                      "depth": 2 if mode == "read" else 3, "priority": least, "ctas": ctas}
+                tp = {"mode": mode_of(mode), "chunk": (args.fill_chunk_mib if mode in FILL_WARPS else 64) << 20,
+                      "depth": 2 if mode == "read" else 3, "priority": least, "ctas": ctas,
+                      "warps": FILL_WARPS.get(mode, 4)}
                 r = cell(tu, torch, fn, high, n, tp, filler, registered, R)
                 row = {"phase": kind, "size": size, "ctx": ctx, "topup": mode, "ctas": ctas, **r,
                        "slowdown": r["step_ms_median"] / base["step_ms_median"] - 1}
@@ -682,7 +694,7 @@ def main() -> int:
     R = res["read"]["R_GBps"]
     log(f"R = {R:.0f} GB/s ({res['read']})")
     res["alone"] = alone(tu, torch, filler, a.alone_s, a.chunk_mib << 20, a.depth, least, a.fill_chunk_mib << 20,
-                         a.throttle_ctas if "fill" in a.throttle_modes else ())
+                         a.throttle_ctas, [m for m in a.throttle_modes if m in FILL_WARPS])
     log(f"top-up alone: {res['alone']}")
 
     def save() -> None:
