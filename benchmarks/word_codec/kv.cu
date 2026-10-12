@@ -661,8 +661,8 @@ __global__ void spin_kernel(long long cycles) {
 // agree bit for bit. q is bf16 (vLLM's), pre-scaled by log2(e)/sqrt(128), so scores are in base 2; each split leaves its
 // unnormalized output, max and sum, which attn_combine merges. Shared memory stays under half an SM's 100 KB, so two
 // CTAs fit an SM. Past 768 bits (STREAM) the decode's registers allow one, and the encoded form copies and decodes DT = 2
-// tiles at a time (1,536 bits' 22 words a token-layer would leave most of a tile's threads idle), each tile then
-// folded in turn as in the plain form.
+// tiles at a time where two fit (1,536 bits' 22 words a token-layer would leave most of a tile's threads idle; 8B's
+// 8-token tiles of 4 KiB at 1,024 bits don't fit two), each tile then folded in turn as in the plain form.
 #ifndef KV_QHEADS
 #define KV_QHEADS 64
 #endif
@@ -678,7 +678,9 @@ static_assert(GROUP * TT == 32 && GROUP <= 8 && TLE % 16 == 0 && WB % 16 == 0,
               "a warp's scores, one a lane; 16-byte copies");
 
 template <bool ENC>
-__host__ __device__ constexpr int attn_dt() { return ENC && STREAM ? 2 : 1; }
+__host__ __device__ constexpr int attn_dt() {
+  return ENC && STREAM && 4 * TT * TLE + HEADS * HEAD_DIM * 2 + 1024 <= 99 * 1024 ? 2 : 1;
+}
 template <bool ENC>
 constexpr int attn_smem() {
   return 2 * attn_dt<ENC>() * TT * (ENC ? TLE : TL_BYTES) + HEADS * HEAD_DIM * 2;
