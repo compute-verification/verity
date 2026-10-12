@@ -20,7 +20,8 @@ Nothing is timed before its gate passed, in this order:
   fused decode (k_s = 16 at each k, 64 at k = 1) also runs with ro-sketch-blake3/v0 (`sketching`) in place of
   ro-blake3/v1, gated on every
   vector's sketch (a float32 GPU reference with TF32 off, exact), every tag (PyPI blake3, `tags.py` on a sample), and
-  the leaves and root.
+  the leaves and root. A diagnostic build (`WT_SK_DIAG`, named `<field>-diag<bits>`) drops parts of the sketch to time
+  them: its partial sums are gated, its sketches and tags are not.
 """
 from __future__ import annotations
 
@@ -93,10 +94,10 @@ class Lib:
         so.wt_tag_tree.argtypes = [v, q, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 15)()
+        cs = (ctypes.c_int * 16)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb, self.fused_warps, self.fused_span, self.tag_block) = list(cs)
+         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag) = list(cs)
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
         if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
@@ -104,7 +105,7 @@ class Lib:
             raise RuntimeError(f"{path}: constants {list(cs)} are not wide.py's {f}")
         if self.tag_block != TG.TAG_BLOCK:
             raise RuntimeError(f"{path}: tag blocks of {self.tag_block} bytes, tagging.py's are {TG.TAG_BLOCK}")
-        self.name = f.name
+        self.name = f.name + (f"-diag{self.diag}" if self.diag else "")
         self.tc = self.tc_mmas > 0
 
     def call(self, fn: str, *args) -> None:
@@ -706,7 +707,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 if cfg[3]:
                     set_sketch_tag(lib)
                     tb_dev, nvec = sk_tags_for(gr)
-                    skr = sketch_ref(k, cfg[3], gr)
+                    skr = sketch_ref(k, cfg[3], gr) if not lib.diag else None
                 for _ in range(gate_reps):
                     pf = torch.zeros_like(pp)
                     tags_dev.fill_(0xFF)
@@ -717,7 +718,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp, skout=skb)
                     if not torch.equal(pf, pp):
                         bad.append(mismatch(pf, pp, nch, mb, n, gr))
-                    if cfg[3]:
+                    if cfg[3] and not lib.diag:
                         torch.cuda.synchronize()
                         sk_eq = torch.equal(skb.view(nvec, cfg[3]), skr["sk"])
                         tg_eq = sketch_tags_ok(host_bytes(tb_dev), skr)
@@ -726,10 +727,13 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                                            "vectors_unequal": int((skb.view(nvec, cfg[3]) != skr["sk"]).any(1).sum())})
                 if cfg[3]:
                     entry.setdefault("sketch", {})[fused_name(k, cfg)] = {"vectors": nvec, "bad": sk_bad[:3],
-                                                                          "ok": not sk_bad}
+                                                                          "ok": not sk_bad,
+                                                                          "diagnostic": bool(lib.diag)}
                     entry["tags"][fused_name(k, cfg)] = not sk_bad
                     if sk_bad:
                         log(f"sketch mismatch {lib.name} {name} M={mb} {fused_name(k, cfg)}: {sk_bad[0]}")
+                    if lib.diag:
+                        res["sketch_commit"] = {"leaves_ok": True, "root_ok": True, "diagnostic": True}
                     if "sketch_commit" not in res and not sk_bad:
                         res["sketch_commit"] = commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves)
                         log(f"sketch commit gate {lib.name} {name}: {nvec} vectors, {res['sketch_commit']}")

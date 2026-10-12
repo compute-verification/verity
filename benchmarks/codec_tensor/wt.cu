@@ -1745,6 +1745,11 @@ constexpr int FUSED_WARPS = FRESH_DECODE ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
+// A diagnostic build (WT_SK_DIAG, bits) drops parts of the sketch to time them, so its sketches and tags are wrong
+// (bench.py gates only its partial sums): 1 the MMA warp's hash, 2 the decoders' MMAs and adds, 4 their sign loads.
+#ifndef WT_SK_DIAG
+#define WT_SK_DIAG 0
+#endif
 // sgs sign words (k_s = 16's signs, skt tasks' steps, a u32 a lane) after the sketch's buffers: wt_fused_sketch puts
 // them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0).
 template <int NB8, int SKK>
@@ -1849,7 +1854,7 @@ __device__ __forceinline__ void sk_hash_block(SkJob &J, int lane, const Sketch &
   constexpr int LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
   int *b = k.buf + (J.tile % SK_BUFS) * 16 * KS;
   const int blk = J.blk;
-  if (k.tags && lane < 16) {
+  if (!(WT_SK_DIAG & 1) && k.tags && lane < 16) {
     const u64 j = k.jbase + 16 * (k.tile0 + J.tile) + lane;
     const int *w = b + lane * KS, swz = sk_swz<KS>(lane & 7);
     u32 m[16];
@@ -1987,13 +1992,13 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     uint8_t *st = smem + s * SB;
     constexpr bool SPLIT = TW % 32 != 0;   // else a warp's lanes are in one task
     SkPart<(SKK > 0 ? SKK : 16)> P0, P1;
-    if constexpr (SKK > 0) {
+    if constexpr (SKK > 0 && !(WT_SK_DIAG & 4)) {
       sk_begin(P0, lo, on && i == lo, w, lane, sk);
       if (SPLIT && hi != lo) sk_begin(P1, hi, on && i == hi, w, lane, sk);
     }
     mbar_wait(ready + lo % stages, (lo / stages) & 1);
     if (hi != lo) mbar_wait(ready + hi % stages, (hi / stages) & 1);
-    if constexpr (SKK > 0) {
+    if constexpr (SKK > 0 && !(WT_SK_DIAG & 2)) {
       sk_mma(P0, smem + (lo % stages) * SB, lane, sk);
       if (SPLIT && hi != lo) sk_mma(P1, smem + (hi % stages) * SB, lane, sk);
       __syncwarp();
@@ -2193,7 +2198,7 @@ extern "C" {
 int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
   out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
-  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK;
+  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK; out[15] = WT_SK_DIAG;
   return 0;
 }
 
