@@ -38,8 +38,8 @@ The frontier's quantities, per field and k (`wide.json` "frontier"):
            times the four linears' native time; `y_commit_linear` is a commit launched per linear, for comparison.
            A ".../commit-overlapped" point takes the commit as its excess beside the next pass instead (`pass_overlap`:
            a pass of fused GEMMs alone and with the commit on a second stream, at batch 1 and 32)
-A ".../mixed-k" point gives each linear a k of its own (`mixed`): x and Δ at the mean k over the stored words, y the
-sum of each linear's measured time at its k; only the assignments no other beats in both y and mean k.
+No point gives the linears different k: the adversary rebuilds the smallest k's words, so such a point has uniform
+k_min's x and a larger y (red team F21).
 The SM clock is sampled during a squaring chain for each library (`clock`, and each point's `sm_mhz`).
 """
 from __future__ import annotations
@@ -47,7 +47,6 @@ from __future__ import annotations
 import argparse
 import ctypes
 import hashlib
-import itertools
 import json
 import os
 import random
@@ -841,36 +840,6 @@ def breakdown(cases: dict, batches, ks, commit_s: float, sketch_commit_s: float 
     return out
 
 
-def mixed(cases: dict, batches, ks, commit_s: float, tag_arm: str = "t") -> dict:
-    """Each linear at a k of its own (public and fixed per linear), from the same arms as `breakdown`: per batch, the
-    assignments on the lower envelope of y_total against k_mean, the mean k over the stored words (the linears
-    weighted by their weights' bytes), which x and Δ scale with. The uniform assignments are `breakdown`'s rows.
-    tag_arm "h": the sketch hashed in the kernel, commit_s the sketch's."""
-    names = list(cases)
-    wbytes = {nm: cases[nm]["weight_bytes"] for nm in names}
-    out = {}
-    for mb in batches:
-        t = {nm: cases[nm]["times"][mb] for nm in names}
-        native = sum(x["native_s"] for x in t.values())
-        y_commit = commit_s / (LAYERS * native)
-        rows = []
-        for combo in itertools.product(ks, repeat=len(names)):
-            kk = dict(zip(names, combo))
-
-            def arm(a, kk=kk):
-                return sum(t[nm]["median_s"][a.format(k=kk[nm])] for nm in names) / native
-            share = {nm: wbytes[nm] / sum(wbytes.values()) for nm in names}
-            rows.append({"ks": kk, "share": share, "k_mean": sum(share[nm] * kk[nm] for nm in names),
-                         "y_total": arm(tag_arm + "{k}") + y_commit, "y_decode": arm("d{k}") - arm("ww0"),
-                         "y_tag": arm(tag_arm + "{k}") - arm("d{k}"), "y_commit": y_commit, "y_base": arm("ww0")})
-        env = []
-        for r in sorted(rows, key=lambda r: (-r["k_mean"], r["y_total"])):
-            if not env or r["y_total"] < env[-1]["y_total"]:
-                env.append(r)
-        out[mb] = env[::-1]
-    return out
-
-
 def clocks(lib: WLib, torch, log, what: str, squarings_s: float) -> dict:
     """The SM clock (MHz) sampled while a compute-only squaring chain runs (about 1.5 s), and the board's maximum,
     through nvidia-smi."""
@@ -900,13 +869,11 @@ def clocks(lib: WLib, torch, log, what: str, squarings_s: float) -> dict:
 
 
 def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: float | None = None,
-           po: dict | None = None, mx: dict | None = None, po_sk: dict | None = None,
-           mx_sk: dict | None = None) -> list[dict]:
+           po: dict | None = None, po_sk: dict | None = None) -> list[dict]:
     """One point per batch and k with the commit serial after the pass, and, where `pass_overlap` measured it, one
-    with the commit beside the next pass (arithmetic ".../commit-overlapped"); and from `mixed`'s envelope
-    (".../mixed-k"), for each quarter step of the mean k, the first non-uniform assignment at or above it (the whole
-    envelope is in wide.json). The sketch's rows give the same under ".../sketch" (hashed in the kernel, τ the
-    sketch's), and ".../sketch-apart" (hashed by a kernel after each call)."""
+    with the commit beside the next pass (arithmetic ".../commit-overlapped"). The sketch's rows give the same under
+    ".../sketch" (hashed in the kernel, τ the sketch's), and ".../sketch-apart" (hashed by a kernel after each
+    call)."""
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
@@ -944,27 +911,6 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
             o = (po_sk or {}).get(k, {}).get("per_batch", {}).get(mb)
             if o is not None:
                 out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped"))
-
-    def mixed_points(mxd: dict, suffix: str, tau_key: str) -> None:
-        for mb, rows in mxd.items():
-            picked = []
-            for g in (i / 4 for i in range(4, 4 * max(fq) + 1)):
-                r = next((r for r in rows if r["k_mean"] >= g - 1e-9), None)
-                if r is not None and len(set(r["ks"].values())) > 1 and r not in picked:
-                    picked.append(r)
-            for r in picked:
-                km = r["k_mean"]
-                q = {"x": km * fq[min(fq)]["x"] / min(fq), "tau": fq[min(fq)][tau_key],
-                     "delta": sum(sh * fq[r["ks"][nm]]["delta"] for nm, sh in r["share"].items())}
-                q["mu_rebuild"] = (1 - q["tau"]) / q["x"]
-                p = point(km, mb, q, r, r["y_commit"], suffix)
-                p["ks"] = r["ks"]
-                p["label"] = (f"{f.name} k=" + "".join(f"{nm[0]}{k}" for nm, k in r["ks"].items())
-                              + f" {lib.name}{suffix}")
-                out.append(p)
-
-    mixed_points(mx or {}, "/mixed-k", "tau")
-    mixed_points(mx_sk or {}, "/sketch/mixed-k", "tau_sketch")
     return out
 
 
@@ -1094,9 +1040,6 @@ def main() -> int:
                 bd = breakdown(cases, batches, ks, pc["median_s"], psc["median_s"] if psc else None)
                 lr["breakdown"] = bd
                 fb = [mb for mb in (1, 32) if mb in batches]
-                mx = mixed(cases, fb, ks, pc["median_s"])
-                mx_sk = mixed(cases, fb, ks, psc["median_s"], "h") if psc else None
-                lr["mixed"], lr["mixed_sketch"] = mx, mx_sk
                 save()
                 for mb, row in bd.items():
                     log(f"layer-weighted {lib.name} M={mb}: base {row['base']:.2f}, " + ", ".join(
@@ -1117,7 +1060,7 @@ def main() -> int:
                 lr["pass_overlap"] = po
                 fq = lr["frontier"]
                 res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name,
-                                        lr.get("clock", {}).get("sm_mhz"), po, mx, po_sk, mx_sk)
+                                        lr.get("clock", {}).get("sm_mhz"), po, po_sk)
             save()
     (out_dir / "points.json").write_text(json.dumps(res["points"], indent=1))
     save()

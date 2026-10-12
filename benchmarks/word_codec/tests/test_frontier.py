@@ -88,7 +88,7 @@ def test_the_bench_stamps_its_model_and_70b_sets_its_linears_and_layers():
 
 def test_sketch_twins_keep_base_and_decode_and_replace_tag_and_commit():
     pts = F.check([point(), point(arithmetic="a/commit-overlapped"), point(batch=32), point(measured=False),
-                   point(batch=8), point(arithmetic="a/sketch"), point(arithmetic="a/sketch/mixed-k")])
+                   point(batch=8), point(arithmetic="a/sketch"), point(arithmetic="a/sketch/commit-overlapped")])
     twins = F.sketch_twins(pts, {1: 0.07, 32: 0.15})
     assert [(t["batch"], t["arithmetic"]) for t in twins] == [(1, "a/sketch-model"), (32, "a/sketch-model")]
     t = twins[0]
@@ -145,29 +145,6 @@ def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the
         "cuda-int32/mersenne/sqr1/rolled/cc/b3u2/tb2")
     lib.tb = 1
     assert wide_bench.points(lib, fq, bd, "r", "gpu")[0]["arithmetic"].endswith("/b3u2/kw2")
-
-
-def test_mixed_k_keeps_the_assignments_no_other_beats_in_y_and_mean_k():
-    import types
-
-    import wide
-    import wide_bench
-
-    def case(wb, native, t):
-        arms = {"ww0": native, **{f"d{k}": native * (1 + 0.5 * k) for k in (1, 2)},
-                **{f"t{k}": native * t[k] for k in (1, 2)}}
-        return {"weight_bytes": wb, "times": {1: {"native_s": native, "median_s": arms}}}
-
-    cases = {"a": case(3, 1.0, {1: 2.0, 2: 2.5}), "b": case(1, 1.0, {1: 2.0, 2: 3.5})}
-    rows = wide_bench.mixed(cases, [1], [1, 2], commit_s=0.0)[1]
-    got = [(r["ks"], r["k_mean"], r["y_total"]) for r in rows]
-    assert got == [({"a": 1, "b": 1}, 1.0, 2.0), ({"a": 2, "b": 1}, 1.75, 2.25), ({"a": 2, "b": 2}, 2.0, 3.0)]
-    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=1, b3u=1, tb=1, kw=1, name="p521s1rcu")
-    fq = {k: {"x": 250.0 * k, "delta": 0.6 * k, "tau": 0.8, "mu_rebuild": 0.0} for k in (1, 2)}
-    pts = F.check(wide_bench.points(lib, fq, {}, "r", "gpu", mx={1: rows}))
-    assert len(pts) == 1 and pts[0]["arithmetic"].endswith("/mixed-k") and pts[0]["k"] == 1.75
-    assert pts[0]["x"] == pytest.approx(437.5) and pts[0]["delta"] == pytest.approx(0.75 * 1.2 + 0.25 * 0.6)
-    assert pts[0]["label"] == "p521 k=a2b1 p521s1rcu/mixed-k"
 
 
 def test_tau_counts_a_batched_tags_compressions_over_its_records():
