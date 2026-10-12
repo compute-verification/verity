@@ -570,7 +570,7 @@ constexpr int WS_MAX_WARPS = 10;   // consumers, the producer and the committers
 
 // The tag and the commit (both off when the pointers are null): `tags` gets block j = jbase + 32 q + l's ro-blake3/v1 tag
 // as 8 little-endian words at 8 (32 q + l); `committers` warps hash the leaves of `ctags` (`cblocks` tags, the previous
-// call's) into `leaves`, 8 big-endian words each. decode = 0 skips the decode (a timing arm: the tag alone).
+// call's) into `leaves`, 8 big-endian words each.
 struct WsTag {
   bw::Key3 key;
   bw::Mid leafmid;
@@ -580,8 +580,11 @@ struct WsTag {
   uint64_t cblocks;
   uint64_t* leaves;
   int committers;
-  int decode;
 };
+
+// gemm_ws_kernel's MODE, fixed at compile time so no branch splits the consumer's code: the tag, the decode, and both
+// interleaved (tag_decode_lane). Without the decode the partial sums are the encoded words' (timing arms only).
+constexpr int WS_TAG = 1, WS_DECODE = 2, WS_INTERLEAVE = 4;
 
 // ro-blake3/v1 over one lane's block: the message u64be j ‖ the LANE_WORDS words little-endian, one chunk of 8 + 8
 // LANE_WORDS bytes (five compressions at either packing).
@@ -696,8 +699,7 @@ __host__ __device__ constexpr int ws_smem_bytes(int stages) {
   return stages * ws_stage_bytes<KR>() + NB8 * 8 * XS_STRIDE + 2 * stages * 8;
 }
 
-// TAG: 0 none, 1 the tag then the decode (tg.decode = 0: no decode), 2 tag_decode_lane.
-template <int KR, int NB8, bool PARTIALS, int TAG>
+template <int KR, int NB8, bool PARTIALS, int MODE>
 __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* __restrict__ wstore,
                                                                    const uint8_t* __restrict__ x, float* __restrict__ y,
                                                                    int M, int N, int Kd, uint64_t base, int groups,
@@ -779,16 +781,18 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
       for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
-      const uint64_t t0 = mulmod(kTau, (base + q * TASK_WORDS + lane) % P);
-      if constexpr (TAG > 0) {
+      if constexpr ((MODE & WS_TAG) != 0) {
         uint32_t cv[8];
-        if constexpr (TAG == 2) tag_decode_lane<KR>(tg.key, tg.jbase + q * LANES + lane, xw, t0, t32, cv);
+        if constexpr ((MODE & WS_INTERLEAVE) != 0)
+          tag_decode_lane<KR>(tg.key, tg.jbase + q * LANES + lane, xw,
+                              mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32, cv);
         else b3_lane_tag(tg.key, tg.jbase + q * LANES + lane, xw, cv);
         uint4* o = reinterpret_cast<uint4*>(tg.tags + 8 * (q * LANES + lane));
         o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
         o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
       }
-      if (TAG < 2 && tg.decode) decode_lane<KR>(xw, t0, t32);
+      if constexpr ((MODE & WS_DECODE) != 0 && (MODE & WS_INTERLEAVE) == 0)
+        decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),
@@ -1029,7 +1033,7 @@ int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int 
   tg.cblocks = cblocks;
   tg.leaves = leaves;
   tg.committers = committers;
-  tg.decode = decode;
+  const int mode = (tags ? WS_TAG : 0) | (decode ? WS_DECODE : 0) | (tags && decode == 2 ? WS_INTERLEAVE : 0);
   const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / TASK_COLS, nbs = N / 16;
   const int threads = (consumers + 1 + committers) * 32;
@@ -1047,9 +1051,16 @@ int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int 
     if (groups > nbs) groups = nbs; \
     kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer, tg); } while (0)
 #define GN(KR, T) do { if (nb8 == 1) G(KR, 1, T); else if (nb8 == 2) G(KR, 2, T); else G(KR, 4, T); } while (0)
-#define GK(KR) do { if (!tags) GN(KR, 0); else if (decode == 2) GN(KR, 2); else GN(KR, 1); } while (0)
+#define GK(KR) do { \
+    switch (mode) { \
+      case 0: GN(KR, 0); break; \
+      case WS_TAG: GN(KR, WS_TAG); break; \
+      case WS_DECODE: GN(KR, WS_DECODE); break; \
+      case WS_TAG | WS_DECODE: GN(KR, WS_TAG | WS_DECODE); break; \
+      default: GN(KR, WS_TAG | WS_DECODE | WS_INTERLEAVE); \
+    } } while (0)
   switch (k) {
-    case 0: GN(0, 0); break;
+    case 0: GN(0, WS_DECODE); break;
     WC_CASES(GK)
     default: return 1;
   }
