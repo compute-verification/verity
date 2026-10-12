@@ -35,6 +35,7 @@ SALT_DOMAIN = b"verity/store/salt/v0\0"
 # reader.cu's LOAD_* modes: the first four compute receipts, the last two are ceilings that read other bytes or none.
 LOADS = ("ldg", "l2_256", "prefetch", "warp", "hot", "none")
 EXACT = LOADS[:4]
+SEGMENTS = 16
 
 
 def store_salt(key: bytes, seed: bytes, leaf: int) -> bytes:
@@ -63,7 +64,7 @@ class Reader:
         self.kept: dict[int, tuple[int, object, list]] = {}
 
     def call(self, fn: str, *args) -> None:
-        rc = getattr(self.so, fn)(*args, None)
+        rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
         if rc:
             raise RuntimeError(f"{fn}: {rc}")
 
@@ -214,6 +215,8 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     """One pass over gib GiB as a device reader does it, against reading the same bytes: receipts (z of zero bytes,
     and over half of it each block bound to a spread z the other half holds), leaves, the whole tree."""
     n = int(gib * 2 ** 30) // BLOCK // rb.PER_LEAF * rb.PER_LEAF
+    if (n // SEGMENTS) % rb.PER_LEAF or (u := n // SEGMENTS // rb.PER_LEAF) & (u - 1) or n % SEGMENTS:
+        raise ValueError(f"{gib} GiB is no {SEGMENTS} aligned segments")
     data = torch.randint(-2 ** 31, 2 ** 31 - 1, (n * BLOCK // 4,), dtype=torch.int32, device="cuda")
     ys = torch.empty((n, 8), dtype=torch.int64, device="cuda")
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -229,6 +232,24 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     steps["leaves"] = lambda: reader.commit(ys, 0, n // rb.PER_LEAF)
     dig = reader.commit(ys, 0, n // rb.PER_LEAF)
     steps["tree"] = lambda: reader.levels(dig, 0, pad=True)
+    # The pass as the store reads it, in aligned segments: segment s's leaves and subtree on a side stream while
+    # segment s + 1 is receipted, its root what end_pass takes.
+    count, side, roots = n // SEGMENTS, torch.cuda.Stream(), {}
+
+    def segmented() -> None:
+        main = torch.cuda.current_stream()
+        side.wait_stream(main)
+        for s in range(SEGMENTS):
+            reader.receipts(data[s * count * BLOCK // 4:], s * count, count, ys[s * count:])
+            done = torch.cuda.Event()
+            done.record(main)
+            with torch.cuda.stream(side):
+                side.wait_event(done)
+                c0 = s * count // rb.PER_LEAF
+                roots[s] = reader.levels(reader.commit(ys[s * count:], c0, count // rb.PER_LEAF), c0)[-1]
+        main.wait_stream(side)
+
+    steps[f"segmented/{SEGMENTS}"] = segmented
     ms = {}
     for name, fn in steps.items():
         fn()
@@ -242,6 +263,9 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
             torch.cuda.synchronize()
             best.append(a.elapsed_time(b))
         ms[name] = min(best)
+    full = reader.levels(reader.commit(ys, 0, n // rb.PER_LEAF), 0, pad=True)
+    h = (count // rb.PER_LEAF).bit_length() - 1
+    segment_roots = [digest(roots[s][0]) for s in range(SEGMENTS)] == [digest(x) for x in full[h]]
     nbytes = n * BLOCK
     by_load = {load: {"gb_s": nbytes / ms[f"receipts/{load}"] / 1e6,
                       "z_gb_s": nbytes / (ms[f"receipts_z_half/{load}"] * n / half) / 1e6,
@@ -261,6 +285,9 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
         "tau_ceiling_none": (ms["receipts/none"] + ms["leaves"] + ms["tree"]) / ms["read"],
         "leaves_and_tree_share": (ms["leaves"] + ms["tree"]) / reader_ms,
         "compressions_per_block": compressions / n,
+        "segments": SEGMENTS, "segment_roots_match": segment_roots,
+        "tau_segmented_per_pass": ms[f"segmented/{SEGMENTS}"] / ms["read"],
+        "commit_marginal_segmented": (ms[f"segmented/{SEGMENTS}"] - ms["receipts/warp"]) / ms["read"],
     }
 
 
@@ -283,7 +310,7 @@ def main() -> int:
         result["measure"] = m = measure(reader, torch, a.gib, a.reps)
         print("reader measure:", json.dumps(m), flush=True)
     (a.out / "reader.json").write_text(json.dumps(result, indent=1))
-    return 0 if g["ok"] else 7
+    return 0 if g["ok"] and result.get("measure", {}).get("segment_roots_match", True) else 7
 
 
 if __name__ == "__main__":
