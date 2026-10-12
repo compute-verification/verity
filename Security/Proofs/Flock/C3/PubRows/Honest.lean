@@ -96,7 +96,8 @@ theorem hCommits_honest (hrows : HPubRows 𝓗) (hown : OwnIs 𝓗 own) (hheld :
       (hheld i R ω t e he R₂ j hacc u q p hp hname x hx hsel)
     show _ = cmtOf Vs bc j e.1 (.inl (u, q))
     rw [vb_cs_inl, hd]
-    simp [cmtOf] <;> rfl
+    simp [cmtOf]
+    rfl
   · have hpos' : Sum.inr g ∈ skOf Vs own sel i j := hpos
     exact absurd hpos' (inr_not_mem_skOf g)
 
