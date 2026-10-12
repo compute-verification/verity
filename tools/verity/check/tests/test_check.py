@@ -726,6 +726,47 @@ def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatc
     assert not passed and rec["status"] == "failed" and "halts" not in rec
 
 
+def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(tmp_path, monkeypatch):
+    """`research cancel`'s SIGTERM while `slow` runs (the FIFO): `slow` is stopped, `after-slow` never starts, and the run still
+    writes its result, `not_run`, with the pack of the pass `passes` stored before it, and exits 143.  Before, the signal killed
+    check.py, and a cancelled check's passes (6f10's 26 minutes, 12 Oct) were run again."""
+    import json
+    import os
+    import signal
+    import tarfile
+    import threading
+
+    gate, marker = _gate(tmp_path, monkeypatch), tmp_path / "never-ran"
+    run_dir, cache = tmp_path / "run", tmp_path / "tests-cache"
+    run_dir.mkdir()
+    for k, v in (("RESEARCH_RUN_DIR", run_dir), ("RESEARCH_RUN_ID", "r20261012-000000-abcd"), ("VERITY_TEST_CACHE", cache),
+                 ("CHECK_CACHE", tmp_path / "check-cache")):
+        monkeypatch.setenv(k, str(v))
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    passes = _py("import pathlib, sys\np = pathlib.Path(sys.argv[1])\np.parent.mkdir(parents=True)\np.write_text('{}')",
+                 cache / "pkg" / "k1.json")
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    _fake_run(monkeypatch, [[("passes", passes, tmp_path), ("slow", slow, tmp_path),
+                             ("after-slow", _py("open(__import__('sys').argv[1], 'w')", marker), tmp_path)]])
+
+    def cancel():
+        with open(gate) as f:
+            f.read(1)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=cancel, daemon=True).start()
+    assert CHECK.main([]) == 143
+    assert signal.getsignal(signal.SIGTERM) is not CHECK._terminated
+    doc = json.loads((run_dir / "result.json").read_text())
+    by = {s["step"]: s for s in doc["steps"]}
+    assert by["passes"]["status"] == "passed" and by["slow"]["status"] == "stopped"
+    assert by["slow"]["detail"] == "stopped: check got SIGTERM" and "after-slow" not in by and not marker.exists()
+    assert doc["validation"]["status"] == "not_run" and doc["validation"]["detail"].startswith("stopped by SIGTERM: ")
+    assert "verdicts.tar.gz" in doc["artifacts"] and doc["verdicts"]["out"]["entries"] == 1
+    with tarfile.open(run_dir / "verdicts.tar.gz") as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json"]
+
+
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
