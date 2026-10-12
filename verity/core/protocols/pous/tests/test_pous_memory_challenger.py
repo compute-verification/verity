@@ -1,10 +1,11 @@
 """The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
-verdict that fails closed, the whole block hashed under `sha512/row/v2`, and a late round that ends the session with no retry.  Every clock is
-injected."""
+verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
+and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import os
 
 import pytest
 
@@ -46,7 +47,8 @@ def coins(session: bytes = SESSION) -> mc.CoinTree:
 def session(respond=None, *, signer=None, clock=None, spend=lambda j: 20_000):
     clock = clock or Clock()
     signer = signer or ts.TestSigner(b"challenger key", height=2)
-    c = mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=clock)
+    c = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+                            clock=clock)
     j = 0
 
     def answer(i: int) -> bytes:
@@ -68,8 +70,8 @@ def test_coin_tree_commits_before_and_opens_after():
     tree = coins()
     want = mc.derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
-    c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
-                            clock=Clock())
+    c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
     assert c.commitment.coin_root == tree.root and len(tree.root) == 64
     with pytest.raises(RuntimeError, match="opened after the session"):
         c.openings()
@@ -154,8 +156,8 @@ def test_receipt_time_is_read_before_hashing(monkeypatch):
         events.append("hash")
         return real(data)
 
-    c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
-                            clock=Seen())
+    c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen())
     i = c.challenge()
     monkeypatch.setattr(mc, "block_digest", digest)
     events.clear()
@@ -173,7 +175,8 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
     _, signed, signer = session()
     assert mc.RECORD_SCHEMA == "pous/round-record/v2"
     assert all(len(r.value()) == 92 and r.value()[-64:] == expected(r.index) for r in signed.rounds)
-    plain = mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
+    plain = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
+                                binding=ROOT, clock=Clock())
     while not plain.done:
         i = plain.challenge()
         plain.receive(block(i))
@@ -211,8 +214,8 @@ def test_openings_must_match_the_revealed_indices():
 
 def test_refusals():
     def open_(**kw):
-        return mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                   clock=Clock(), **kw)
+        return mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+                                   block_bytes=BLOCK_BYTES, clock=Clock(), **kw)
 
     with pytest.raises(ValueError, match="coarser than 1000 ns"):
         open_(binding=ROOT, resolution_ns=10_000)
@@ -231,6 +234,71 @@ def test_refusals():
     signer.sign(SESSION, b"a"), signer.sign(SESSION, b"b")
     with pytest.raises(lms.StateError, match="all 2\\^1 leaves are used"):
         signer.sign(SESSION, b"c")
+    with pytest.raises(TypeError, match="log"):
+        mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
+
+
+def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_path, monkeypatch):
+    """The session log: the id is appended and fsynced when the session commits, before its first challenge reads the
+    clock, so a session that never runs has used it too; a second session under it is refused, by the same log or by
+    the file opened again, and another id is not."""
+    events: list[str] = []
+    fsync = os.fsync
+    monkeypatch.setattr(os, "fsync", lambda fd: (events.append("fsync"), fsync(fd))[1])
+
+    class Seen(Clock):
+        def __call__(self) -> int:
+            events.append("clock")
+            return self.now
+
+    path = tmp_path / "sessions"
+    mc.SessionLog.create(path)
+    log, signer = mc.SessionLog(path), ts.TestSigner(b"k", height=2)
+
+    def open_(log: mc.SessionLog, session: bytes = SESSION) -> mc.MemoryChallenger:
+        return mc.MemoryChallenger(coins(session), signer, log=log, limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
+                                   binding=ROOT, clock=Seen())
+
+    events.clear()
+    c = open_(log)
+    assert events == ["fsync"] and SESSION in log and path.read_text() == f"{mc.SESSION_LOG}\n{SESSION.hex()}\n"
+    c.challenge()
+    assert events == ["fsync", "clock"]
+    for again in (log, mc.SessionLog(path)):
+        with pytest.raises(mc.SessionLogError, match="runs one session under an id"):
+            open_(again)
+    other = hashlib.sha512(b"the next audit's id").digest()[:32]
+    open_(mc.SessionLog(path), other)
+    assert path.read_text() == f"{mc.SESSION_LOG}\n{SESSION.hex()}\n{other.hex()}\n"
+    with pytest.raises(ValueError, match="32 bytes"):
+        log.claim(SESSION[:31])
+
+
+def test_a_session_log_that_is_missing_unreadable_or_made_twice_is_refused(tmp_path):
+    """A missing log is never made in its place, a log is made once, and a log whose lines are not distinct whole ids
+    (cut short, edited, an id twice) refuses to open, and refuses a claim when it changes so after opening."""
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        mc.SessionLog(tmp_path / "none")
+    path = tmp_path / "sessions"
+    mc.SessionLog.create(path)
+    with pytest.raises(mc.SessionLogError, match="never made again"):
+        mc.SessionLog.create(path)
+    head, a = mc.SESSION_LOG, SESSION.hex()
+    for text in ("", f"{head}", "another/log\n", f"{head}\n{a}", f"{head}\n{a}\n{a}\n", f"{head}\n{a[:-1]}\n",
+                 f"{head}\n{a.upper()}\n", f"{head}\n\n", f"{head}\n{a}\n\n"):
+        bad = tmp_path / "bad"
+        bad.write_text(text)
+        with pytest.raises(mc.SessionLogError, match="unreadable"):
+            mc.SessionLog(bad)
+    log = mc.SessionLog(path)
+    with open(path, "a") as f:
+        f.write(a[:10])
+    with pytest.raises(mc.SessionLogError, match="unreadable"):
+        log.claim(SESSION)
+    path.unlink()
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        log.claim(SESSION)
+    assert not path.exists()
 
 
 def test_the_certificate_covers_p2_v4_at_the_cap():
