@@ -23,8 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from serve import CAPTURE, KV_TOKEN_BYTES  # noqa: E402
 
-CLASSES = (("gemm", re.compile(r"gemm|gemv|cutlass|xmma|cublas|nvjet|matmul|scaled_mm|splitk", re.I)),
-           ("attention", re.compile(r"flash|attn|attention|fmha|batchdecode|batchprefill|mergestate|merge_state", re.I)))
+# Attention is matched first: FlashAttention's kernels are cutlass templates named `flash_fwd_splitkv`.
+CLASSES = (("attention", re.compile(r"flash|attn|attention|fmha|batchdecode|batchprefill|mergestate|merge_state", re.I)),
+           ("gemm", re.compile(r"gemm|gemv|cutlass|xmma|cublas|nvjet|matmul|scaled_mm|splitk", re.I)))
 
 
 def classify(name: str) -> str:
@@ -54,8 +55,8 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
             "other_share": ms["other"] / kern, "native_ms": native_ms,
             "native_of_R": (weight_bytes + kv_bytes) / (rate * native_ms), "native_all_ms": native_all_ms,
             "native_all_of_R": (weight_bytes + kv_bytes) / (rate * native_all_ms),
-            "top": [{"name": n[:120], "class": classify(n), "ms": round(t, 4)}
-                    for n, t in sorted(by.items(), key=lambda kv: -kv[1])[:15]]}
+            "kernels": [{"name": n[:160], "class": classify(n), "ms": round(t, 4)}
+                        for n, t in sorted(by.items(), key=lambda kv: -kv[1])]}
 
 
 def main() -> int:

@@ -14,6 +14,8 @@ def test_kernel_classes_by_name():
     assert step_profile.classify("void cutlass::device_kernel<cutlass::gemm::kernel::GemmUniversal<...>>") == "gemm"
     assert step_profile.classify("nvjet_tst_64x8_64x16_4x1_v_bz_TNT") == "gemm"
     assert step_profile.classify("void flashinfer::BatchDecodeWithPagedKVCacheKernel<...>") == "attention"
+    assert step_profile.classify("void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 128, 4, false, "
+                                 "false, cutlass::bfloat16_t, Flash_kernel_traits<...>>>") == "attention"
     assert step_profile.classify("void vllm::rms_norm_kernel<c10::BFloat16>") == "other"
 
 
@@ -30,4 +32,4 @@ def test_split_times_each_class_and_re_times_the_gemms_at_the_native_rate():
     assert (r["kernel_ms"], r["span_ms"], r["kernels_a_step"]) == (7.0, 7.0, 3.0)
     assert (r["of_R"], r["gemm_of_R"], r["attention_of_R"]) == (pytest.approx(3 / 7), 0.5, 0.5)
     assert r["native_ms"] == pytest.approx(4.0 + 2.0 + 1.0) and r["native_all_ms"] == pytest.approx(6.0 + 1.0)
-    assert r["top"][0] == {"name": "gemm_a", "class": "gemm", "ms": 4.0}
+    assert r["kernels"][0] == {"name": "gemm_a", "class": "gemm", "ms": 4.0} and len(r["kernels"]) == 3
