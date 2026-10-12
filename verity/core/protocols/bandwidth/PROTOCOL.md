@@ -30,17 +30,17 @@ slack the last term charges. The three terms are the three ways a sampled block 
 at a query: the samples miss the blocks the device never queried; a tag is guessed; a device queried `k` blocks with
 less information than they hold, which would describe the store in fewer bits than it has.
 
-At the deployed point, `ε_s = 1/64`, `s = 1,849`, `h = 256` (`ro-blake3/v1`), `q ≤ 2^40` and `λ = 40·k + 41`:
+At the deployed point, `ε_s = 1/64`, `s = 1,849`, `h = 256` (`ro-blake3/v1`), `q ≤ 2^64` and `λ = 64·k + 41`:
 
 | | value |
 |---|---|
 | `N`, `b` | `2^19` blocks of 16,448 bits (2,056 bytes); `E` is 1,077,936,128 bytes |
 | `k` | 516,096 blocks, `E` less 1/64 (16.8 MB) |
-| `λ` | 20,643,881 bits = 2,580,485 bytes, 0.24% of `E` |
+| `λ` | 33,030,185 bits = 4,128,774 bytes, 0.38% of `E` |
 | error | `2^-42.01` (samples) + `2^-245.1` (guesses) + `2^-41` (compression) ≤ `2^-40.42` |
 
 `G = 0`, because `Params` refuses `T + RTT` at or past one rebuild (§5). `S` and `c` are the device's (§5); at
-`T = 1.2 ms` and `RTT = 0`, `I` is 774,752,092 bytes, 71.9% of `E`, 646 GB/s (§6). `audit.bound` computes `I` and the
+`T = 1.2 ms` and `RTT = 0`, `I` is 741,353,308 bytes, 68.8% of `E`, 618 GB/s (§6). `audit.bound` computes `I` and the
 error; `test_bound_is_the_guarantee_at_the_proofs_point` checks it against the formula.
 
 `gf31-poly/v1` is an uncertified fast check: nothing bounds a device's ingress through it (§4), and `bound` refuses it.
@@ -160,8 +160,8 @@ only the words mod p (`w`, `w + p` and `w + 2p` agree), 15,934 of a block's 16,4
 | parameter | value | source |
 |---|---|---|
 | `ε_s`, `s` | 1/64, 1,849 | `audit.EPSILON`, `audit.SAMPLES` (`samples_for(N, -42)`) |
-| `q` | at most `2^40` oracle queries in a window | `audit.QUERIES_LOG2`; the RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms |
-| `λ` | `40·k + 41` bits | `audit.SLACK_LOG2`: `C(q, k)/2^λ ≤ q^k/2^λ = 2^-41` |
+| `q` | at most `2^64` oracle queries in a window | `audit.QUERIES_LOG2`; the RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms, so `2^64` covers `2^38` such devices helping, and the bound needs no assumption on `q` |
+| `λ` | `64·k + 41` bits | `audit.SLACK_LOG2`: `C(q, k)/2^λ ≤ q^k/2^λ = 2^-41`; raising `q` from `2^40` cost 1.55 MB (0.14 points) |
 | `S` | 239,992,832 bytes (22.3% of `E`) | `S_chip` (`summarize.s_chip_bytes`, from the device's properties in `device.json`): 128 MiB of L2; for each of 188 SMs, 256 KiB of registers, 128 KiB of L1 and shared memory, and 160 KiB of other stores; then 1 MiB at the chip level (see below) |
 | `c` | `cap_side · (T + RTT)`, `cap_side` = 63.0 GB/s | the GPU's PCIe Gen 5 x16 link at its raw rate, 32 GT/s × 16 lanes at 128b/130b; measured 56.6 GB/s host to device, 51.4 GB/s zero-copy (§6) |
 | `G` | 0 | `Params` refuses `T + RTT ≥ 2 · ROOT_CALL_NS = 1,708,058 ns`, the fastest cooperating P2 root; one root, not two, so a device holding a block's inner root rebuilds nothing |
@@ -261,18 +261,19 @@ at 1.01 ms (run `r20261012-000847-217b`, art:3a657af4fa9d2c009caff8382b05bcb97e5
 device that skips 1% or 5% of the blocks was rejected in every run, for every tag; at `s = 1,849` it passes with
 probability `0.99^1849 ≈ 2^-26.8` or `0.95^1849 ≈ 2^-136.8`.
 
-`bound` at `s = 1,849`, `S = 208,142,336` bytes and `cap_side = 63.0 GB/s` (error `2^-40.42` throughout):
+`bound` at `s = 1,849`, `q ≤ 2^64`, `S = 239,992,832` bytes and `cap_side = 63.0 GB/s` (error `2^-40.42`
+throughout):
 
 | `T` | `RTT` | `I` | share of `E` | `I / (T + RTT)` |
 |---|---|---|---|---|
-| 1.0 ms | 0 | 787,355,169 bytes | 73.0% | 787 GB/s |
-| **1.2 ms** | **0** | **774,752,092 bytes** | **71.9%** | **646 GB/s** |
-| 1.2 ms | 0.3 ms | 755,847,477 bytes | 70.1% | 504 GB/s |
-| 1.4 ms | 0 | 762,149,015 bytes | 70.7% | 544 GB/s |
-| 1.708 ms (the largest `Params` allows) | 0 | 742,736,685 bytes | 68.9% | 435 GB/s |
+| 1.0 ms | 0 | 753,956,385 bytes | 69.9% | 754 GB/s |
+| **1.2 ms** | **0** | **741,353,308 bytes** | **68.8%** | **618 GB/s** |
+| 1.2 ms | 0.3 ms | 722,448,693 bytes | 67.0% | 482 GB/s |
+| 1.4 ms | 0 | 728,750,231 bytes | 67.6% | 521 GB/s |
+| 1.708 ms (the largest `Params` allows) | 0 | 709,337,901 bytes | 65.8% | 415 GB/s |
 
-At `T = 1.2 ms` the certified rate is 44% of the raw read rate (1,476 GB/s). Of `E`'s 1,078 MB, the chip's storage
-takes 208 MB (19.3%), the side link 76 MB (7.0%), the sample 17 MB (1.6%) and `λ` 2.6 MB (0.24%); the rest of the gap
+At `T = 1.2 ms` the certified rate is 42% of the raw read rate (1,476 GB/s). Of `E`'s 1,078 MB, the chip's storage
+takes 240 MB (22.3%), the side link 76 MB (7.0%), the sample 17 MB (1.6%) and `λ` 4.1 MB (0.38%); the rest of the gap
 from the raw rate is the time the honest pass and its margin take beyond a raw read.
 
 ## 7. Findings and open questions for the red team

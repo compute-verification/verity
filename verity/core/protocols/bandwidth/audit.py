@@ -268,10 +268,11 @@ class Window:
 
 EPSILON = Fraction(1, 64)
 SAMPLES = 1849
-QUERIES_LOG2 = 40
+QUERIES_LOG2 = 64
 SLACK_LOG2 = 41
-"""The proof's deployed point: `ε_s = 1/64`, `s = 1,849`, at most `2^40` oracle queries in a window, and
-`λ = 40·k + 41`, which together keep the error under `2^-40` at `N = 2^19`."""
+"""The proof's deployed point: `ε_s = 1/64`, `s = 1,849`, at most `2^64` oracle queries in a window, and
+`λ = 64·k + 41`, which together keep the error under `2^-40` at `N = 2^19`.  `2^64` is past what any fleet computes in
+a window (an RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms), so the query bound needs no assumption."""
 
 
 def certified_blocks(blocks: int, epsilon: Fraction = EPSILON) -> int:

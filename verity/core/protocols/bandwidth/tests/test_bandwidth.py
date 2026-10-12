@@ -412,8 +412,8 @@ def test_bound_is_the_guarantee_at_the_proofs_point(name: str) -> None:
     params = audit.Params(name, audit.SAMPLES, 1_000_000, rtt_allowance_ns=100_000)
     b = audit.bound(params, 1 << 19, 2056, chip_bytes=208_000_000, side_bytes_per_s=63e9)
     k = 516_096
-    assert b.side_bytes == 69_300_000 and b.slack_bits == 40 * k + 41
-    assert b.ingress_bytes == (k * 2056 * 8 - 8 * 208_000_000 - 8 * 69_300_000 - (40 * k + 41)) // 8
+    assert audit.QUERIES_LOG2 == 64 and b.side_bytes == 69_300_000 and b.slack_bits == 64 * k + 41
+    assert b.ingress_bytes == (k * 2056 * 8 - 8 * 208_000_000 - 8 * 69_300_000 - (64 * k + 41)) // 8
     assert b.error_compression_log2 == -41 and b.error_guess <= 1849 * 2.0 ** -256
     assert b.error < 2.0 ** -40 and 0.7e9 < b.ingress_bytes < (1 << 19) * 2056
 
