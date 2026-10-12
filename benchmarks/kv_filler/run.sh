@@ -38,7 +38,7 @@ P2=$!
 wait $P1 || { tail -30 "$O/topup.ptxas"; exit 4; }
 wait $P2 || { tail -30 "$O/kv-p512.ptxas"; exit 4; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/topup.ptxas"; then echo "REFUSED: a top-up kernel spills"; exit 4; fi
-sha256sum $KF/topup.cu benchmarks/bandwidth/tagger.cu benchmarks/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
+sha256sum $KF/topup.cu $KF/fill.cu $KF/readers.cu benchmarks/bandwidth/tagger.cu benchmarks/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
 if [ -d $KF/tests ] && "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $KF/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi

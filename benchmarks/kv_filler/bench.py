@@ -15,6 +15,8 @@ Nothing is timed before every gate passed:
   at the greatest priority beside a top-up at the least) and, for decode, eager and as a CUDA graph. Each cell gives the
   step's time against alone (the interference), the filler bytes the top-up read inside the cell's span on the GPU's
   clock, and the span's registered reads (the step's weights and KV, which are registered, plus the filler) over R·T.
+- `prefill_cost`: a synthetic prefill alone and beside fill-sk16/v2's PREFILL role and `readers.cu`'s plain and TMA
+  bulk readers at a few grids: the prefill's added time at R per reader byte.
 - `encode`: the KV codec's encode at p512, k = 2 (the page conversion's cost: a page allocated from filler is encoded on
   write), alone and on a low-priority stream beside a decode step, its rate and the step's slowdown.
 """
@@ -77,6 +79,7 @@ class Topup:
         so.bw_fill_test_store.argtypes = [v, q]
         so.tu_fill_units.argtypes = [v, v, i, q, q, v, v, i, v]
         so.tu_fill_signs.argtypes = [v, v]
+        so.rd_read.argtypes = [i, i, v, q, i, v, v]
 
     def fill_units(self, regions, unit0: int, units: int, seed: bytes, sign_seed: bytes, ctas: int):
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
@@ -654,6 +657,94 @@ def phases(tu: Topup, torch, model: Model, filler, R: float, args, least: int, g
     return rows
 
 
+PC_READERS = {"ldef4": (1, 4), "ld4": (0, 4), "bulk2": (2, 2), "bulk4": (2, 4)}  # readers.cu's rd_read (kind, u)
+
+
+def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: int, greatest: int, log) -> list[dict]:
+    """A synthetic prefill of each `--pc-prefill` length on the greatest-priority stream, alone and beside a reader of
+    each `--pc-ctas` CTAs on a stream of the same priority: `v2` (fill-sk16/v2's PREFILL role, each prefill bracketed
+    as serve.py brackets a prefilling step) and `readers.cu`'s plain readers (`PC_READERS`: 16-byte loads, and TMA bulk
+    copies into S stages of 16 KiB of shared memory), each a train of launches timed by events. Each cell gives the
+    prefill's slowdown, the reader's bytes inside the prefills' span, and their cost: the span's added time at R per
+    reader byte."""
+    rows = []
+    high = torch.cuda.Stream(priority=greatest)
+    side = torch.cuda.Stream(priority=greatest)
+    sq = Seq(tu)
+    xr = torch.zeros(1, dtype=torch.int32, device="cuda")
+    for m in args.pc_prefill:
+        model.kv = None
+        torch.cuda.empty_cache()
+        x = torch.randn(m, HIDDEN, device="cuda", dtype=torch.bfloat16)
+        n = args.pc_steps
+        with torch.cuda.stream(high):
+            for _ in range(2):
+                model.prefill(x)
+        torch.cuda.synchronize()
+        ts = step_times(torch, lambda: model.prefill(x), high, n)
+        alone_ms = statistics.median(ts)
+        span_alone = sum(ts)
+        rows.append({"prefill": m, "reader": None, "ctas": 0, "step_ms_median": alone_ms, "span_ms": span_alone})
+        log(f"prefill {m} alone: {alone_ms:.3f} ms")
+        for reader in args.pc_readers:
+            for ctas in args.pc_ctas:
+                torch.cuda.synchronize()
+                if reader == "v2":
+                    sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, priority=least,
+                             step_priority=greatest)
+                    time.sleep(0.02)
+
+                    def one():
+                        tu.so.sq_step_begin_phase(0, 1, ctas, high.cuda_stream)
+                        model.prefill(x)
+                        tu.so.sq_step_end_phase(1, high.cuda_stream)
+
+                    t0 = sq.now(high.cuda_stream)
+                    ts = step_times(torch, one, high, n)
+                    t1 = sq.now(high.cuda_stream)
+                    sq.stop()
+                    got = overlap_bytes(tu.log(), t0, t1)
+                else:
+                    kind, u = PC_READERS[reader]
+                    piece = (64 << 20) * max(1, ctas // 16)
+                    guess = min(R * 1e9, ctas * 40e9)  # a 16-byte-load CTA's rate alone, at most R
+                    pieces = int(guess * span_alone / 1e3 * 1.5 / piece) + 4
+                    ref = torch.cuda.Event(enable_timing=True)
+                    evs = [torch.cuda.Event(enable_timing=True) for _ in range(pieces)]
+                    with torch.cuda.stream(side):
+                        ref.record()
+                        for k in range(pieces):
+                            off = (k * piece) % (filler.numel() - piece + 1) // 16384 * 16384
+                            tu.so.rd_read(kind, u, ctypes.c_void_p(filler.data_ptr() + off), piece, ctas,
+                                          ctypes.c_void_p(side.cuda_stream), ctypes.c_void_p(xr.data_ptr()))
+                            evs[k].record()
+                    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                    high.wait_event(ref)
+                    with torch.cuda.stream(high):
+                        a.record()
+                    ts = step_times(torch, lambda: model.prefill(x), high, n)
+                    with torch.cuda.stream(high):
+                        b.record()
+                    torch.cuda.synchronize()
+                    t0, t1 = ref.elapsed_time(a), ref.elapsed_time(b)
+                    ends = [ref.elapsed_time(e) for e in evs]
+                    recs = [(ends[k - 1] if k else 0.0, ends[k], piece) for k in range(pieces)]
+                    got = overlap_bytes(recs, t0, t1)
+                    if ends[-1] < t1:
+                        log(f"  {reader}@{ctas}: the reader ended before the prefills ({ends[-1]:.1f} < {t1:.1f} ms)")
+                span = sum(ts)
+                r = {"prefill": m, "reader": reader, "ctas": ctas, "step_ms_median": statistics.median(ts),
+                     "span_ms": span, "slowdown": statistics.median(ts) / alone_ms - 1, "reader_bytes": got,
+                     "reader_GBps": got / (span / 1e3) / 1e9,
+                     "cost_reads": (span - span_alone) / 1e3 * R * 1e9 / got if got else None,
+                     "eta_closed": got / (R * 1e9 * span / 1e3)}
+                rows.append(r)
+                log(f"prefill {m} beside {reader}@{ctas}: {r['step_ms_median']:.3f} ms ({r['slowdown']:+.2%}), reader "
+                    f"{r['reader_GBps']:.0f} GB/s ({r['eta_closed']:.3f} of R), cost {r['cost_reads'] or 0:.3f} reads "
+                    "a byte")
+    return rows
+
+
 def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int, greatest: int, log) -> list[dict]:
     """The top-up held to a few CTAs (read: `ctas` long-lived CTAs; ro-blake3/v1: chunks of `ctas` × 64 blocks, a CTA
     each) beside a decode step as a CUDA graph and a prefill, both on the greatest-priority stream: harvest against
@@ -842,6 +933,10 @@ def main() -> int:
     ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
     ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--fill-chunk-mib", type=int, default=1024)
+    ap.add_argument("--pc-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
+    ap.add_argument("--pc-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[16, 32, 64, 128])
+    ap.add_argument("--pc-readers", type=lambda s: s.split(","), default=["v2", "ldef4", "bulk2", "bulk4"])
+    ap.add_argument("--pc-steps", type=int, default=6)
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -884,6 +979,9 @@ def main() -> int:
     model = Model(torch)
     if "phases" not in a.skip:
         res["phases"] = phases(tu, torch, model, filler, R, a, least, greatest, log)
+        save()
+    if "prefill_cost" not in a.skip:
+        res["prefill_cost"] = prefill_cost(tu, torch, model, filler, R, a, least, greatest, log)
         save()
     if "throttle" not in a.skip:
         res["throttle"] = throttle(tu, torch, model, filler, R, a, least, greatest, log)

@@ -29,6 +29,7 @@
 
 #include "../bandwidth/tagger.cu"
 #include "fill.cu"
+#include "readers.cu"
 
 #include <atomic>
 #include <mutex>
