@@ -41,21 +41,24 @@ def test_tag_vectors_bound_every_launch(n, kd, t):
     assert tlib.tag_vectors(n, kd) == most
 
 
-@pytest.mark.parametrize("tw,s,warps", [(86, 96, 12), (43, 192, 8), (128, 64, 16)])
+@pytest.mark.parametrize("tw,s,warps,t", [(86, 96, 12, 8), (43, 192, 8, 8), (43, 192, 12, 32), (128, 64, 16, 8)])
 @pytest.mark.parametrize("sketch", [None, 16, 64])
-def test_tensor_configs_fit_the_fused_kernel(tw, s, warps, sketch):
+def test_tensor_configs_fit_the_fused_kernel(tw, s, warps, t, sketch):
     """Every config the tensor arm launches passes `wt_fused_sketch`'s bounds and its shared memory at M = 32
-    (`fused_smem_bytes<4, k_s>`), for p768, p1536 and p512."""
+    (`fused_smem_bytes<4, k_s>` with the signs in global memory), for p768, p1536 (8 warps at T = 8, and 12 at T = 32)
+    and p512; the sketched ones include ra-codec-tensor's p1536 picks, 8 x 8 and 10 x 9."""
     tlib = object.__new__(K.TensorLib)
     tlib.sb, tlib.task_words, tlib.fused_warps, tlib.fused_span = tw * s, tw, warps, (tw + 30) // 32 + 1
-    tlib.sketch = {"k": sketch, "t": 8} if sketch else None
+    tlib.sketch = {"k": sketch, "t": t} if sketch else None
     for tagged in (False, True):
         cfgs = tlib.configs(tagged)
         assert cfgs
-        for d, st, t, ks in cfgs:
-            assert ks == (sketch or 0) and (t == -1 if sketch or not tagged else t >= 0)
-            assert d >= tlib.fused_span and d + 2 + max(t, 0) <= warps and st >= -(-32 * d // tw)
-            assert not ks or st < 2 * 8
+        if sketch == 16 and warps == 12 and tw == 43:
+            assert {(8, 8), (10, 9)} <= {(d, st) for d, st, _, _ in cfgs}
+        for d, st, tg, ks in cfgs:
+            assert ks == (sketch or 0) and (tg == -1 if sketch or not tagged else tg >= 0)
+            assert d >= tlib.fused_span and d + 2 + max(tg, 0) <= warps and st >= -(-32 * d // tw)
+            assert not ks or st < 2 * t
             assert st * tlib.sb + 4 * 8 * 528 + 16 * ((5 * st + 1) // 2) + 16 + 3 * 64 * ks <= K.SMEM_PER_BLOCK
 
 

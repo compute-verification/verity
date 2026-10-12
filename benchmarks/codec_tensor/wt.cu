@@ -171,6 +171,53 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
   }
 }
 
+// At full slot, limb k of the lazy x takes t's columns k and k + NL at once (r and h, each pair once), so t is never
+// held: x = sum (r_k + c h_k + carry) 2^(32k) = t mod p, then fold's second stage. The low columns' carries stay in
+// that sum, so its carry out of 2^n, (c1, c0), is below (NL + 1) 2^32 + c, not c: (c1, c0) c < 2^50 goes back in.
+// It needs fewer registers than sqr_full + fold but runs 1-16% slower (three multiplies by c a limb, not one), so
+// only the fused decoders that need the registers use it (decode_word_fresh); sqr and mul, the encode's, do not.
+// x must not be a.
+__device__ __forceinline__ void fold_limb(u32 &x, u32 &c0, u32 &c1, const u32 (&r)[3], const u32 (&h)[3]) {
+  u64 v = (u64)h[0] * CF + r[0] + c0;
+  x = (u32)v;
+  v = (v >> 32) + (u64)h[1] * CF + r[1] + c1;
+  c0 = (u32)v;
+  c1 = (u32)(v >> 32) + h[2] * CF + r[2];
+}
+__device__ __forceinline__ void fold_top(u32 (&x)[NL], u32 c0, u32 c1) {
+  u64 c = (((u64)c1 << 32) | c0) * CF;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    c += x[k];
+    x[k] = (u32)c;
+    c >>= 32;
+  }
+  x[0] += (u32)c * CF;
+}
+__device__ __forceinline__ void dbl3(u32 (&r)[3]) {
+  r[2] = (r[2] << 1) | (r[1] >> 31);
+  r[1] = (r[1] << 1) | (r[0] >> 31);
+  r[0] <<= 1;
+}
+
+__device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
+  u32 c0 = 0, c1 = 0;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    u32 r[3] = {0, 0, 0}, h[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = 0; 2 * i < k; ++i) mac(r, a[i], a[k - i]);
+#pragma unroll
+    for (int i = k + 1; 2 * i < k + NL; ++i) mac(h, a[i], a[k + NL - i]);
+    dbl3(r);
+    dbl3(h);
+    if ((k & 1) == 0) mac(r, a[k / 2], a[k / 2]);
+    if (((k + NL) & 1) == 0) mac(h, a[(k + NL) / 2], a[(k + NL) / 2]);
+    fold_limb(x[k], c0, c1, r, h);
+  }
+  fold_top(x, c0, c1);
+}
+
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   u32 t[2 * NL];
   sqr_full(a, t);
@@ -454,6 +501,50 @@ __device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) 
     add_nc(q, w, y);
     canon_cc(y);
   }
+}
+
+// u = (c_0 + tau i) mod p, canonical, at full slot and without a double-width product: limb k sums c_0's, tau_k lo
+// and tau_(k-1) hi into the carry (three words), and the part above 2^n (< 2^66) comes back times c.
+__device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
+  static_assert(FULL_SLOT, "2^n = c");
+  const u32 lo = (u32)i, hi = (u32)(i >> 32);
+  u32 r[3] = {0, 0, 0};
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    mac(r, kTau[k], lo);
+    if (k > 0) mac(r, kTau[k - 1], hi);
+    add3(r, kC[0][k], 0u);
+    u[k] = r[0];
+    r[0] = r[1];
+    r[1] = r[2];
+    r[2] = 0;
+  }
+  mac(r, kTau[NL - 1], hi);
+  u64 v = (u64)r[0] * CF;
+  const u32 a0 = (u32)v;
+  v = (v >> 32) + (u64)r[1] * CF;
+  const u32 a1 = (u32)v;
+  const u32 a2 = (u32)(v >> 32) + r[2] * CF;
+  u[0] = add_cc(u[0], a0);
+  u[1] = addc_cc(u[1], a1);
+  u[2] = addc_cc(u[2], a2);
+#pragma unroll
+  for (int k = 3; k < NL; ++k) u[k] = addc_cc(u[k], 0u);
+  const u32 co = addc(0u, 0u);   // then u < c 2^66, so the c below carries at most into u[2]
+  u[0] = add_cc(u[0], co * CF);
+  u[1] = addc_cc(u[1], 0u);
+  u[2] = addc(u[2], 0u);
+  canon_cc(u);
+}
+
+// decode_word_w with c_0 + t made from the word's index after the square (ct_of), so no tweak is held across words.
+__device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i) {
+  u32 q[NL], u[NL];
+  sqr_fold(y, q);
+  canon_cc(q);
+  neg_if(q, y[0] & 1);
+  ct_of(i, u);
+  submod_cc(q, u, y);
 }
 
 // w = -(c_0 + t) mod p.
@@ -1569,14 +1660,18 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // loads: an earlier arrive lets the next bulk copy (async proxy) overwrite the stage under loads still in flight.
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
-// 128 registers, three at 168, two at 255).
-constexpr int FUSED_WARPS = NL <= 17 ? 16 : (NL <= 24 ? 12 : 8);
+// 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word, its square and
+// the tweak. At full slot and NL > 24 it holds neither the double-width square nor the tweak (FRESH: sqr_fold, and
+// c_0 + t made a word at a time), which fits 12 warps at NL = 48.
+constexpr int FUSED_WARPS = FULL_SLOT && NL > 24 && NL <= 48 ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
+// sgs sign words (k_s = 16's signs, skt tasks' steps, a u32 a lane) after the sketch's buffers: wt_fused_sketch puts
+// them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0).
 template <int NB8, int SKK>
-__host__ __device__ constexpr int fused_smem_bytes(int stages) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK;
+__host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
+  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK + 4 * sgs;
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -1747,7 +1842,7 @@ __device__ __forceinline__ void sk_begin(SkPart<KS> &P, int x, bool mine, int w,
         const uint2 v = __ldg(reinterpret_cast<const uint2 *>(sp));
         P.sw[h][0] = v.x, P.sw[h][1] = v.y;
       } else {
-        P.sw[h][0] = __ldg(sp);
+        P.sw[h][0] = *sp;   // shared or global memory (fused_kernel's sgs)
       }
     }
   }
@@ -1795,11 +1890,12 @@ template <int K, int SKK>
 __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
                                              int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
                                              const u32 *__restrict__ tsteps, const Sketch &sk) {
+  constexpr bool FRESH = K == 1 && FULL_SLOT && NL > 24;   // the tweak's registers would cost decoder warps
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
-  tweak(base + (q0 + (u64)i * gq) * TW + w, t);
-  if constexpr (K == 1) {
+  if constexpr (!FRESH) tweak(base + (q0 + (u64)i * gq) * TW + w, t);
+  if constexpr (K == 1 && !FRESH) {
     u32 wn[NL];
     w_of(t, wn);
     copy(t, wn);
@@ -1829,7 +1925,8 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     if (on) {
       load_word_smem(st + w * S, yw);
       if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
-      if constexpr (K == 1) decode_word_w(yw, t);
+      if constexpr (FRESH) decode_word_fresh(yw, base + (q0 + (u64)i * gq) * TW + w);
+      else if constexpr (K == 1) decode_word_w(yw, t);
       else decode_word<K>(yw, t);
     }
     if constexpr (PAY_E == 0) {
@@ -1851,12 +1948,14 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       }
     }
     const bool wrap = w + rem >= TW;
-    u32 step[NL], t2[NL];
+    if constexpr (!FRESH) {
+      u32 step[NL], t2[NL];
 #pragma unroll
-    for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
-    if constexpr (K == 1) submod_cc(t, step, t2);
-    else addmod(t, step, t2);
-    copy(t, t2);
+      for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
+      if constexpr (K == 1) submod_cc(t, step, t2);
+      else addmod(t, step, t2);
+      copy(t, t2);
+    }
     w += wrap ? rem - TW : rem;
     i += wrap ? adv + 1 : adv;
   }
@@ -1871,7 +1970,7 @@ template <int K, int NB8, bool PARTIALS, int SKK>
 __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
-    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt) {
+    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
@@ -1883,6 +1982,10 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
   load_xs<NB8>(xs, x, M, Kd, kc);
   for (int e = threadIdx.x; e < SK_BUFS * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
+  u32 *sksg = reinterpret_cast<u32 *>(skbuf + SK_BUFS * 16 * SKK);
+  if (sgs && signs)
+    for (int e = threadIdx.x; e < sgs; e += blockDim.x) sksg[e] = __ldg(signs + e);
+  const u32 *sgn = sgs ? sksg : signs;
   if (threadIdx.x == 0) {
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
@@ -1918,7 +2021,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     __syncwarp();
   } else if (warp == decoders) {
     const int g = lane >> 2, tq = lane & 3;
-    [[maybe_unused]] const Sketch sk{skbuf, signs, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+    [[maybe_unused]] const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
     [[maybe_unused]] SkJob J;
     J.blk = -1;
     int hashed = 0;   // the tiles whose hash has started
@@ -1964,7 +2067,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       }
     }
   } else if (warp < decoders) {
-    const Sketch sk{skbuf, signs, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+    const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
     decode_tasks<K, SKK>(smem, ready, loaded, decoded, stages, ntasks, q0, gq, base, decoders, warp, lane, tsteps, sk);
   }
   if constexpr (SKK == 0)
@@ -2152,15 +2255,22 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers) * 32;
-  auto go = [&](auto kern, int smem) -> int {
+  int dev = 0, optin = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
+  const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
+  auto go = [&](auto kern, int smem, int sgs) -> int {
     return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
       kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
-                                               stages, tsteps, tags, tag_base, signs, sk_out, skt);
+                                               stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
     });
   };
-#define G(KK, NB, SK) \
-  return partials ? go(fused_kernel<KK, NB, true, SK>, fused_smem_bytes<NB, SK>(stages)) \
-                  : go(fused_kernel<KK, NB, false, SK>, fused_smem_bytes<NB, SK>(stages))
+#define G(KK, NB, SK)                                                                              \
+  do {                                                                                             \
+    const int sg = fused_smem_bytes<NB, SK>(stages, signs16) <= optin ? signs16 : 0;               \
+    return partials ? go(fused_kernel<KK, NB, true, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg) \
+                    : go(fused_kernel<KK, NB, false, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg); \
+  } while (0)
 #define GN(KK, SK) do { if (nb8 == 1) G(KK, 1, SK); else if (nb8 == 2) G(KK, 2, SK); else G(KK, 4, SK); } while (0)
   if (sketch_k == 16) GN(1, 16);
   if (sketch_k == 64) GN(1, 64);

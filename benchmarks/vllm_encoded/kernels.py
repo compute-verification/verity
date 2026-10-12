@@ -372,9 +372,11 @@ class TensorLib:
     def configs(self, tagged: bool) -> list[tuple[int, int, int, int]]:
         """(decoders, stages, taggers, k_s) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged (taggers
         -1), the most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0
-        or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched, all of
-        them sketching the words they decode, at 2, 3 and 4 stages fewer than fit with the sketch's buffers and fewer
-        than 2 t.  Not 4 or 6 tag warps: with that many gate_up's sums at M = 32 differ from launch to launch (p511 and
+        or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched, the
+        most decoder warps and 2 fewer (ra-codec-tensor's p1536 picks at T = 32: 8 x 8 for qkv and o, 10 x 9 for
+        gate_up and down), all of them sketching the words they decode, at 0 to 4 stages fewer than fit with the
+        sketch's buffers and fewer than 2 t (the kernel puts k_s = 16's signs in shared memory when they fit beside
+        the stages).  Not 4 or 6 tag warps: with that many gate_up's sums at M = 32 differ from launch to launch (p511 and
         p767, r20261012-092414-7dcc and r20261012-092945-296e)."""
         def smax(ks: int) -> int:
             return (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (self.sb + 40)
@@ -386,7 +388,8 @@ class TensorLib:
 
         if self.sketch is not None:
             ks, t = self.sketch["k"], self.sketch["t"]
-            return list(dict.fromkeys((dmax, min(2 * t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (2, 3, 4)))
+            return list(dict.fromkeys((d, min(2 * t - 1, max(need(d), smax(ks) - f)), -1, ks)
+                                      for d in (dmax, dmax - 2) if d >= self.fused_span for f in range(5)))
         if not tagged:
             return list(dict.fromkeys([(dmax, max(need(dmax), smax(0) - 4), -1, 0),
                                        (dmax, max(need(dmax), smax(0) - 6), -1, 0)]))

@@ -5,7 +5,7 @@ at k = 1, at the locked clock, so x_boosted is false and the renderer grants the
     python points.py --gemm RUN_DIR [--gemm RUN_DIR ...] --rates RUN_DIR [--rates ...] [--art RUN=art:...] --out points.json
         [--rates-out rates.json]
 
-Each field's rates come from the last --rates run that measured it. --rates-out writes `verity/codec-tensor-rates/v0`
+Each field's rates come from the --rates run with its fastest k = 1 encode. --rates-out writes `verity/codec-tensor-rates/v0`
 (one row a field: the best squarings/s on CUDA and tensor cores, decode and encode words/s at each k, and x, Δ and r).
 
 y_base is the plain kernel's layer ratio, y_decode the untagged fused kernel's over it, y_tag the tagged (or sketched)
@@ -55,11 +55,15 @@ def points(gemm: dict, run: str, art: str | None, rates: dict, sm_mhz: float) ->
 
 
 def merge_rates(runs: list[tuple[str, dict]]) -> dict:
-    """The rates runs' libs that have an analysis, the last run's for a field measured twice, each with its run."""
+    """The rates runs' libs that have an analysis, each with its run. A field measured more than once takes the run
+    with the fastest k = 1 encode: x is the adversary's best, never a slower squaring's."""
+    def encode1(e: dict) -> float:
+        return next(v["per_s"] for k, v in e["rates"]["encode"].items() if int(k) == 1)
+
     libs = {}
     for run, d in runs:
         for name, e in d["libs"].items():
-            if "analysis" in e and "rates" in e:
+            if "analysis" in e and "rates" in e and (name not in libs or encode1(e) > encode1(libs[name])):
                 libs[name] = dict(e, run=run, device=d["device"]["name"])
     return {"libs": libs}
 
