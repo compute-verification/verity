@@ -43,7 +43,7 @@ theorem playOut_eq {α : Type} {g : Game α} {ts : List Step} {a : α} (d : α) 
     playOut g ts d = a := by
   have hx : ∃ a, PlaysT g ts a := ⟨a, h⟩
   unfold playOut
-  rw [dif_pos hx]
+  rw [dite_eq_left hx]
   exact PlaysT.det hx.choose_spec h
 
 /-! ## The tied run -/
@@ -168,8 +168,8 @@ theorem stagesPlay_of_ties {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoA
     lig_plays_of_levelTie hl⟩
 
 /-- **A stage's messages are typed by `T`** where its kinds are a prefix of a shape whose message types are. -/
-theorem tysAt_of_kinds {nT : ℕ} {T : Fin nT → Type} {l : List Step} {σ : List Kind} (hk : l.map kindOf <+: σ)
-    (hT : ∀ M, Kind.msg M ∈ σ → ∃ j, T j = M) : TysAt T l := fun m hm =>
+theorem tysAt_of_kinds {nT : ℕ} {T : Fin nT → Type} {l : List Step} {σ : List Exec.Kind} (hk : l.map kindOf <+: σ)
+    (hT : ∀ M, Exec.Kind.msg M ∈ σ → ∃ j, T j = M) : TysAt T l := fun m hm =>
   hT m.1 (hk.subset (List.mem_map.2 ⟨.inl m, hm, rfl⟩))
 
 /-! ## The tied source -/
