@@ -368,3 +368,182 @@ def test_the_hosted_rounds_report_the_responder_s_isolation_and_the_joint_round_
     assert "| 1 / 1 / 1 | " in md and "rejected (tag-mismatch) |" in md and "= 4312 GB/s" in md
     assert "2 of 2 on time at T (1,354 µs, the RTT at P2's cap 354 µs inside the rebuild floor), 2 accepted" in md
     assert f"| {key} | {arm} | 1 | 0.500 | 1 | 0.400 |" in md
+
+
+def test_a_window_cadence_is_none_some_ms_or_some_ms_without_the_preparation():
+    assert [(e.ms, e.prep, e.label) for e in J.EVERY] == [(None, True, "none"), (10, True, "10ms"), (100, True, "100ms"),
+                                                         (1000, True, "1000ms"), (10, False, "10ms-noprep")]
+    for bad in ("0", "10ms", "10-prep", "-5", ""):
+        with pytest.raises(ValueError, match="a window cadence is none"):
+            J.Every.parse(bad)
+
+
+class _Chain:
+    """`joint.Chain` on the CPU: each mark the next integer, a quarter of a ms of device time apart."""
+
+    def __init__(self) -> None:
+        self.calls, self.n = [], 0
+
+    def launch(self) -> None:
+        self.calls.append("launch")
+
+    def mark(self) -> int:
+        self.n += 1
+        return self.n
+
+    def wait(self, m: int) -> None:
+        self.calls.append(("wait", m))
+
+    def drain(self) -> None:
+        self.calls.append("drain")
+
+    def gap(self, a: int, b: int) -> float:
+        return 0.25 * (b - a)
+
+
+def _pause(store, vk, chains, every, prover=None, seconds=0.05):
+    remote = J.Remote(vk, J.JOINT_TAG, b"source", thread=True, clock=_ticks(1_000))
+    return J.Pause(prover or _Prover(store), remote, chains, [J.Every.parse(x) for x in every], seconds=seconds, judge_each=1,
+                   clock=_ticks(1_000_000))
+
+
+def test_the_pause_hook_drains_prepares_and_times_each_window(small_store, monkeypatch):
+    """(f): a segment without windows only issues the chain, at most `lookahead` chains in flight; with a cadence, each
+    window drains the chain at a chain boundary, prepares (a warm pass, then the scrub) unless -noprep, takes σ, runs the
+    pass into a workspace of its own when it is to be judged, and sends its root; its elapsed time is the verifier's own,
+    which the judged windows' verdicts agree with; the skip control is rejected."""
+    store, vk = small_store
+    monkeypatch.setattr(J, "SKIP", 0.25)
+    key, arm, chain = "o-n4096-k4096-b1-L32", "native-fp8", _Chain()
+    p = _pause(store, vk, {(key, arm): chain}, ("none", "10", "10-noprep"))
+    prover = p.prover
+    assert prover.calls == [("reserve", J.JOINT_TAG, 3), ("pass", J.JOINT_TAG, 0, None)] and p.rtt["n"] == J.PINGS
+    segs = [p.next() for _ in range(3)]
+    out = p.close()
+    assert [s["every"] for s in segs] == ["none", "10ms", "10ms-noprep"] and out["error"] is None
+    assert segs[0]["windows"] == [] and segs[0]["chains"] == 49 and segs[0]["wall_ns"] == 51_000_000
+    assert chain.calls[:4] == ["launch", "launch", ("wait", 1), "launch"]
+    ten, noprep = segs[1]["windows"], segs[2]["windows"]
+    assert len(ten) >= 2 and len(noprep) >= 2 and out["windows_started"] == len(ten) + len(noprep) + 1
+    assert [w["slot"] for w in ten] == [1] + [0] * (len(ten) - 1) and noprep[0]["slot"] == 2
+    w = ten[0]
+    assert (w["drain_ns"], w["seed_ns"], w["pass_ns"], w["commit_ns"], w["bubble_ms"]) == (1_000_000,) * 4 + (0.25,)
+    assert all(x["elapsed_ns"] == 1_000 and x["on_time_at_T"] and x["drawn"] for x in ten + noprep)
+    assert prover.calls.count(("scrub",)) == len(ten) + 1
+    first = prover.calls.index(("pass", J.JOINT_TAG, 1, None))
+    assert prover.calls[first - 2:first] == [("pass", J.JOINT_TAG, 0, None), ("scrub",)]
+    assert prover.calls[prover.calls.index(("pass", J.JOINT_TAG, 2, None)) - 1] != ("scrub",)
+    assert [(j["window"], j["accepted"], j["elapsed_agrees"]) for j in out["judged"]] == [(0, True, True),
+                                                                                       (len(ten), True, True)]
+    assert out["skip"]["accepted"] is False and out["skip"]["failure"] == "tag-mismatch" and out["skip"]["tagged"] == 12
+    assert prover.calls[-1] == ("release", J.JOINT_TAG) and not p.remote.proc.is_alive()
+
+    r = {"pause": out, "pause_setup": {"store": {"bytes": 1 << 30}}, "macs": {key: 4096 * 4096 * 32}}
+    f = R.pause(r)
+    rows = {x["every"]: x for x in f["rows"]}
+    none = 49 / 0.051
+    assert rows["none"]["chains_per_s"] == pytest.approx(none) and rows["none"]["loss"] is None
+    t = rows["10ms"]
+    rate = segs[1]["chains"] / (segs[1]["wall_ns"] / 1e9)
+    assert t["chains_per_s"] == pytest.approx(rate) and t["loss"] == pytest.approx(1 - rate / none)
+    assert t["tflops_lost"] == pytest.approx(2 * 4096 * 4096 * 32 * (none - rate) / 1e12)
+    assert t["on_time_at_T"] == t["within_limit"] == t["windows"] == len(ten)
+    assert t["certified_bytes_per_s"] == pytest.approx(len(ten) * (1 << 30) / (segs[1]["wall_ns"] / 1e9))
+    assert t["model_loss"] == pytest.approx(len(ten) / (segs[1]["wall_ns"] / 1e9) * 0.25 / 1e3)
+    assert (f["judged"], f["judged_accepted"], f["elapsed_agrees"]) == (2, 2, True)
+    doc = _doc()
+    doc["rounds"] = {"order": ["joint-v1"], "joint-v1": {"round": "joint-v1", "responder": "a thread", "harness_rc": 0,
+                                                         "points": {}, **r}}
+    md = R.markdown(doc, {}, "fixture", None, {"joint-v1": _pous_result()})
+    assert "(f) Joint v1, round joint-v1: the bandwidth audit's honest overhead." in md
+    assert "2 of 2 judged accepted (their elapsed time the timing record's: True); the skip control (25% untagged) " \
+           "rejected (tag-mismatch)." in md
+    assert f"| B=1 L=32 | native-fp8 | 10ms | {rate:.1f} | " in md and f"| {len(ten)} / {len(ten)} | " in md
+    assert "Certified per wall second is E's 1.074 GB in each window on time at T, raw: Q_cert is pending." in md
+
+
+def test_the_verifier_runs_in_a_process_of_its_own(small_store):
+    """`Remote` spawns `serve` with `vk` (what the GPU run does): σ and the root cross the pipe, and the window's verdict
+    agrees with its timing record whether or not it was on time."""
+    from multiprocessing import resource_tracker
+    store, vk = small_store
+    remote = J.Remote(vk, J.JOINT_TAG, b"source")
+    try:
+        assert remote.ping(3)["n"] == 3
+        seed = remote.start()
+        c = _Prover(store).tag_pass(J.JOINT_TAG, seed, 0)
+        remote.commit(c.root)
+        (r,) = remote.results()
+        v = remote.verdict(0, c.open)
+    finally:
+        remote.close()
+        resource_tracker._resource_tracker._stop()  # the spawn start's tracker, which would outlive the test
+    assert r["elapsed_ns"] is not None and v["elapsed_ns"] == r["elapsed_ns"]
+    assert (v["accepted"], v["failure"]) == ((True, None) if r["drawn"] else (False, "late"))
+    assert not remote.proc.is_alive()
+
+
+class _Failing(_Prover):
+    """`_Prover` whose seeded passes fail after the first `after`."""
+
+    def __init__(self, store, after: int) -> None:
+        super().__init__(store)
+        self.left = after
+
+    def tag_pass(self, tag: str, seed: bytes, slot: int, tagged: int | None = None) -> _Pass:
+        if seed != J.THROWAWAY:
+            self.left -= 1
+            if self.left < 0:
+                raise RuntimeError("the tagger failed")
+        return super().tag_pass(tag, seed, slot, tagged)
+
+
+def test_a_failed_window_stops_the_windows_and_the_segments_turn_one_later_each_round(small_store):
+    store, vk = small_store
+    chains = {("a", "native-fp8"): _Chain(), ("b", "native-fp8"): _Chain()}
+    p = _pause(store, vk, chains, ("none", "10"), prover=_Failing(store, 2), seconds=0.03)
+    segs = [p.next() for _ in range(8)]
+    out = p.close()
+    assert [(s["key"], s["every"]) for s in segs] == [("a", "none"), ("a", "10ms"), ("b", "none"), ("b", "10ms"),
+                                                      ("a", "10ms"), ("b", "none"), ("b", "10ms"), ("a", "none")]
+    assert "the tagger failed" in out["error"] and out["skip"] is None
+    assert [w["window"] for w in segs[1]["windows"]] == [0, 1] and [w["window"] for w in segs[3]["windows"]] == [None]
+    assert all(not s["windows"] for s in segs[4:])
+    assert [j["window"] for j in out["judged"]] == [0] and out["judged"][0]["accepted"]
+    assert [x["windows"] for x in R.pause_rows(out, {}, None)] == [0, 2, 0, 0]
+
+
+def test_the_probe_summarizes_each_condition_and_renders_its_table():
+    P = _load("probe")
+    items = [[0.0012, 0.0011, 0.0001, None, 3, 2_000_000, 30], [0.0014, 0.0013, 0.0003, None, 4, None, 30]]
+    s = P.summarize(items)
+    assert s == {"n": 2, "host_ms": pytest.approx(1.3), "device_ms": pytest.approx(1.2), "launch_ms": pytest.approx(0.2),
+                 "cpu_mhz": 2000.0}
+    held = [[0.002, 0.0011, 0.0001, 0.004, 3, None, 30], [0.002, 0.0011, 0.0002, 0.005, 3, None, 30]]
+    assert P.summarize(held)["queued"] is False and P.summarize(held[:1])["queued"] is True
+    assert P.cpulist("0-2,5,7-8\n") == {0, 1, 2, 5, 7, 8} and P.node_of(5, {0: [0, 1], 1: [5]}) == 1
+    doc = _doc()
+    doc["probe"] = {"point": "o-n4096-k4096-b1-L32", "numa": {"gpu_node": 1},
+                    "phases": {"alone": {"clocks_before": {"clocks.sm": "2092"},
+                                         "summary": {"native-fp8/default": {**s, "nodes": [1]},
+                                                     "native-fp8/default+held": {**P.summarize(held[:1]), "nodes": [1]}}},
+                               "near": {"skipped": "no CPU of this mask on a node at the GPU's"}}}
+    md = R.markdown(doc, {}, "fixture")
+    assert "Probe at o-n4096-k4096-b1-L32 (`probe.py`)" in md and "(the GPU's node is 1)" in md and "alone 2092, near –" in md
+    assert "| alone | native-fp8/default | 1.3000 | 1.2000 | 0.2000 | 2000 | 1 |" in md
+    assert "| alone | native-fp8/default+held (queued) | 2.0000 | 1.1000 | 0.1000 | – | 1 |" in md
+    assert "Probe near: no CPU of this mask on a node at the GPU's" in md
+
+
+def test_the_rounds_chain_times_carry_the_device_s_and_the_launch_s():
+    turns = object.__new__(CHAIN.Turns)
+    turns.plans = {"k": {"arms": {"native-fp8": {"chains": 4, "median_s": 0.002, "device_median_s": 0.0019}}}}
+    pts = turns.summary({"k": {"native-fp8": [[0, 0.002, 0.0019, 0.0001], [1, 0.004, 0.0039, 0.0003]]}},
+                        {("k", "native-fp8"): [(0.001, 0.0009, 0.0002)] * 3})
+    r = pts["k"]["native-fp8"]
+    assert (r["median_s"], r["device_median_s"], r["launch_median_s"]) == (pytest.approx(0.003), pytest.approx(0.0029),
+                                                                           pytest.approx(0.0002))
+    assert (r["after"], r["after_device_median_s"], r["after_launch_median_s"]) == ([0.001] * 3, 0.0009, 0.0002)
+    row = R.beside_rows(pts)[0]
+    assert (row["device_ms"], row["launch_ms"], row["after_launch_ms"]) == (pytest.approx(2.9), pytest.approx(0.2),
+                                                                            pytest.approx(0.2))

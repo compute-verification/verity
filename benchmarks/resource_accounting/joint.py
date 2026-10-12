@@ -15,10 +15,18 @@
   scrub or warm pass first (the chain keeps the device busy, and both would add reads of their own); the openings and
   verdicts wait until the harness has returned (the audit does not time them, and Python's BLAKE3 takes 3 s a window).
 
-A window's verifier is in this process, so it sees no network round trip.  `window_params` puts the RTT at P2's cap inside
-the rebuild floor, and a window is on time here when it committed within `T`, the most a prover may take when the round trip
-uses the whole allowance.  The store is the harness's, under PoUS's salt rather than `audit.draw_salt`'s (which binds the
-device's identity in, so that devices holding one W hold different stores); on one device the salt changes no time.
+* **(f), joint v1** (`Pause`).  The honest prover pauses its chain at a call boundary for each window: the chain's points and
+  arms run in segments, each under one window cadence (`Every`: one window each 10, 100 or 1,000 ms of chain, or none, with
+  or without the preparation), and a window drains the chain's stream, prepares as (d) does, takes σ, runs the tag pass,
+  sends its root and resumes.  The segments' chains a second, against the segments without windows, are the bandwidth
+  audit's honest overhead in useful throughput; the gap the pause leaves in the chain's stream, by its events, is its cost
+  a window.  Its verifier is in a process of its own (`Remote`), as a remote one is, so a window's elapsed time holds the
+  pipe's round trip, and its samples (5 ms of Python a window) and verdicts take no time from the chain.
+
+The verifier of (d) and (e) is in this process, so it sees no network round trip.  `window_params` puts the RTT at P2's cap
+inside the rebuild floor, and a window is on time here when it committed within `T`, the most a prover may take when the
+round trip uses the whole allowance.  The store is the harness's, under PoUS's salt rather than `audit.draw_salt`'s (which
+binds the device's identity in, so that devices holding one W hold different stores); on one device the salt changes no time.
 """
 
 from __future__ import annotations
@@ -31,6 +39,7 @@ import sys
 import threading
 import time
 import traceback
+from collections import Counter, deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +58,7 @@ SKIP = 0.01
 SCRUB_BYTES = 512 << 20
 PASSES, WINDOWS, SLOTS, GAP_S = 20, 4, 40, 3.0
 SEED = 20261011
+THROWAWAY = bytes(tags.SEED_BYTES)
 
 
 def store_key(params: Any, salt: bytes, store: bytes) -> tuple[VerifierKey, MerkleTree]:
@@ -138,7 +148,7 @@ def alone(prover: Prover, vk: VerifierKey, names: Sequence[str], source: bytes, 
     """(d): the raw read, and for each tag in `names` its passes, windows and skip control, each from a scrubbed L2 (a
     window after a warm pass too)."""
     out: dict = {"raw_read": prover.raw_read(passes), "tags": {}}
-    throwaway = bytes(tags.SEED_BYTES)
+    throwaway = THROWAWAY
     for name in names:
         prover.reserve(name, 1)
         prover.tag_pass(name, throwaway, 0)  # loads the kernels, untimed
@@ -204,15 +214,306 @@ class Joint:
 
 
 def overlap(items: Sequence[Sequence[float]], chains: int, windows: Sequence[dict]) -> dict:
-    """Chain items (`[start_ns, seconds a chain]`, `chains` chains each) that overlapped a window's span from its start to its
-    commitment, against those that did not."""
+    """Chain items (`[start_ns, seconds a chain, ...]`, `chains` chains each) that overlapped a window's span from its start
+    to its commitment, against those that did not."""
     spans = [(w["start_ns"], w["start_ns"] + w["elapsed_ns"]) for w in windows if w.get("elapsed_ns") is not None]
     hit, miss = [], []
-    for start, seconds in items:
+    for start, seconds, *_ in items:
         end = start + seconds * chains * 1e9
         (hit if any(a < end and start < b for a, b in spans) else miss).append(seconds)
     return {"with": len(hit), "without": len(miss), "median_with_s": statistics.median(hit) if hit else None,
             "median_without_s": statistics.median(miss) if miss else None}
+
+
+# ---- (f), joint v1: the honest prover pauses its chain ------------------------------------------------------------------
+
+LOOKAHEAD, SEGMENT_S, JUDGE_EACH, PINGS = 2, 2.5, 2, 200
+
+
+@dataclass(frozen=True)
+class Every:
+    """A segment's window cadence: one window each `ms` of chain (`None`: none), each after the preparation (`prep`: an
+    untimed pass under a throwaway seed, then the scrub) or straight after the drain."""
+
+    ms: int | None
+    prep: bool = True
+
+    @property
+    def label(self) -> str:
+        return "none" if self.ms is None else f"{self.ms}ms" + ("" if self.prep else "-noprep")
+
+    @classmethod
+    def parse(cls, label: str) -> Every:
+        """``none``, ``<ms>`` or ``<ms>-noprep``."""
+        if label == "none":
+            return cls(None)
+        ms, _, rest = label.partition("-")
+        if not ms.isdigit() or int(ms) <= 0 or rest not in ("", "noprep"):
+            raise ValueError(f"a window cadence is none, <ms> or <ms>-noprep, not {label!r}")
+        return cls(int(ms), prep=rest != "noprep")
+
+
+EVERY = tuple(Every.parse(x) for x in ("none", "10", "100", "1000", "10-noprep"))
+
+
+class Recorder:
+    """A clock that keeps its last reading.  `Window.start` reads its verifier's clock last as the window starts, and
+    `Window.commit` first as it stops, so the readings kept after each bracket the window as its own clock does."""
+
+    def __init__(self, clock: Callable[[], int] = time.monotonic_ns) -> None:
+        self.clock, self.last = clock, 0
+
+    def __call__(self) -> int:
+        self.last = self.clock()
+        return self.last
+
+
+def serve(conn: Any, vk: VerifierKey, tag: str, source: bytes, clock: Callable[[], int] = time.monotonic_ns) -> None:
+    """Joint v1's verifier, at the other end of `conn` (`Remote`), one message at a time: ``start`` sends σ; ``commit`` takes
+    the root and replies nothing, its samples drawn here while the prover's chain runs (and kept only for a window to be
+    judged); ``ping`` echoes; ``results`` sends each window's start and elapsed time and whether its samples were drawn;
+    ``drawn`` sends a kept window's samples and ``verdict`` checks their openings; ``stop`` ends."""
+    rec = Recorder(clock)
+    v = verifier(vk, tag, source, rec)
+    windows: list[list[Any]] = []  # [window, started, elapsed, drawn, samples kept]
+    try:
+        while True:
+            op, *args = conn.recv()
+            if op == "start":
+                w = v.window()
+                seed = w.start()
+                windows.append([w, rec.last, None, False, None])
+                conn.send(seed)
+            elif op == "commit":
+                o = windows[-1]
+                drawn = o[0].commit(args[0])
+                o[2], o[3] = rec.last - o[1], bool(drawn)
+                if args[1]:
+                    o[4] = drawn
+                else:
+                    o[0] = None
+            elif op == "ping":
+                conn.send(args[0])
+            elif op == "results":
+                conn.send([{"start_ns": s, "elapsed_ns": e, "drawn": d} for _, s, e, d, _ in windows])
+            elif op == "drawn":
+                conn.send(windows[args[0]][4])
+            elif op == "verdict":
+                r = windows[args[0]][0].verdict(args[1])
+                conn.send({"accepted": r.accepted, "elapsed_ns": r.elapsed_ns, "failure": r.failure, "index": r.index})
+            elif op == "stop":
+                conn.send(None)
+                return
+            else:
+                raise ValueError(f"no message {op!r}")
+    finally:
+        conn.close()
+
+
+class Remote:
+    """Joint v1's verifier (`serve`) in a process of its own, as a remote one is: σ and the root cross a pipe, so a window's
+    elapsed time holds the pipe's round trip, and its samples and verdicts take nothing from the prover's thread.
+    ``thread=True`` serves it from a thread of this process instead, on `clock` (the CPU tests)."""
+
+    def __init__(self, vk: VerifierKey, tag: str, source: bytes, *, thread: bool = False,
+                 clock: Callable[[], int] = time.monotonic_ns) -> None:
+        import multiprocessing
+        ctx = multiprocessing.get_context("spawn")
+        self.conn, child = ctx.Pipe()
+        kw = {"target": serve, "args": (child, vk, tag, source, *((clock,) if thread else ())), "name": "bandwidth-verifier",
+              "daemon": True}
+        self.proc = threading.Thread(**kw) if thread else ctx.Process(**kw)
+        self.proc.start()
+        if not thread:
+            child.close()
+
+    def ping(self, n: int, clock: Callable[[], int] = time.perf_counter_ns) -> dict:
+        """`n` round trips over the pipe: their ns at p50, p99 and the most."""
+        rtts = []
+        for i in range(n):
+            t = clock()
+            self.conn.send(("ping", i))
+            self.conn.recv()
+            rtts.append(clock() - t)
+        rtts.sort()
+        return {"n": n, "p50_ns": rtts[n // 2], "p99_ns": rtts[min(n - 1, (99 * n) // 100)], "max_ns": rtts[-1]}
+
+    def start(self) -> bytes:
+        self.conn.send(("start",))
+        return self.conn.recv()
+
+    def commit(self, root: bytes, keep: bool = True) -> None:
+        """The window's root; `keep` keeps its samples for a verdict."""
+        self.conn.send(("commit", root, keep))
+
+    def results(self) -> list[dict]:
+        self.conn.send(("results",))
+        return self.conn.recv()
+
+    def verdict(self, n: int, opener: Callable[[int], audit.Opening]) -> dict:
+        """Window `n`'s verdict on the openings of its samples (none when it was late)."""
+        self.conn.send(("drawn", n))
+        drawn = self.conn.recv()
+        self.conn.send(("verdict", n, [opener(j) for j in drawn]))
+        return self.conn.recv()
+
+    def close(self) -> None:
+        try:
+            self.conn.send(("stop",))
+            self.conn.recv()
+        except (EOFError, OSError):
+            pass
+        self.proc.join()
+        self.conn.close()
+
+
+class Chain(Protocol):
+    """One point's chain on a stream of its own: `launch` enqueues one chain, `mark` records a point in the stream's order,
+    `wait` blocks until the stream has reached a mark and `drain` until it is idle, and `gap` is the device's ms between two
+    reached marks."""
+
+    def launch(self) -> None: ...
+
+    def mark(self) -> Any: ...
+
+    def wait(self, m: Any) -> None: ...
+
+    def drain(self) -> None: ...
+
+    def gap(self, a: Any, b: Any) -> float: ...
+
+
+class Pause:
+    """(f)'s honest prover over the chains of the shape's points and arms (`chains[(key, arm)]`).  `next` runs one segment of
+    `seconds` (the PoUS harness's load calls it in a loop): the next point, arm and cadence in turn (`every`, the turns
+    starting one later each round), the chain issued with at most `lookahead` in flight; at the first chain boundary once
+    `every.ms` of chain have passed since the last window (the chain's last call: a call boundary), it drains the stream,
+    prepares, takes σ (`remote`), runs the tag pass, sends its root and resumes.  The first `judge_each` windows of each
+    cadence keep a workspace of their own and are judged at `close`, after one skip control, which must be rejected."""
+
+    def __init__(self, prover: Prover, remote: Remote, chains: dict[tuple[str, str], Chain], every: Sequence[Every] = EVERY,
+                 seconds: float = SEGMENT_S, judge_each: int = JUDGE_EACH, lookahead: int = LOOKAHEAD,
+                 clock: Callable[[], int] = time.monotonic_ns) -> None:
+        self.prover, self.remote, self.chains, self.every = prover, remote, chains, tuple(every)
+        self.seconds, self.judge_each, self.lookahead, self.clock = seconds, judge_each, lookahead, clock
+        self.params = C.window_params(JOINT_TAG)
+        self.order = [(key, arm, e) for key, arm in chains for e in self.every]
+        judged = judge_each * sum(e.ms is not None for e in self.every)
+        prover.reserve(JOINT_TAG, 1 + judged)
+        self.free, self.taken = list(range(1, 1 + judged)), Counter()
+        self.kept: dict[int, Pass] = {}
+        self.segments: list[dict] = []
+        self.n = self.i = 0
+        self.error: str | None = None
+        self.skip: tuple[int, Pass, int] | None = None
+        prover.tag_pass(JOINT_TAG, THROWAWAY, 0)  # loads the kernels, untimed
+        self.rtt = remote.ping(PINGS)
+
+    def next(self) -> dict:
+        key, arm, every = self.order[(self.i + self.i // len(self.order)) % len(self.order)]
+        self.i += 1
+        seg = {"key": key, "arm": arm, "every": every.label, "every_ms": every.ms, "prep": every.prep,
+               **self.segment(self.chains[(key, arm)], every)}
+        self.segments.append(seg)
+        return seg
+
+    def segment(self, chain: Chain, every: Every) -> dict:
+        clock = self.clock
+        t0 = clock()
+        end, step = t0 + round(self.seconds * 1e9), None if every.ms is None else every.ms * 1_000_000
+        due = None if step is None or self.error else t0 + step
+        inflight: deque = deque()
+        chains, windows = 0, []
+        while (now := clock()) < end:
+            if due is not None and now >= due:
+                last = chain.mark()
+                t = clock()
+                chain.drain()
+                drained = clock()
+                w = self.window(every)
+                resumed = chain.mark()
+                w.update(drain_ns=drained - t, pause_ns=clock() - drained)
+                windows.append((w, last, resumed))
+                inflight.clear()
+                due = None if self.error else clock() + step
+                continue
+            if len(inflight) >= self.lookahead:
+                chain.wait(inflight.popleft())
+            chain.launch()
+            inflight.append(chain.mark())
+            chains += 1
+        chain.drain()
+        wall = clock() - t0
+        out = [{**w, "bubble_ms": chain.gap(a, b)} for w, a, b in windows]
+        return {"start_ns": t0, "wall_ns": wall, "chains": chains, "windows": out}
+
+    def window(self, every: Every) -> dict:
+        p, clock, slot = self.prover, self.clock, 0
+        if self.taken[every.label] < self.judge_each and self.free:
+            slot = self.free.pop(0)
+            self.taken[every.label] += 1
+        try:
+            t0 = clock()
+            if every.prep:
+                p.tag_pass(JOINT_TAG, THROWAWAY, 0)
+                p.scrub()
+            t1 = clock()
+            seed, n = self.remote.start(), self.n
+            self.n += 1
+            t2 = clock()
+            tp = p.tag_pass(JOINT_TAG, seed, slot)
+            t3 = clock()
+            self.remote.commit(tp.root, keep=bool(slot))
+            t4 = clock()
+        except Exception:  # noqa: BLE001 - recorded; the segments go on without windows
+            self.error = traceback.format_exc(limit=6)
+            return {"window": None, "error": self.error.strip().splitlines()[-1]}
+        if slot:
+            self.kept[n] = tp
+        return {"window": n, "slot": slot, "prep_ns": t1 - t0, "seed_ns": t2 - t1, "pass_ns": t3 - t2, "commit_ns": t4 - t3,
+                "device_ms": tp.device_ms, "device_tags_ms": tp.device_tags_ms}
+
+    def skip_control(self) -> None:
+        """One window with `SKIP` of the blocks untagged over a poisoned workspace, prepared as the honest ones are."""
+        p = self.prover
+        tagged = p.blocks - round(SKIP * p.blocks)
+        p.tag_pass(JOINT_TAG, THROWAWAY, 0)
+        p.poison(JOINT_TAG, 0)
+        p.scrub()
+        seed, n = self.remote.start(), self.n
+        self.n += 1
+        tp = p.tag_pass(JOINT_TAG, seed, 0, tagged)
+        self.remote.commit(tp.root)
+        self.skip = (n, tp, tagged)
+
+    def close(self) -> dict:
+        """The skip control, every window's elapsed time and whether it was on time at `T`, and the kept windows' verdicts."""
+        judged, skip = [], None
+        try:
+            if self.error is None:
+                self.skip_control()
+            results = self.remote.results()
+            T = self.params.deadline_ns
+            for seg in self.segments:
+                for w in seg["windows"]:
+                    if w.get("window") is not None:
+                        r = results[w["window"]]
+                        w.update(start_ns=r["start_ns"], elapsed_ns=r["elapsed_ns"], drawn=r["drawn"],
+                                 on_time_at_T=r["elapsed_ns"] is not None and r["elapsed_ns"] <= T)
+            for n, tp in sorted(self.kept.items()):
+                v = self.remote.verdict(n, tp.open)
+                judged.append({"window": n, **v, "elapsed_agrees": v["elapsed_ns"] == results[n]["elapsed_ns"]})
+            if self.skip is not None:
+                n, tp, tagged = self.skip
+                skip = {"window": n, "tagged": tagged, "fraction": SKIP, **self.remote.verdict(n, tp.open)}
+        except Exception:  # noqa: BLE001 - recorded with the windows
+            self.error = (self.error or "") + traceback.format_exc(limit=6)
+        finally:
+            self.remote.close()
+            self.prover.release(JOINT_TAG)
+        return {"tag": JOINT_TAG, **params_record(self.params), "every": [e.label for e in self.every],
+                "seconds": self.seconds, "lookahead": self.lookahead, "judge_each": self.judge_each, "rtt": self.rtt,
+                "windows_started": self.n, "segments": self.segments, "judged": judged, "skip": skip, "error": self.error}
 
 
 # ---- on the device ----------------------------------------------------------------------------------------------------
@@ -312,3 +613,20 @@ def setup(lib: str | Path, c: Any, fr: Any, done: Callable[[], bool], *, passes:
               "scrub_bytes": SCRUB_BYTES, "stream_priority": prover.stream.priority, "vk_s": key_s,
               "setup_s": time.monotonic() - t0})
     return d, Joint(prover, vk, os.urandom(32), done, slots, gap_s)
+
+
+def setup_pause(lib: str | Path, c: Any, fr: Any, chains: dict[tuple[str, str], Chain], **kw: Any) -> tuple[dict, Pause]:
+    """(f) at the harness's hook: `vk` over `C` as `setup` makes it, the verifier's process, and the pause hook over
+    `chains` (`Pause`'s keywords in `kw`)."""
+    if not hasattr(fr, "params"):
+        raise ValueError(f"{type(fr).__name__} has no registered P2 params: the joint-v1 round takes p2-v3-gpu or p2-v3-mc-gpu")
+    t0 = time.monotonic()
+    vk, tree = store_key(fr.params, fr.salt, c.cpu().numpy().tobytes())
+    key_s = time.monotonic() - t0
+    prover = GpuProver(lib, c, tree)
+    remote = Remote(vk, JOINT_TAG, os.urandom(32))
+    pause = Pause(prover, remote, chains, **kw)
+    return {"store": {"blocks": fr.params.blocks, "block_bytes": fr.params.block_bytes,
+                      "bytes": fr.params.blocks * fr.params.block_bytes, "root": vk.root.hex()},
+            "scrub_bytes": SCRUB_BYTES, "stream_priority": prover.stream.priority, "vk_s": key_s,
+            "setup_s": time.monotonic() - t0}, pause

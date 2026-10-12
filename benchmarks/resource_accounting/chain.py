@@ -3,7 +3,8 @@
   python chain.py --out OUT/chain.json [--shapes o,qkv,gate_up,down,cube8192] [--batches 1,8,32,128,512,2048] [--lengths 32]
       [--arms native-bf16,native-fp8,pearl-c,...] [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
       [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25] [--beside DIR --beside-cmd CMD [--beside-log F] [--beside-cpus V,R] [--beside-idle]]
-      [--rounds separate,inproc,joint [--tagger libbwtag.so] --host-bench benchmarks/pous/bench.py ARGS...]
+      [--probe] [--rounds separate,inproc,joint,joint-v1 [--tagger libbwtag.so] [--pause-every none,10,100,1000,10-noprep]
+       --host-bench benchmarks/pous/bench.py ARGS...]
   python chain.py --plan ...      the points and their weights' bytes, without a GPU
 
 A point (`sweep.Point`) is L dependent calls y_{i+1} = act(W_i · y_i) at one (n, k) and batch B, every W_i its own BF16
@@ -41,8 +42,11 @@ With ``--host-bench`` (`pod.sh BENCH_HOST`: the harness's own command, venv, bui
 once the first shape's points are measured alone, `hosted` runs the harness once a round with the chain as its honest audit's
 load: ``separate`` in a process of its own, as ``--beside`` does; ``inproc`` in this process (`bench.main(argv, load=...)`),
 its responder a thread here in this CUDA context; ``joint``, ``inproc`` with the bandwidth audit (`joint`'s (d) at the hook,
-before the limit is calibrated, and (e)'s windows through the honest audit).  Only the native arms run there (the harness's
-venv has no Pearl-C), each item on a stream of the chain's own.
+before the limit is calibrated, and (e)'s windows through the honest audit); ``joint-v1``, ``inproc`` with (f)'s segments as
+the load, the chain paused at a call boundary for each bandwidth window (`joint.Pause`).  Only the native arms run there
+(the harness's venv has no Pearl-C), each item on a stream of the chain's own.  Every native item is timed on the host, by
+events on the device, and from its start to its last launch on the host.  ``--probe`` times the first shape's smallest batch
+by stream, NUMA node and beside a second process (`probe`), once its points are measured alone.
 """
 
 from __future__ import annotations
@@ -231,20 +235,60 @@ class Native:
         return {"check": "native", "arm": self.arm, "rel_rms_first_call": err, "graph_equals_eager": bool(torch.equal(eager, self.chain[1])),
                 "ok": err < ERR}
 
-    def item(self, reps: int, which: str = "chain") -> dict:
-        """`reps` replays on the current stream, timed between its synchronizations (not the device's: a tag pass or the
-        responder on another stream of this process is not waited for)."""
+    def item(self, reps: int, which: str = "chain", hold_cycles: int = 0) -> dict:
+        """`reps` replays on the current stream, timed on the host between its synchronizations (not the device's: a tag pass
+        or the responder on another stream of this process is not waited for), on the device by events on the stream
+        around them (``device_s``), and the host's time to launch them (``launch_s``).  With `hold_cycles` the stream first
+        spins that many cycles (`torch.cuda._sleep`), so the replays are all queued before the device reaches them when
+        the hold (``held_s``) outlasts their launch: ``device_s`` is then the device's alone."""
         import torch
         g, stream = (self.chain if which == "chain" else self.gemms)[0], torch.cuda.current_stream()
+        a, b, z = (torch.cuda.Event(enable_timing=True) for _ in range(3))
         stream.synchronize()
         t = time.perf_counter()
+        if hold_cycles:
+            z.record(stream)
+            torch.cuda._sleep(hold_cycles)
+        a.record(stream)
         for _ in range(reps):
             g.replay()
+        launched = time.perf_counter()
+        b.record(stream)
         stream.synchronize()
-        return {"seconds": (time.perf_counter() - t) / reps}
+        out = {"seconds": (time.perf_counter() - t) / reps, "device_s": a.elapsed_time(b) / 1e3 / reps,
+               "launch_s": (launched - t) / reps}
+        if hold_cycles:
+            out["held_s"] = z.elapsed_time(a) / 1e3
+        return out
 
     def final(self):
         return self.chain[1]
+
+
+class Issued:
+    """A native arm's chain, one graph replay at a time on `stream` (`joint.Chain`, the pause hook's): the caller is on that
+    stream (`torch.cuda.stream`) when it launches."""
+
+    def __init__(self, nat: Native, stream) -> None:
+        self.graph, self.stream = nat.chain[0], stream
+
+    def launch(self) -> None:
+        self.graph.replay()
+
+    def mark(self):
+        import torch
+        e = torch.cuda.Event(enable_timing=True)
+        e.record(self.stream)
+        return e
+
+    def wait(self, m) -> None:
+        m.synchronize()
+
+    def drain(self) -> None:
+        self.stream.synchronize()
+
+    def gap(self, a, b) -> float:
+        return a.elapsed_time(b)
 
 
 class PearlC:
@@ -492,8 +536,14 @@ def run_point(p: S.Point, arms: tuple[str, ...], W: Weights, act: Act, pc: Pearl
                     if key in r:
                         rec[key] = r[key]
             rec["seconds"].append(r["seconds"])
+            if "device_s" in r:
+                rec.setdefault("device_seconds", []).append(r["device_s"])
+                rec.setdefault("launch_seconds", []).append(r["launch_s"])
     for name, rec in out["arms"].items():
         rec["median_s"] = statistics.median(rec["seconds"])
+        if rec.get("device_seconds"):
+            rec["device_median_s"] = statistics.median(rec["device_seconds"])
+            rec["launch_median_s"] = statistics.median(rec["launch_seconds"])
         if rec["roots"]:
             rec["roots_repeat"] = len(set(rec["roots"])) == 1
             rec["roots"] = sorted(set(rec["roots"]))
@@ -554,34 +604,48 @@ class Turns:
         self.turns = [(p, arm, m) for p in pts for arm, m in self.plans[p.key]["arms"].items() if not arm.endswith("-gemm")
                       and (arm not in S.NATIVE or (p.key, arm) in self.natives) and (arm in S.NATIVE or pc is not None)]
 
-    def item(self, p: S.Point, arm: str, m: dict) -> float:
+    def item(self, p: S.Point, arm: str, m: dict) -> tuple[float, float | None, float | None]:
+        """Seconds a chain on the host, on the device, and to launch it on the host (the last two native arms only)."""
         if arm in S.NATIVE:
-            return self.natives[(p.key, arm)].item(m["chains"])["seconds"]
-        return self.pc.item(arm, self.x0s[p.key], p.batch, m["chains"])["seconds"]
+            r = self.natives[(p.key, arm)].item(m["chains"])
+            return r["seconds"], r["device_s"], r["launch_s"]
+        return self.pc.item(arm, self.x0s[p.key], p.batch, m["chains"])["seconds"], None, None
 
     def next(self, into: dict) -> None:
-        """One item of the next arm in turn: its monotonic start and seconds a chain, appended to ``into[key][arm]``."""
+        """One item of the next arm in turn: its monotonic start and seconds a chain on the host, on the device and to launch,
+        appended to ``into[key][arm]``."""
         p, arm, m = self.turns[self.i % len(self.turns)]
         self.i += 1
         t = time.monotonic_ns()
-        into[p.key].setdefault(arm, []).append([t, self.item(p, arm, m)])
+        into[p.key].setdefault(arm, []).append([t, *self.item(p, arm, m)])
 
-    def after(self) -> dict[tuple[str, str], list[float]]:
-        out: dict[tuple[str, str], list[float]] = {}
+    def after(self) -> dict[tuple[str, str], list[tuple[float, float | None, float | None]]]:
+        out: dict[tuple[str, str], list[tuple[float, float | None, float | None]]] = {}
         for _ in range(AFTER_ITEMS):
             for p, arm, m in self.turns:
                 out.setdefault((p.key, arm), []).append(self.item(p, arm, m))
         return out
 
     def summary(self, points: dict, after: dict) -> dict:
-        """Each arm's items in the window against its time alone before (the sweep's median) and after (`after`)."""
+        """Each arm's items in the window against its time alone before (the sweep's median) and after (`after`), on the
+        host, and on the device and to launch where the items timed them."""
+        def med(xs) -> float | None:
+            xs = [x for x in xs if x is not None]
+            return statistics.median(xs) if xs else None
+
         for key, by_arm in points.items():
             for arm, items in by_arm.items():
-                alone, later = self.plans[key]["arms"][arm]["median_s"], after.get((key, arm))
-                during = statistics.median(s for _, s in items)
-                by_arm[arm] = {"items": items, "chains": self.plans[key]["arms"][arm]["chains"], "median_s": during,
-                               "alone_median_s": alone, "slowdown": during / alone - 1, "after": later,
-                               "after_median_s": statistics.median(later) if later else None}
+                plan = self.plans[key]["arms"][arm]
+                later = after.get((key, arm)) or ()
+                during = statistics.median(x[1] for x in items)
+                by_arm[arm] = {"items": items, "chains": plan["chains"], "median_s": during, "alone_median_s": plan["median_s"],
+                               "slowdown": during / plan["median_s"] - 1, "after": [x[0] for x in later],
+                               "after_median_s": med(x[0] for x in later),
+                               "device_median_s": med(x[2] if len(x) > 2 else None for x in items),
+                               "launch_median_s": med(x[3] if len(x) > 3 else None for x in items),
+                               "alone_device_median_s": plan.get("device_median_s"),
+                               "after_device_median_s": med(x[1] for x in later),
+                               "after_launch_median_s": med(x[2] for x in later)}
         return points
 
     def close(self) -> None:
@@ -639,7 +703,7 @@ def beside(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
     return rec
 
 
-ROUNDS = ("separate", "inproc", "joint")
+ROUNDS = ("separate", "inproc", "joint", "joint-v1")
 HONEST = "p2-honest"
 
 
@@ -687,25 +751,31 @@ def inside(a, name: str, bench: Path, argv: list[str], out: Path, group: list[S.
     """One run of the harness in this process (`bench.main(argv, load=hook)`): its responder a thread here, on its own stream
     in this process's CUDA context, and the shape's chains (`Turns`) its honest audit's load, each item on a stream of their
     own.  The ``joint`` round also runs the bandwidth audit's (d) at the hook, before the limit is calibrated, and (e)'s
-    windows through the honest audit (`joint`), judged once the harness has returned.  Then each arm runs `AFTER_ITEMS`
-    items alone again."""
+    windows through the honest audit (`joint`), judged once the harness has returned.  The ``joint-v1`` round's load is
+    (f)'s segments instead (`joint.Pause`, set up at the hook): the chains paused for each window at a call boundary.  Then
+    each arm runs `AFTER_ITEMS` items alone again."""
     import joint as J
     import torch
     turns = Turns(group, arms, W, act, None, measured)
     stream = torch.cuda.Stream()
     rec: dict = {"round": name, "tag": HONEST, "responder": "a thread of the chain's process, in its CUDA context",
-                 "points": {k: {} for k in turns.keys}, "chain_stream_priority": stream.priority}
+                 "points": {k: {} for k in turns.keys}, "chain_stream_priority": stream.priority,
+                 "macs": {k: turns.plans[k]["macs"] for k in turns.keys}}
     if not turns.turns:
         return {**rec, "error": "no arm of the shape was measured alone"}
     done = lambda: (out / f"audit-{HONEST}.json").exists()
     state: dict = {}
 
     def hook(c, fr):
-        if name == "joint":
-            try:
+        try:
+            if name == "joint":
                 rec["alone"], state["joint"] = J.setup(a.tagger, c, fr, done, gap_s=a.window_gap_s)
-            except Exception:  # noqa: BLE001 - recorded; the round runs as inproc
-                rec["alone_error"] = traceback.format_exc(limit=8)
+            elif name == "joint-v1":
+                chains = {key: Issued(nat, stream) for key, nat in turns.natives.items()}
+                rec["pause_setup"], state["pause"] = J.setup_pause(a.tagger, c, fr, chains, every=a.pause_every,
+                                                                   seconds=a.pause_segment_s)
+        except Exception:  # noqa: BLE001 - recorded; the round runs as inproc
+            rec["alone_error" if name == "joint" else "pause_error"] = traceback.format_exc(limit=8)
         torch.cuda.synchronize()
 
         def load() -> None:
@@ -714,7 +784,10 @@ def inside(a, name: str, bench: Path, argv: list[str], out: Path, group: list[S.
                 if "joint" in state:
                     state["joint"].start()
             with torch.cuda.stream(stream):
-                turns.next(rec["points"])
+                if "pause" in state:
+                    state["pause"].next()
+                else:
+                    turns.next(rec["points"])
             rec["window_end_ns"] = time.monotonic_ns()
 
         return load
@@ -732,10 +805,12 @@ def inside(a, name: str, bench: Path, argv: list[str], out: Path, group: list[S.
             os.environ["RESEARCH_RUN_DIR"] = before
         if "joint" in state:
             rec["windows"] = state["joint"].close()
+        if "pause" in state:
+            rec["pause"] = state["pause"].close()
     state.clear()
     torch.cuda.synchronize()
     after = {}
-    if rec.get("window_end_ns"):
+    if rec.get("window_end_ns") and "pause" not in rec:
         with torch.cuda.stream(stream):
             after = turns.after()
     rec["points"] = turns.summary(rec["points"], after)
@@ -755,7 +830,7 @@ def hosted(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
     ``RESEARCH_RUN_DIR``, where `bench.main` writes its result.json):
 
     * ``separate``: the harness in a process of its own (`beside`): its responder in another CUDA context than the chain's;
-    * ``inproc`` and ``joint``: the harness in this process (`inside`).
+    * ``inproc``, ``joint`` and ``joint-v1``: the harness in this process (`inside`).
 
     A round starts only with ``--round-min`` minutes of the budget left; `saved()` is called after each."""
     import shlex
@@ -784,6 +859,26 @@ def hosted(a, group: list[S.Point], arms: tuple[str, ...], W: Weights, act: Act,
         saved()
 
 
+def run_probe(a, group: list[S.Point], W: Weights, act: Act, measured: list[dict], uuid: str | None) -> dict:
+    """`probe.run` on fresh graphs of the native arms at the shape's smallest measured batch, each item as many chains as
+    its point timed, the PoUS harness's CPUs left out of its pinning."""
+    import probe as P
+    plans = {m["key"]: m for m in measured if m.get("arms")}
+    pts = [p for p in group if p.key in plans]
+    if not pts:
+        return {"error": "no point of the shape was measured alone"}
+    p = min(pts, key=lambda q: q.batch)
+    x0 = chain_input(p, act)
+    natives = {arm: Native(arm, W, act, x0) for arm in S.NATIVE if arm in plans[p.key]["arms"]}
+    argv = a.host_bench[1:] if a.host_bench else []
+    cpus = [flag(argv, "--verifier-cpu"), flag(argv, "--responder-cpu")] if argv else (a.beside_cpus or "").split(",")
+    try:
+        return {"point": p.key, **P.run(natives, {arm: plans[p.key]["arms"][arm]["chains"] for arm in natives}, uuid,
+                                        {int(x) for x in cpus if x})}
+    finally:
+        natives.clear()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path)
@@ -809,6 +904,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rounds", default="separate,inproc", help=f"--host-bench's rounds in order, of {', '.join(ROUNDS)}")
     ap.add_argument("--tagger", help="the bandwidth tagger's libbwtag.so (benchmarks/bandwidth/tagger.cu), for the joint round")
     ap.add_argument("--window-gap-s", type=float, default=3.0, help="the joint round's mean gap between bandwidth windows")
+    ap.add_argument("--pause-every", default="none,10,100,1000,10-noprep",
+                    help="the joint-v1 round's window cadences in turn: none, <ms> of chain, or <ms>-noprep (no preparation)")
+    ap.add_argument("--pause-segment-s", type=float, default=2.5, help="the joint-v1 round's seconds a segment")
+    ap.add_argument("--probe", action="store_true",
+                    help="after the first shape's points, time its smallest batch's native chains by stream and beside a "
+                         "second CUDA process (probe.py)")
     ap.add_argument("--round-min", type=float, default=9.0, help="start no round with less of the budget left")
     ap.add_argument("--host-bench", nargs=argparse.REMAINDER,
                     help="the rest: the PoUS harness's bench.py and its arguments (pod.sh BENCH_HOST), run as --rounds")
@@ -821,8 +922,14 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("--host-bench takes the harness's bench.py and its arguments, and not --beside")
         if set(a.rounds) - set(ROUNDS) or len(set(a.rounds)) != len(a.rounds):
             ap.error(f"--rounds is distinct rounds of {', '.join(ROUNDS)}, not {a.rounds}")
-        if "joint" in a.rounds and not a.tagger:
-            ap.error("the joint round needs --tagger")
+        if {"joint", "joint-v1"} & set(a.rounds) and not a.tagger:
+            ap.error("the joint and joint-v1 rounds need --tagger")
+        if "joint-v1" in a.rounds:
+            import joint as J
+            try:
+                a.pause_every = [J.Every.parse(x) for x in a.pause_every.split(",") if x]
+            except ValueError as ex:
+                ap.error(str(ex))
     arms = tuple(x for x in a.arms.split(",") if x)
     if set(arms) - set(S.ARMS):
         ap.error(f"unknown arms {sorted(set(arms) - set(S.ARMS))}")
@@ -908,6 +1015,12 @@ def main(argv: list[str] | None = None) -> int:
                         doc["verify"] = retain_pass(pc, p, act, a.retain, doc["points"][-1])
                     except Exception:  # noqa: BLE001
                         doc["verify"] = {"point": p.key, "error": traceback.format_exc(limit=6), "ok": False}
+                save(a.out, doc)
+            if a.probe and "probe" not in doc:
+                try:
+                    doc["probe"] = run_probe(a, group, W, act, doc["points"], uuid)
+                except Exception:  # noqa: BLE001
+                    doc["probe"] = {"error": traceback.format_exc(limit=6)}
                 save(a.out, doc)
             if a.beside and "beside" not in doc:
                 try:
