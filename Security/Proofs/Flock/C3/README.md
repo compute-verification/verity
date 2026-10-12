@@ -5,7 +5,7 @@
 `stacked` entry, V*'s statements over the verifier's own list). Its only `sorry`s are the stubs below; the guarantee's
 proof itself has none. It takes VBridge (`_hbr`) and V*'s parse (`_hob`) as PublicAudit does; pieces (b)–(h) discharge
 them. V*'s statements are indexed by the verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is
-circuits' gap 2's (#1847, merged here at `0a6530f4a`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
+circuits' gap 2's (#1847, merged here at `100c17932`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's `stacked` shape.
 
 Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C** circuits' code, **L** rec-lean.
@@ -37,7 +37,7 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
 | n0 | `C3Family.honest`: the family at `custodied zr _hCust h`, `run` the decode of V*'s layers stage by stage, `row` by `fixedRow`'s prefixes | 400 | b2, h2 | L |
 | n1 | `hTape_honest`, `hPubRows_of_check` (g), from `checkPubRows`/`fixedRow` per prefix | 300 | n0 | W |
 | n2 | `hReps_honest` (c) | 250 | n0, c1 | W |
-| n3 | `hSparse_honest` (d), from `sparse_refines`, `sparsePhase_plays` | 250 | n0 | W |
+| n3 | `hSparse_honest` (d), from `sparse_refines`, `sparsePhase_plays`, with the claim round's `c_k` as RecSparse's `claim` check | 250 | n0 | W |
 | n4 | `hOpening_honest` (e): RecOpening's algebra at opening-only shape (`rec-opening/m<m>-c2-p<j>`; no zerocheck or lincheck, O1–O6 at `mReg`) | 300 | n0, c1's `ringSwitch_of_residuals` | W |
 | n5 | `hRegLevels_honest` (f): R's levels on `stacked/rep0` after both reps, `rec-top-stacked-L<l>` tops, the binding round against `StackedTop`'s cap | 250 | n0, c1's `ligerito_of_residuals_at` | W |
 
@@ -45,11 +45,11 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
 
 * Gap 2 is #1847 (draft): the eleven statements, a list missing RecSparse, an R level or the opening refused by name, an
   opening at another shape refused. It moves `PublicAudit`'s and this guarantee's read records (`RecVStar.statements`).
-* `RecCoins.check` (check 5) covers only `rec-open/` and `rec-residuals/`: extending it to `rec-sparse/`,
-  `rec-open-stacked/` and `rec-opening/` is circuits' verifier code. No statement here takes those kinds' coins as a
-  hypothesis.
-* Gap 4, the verifier's own `rec-claim`, is circuits': the statement takes V*'s bindings (`bind`) as the verifier of
-  record's inputs, so the claim it cites is the one the verifier computes.
+* `RecCoins.check` (check 5) covers `rec-sparse/`, `rec-open-stacked/` and `rec-opening/` at the coin server's coins since
+  #1847's `9b2799c7e` (merged here at `100c17932`). No statement here takes any kind's coins as a hypothesis.
+* Gap 4, the verifier's own `rec-claim`, is circuits' and in #1847: its row `x` is `sparse/rep<x>`'s claim round's `c_k`
+  (`RecVStar.claimRow`, through `fixedRow`). The statement takes V*'s bindings (`bind`) as the verifier of record's
+  inputs, so the claim it cites is the one the verifier computes.
 * The guarantee holds at every `hp : HoloParams`; to state with h2: `hp` is the verifier's own, the inner shape's
   `sparse` entry (`RecVStar.Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`).
 
@@ -64,6 +64,10 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
   constant `STACKED_CLAIMS` (`regPhase` opens two, `regOpenError` counts two). The verifier's link is transitive: each
   `rec-opening` unit matches META's `stacked` (`stacked_of_openingShape`), which opens two claims at `fast100`'s rounds
   (`claims_of_stackedShape`), and the units' names come from the outer program the verifier compiles (gap 2).
+* The claim round (#1847's `100c17932`: each rep's sparse stream ends with its claim, a message without coins): the model
+  is unchanged. `sparsePhase` computes the claim (`sparseVerdict`'s `batch`, `Σ_p eq(ζ_p, p)·u_p`), and RecSparse's
+  `claim` port, which reads `rec-claim`'s row, checks the sent `c_k` against `u` and `ζ_p`. So n3 takes the round's
+  value as RecSparse's `claim` check gives it, and n1's decoder folds the coinless round into the sparse steps.
 
 ## Weakness
 
