@@ -75,6 +75,7 @@ class Lib:
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3d": [i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
+            "tf_fused3p": [i, i, v, v, v, v, i, i, i, u64, v, i, v, i, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_commit": [v, u64, u64, v, v],
@@ -271,6 +272,11 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                         check(f"t_r{pd}_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, pd, plain, xs[mb], y, tb,
                                                                 mb, n, k, jb))
             if lanes in CHUNK_REG_PACKED and n % 64 == 0:
+                ctr = torch.zeros(2, dtype=torch.int32, device="cuda")
+                for mb in (1, 16, 32):
+                    check(f"t_r1p_m{mb}", lambda: lib.call("tf_fused3p", lanes, MODE_TAGS, ptr(plain),
+                                                           ptr(xs[mb].view(torch.uint8)), ptr(y), ptr(tb), mb, n, k, jb,
+                                                           ptr(ctr), 0, ptr(ctr) + 4, 0, stream(torch)))
                 for mb in (1, 16, 32):
                     check(f"t_r1c_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, 1, plain, xs[mb], y, tb, mb, n, k,
                                                          jb, pk=1))
@@ -367,6 +373,12 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             for label, (lanes, mode, pd, pk) in reg if n % 64 == 0 else ():
                 ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
                 fused3(lib, torch, lanes, mode, pd, plain, x, ya, tb, mb, n, k, 0, xr, pk=pk)
+                e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
+            ctr = torch.zeros(2, dtype=torch.int32, device="cuda")
+            for label, lanes, mode in (("g0kr1p", 1, MODE_GEMM), ("t4kr1p", 4, MODE_TAGS)) if n % 64 == 0 else ():
+                ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
+                lib.call("tf_fused3p", lanes, mode, ptr(plain), ptr(x.view(torch.uint8)), ptr(ya), ptr(tb), mb, n, k, 0,
+                         ptr(ctr), 0, ptr(ctr) + 4, 0, stream(torch))
                 e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
             for label, (lanes, mode, wc, st) in forms:
                 if not fits(mb, mode, wc, st, n):
@@ -738,6 +750,10 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     tagdL    tagrL with deferred chunk ends (tf_fused3d): each launch leaves its lanes' last quads and finishes to the
              next launch's loop, the last launch finishing its own; gated like tagk
     commitdL tagdL, then commitL's tf_commit
+    nativep  g0kr1 at every shape as a chain of programmatic dependent launches (tf_fused3p): each launch reads x once
+             the launch before it has written y, so its prologue overlaps that launch's last CTAs
+    tagpL    tagrL as such a chain: each launch's chunk ends overlap the next launch's loads; gated like tagk
+    commitpL tagpL, then commitsL's leaves and tree
     probe4   u4kw4s3 at every shape: 4-round BLAKE3, uncertified
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
@@ -811,6 +827,26 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                 off += layout.chunk_block_count(n, k, g)
             return fs
 
+        ctr = torch.zeros(len(names) * layout.LAYERS, dtype=torch.int32, device="cuda")
+
+        def seq_pdl(g=None):
+            """g0kr1 (g None) or tagr's launches through tf_fused3p, launch q waiting on ctr[q - 1]."""
+            lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_TAGS)
+            fs, off, prev = [lambda: (ctr.zero_(), 0)[1]], 0, 0
+            order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
+            for q, (layer, name) in enumerate(order):
+                n, k, _ = weights[name]
+                pl = copies[name][layer][0]
+                tp = ptr(tbs[g]) + 32 * off if g else 0
+                wc = ptr(ctr) + 4 * (q - 1) if q else 0
+                fs.append(lambda n=n, k=k, pl=pl, name=name, tp=tp, off=off, wc=wc, wn=prev, q=q: lib.so.tf_fused3p(
+                    lanes, mode, ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp, mb, n, k, off, wc, wn,
+                    ptr(ctr) + 4 * q, int(q > 0), stream(torch)))
+                prev = (n // 16 // 4) * (k // (layout.TILE_COLS * layout.CHUNK_TILES))
+                if g:
+                    off += layout.chunk_block_count(n, k, g)
+            return fs
+
         def best(name, prefix):
             med = timing[name]["batches"][mb]["median_s"]
             return min((a for a in med if a.startswith(prefix)), key=lambda a: med[a])
@@ -824,7 +860,8 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                     raise RuntimeError(f"step {what}: error {rc}")
             return f
 
-        arms = {"native": run(seq(lambda name: timing[name]["batches"][mb]["native_arm"]), "native")}
+        arms = {"native": run(seq(lambda name: timing[name]["batches"][mb]["native_arm"]), "native"),
+                "nativep": run(seq_pdl(), "nativep")}
         picks, gates = {}, {}
         for g in groups:
             picks[g] = {name: best(name, f"t{g}k") for name in names}
@@ -880,7 +917,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
             torch.cuda.synchronize()
             want = tbs[g].clone()
             gates[g] = {}
-            steps = [("tagk", seq(lambda name: f"t{g}kr1c", g)), ("tagd", seq_deferred(g))]
+            steps = [("tagk", seq(lambda name: f"t{g}kr1c", g)), ("tagd", seq_deferred(g)), ("tagp", seq_pdl(g))]
             for what, fs in steps:
                 f = run(fs, f"{what}{g}")
                 tbs[g].zero_()
@@ -897,6 +934,12 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                     f()
                     lib.call("tf_commit", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
                 arms[f"commitd{g}"] = commitd
+            if gates[g]["tagp"]:
+                def commitp(f=arms[f"tagp{g}"], g=g):
+                    f()
+                    lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
+                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
+                arms[f"commitp{g}"] = commitp
         if 4 in groups and all("u4kw4s3" in timing[name]["batches"][mb]["median_s"] for name in names):
             arms["probe4"] = run(seq(lambda name: "u4kw4s3", 4), "probe4")
         if 4 in groups:
@@ -963,41 +1006,44 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
                         "weighting": "layer", "picks": t["picks"]})
         for a, y in s["step"].get(mb, {}).items():
             what, g = re.fullmatch(r"([a-z]+)(\d*)", a).groups()
-            if what == "native":
+            if what in ("native", "nativep"):
                 continue
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": {"tag": "tag", "commit": "tag+commit", "overlap": "tag+commit overlapped",
                                   "top": "commit's tree top alone", "probe": "tag", "tagr": "tag", "tagk": "tag",
                                   "tagd": "tag", "commitd": "tag+commit", "commits": "tag+commit", "prober": "tag",
+                                  "tagp": "tag", "commitp": "tag+commit",
                                   "noend": "tag without chunk ends (diagnostic)"}[what],
                         **({"certified": False, "rounds": PROBE_ROUNDS} if what in ("probe", "prober") else {}),
                         **({"certified": False, "diagnostic": True} if what == "noend" else {})})
     return out
 
 
-STAGE_TAG_ARMS = ("tag", "tagr", "tagk", "tagd")
+STAGE_PAIRS = (("tag", "commit"), ("tagd", "commitd"), ("tagp", "commitp"))
 
 
 def stage_points(res: dict, batches, run: str | None) -> list[dict]:
     """The tag stage as a drop-in for the codec lanes' frontier (`verity/tag-stage-point/v0`, one per block size and
-    batch): y_tag the fastest certified step arm's increment over native, y_commit the serial commit's (commitL over
-    tagL), tau the tag's compressions per step at the V1 chain rate over the native step."""
+    batch): of the step's tag arms with a commit arm after them, the one with the least tag + commit, y over the faster
+    of native and nativep; y_commit the commit arm's increment over its tag arm; tau the tag's compressions per step at
+    the V1 chain rate over that native step."""
     rate = res["chains"]["b3_v1_r7"]["compressions_per_s"]
     out = []
     for mb in batches:
-        step = res["step"][mb]
+        med = res["step"][mb]["median_s"]
+        base = min(med["native"], med.get("nativep", med["native"]))
         for g in STEP_GROUPS:
-            arms = [f"{a}{g}" for a in STAGE_TAG_ARMS if f"{a}{g}" in step["y"]]
-            if not arms or f"commit{g}" not in step["y"]:
+            pairs = [(f"{t}{g}", f"{c}{g}") for t, c in STAGE_PAIRS if f"{t}{g}" in med and f"{c}{g}" in med]
+            if not pairs:
                 continue
-            best = min(arms, key=lambda a: step["y"][a])
-            y_tag, y_commit = step["y"][best] - 1, step["y"][f"commit{g}"] - step["y"][f"tag{g}"]
-            tau = layout.store_chunk_blocks(g) * (17 * g + 1) / rate / step["median_s"]["native"]
+            t, c = min(pairs, key=lambda p: med[p[1]])
+            tau = layout.store_chunk_blocks(g) * (17 * g + 1) / rate / base
             out.append({"schema": "verity/tag-stage-point/v0", "lane": "ra-tag-fast", "model": "llama-3.1-8b",
                         "tag": "ro-blake3/v1", "certified": True, "block_bytes": 1024 * g, "batch": mb,
-                        "y_tag": y_tag, "y_commit": y_commit, "y_total": 1 + y_tag + y_commit, "tag_arm": best,
-                        "commit": f"commit{g} - tag{g} (SHA-512 leaves and tree after the step)", "tau": tau,
-                        "measured": True, "run": run, "sm_hz": res.get("clock_hz")})
+                        "y_tag": med[t] / base - 1, "y_commit": (med[c] - med[t]) / base, "y_total": med[c] / base,
+                        "tag_arm": t, "commit_arm": c, "native_s": base,
+                        "native_arm": "nativep" if base < med["native"] else "native", "tau": tau, "measured": True,
+                        "run": run, "sm_hz": res.get("clock_hz")})
     return out
 
 
