@@ -16,9 +16,10 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   (the default, whose empty levels reject R, where `ℓ` is out of `[6, k_log]`).
 * `HoloReg`: the registered word `w` and its level-0 cap `cap`; `Opens` is the registrant's openings of every position
   of `cap` to `w`'s columns, what defines `w` from `cap` (`RecursiveAudit`'s `_hreg` for an encoded table).
-* `StackedTop lv reg d cap`: `cap` is R's registered top, the `stacked` entry of the registration record `reg` that the
-  inner circuit's META binds by its digest `d` (`RecVStar.registration`): the entry `topEntry` makes from one hm96
-  commit string per node, each over the node's row (`Firewall.topRows`, `rowDigest`) under a salt.
+* `StackedTop lv st reg cap`: `cap` is R's registered top, the `stacked` entry of the registration record `reg` (the
+  verifier's `--rec-inner-registration`) that the inner statement's META binds by its digest (`metaRegistration st`,
+  `RecVStar.registration`): the entry `topEntry` makes from one hm96 commit string per node, each over the node's row
+  (`Firewall.topRows`, `rowDigest`) under a salt.
 * `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`; the statement is true when
   some table `R` within the unique-decoding radius of `w` (`RegSchedule.Close`) has a satisfiable hidden statement at
   the slots' types.
@@ -101,12 +102,21 @@ def HoloReg.Opens (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkl
   ∀ pos < 2 ^ lv.logLen, ∃ salt sibs,
     Merkle.VerifiesL H E Lf x.cap (pathLen lv) pos (x.column lv.lanes pos) salt sibs
 
-/-- **`cap` is R's registered top**: the registration record `reg`, whose digest the inner circuit's META binds (`d`),
-names `stacked` under its `program`, and that entry is what `topEntry` makes from `2^capDepth lv` commit strings,
-node `i`'s the hm96 commit string of its row (`Firewall.topRows`) under a salt. -/
-def StackedTop (lv : Level) (reg : Lean.Json) (d : String) (cap : Cap Refine.Dig) : Prop :=
+/-- **The digest the inner statement's META binds**: META's `registration` of `st`'s circuit, the circuit registration's
+digest, as `FlockVerify.innerMetaRegistration` reads it off `--rec-inner-circuit`, the file `AcceptsPublic` sets `st` up
+from (`RecCoins.Inner.load`); none where META names none, or no digest, which the verifier refuses. -/
+def metaRegistration (st : Flock.Stmt) : Option String :=
+  match st.c.metaJ.getObjVal? "registration" with
+  | .ok (.str d) => some d
+  | _ => none
+
+/-- **`cap` is R's registered top**: the registration record `reg` (`--rec-inner-registration`, the verifier's own
+input) is the one the inner statement's META binds by its digest (`metaRegistration st`), it names `stacked` under its
+`program`, and that entry is what `topEntry` makes from `2^capDepth lv` commit strings, node `i`'s the hm96 commit
+string of its row (`Firewall.topRows`) under a salt. -/
+def StackedTop (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) : Prop :=
   ∃ (prog : String) (e : Lean.Json) (bcs : Array ByteArray) (salt : ℕ → ByteArray),
-    Flock.RecVStar.registration (some reg) (some d) = .ok (some (prog, some e)) ∧
+    Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
       Flock.RecVStar.topEntry prog bcs = .ok e ∧ bcs.size = 2 ^ capDepth lv ∧
       ∀ i (h : i < bcs.size), bcs[i] = Flock.Hm96.Default512.commitString
         (Flock.Firewall.rowDigest ((Flock.Firewall.topRows (cap i).1).headD #[])) (salt i)

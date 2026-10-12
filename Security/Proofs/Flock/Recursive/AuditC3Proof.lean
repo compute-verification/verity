@@ -35,7 +35,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg d xR hreg hstk ish Vs zr hCust bind rows hob hF
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg xR hreg hstk ish Vs zr hCust bind rows hob hF
     dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap

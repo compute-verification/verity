@@ -60,6 +60,11 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
   reordering lemma is needed.
 * `Creg`: the inner statement's `x.cap`, tied by `StackedTop` (`_hstk`) to the META-bound record's `stacked` entry; the
   registrant's openings of every level-0 position are `_hreg` (`HoloReg.Opens`). Closeness is in `holds`, not a hypothesis.
+* `_hstk`'s tie (round 2): the digest is `metaRegistration st`, META's `registration` of the inner statement's circuit,
+  which the verifier reads off `--rec-inner-circuit` (`innerMetaRegistration`), the file `AcceptsPublic` sets `st` up
+  from; `reg` is the verifier of record's `--rec-inner-registration`, an input as `bind` and `rows` are. The verifier
+  holds the tie in `RecVStar.innerCommits` (`registration`), which `VerifiesVStar` does not model, so it stays a
+  hypothesis, but one `st` fixes: SHA-512 and the root bind `reg`, its `stacked` entry and so the cap to `st`'s META.
 * `m` and claims: derived, not hypotheses. The model's R schedule is `fast100` at `mReg` (`holoAt`), and `claims` is the
   constant `STACKED_CLAIMS` (`regPhase` opens two, `regOpenError` counts two). The verifier's link is transitive: each
   `rec-opening` unit matches META's `stacked` (`stacked_of_openingShape`), which opens two claims at `fast100`'s rounds

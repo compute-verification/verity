@@ -24,9 +24,10 @@ What it takes, against `PublicAudit`:
   `mReg` and R opened at `STACKED_CLAIMS = 2` claims, the two reps' sparse claims (a constant of the model, which
   `regPhase` opens, and of the error, `regOpenError`; no parameter the prover picks);
 * R's registration, which says which table the audit is about, as `RecursiveAudit`'s `p`, `path₀` and `_hreg` say which
-  private circuit: the record `reg` whose digest `d` the inner circuit's META binds, the registered word and cap `xR`,
-  the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`) and the cap the record's `stacked`
-  entry (`_hstk`, `StackedTop`). The word's closeness to a codeword is no hypothesis: the statement holds only when some
+  private circuit: the record `reg`, the verifier of record's `--rec-inner-registration`, which `st`'s META binds by
+  its digest (`metaRegistration st`, as the verifier reads it off `--rec-inner-circuit`, the file `st` is set up from),
+  the registered word and cap `xR`, the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`) and
+  the cap the record's `stacked` entry (`_hstk`, `StackedTop`), so `st` fixes the cap up to a collision. The word's closeness to a codeword is no hypothesis: the statement holds only when some
   table within the unique-decoding radius of the word has a satisfiable hidden statement, so a far word is a false
   statement that the bound covers;
 * V*'s statements indexed by the verifier's own list (`vstarCount ish`, `RecVStar.statements`; gap 4(c)), in place of
@@ -58,8 +59,9 @@ set_option synthInstance.maxHeartbeats 1000000
 /-- **The recursive audit at candidate 3.**
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
-parameters `hp`, R's registration (the record `reg` META binds by its digest `d`, the registered word and cap `xR`
-with the registrant's openings `_hreg`, its cap the record's `stacked` entry `_hstk`), the verifier of record's inner
+parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, the
+registered word and cap `xR` with the registrant's openings `_hreg`, its cap the record's `stacked` entry `_hstk`), the
+verifier of record's inner
 shape `ish`, and every prover `σ` of the recursive audit with candidate 3's compiled table as its inner protocol
 (`holoInnerAt`), at the law of the registration's draws (`drawLaw`): V*'s statements `Vs`, one for each of the
 verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their
@@ -83,11 +85,11 @@ def RecursiveAuditC3 : Prop :=
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the verifier's own partition object and program, the inner statement and the sparse phase's parameters
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) (hp : HoloParams)
-    -- R's registration: the record and the digest META binds, the registered word and cap, the registrant's openings
-    -- and the record's `stacked` entry
-    (reg : Lean.Json) (d : String) (xR : HoloReg FlockLevel3.GF128 Refine.Dig)
+    -- R's registration: the verifier of record's own input, the record `--rec-inner-registration` that `st`'s META
+    -- binds; the registered word and cap, the registrant's openings and the record's `stacked` entry
+    (reg : Lean.Json) (xR : HoloReg FlockLevel3.GF128 Refine.Dig)
     (_hreg : xR.Opens Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp).rsch.sch.level₀)
-    (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ reg d xR.cap)
+    (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg xR.cap)
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
