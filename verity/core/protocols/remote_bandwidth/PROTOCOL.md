@@ -201,8 +201,13 @@ plus the node's capacities.
   chain and fresh store indices.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps the chaining gap to an all-gather and a few hashes.
-- **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are a cheaper receipt. \(z\) must enter before the
-  sketch, because a linear sketch of \(E \oplus Z\) splits. The reference has only the full SHA-512 receipt.
+- **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are a cheaper receipt. Two rules apply to them:
+  - The sketch's matrix must be derived from each pass's chained seed, never once per window. A per-window matrix
+    makes each block's contribution a fixed digest: read once and kept, it serves every later pass's receipt (red team
+    F29, art:61fc2e4c).
+  - \(z\) must enter before the sketch, because a linear sketch of \(E \oplus Z\) splits.
+
+  The reference has only the full SHA-512 receipt, which the pass's seed keys from its first block.
 - **The challenger's state.** v0's on-site audit keeps a challenger state on disk so that no nonce repeats across
   restarts. Here every nonce is drawn fresh from the verifier's randomness, and one session over a registration is
   open at a time. Persisting that across verifier restarts is out of scope.
