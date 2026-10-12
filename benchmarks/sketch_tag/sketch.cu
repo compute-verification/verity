@@ -203,10 +203,11 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
   }
 }
 
-// ro-sketch-blake3/v0 over vectors [0, nvec) of sk: one thread a vector, its message u64be (jbase + v) ‖ KS int32 LE.
+// ro-sketch-blake3/v0 over vectors [0, nvec) of sk: one thread a vector, its message u64be (jbase + v) ‖ KS int32 LE;
+// clear zeroes each vector once read (the next call's atomic runs add into it).
 template <int KS>
-__global__ void __launch_bounds__(128) sk_hash_kernel(const int* __restrict__ sk, uint64_t nvec, bw::Key3 key,
-                                                      uint64_t jbase, uint32_t* __restrict__ tags) {
+__global__ void __launch_bounds__(128) sk_hash_kernel(int* __restrict__ sk, uint64_t nvec, bw::Key3 key,
+                                                      uint64_t jbase, uint32_t* __restrict__ tags, int clear) {
   const uint64_t v = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
   if (v >= nvec) return;
   constexpr int MSG = 2 + KS, BLOCKS = (MSG + 15) / 16;
@@ -216,6 +217,11 @@ __global__ void __launch_bounds__(128) sk_hash_kernel(const int* __restrict__ sk
   for (int i = 0; i < KS / 4; ++i) {
     const uint4 q = src[i];
     w[4 * i] = q.x; w[4 * i + 1] = q.y; w[4 * i + 2] = q.z; w[4 * i + 3] = q.w;
+  }
+  if (clear) {
+    uint4* dst = reinterpret_cast<uint4*>(sk + v * KS);
+#pragma unroll
+    for (int i = 0; i < KS / 4; ++i) dst[i] = make_uint4(0, 0, 0, 0);
   }
   const uint64_t j = jbase + v;
   uint32_t cv[8];
@@ -318,8 +324,10 @@ int sk_gemm(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, in
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The tags of vectors [0, nvec) of sk into tags (32 bytes each, tagger.cu's b3 layout), block index jbase + v.
-int sk_hash(int ks, const int* skin, uint64_t nvec, const uint8_t* seed, uint64_t jbase, uint32_t* tags, cudaStream_t s) {
+// The tags of vectors [0, nvec) of sk into tags (32 bytes each, tagger.cu's b3 layout), block index jbase + v; clear
+// zeroes sk behind the read.
+int sk_hash(int ks, int* skin, uint64_t nvec, const uint8_t* seed, uint64_t jbase, uint32_t* tags, int clear,
+            cudaStream_t s) {
   static uint8_t last[32];
   static bool have = false;
   static bw::Key3 key;
@@ -330,9 +338,9 @@ int sk_hash(int ks, const int* skin, uint64_t nvec, const uint8_t* seed, uint64_
   }
   const unsigned grid = (unsigned)((nvec + 127) / 128);
   switch (ks) {
-    case 8: sk::sk_hash_kernel<8><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags); break;
-    case 16: sk::sk_hash_kernel<16><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags); break;
-    case 32: sk::sk_hash_kernel<32><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags); break;
+    case 8: sk::sk_hash_kernel<8><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags, clear); break;
+    case 16: sk::sk_hash_kernel<16><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags, clear); break;
+    case 32: sk::sk_hash_kernel<32><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags, clear); break;
     default: return 1;
   }
   return cudaGetLastError() ? 4 : 0;

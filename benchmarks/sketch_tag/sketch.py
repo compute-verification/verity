@@ -22,6 +22,7 @@ signs in B: 16 vectors share each sign fragment, and no two vectors' bytes are e
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -32,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "word_codec"))
 import codec as C  # noqa: E402
 
 from verity.core.protocols.bandwidth import tags  # noqa: E402
-from verity.core.protocols.pous.verifier import MerkleTree  # noqa: E402
 from verity.ml.randomness import Key, derive  # noqa: E402
 
 NAME = "ro-sketch-blake3/v0"
@@ -133,37 +133,54 @@ def leaves(seed: bytes, ys: list[bytes]) -> list[bytes]:
     return tags.leaves(TAG, seed, ys)
 
 
+def tree_root(nodes: list[bytes]) -> bytes:
+    """The bandwidth audit's tree over the leaves: RFC 6962's shape, node SHA512(0x01 ‖ l ‖ r) (`pous.verifier`)."""
+    if len(nodes) == 1:
+        return nodes[0]
+    k = 1 << ((len(nodes) - 1).bit_length() - 1)
+    return hashlib.sha512(b"\x01" + tree_root(nodes[:k]) + tree_root(nodes[k:])).digest()
+
+
 def root(seed: bytes, ys: list[bytes]) -> bytes:
-    return MerkleTree(leaves(seed, ys)).root
+    return tree_root(leaves(seed, ys))
 
 
 def sign_fragments(bits_kn: np.ndarray, m: int, t: int) -> np.ndarray:
-    """The device's copy of S, packed for the B operand: for tile task i, step group u (128 / k steps of 16 bytes,
-    steps padded to MP = ⌈m / spl⌉ spl) and lane l, 16 bytes at ((i · MP / spl + u) · 32 + l) · 16; byte
-    (s mod spl) · k/8 + blk holds b0's four signs (bits 0 … 3) and b1's (bits 4 … 7) of rows 8 blk + g at step
-    i m + s: b0 bit q is S[8 blk + g][32 (i m + s) + 4 tq + q], b1 bit q the same at + 16."""
+    """The device's copy of S, packed for the B operand: for tile task i, step group u (spl = 128 / k steps, a task's
+    steps padded to MP = ⌈m / spl⌉ spl) and lane l = 4 g + tq, four u32 words (16 bytes, at ((i · MP / spl + u) · 32 + l)
+    · 16). Pair p = (s mod spl) · k/8 + blk of step s = u spl + (s mod spl) is word p / 4, bit 8 q + 2 (p mod 4) + h:
+    S[8 blk + g][32 (i m + s) + 16 h + 4 tq + q], h = 0 for register b0 and 1 for b1 (a 1 bit is −1). A register is then
+    ((w >> 2 (p mod 4) + h) & 0x01010101) · 0xFE + 0x01010101."""
     k, n = bits_kn.shape
     if k not in KS or n != 32 * m * t:
         raise ValueError("S is k × 32 m T")
     spl, kb = 128 // k, k // 8
     mp = -(-m // spl) * spl
-    s = bits_kn.reshape(kb, 8, t, m, 2, 4, 4)                     # blk, g, i, s, h, tq, q
+    s = bits_kn.reshape(kb, 8, t, m, 2, 4, 4)                       # blk, g, i, s, h, tq, q
     s = np.concatenate([s, np.zeros((kb, 8, t, mp - m, 2, 4, 4), np.uint8)], axis=3)
-    nib = (s << np.arange(4, dtype=np.uint8)).sum(axis=-1, dtype=np.uint8)   # blk, g, i, s, h, tq
-    byte = nib[..., 0, :] | (nib[..., 1, :] << 4)                  # blk, g, i, s, tq
-    byte = byte.reshape(kb, 8, t, mp // spl, spl, 4)               # blk, g, i, u, sl, tq
-    return np.ascontiguousarray(byte.transpose(2, 3, 1, 5, 4, 0)).reshape(-1)   # i, u, g, tq, sl, blk
+    s = s.reshape(kb, 8, t, mp // spl, spl, 2, 4, 4)                # blk, g, i, u, sl, h, tq, q
+    s = s.transpose(2, 3, 1, 6, 4, 0, 5, 7)                         # i, u, g, tq, sl, blk, h, q
+    s = s.reshape(t, mp // spl, 8, 4, 4, 4, 2, 4)                   # i, u, g, tq, word, j, h, q  (p = 4 word + j)
+    s = s.transpose(0, 1, 2, 3, 4, 7, 5, 6)                         # bit 8 q + 2 j + h
+    return np.packbits(np.ascontiguousarray(s).reshape(-1, 8), axis=1, bitorder="little").reshape(-1)
+
+
+def fragment_signs(frag: np.ndarray, k: int, m: int, t: int) -> np.ndarray:
+    """`sign_fragments`' inverse on the B operand's positions: (task i, step s, column c, tq, blk, h, q) in {−1, +1}."""
+    spl, kb = 128 // k, k // 8
+    mp = -(-m // spl) * spl
+    b = np.unpackbits(frag.reshape(-1, 1), axis=1, bitorder="little")
+    b = b.reshape(t, mp // spl, 8, 4, 4, 4, 4, 2)                   # i, u, g, tq, word, q, j, h
+    b = b.transpose(0, 1, 2, 3, 4, 6, 7, 5).reshape(t, mp // spl, 8, 4, spl, kb, 2, 4)   # i, u, g, tq, sl, blk, h, q
+    b = b.transpose(0, 1, 4, 2, 3, 5, 6, 7).reshape(t, mp, 8, 4, kb, 2, 4)[:, :m]
+    return 1 - 2 * b.astype(np.int64)
 
 
 def sketch_from_fragments(store: bytes, n_rows: int, kdim: int, bits: int, t: int, frag: np.ndarray, k: int):
-    """The sketch as the device computes it, mma by mma from the packed signs: a check of `sign_fragments`."""
+    """The sketch as the device computes it, one mma.m16n8k32 at a time from the packed signs (a check of the packing)."""
     a = lane_steps(store, n_rows, kdim, bits).view(np.int8).astype(np.int64)
     nbs, nchunks, m = a.shape[:3]
-    spl, kb = 128 // k, k // 8
-    mp = -(-m // spl) * spl
-    f = frag.reshape(t, mp // spl, 8, 4, spl, kb).transpose(0, 1, 4, 2, 3, 5).reshape(t, mp, 8, 4, kb)
-    sg = np.stack([(f >> q) & 1 for q in range(8)], axis=-1)       # i, s, c, tq, blk, (h, q)
-    b = (1 - 2 * sg.astype(np.int64))[:, :m].reshape(t, m, 8, 4, kb, 2, 4)
+    b = fragment_signs(frag, k, m, t)                              # i, s, c, tq, blk, h, q
     a = a.reshape(nbs, nchunks, m, 8, 4, 2, 2, 4)                  # nb, kc, s, g, tq, h, e, q
     out = np.zeros((-(-nbs // t), nchunks, ROWS, k), np.int64)
     for nb in range(nbs):
@@ -171,3 +188,12 @@ def sketch_from_fragments(store: bytes, n_rows: int, kdim: int, bits: int, t: in
         # D[(e, g)][(blk, c)] += Σ_{s, tq, h, q} A[(e, g)][(s, h, tq, q)] · B[(s, h, tq, q)][(blk, c)]
         out[G] += np.einsum("ksgtheq,sctbhq->kegbc", a[nb], b[i]).reshape(nchunks, ROWS, k)
     return out.reshape(-1, k)
+
+
+def sketch_f64(vs: np.ndarray, s: np.ndarray, rows: int = 1 << 15) -> np.ndarray:
+    """`sketch` through float64 BLAS, in chunks of rows: exact, every partial sum an integer below 2^53."""
+    out = np.empty((vs.shape[0], s.shape[0]), np.int64)
+    st = s.astype(np.float64).T
+    for a in range(0, vs.shape[0], rows):
+        out[a:a + rows] = np.rint(vs[a:a + rows].astype(np.float64) @ st).astype(np.int64)
+    return out
