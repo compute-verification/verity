@@ -162,13 +162,17 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
     return;
   }
   if (warp > consumers) {
-    const uint64_t ntiles = cm.nvec / 16, step = (uint64_t)gridDim.x * cm.committers * 2;
-    const int r = lane & 15;
-    for (uint64_t t0 = ((uint64_t)blockIdx.x * cm.committers + (warp - consumers - 1)) * 2; t0 < ntiles; t0 += step) {
-      const uint64_t tile = t0 + (lane >> 4), v = tile * 16 + r;
-      if (tile < ntiles) sk_tag<KS>(cm.sk + v * KS, cm.jbase + v, cm.key, cm.clear, cm.tags + 8 * v);
+    // a contiguous share of the tiles a warp, 32 at a time: the warp's lanes tag their vectors, then one lane a leaf, so
+    // a warp's latency is about one leaf whatever its share
+    const uint64_t ntiles = cm.nvec / 16, nw = (uint64_t)gridDim.x * cm.committers;
+    const uint64_t wid = (uint64_t)blockIdx.x * cm.committers + (warp - consumers - 1);
+    const uint64_t share = (ntiles + nw - 1) / nw, t_end = min(ntiles, (wid + 1) * share);
+    for (uint64_t t0 = wid * share; t0 < t_end; t0 += 32) {
+      const uint64_t v_end = min(t_end, t0 + 32) * 16;
+      for (uint64_t v = t0 * 16 + lane; v < v_end; v += 32)
+        sk_tag<KS>(cm.sk + v * KS, cm.jbase + v, cm.key, cm.clear, cm.tags + 8 * v);
       __syncwarp();
-      if (r == 0 && tile < ntiles) b3_leaf(cm.tags, cm.nvec, tile, cm.leafmid, cm.leaves);
+      if (t0 + lane < t_end) b3_leaf(cm.tags, cm.nvec, t0 + lane, cm.leafmid, cm.leaves);
       __syncwarp();
     }
     return;
