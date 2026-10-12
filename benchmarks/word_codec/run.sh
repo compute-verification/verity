@@ -15,7 +15,8 @@
 # and WC_KMAX (default 8) the largest k they hold.
 # KV=1 runs the KV cache's codec instead: kv.cu built at each width of KV_FIELDS (default 512 768; a width tagged k1
 # squares by one level of Karatsuba, o1 builds at ptxas -O1, h32 at 32 query heads (8B's attention), t16 with the
-# tensor-core attention's tiles of 16 tokens, as in 1536k1o1 or 512h32), then KV_SCRIPT (default kv_bench.py) with
+# tensor-core attention's tiles of 16 tokens, m with σ_K between rounds (kv.py's masked word), as in 1536k1o1, 512h32
+# or 512m), then KV_SCRIPT (default kv_bench.py) with
 # KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck,
 # and SANITIZE=2 runs KV_SCRIPT after it if every tool passed.
 set -uxo pipefail
@@ -37,6 +38,7 @@ if [ "${KV:-0}" = 1 ]; then
     [[ $tag == *o1* ]] && flags+=(-Xptxas -O1)
     [[ $tag == *h32* ]] && flags+=(-DKV_QHEADS=32)
     [[ $tag == *t16* ]] && flags+=(-DKV_MT=16)
+    [[ $tag == *m* ]] && flags+=(-DKV_MASK=1)
     nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
       "${flags[@]}" -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
     LIBS+=(--lib "$lib=$B/kv-$lib.so")

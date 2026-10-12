@@ -114,7 +114,7 @@ def attn_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: int |
         cell = {"batch": b, "context": ctx, "layers": layers, "splits": list(SPLITS), "equal": {}, "rel_err": {},
                 "mma_vs_fma": 0.0}
         for k in ks:
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             lib.call("kv_encode", B.ptr(pad), B.ptr(enc), pad.numel() // f.word_bytes, 0, k, 0, st)
             for layer in (0, layers - 1):
                 kk, vv = kvl[:, :, layer, 0].double(), kvl[:, :, layer, 1].double()
@@ -242,7 +242,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     log(f"exhaust {lib.name} B={b} ctx={ctx} L={layers}: store {store.numel() / 1e9:.1f} GB, read {rd['gbps']:.0f} GB/s")
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     for k in ks:
-        B.set_key(lib, K.key(f.name, B.SEED, k))
+        B.set_key(lib, B.lib_key(lib, k))
         bad = floor_gate(lib, torch, store, n_words, k, [sms * mult for mult in (4, 8, 16)], st)
         if bad:
             cell["floor"][k] = {"ok": False, "bad_grids": bad}
@@ -270,7 +270,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     part = part_buffer(torch, sh, b)
     for fm in forms_of(sh):
         for k in ([1] if fm in RTOL else ks):
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             per = {}
             ctas = (lambda s: b * K.KV_HEADS * s) if fm >= 3 else (lambda s: b * s)
             for sp in [s for s in SPLITS if ctas(s) >= sms] or [max(SPLITS)]:
@@ -369,7 +369,7 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
         t_gemm = statistics.median([both(True, None, 1) for _ in range(reps)])
         row = {"gemm_s": t_gemm, "gemm_gbps": w_bytes / t_gemm / 1e9, "words": n, "bytes": n * f.word_bytes, "k": {}}
         for k in ks:
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             kr = {"sm_s": n / enc_rates[k]["per_s"], "grids": {}}
             for gr in WRITE_GRIDS:
                 grid = gr * sms
@@ -522,7 +522,7 @@ def main() -> int:
         for lib in libs:
             g = attn_gate(lib, torch, m, [(2, 100)], ks[:1], log, layers_override=2)
             res["ok"] &= all(c["ok"] for c in g.values())
-            B.set_key(lib, K.key(lib.field.name, B.SEED, ks[0]))
+            B.set_key(lib, B.lib_key(lib, ks[0]))
             bad = floor_gate(lib, torch, B.random_words(torch, 5000, lib.field, 1), 5000, ks[0], [3], B.stream(torch))
             log(f"floor gate {lib.name} k={ks[0]}: " + (f"FAIL at grids {bad}" if bad else "ok"))
             res["ok"] &= not bad and prim_gate(lib, torch, log)["ok"]
