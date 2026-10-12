@@ -58,6 +58,7 @@ import Definitions.Pouw.PearlC.Game
 import Definitions.Pouw.PearlC.Hidden
 import Definitions.Pouw.PearlC.HiddenTileGame
 import Definitions.Pouw.PearlC.Instance
+import Definitions.Pouw.PearlC.NoiseSha512
 import Definitions.Pouw.PearlC.PeelExact
 import Definitions.Pouw.PearlC.PeelExactP
 import Definitions.Pouw.PearlC.PeelExactVectors
@@ -68,6 +69,7 @@ import Definitions.Pouw.PearlC.RowPrimVectors
 import Definitions.Pouw.PearlC.RowPrims
 import Definitions.Pouw.PearlC.RowSem
 import Definitions.Pouw.PearlC.SaltDead
+import Definitions.Pouw.PearlC.Sha512
 import Definitions.Pouw.PearlC.Skip
 import Definitions.Pouw.PearlC.SkipP
 import Definitions.Pouw.PearlC.Sm120
@@ -78,6 +80,7 @@ import Definitions.Pouw.PearlC.TileCheck
 import Definitions.Pouw.PearlC.TileCheck8
 import Definitions.Pouw.PearlC.TileCheck4
 import Definitions.Pouw.PearlC.TileCircuit
+import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
 import Definitions.Pouw.TileBound.AlignedExactDefs

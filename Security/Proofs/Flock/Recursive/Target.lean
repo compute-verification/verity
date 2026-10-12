@@ -28,6 +28,11 @@ block statement on the inner messages and the inner coins.
 * `flockInner`, `flock_inner_sound`, `flock_inner_sound_fast100`: the interactive table as the recursion's inner protocol
   (`Inner`) on a fixed schedule with live coins (`schedInner`), its statements the hidden templates of the class, and its
   `InnerSound`: at most `tableError`, at most `2^-205` for `22 ≤ m ≤ 33`.
+* `flockInnerCL`, `flockInnerCL_accepts`: the compiled table (`Model.tableCL` under `Lf`) as the recursion's inner
+  protocol on the same schedule and statements. Its round messages are what the firewall commits and V* registers: the
+  level-0 cap, each round's proof messages and Merkle tops, then the openings with their salts. It accepts a transcript
+  exactly when the transcript's steps are a cap, the link points, and a run of `tableAfterL` (what `InnerAccepts` plays)
+  to an accepted outcome.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -214,6 +219,46 @@ theorem flock_inner_sound_fast100 (A : Arith F K) (hA : A.Correct) (cls : HClass
     InnerSound (flockInner T CT A cls regs sch) (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := fun M hno s =>
   (flock_inner_sound T CT A hA cls regs sch hsch hlay M hno s).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
+
+/-- **C-Flock's compiled inner protocol on the class**: `flockInner` with the compiled table (`Model.tableCL` under the
+leaf scheme `Lf`) as the verifier. Its round messages are the level-0 cap, each round's proof messages and Merkle tops
+(each of rep 0's steps after the prover's choice `true`, as `interleave` reads it), and, in the round after the last
+coin, the openings with their salts, which is what the firewall commits and V* registers; the oracles are never sent
+whole. Its statements and their truth are `flockInner`'s. -/
+noncomputable def flockInnerCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
+    (sch : Schedule) : Inner :=
+  schedInner T CT (Hidden cls) (fun M => tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
+    (fun _ out => out.accepted = true) (fun M => ∃ z, (M.toStatement regs).Satisfies z)
+
+/-- **What the compiled `Inner` accepts**: a transcript whose steps on the schedule are a level-0 cap `cap₀`, the link
+points `pts`, and then a run of the table after them (`tableAfterL`, the run `InnerAccepts` plays) that ends accepted. -/
+theorem flockInnerCL_accepts (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
+    (sch : Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k))) :
+    (flockInnerCL T CT A H E Lf cls regs sch).accepts M t ↔
+      ∃ (cap₀ : Cap D) (pts : Fin 2 → Fin cls.mPts → F) (ts : List Step) (out : OutCL F D Sl),
+        schedSteps T CT 0 t = .inl ⟨Cap D, cap₀⟩ :: .inr ⟨Fin 2 → Fin cls.mPts → F, pts⟩ :: ts ∧
+          PlaysT (tableAfterL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts cap₀ pts) ts out ∧
+          out.accepted = true := by
+  show (∃ out, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
+    (schedSteps T CT 0 t) out ∧ out.accepted = true) ↔ _
+  -- explicit, since `cls.hm` proves `13 ≤ (M.toStatement regs).m` only up to unfolding `toStatement`
+  rw [tableCL_eq A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts]
+  generalize schedSteps T CT 0 t = ss
+  constructor
+  · rintro ⟨out, h, hacc⟩
+    cases ss with
+    | nil => cases h.nil_inv
+    | cons s ss =>
+      obtain ⟨cap₀, rfl, h₁⟩ := h.send_inv
+      cases ss with
+      | nil => cases h₁.nil_inv
+      | cons s ss =>
+        obtain ⟨pts, rfl, h₂⟩ := h₁.coin_inv
+        exact ⟨cap₀, pts, ss, out, rfl, h₂, hacc⟩
+  · rintro ⟨cap₀, pts, ts, out, rfl, h, hacc⟩
+    exact ⟨out, .send cap₀ (.coin pts h), hacc⟩
 
 end Target
 

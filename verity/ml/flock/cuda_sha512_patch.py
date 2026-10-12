@@ -63,7 +63,7 @@ for f in ("prove_chunk.cuh", "prove_circuit.cuh"):
 edit("prove_circuit.cuh", [
     ("uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n",
      "uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n"
-     "    Hm96Guard hm96_guard(N->hm96_tree, N->hm96_ctx, N->hm96_key, N->hm96_prefixes, N->hm96_tables, N->hm96_level0_leaves);\n"),
+     "    Hm96Guard hm96_guard(N->hm96_tree, N->hm96_ctx, N->hm96_prefixes, N->hm96_tables, N->hm96_level0_leaves);\n"),
 ])
 edit("ligerito_f256.cuh", [
     ("out.initial_cap.size() * 32", "out.initial_cap.size() * FLOCK_HB"),

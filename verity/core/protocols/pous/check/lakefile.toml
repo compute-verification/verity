@@ -3,7 +3,7 @@
 # the core primitives (the identity hash, randomness's `frame`) only. Its properties are stated in `Security/Properties/Pous.lean`; it moves into `verity/core/protocols/pous` once
 # they are proved.
 name = "pous_check"
-defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest"]
+defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit"]
 
 [leanOptions]
 autoImplicit = false
@@ -43,3 +43,7 @@ root = "PousCheck.SetupDifftestMain"
 [[lean_exe]]
 name = "pous-audit-difftest"
 root = "PousCheck.DifftestMain"
+
+[[lean_exe]]
+name = "pous-timed-audit"
+root = "PousCheck.TimedAuditMain"

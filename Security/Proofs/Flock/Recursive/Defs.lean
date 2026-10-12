@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # Recursion: the model
@@ -17,6 +18,15 @@ for the drawn units and the public coins, accepts.
   of the messages and products of the coins.
 * `InnerSound I ε`: on a false statement no prover strategy of `I.game` makes the inner verifier accept with probability
   above `ε`. A strategy of `I.game` fixes its round-`k` message before the coin `ρ_k` is drawn.
+* `InnerSoundFork H I pick ε`, its fork form: on a false statement every prover strategy either has a fork (`Inner.Fork`:
+  two continuations of its own after some round's message, whose transcripts `pick` reads as a collision of `H` at an
+  outcome the fork reaches), or makes the inner verifier accept with probability at most `ε`. `InnerSoundForkOn` is the
+  same for the runs whose transcripts satisfy any `G`: the fork read only where both transcripts satisfy `G`
+  (`pickOn`), the acceptance counted only where its transcript does. It implies `InnerSoundFork`
+  (`InnerSoundForkOn.plain`, at `G := True`).
+* `Game.Outcome`, `StrictCR.FindsColl`, `StrictCR.Finder.Finds`: an outcome a strategy reaches, and a run that finds a
+  collision of `H` at one; `contF` and `forkG`: the rest of a run of `rounds` from a node, and two of them from the node
+  where round `k`'s message is sent.
 * `recGame`: the recursive audit: the registration, the draw, the `r` committed rounds, and the outer session, whose game
   is a parameter (`V*`'s live session in the Flock instance).
 * `leafAvg`, `expAt`, `probAt`: averages over the round coins of quantities at the outer session's start, which may read
@@ -26,6 +36,34 @@ for the drawn units and the public coins, accepts.
   before. `leafAvg_relabel` is the simulation: the probability that the inner verifier accepts the relabelled transcript
   is the probability that it accepts against `refStrat`.
 -/
+
+namespace FlockSoundness.Game
+
+variable {α : Type}
+
+/-- **An outcome the strategy reaches**: `s` plays `g` to `a` at some coins. -/
+def Outcome : (g : Game α) → Strategy g → α → Prop
+  | .ret b, _, a => b = a
+  | .send _ k, s, a => Outcome (k s.1) s.2 a
+  | @Game.coin _ _ _ _ k, s, a => ∃ c, Outcome (k c) (s c) a
+
+end FlockSoundness.Game
+
+namespace FlockSoundness.StrictCR
+
+open Game
+
+variable {D β : Type} (H : List UInt8 → D)
+
+/-- **A run of `g` against `s` finds a collision of `H`**: some outcome `s` reaches outputs, by `out`, two different
+strings that `H` maps to one digest. -/
+def FindsColl (g : Game β) (s : Strategy g) (out : β → Pair) : Prop :=
+  ∃ b, Game.Outcome g s b ∧ IsColl H (out b)
+
+/-- **A finder finds a collision of `H`** at an outcome its strategy reaches. -/
+def Finder.Finds (Fd : Finder Pair) : Prop := FindsColl H Fd.g Fd.s id
+
+end FlockSoundness.StrictCR
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -57,11 +95,77 @@ attribute [instance] Inner.fintype Inner.nonempty
 /-- The inner verifier's side of the interaction, its output the transcript. -/
 def Inner.game (I : Inner) : Game (List (I.Msg × I.Coin)) := rounds I.Msg I.Coin I.r .ret
 
+section Fork
+
+variable {M C β γ : Type} [Fintype C] [Nonempty C]
+
+/-- **The rest of the run from a node**: the remaining round coins, the prover's messages read from its strategy, and then
+the finder `T` at the leaf reached. -/
+noncomputable def contF : (r : ℕ) → (f : List (M × C) → Game β) →
+    ((t : List (M × C)) → Strategy (f t) → StrictCR.Finder γ) → Strategy (rounds M C r f) → StrictCR.Finder γ
+  | 0, _, T, s => T [] s
+  | r + 1, f, T, s =>
+      ⟨.coin C fun ρ => (contF r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).g,
+        fun ρ => (contF r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).s⟩
+
+/-- **The fork at round `k`**: the round coins to the node where the prover sends its round-`k` message, then the rest of
+the run twice, independently (`contF`, the trial `T` at each leaf), the two trials' outputs read by `pick`. With no round
+`k` it finds nothing. -/
+noncomputable def forkG (pick : γ → γ → StrictCR.Pair) : (k r : ℕ) → (f : List (M × C) → Game β) →
+    ((t : List (M × C)) → Strategy (f t) → StrictCR.Finder γ) → Strategy (rounds M C r f) →
+    StrictCR.Finder StrictCR.Pair
+  | _, 0, _, _, _ => ⟨.ret none, PUnit.unit⟩
+  | 0, r + 1, f, T, s => StrictCR.twoRuns (contF (r + 1) f T s).g (contF (r + 1) f T s).s pick
+  | k + 1, r + 1, f, T, s =>
+      ⟨.coin C fun ρ => (forkG pick k r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).g,
+        fun ρ => (forkG pick k r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).s⟩
+
+end Fork
+
 /-- **`InnerSound I ε`**: on a false statement, every prover strategy makes the inner verifier accept with probability at
 most `ε`. A strategy of `I.game` fixes each round's message before the round's coin is drawn, as a function of the
 statement and the transcript before it; a randomized prover is a mixture of these. -/
 def InnerSound (I : Inner) (ε : ℝ≥0∞) : Prop :=
   ∀ x, ¬ I.holds x → ∀ s : Strategy I.game, prob (I.accepts x) I.game s ≤ ε
+
+/-- **A fork of an inner prover's own runs**: at some round `k < r`, two continuations of `s` after its round-`k` message,
+each run to the end, and `pick` of their two transcripts outputs a collision of `H` at an outcome the fork reaches. -/
+def Inner.Fork {D : Type} (H : List UInt8 → D) (I : Inner)
+    (pick : List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (s : Strategy I.game) : Prop :=
+  ∃ k < I.r, (forkG pick k I.r .ret (fun t _ => ⟨.ret t, PUnit.unit⟩) s).Finds H
+
+/-- **`InnerSound` in fork form**: on a false statement `x`, every prover strategy has a fork (`Inner.Fork`, its two
+transcripts read by `pick x`), or makes the inner verifier accept with probability at most `ε`. The bound is exact for a
+prover none of whose forks `pick` reads as a collision; for one that has such a fork it says nothing. -/
+def InnerSoundFork {D : Type} (H : List UInt8 → D) (I : Inner)
+    (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (ε : ℝ≥0∞) : Prop :=
+  ∀ x, ¬ I.holds x → ∀ s : Strategy I.game, I.Fork H (pick x) s ∨ prob (I.accepts x) I.game s ≤ ε
+
+open Classical in
+/-- `pick` of two transcripts that both satisfy `G`, else nothing. -/
+noncomputable def pickOn {τ : Type} (G : τ → Prop) (pick : τ → τ → StrictCR.Pair) (t t' : τ) : StrictCR.Pair :=
+  if G t ∧ G t' then pick t t' else none
+
+/-- **`InnerSoundFork` on the runs whose transcripts satisfy `G`**, for every `G`: on a false statement every prover
+strategy has a fork whose two transcripts both satisfy `G` and which `pick` reads as a collision, or the inner verifier
+accepts a transcript satisfying `G` with probability at most `ε`. The recursive audit reads it at `G` := the transcripts
+some accepted outer proof decodes, so that a fork of the simulated inner prover is a fork of the recursive prover's own
+runs. -/
+def InnerSoundForkOn {D : Type} (H : List UInt8 → D) (I : Inner)
+    (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (ε : ℝ≥0∞) : Prop :=
+  ∀ x, ¬ I.holds x → ∀ (G : List (I.Msg × I.Coin) → Prop) (s : Strategy I.game),
+    I.Fork H (pickOn G (pick x)) s ∨ prob (fun t => I.accepts x t ∧ G t) I.game s ≤ ε
+
+/-- **`InnerSoundForkOn` implies `InnerSoundFork`**: at `G := True`. -/
+theorem InnerSoundForkOn.plain {D : Type} {H : List UInt8 → D} {I : Inner}
+    {pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair} {ε : ℝ≥0∞}
+    (h : InnerSoundForkOn H I pick ε) : InnerSoundFork H I pick ε := by
+  intro x hx s
+  rcases h x hx (fun _ => True) s with hf | hp
+  · refine Or.inl ?_
+    have hpick : pickOn (fun _ => True) (pick x) = pick x := funext fun t => funext fun t' => by simp [pickOn]
+    rwa [hpick] at hf
+  · exact Or.inr ((prob_mono (fun _ h => ⟨h, trivial⟩) _ s).trans hp)
 
 /-- **The recursive audit**: the prover registers `R` (the hiding commitment `c_P` among it), the verifier draws `ω` (the
 units of `P` to prove), then `I.r` rounds in which the prover sends a commitment `c_k : Cm` to its inner message and the

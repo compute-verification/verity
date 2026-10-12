@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import random
+import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -24,6 +25,13 @@ PKG = ROOT / "verity/core/protocols/pouw/lean/check"
 _spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
+sys.modules["pouw_check_cases"] = vectors
+_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
+openings = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(openings)
+_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
+passes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(passes)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -181,9 +189,167 @@ def test_ratios_have_one_spelling():
             CC.ratio(s, "x")
 
 
+_WINDOW_ENTRY = "is not the registered window's entry"
+_HEADER, _COUNT = "the proof's public file has no JSON header", "the proof's header has no instance count"
+_ROWS = "the proof's first rows are not an A row and a B row of the registered schemas"
+_FIELDS = "the opening's salt is not 192 bytes, or a path"
+#: the refusal each opening mutation aims at, by its reason's start or end ("…" before an end); None for an acceptance
+OPENING_EXPECT = {
+    "honest": None, "undrawn": "…is not drawn", "domain": "the registered window domain is not",
+    "context": "the registered window domain is not", "root-hex": "the registered window root is not",
+    "root-short": "the registered window root is not", **{n: "the opening names no entry" for n in (
+        "entry-missing", "entry-kind", "entry-root", "entry-negative", "entry-huge", "entry-float", "entry-null",
+        "opening-list", "index-string", "index-bool", "index-missing")},
+    "entry-bool": {None, "…" + _WINDOW_ENTRY}, "salt-upper": None, "salt-spaced": None,
+    **{n: _FIELDS for n in ("salt-short", "salt-type", "salt-bad", "window-path-type", "window-path-digest",
+                            "side-path-type", "side-path-digest", "side-missing", "side-index-type", "side-index-bool")},
+    **{n: "…" + _WINDOW_ENTRY for n in ("window-path-short", "entry-other", "entry-negative-index", "entry-past",
+                                        "forged-entry")},
+    "out-of-range": "…is not in the entry's range", "kind-none": "…is not in the entry's range",
+    **{n: _HEADER for n in ("no-newline", "header-not-json", "header-nan", "header-list", "header-utf8")},
+    **{n: _COUNT for n in ("instances-missing", "instances-bool", "instances-float", "instances-string")},
+    "instances-two": "…instances, not one tile",
+    **{n: _ROWS for n in ("schemas-missing", "frame-type", "schemas-type", "schemas-swapped", "schemas-one",
+                          "schemas-prefixed")},
+    "schemas-unsorted": None, "body-short": "the proof's body holds no A row and B row",
+    "a-index": "side a: the opening is of row", "b-index": "side b: the opening is of row",
+    **{n: "side a: the proof's committed row is not" for n in ("a-row", "a-path-short", "rows-swapped", "past-side")},
+    **{n: "side b: the proof's committed row is not" for n in ("b-row", "b-path")},
+    "params-bad": CC.Refused, "commitment-bad": CC.Refused,
+}
+
+
+def _opening(case: dict) -> str | None:
+    return CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
+                      case["unit"], bytes.fromhex(case["pub"]), case["opening"])
+
+
+def _hits(reason: str | None, want) -> bool:
+    if want is None or reason is None:
+        return reason is want
+    return reason.endswith(want[1:]) if want.startswith("…") else reason.startswith(want)
+
+
+def test_every_opening_mutation_hits_its_refusal():
+    """`core_check.opening` accepts an honest opening, a call's tile or the filler's, and refuses each mutation, over a
+    few cases each, with the reason it aims at (or reads hex and the header as both sides must)."""
+    assert set(OPENING_EXPECT) == set(openings.NAMES) | {"honest"}
+    for name, want in OPENING_EXPECT.items():
+        for seed in range(4):
+            case = openings.instance(random.Random(f"{name}/{seed}"), name)
+            if want is CC.Refused:
+                with pytest.raises(CC.Refused):
+                    _opening(case)
+                continue
+            got = _opening(case)
+            assert any(_hits(got, w) for w in (want if isinstance(want, set) else {want})), (name, seed, got)
+
+
+def test_the_opening_reads_what_served_zk_writes():
+    """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
+    A and B rows' schemas."""
+    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+    assert CC.SERVED_DOMAIN == R.SERVED_DOMAIN
+    assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
+    case = openings.honest(random.Random(1))
+    assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
+        case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
+        case["params"]["check"]["entries"], case["params"]["context"])
+
+
 def test_canonical_json_is_leans():
     assert CC.canonical(b'{"a":[1,null,true],"b":"x"}') == {"a": [1, None, True], "b": "x"}
     for b, why in ((b'{"b":1,"a":2}', "not canonical"), (b'{"a": 1}', "not canonical"), (b'{"a":1.5}', "non-integer"),
                    (b"\xff", "not UTF-8"), (b"{", "not JSON")):
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
+
+
+#: the refusal each pass mutation aims at: (code, the reason's start), or the honest pass's ``how`` (a reading both sides
+#: share)
+PASS_EXPECT = {
+    "honest": {"coin", "recorded beacon"}, "spaced-hex": {"coin", "recorded beacon"},
+    "no-pass": ("coin", "the window names no pass"), "not-utf8": ("manifest", "the pass's manifest is not a JSON object"),
+    "not-json": ("manifest", "the pass's manifest is not a JSON object"),
+    "not-object": ("manifest", "the pass's manifest is not a JSON object"),
+    "constant": ("manifest", "the pass's manifest is not a JSON object"),
+    "recorded-unread": ("coin", f"the pass's manifest is {CC.MANIFEST_RECORDED}, recorded before epoch coins"),
+    "schema-other": ("coin", "schema "), "schema-missing": ("manifest", "the pass's manifest names no schema"),
+    "matmuls-form": ("manifest", "the pass's matmuls are not"), "matmuls-not-list": ("manifest", "the pass's matmuls are not"),
+    "shape": ("coin", "a shape has m, k, n >= 1"), "ids-64-bit": ("coin", "a matmul's index and weight id are 64-bit"),
+    "weights-form": ("manifest", "the pass's weights are not"), "weights-not-object": ("manifest", "the pass's weights are not"),
+    "no-salt-coin": ("coin", "the pass has no salt coin"),
+    "no-verifier-coins": ("coin", "the pass's salt coin opens against the epoch's published coin commitment"),
+    "verifier-coins": ("coin", "the verifier's coins are malformed: an epoch is"),
+    "opening-form": ("coin", "the pass's coins are malformed: a coin opening is"),
+    "pass-coins-form": ("coin", "the pass's coins are malformed: a coin commitment's"),
+    "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is 'verity/pouw/epoch-coins/v1'"),
+    "not-the-epochs": ("coin", "the pass's coin commitment is not the epoch's"),
+    "indices": ("coin", "matmul indices are unique"), "dims": ("coin", "every matmul on weight"),
+    "weights-set": ("coin", "every weight of the workload is committed, and only those"),
+    "coin-epoch": ("coin", "the salt's coin is epoch"), "coin-label": ("coin", "the salt's coin is the epoch's"),
+    "coin-size": ("coin", "the salt's coin opening is malformed"),
+    "coin-foreign": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "coin-tampered": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "coin-path": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "coin-early": ("coin", "the salt's coin was not opened after what the verifier recorded"),
+    "resalted": ("coin", "the pass's salt is not its"), "salt-missing": ("coin", "the pass's salt is not its"),
+    "beacon-empty": ("manifest", "the recorded pass's beacon is not nonempty hex"),
+    "no-beacon": ("coin", "the recorded pass has no beacon"),
+    "not-named": ("manifest", "the pass is not the one the window's parameters name"),
+}
+
+DRAW_EXPECT = {
+    "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed"),
+    "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is"),
+    "registration": ("draw", "the registration is not a SHA-512 digest"), "stream": ("draw", "the registration is not a SHA-512"),
+    "receipt": ("draw", "the receipt is not"), "law": ("draw", "the law is not subset:k over N"),
+    "opening-form": ("coin", "the draw's a coin opening is"), "label": ("coin", "the draw's coin is the epoch's 'salt' coin"),
+    "epoch": ("coin", "the draw's coin is epoch"),
+    "foreign": ("coin", "the draw's coin does not open"), "tampered": ("coin", "the draw's coin does not open"),
+    "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
+    "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
+    "early-coins-live": ("coin", "the draw's coin does not open"),
+}
+
+
+def test_every_pass_mutation_hits_its_refusal():
+    """`core_check.pass_epoch` re-starts an honest pass's epoch (each coin version, and a recorded beacon's) and refuses
+    each mutation, over a few cases each, with the refusal it aims at."""
+    assert set(PASS_EXPECT) == set(passes.PASS_NAMES) | {"honest"}
+    for name, want in PASS_EXPECT.items():
+        for seed in range(6):
+            how, refused = CC.pass_epoch(*passes.pass_args(passes.pass_instance(random.Random(f"{name}/{seed}"), name)))
+            if isinstance(want, set):
+                assert refused is None and how in want, (name, seed, refused)
+            else:
+                assert refused is not None and refused[0] == want[0] and refused[1].startswith(want[1]), (name, seed, refused)
+
+
+def test_every_draw_mutation_hits_its_refusal():
+    assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
+    for name, want in DRAW_EXPECT.items():
+        for seed in range(6):
+            got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
+            assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
+                (name, seed, got)
+
+
+def test_the_versioned_coin_rule_is_the_coins_on_the_current_version():
+    """On `coins.SCHEME`, `core_check.coin_reason` and `weights_root` are `coins.coin_reason` and `audit.weights_root`;
+    the recorded version differs from it in its binding and weights' root."""
+    from verity.core.protocols.pouw import coins as Co
+    from verity.core.protocols.pouw.audit import weights_root
+    rng = random.Random(3)
+    for seed in range(8):
+        ch = Co.Challenger(seed % 3, rng.randbytes)
+        roots = {rng.randrange(99): rng.randbytes(64) for _ in range(3)}
+        assert CC.weights_root(Co.SCHEME, roots) == weights_root(roots)
+        assert CC.weights_root(CC.COINS_RECORDED, roots) != weights_root(roots)[:32]
+        o = ch.open("salt", weights_root(roots))
+        c = CC.coins_of(ch.commitment.to_json(), False)
+        for label, after, op in (("salt", o.after, o), ("salt", bytes(64), o), ("draw", o.after, o),
+                                 ("salt", o.after, Co.CoinOpening(o.epoch + 1, o.label, o.after, o.coin, o.salt, o.path)),
+                                 ("salt", o.after, Co.CoinOpening(o.epoch, o.label, o.after, o.coin[:-1] + b"x", o.salt, o.path))):
+            assert CC.coin_reason(c, op, label, after) == Co.coin_reason(ch.commitment, op, label, after)

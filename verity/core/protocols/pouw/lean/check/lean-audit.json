@@ -1,5 +1,5 @@
 {
- "roots": ["PouwCheck"],
+ "roots": ["PouwCheck", "PouwCheck.DifftestMain"],
  "exempt": {
   "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck"
  },
@@ -19,6 +19,11 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwCheck.Opening": {
+   "imports": ["PouwCheck.Inputs", "PouwWindow.Record", "PouwWindow.Side"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwCheck.Protocol": {
    "imports": ["CoreProtocol.Cli", "PouwCheck.Check"],
    "except": [],
@@ -26,6 +31,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
  }
 }

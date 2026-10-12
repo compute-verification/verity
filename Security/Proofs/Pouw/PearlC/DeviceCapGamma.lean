@@ -151,8 +151,4 @@ theorem pearlCSampledSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.DomainDevUnpromoted : Pouw.Guarantees.PearlC.DomainDevUnpromoted := @Pouw.PearlC.pearlCDomainDev_unpromoted
-
 theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedCap1000_8192 := @Pouw.PearlC.pearlCGammaUnpromotedCap1000_8192
-
-theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevCapAnti : Pouw.Guarantees.PearlC.TTOutPearlCDevCapAnti := @Pouw.PearlC.ttOutPearlCDev_cap_anti

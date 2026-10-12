@@ -35,7 +35,7 @@ fi
 (cd "$B" && sha256sum -c --quiet SHA256SUMS) || { stamp "PREBUILT_FAIL: $B/SHA256SUMS does not hold"; exit 13; }
 cp "$B/SHA256SUMS" "$OUT/prebuilt.sha256"
 
-export SCHEME=pearl-c-sm120-v1-h2 GRAPHS=1 FP8_GRAPHS=1 SCHEDULE=serial ROWS_FORM=s WHOLE_STEP=1 WHOLE_DEFER=1
+export SCHEME=pearl-c-sm120-v1-h3 GRAPHS=1 FP8_GRAPHS=1 SCHEDULE=serial ROWS_FORM=s WHOLE_STEP=1 WHOLE_DEFER=1
 export STATEMENT=$B/hm96_rows.cubin
 read -r -a LEASE_ARGS <<< "${LEASE:-1 --wait --preemptible --max-min 25}"
 read -r -a WRAP_ARGS <<< "${WRAP:-}"

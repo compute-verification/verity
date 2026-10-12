@@ -1,6 +1,6 @@
 import Definitions.Pouw.TileBound.Defs
 import Mathlib.Tactic.IntervalCases
-import Models.Pouw.Guarantees.TileBound
+import Definitions.Pouw.TileBound.Fp8Defs
 
 /-!
 # When a ⟨2,2,2⟩ recursion could pay at E4M3, and the output region it needs (the TT_OUT restatements lane)
@@ -85,11 +85,3 @@ theorem fp32_region_of_pays {L : ℕ} (h : price .fp32 * (7 / 8 : ℚ) ^ L < pri
   omega
 
 end Pouw.TileBound
-
-theorem Pouw.SecurityProofs.TileBound.Bf16PaysIff : Pouw.Guarantees.TileBound.Bf16PaysIff := @Pouw.TileBound.bf16_pays_iff
-
-theorem Pouw.SecurityProofs.TileBound.Bf16RegionOfPays : Pouw.Guarantees.TileBound.Bf16RegionOfPays := @Pouw.TileBound.bf16_region_of_pays
-
-theorem Pouw.SecurityProofs.TileBound.Fp32RegionOfPays : Pouw.Guarantees.TileBound.Fp32RegionOfPays := @Pouw.TileBound.fp32_region_of_pays
-
-theorem Pouw.SecurityProofs.TileBound.Tf32RegionOfPays : Pouw.Guarantees.TileBound.Tf32RegionOfPays := @Pouw.TileBound.tf32_region_of_pays

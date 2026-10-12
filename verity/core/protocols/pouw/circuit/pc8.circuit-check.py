@@ -7,8 +7,8 @@ from typing import Any
 
 def _pouw_roots() -> list[Any]:
     """Pearl-C's tile check as Pearl-C4's at k = 128 (one promotion window): its templates on the H100's and sm_120's
-    records and its roots on sm_120's; its hiding templates and roots on sm_120's, and the hiding tile under -h3
-    (`Pc8TileHiddenH3`); its hiding roots with the per-tile cap
+    records and its roots on sm_120's; its hiding templates and roots on sm_120's, the hiding tile under -h3
+    (`Pc8TileHiddenH3`), and the served window's tile on its indexed side rows (`Pc8TileSide`); its hiding roots with the per-tile cap
     (``Shape.cap``, `verity.core.protocols.pouw.circuit.cap`) at k = 256 (two promotion windows) on sm_120's with
     one row a side; and its roots with the row units cut along k (`verity.core.protocols.pouw.circuit.rowk`,
     ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""
@@ -22,7 +22,7 @@ def _pouw_roots() -> list[Any]:
     h8 = replace(tile8, hidden=True)
     out += [t for t in [*pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
             if t not in out]
-    out.append(pc8.templates(128, h8.tile, "sm120", True, "h3")["tile"])
+    out += [pc8.templates(128, h8.tile, "sm120", True, "h3")["tile"], pc8.side_tile(128, h8.tile, "sm120")]
     split = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", hidden=True, cap=True)
     out += [pc8.call(split), pc8.check(split)]
     s = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128)

@@ -50,15 +50,14 @@ typedef struct {
     int (*mid_cb)(void* ctx, const uint32_t* cut, long long groups, uint32_t* late, long long* n_host, const long long** host_at,
                   const int** host_words, const uint64_t** host_zab);
     void* mid_ctx;
-    // hm96-sha512 Merkle leaves (the SHA-512 build, cuda_sha512_patch.py): the device expands tree k's salts with ChaCha20 under
-    // hm96_key (32 bytes) and the nonce hm96_tree returns for k (trees in build order); the scheme's constants are the salt
-    // prefix || leaf prefix (256 bytes) and the key's byte tables (192 x 256 x 8 u64). hm96_tree null: unsalted leaves.
-    long long (*hm96_tree)(void* ctx, int tree);
+    // hm96-sha512 Merkle leaves (the SHA-512 build, cuda_sha512_patch.py): hm96_tree returns tree k's salts (trees in build
+    // order; 192 bytes per leaf, host memory the host keeps until the prover returns, read from the OS); the scheme's constants
+    // are the salt prefix || leaf prefix (256 bytes) and the key's byte tables (192 x 256 x 8 u64). hm96_tree null: unsalted.
+    const uint8_t* (*hm96_tree)(void* ctx, int tree, long long leaves);
     void* hm96_ctx;
-    const uint8_t* hm96_key;
     const uint8_t* hm96_prefixes;
     const uint64_t* hm96_tables;
-    long long hm96_level0_leaves;   // the level-0 tree's leaves: salt-stream id 0 is refused for a tree of any other size
+    long long hm96_level0_leaves;   // the level-0 tree's leaves: tree 0 (level 0's salts) is refused at any other size
     // M1 (lane flock-zk, verity/ml/flock/live/PROTOCOL.md §8), zk_on: Ligerito level 0's hiding. The level-0 codeword has the
     // witness's 2^initial_k lanes and 4 uniform ones (zk_extra: 4 lanes of L words), every lane's message padded by
     // (X_L + c)·μ (zk_pads: t_pad words per lane, lane-major, the witness's lanes first); the lane phase folds rep zk_rep's pair
@@ -81,26 +80,25 @@ typedef struct {
     int host0_ab;
 } FlockCircuitParams;
 
-// Salts of leaves idx[0..n) of tree `nonce` under `key`, expanded on the device (192 bytes each, in order): a test vector against
-// the host's zk_hooks::LeafSalts.
-__global__ void fc_hm96_salts(Hm96Key key, uint64_t nonce, const long long* __restrict__ idx, int n, uint32_t* __restrict__ out) {
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    if (k < n) hm96_salt(key, nonce, idx[k], out + 48 * k);
-}
-
-extern "C" int flock_cuda_hm96_salts(const uint8_t* key, uint64_t nonce, const long long* idx, int n, uint8_t* out) {
-    Hm96Key k{};
-    memcpy(k.k, key, 32);
-    long long* d_idx = nullptr;
-    uint32_t* d_out = nullptr;
-    if (cudaMalloc(&d_idx, n * sizeof(long long)) != cudaSuccess || cudaMalloc(&d_out, (size_t)n * 192) != cudaSuccess) return 1;
-    cudaMemcpy(d_idx, idx, n * sizeof(long long), cudaMemcpyHostToDevice);
-    fc_hm96_salts<<<(n + 127) / 128, 128>>>(k, nonce, d_idx, n, d_out);
-    cudaError_t e = cudaMemcpy(out, d_out, (size_t)n * 192, cudaMemcpyDeviceToHost);
-    cudaFree(d_idx);
-    cudaFree(d_out);
-    volatile uint32_t* vk = k.k;
-    for (int j = 0; j < 8; j++) vk[j] = 0;
+// hm96 leaves of the digests x[0..n) (64 bytes each) under the host's salts (192 bytes each), finished on the device as a tree's
+// leaves are: a test vector against flock_merkle::hm96::leaf.
+extern "C" int flock_cuda_hm96_leaves(const uint8_t* x, const uint8_t* salts, long long n, const uint8_t* prefixes,
+                                      const uint64_t* tables, uint8_t* out) {
+    const size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
+    uint8_t *d_x = nullptr, *d_s = nullptr, *d_pre = nullptr;
+    uint64_t *d_t = nullptr, *d_mid = nullptr;
+    if (cudaMalloc(&d_x, (size_t)n * 64) != cudaSuccess || cudaMalloc(&d_s, (size_t)n * 192) != cudaSuccess ||
+        cudaMalloc(&d_pre, 256) != cudaSuccess || cudaMalloc(&d_t, tb) != cudaSuccess || cudaMalloc(&d_mid, 16 * sizeof(uint64_t)) != cudaSuccess)
+        return 1;
+    cudaMemcpy(d_x, x, (size_t)n * 64, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_s, salts, (size_t)n * 192, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_t, tables, tb, cudaMemcpyHostToDevice);
+    hm96_midstates<<<1, 1>>>(d_pre, d_mid);
+    hm96_finish_leaves<<<(unsigned)((n + 127) / 128), 128>>>(d_x, (const uint32_t*)d_s, 0, n, d_t, d_mid);
+    cudaError_t e = cudaMemcpy(out, d_x, (size_t)n * 64, cudaMemcpyDeviceToHost);
+    cudaMemset(d_s, 0, (size_t)n * 192);
+    cudaFree(d_x); cudaFree(d_s); cudaFree(d_pre); cudaFree(d_t); cudaFree(d_mid);
     return e == cudaSuccess ? 0 : 2;
 }
 
@@ -256,11 +254,11 @@ static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
     return after >= margin;
 }
 
-// rep 1 opens rep 0's level-0 tree: with hm96 leaves it is salt stream 0 (tree 0), and rep 1's own trees count from 1
+// rep 1 opens rep 0's level-0 tree: with hm96 leaves its salts are level 0's (tree 0), and rep 1's own trees count from 1
 static void fc_rejoin_level0(const uint8_t* d_tree0) {
 #ifdef FLOCK_HB
     if (g_hm96.tree_cb) {
-        g_hm96.nonce[d_tree0] = 0;
+        g_hm96.salts[d_tree0] = {hm96_tree_salts(0, g_hm96.level0_leaves), g_hm96.level0_leaves};
         g_hm96.trees = 1;
     }
 #else

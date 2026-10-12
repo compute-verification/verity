@@ -87,7 +87,7 @@ structure Build where
   items : Array Ref := #[]
   reads : Array ReadRec := #[]
 
-def Build.row (b : Build) (a c : Ent) : Build × Nat := ({ b with rows := b.rows.push (a, c) }, b.rows.size)
+def Build.row (b : Build) (a c : Ent) : Build × Nat := let n := b.rows.size; ({ b with rows := b.rows.push (a, c) }, n)
 
 def Build.zeros (b : Build) (upTo : Nat) : Build :=
   (List.range (upTo - b.rows.size)).foldl (fun b _ => (b.row ([], false) ([], false)).1) b

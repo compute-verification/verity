@@ -27,6 +27,7 @@ from research.store import sealed as SL
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 LOCKOUT = NEBIUS / "lockout"
 ME, MY_GID = os.getuid(), os.getgid()
+CALLER, CALLER_GID = (ME, MY_GID) if ME else (1000, 1000)   # vy-sudo refuses root as its caller: a root runner (a pod) tests as 1000
 T0 = 1_600_000_000.0                     # every file's mtime: quiet, and before VERIFIED_FROM
 VERIFIED_FROM = 4102444800.0
 ART = "art:" + "a" * 64
@@ -325,21 +326,22 @@ def test_renice_and_taskset_touch_only_the_callers_processes(proc):
 
 
 FILL = ["--quiet", "--scope", "--collect", "--slice=vy-timing.slice", "--unit", "fill-timing-1", "--nice=0", "-p", "AllowedCPUs=8-15",
-        "-p", "MemoryMax=64G", "-p", "MemorySwapMax=0", "--", "setpriv", f"--reuid={ME}", f"--regid={MY_GID}", "--init-groups", "--",
+        "-p", "MemoryMax=64G", "-p", "MemorySwapMax=0", "--", "setpriv", f"--reuid={CALLER}", f"--regid={CALLER_GID}", "--init-groups", "--",
         "/usr/local/bin/gpu-lease", "1", "--", "taskset", "-c", "8-15", "bash", "-c", "x"]
 
 
 def test_systemd_run_runs_a_scope_as_the_caller_and_a_unit_only_as_a_job_user(tmp_path):
-    out = VS.systemd_run(FILL, ME, MY_GID)
-    assert out[0] == "/usr/bin/systemd-run" and f"--uid={ME}" in out and f"--gid={MY_GID}" in out and "--unit=fill-timing-1" in out
+    out = VS.systemd_run(FILL, CALLER, CALLER_GID)
+    assert out[0] == "/usr/bin/systemd-run" and f"--uid={CALLER}" in out and f"--gid={CALLER_GID}" in out and "--unit=fill-timing-1" in out
     assert out[out.index("--") + 1:] == ["/usr/local/bin/gpu-lease", "1", "--", "taskset", "-c", "8-15", "bash", "-c", "x"]
     env = tmp_path / "job.env"
     env.write_text("A=1\n")
+    os.chown(env, CALLER, CALLER_GID)
     job = lambda n: (_ for _ in ()).throw(VS.Refused("privileged")) if n in ("root", "0") else type("pw", (), {"pw_gid": 1000})()
     unit = ["--unit=job-1", "--uid=ubuntu", "--wait", "--pipe", "--collect", "--quiet", "--service-type=exec", "--expand-environment=no",
             "--working-directory=/workspace", "-p", f"EnvironmentFile={env}", "-p", "CapabilityBoundingSet=", "-p", "NoNewPrivileges=yes",
             "--", "python3", "job.py"]
-    assert VS.systemd_run(unit, ME, MY_GID, user=job)[-2:] == ["python3", "job.py"]
+    assert VS.systemd_run(unit, CALLER, CALLER_GID, user=job)[-2:] == ["python3", "job.py"]
     bad = [
         ["--scope", "--uid=0", "--", "id"], ["--scope", "-p", "ExecStartPre=+/bin/sh", "--", "id"], ["--scope", "-p", "User=root", "--", "id"],
         ["--scope", "-p", "CapabilityBoundingSet=CAP_SYS_ADMIN", "--", "id"], ["--scope", "--slice=system.slice", "--", "id"],
@@ -349,11 +351,11 @@ def test_systemd_run_runs_a_scope_as_the_caller_and_a_unit_only_as_a_job_user(tm
     ]
     for args in bad:
         with pytest.raises(VS.Refused):
-            VS.systemd_run(args, ME, MY_GID, user=job)
+            VS.systemd_run(args, CALLER, CALLER_GID, user=job)
 
 
 def test_plan_takes_the_caller_from_sudo_and_passes_only_harmless_variables(proc):
-    env = {"SUDO_UID": str(ME), "SUDO_GID": str(MY_GID)}
+    env = {"SUDO_UID": str(CALLER), "SUDO_GID": str(CALLER_GID)}
     argv, e = VS.plan(["env", "PATH=/home/research/.local/bin:/usr/bin", "HOME=/home/research", "systemd-run", *FILL], env)
     assert argv[0] == "/usr/bin/systemd-run" and e["PATH"].startswith("/home/research") and e["HOME"] == "/home/research"
     for args, environ in ((["env", "LD_PRELOAD=/x", "systemd-run", *FILL], env), (["env", "PYTHONPATH=/x", "systemd-run", *FILL], env),
@@ -367,7 +369,7 @@ def test_plan_takes_the_caller_from_sudo_and_passes_only_harmless_variables(proc
     with pytest.raises(VS.Refused):
         VS.plan(["hf-ns", "BASH_ENV=/tmp/x", "--", "/workspace/n2_build.sh", "a"], env)
     hf = VS.plan(["hf-ns", "--", "/workspace/n2_build.sh", "a"], env)[0]
-    assert hf[:4] == ["/usr/bin/unshare", "--mount", "--propagation", "private"] and hf[-6:] == [*VS.HF_BIND, str(ME), str(MY_GID),
+    assert hf[:4] == ["/usr/bin/unshare", "--mount", "--propagation", "private"] and hf[-6:] == [*VS.HF_BIND, str(CALLER), str(CALLER_GID),
                                                                                                "/workspace/n2_build.sh", "a"]
     if os.geteuid() != 0:
         assert VS.main(["renice", "-n", "1", "-p", "1"]) == VS.REFUSED

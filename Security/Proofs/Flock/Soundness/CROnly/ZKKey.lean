@@ -4,9 +4,9 @@ import Proofs.Flock.Soundness.CROnly.ZK
 # Lemma C at a uniform hm96 key
 
 `adaptive_prefinal_gap` bounds Lemma C's gap at a fixed key by `2·|L|·δ₁(κ)`, with `δ₁(κ)` the hiding gap of the leaves'
-salt hashes under key `κ`. Here the key is drawn uniformly, independently of the salts, and everything else (the table,
-the prover, the verifier `V*`, the event and the leaf hash) may depend on it: the gap is then `2·|L|` times the gap's
-mean over the key (`adaptive_prefinal_key`), and for `hm96-sha512` that mean is at most `2^-257`
+salt hashes under key `κ`. Here the key is drawn uniformly, first and independently of the salts, and everything else
+(the witnesses, the table, the prover, the verifier `V*`, the event and the leaf hash) may depend on it: the gap is then
+`2·|L|` times the gap's mean over the key (`adaptive_prefinal_key`), and for `hm96-sha512` that mean is at most `2^-257`
 (`adaptive_prefinal_hm96_sha512`). The leaf hash depends on the key because hm96-sha512's leaves are
 `H(leaf_prefix(key) ‖ ·)` with `leaf_prefix(key) = leaf tag ‖ H(key)` (`hm96/PROTOCOL.md` §2). So Lemma C needs of the
 key only that it is uniform.
@@ -52,9 +52,9 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommG
   [Fintype Hi] [DecidableEq Hi] {J : ℕ}
 
 /-- **Lemma C at a uniform key**: `adaptive_prefinal_gap` with the key `κ` that hashes the leaves' salts (`My κ`) drawn
-uniformly and independently of the prover's coins, the salts and the verifier's tape. The table, the prover, the
-verifier `V*`, the event and the leaf hash `H κ` may all depend on the key, which is public. The gap is `2·|L|` times the
-hiding gap's mean over the key. -/
+uniformly and independently of the prover's coins, the salts and the verifier's tape. The witnesses `w κ`, `w' κ`, the
+table, the prover, the verifier `V*`, the event and the leaf hash `H κ` may all depend on the key, which is public. The
+gap is `2·|L|` times the hiding gap's mean over the key. -/
 theorem adaptive_prefinal_key {n : ℕ} {Cn M Cc Ω L Tp Key : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L] [DecidableEq L] [Fintype Tp] [Nonempty Tp] [DecidableEq Cc] [Fintype Key]
     (T : Key → (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
@@ -68,22 +68,22 @@ theorem adaptive_prefinal_key {n : ℕ} {Cn M Cc Ω L Tp Key : Type} [Inhabited 
     (hI : ∀ κ w ω u c, msgs κ w ω c (fun l => H κ ((u l).1, cs (u l).2))
       = out κ c fun j =>
           (T κ c j).cut (ZK.Session.sent (T κ c) (rep κ c) j) ((T κ c j).preView (w j) (e κ c (ω, u) j)))
-    (w w' : Fin J → W) (hreg : ∀ κ c j, (T κ c j).sReg (w j) = (T κ c j).pubReg)
-    (hreg' : ∀ κ c j, (T κ c j).sReg (w' j) = (T κ c j).pubReg) (V : Key → Tp → Responder M Cn n)
+    (w w' : Key → Fin J → W) (hreg : ∀ κ c j, (T κ c j).sReg (w κ j) = (T κ c j).pubReg)
+    (hreg' : ∀ κ c j, (T κ c j).sReg (w' κ j) = (T κ c j).pubReg) (V : Key → Tp → Responder M Cn n)
     (G : Key → Tp → (Fin n → M) → Prop) :
     prCoin (fun q : Key × (Tp × (Ω × (L → Salt))) =>
-        G q.1 q.2.1 (run (P q.1 w) (V q.1 q.2.1) (q.2.2.1, fun l => (My q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
+        G q.1 q.2.1 (run (P q.1 (w q.1)) (V q.1 q.2.1) (q.2.2.1, fun l => (My q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
       ≤ prCoin (fun q : Key × (Tp × (Ω × (L → Salt))) =>
-          G q.1 q.2.1 (run (P q.1 w') (V q.1 q.2.1) (q.2.2.1, fun l => (My q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
+          G q.1 q.2.1 (run (P q.1 (w' q.1)) (V q.1 q.2.1) (q.2.2.1, fun l => (My q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
         + 2 * Fintype.card L * avg fun κ => ENNReal.ofReal (hidingGap (My κ) cs) := by
   have h := prCoin_avg_close_var
     (fun κ (q : Tp × (Ω × (L → Salt))) =>
-      G κ q.1 (run (P κ w) (V κ q.1) (q.2.1, fun l => (My κ (q.2.2 l), cs (q.2.2 l)))))
+      G κ q.1 (run (P κ (w κ)) (V κ q.1) (q.2.1, fun l => (My κ (q.2.2 l), cs (q.2.2 l)))))
     (fun κ (q : Tp × (Ω × (L → Salt))) =>
-      G κ q.1 (run (P κ w') (V κ q.1) (q.2.1, fun l => (My κ (q.2.2 l), cs (q.2.2 l)))))
+      G κ q.1 (run (P κ (w' κ)) (V κ q.1) (q.2.1, fun l => (My κ (q.2.2 l), cs (q.2.2 l)))))
     (fun κ => 2 * (Fintype.card L : ℝ≥0∞) * ENNReal.ofReal (hidingGap (My κ) cs))
     fun κ => adaptive_prefinal_gap (T κ) (rep κ) (My κ) cs (H κ) (msgs κ) (dig κ) (P κ) (hP κ) (e κ) (k κ) (he κ)
-      (out κ) (hI κ) w w' (hreg κ) (hreg' κ) (V κ) (G κ)
+      (out κ) (hI κ) (w κ) (w' κ) (hreg κ) (hreg' κ) (V κ) (G κ)
   rw [avg_const_mul'] at h
   exact h
 
@@ -111,14 +111,14 @@ theorem adaptive_prefinal_hm96_sha512 {Fb : Type} [Field Fb] [Fintype Fb] [Decid
     (hI : ∀ κ w ω u c, msgs κ w ω c (fun l => H κ ((u l).1, cs (u l).2))
       = out κ c fun j =>
           (T κ c j).cut (ZK.Session.sent (T κ c) (rep κ c) j) ((T κ c j).preView (w j) (e κ c (ω, u) j)))
-    (w w' : Fin J → W) (hreg : ∀ κ c j, (T κ c j).sReg (w j) = (T κ c j).pubReg)
-    (hreg' : ∀ κ c j, (T κ c j).sReg (w' j) = (T κ c j).pubReg)
+    (w w' : (Fin (512 + 1536 - 1) → Fb) → Fin J → W) (hreg : ∀ κ c j, (T κ c j).sReg (w κ j) = (T κ c j).pubReg)
+    (hreg' : ∀ κ c j, (T κ c j).sReg (w' κ j) = (T κ c j).pubReg)
     (V : (Fin (512 + 1536 - 1) → Fb) → Tp → Responder M Cn n)
     (G : (Fin (512 + 1536 - 1) → Fb) → Tp → (Fin n → M) → Prop) :
     prCoin (fun q : (Fin (512 + 1536 - 1) → Fb) × (Tp × (Ω × (L → Fin 1536 → Fb))) =>
-        G q.1 q.2.1 (run (P q.1 w) (V q.1 q.2.1) (q.2.2.1, fun l => (hankel q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
+        G q.1 q.2.1 (run (P q.1 (w q.1)) (V q.1 q.2.1) (q.2.2.1, fun l => (hankel q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
       ≤ prCoin (fun q : (Fin (512 + 1536 - 1) → Fb) × (Tp × (Ω × (L → Fin 1536 → Fb))) =>
-          G q.1 q.2.1 (run (P q.1 w') (V q.1 q.2.1) (q.2.2.1, fun l => (hankel q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
+          G q.1 q.2.1 (run (P q.1 (w' q.1)) (V q.1 q.2.1) (q.2.2.1, fun l => (hankel q.1 (q.2.2.2 l), cs (q.2.2.2 l)))))
         + 2 * Fintype.card L * ENNReal.ofReal (1 / 2 ^ 257) :=
   (adaptive_prefinal_key T rep (fun κ => hankel κ) cs H msgs dig P hP e k he out hI w w' hreg hreg' V G).trans
     (add_le_add le_rfl (by

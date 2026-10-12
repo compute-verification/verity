@@ -47,8 +47,8 @@ Everything else is the protocol's (`audit`), the same for every scheme.
      being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
      `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
      W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
-   - `Lottery(target)` is Pearl's mining rule, not one of the audit's laws: the tiles whose digest, read little-endian, is
-     at most target·|rows|·|cols|·k. It stays in `audit`, unwired: no served path selects with it.
+   - `Lottery(target)` is Pearl's mining rule, not one of the audit's sampling designs: the tiles whose digest, read
+     little-endian, is at most target·|rows|·|cols|·k. It stays in `audit`, unwired: no served path selects with it.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
@@ -90,12 +90,38 @@ root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding ta
 
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
 opened live and once: the salt coin after the verifier recorded `weights_root`, the draw coin after it recorded what the
-draw keys (the transcript's root; Pearl-C's work law adds its records' root, `pearl_c_work.draw_after`). An opening is
-(epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it asked for,
-that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded (`coin_reason`).
-A second request for an opened coin is refused, so a retry never redraws. The coins are the designated verifier's: an
-outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`). Vectors:
-`tests/vectors/epoch_coins_v1.json`.
+draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `pearl_c_work.draw_after`). An
+opening is (epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it
+asked for, that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded
+(`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
+verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
+Vectors: `tests/vectors/epoch_coins_v1.json`.
+
+## Registered weights (`registration`)
+
+One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.check_registration`) and served FP8's Pearl-C
+(`PearlC.check_registration`) both call `check_registration`. No Lean statement reads a registration.
+
+- **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep, for Pearl-C4; compute-accounting,
+  8 Oct, for served FP8). An unrotated checkpoint registers only from the curated list, the fallback.
+- **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
+  5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
+  heads. They are never applied on an unrotated checkpoint, curated or not.
+- A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
+  V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
+  because the two were measured only together, after the rotation.
+- **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does under Pearl-C4: the cast moves its
+  layer 0's update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so
+  its stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
+  the linears it feeds), and takes no V/O or interleave.
+- **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
+  `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
+  started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a
+  beacon's or a fixed seed's. The rule reads what a registration declares; applying the transforms is the
+  registration's own.
+- **Served FP8 applies no rotation yet.** The vLLM option's executor (`pouw.SERVED_TRANSFORMS`) applies none and reads no
+  curated list, so its commitment's `registration` (`pouw.weights_claim`) says it claims nothing about which weights were
+  served, and names the refusal. Its salt is still the live coin, so what the draw establishes of the work is unchanged.
 
 ## The proof's identifier (v1) (`identifier`)
 
@@ -230,8 +256,10 @@ rows  min(64, m − 64·(I div 64)), the tile's height: 64, or the call's short 
 with I < m and J < 64·cols. The pass's tiles are in workload order, then each call's 64 x 64 tiles row-major, so this
 is `audit.tile_refs`'s tile holding (I, J). Up to 4,096 window tiles read one leaf, and the leaf a unit computes is its
 word's 64 x 64 tile's (the output of `Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as
-advice), not `Pc8TileHidden`'s 1 x 1 digest; `served_zk/stage_tile.py` refuses a window of indexed side rows, which
-`Pc8TileHidden` does not read.
+advice), not `Pc8TileHidden`'s 1 x 1 digest. Until TileRead is a Program, a drawn tile's unit is `Pc8TileSide`
+(`pc8.side_tile`, `served_zk/stage_tile.py`): `Pc8TileHidden`'s 1 x 1 check and digest over the drawn word's two side
+rows, which it reads whole, index field included (`pc8.SIDE_PORTS`, row `fp8-pi`), so its committed inputs are the side
+trees' leaves. It reads I and J as values and uses neither yet, and it reads no -h3 leaf.
 
 The side rows' indices are bound to the record in the window's reference only: the window statement in gates reads the P
 entry rows, not the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the
@@ -256,9 +284,9 @@ the following hold:
 (`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,
 the window's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
 F_σ (C-Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
-population N, its law subset:K′, and its window root and domain at port `entries`), its own draw, σ, the cap and the
-pass's tile domain (`public_inputs`). F_σ is a key-sorted JSON header line `{"format", "instances": cap, "ports"}`, then
-each instance's words, u16 little-endian, instance-major, in port order:
+population N, its sampling design subset:K′, and its window root and domain at port `entries`), its own draw, σ, the cap
+and the pass's tile domain (`public_inputs`). F_σ is a key-sorted JSON header line
+`{"format", "instances": cap, "ports"}`, then each instance's words, u16 little-endian, instance-major, in port order:
 
 ~~~text
 port       words   seed           derivation                               value
@@ -468,11 +496,12 @@ second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant
   delivered.
 
 **The draw** (`plan`). The strata are the verifier's own, as `verify` derives them (root's ruling on X-SPC-84): one per
-template of the call's partition, in the order of its first unit (`Flock/Draw.lean` `strataOf`). The law draws each
-stratum, and each drawn tile is proved with its closure: its X unit, strip digest, the node units on that strip's path and
-the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. Every other template is drawn
-at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The law is a seam:
-- `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean`): k_s = min(n_s, max(f_s,
+template of the call's partition, in the order of its first unit (`Flock/Draw.lean` `strataOf`). The sampling design
+draws each stratum, and each drawn tile is proved with its closure: its X unit, strip digest, the node units on that
+strip's path and the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. Every
+other template is drawn at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The
+sampling design is a seam:
+- `WorkLaw` is Verity root's work sampling design (#362 with #374's floors, `Flock/Draw.lean`): k_s = min(n_s, max(f_s,
   ⌈K·w_s·n_s/W⌉)), with K = 27,713, the draws that establish ε = 0.1% at δ = 2⁻⁴⁰, the default report point and not a
   policy parameter (`plan.record_k`; 27,712 misses). Only the tile template does
   PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
@@ -481,24 +510,24 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
     template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
     window guarantee takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is
-    under-drawn: in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
+    under-drawn: in the red team's window ten faulty units have acceptance probability 0.156 against a claimed 2.4·10⁻⁴
     (`test_the_red_team_s_capped_window_is_refused`).
-  - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
+  - `plan.law_object` is the sampling design `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
-    (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
-    (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K.
+    (`plan.window_laws`). That is the sampling design `verify` enforces when each call is its own statement with its own
+    K_c (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K.
   - **y's floors** (root's option B, which closes X-SPC-105). No tile's closure holds a dequantization unit, so y is
     drawn at its floor: each call's table gives `dequant` `{"work": 0, "floor": f_c}`, f_c = ⌈K_y·n_c/N⌉, n_c its y
     cells and N the window's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
     or proves the call's y, and a window draws at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
     are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
-    sum. Per call the floor is a guarantee (`audit_work_floor`); `flock-verify draw --work` derives the same law from
-    these tables.
+    sum. Per call the floor is a guarantee (`audit_work_floor`); `flock-verify draw --work` derives the same sampling
+    design from these tables.
   - **X-SPC-105 and X-SPC-106 are closed by the window guarantee**, `audit_window_split_of_record` in
     `FlockSoundness/Audit/Window.lean` ([#418](https://github.com/danielreuter/verity/pull/418), proved at `f06327bd`,
-    pending its grant): the per-call law with y's floors at
+    pending its grant): the per-call sampling design with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
-    at most 2⁻⁴⁰ + ε_ks + δ_link. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
+    at most 2⁻⁴⁰ + ε_ks + ε_bind. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
     their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above), y's floors
     (`hfy`), and a window that does some work and has y cells (`hW`, `hN`: `window_laws` refuses W = 0 or N = 0,
     `plan.py:186`, `plan.py:191`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify`
@@ -533,7 +562,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
       needed for a third party to check it. No protocol timing changes: the key is still the verifier's own
       randomness after the receipt.
-    - *ε_ks and δ_link are the window's.* The guarantee's are one window `Analysis`'s (M2). The per-call values are not
+    - *ε_ks and ε_bind are the window's.* The guarantee's are one window `Analysis`'s (M2). The per-call values are not
       cited as the window's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
@@ -545,13 +574,14 @@ window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`),
 fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
 the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
 with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
-window draws under a context of its own, the product law the window guarantee takes as M1.
+window draws under a context of its own, the product sampling design the window guarantee takes as M1.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
 the call's Y and c₀ there beside the weight Program's output there, a ("y", strip) leaf, and `Traced.check_link` refuses
 any strip where they differ (`test_the_call_s_y_is_linked_to_the_weight_program`: another weight's Y, or one c₀ changed).
-A wrong Y input on a strip no drawn tile reads spoils only undrawn tiles, which the law charges like any unsound tile.
+A wrong Y input on a strip no drawn tile reads spoils only undrawn tiles, which the sampling design charges like any
+unsound tile.
 
 **The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
 window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
@@ -653,8 +683,8 @@ useful    U/(α_A·α_B), glue
   - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
-    transfer. The work law checks it on every credited A row of a drawn tile, over its credited columns, after the
-    tile's cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
+    transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
+    after the tile's cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`); `PearlC(hashing="h3")` on the H100
     record names `pearl-c-h100-v1-h3`. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end, with A's
     row root and row 0's leaf, digest, seed and E_A line, and a hash of every row digest and seed. h0's verifier refuses
@@ -673,7 +703,7 @@ useful    U/(α_A·α_B), glue
     `forming_elements` is a stub that returns 0.
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
     cap.
-- **The work law** (`schemes/pearl_c_work.py`) is what the verifier credits, draws and checks.
+- **The work sampling design** (`schemes/pearl_c_work.py`) is what the verifier credits, draws and checks.
   - A weight's `Split` holds at most ⌊k/100⌋ side channels. The unit reads the kept channels zero-padded to `k_unit`,
     and credit is on the kept width, so padding earns nothing. The audit recomputes S by the pinned rule through
     `split_check`, which the model integration supplies.
@@ -681,10 +711,10 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
-    - A known difference from Lean: the work law excludes a failing weight row and accepts its tiles, while Lean's good
-      tile (`TileGood`) and correct unit (`Correct`) never exclude one, so `TileCheck.Accepts` refuses the tile as
-      `check_tile` does. The work law stays credit-sound there only while an excluded column earns nothing
-      (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
+    - A known difference from Lean: the work sampling design excludes a failing weight row and accepts its tiles, while
+      Lean's good tile (`TileGood`) and correct unit (`Correct`) never exclude one, so `TileCheck.Accepts` refuses the
+      tile as `check_tile` does. The work sampling design stays credit-sound there only while an excluded column earns
+      nothing (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
       `pouw/work-law-weight-row-exclusion`.
   - **Voluntary rows (V-EX;** the assessor's B at 17:32Z**):** the record may also give up up to ⌈m/64⌉ A rows
     (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same in every unit of the weight).
@@ -770,7 +800,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
 - `pearl_c_u` restates a step of several groups as one grouped sum per group, the accumulator joining the first and each
   group's word the next.
 - Only forming v1 runs on a non-H100 record (v0 is #311's H100 port).
-- The work law aligns `k_unit` to 128, so it requires 32·G ∣ 128.
+- The work sampling design aligns `k_unit` to 128, so it requires 32·G ∣ 128.
 - **The circuit (`circuit.pc8`)** is forming v1's tile check as a Program, cut as `circuit.pc4` cuts Pearl-C4's. Its
   units are three templates, each with the device record as a static (`DEV`: `h100`, `sm120`, `sm120-unpromoted`):
 
@@ -799,9 +829,9 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     a 16-row one, and decode's m = 32 is one 32-row tile row at the default tile.
     - `plan.tile_layout` proves a short tile with its r `Pc8RowA` units, in its own stratum at W_ref r/64 of a whole
       tile's.
-    - A call with both whole and short tile rows is therefore two tile strata, which the work law refuses
-      (`plan.check_work_strata`, the window pin's `hone`). Under the work law such a call is not drawn yet; a call that is
-      all one tile row height is.
+    - A call with both whole and short tile rows is therefore two tile strata, which the work sampling design refuses
+      (`plan.check_work_strata`, the window pin's `hone`). Under the work sampling design such a call is not drawn yet;
+      a call that is all one tile row height is.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
@@ -895,8 +925,8 @@ useful    U/(α_A·α_B), glue
     u·2^32 + i u64 LE) over the row's SHA-512 digest d_i (`pearl_c.row_digest`), the same SHA-512 seed-A derivation as
     the unit's.
   - seed_B and what it keys (E_B, F_A, F_B) are unchanged, and the tickets keep the unit's seed_A over root_A. A's and
-    B's trees are `audit.HM96`, the tile leaf is Pearl-C's -h3 (SHA-512); the work law checks the row cap as well as the
-    tile cap.
+    B's trees are `audit.HM96`, the tile leaf is Pearl-C's -h3 (SHA-512); the work sampling design checks the row cap as
+    well as the tile cap.
   - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0 keeps its names, circuit
     (`circuit.pc4`) and kernels, and no device path forms -h3 yet.
   - At every hashing the seeds (`pearl-c4/v1`) and the noise lines (`pearl-c4/v2/line`) are SHA-512 and the tickets
@@ -1003,24 +1033,11 @@ useful    U/(α_A·α_B), glue
     the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
     ρ's accumulate, 2);
   - the weight side is `job_cost`.
-- **Registered weights (`check_registration`):**
-  - **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep). An unrotated checkpoint
-    registers only from the curated list, the fallback.
-  - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
-    5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
-    heads. They are never applied on an unrotated checkpoint, curated or not.
-  - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
-    V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
-    because the two were measured only together, after the rotation.
-  - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
-    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so its
-    stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
-    the linears it feeds), and takes no V/O or interleave.
-  - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
-    registration's own.
-- **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
-- **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
-  row needs:
+- **Registered weights** are the shared rule ("Registered weights (`registration`)"), through
+  `PearlC4.check_registration`.
+- **The work sampling design** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
+- **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that sampling design's rules,
+  which every measured row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
     per-row rules or R1 (`r1_row`, row by row over its workers), the draws and their openings, and a count of device
@@ -1099,6 +1116,8 @@ useful    U/(α_A·α_B), glue
     pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  seg / v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
     pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               seg / v2
+    pouw/row-fp8-pi/v1   an fp8-p row, then its index field (a window's side row,  k/2 + 72          X, W               seg / v2
+                         `window.side_row`): I or J, a u32 low word first, 6 zero
     pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2 / v2
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     pouw/row-sd/v1       a row of A's k/32 salt-dead counts, each 32-bit word as   k/16              X                  seg
@@ -1126,11 +1145,9 @@ useful    U/(α_A·α_B), glue
     one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. The chunk
     digests and the strip row are v2 rows padded with zero words to 64, one whole block: C-Flock's composer refuses a
     unit none of whose rows hashes a block before its last, and without a whole block the strip, a row digest, the tile
-    and the tally would read and write only one-block v2 rows. They are not row-seg rows because C-Flock's widened
-    proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
-    blocks; padded, each costs two compressions, as its short row-seg row did, where a row-seg row padded to a block
-    would cost three. A row digest and the strip write the zero words as constants, and the tile and the tally leave
-    them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
+    and the tally would read and write only one-block v2 rows. They are not row-seg rows: padded, each costs two
+    compressions, as its short row-seg row did, where a row-seg row padded to a block would cost three. A row digest and
+    the strip write the zero words as constants, and the tile and the tally leave them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
     statement that reads or writes them, so each (row, role) has one leaf schema wherever it appears and no row is
     `sha512/row/v1` (Daniel's ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a
     128-byte prefix block and the row, and is any length; the role byte v2 drops is bound by the registration domain.
@@ -1255,7 +1272,7 @@ and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and
     game the guarantees state (the registration before the coin, `L.draw ω`) can't express. Either apply the guarantees
     strategy by strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over
     contexts; the Lean lane's to choose (root's C1);
-  - a statement composing the calls' ε_ks and δ_link into the window's (M2);
+  - a statement composing the calls' ε_ks and ε_bind into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;

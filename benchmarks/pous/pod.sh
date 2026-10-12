@@ -58,6 +58,27 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench; POUS_BUILD=${POUS_BUILD:-$W/pous_build}
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
+# lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
+# challenger's Lean verdict (its Server and build need only the stdlib)
+export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
+# Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
+export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/python
+# PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
+# p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
+# the package's .lake) before the lease, in the same job:
+#   research run --on vy-nebius-2 --cwd clone ... -- bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
+#     gpu-lease 1 --on N --max-min M -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
+if [ "${PREPARE:-0}" = 1 ]; then
+  case $IMPL in
+    p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
+    p2-v3-gpu) set -- verity/core/protocols/pous/check pous-timed-audit ;;
+    *) exit 0 ;;
+  esac
+  grep -q "^name = \"$2\"" "$1/lakefile.toml" || exit 0
+  (cd "$1" && lake build "$2") > "$O/lean-build.log" 2>&1 || { tail -30 "$O/lean-build.log"; exit 3; }
+  exit 0
+fi
 # the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
 gpu_uuid() {
   local v=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}} l
@@ -142,8 +163,6 @@ record_host() {
 smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,noheader || true
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
-export PATH=$HOME/.local/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src
 if [ -n "${GATE_ROLE:-}" ]; then
   gate=(--role "$GATE_ROLE" --out "$O/placement-gate.json" ${GATE_CORES:+--cores "$GATE_CORES"})
   for p in ${GATE_PEERS:-}; do f=${p#*=}; [ "${f#/}" = "$f" ] && f=$I/$f; gate+=(--peer "${p%%=*}=$f"); done

@@ -1,4 +1,4 @@
-import Properties.CertifierNetwork
+import Properties.Proofs.CertifierNetwork.Defs
 import Properties.Proofs.CertifierDevice.Issuer
 import Properties.Proofs.CertifierDevice.Basic
 import Properties.Proofs.NetworkCertifier.Grid
@@ -255,12 +255,13 @@ theorem recordHead_fields {l : String} {d : Direction} {w : Int} {grid : Array S
 /-! ## The digest, the message and `prepare` -/
 
 theorem digest_of {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) :
-    h.digest = .ok (NetworkCheck.taggedSha512 NetworkCheck.recordTag x) := by
+    ∃ dg, h.digest = .ok dg ∧ dg.size = 64 := by
+  obtain ⟨y, -, hy⟩ := Properties.Identity.taggedSha512_of (tag := NetworkCheck.recordTag) (payload := x) (by decide)
+    (by decide) (encode_size he)
+  refine ⟨Flock.Sha512.hash y, ?_, hash_size _⟩
   unfold RecordHead.digest
   rw [he]
-  rfl
-
-theorem taggedSha512_size (t : String) (x : ByteArray) : (NetworkCheck.taggedSha512 t x).size = 64 := hash_size _
+  exact hy
 
 theorem messageInput_of {k : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray} (hg : g.size = 64)
     (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) : ∃ x, messageInput k l d w g = .ok x := by
@@ -289,9 +290,9 @@ theorem parameters_size {g : Params} {ss : Option _root_.NetworkCertifier.SyncSe
   | error e => rw [hc] at h; cases h
   | ok j =>
     rw [hc] at h
-    simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    rw [← h]
-    exact taggedSha512_size _ _
+    have h' : Identity.taggedSha512 NetworkCheck.parametersTag j.toUTF8 = .ok pd := h
+    obtain ⟨x, -, rfl⟩ := Properties.Identity.taggedSha512_ok.mp h'
+    exact hash_size _
 
 theorem prepare_eq {i : Issuer} {r : Record} {d : Direction} {g : Params} {pd : ByteArray} {dl : Bool}
     {head : RecordHead} {dg m : ByteArray}
@@ -325,10 +326,9 @@ theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) {r : Record} {d : Direc
     (hl' ▸ hl) (by rw [hw']; exact ⟨by omega, cast_lt (w := 8) hw⟩) (by rw [hT']; exact ⟨by omega, cast_lt (w := 4) hT⟩)
     (by rw [hr']; exact ⟨by omega, cast_lt (w := 4) hr⟩) (by rw [hB']; exact ⟨by omega, cast_lt (w := 4) hB⟩)
     (by rw [hτ']; exact ⟨by omega, cast_lt (w := 4) hτ⟩) hst'
-  have hdg := digest_of hx
-  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) (taggedSha512_size NetworkCheck.recordTag x) hk
-    ⟨by omega, cast_lt (w := 8) hw⟩
-  refine ⟨head, NetworkCheck.taggedSha512 NetworkCheck.recordTag x, m, hh, ?_⟩
+  obtain ⟨dg, hdg, hdgs⟩ := digest_of hx
+  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) hdgs hk ⟨by omega, cast_lt (w := 8) hw⟩
+  refine ⟨head, dg, m, hh, ?_⟩
   have hn : (Status.reason? r.status).map reasonValue = none := by rw [hst]; rfl
   exact prepare_eq (by rw [hn]; exact hh) hdg hm
 

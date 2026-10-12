@@ -1,6 +1,6 @@
 """The quick tier at one checkout, as facts and a verdict: each Lake package `--lean` names built first (with the PATH's `lake`, else
 elan's; with neither it refuses; in a check slot, from the slot's warm `.lake`: `build`), then CMD (`suites.py --quick`) with
-`--changed BASE`.  `tier` gathers the facts; `judge` reads them
+`--changed BASE`, under a node's umask and off the lowest core (`confined`).  `tier` gathers the facts; `judge` reads them
 as the refusal `research queue ready` prints, or None for a pass, the same way wherever the tier ran.
 
     python3 quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...
@@ -96,6 +96,19 @@ def build(lake: str, pkg: Path, d: str, env: dict) -> dict:
     return {"dir": d, "rc": rc, "start": started or "cold"}
 
 
+#: the umask the suites run under: a Nebius node's, so a test whose files take the machine's umask (a VM's is 022) fails here
+UMASK = 0o002
+
+
+def confined() -> None:
+    """The suites' `preexec_fn`: `UMASK`, and every core this process may use but the lowest (1-3 of a 4-core VM's 0-3), so a
+    test that assumes a core (a slot `a 0`) or a umask fails on its author's VM, not first on a machine whose slot lacks it."""
+    os.umask(UMASK)
+    cores = os.sched_getaffinity(0) if hasattr(os, "sched_getaffinity") else set()
+    if len(cores) > 1:
+        os.sched_setaffinity(0, cores - {min(cores)})
+
+
 def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(), env: dict | None = None) -> dict:
     """The facts of one run of the tier in ``tree``: the commit checked out there, what differs from it before anything runs (each
     kept `.venv` and `.lake` aside), each Lean build's exit, and CMD's exit and report (`out/suites.json`, logs in `out/logs/`).  It
@@ -138,7 +151,7 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
     report.unlink(missing_ok=True)
     try:
         doc["rc"] = subprocess.run([*command, *(["--changed", base] if doc["changed"] else []), "--json", str(report), "--logs", str(logs)],
-                                   cwd=tree, env=env).returncode
+                                   cwd=tree, env=env, preexec_fn=confined).returncode
     except FileNotFoundError as e:
         doc["error"] = f"can't run it here ({e})"
         return doc

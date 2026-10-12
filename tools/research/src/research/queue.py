@@ -6,11 +6,12 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
-    research queue ready PR (--on MACHINE | --local) [--by LANE]
+    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE]
                                                    the owner's word that the PR is ready at its current head (a new push needs it again),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
-                                                   (`QuickTier`); exit 3 when it never started (no slot within its wait)
+                                                   (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
+                                                   --mark, on the owner's word alone (`MarkOnly`)
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -23,7 +24,7 @@ as a merge of `main` that changes no file leaves it: `ready` marks that one with
 head: `suites.py --quick` on the suites the PR changes, from a clean checkout, either as a `research run` on a machine (`--on`,
 `RemoteQuickTier`: in one of its check slots, so several PRs' tiers run at once and the caller only waits) or here (`--local`,
 `QuickTier`); a failure refuses and names the tests, and a remote run whose result can't be read, or that reports another head, is a
-failure.  Once the queue lands trains it replaces the
+failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and the train's full check is the head's first test.  Once the queue lands trains it replaces the
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
@@ -365,7 +366,7 @@ class Queue:
             elif ejected and ejected["head"] == p.head:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif not self.ready(p.number, p.head):
-                e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local)"
+                e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
             e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
         changed = True
@@ -652,6 +653,9 @@ REMOTE_GRACE_S = 1800
 REMOTE_POLL_S = 30
 #: slot.py's exit when no check slot came within --wait-max (its NOT_STARTED): the tier never ran
 SLOT_NOT_STARTED = 75
+#: the remote tier's command, slot.py from the shipped tree as the launcher of a machine with /etc/vy/runs-via-slot accepts it
+#: (pods/nebius/slot_only.py's `through_slot`, which the suites that read this module may not read)
+SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
 
@@ -685,9 +689,9 @@ class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
     lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On the machine the run waits for a
-    free check slot (`tools/verity/check/slot.py` from the caller's checkout, sent with the run, as `check.py --record --on` takes one) and
-    runs `quick_tier.py` (sent too) in the shipped tree.  The caller polls the run's records (`research fetch`) until it ends and
-    judges the facts in its result.json as the local tier's are judged; a run that ends without them, with facts from another run
+    free check slot (the shipped tree's `tools/verity/check/slot.py`, as `check.py --record --on` takes one: the run's command is
+    slot.py's, which a machine with /etc/vy/runs-via-slot requires) and runs `quick_tier.py` (sent with the run) in that tree.
+    The caller polls the run's records (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without them, with facts from another run
     or head, or other than `done` with exit 0, is a failure.  A run that waited `wait_s` for a slot and gave up never started
     (`NotStarted`), and neither did one with no machine to run on.  The tier has `timeout_s` from taking its slot (`--run-max`), so
     the run on the machine is bounded by the two together (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of
@@ -696,22 +700,19 @@ class RemoteQuickTier(QuickTier):
     WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
-                 slot: Path | None = None, timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S,
+                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.poll_s = on, by, project, poll_s
         self.timeout_s, self.wait_s = timeout_s, wait_s
-        self.slot = Path(slot or self.repo / "tools" / "verity" / "check" / "slot.py")
         self.launch, self.fetch, self.sleep, self.clock, self.place = launch, fetch, sleep, clock, place
 
     def __call__(self, pr: PR) -> str | None:
         from . import runs as R
 
         on = self.on
-        if not self.slot.is_file():
-            return f"{self.slot} isn't there to take a check slot on {on} with (run it from a checkout of the repository)"
         if on == "auto" or "," in on:
             got, why = self.place(on, self.repo)
             if got is None:
@@ -725,12 +726,11 @@ class RemoteQuickTier(QuickTier):
                 return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
             args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
             opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
-            script = (f'i="$RESEARCH_RUN_DIR/inputs"; exec python3 "$i/{self.slot.name}" {shlex.join(opts)} '
-                      f'-- python3 "$i/{job.name}" {shlex.join(args)}')
             r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
-                             "--source", str(wt), "--cwd", "source", "--send", str(job), "--send", str(self.slot), "--require-result",
+                             "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
                              "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                             "--declared-output", "out/*", "--", "sh", "-c", script], wt)
+                             "--declared-output", "out/*", "--", *SLOT, *opts,
+                             "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
         if r.returncode:
             return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
         print(f"research queue: the quick tier runs as {rid} on {on}, in a check slot; waiting for it to end "
@@ -758,6 +758,16 @@ class RemoteQuickTier(QuickTier):
             status = _json_file(d / "status.json")
             if status.get("state") in R.TERMINAL:
                 return status, None
+            if rec.get("launcher_exited") or rec.get("runner_gone"):
+                # a fetch copies status.json before it probes the runner, which can record its end and exit in between
+                # (r20261010-134738-7625 passed and read as gone): fetch once more before calling the run lost
+                try:
+                    fetch(d)
+                except Exception:  # noqa: BLE001
+                    pass
+                status = _json_file(d / "status.json")
+                if status.get("state") in R.TERMINAL:
+                    return status, None
             if gone := rec.get("launcher_exited"):
                 return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
             if gone := rec.get("runner_gone"):
@@ -840,6 +850,14 @@ def _tree(repo: Path, commit: str) -> str:
     return _git(repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip()
 
 
+class MarkOnly:
+    """`ready --mark`: the owner's word alone, with no quick tier, so marking needs no machine and no wait; the train's full check
+    tests the head.  A ready post with no mark behind it cost #1650 5.5 h (infra's review, 9 Oct)."""
+
+    def __call__(self, pr: PR) -> None:
+        return None
+
+
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
@@ -858,6 +876,9 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
             print(f"research queue: #{pr.number}'s head {pr.head[:12]} has the tree of {old[:12]}, marked ready after its quick tier "
                   f"passed: the same files, so the tier isn't run again", flush=True)
             return _mark(store, pr, by, None, "ready")
+    if isinstance(tier, MarkOnly):
+        print(f"research queue: #{pr.number} at {pr.head[:12]}: marked on {by}'s word, with no quick tier", flush=True)
+        return _mark(store, pr, by, None, "ready")
     print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
     return _mark(store, pr, by, tier(pr), "ready")
 
@@ -942,11 +963,12 @@ def main(argv: list[str]) -> int:
                                                     "M1,M2: the one with a free check slot, as `check.py --on` picks); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
+    ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
     a = ap.parse_args(argv)
     if a.dry_run and a.command not in ("sync", "land"):
         ap.error(f"--dry-run is for sync and land only: `{a.command}` would act for real")
-    if a.command == "ready" and bool(a.on) == a.local:
-        ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot) and --local (here)")
+    if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
+        ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
     if a.command in ("ready", "judge") and not a.by:
@@ -969,7 +991,7 @@ def main(argv: list[str]) -> int:
             return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote)
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-            tier = RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
+            tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             return ready(GitHub(repo), store, a.pr, a.by, tier)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,

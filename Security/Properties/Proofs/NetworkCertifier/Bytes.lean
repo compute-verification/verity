@@ -1,4 +1,6 @@
 import Properties.NetworkCertifier
+import Properties.Proofs.Identity
+import Mathlib.Data.Set.Card
 
 /-!
 # The record's encodings are injective
@@ -278,6 +280,20 @@ theorem encode_link {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) : h
   obtain ⟨-, -, -, ⟨lk, -, -, -, -, -, -, -, -, -, -, hlk, -⟩⟩ := encode_view he
   exact text_short hlk
 
+theorem encode_size {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) : x.size < 2 ^ 64 := by
+  obtain ⟨hc, hpa, hro, ⟨lk, dir, win, bk, al, fb, bm, sc, st, dl, rest, hlk, hdir, hwin, hbk, hal, hfb, hbm, hsc,
+    hst, hdl, hrest, hx⟩⟩ := encode_view he
+  obtain ⟨m, lb, hlb, hlk'⟩ := text_ok hlk
+  have h1 := congrArg List.length hx
+  have h2 := congrArg List.length hlk'
+  simp only [List.length_append, bs_length, countsEnc_length hrest, Array.length_toList] at h1 h2
+  rw [uBE_size hdir, uBE_size hwin, uBE_size hbk, uBE_size hal, uBE_size hfb, uBE_size hbm, uBE_size hst,
+    uBE_size hdl, hpa, hro] at h1
+  rw [uBE_size hlb] at h2
+  have h3 := text_short hlk
+  have h4 : (h.counts.size : Int) < 4294967296 := by rw [hc]; exact (uBE_ok hbk).2.1
+  omega
+
 theorem encode_inj {h h' : RecordHead} {x : ByteArray} (he : h.encode = .ok x) (he' : h'.encode = .ok x) :
     h = h' := by
   obtain ⟨hc, hpa, hro, ⟨lk, dir, win, bk, al, fb, bm, sc, st, dl, rest, hlk, hdir, hwin, hbk, hal, hfb, hbm, hsc,
@@ -312,9 +328,12 @@ theorem encode_inj {h h' : RecordHead} {x : ByteArray} (he : h.encode = .ok x) (
 
 /-! ## The SHA-512 inputs -/
 
-theorem taggedInput_inj {tag : String} {a b : ByteArray} (h : taggedInput tag a = taggedInput tag b) : a = b := by
-  have h' := congrArg bs h
-  simp only [taggedInput, bs_append, List.append_assoc] at h'
+theorem taggedInput_inj {tag : String} {a b x : ByteArray} (h : Properties.Identity.taggedInput tag a = .ok x)
+    (h' : Properties.Identity.taggedInput tag b = .ok x) : a = b := by
+  obtain ⟨-, rfl⟩ := Properties.Identity.taggedInput_ok.mp h
+  obtain ⟨-, e⟩ := Properties.Identity.taggedInput_ok.mp h'
+  have h' := congrArg bs e
+  simp only [bs_append, List.append_assoc] at h'
   have h'' := List.append_cancel_left (List.append_cancel_left (List.append_cancel_left h'))
   exact (split_bytes h'' (by rw [be64_size, be64_size])).2 |> bs_inj
 

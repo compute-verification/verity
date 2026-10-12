@@ -39,8 +39,9 @@ at most `tableError(fast100 m, shape)`:
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
-  - **At #123's values** (`8d621454`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, `t = 2q₀`, and a pair of extra lanes per
-    rep. The bound is at most **2^-205 per table** (`table_sound_pad_m1`).
+  - **At C-Flock ZK's values** (§7 item 6, `Zk.queries0`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31`
+    and 218 at `m = 32..35`, `t = 2q₀`, and a pair of extra lanes per rep. At every `m` the verifier serves the bound is
+    at most **2^-205 per table** (`table_sound_pad_m1`).
   - **The committed values** are the witness lanes' messages `a − c₀·pad` of lane families within the padded radius
     (`CommittedPad`).
   - **The model is M1 in the clear.** The verifier computes the restarted claim `s + Σ_i ρ_i·e_i` itself. M1 masks the
@@ -79,7 +80,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines a wrong unit through extracted values, so it pays the table's knowledge error and a
+unit used. The audit bound defines a faulty unit through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
@@ -172,7 +173,7 @@ link term per audit.
 | Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
 | M1's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
-| The padded bound at #123's values: 2^-205 per table at m = 25–27 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
+| The padded bound at C-Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
@@ -183,7 +184,7 @@ link term per audit.
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
-| Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
+| Sampled audits: the integrity profile over any partition and sampling design, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumption-notes/template-rows.md`) |
@@ -226,14 +227,14 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     or an input-port bit of a net slot (a row's first `cv`, an hm96 `pad`, a unit's leaf or leaf-cut bit, a wire's
     destination). That none is a unit's computed row follows from the layout checks (`delta_split`, `deltaIn_inBit`).
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
-  are placed in a block. Then the transcript decoded from that block makes the unit correct.
+  are placed in a block. Then the trace decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
 
-    The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
+    The decoded trace then carries `true` on the constant (`UnitPlace.decode_one`).
   - A unit's input columns on one gate must carry one value in every satisfying witness (`UnitPlace.aliased`), as
-    they do when they copy one source's position, or forced-zero rows. The transcript reads each gate off one of its
+    they do when they copy one source's position, or forced-zero rows. The trace reads each gate off one of its
     columns.
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
@@ -257,7 +258,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     copies rewrite that row, or the pin's row is empty or lands inside another range.
 - **What a correct unit computes** is its certificate's, not a hypothesis (L1 was dropped, Daniel, Sep 30): the
   end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
-  `GateRows.rows G L` and `G` computes `D`, a unit that is not wrong computes `D` (`IsRowsUnit.computes_of_cert`,
+  `GateRows.rows G L` and `G` computes `D`, a unit that is not faulty computes `D` (`IsRowsUnit.computes_of_cert`,
   `Certificate.lean`). RoPE's rows are proved to be its gate circuit's (`Rope.rope_sound`,
   `assumption-notes/template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
@@ -438,7 +439,8 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
   every completed first run (`V*` picks them) are hypotheses.
 
 **Not in Lean:** the link from `flock-circuit --zk` to the model (the Lean reference prover and its differential test,
-DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness.
+DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness for the masks and
+padding. The leaf salts are the operating system's bytes, uniform under A3 (`Discharge/ZkView/OsSalts.lean`).
 
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
@@ -454,16 +456,18 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 
 - **It rests on** special honest-verifier ZK of masked Flock: a simulator for every fixed coin sequence, which is VEIL's
   notion and the first zero-knowledge lemma to prove. The lemma is statistical. Its only caveat is ChaCha20 standing in
-  for uniform prover randomness. The simulations of a session's tables compose, because their masks are independent.
+  for uniform masks and padding; the leaf salts are the operating system's (A3). The simulations of a session's tables compose, because their masks are independent.
 - **Serialized sessions** then compose sequentially (Goldreich–Oren 1994).
 - **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
   (DESIGN.md §11.2).
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
-- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they are
-  ChaCha20 output under a seed from the operating system. Treating that output as uniform is the one caveat to the
-  lemma's statistical zero knowledge, and the seed's quality is trusted.
+- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production the
+  leaf salts are the operating system's bytes, 192 a leaf (`getrandom`; Daniel, 9 Oct, decision 4(a)), which A3 makes
+  uniform (`Discharge/ZkView/OsSalts.lean`), and the masks and padding are ChaCha20 output under a seed from the
+  operating system. Treating that output as uniform is the one caveat to the lemma's statistical zero knowledge, and
+  the operating system's randomness is A3.
 - **Leaf hiding.** Halevi–Micali leaves are statistically hiding in the standard model, by the leftover hash lemma, with
   no random oracle (`N·2^-256` for N leaves with a fresh key, §4). They are binding under collision resistance of their
   hash, SHA-512 in the adopted variant.
@@ -486,9 +490,9 @@ The weights are committed once and every later proof opens that root. The analys
   2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision, with
   Daniel:** state security per table, or as a lifetime budget.
 - **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
-  - In a sampled audit only the first wrong sampled unit matters. So an audit costs one table's hash term plus one
+  - In a sampled audit only the first faulty sampled unit matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
-  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
+  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is faulty only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
   - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
     for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`

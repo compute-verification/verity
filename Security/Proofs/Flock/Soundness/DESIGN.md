@@ -231,13 +231,13 @@ strict time.
     draws until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
     $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a draw reads it gives
     $\delta_{\rm link}\le2Q_s(1+k)\,t/2^{256}$, with $Q_s\le N_s$ (below).
-  - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
+  - **The bound is relative.** $u^*$ is faulty, so acceptance itself is the bad event:
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
   - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot Q_s(8N_0/e)/2^{256}$ up to lower-order
     terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 19 bits below.
   - **A one-bit refinement, for later:** $4N_0/e$, from a value layer drawn from a sequence of auxiliary extractions
-    (the first recovery behind each string), with the committed transcript then chosen by averaging over that
+    (the first recovery behind each string), with the committed trace then chosen by averaging over that
     sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
   - **Proved** (`flock_batched_linkSoundE`), under A2 for each commit string's explicit finder and a named binding of
     wires to commit strings (`ValueBinding`, from the `hm96` layout):
@@ -315,8 +315,8 @@ is written so that these slot in without restructuring:
   theorem, over uniform prover randomness).
 - **Differential tests** tie production to it byte for byte: on the same inputs, seeds and coins, the production prover
   must emit exactly its messages, which pins down mask placement.
-- **Still trusted:** that equivalence beyond the tested inputs, and the quality of the operating system's and ChaCha's
-  randomness.
+- **Still trusted:** that equivalence beyond the tested inputs, and the quality of the operating system's randomness (A3,
+  which the leaf salts read directly) and of ChaCha's (the masks and padding).
 
 ## 7. Staging against a16z's security stages
 
@@ -547,22 +547,22 @@ If real concurrency is ever needed:
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
-- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is wrong
-  relative to a committed transcript defined by extraction. A drawn wrong unit is charged to one of two named events:
-  extraction fails, or it disagrees with the transcript (`cover`, from `correct_congr`). The oracle layer is the special
-  case where the registration is the transcript (`Partition.oracle`).
-- **Transcripts are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
+- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is faulty
+  relative to a committed trace defined by extraction. A drawn faulty unit is charged to one of two named events:
+  extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
+  case where the registration is the trace (`Partition.oracle`).
+- **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
   and every composition lemma is a strong induction over gate indices.
 - **Two-stage.** Second-stage coins are drawn for every coarse unit, and only the drawn units' coordinates are used.
-  Tightness and the dilution counterexample hold for any first-stage law. Minimax uses the supporting line of
-  `s ↦ C(n − s, K)` in `ℕ`, where real convexity fails.
+  Tightness and the dilution counterexample hold for any first-stage sampling design. Minimax uses the supporting line
+  of `s ↦ C(n − s, K)` in `ℕ`, where real convexity fails.
 - **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form
   (`table_value_sound`), which projects a batched session onto one table through `value_interleave_le`. The lowering
   is a named hypothesis.
 - **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
   table's extractor is randomized and its bound depends on the prover, so the audit carries, per drawn unit, the joint
   probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
-  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a wrong drawn unit, and bounds that are functions of the
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a faulty drawn unit, and bounds that are functions of the
   prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
   (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
   - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each drawn unit is read from

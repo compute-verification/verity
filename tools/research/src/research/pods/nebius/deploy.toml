@@ -102,6 +102,14 @@ src = "tools/research/src/research/pods/nebius/runs-via-slot"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
+# ---- the shared nodes: how each reaches the other, for a check's twins (`check.py --on auto`, slot.py --twin)
+
+[[file]]
+path = "/etc/vy/peers"
+src = "tools/research/src/research/pods/nebius/peers"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
 [[file]]
 path = "/usr/local/lib/vy-monitoring/slot_only.py"
 src = "tools/research/src/research/pods/nebius/slot_only.py"
@@ -437,13 +445,13 @@ owner = "infra"
 path = "/workspace/research/console/verity_console.py"
 src = "tools/research/console/verity_console.py"
 nodes = ["vy-nebius-1"]
-owner = "console"
+owner = "infra"
 
 [[file]]
 path = "/workspace/research/console/util_collect.py"
 src = "tools/research/console/util_collect.py"
 nodes = ["vy-nebius-1"]
-owner = "console"
+owner = "infra"
 
 # the console imports cluster.usage from beside itself: node 1's python3 has no cluster package
 [[tree]]
@@ -452,21 +460,21 @@ src = "infra/cluster/src/cluster"
 nodes = ["vy-nebius-1"]
 run = ["systemd:verity-console.timer"]
 required = true
-owner = "console"
+owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/verity-console.service"
 src = "infra/nebius/verity-console.service"
 nodes = ["vy-nebius-1"]
 run = ["systemd:verity-console.timer"]
-owner = "console"
+owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/verity-console.timer"
 src = "infra/nebius/verity-console.timer"
 nodes = ["vy-nebius-1"]
 run = ["systemd:verity-console.timer"]
-owner = "console"
+owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-disk-guard.service"

@@ -131,7 +131,7 @@ theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at *
     omega
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 8000000 in
 /-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables none pre = .ok c) :
@@ -143,9 +143,9 @@ theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (St
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    exact ⟨_, by assumption⟩
+    exact ⟨_, by with_reducible assumption⟩
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 8000000 in
 /-- A template's `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {t : Typed.Template} {c : Circuit} (h : HmRow.parse tags bytes tables (some t) #[] = .ok c) :
@@ -157,7 +157,7 @@ theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (St
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    exact ⟨_, by assumption⟩
+    exact ⟨_, by with_reducible assumption⟩
 
 /-- `HmRow.parse` with its defaults, as `setupH` calls it, ends with `HmRow.check`. -/
 theorem hm_parse_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}

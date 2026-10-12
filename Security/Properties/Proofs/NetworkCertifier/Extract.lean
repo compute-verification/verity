@@ -1,12 +1,10 @@
 import Properties.Proofs.NetworkCertifier.Check
 
 /-!
-# A run without a break meets the injectivity lemmas' hypotheses
+# The strings the check hashes, listed
 
-`runStrings` lists every string the run hashes (`mem_runStrings`), so where no two distinct strings of it have one
-SHA-512 digest, SHA-512 has no collision on `RunStrings` (`cf_run`); and where no certificate of the commitment verifies
-under the key over a message the device never signed, each one that verifies is over a message it signed
-(`signed_of_not`).
+`checkStrings` lists every string the check hashes (`mem_checkStrings`): what a run without a SHA-512 collision among
+the strings it hashes rules out (`Properties.Proofs.CertifierNetwork.Runs`).
 -/
 
 open NetworkCheck hiding Params
@@ -26,8 +24,8 @@ theorem toOption_eq_some {ε α : Type} {x : Except ε α} {a : α} : x.toOption
 /-! ## The run's strings -/
 
 theorem mem_headStrings {h : RecordHead} {x : ByteArray} (hx : HeadString h x) : x ∈ headStrings h := by
-  obtain ⟨enc, he, rfl⟩ := hx
-  simp [headStrings, he, Except.toOption]
+  obtain ⟨enc, he, hx⟩ := hx
+  simp [headStrings, he, hx, Except.toOption]
 
 theorem mem_framesStrings {g : Grid} {fr : Array ByteArray} {x : ByteArray} (hx : FramesString g fr x) :
     x ∈ framesStrings g fr := by
@@ -52,51 +50,21 @@ theorem declared_eq {W : Nat} {link : Link} {syncs : Fin W → ClockSync} (h : D
     syncs = declared W link :=
   funext fun v => by rw [declared, Array.getD_eq_getD_getElem?, h v]; rfl
 
-theorem mem_runStrings {p : Params} {c : Commitment} {e : Evidence} {dev : Device p} {eg x : ByteArray}
-    (hx : RunStrings p c e dev eg x) : x ∈ runStrings p c e dev eg := by
-  unfold runStrings
-  rcases hx with ⟨r, hr, hx | hx⟩ | ⟨l, link, hm, w, hw, syncs, hd, hx | ⟨h, hh, hx⟩⟩ |
-      ⟨i, hi, hx | ⟨dg, hdg, hx⟩⟩ | ⟨ℓ, w, hw, hx⟩
-  · exact List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-      (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_left _ (mem_headStrings hx)⟩)))
-  · refine List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-      (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_right _ ?_⟩)))
+theorem mem_checkStrings {p : Params} {c : Commitment} {e : Evidence} {eg x : ByteArray}
+    (hx : CheckString p c e eg x) : x ∈ checkStrings p c e eg := by
+  unfold checkStrings
+  rcases hx with ⟨r, hr, hx | hx⟩ | ⟨l, link, hm, w, hw, syncs, hd, hx | ⟨h, hh, hx⟩⟩
+  · exact List.mem_append_left _ (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_left _ (mem_headStrings hx)⟩)
+  · refine List.mem_append_left _ (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_right _ ?_⟩)
     rw [hx]
     exact List.mem_singleton_self _
   · obtain rfl := declared_eq hd
-    exact List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-      (List.mem_flatMap.mpr ⟨(l, link), hm, List.mem_flatMap.mpr ⟨w, List.mem_range.mpr hw,
-        List.mem_append_left _ (mem_treeStrings hx)⟩⟩)))
+    exact List.mem_append_right _ (List.mem_flatMap.mpr ⟨(l, link), hm, List.mem_flatMap.mpr
+      ⟨w, List.mem_range.mpr hw, List.mem_append_left _ (mem_treeStrings hx)⟩⟩)
   · obtain rfl := declared_eq hd
-    refine List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-      (List.mem_flatMap.mpr ⟨(l, link), hm, List.mem_flatMap.mpr ⟨w, List.mem_range.mpr hw,
-        List.mem_append_right _ (List.mem_flatMap.mpr ⟨h, ?_, mem_headStrings hx⟩)⟩⟩)))
+    refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨(l, link), hm, List.mem_flatMap.mpr ⟨w,
+      List.mem_range.mpr hw, List.mem_append_right _ (List.mem_flatMap.mpr ⟨h, ?_, mem_headStrings hx⟩)⟩⟩)
     rw [hh]
     exact List.mem_singleton_self _
-  · exact List.mem_append_left _ (List.mem_append_right _
-      (List.mem_flatMap.mpr ⟨i, hi, List.mem_append_left _ (mem_headStrings hx)⟩))
-  · refine List.mem_append_left _ (List.mem_append_right _
-      (List.mem_flatMap.mpr ⟨i, hi, List.mem_append_right _ ?_⟩))
-    rw [hdg]
-    show x ∈ (Except.toOption _).toList
-    rw [hx]
-    exact List.mem_singleton_self _
-  · exact List.mem_append_right _ (List.mem_flatMap.mpr ⟨ℓ, List.mem_finRange ℓ,
-      List.mem_flatMap.mpr ⟨w, List.mem_range.mpr hw, mem_treeStrings hx⟩⟩)
-
-/-- Where no two distinct strings of the run have one SHA-512 digest, SHA-512 has no collision on what it hashes. -/
-theorem cf_run {p : Params} {c : Commitment} {e : Evidence} {dev : Device p} {eg : ByteArray}
-    (h : ¬ ∃ x ∈ runStrings p c e dev eg, ∃ y ∈ runStrings p c e dev eg, x ≠ y ∧ Sha512.hash x = Sha512.hash y) :
-    CF (RunStrings p c e dev eg) :=
-  fun x y hx hy hxy => Classical.byContradiction fun hne => h ⟨x, mem_runStrings hx, y, mem_runStrings hy, hne, hxy⟩
-
-/-- Where no certificate of the commitment verifies over a message the device never signed, each certificate whose
-signature verifies over its message is over a message the device signed. -/
-theorem signed_of_not {p : Params} {c : Commitment} {dev : Device p}
-    (h : ¬ ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies p m r.certificate.signature ∧
-      ¬ Signed dev m) :
-    ∀ r ∈ c.records.toList, ∀ m, certMessage r = some m → LmsVerifies p m r.certificate.signature →
-      Signed dev m :=
-  fun r hr m hm hv => Classical.byContradiction fun hs => h ⟨r, hr, m, hm, hv, hs⟩
 
 end Properties.NetworkCertifier

@@ -290,19 +290,22 @@ theorem committed_le : CommittedLe := by
   unfold W
   simp only [hw, Finset.prod_const, Finset.card_univ, Fintype.card_pi, Nat.cast_pow, ENNReal.inv_pow]
 
-/-- **Committed coins at hm96-sha512 under a fresh key** (`CommittedLeHm96`): `committed_le` at each key's hiding gap
-(`CROnly.hm96Hiding_gap`), averaged over the key (`CROnly.hm96_sha512_sum`). -/
+/-- **Committed coins at hm96-sha512 under a fresh key** (`CommittedLeHm96`): `committed_le` at each key's event,
+interaction, digests, leaf hash and prover, and at its hiding gap (`CROnly.hm96Hiding_gap`), averaged over the key
+(`CROnly.hm96_sha512_sum`). -/
 theorem committed_le_hm96 : CommittedLeHm96 := by
   intro E I Blk Cs D α _ _ _ hE _ _ _ _ _ p g hg dig cs hcs H τ
-  calc avg (fun κ => probC p g dig (CROnly.hankel (n := 512) (l := 1536) κ) cs H (τ κ))
-      ≤ avg (fun κ : Fin (512 + 1536 - 1) → E => value p g.erase + Fintype.card I *
+  calc avg (fun κ => probC (p κ) (g κ) (dig κ) (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ) (τ κ))
+      ≤ avg (fun κ : Fin (512 + 1536 - 1) → E => value (p κ) (g κ).erase + Fintype.card I *
           ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs)) :=
-        avg_mono fun κ => committed_le p g hg dig (CROnly.hankel (n := 512) (l := 1536) κ) cs H _
+        avg_mono fun κ => committed_le (p κ) (g κ) (hg κ) (dig κ) (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ) _
           (CROnly.hm96Hiding_gap _ _) (τ κ)
-    _ = value p g.erase + Fintype.card I * avg (fun κ : Fin (512 + 1536 - 1) → E =>
-          ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs)) := by
-        rw [avg_add, avg_const, avg_const_mul]
-    _ ≤ value p g.erase + Fintype.card I * ENNReal.ofReal (1 / 2 ^ 257) := by
+    _ = avg (fun κ : Fin (512 + 1536 - 1) → E => value (p κ) (g κ).erase) + Fintype.card I *
+          avg (fun κ : Fin (512 + 1536 - 1) → E =>
+            ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs)) := by
+        rw [avg_add, avg_const_mul]
+    _ ≤ avg (fun κ : Fin (512 + 1536 - 1) → E => value (p κ) (g κ).erase) +
+          Fintype.card I * ENNReal.ofReal (1 / 2 ^ 257) := by
         gcongr
         exact CROnly.avg_ofReal_le _ (fun κ => CROnly.hidingGap_nonneg _ _) (CROnly.hm96_sha512_sum hE cs hcs)
 

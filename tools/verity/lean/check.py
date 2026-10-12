@@ -93,7 +93,10 @@ allowed axioms replaces it.  `--update` writes the records and `reads` from the 
 whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  A guarantee whose
+those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
+`--update` whose every failure is a record difference (`RECORD_DIFFERENCE`: two records each right on its side of a merge
+whose definitions changed) writes the same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names
+the file, so a failed check of a train's merge carries its record.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
@@ -110,7 +113,8 @@ Each package's report lists, without failing, the spec definitions that no guara
 package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
-too; its reading and replay run beside the builds that follow.
+too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
+Its reading and replay run beside the builds that follow.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -119,6 +123,7 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import difflib
 import gzip
 import hashlib
@@ -1030,6 +1035,24 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     return out, fails
 
 
+#: the failures `--update` settles from the build alone: a guarantee, a `reads` group or an assumption whose record differs
+#: from the build (two records, each right on its own side of a merge).  A missing record or name, an owner, and every other
+#: failure take a person
+RECORD_DIFFERENCE = re.compile(
+    r"guarantees: (\S+'s (signature|assumptions|type hash) changed:|they now read definitions in |they no longer read |"
+    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for )|"
+    r"assumptions: \S+'s definition in \S+ changed;")
+
+
+def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[str]) -> dict | None:
+    """The `lean-audit.json` that `--update` writes, when ``fails`` are all record differences (`RECORD_DIFFERENCE`), else
+    None: the policy with its guarantees, reads and assumptions as the build has them."""
+    if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
+        return None
+    new = judge(policy, facts, files, update=True)[1]
+    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions") if k in new}
+
+
 #: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
 #: always returns, whose property takes no such hypothesis, only the input
 OUTCOMES = ("accept", "undecided", "reject", "none")
@@ -1057,8 +1080,15 @@ def shape(policy: dict, facts: dict) -> list[str]:
     with a lifted definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type
     reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
-    one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
-    hypothesis too, and a conjunction counts as its conjuncts. A guarantee under `shape.frozen` ({name: why it
+    one, of the tuple of their inputs (a binding property). A hypothesis is read by its body under its leading binders
+    (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
+    its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
+    (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
+    entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
+    acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
+    conclusion's events of those constants are each its acceptance and then what fails (`prob (fun o => A o ∧ B o) g σ ≤
+    …`, every conjunct before the last an acceptance) takes no acceptance hypothesis, and each of its hypotheses that
+    isn't a premise is refused. A guarantee under `shape.frozen` ({name: why it
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
@@ -1071,7 +1101,11 @@ def shape(policy: dict, facts: dict) -> list[str]:
     spec = policy.get("shape", {})
     fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
     frozen, where = spec.get("frozen", {}), "shape.frozen"
-    conjectures = spec.get("conjectures", {})
+    conjectures, events = spec.get("conjectures", {}), spec.get("events", [])
+    if not isinstance(events, list) or not all(isinstance(e, str) and e for e in events):
+        fails.append(f"shape: shape.events is {json.dumps(events)}; it lists constants, each a probability whose event "
+                     f"argument holds a property's acceptance")
+        events = []
     for name, c in sorted(conjectures.items()):
         c = c if isinstance(c, dict) else {}
         if name not in policy.get("assumptions", {}):
@@ -1108,7 +1142,7 @@ def shape(policy: dict, facts: dict) -> list[str]:
         if name in frozen and not frozen[name].strip():
             fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
         got = facts["pins"].get(name, {}).get("shape")
-        why = refusals(entries.get(name), got, premises, set(conjectures)) if isinstance(got, list) else \
+        why = refusals(entries.get(name), got, premises, set(conjectures), events) if isinstance(got, list) else \
             [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
         rests = sorted({c for part in got for h in part["hypotheses"] for c in [h.get("head"), *h["reaches"]]
                         if c in conjectures}) if isinstance(got, list) else []
@@ -1132,48 +1166,77 @@ def shape(policy: dict, facts: dict) -> list[str]:
     return fails
 
 
-def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset(),
+             events: list[str] = ()) -> list[str]:
     """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
-    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one."""
-    if not entry or not entry.get("function") or entry.get("outcome") not in OUTCOMES:
+    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one, of
+    the entry's function, or of its own when the entry lists `conjuncts` (one `{function, outcome}` each, in order) in
+    place of one function and outcome for them all."""
+    named = lambda e: isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
+    each = (entry or {}).get("conjuncts")
+    if each is not None:
+        if "function" in entry or "outcome" in entry:
+            return ["has an entry under shape.properties with both `conjuncts` and a function or outcome for them all: "
+                    "give one or the other"]
+        if not isinstance(each, list) or len(each) != len(got) or not all(map(named, each)):
+            return [f"has {len(got)} conjunct(s), and its entry's `conjuncts` must list one entry naming its function "
+                    f"and its outcome ({', '.join(OUTCOMES)}) for each, in order"]
+    elif not named(entry):
         return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
+    each = each or [entry] * len(got)
     if len(got) == 1:
-        return part_refusals(entry, got[0], premises, conjectures)
-    return [f"(conjunct {k + 1}) {w}" for k, part in enumerate(got)
-            for w in part_refusals(entry, part, premises, conjectures)]
+        return part_refusals(each[0], got[0], premises, conjectures, events)
+    return [f"(conjunct {k + 1}) {w}" for k, (e, part) in enumerate(zip(each, got))
+            for w in part_refusals(e, part, premises, conjectures, events)]
 
 
-def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset(),
+                  events: list[str] = ()) -> list[str]:
     """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
     first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
-    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`."""
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A probability
+    statement has its acceptance in the event (`shape.events`): when its conclusion has an event of one of those constants
+    (`prob (fun o => A₁ o ∧ … ∧ Aₙ o ∧ B o) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and in every one each conjunct before
+    the last is about the function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance
+    outside the event too.  An event of one of them that isn't so is refused: a conjunct before the last that isn't an
+    acceptance is a hypothesis inside the event (`Pr[A ∧ Q ∧ B]` bounds `B` only where `Q` holds)."""
     fns = [entry["function"]] if isinstance(entry["function"], str) else list(entry["function"])
     outcome, said = entry["outcome"], " or ".join(fns)
 
     def about(h: dict) -> bool:
-        reached = set(h["reaches"])
-        return any(reaches(f, reached) for f in fns) and (
+        reached = set(h["applies"] if "applies" in h else h["reaches"])
+        return not h.get("guarded") and any(reaches(f, reached) for f in fns) and (
             outcome == "accept" or any(c.rsplit(".", 1)[-1] == outcome for c in reached))
 
     def premise(h: dict) -> bool:
         return h.get("head") in conjectures or bool(h["module"]) and under(premises, h["module"])
 
     hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
+    probs = [e for e in got.get("events", []) if e["head"] in events]
+    inevent = outcome != "none" and bool(probs) and all(
+        len(e["conjuncts"]) > 1 and all(map(about, e["conjuncts"][:-1])) for e in probs)
     start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
         next(iter(hyps), None)
     ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
-    taken = [h for h in hyps if ends is None or h["at"] < ends]
+    taken = hyps if inevent else [h for h in hyps if ends is None or h["at"] < ends]
     out = []
-    if outcome != "none" and start is None:
+    if outcome != "none" and probs and not inevent:
+        out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} whose conjuncts before its last "
+                   f"are not each its function returning {outcome} ({said}): a probability statement's event is its "
+                   f"acceptance, under no hypothesis of its own, and then what fails")
+    if outcome != "none" and start is None and not inevent:
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
     for h in taken:
-        if (outcome != "none" and about(h)) or premise(h):
+        if (outcome != "none" and about(h) and not inevent) or premise(h):
             continue
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
+        its = f"its event's first conjunct, {outcome} by {said}" if inevent else f"{outcome} by {said}"
         out.append(f"takes {h['name']} : {h['type']}, {what} that is neither its acceptance nor a premise (its acceptance: "
-                   f"{outcome} by {said}; a premise: "
-                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})")
+                   f"{its}; a premise: "
+                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})" +
+                   (": it holds under a hypothesis of its own, and an acceptance is the event itself, under `∀` binders "
+                    "only" if h.get("guarded") and not inevent else ""))
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
     return out
@@ -1603,11 +1666,39 @@ def path_deps(pkg: Path) -> list[Path]:
             if d.get("type") == "path"] if manifest.exists() else []
 
 
+def writable(pkg: Path) -> list[Path]:
+    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's."""
+    return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
+
+
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the `.lake` directories of the package and its path dependencies
-    (``argv`` as is where there is no sandbox)."""
-    rw = [str(d / ".lake") for d in [pkg.resolve(), *path_deps(pkg)]]
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *rw, "--", *argv] if sandboxed() else argv
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories (``argv`` as is where there
+    is no sandbox)."""
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+
+
+#: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
+_WRITING: set[Path] = set()
+_WROTE = threading.Condition()
+
+
+@contextlib.contextmanager
+def writing(pkg: Path, log=print):
+    """Hold ``pkg``'s `writable` directories for one Lake build: two builds that share one run one at a time, and the
+    others side by side. Two dependents of one stale path dependency would both rebuild its modules into its one
+    `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135)."""
+    dirs = set(writable(pkg))
+    with _WROTE:
+        if busy := sorted(str(d.parent) for d in _WRITING & dirs):
+            log(f"build: {pkg} waits for a build that writes the .lake of {', '.join(busy)}")
+        _WROTE.wait_for(lambda: not _WRITING & dirs)
+        _WRITING.update(dirs)
+    try:
+        yield
+    finally:
+        with _WROTE:
+            _WRITING.difference_update(dirs)
+            _WROTE.notify_all()
 
 
 def olean_files(lib: Path) -> list[Path]:
@@ -1795,6 +1886,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if work.resolve().is_relative_to(pkg.resolve()):
         raise ValueError(f"the audit's output {work} is inside the package {pkg}")
     work.mkdir(parents=True, exist_ok=True)
+    for stale in (POLICY, "review.txt"):
+        (work / stale).unlink(missing_ok=True)
     rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
     t, _peak.bytes = time.monotonic(), 0
     if build:
@@ -1802,9 +1895,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         for step, argv in (("setup", None),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
-            s = time.monotonic()
-            rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
-            rep["seconds"][step] = round(time.monotonic() - s, 1)
+            with contextlib.nullcontext() if argv is None else writing(pkg, log):
+                s = time.monotonic()
+                rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
+                rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
                 return rep
@@ -1917,12 +2011,20 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    def sources() -> dict[str, Path]:
+        return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
+
     if update:
         dump(work, new)
+    elif (regen := regenerated(policy, facts, files, fails)) is not None:
+        dump(work, regen)
+        notes = review(policy, regen, facts, sources())
+        (work / "review.txt").write_text("\n".join(notes) + "\n")
+        rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY)}
+        log(f"audit: {pkg}/{POLICY}: every failure is a record difference; {work / POLICY} is the record `--update` writes")
     if update and new != policy:
         dump(pkg, new)
-        sources = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
-        notes = review(policy, new, facts, sources, moved) + lnotes
+        notes = review(policy, new, facts, sources(), moved) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
@@ -2168,7 +2270,10 @@ def main(argv: list[str]) -> int:
             if not built[pkg].is_set():
                 seal(pkg)
         with lock:
-            rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
+            if tamper := [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]:
+                rep["failures"] += tamper
+                if regen := rep.pop("regenerated", None):
+                    Path(regen).unlink(missing_ok=True)
             reports[pkg] = rep
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"

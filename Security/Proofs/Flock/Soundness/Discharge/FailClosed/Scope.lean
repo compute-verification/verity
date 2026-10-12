@@ -10,27 +10,34 @@ import Flock.ProvedScope
 `flock-verify verify` refuses every session of a statement whose form the soundness proof does not cover:
 `Main.verifyCmd` runs `Flock.ProvedScope.check` on the statement in every session's verdict, after every other check but
 the draw-less session's refusal, and refuses the session when it fails. So what the verifier accepts is `Verifies`
-(under `--zk`, `VerifiesZK`): the setup and verdict
+(under `--zk`, `VerifiesZK`, and with `--registered F` `VerifiesZKR`): the setup and verdict
 `Accepts` models, and the check. Every condition on the statement's form that the headlines took as a hypothesis follows
 from the check: an untyped statement (`Checks.typed`), retained rounds and `hm96-sha512/v1` leaves, at most one table
 without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
-(`Checks.tables`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the executable's `ProvedScope.scopeOk` is
-`Layout.scopeOk`, its port bits a mask). The unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
-`FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form.
+unless the session is `--zk`, the statement has hidden outputs and the verifier holds its own registered reads
+(`Checks.tables`; without them, `Checks.tables_none`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the
+executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask), or under hidden outputs `Layout.scopeOkH`
+(`Checks.scopeH`, by `scopeOkH_eq`). The unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
+`FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form, and so is the registered one
+(`FailClosed.ZkRegistered`) over `VerifiesZKR`.
 
-`Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome` argument for
-argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s, after `withCoins`, then `Zk.tags`
-at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The circuit, public file and tables are the
-bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`. The flag is `false`: with
-`--public-inputs` the check refuses every session, and without it `buildSession` passes `setupTables` no public input
-words, the setup `Accepts` models. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
+`Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
+registered.isSome` argument for argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s,
+after `withCoins`, then `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
+circuit, public file and tables are the bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`.
+The public-inputs flag is `false`: with `--public-inputs` the check refuses every session, and without it `buildSession`
+passes `setupTables` no public input words, the setup `Accepts` models. The registered flag `reg` is whether the verifier
+holds `--registered F`: `Scope` and `ScopeZ` are the check without it, `ScopeZR` the check with it, which `VerifiesZKR`
+pairs with the registered check `AcceptsZKR` models. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
 requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a drawn
 session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a draw. So a session
-`verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK`). `verifyCmd` refuses more, which only shrinks the
+`verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK` without `--registered` and `VerifiesZKR` with it;
+without `--zk` the check is the same either way). `verifyCmd` refuses more, which only shrinks the
 event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
 without `--zk`), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
-which the check refuses), a coin-tree key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
+which the check passes only under `--zk` at hidden outputs, where `VerifiesZKR` models the registered check), a coin-tree
+key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
 one's canonical form is verified against that earlier setup; `canon` takes integers only, so the two draws hold the same
 content.
 -/
@@ -74,12 +81,20 @@ theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portRead
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
   simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports]
 
+/-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
+theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
+  have e : ProvedScope.v2Row = Layout.v2Row := rfl
+  have e' : ProvedScope.segRow = Layout.segRow := rfl
+  simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.bitRows, Layout.bitRows, e, e']
+
 /-! ## The check, and what it gives -/
 
 /-- **The verifier's statement check passes** at tags `t` (the session's: under `--zk`, `zkTags`'s), with no public input
-words of the verifier's own (the setup `Accepts` models takes none). -/
-def Checks (t : Tags) (zk : Bool) (I : Inputs) : Prop :=
-  ProvedScope.check t zk I.circuitFile I.publicFile I.tables I.count false = .ok ()
+words of the verifier's own (the setup `Accepts` models takes none), and with its own registered reads (`--registered F`)
+when `reg`. -/
+def Checks (t : Tags) (zk : Bool) (I : Inputs) (reg : Bool) : Prop :=
+  ProvedScope.check t zk I.circuitFile I.publicFile I.tables I.count false reg = .ok ()
 
 /-- The circuit as the check parses it (`default` when it does not parse, and then the check fails). -/
 def circ (t : Tags) (I : Inputs) : Circuit :=
@@ -94,11 +109,12 @@ def pubOf (t : Tags) (I : Inputs) : Public :=
   | .error _ => default
 
 theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
-    (h : ProvedScope.check t zk cf pf tables count false = .ok ()) :
+    {reg : Bool} (h : ProvedScope.check t zk cf pf tables count false reg = .ok ()) :
     (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
       (zk = true ∨ count ≤ 1)) ∧
-    ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧ pub.tables = none ∧
-      ProvedScope.scopeOk c = true := by
+    ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧
+      (pub.tables = none ∨ ProvedScope.sharedRowsOk t zk reg = true) ∧
+      (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = true := by
   unfold ProvedScope.check at h
   split at h
   · cases h
@@ -121,14 +137,24 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   split at h
   · cases h
   rename_i ht
-  split at h
-  · rename_i hs
-    exact ⟨c, pub, hc, hp, by simpa using ht, hs⟩
+  have htab : pub.tables = none ∨ ProvedScope.sharedRowsOk t zk reg = true := by
+    cases hpt : pub.tables with
+    | none => exact Or.inl rfl
+    | some _ =>
+      refine Or.inr ?_
+      rw [hpt] at ht
+      revert ht
+      generalize ProvedScope.sharedRowsOk t zk reg = b
+      cases b <;> simp
+  refine ⟨c, pub, hc, hp, htab, ?_⟩
+  generalize (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = b at h
+  cases b
   · cases h
+  · rfl
 
 namespace Checks
 
-variable {t : Tags} {zk : Bool} {I : Inputs} (h : Checks t zk I)
+variable {t : Tags} {zk : Bool} {I : Inputs} {reg : Bool} (h : Checks t zk I reg)
 include h
 
 theorem typed : t.typed = false := (check_ok h).1.2.1
@@ -150,16 +176,37 @@ theorem public_ok : ProvedScope.publicOf t (circ t I) I.publicFile = .ok (pubOf 
   unfold pubOf
   rw [this, hp]
 
-theorem tables : (pubOf t I).tables = none := by
+/-- No shared-row public file, or one where the check covers it: a `--zk` session of a statement with hidden outputs whose
+verifier holds its own registered reads. -/
+theorem tables : (pubOf t I).tables = none ∨ (zk = true ∧ t.hiddenOutputs = true ∧ reg = true) := by
   obtain ⟨c, pub, hc, hp, ht, -⟩ := (check_ok h).2
   have : circ t I = c := by unfold circ; rw [hc]
   have hpub : pubOf t I = pub := by unfold pubOf; rw [this, hp]
-  rw [hpub, ht]
+  rw [hpub]
+  refine ht.imp id fun hs => ?_
+  simp only [ProvedScope.sharedRowsOk, Bool.and_eq_true] at hs
+  exact ⟨hs.1.1, hs.1.2, hs.2⟩
 
-theorem scope : Layout.scopeOk (circ t I) = true := by
+/-- Without the verifier's own registered reads, no shared-row public file. -/
+theorem tables_none (hr : reg = false) : (pubOf t I).tables = none :=
+  h.tables.resolve_right fun ⟨_, _, h'⟩ => by rw [hr] at h'; cases h'
+
+theorem scope (hh : t.hiddenOutputs = false) : Layout.scopeOk (circ t I) = true := by
   obtain ⟨c, -, hc, -, -, hs⟩ := (check_ok h).2
   have : circ t I = c := by unfold circ; rw [hc]
+  simp only [hh, Bool.false_eq_true, ↓reduceIte] at hs
   rw [this, ← scopeOk_eq, hs]
+
+/-- **`Layout.scopeOkH`**, with or without hidden outputs (`scopeOk` gives it). -/
+theorem scopeH : Layout.scopeOkH (circ t I) = true := by
+  obtain ⟨c, -, hc, -, -, hs⟩ := (check_ok h).2
+  have : circ t I = c := by unfold circ; rw [hc]
+  rw [this]
+  cases hh : t.hiddenOutputs
+  · simp only [hh, Bool.false_eq_true, ↓reduceIte] at hs
+    exact Layout.scopeOkH_of_scopeOk (by rw [← scopeOk_eq, hs])
+  · simp only [hh, ↓reduceIte] at hs
+    rw [← scopeOkH_eq, hs]
 
 theorem parse (hh : t.hiddenOutputs = false) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   have := h.circuit_ok
@@ -189,7 +236,7 @@ theorem built : Built (circ t I).unit := by
   obtain ⟨ls, hls⟩ := P.check
   exact unit_built P (check_facts P.typed hls)
 
-theorem outNet : (circ t I).outNet = (circ t I).unitNet := (Layout.scopeOk_spec h.built h.scope).2.1
+theorem outNet : (circ t I).outNet = (circ t I).unitNet := (Layout.scopeOkH_spec h.built h.scopeH).2.1
 
 end Checks
 
@@ -197,8 +244,9 @@ end Checks
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **`flock-verify verify`'s statement check** (no `--zk`). -/
-def Scope (I : Inputs) : Prop := Checks I.tags false I
+/-- **`flock-verify verify`'s statement check** (no `--zk`). Without `--zk` the check is the same with or without the
+verifier's registered reads (`ProvedScope.sharedRowsOk` needs `--zk`). -/
+def Scope (I : Inputs) : Prop := Checks I.tags false I false
 
 /-- **What `flock-verify verify` accepts** (no `--zk`): the setup and verdict `Accepts` models, and the statement check. -/
 def Verifies (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ Scope I
@@ -206,8 +254,13 @@ def Verifies (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ Scope 
 /-- `Verifies` at the live session's transcript. -/
 def LiveVerifies (I : Inputs) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop := Verifies I o.2.2
 
-/-- **`flock-verify verify --zk`'s statement check**, at the session's tags (`zkTags`). -/
-def ScopeZ (I : Inputs) : Prop := Checks (zkTags I) true I
+/-- **`flock-verify verify --zk`'s statement check**, at the session's tags (`zkTags`), without the verifier's own
+registered reads. -/
+def ScopeZ (I : Inputs) : Prop := Checks (zkTags I) true I false
+
+/-- **`flock-verify verify --zk --registered F`'s statement check**, at the session's tags (`zkTags`): the check with the
+verifier's own registered reads, which also passes a shared-row public file of a statement with hidden outputs. -/
+def ScopeZR (I : Inputs) : Prop := Checks (zkTags I) true I true
 
 /-- **What `flock-verify verify --zk` accepts**: the setup and verdict `AcceptsZK` models, and the statement check. -/
 def VerifiesZK (I : Inputs) (t : Exec.Transcript) : Prop := AcceptsZK I t ∧ ScopeZ I
@@ -254,9 +307,47 @@ theorem ScopeZ.loadH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = tr
 
 theorem ScopeZ.built {I : Inputs} (h : ScopeZ I) : Built (circZ I).unit := Checks.built h
 
-theorem ScopeZ.tables {I : Inputs} (h : ScopeZ I) : (pubZ I).tables = none := Checks.tables h
+theorem ScopeZ.tables {I : Inputs} (h : ScopeZ I) : (pubZ I).tables = none := Checks.tables_none h rfl
 
-theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) : Layout.scopeOk (circZ I) = true := Checks.scope h
+theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
+    Layout.scopeOk (circZ I) = true := Checks.scope h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZ.scopeH {I : Inputs} (h : ScopeZ I) : Layout.scopeOkH (circZ I) = true := Checks.scopeH h
+
+theorem ScopeZR.typed {I : Inputs} (h : ScopeZR I) : I.tags.typed = false := by
+  rw [← zkTags_typed]; exact Checks.typed h
+
+theorem ScopeZR.retainRounds {I : Inputs} (h : ScopeZR I) : I.tags.retainRounds = true := by
+  rw [← zkTags_retainRounds]; exact Checks.retainRounds h
+
+theorem ScopeZR.merkleLeaf {I : Inputs} (h : ScopeZR I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
+  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf h
+
+theorem ScopeZR.parseH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
+    HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
+  Checks.parseH h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZR.loadH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
+    HmOut.loadPublic (zkTags I) (circZ I) I.publicFile = .ok (pubZ I) :=
+  Checks.loadH h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZR.built {I : Inputs} (h : ScopeZR I) : Built (circZ I).unit := Checks.built h
+
+theorem ScopeZR.scope {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = false) :
+    Layout.scopeOk (circZ I) = true := Checks.scope h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZR.scopeH {I : Inputs} (h : ScopeZR I) : Layout.scopeOkH (circZ I) = true := Checks.scopeH h
+
+/-- **The check with the verifier's registered reads is the check without them at public outputs**: `sharedRowsOk`
+needs hidden outputs. -/
+theorem ScopeZR.scopeZ {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = false) : ScopeZ I := by
+  have hs : ProvedScope.sharedRowsOk (zkTags I) true true = ProvedScope.sharedRowsOk (zkTags I) true false := by
+    simp [ProvedScope.sharedRowsOk, zkTags_hiddenOutputs, hh]
+  unfold ScopeZ
+  unfold ScopeZR Checks ProvedScope.check at h
+  unfold Checks ProvedScope.check
+  rw [← hs]
+  exact h
 
 theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.typed h
 
@@ -278,9 +369,12 @@ theorem Scope.loadH {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = true
 
 theorem Scope.built {I : Inputs} (h : Scope I) : Built (circS I).unit := Checks.built h
 
-theorem Scope.tables {I : Inputs} (h : Scope I) : (pubS I).tables = none := Checks.tables h
+theorem Scope.tables {I : Inputs} (h : Scope I) : (pubS I).tables = none := Checks.tables_none h rfl
 
-theorem Scope.scope {I : Inputs} (h : Scope I) : Layout.scopeOk (circS I) = true := Checks.scope h
+theorem Scope.scope {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) : Layout.scopeOk (circS I) = true :=
+  Checks.scope h hh
+
+theorem Scope.scopeH {I : Inputs} (h : Scope I) : Layout.scopeOkH (circS I) = true := Checks.scopeH h
 
 theorem Scope.outNet {I : Inputs} (h : Scope I) : (circS I).outNet = (circS I).unitNet := Checks.outNet h
 

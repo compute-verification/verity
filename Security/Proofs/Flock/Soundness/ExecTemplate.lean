@@ -9,12 +9,69 @@ import Proofs.Flock.Soundness.ExecSetup
 `HmRow.parse … (tmpl := some t)` is the path `parseTyped` takes for a typed template (#277, #307):
 - `parse_facts_tmpl`: its nets are the template's root and placed layouts' circuits, then the file's own text nets and
   lookup slots; its unit is the root (`unitNet = 0`), one per template instance; its block is `blockOf t` over those nets; its wires are
-  the rows' own chains (`rowWires`), with no leaf map or cut; and `HmRow.check` passed.
+  the rows' own chains (`rowWires`), with no leaf map or cut; and `HmRow.check` passed. A typed statement's rows are
+  `sha512/row/v1`'s (`rowPorts_typed`).
 -/
 
 open Flock FlockLevel3
 
 namespace FlockSoundness
+
+set_option maxHeartbeats 1000000 in
+/-- `HmRow.rowPorts`' ports for a typed statement are `sha512/row/v1`'s (it refuses `row_schemas`), each whole SHA-512
+blocks of `16 · words` bits, with a compression at least (it refuses a row of no words). -/
+theorem rowPorts_typed {mj : Lean.Json} {ports : Array Port} (h : HmRow.rowPorts mj true = .ok ports) :
+    ∀ p ∈ ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks := by
+  unfold HmRow.rowPorts at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) v2 one at h
+  obtain ⟨s, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  obtain ⟨hv2, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp1] at h
+  replace hv2 : v2 = false := by simpa using hv2
+  obtain ⟨listedPorts, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  simp (config := { zeta := false }) only [hv2, Bool.false_eq_true, ↓reduceIte] at h
+  change jp2 (Array.replicate listedPorts.size none) = .ok ports at h
+  simp (config := { zeta := false }) only [jp2] at h
+  obtain ⟨ports', hmap, h⟩ := except_bind_ok h
+  obtain ⟨listed, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) bad jp3 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp3] at h
+  obtain ⟨u, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp4] at h
+  cases h
+  intro p hp
+  obtain ⟨i, -, hf⟩ := array_mapM_ok hmap p hp
+  obtain ⟨a, -, hf⟩ := except_bind_ok hf
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpa at hf
+  replace hf := ite_throw_ok hf
+  simp (config := { zeta := false }) only [jpa] at hf
+  obtain ⟨name, -, hf⟩ := except_bind_ok hf
+  obtain ⟨words, -, hf⟩ := except_bind_ok hf
+  obtain ⟨comps, -, hf⟩ := except_bind_ok hf
+  split at hf
+  · extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpn at hf
+    obtain ⟨hbad, hf⟩ := ite_throw_ok' hf
+    simp (config := { zeta := false }) only [jpn] at hf
+    cases hf
+    simp only [Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hbad
+    refine ⟨rfl, rfl, ?_⟩
+    show 0 < comps
+    omega
+  · rename_i heq
+    have hn : (Array.replicate listedPorts.size (none : Option (ℕ × Bool)))[i]! = none := by
+      by_cases hi : i < listedPorts.size
+      · rw [getElem!_pos _ i (by simpa using hi)]; simp
+      · rw [getElem!_neg _ i (by simpa using hi)]; rfl
+    rw [hn] at heq
+    cases heq
 
 /-- **What `HmRow.parse` accepted for a typed template's block `t`.** -/
 structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop where
@@ -37,6 +94,8 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   leavesIn : c.leavesIn = #[#[]]
   wires : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet
   leafCuts : c.leafCuts = #[]
+  /-- a typed statement's rows are `sha512/row/v1`'s, each of `16 · words` bits in at least one compression -/
+  v1 : tags.typed = true → ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks
 
 set_option maxHeartbeats 4000000 in
 theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {t : Typed.Template}
@@ -172,6 +231,9 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
@@ -323,7 +385,8 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           upv := (Except.ok.inj hupv).symm
           leavesIn := (Except.ok.inj hleavesIn).symm
           wires := rfl
-          leafCuts := hlc (hkeys "leaf_cuts" (by simp [HmRow.TEMPLATE_DERIVED])) }
+          leafCuts := hlc (hkeys "leaf_cuts" (by simp [HmRow.TEMPLATE_DERIVED]))
+          v1 := fun ht => rowPorts_typed (ht ▸ hrp) }
 
 /-- **What `parseTyped` accepted** (#307): `Typed.read`'s class `k` and block, then `parse` on the block, a template's
 (`tmpl`) or a flat class's unit net (`pre`), with the class recorded as `cls`. -/

@@ -173,7 +173,7 @@ def check(units: PartitionUnits, T: int = 16, seed: int = 0, max_gates: int = 1 
             log(f"  {cl.representative.definition} u{cl.representative.unit}: {len(cl.representative.gates)} word gates, "
                 f"{c.counts['ands'] if c.counts else c.reason} {','.join(c.missing)}")
     lower_s = time.time() - t1
-    key = derive(SOURCE, DOMAIN, {"program": program_digest(units.program)[:32], "seed": int(seed)})
+    key = derive(SOURCE, DOMAIN, {"program": program_digest(units.program), "seed": int(seed)})
     t2 = time.time()
     mismatches, checked, lanes_checked = Counter(), 0, 0
     for fn, circuits in list(units._flat.values()):

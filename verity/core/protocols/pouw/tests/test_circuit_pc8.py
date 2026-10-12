@@ -383,6 +383,38 @@ def test_the_h3_tile_is_hiding_only_and_leaves_h0_as_it_is():
             pc8.templates(K, (2, 3), "sm120", *bad)
 
 
+def test_the_window_tile_reads_its_side_rows_index_fields():
+    """`Pc8TileSide` is `Pc8TileHidden` with each row's index field (`leaves.INDEX`) as one more value: its digest is the
+    hiding tile's whatever the indices, and the rows its ports make (`SIDE_PORTS`: codes, P, then the index field, each
+    leaf's bits in order) are the window's side rows (`window.side_row`), A's row-seg and B's v2, k/2 + 72 words each."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+    tm, tn = 2, 3
+    fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True)["tile"]
+    assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef
+    assert fn.signature()[0] == hidden.signature()[0] + (("ia", pc8.Array(tm, L.INDEX)), ("jb", pc8.Array(tn, L.INDEX)))
+    assert fn.signature()[1] == hidden.signature()[1]
+    rng = random.Random(11)
+    ac, bc = ([[rng.getrandbits(8) & 0x77 for _ in range(K)] for _ in range(r)] for r in (tm, tn))
+    pa, pb = ([[rng.getrandbits(16) & 0x3FFF for _ in range(64)] for _ in range(r)] for r in (tm, tn))
+    want = list(evaluate(hidden, _flat(ac), _flat(bc), _flat(pa), _flat(pb)))
+    for ii, jj in (([0, 8191], [0, 1, 131071]), ([5, 64], [70000, 3, 4])):
+        ia, jb = [L.words_index(i) for i in ii], [L.words_index(j) for j in jj]
+        assert list(evaluate(fn, _flat(ac), _flat(bc), _flat(pa), _flat(pb), _flat(ia), _flat(jb))) == want
+        for codes, p, idx, i in [*zip(ac, pa, ia, ii), *zip(bc, pb, jb, jj)]:
+            bits = sum(c << (8 * t) for t, c in enumerate(codes)) | sum(w << (8 * K + 16 * t) for t, w in enumerate(p + idx))
+            words = [(bits >> (16 * w)) & 0xFFFF for w in range(L.ROW_WORDS["fp8-pi"](K))]
+            assert words == Wd.side_row(L.words_fp8_p(codes, p), i) == L.words_fp8_pi(codes, p, i)
+    reads = {p: tm for p in ("ac", "pa", "ia")} | {p: tn for p in ("bc", "pb", "jb")}
+    bits = 16 * (K // 2 + 72)
+    assert L.statement_rows(pc8.SIDE_PORTS, K, reads) == {"row_schemas": [[SCHEMA_HM96_SHA512_ROW_SEG, bits]] * tm
+                                                         + [[SCHEMA_HM96_SHA512_ROW_V2, bits]] * tn
+                                                         + [[SCHEMA_HM96_SHA512_ROW_V2, 256]]}
+    assert (L.ROW_SCHEMA["fp8-pi", ROLE_X], L.ROW_SCHEMA["fp8-pi", ROLE_W]) == (L.ROW_SCHEMA["fp8-p", ROLE_X],
+                                                                                L.ROW_SCHEMA["fp8-p", ROLE_W])
+
+
 @pytest.mark.parametrize("dev", ["h100", "sm120"])
 def test_the_verifier_derives_the_anchored_inputs(dev):
     """`TileAnchors.of` derives the scheme's E_A, E_B, F_A, F_B and G (on the record's chain) from its seeds, and the tile

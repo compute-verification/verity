@@ -30,6 +30,10 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
+- **Parallel proof work runs against fixed statements** (Daniel, 8 Oct). Before any worker starts, the final theorem's
+  statement and each open piece's statement are on the branch; each worker proves its piece against that statement, and
+  integration builds the final theorem against them continuously. What isn't closed by the deadline is a gap list on the
+  branch: exact lemma names with no `sorry` outside them, each with a size and an owner.
 - **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file. The Lean check lists where they are
   (`reads` in `Security/lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
@@ -159,8 +163,14 @@ simp with that.
   constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
   outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
   acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
-  constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
-  and a conjunction as its conjuncts. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
+  constant of a module under `shape.premises` (under its leading `∀`s); the acceptance applies the function in its own
+  body, under no hypothesis of its own; a `Prop` field of a structure an input ranges over, or a family of them
+  (`Vs : Fin S → VStmt`) holds, counts as a hypothesis (`Nonempty` too),
+  and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
+  `{function, outcome}` each. A probability statement has its acceptance in the event instead: with its constant under
+  `shape.events` (`FlockSoundness.Game.prob`), a conjunct whose events are each the acceptance and then what fails
+  (`prob (fun o => A o ∧ B o) g σ ≤ …`, every conjunct before the last an acceptance) takes premises only, and every
+  other hypothesis is refused; a compound failure goes under one `¬` or definition. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
   with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
   `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
   `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one
@@ -177,6 +187,11 @@ simp with that.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/verity/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
   rebuild, and only a conflict it refuses needs `check.py --update` on the merged tree.
+- Record your lock at your own head, for what your change says, and then mark the PR ready. Don't merge a moving `main`
+  in again just to re-record. When the train's check fails only because a record's `guarantees`, `reads` or
+  `assumptions` differ (another PR changed a definition yours reads), the lander's `tools/verity/check/retip.py`
+  regenerates them at the train tip. Re-record yourself only what it can't regenerate: a conflict `merge.py` refuses, any
+  other key (`shape`, a move's map), or a failure in another step.
 
 ## Rulings so far
 

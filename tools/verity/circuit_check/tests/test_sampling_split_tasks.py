@@ -8,7 +8,6 @@ rebinds a target, or repins one, rewrites it (`python tools/verity/circuit_check
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -39,15 +38,22 @@ def _static(v):
     return v if isinstance(v, (bool, int, float, str)) or v is None else getattr(v, "id", repr(v))
 
 
-def family_tasks() -> dict:
+def family_tasks(suite: dict | None = None) -> dict:
     """The family's entries of `circuit-check --all`'s task list (`cli._tasks`), each with its pin, and the pins of every family
-    Definition those targets call."""
+    Definition those targets call; with ``suite``, the task list is built on that `targets.suite()`."""
     from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
 
     from circuit_check import checks as CK
     from circuit_check import cli
+    from circuit_check import targets as TG
 
-    tasks = cli._tasks([], CK.Options(), everything=True, as_call=None)
+    real = TG.suite
+    if suite is not None:
+        TG.suite = lambda: suite
+    try:
+        tasks = cli._tasks([], CK.Options(), everything=True, as_call=None)
+    finally:
+        TG.suite = real
     pins = CK.load_pins()
     family = {k for k, d in REGISTRY.defs.items() if in_family(d)}
     out = []
@@ -78,20 +84,22 @@ def family_tasks() -> dict:
     return {"tasks": out, "pins": {sec: {k: v for k, v in sorted(pins[sec].items()) if k in ids} for sec in ("definitions", "pieces")}}
 
 
-def _fresh() -> dict:
-    """`family_tasks()` in a new process: `targets.suite()` grows as tracing registers Definitions, so a process that already
-    built it (this suite's `test_circuit_check.py` does at import) lists more targets than circuit-check does."""
-    p = subprocess.run([sys.executable, __file__, "--print"], capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-4000:]
-    return json.loads(p.stdout)
+def _suite() -> dict:
+    """The process's first `targets.suite()`, the one circuit-check builds: `test_circuit_check.py`'s, built at import, when it is
+    loaded. `targets.suite()` grows as tracing registers Definitions, so a later call in this process lists more targets."""
+    from circuit_check import targets as TG
+
+    other = sys.modules.get("test_circuit_check")
+    return other.SUITE if other is not None and hasattr(other, "SUITE") else TG.suite()
 
 
 @pytest.mark.slow
 def test_the_family_s_circuit_check_tasks_are_unchanged():
-    """Builds circuit-check's whole task list in a fresh process (about 70 s): only the list itself shows that the split left
-    every target of the family where circuit-check finds it, at the same statics and pins."""
+    """Builds circuit-check's whole task list on the suite `test_circuit_check.py` built (about a minute alone, as
+    `test_split_prims_serve.py` does): only the list itself shows that the split left every target of the family where
+    circuit-check finds it, at the same statics and pins."""
     want = json.loads(FIXTURE.read_text())
-    got = _fresh()
+    got = family_tasks(_suite())
     assert len(got["tasks"]) == len(want["tasks"]) and got["tasks"] == want["tasks"], (
         sorted({t["label"] for t in want["tasks"]} ^ {t["label"] for t in got["tasks"]}) or "same labels, other entries")
     assert got["pins"] == want["pins"]

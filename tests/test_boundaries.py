@@ -89,6 +89,9 @@ ML_IMPORTS_CORE = {
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
                                              "core imports them from there, and this entry goes",
+    "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
+                                                        "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
+                                                        "entry), and moves with them in the follow-up to T2",
 }
 #: The units of ``verity.ml`` core's verifiers read, directly or through one another (what ``ALLOWED`` lets core reach): a
 #: verifier's verdict rests on them, so they are on the soundness path, and AGENTS.md names each.  The rest of ml (C-Flock's

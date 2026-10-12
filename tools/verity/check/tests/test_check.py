@@ -473,7 +473,11 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "560", "a slot's mem= caps circuit-check's own budget"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -481,17 +485,6 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
-
-
-def test_circuit_check_takes_one_worker_per_its_memory_share(tmp_path, monkeypatch):
-    """A cold `circuit-check --all --jobs 23` on vy-nebius-cpu-1 (755 GB) grew to 610 GiB and took the node down twice (7 Oct):
-    its workers are bounded by memory as well as cores, and never fall to none."""
-    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
-    jobs = lambda gs: (cc := gs[1][1][1])[cc.index("--jobs") + 1]
-    for gb, want in ((600, "4"), (370, "2"), (1400, "10"), (2048, "16"), (40, "1")):
-        monkeypatch.setattr(CHECK, "memory_gb", lambda: gb)
-        assert jobs(CHECK.groups(tmp_path, 32)) == want, gb
-        assert CHECK.groups(tmp_path, 32)[0][0][1][-1] == "16", "pytest keeps its half of the cores"
 
 
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
@@ -816,8 +809,10 @@ def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, 
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     """Without bytecode or pytest's cache; every lint it names exists, so a rename can't turn it into a failure of
     every check. Without uv, the lockfile step fails by name."""
-    (lock, argv, cwd), (lints, pytest, cwd2) = CHECK.preflight()
+    (lock, argv, cwd), (lints, pytest, cwd2), (fixtures, public, cwd3) = CHECK.preflight()
     assert (lock, argv[1:], cwd) == ("preflight-lock", ["lock", "--check"], ROOT)
+    assert (fixtures, public[1:], cwd3) == ("preflight-fixtures", ["-B", str(ROOT / "tools" / "verity" / "check" / "check.py"),
+                                                                   "--fixtures"], ROOT)
     assert (lints, pytest[1:4], cwd2) == ("preflight-lints", ["-B", "-m", "pytest"], ROOT) and "no:cacheprovider" in pytest
     assert pytest[-len(CHECK.LINTS):] == list(CHECK.LINTS)
     for t in CHECK.LINTS:
@@ -826,6 +821,69 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     monkeypatch.delenv("UV", raising=False)
     monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
+
+
+def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_the_public_export_has(tmp_path, monkeypatch, capsys):
+    """The closing train's check (cb20, 10 Oct) failed `lean-suites` after its launch: #1716 registered rec-coins, preserved
+    privately and never exported, and node 1 had it neither in its store nor from the public export. A fixture the tree already
+    holds exactly or this machine's store holds whole needs no export (top, 10 Oct: infra's node-1 copies keep trains moving),
+    though the export is asked first (one HEAD per manifest, no blob), so the ones it lacks are named. A tracked fixture
+    and the `previous` history are not asked about, and with no public source to ask it refuses rather than pass."""
+    import json
+    import subprocess
+
+    from research.store.fixtures import fixture_id
+
+    good, gone, small, local = ("art:" + c * 64 for c in "abce")
+    (tmp_path / "big").mkdir()
+    (tmp_path / "big" / "there.bin").write_bytes(b"exact bytes")
+    there = fixture_id(tmp_path / "big" / "there.bin")
+    (tmp_path / "fixtures").mkdir()
+    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(
+        {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", local: "big/local.bin", there: "big/there.bin",
+         "previous": {good: ["art:" + "d" * 64]}}))
+    (tmp_path / "small.json").write_text("{}")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "small.json", "fixtures"], check=True)
+    asked = []
+
+    def head(key):
+        asked.append(key)
+        return {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None
+
+    class Store:
+        def has_local(self, art):
+            return art == local
+
+    where, missing = CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Store())
+    assert missing == [gone]
+    assert where == {good: "the public export", local: "this machine's store", there: "the tree"}
+    assert sorted(asked) == sorted(f"manifests/{a.removeprefix('art:')}.json" for a in (good, gone, local, there))
+    with pytest.raises(RuntimeError, match="no public source"):
+        CHECK.fetchable_fixtures(tmp_path, "", head, Store())
+
+    class Broken:
+        def has_local(self, art):
+            raise OSError("no store")
+
+    assert CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Broken())[1] == [gone, local]
+
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, [gone]))
+    assert CHECK.main(["--fixtures"]) == 1
+    out = capsys.readouterr()
+    assert gone in out.err and "1 from this machine's store" in out.err and f"{local} from this machine's store" in out.out
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, []))
+    assert CHECK.main(["--fixtures"]) == 0 and "1 from this machine's store" in capsys.readouterr().out
+
+
+def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs_on(tmp_path, monkeypatch, capsys):
+    """A train's prep runs `--preflight` off the node its check is pinned to, so a fixture only that node's store holds (f1-gate
+    on node 1, 10 Oct) mustn't refuse the train there: the check's own preflight-fixtures judges the node, and refuses on it."""
+    fail = _py("raise SystemExit(1)")
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-fixtures", fail, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 0 and "not refused here" in capsys.readouterr().out
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lints", fail, tmp_path), ("preflight-fixtures", fail, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 1
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
@@ -979,3 +1037,240 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
         p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
                            capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+
+
+@pytest.mark.parametrize("twins", [False, True])
+def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
+    """With `auto` and no free slot, check.py launches one twin per machine and only one of them runs: train.sh prints every
+    twin's run id, so the lander follows the one that runs rather than the first launched, which may exit 75 not started."""
+    import os
+    import subprocess
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, done = tmp_path / "bin", tmp_path / "launched"
+    bin_.mkdir()
+    lines = (["check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2: the first to take a check slot runs"]
+             if twins else []) + ["research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r"]
+    lines += ["research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r"] if twins else []
+    (bin_ / "uv").write_text("#!/bin/sh\n" + "".join(f"echo '{x}'\n" for x in lines) + f"touch {done}\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")    # waits on the launch, not on a clock
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **GIT_ENV, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    want = "RUN r20261009-050001-aaaa r20261009-050002-bbbb" if twins else "RUN r20261009-050001-aaaa"
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
+
+
+#: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches
+_POST_STUB = ('case "$*" in *"slack reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; exit 0;; '
+              'esac\n')
+
+
+def _train_repo(tmp_path):
+    """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
+    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
+    import os
+    import subprocess
+
+    git_env = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True,
+                              env={**os.environ, **git_env}).stdout.strip()
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    (tmp_path / "repo" / "a").write_text("a\n")
+    git("add", "a")
+    git("commit", "-q", "-m", "root")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
+    bin_.mkdir()
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}printf '%s\\n' \"$@\" > {argv}\n"
+                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+
+    def train(*a):
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
+                              cwd=tmp_path / "repo", env=env)
+
+    return git, train, argv
+
+
+def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_not_its_ancestor(tmp_path):
+    """The two hand-built launches of 9 Oct (one of an empty commit, one without `--cwd source`) are what train.sh removes: it
+    refuses, before launching anything, a commit whose tree is its parent's, one no branch of origin holds (the run ships what
+    origin holds), a BASE that isn't an ancestor of it, and --agreement beside --against."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "empty")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
+    posted = tmp_path / "posted"
+    assert "registered no run (exit 1)" in posted.read_text() and "is empty (its tree is its base" in posted.read_text()
+
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "local")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
+
+    git("push", "-q", "origin", "HEAD:main")
+    head = git("rev-parse", "HEAD")
+    git("checkout", "-q", "-b", "side", root)
+    (tmp_path / "repo" / "s").write_text("s\n")
+    git("add", "s")
+    git("commit", "-q", "-m", "side")
+    git("push", "-q", "origin", "side")
+    p = train(head, "vy-x", "--against", "side")
+    assert p.returncode == 1 and "is not an ancestor of" in p.stderr, p.stderr
+
+    posted.unlink()
+    p = train(head, "vy-x", "--against", root, "--agreement")
+    assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
+    assert not argv.exists() and not posted.exists()
+
+
+def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
+    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
+    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
+    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert not (tmp_path / "posted").exists()
+
+    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    p = train("HEAD", "vy-x")
+    posted = (tmp_path / "posted").read_text()
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
+    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
+    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
+
+    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
+                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
+    p = train("HEAD", "vy-x")
+    posted = (tmp_path / "posted").read_text()
+    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
+
+
+def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
+    """#1585's head 13df320192c2 merged main into a commit that already held main's change: its tree is its first parent's, yet
+    it differs from main, and train.sh refused it as empty (22:23Z, 9 Oct). Empty means the tree is main's, where it leaves main."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    (tmp_path / "repo" / "m").write_text("m\n")
+    git("add", "m")
+    git("commit", "-q", "-m", "main")
+    git("push", "-q", "origin", "HEAD:main")
+    for branch, files in (("pr", ("m", "p")), ("same", ("m",))):
+        git("checkout", "-q", "-b", branch, root)
+        for f in files:
+            (tmp_path / "repo" / f).write_text(f"{f}\n")
+            git("add", f)
+        git("commit", "-q", "-m", branch)
+        git("merge", "-q", "--no-edit", "origin/main")
+        git("push", "-q", "origin", branch)
+    head = git("rev-parse", "pr")
+    assert git("rev-parse", "pr^{tree}") == git("rev-parse", "pr^1^{tree}") != git("rev-parse", "origin/main^{tree}")
+    p = train(head, "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    argv.unlink()
+
+    assert git("rev-parse", "same^{tree}") == git("rev-parse", "origin/main^{tree}")
+    p = train(git("rev-parse", "same"), "vy-x")
+    assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
+    assert not argv.exists()
+
+
+def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_path):
+    """`--against BASE` launches `suites.py --changed BASE` (no --quick) through the quick tier's job in a priority slot, as a
+    `research run --cwd source`: the flag the 10:14Z hand-built launch lacked, so the suites ran outside the shipped tree."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    head = git("rev-parse", "HEAD")
+    p = train("HEAD", "vy-x", "--against", root)
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    a = argv.read_text().splitlines()
+    assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
+    assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
+    cmd, job = a[a.index("--") + 1:], a[-1]
+    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"], \
+        "cpu-1's launcher takes only a run whose command is slot.py's (slot_only.through_slot; the lander, 10 Oct)"
+    assert [a[i + 1] for i, x in enumerate(a) if x == "--send"] == ["tools/research/src/research/quick_tier.py"]
+    assert f"--head {head} --base {root} --" in job
+    assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
+
+
+def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
+    """train.sh is bash, so it copies the quick tier's slot wait, run time and Lean builds from research.queue: this keeps the
+    copies equal."""
+    from research import queue
+
+    text = (ROOT / "tools" / "verity" / "check" / "train.sh").read_text()
+    assert f"wait_s={queue.REMOTE_WAIT_S} run_s={queue.REMOTE_TIMEOUT_S}" in text
+    assert "".join(f" --lean {d}" for d in queue.LEAN_BUILDS) + " --head" in text
+    assert "uv run --locked --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
+
+
+def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):
+    """check.py killed before it launches a run (the OOM killer, while it gathers verdicts) prints no traceback: train.sh says
+    how it exited and returns that, at once, rather than polling the log for ten minutes and saying only that nothing launched."""
+    import os
+    import subprocess
+
+    GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, pidf = tmp_path / "bin", tmp_path / "pid"
+    bin_.mkdir()
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}echo 'check: verdicts: gathering'\n"
+                             f"echo $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\nexit 137\n")
+    # waits until check.py has exited, not on a clock
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\nwhile kill -0 $(cat {pidf}) 2>/dev/null; do :; done\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **GIT_ENV, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    assert p.returncode == 137 and "train: check.py exited 137 before launching a run (killed" in p.stderr, (p.stdout, p.stderr)
+    assert "RUN" not in p.stdout
+    posted = (tmp_path / "posted").read_text()
+    assert "registered no run (exit 137)" in posted and "exited 137 before launching a run" in posted, posted
+    assert "check: verdicts: gathering" in posted, posted

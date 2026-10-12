@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from . import cache as CC
 from . import checks as CK
@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parents[5]
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
-    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras)
+    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_ands=a.lower_max_ands)
 
 
 _TASKS: list[tuple] = []
@@ -125,31 +125,185 @@ def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | 
     if tracing:
         CC.trace(REPO)
     _TASKS[:] = _tasks(specs, opts, everything, as_call)
+    if as_call is None:
+        TG.call_families()            # what a Definition's check would otherwise build in each target's process (every template)
 
 
-def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None = None, initargs: tuple = ()):
-    """``fn`` of each item in up to ``jobs`` forkserver workers, yielded as each finishes. A worker that dies (the OOM killer)
-    raises ``BrokenProcessPool``: ``multiprocessing.Pool`` would wait for its task forever."""
+def _rss_gb() -> float | None:
+    """This process's resident set now, in GiB (``VmRSS``; None without /proc)."""
+    try:
+        for ln in Path("/proc/self/status").read_text().splitlines():
+            if ln.startswith("VmRSS:"):
+                return round(int(ln.split()[1]) / (1 << 20), 2)
+    except OSError:
+        pass
+    return None
+
+
+def _maxrss_gb(ru_maxrss: int) -> float:
+    return round(ru_maxrss / (1 << 30 if sys.platform == "darwin" else 1 << 20), 2)
+
+
+class Killed(dict):
+    """What `parallel` yields in place of an item's result when its process died before returning one (the OOM killer):
+    ``how`` it died (``signal 9``, ``exit 3``)."""
+
+
+def _child(w: int, fn: Callable, item: Any) -> None:
+    """A forked child: ``fn(item)``, pickled down ``w``, and exit.  Its start RSS is the zygote's at the fork (shared with it
+    copy-on-write)."""
+    import pickle
+
+    start = _rss_gb()
+    try:
+        data = pickle.dumps((fn(item), start))
+    except BaseException as e:  # noqa: BLE001  (the zygote reports what the item raised, never the child's stack unwinding into its loop)
+        data = pickle.dumps((Killed(how=f"raised {type(e).__name__}: {str(e)[:200]}"), start))
+    view = memoryview(data)
+    while view:
+        view = view[os.write(w, view):]
+    os._exit(0)
+
+
+def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple) -> None:
+    """`parallel`'s one worker: ``initializer`` once, then a forked child per item ``conn`` sends, each running that item alone and
+    exiting.  Each child is reaped with ``wait4``, whose ``ru_maxrss`` is that child's own peak RSS even when it was killed, and
+    the zygote knows which item each child had, so a death is named by its item."""
+    import gc
+    import pickle
+    import selectors
+    import warnings
+
+    if initializer is not None:
+        initializer(*initargs)
+    gc.collect()
+    gc.freeze()                       # the children's collections then leave the task list's pages shared
+    sel = selectors.DefaultSelector()
+    sel.register(conn, selectors.EVENT_READ)
+    kids: dict[int, tuple[int, int, bytearray]] = {}         # read end -> (pid, ticket, what the child wrote)
+    while True:
+        for key, _ in sel.select():
+            if key.fileobj is conn:
+                try:
+                    msg = conn.recv()
+                except EOFError:
+                    msg = None
+                if msg is None:
+                    for pid, _, _ in kids.values():
+                        os.kill(pid, 9)
+                        os.waitpid(pid, 0)
+                    return
+                ticket, item = msg
+                r, w = os.pipe()
+                with warnings.catch_warnings(), CC.internal():
+                    warnings.simplefilter("ignore", DeprecationWarning)        # the numeric libraries' idle threads
+                    pid = os.fork()                                            # the child keeps the tracer's hook
+                if pid == 0:
+                    os.close(r)
+                    _child(w, fn, item)
+                os.close(w)
+                kids[r] = (pid, ticket, bytearray())
+                sel.register(r, selectors.EVENT_READ)
+                continue
+            r = key.fileobj
+            pid, ticket, buf = kids[r]
+            if chunk := os.read(r, 1 << 20):
+                buf += chunk
+                continue
+            sel.unregister(r)
+            os.close(r)
+            del kids[r]
+            _, status, usage = os.wait4(pid, 0)
+            if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 and buf:
+                value, start = pickle.loads(buf)
+            else:
+                how = f"signal {os.WTERMSIG(status)}" if os.WIFSIGNALED(status) else f"exit {os.WEXITSTATUS(status)}"
+                value, start = Killed(how=how), None
+            conn.send((ticket, value, _maxrss_gb(usage.ru_maxrss), start))
+
+
+def admit(queued: list[float], running: list[float], jobs: int, budget: float) -> list[int]:
+    """Which of the queued items (by their weights, in order) to start beside those running: each in turn that fits, while fewer
+    than ``jobs`` run and the weights add up to at most ``budget``; with nothing running, the first starts whatever its weight."""
+    used, n, picked = sum(running), len(running), []
+    for k, w in enumerate(queued):
+        if n >= jobs:
+            break
+        if n == 0 or used + w <= budget:
+            picked.append(k)
+            used, n = used + w, n + 1
+    return picked
+
+
+def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None = None, initargs: tuple = (), *,
+             weight: Callable[[Any], float] | None = None, budget: float | None = None):
+    """``(item, fn(item), peak_gb, start_gb)`` for each item, yielded as each finishes, each item run alone in a process of its
+    own: up to ``jobs`` at once, forked from one zygote process that ran ``initializer(*initargs)`` (started by forkserver, never
+    a fork of this possibly multi-threaded process: under pytest-xdist that deadlocked).  ``peak_gb`` is that process's peak RSS
+    (``ru_maxrss``, GiB): the item's own, plus ``start_gb``, the RSS it was forked with, which it shares with the zygote (what
+    ``initializer`` built).  An item whose process died (the OOM killer) yields a `Killed` for ``fn(item)``, with the peak it
+    reached; the others run on.  With ``weight`` and ``budget`` an item starts only while the weights of the items running and its
+    own add up to at most ``budget`` (an item heavier than ``budget`` runs alone), taken in the order given, the first that fits."""
     import multiprocessing as mp
-    from concurrent.futures import ProcessPoolExecutor, as_completed
 
-    with ProcessPoolExecutor(min(jobs, len(items)), mp_context=mp.get_context("forkserver"), initializer=initializer,
-                             initargs=initargs) as pool:
-        for f in as_completed([pool.submit(fn, x) for x in items]):
-            yield f.result()
+    weigh = weight or (lambda _: 0.0)
+    limit = float("inf") if budget is None else budget
+    ctx = mp.get_context("forkserver")
+    here, there = ctx.Pipe()
+    zygote = ctx.Process(target=_zygote, args=(there, fn, initializer, initargs), daemon=True)
+    zygote.start()
+    there.close()
+    queue = list(enumerate(items))
+    running: dict[int, tuple[Any, float]] = {}
+    try:
+        while queue or running:
+            for k in admit([weigh(x) for _, x in queue], [w for _, w in running.values()], jobs, limit):
+                t, x = queue[k]
+                here.send((t, x))
+                running[t] = (x, weigh(x))
+            queue = [q for q in queue if q[0] not in running]
+            try:
+                t, value, peak, start = here.recv()
+            except EOFError:
+                raise RuntimeError(f"circuit-check's zygote died (exit {zygote.exitcode}) while running "
+                                   f"{[x for x, _ in running.values()]}") from None
+            yield running.pop(t)[0], value, peak, start
+    finally:
+        try:
+            here.send(None)
+        except OSError:
+            pass
+        here.close()
+        zygote.join()
 
 
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
-        cache: Path | None = None) -> dict:
-    """Every target's checks, in target order; ``jobs`` > 1 runs them in that many worker processes, each started from a fresh
-    forkserver (never a fork of this possibly multi-threaded process: under pytest-xdist that deadlocked) and rebuilding the
-    task list with its own memo, so a worker may repeat a Definition another checked: the results are the same.
+        cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None) -> dict:
+    """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
+    process of its own, up to ``jobs`` at once (`parallel`): forked from one process that built the task list itself with its own
+    memo, so a target's check never reuses what another's computed: the results are the same as checking them here, in turn.
 
     With ``cache`` each target's result is reused while everything its check read or resolved is unchanged
     (`circuit_check.cache`): what was read and run from the start of its check, the builds of the Definitions it reached, its
     own bindings and pins, and those modules' import closures; not what the task list's build or another target read.  A result
     is not stored once its process did something the tracer cannot see, nor when the check raised (no verdict), nor when the
     reads as that process sees them right after its check differ from what would be recorded (the tree changed during the run).
+
+    Isolated, each result has ``peak_gb``: the peak RSS of the process that checked that target and nothing else (its
+    ``ru_maxrss``, in GiB, so also when it was killed), and ``rss_start_gb``: the RSS it was forked with, the task list it shares
+    copy-on-write with the process it was forked from, which the peak includes; ``peak_gb - rss_start_gb`` is what the check itself
+    grew.  Checked here, in turn, a result has neither (earlier targets' leftovers would be under its peak).  The report's
+    ``peaks`` lists the heaviest of the targets checked now, and ``progress`` (JSON lines) gets a line per target as it finishes,
+    so a run that is itself killed still leaves them.
+
+    Isolated, circuit-check's memory stays under ``mem_gb`` GiB (default: what `memory_gb` leaves this process) as long as every
+    target that peaks over `HEAVY_GB` is listed in `HEAVY` with its peak: a target starts only while the peaks of those running
+    and its own add up to at most `budget_gb` (``mem_gb`` less this process's RSS), counting an unlisted target as `HEAVY_GB`;
+    one heavier than that still runs, alone, and the log says it does not fit; the
+    listed targets go first, heaviest first.  The sum counts each process's copy of the task list, which they share, so the bound
+    is conservative by that much per process.  An unlisted target that peaks well over `HEAVY_GB` can still break it: the process
+    it gets killed in is reported as that target's failure (``circuit-check/killed``, with its peak), the other targets run on,
+    and its peak belongs in `HEAVY`.
 
     The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
     could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
@@ -164,6 +318,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             got = [CC.lookup(cache, k, REPO, moved=False) for k in hit[0]["keys"]]
             if all(g is not None and not _errored(g[0]) for g in got):
                 rep = CK.report([{**g[0], "cache": {"hit": g[1]}} for g in got], opts)
+                rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 return rep
     tasks = _tasks(specs, opts, everything, as_call)
@@ -177,6 +332,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
         out[i] = r
+        if progress is not None:
+            with progress.open("a") as f:
+                f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
+                                    "failures": len(r["failures"]), **({"killed": True} if r.get("killed") else {})}) + "\n")
         if tracing and got is not None:
             if _errored(r):
                 stats["errors"].append(r["target"])
@@ -203,15 +362,35 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 stats["hits"] += 1
             else:
                 todo.append(i)
-    if jobs > 1 and len(todo) > 1:
+    if (jobs > 1 if isolate is None else isolate) and todo:
         init = (specs, opts, everything, as_call, tracing)
-        for i, r, got, untraced, worker in parallel(_work, todo, jobs, _init, init):
-            done(i, r, got, untraced, worker)
+        budget = budget_gb(mem_gb)
+        peaks = heavy()
+        order = sorted(todo, key=lambda i: -peaks.get(tasks[i][1], 0))
+        if log:
+            for i in order:
+                if peaks.get(tasks[i][1], 0) > budget:
+                    log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
+        for i, got_, peak, start in parallel(_work, order, jobs, _init, init, weight=lambda i: peaks.get(tasks[i][1], HEAVY_GB),
+                                             budget=budget):
+            if isinstance(got_, Killed):
+                r = {"failures": [{"check": "circuit-check", "code": "killed", "definition": tasks[i][1],
+                                   "name": f"circuit-check/killed {tasks[i][1]}: its process died ({got_['how']}: the OOM "
+                                           f"killer?) at a peak of {peak} GiB"}],
+                     "warnings": [], "kind": tasks[i][0], "target": tasks[i][1], "seconds": 0.0, "peak_gb": peak, "killed": True}
+                done(i, r)
+            else:
+                _, r, got, untraced, worker = got_
+                r.update(peak_gb=peak, rss_start_gb=start)
+                done(i, r, got, untraced, worker)
     else:
         for i in todo:
             r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
             done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
     rep = CK.report([r for r in out if r is not None], opts)
+    ran = [r for r in rep["targets"] if r.get("peak_gb") is not None and "cache" not in r]
+    rep["peaks"] = [{"target": r["target"], "peak_gb": r["peak_gb"], "rss_start_gb": r.get("rss_start_gb"), **({"killed": True} if r.get("killed") else {})}
+                    for r in sorted(ran, key=lambda r: -r["peak_gb"])[:PEAKS_REPORTED]]
     if tracing:
         rep["cache"] = stats
     return rep
@@ -230,9 +409,30 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
+#: the targets that peak over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling; ``peak_gb``, which counts the 9.6 GiB
+#: task list each process is forked with), from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1: its first 239
+#: targets, every one an earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the
+#: earlier 29.4 and 104.2 GiB entries were what a long-lived worker kept from a previous target); its other targets confirm it
+HEAVY = Path(__file__).with_name("heavy.json")
+HEAVY_GB = 16
+PEAKS_REPORTED = 50
+
+
+def budget_gb(mem_gb: int | None) -> float:
+    """What the targets' processes may take together, in GiB: what `memory_gb` leaves (this process's use taken off already),
+    and with ``mem_gb`` (all of circuit-check: a check slot's mem=) at most that less what this process holds now (its own copy
+    of the task list)."""
+    return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
+
+
+def heavy() -> dict[str, float]:
+    return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
+
+
 #: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
-#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct)
-GB_PER_JOB = 128
+#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct); a cold `--all` at 7 workers in
+#: vy-n2's 900 GiB session scope grew them to 107-155 GiB and was OOM-killed (r20261009-061009-1b4d, 9 Oct)
+GB_PER_JOB = 160
 
 
 def memory_gb(root: Path = Path("/")) -> int:
@@ -266,11 +466,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--all", action="store_true", help="every registered Definition and template at the catalog's bindings")
     ap.add_argument("--out", type=Path, help="write the JSON report here")
     ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
+    ap.add_argument("--mem-gb", type=int, default=None, help="the memory circuit-check may take, in GiB, this process included "
+                    "(default: what this process may use, `memory_gb`); see `run`")
     ap.add_argument("--vectors", type=int, default=CK.Options.vectors)
     ap.add_argument("--seed", type=int, default=CK.Options.seed)
     ap.add_argument("-X", type=int, default=CK.Options.X)
     ap.add_argument("-W", type=int, default=CK.Options.W)
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
+    ap.add_argument("--lower-max-ands", type=int, default=CK.Options.lower_max_ands,
+                    help="lower a Definition whole when the piece pins estimate at most this many ANDs")
     ap.add_argument("--as-call", action="store_true", help="hold a Definition target to the partition invariant as a Call "
                     "(default: when its family is a Call of a served Program)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
@@ -292,7 +496,8 @@ def main(argv: list[str] | None = None) -> int:
     jobs = a.jobs or auto_jobs()
     opts = _options(a)
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
-              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None)
+              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None,
+              mem_gb=a.mem_gb, isolate=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None)
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "

@@ -45,7 +45,7 @@ its draw: the `y₀` of `EndToEndHidden`, `EndToEndHiddenDrawn`, `EndToEndRegist
 `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`. -/
 theorem EndToEndHidden_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : Flock.HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    (hscope : Layout.scopeOk c = true) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (hscope : Layout.scopeOkH c = true) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop)
     {S : Finset (Fin n)} {t : Exec.Transcript} (hacc : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
@@ -65,7 +65,7 @@ theorem EndToEndHidden_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = fals
   obtain ⟨_, -, hdr⟩ := Hidden.setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[0].c with outPorts := #[] }) hdr
   obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHidden (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
-    (mPts := mPtsOf c.g (kd / nTab I)) (typedJ ht 0) hcJ (Layout.scopeOk_spec hU hscope).2.1 hst hf hD
+    (mPts := mPtsOf c.g (kd / nTab I)) (typedJ ht 0) hcJ (Layout.scopeOkH_spec hU hscope).2.1 hst hf hD
     (hDraw.1 D hD) (hDraw.2 _ hst)
   obtain ⟨y, -, -, -⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape 0 hj)
     (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')

@@ -168,8 +168,8 @@ def test_the_rule_refuses_a_leaf_count_unless_declared():
         _stream(spec).register(_record(), _ports(6))
     assert e.value.verdict.detail == {"undeclared": ["leaves:x"]}
     bare = _spec(public=())
-    assert S.check_public(bare, _record()).detail["undeclared"] == ["population", "window", "leaves:x", "domain:x",
-                                                                   "leaves:out", "domain:out"]
+    assert S.check_public(bare, _record()).detail["undeclared"] == ["population", "window", "domain:x", "leaves:x",
+                                                                   "domain:out", "leaves:out"]
 
 
 def test_the_rule_refuses_a_template_population_unless_declared():
@@ -213,7 +213,7 @@ def test_the_rule_refuses_the_rest():
     assert S.check_public(_spec(), _record(registered=reg)).detail["roots"] == ["W"]
     spec = _spec(values=(*VALUES, S.Value("W", None, "epoch", registered=True)),
                  public=(*STEP0, S.Public("W", "commitment", "the weights' salted root")))
-    assert S.check_public(spec, _record(registered=reg)).detail["undeclared"] == ["leaves:W", "words:W", "domain:W"]
+    assert S.check_public(spec, _record(registered=reg)).detail["undeclared"] == ["domain:W", "leaves:W", "words:W"]
     assert S.check_public(_spec(), "a record").codes == ("keys",)
 
 

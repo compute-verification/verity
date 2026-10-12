@@ -78,12 +78,11 @@ struct CircuitParams {
     u_cut_rows: *const u32,
     mid_cb: Option<MidCb>,
     mid_ctx: *mut c_void,
-    /// hm96-sha512 Merkle leaves (the SHA-512 build): the device expands each tree's salts with ChaCha20 under `hm96_key` (32
-    /// bytes, `zk_hooks::LeafSalts`) with the nonce `hm96_tree` returns for this proof's k-th tree; and the scheme's constants
+    /// hm96-sha512 Merkle leaves (the SHA-512 build): `hm96_tree` hands the device this proof's k-th tree's salts, read on the
+    /// host from the OS (`zk_hooks::LeafSalts`, 192 bytes per leaf, held until the prover returns); and the scheme's constants
     /// (salt prefix ‖ leaf prefix, 256 bytes; the key's byte tables, 192 × 256 × 8 u64). Null: unsalted.
     hm96_tree: Option<Hm96TreeCb>,
     hm96_ctx: *mut c_void,
-    hm96_key: *const u8,
     hm96_prefixes: *const u8,
     hm96_tables: *const u64,
     hm96_level0_leaves: i64,
@@ -123,16 +122,35 @@ pub enum Live<'a> {
     Zk { level0: &'a Level0, rounds: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128> },
 }
 
-type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
+type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32, i64) -> *const u8;
 
-/// The salt-stream nonce of this proof's k-th tree: 0 for level 0 (both reps share it), a fresh id for every later tree.
+/// The salts the device's trees take (`hm96_tree`): the table's, and every tree's handed to the device so far, which its
+/// openings read until the prover returns.
 #[cfg(feature = "sha512")]
-unsafe extern "C" fn hm96_tree(ctx: *mut c_void, tree: i32) -> i64 {
-    if tree == 0 {
-        return 0;
-    }
-    let salts = unsafe { &*(ctx as *const std::sync::Mutex<crate::zk_hooks::LeafSalts>) };
-    salts.lock().unwrap_or_else(std::sync::PoisonError::into_inner).next_id() as i64
+struct Hm96Trees<'a> {
+    salts: &'a std::sync::Mutex<crate::zk_hooks::LeafSalts>,
+    given: std::sync::Mutex<Vec<std::sync::Arc<Vec<u8>>>>,
+}
+
+/// This proof's k-th tree's salts, `leaves` × 192 bytes: level 0's for tree 0 (both reps share them), a fresh tree's for every
+/// later one. Null when they cannot be read (the device refuses the tree).
+#[cfg(feature = "sha512")]
+unsafe extern "C" fn hm96_tree(ctx: *mut c_void, tree: i32, leaves: i64) -> *const u8 {
+    let h = unsafe { &*(ctx as *const Hm96Trees<'_>) };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut s = h.salts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let b = match tree {
+            0 => s.level0(leaves as usize),
+            _ => {
+                let id = s.next_id();
+                std::sync::Arc::new(s.expand(id, leaves as usize))
+            }
+        };
+        let p = b.as_ptr();
+        h.given.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(b);
+        p
+    }))
+    .unwrap_or(std::ptr::null())
 }
 
 type MidCb = unsafe extern "C" fn(*mut c_void, *const u32, i64, *mut u32, *mut i64, *mut *const i64, *mut *const i32, *mut *const u64) -> i32;
@@ -186,7 +204,7 @@ unsafe extern "C" {
     fn flock_cuda_prove_circuit(p: *const ProveParams, n: *const CircuitParams, out: *mut *mut u8, out_len: *mut usize) -> i32;
     fn flock_cuda_free(p: *mut u8);
     #[cfg(feature = "sha512")]
-    fn flock_cuda_hm96_salts(key: *const u8, nonce: u64, idx: *const i64, n: i32, out: *mut u8) -> i32;
+    fn flock_cuda_hm96_leaves(x: *const u8, salts: *const u8, n: i64, prefixes: *const u8, tables: *const u64, out: *mut u8) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
     fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
@@ -237,13 +255,19 @@ pub fn deep_unit(st: &Stmt) -> bool {
     }
 }
 
-/// The salts of leaves `idx` of tree `nonce` under `key` as the device expands them (192 bytes each): a test vector against
-/// `zk_hooks::LeafSalts::salt`.
+/// The hm96 leaves of the digests `x` (64 bytes each) under the host's `salts` (192 bytes each) as the device finishes a tree's
+/// leaves: a test vector against `flock_merkle::hm96::leaf`.
 #[cfg(feature = "sha512")]
-pub fn device_salts(key: &[u8; 32], nonce: u64, idx: &[i64]) -> Vec<u8> {
-    let mut out = vec![0u8; 192 * idx.len()];
-    let rc = unsafe { flock_cuda_hm96_salts(key.as_ptr(), nonce, idx.as_ptr(), idx.len() as i32, out.as_mut_ptr()) };
-    assert_eq!(rc, 0, "device salt expansion failed ({rc})");
+pub fn device_leaves(x: &[u8], salts: &[u8]) -> Vec<u8> {
+    let n = x.len() / 64;
+    assert!(x.len() == 64 * n && salts.len() == 192 * n, "a 64-byte digest and a 192-byte salt per leaf");
+    let pre = { let c = flock_merkle::hm96::consts(); [c.salt_prefix, c.leaf_prefix].concat() };
+    let mut out = vec![0u8; 64 * n];
+    let rc = unsafe {
+        flock_cuda_hm96_leaves(x.as_ptr(), salts.as_ptr(), n as i64, pre.as_ptr(), flock_merkle::hm96::consts().tables.as_ptr() as *const u64,
+                               out.as_mut_ptr())
+    };
+    assert_eq!(rc, 0, "the device's hm96 leaves failed ({rc})");
     out
 }
 
@@ -909,7 +933,6 @@ pub fn prove_circuit(
         mid_ctx: mctx.as_mut().map_or(null_mut(), |m| m as *mut MidCtx<'_> as *mut c_void),
         hm96_tree: None,
         hm96_ctx: null_mut(),
-        hm96_key: std::ptr::null(),
         hm96_prefixes: std::ptr::null(),
         hm96_tables: std::ptr::null(),
         hm96_level0_leaves: 0,
@@ -951,12 +974,11 @@ pub fn prove_circuit(
         [c.salt_prefix, c.leaf_prefix].concat()
     };
     #[cfg(feature = "sha512")]
-    let key_guard = salts.map(|s| crate::zk_hooks::ZeroOnDrop(s.lock().unwrap_or_else(std::sync::PoisonError::into_inner).key().to_vec()));
+    let trees = salts.map(|salts| Hm96Trees { salts, given: Default::default() });
     #[cfg(feature = "sha512")]
-    if let (Some(s), Some(k)) = (salts, &key_guard) {
+    if let Some(h) = &trees {
         p.hm96_tree = Some(hm96_tree as Hm96TreeCb);
-        p.hm96_ctx = s as *const _ as *mut c_void;
-        p.hm96_key = k.0.as_ptr();
+        p.hm96_ctx = h as *const Hm96Trees<'_> as *mut c_void;
         p.hm96_level0_leaves = pcs.n_leaves() as i64;
         p.hm96_prefixes = hm96_prefixes.as_ptr();
         p.hm96_tables = flock_merkle::hm96::consts().tables.as_ptr() as *const u64;
@@ -984,7 +1006,7 @@ pub fn prove_circuit(
     let t_decode = Instant::now();
     drop(mctx);
     #[cfg(feature = "sha512")]
-    drop(key_guard);
+    drop(trees);
     if let Some(why) = rounds.and_then(|r| r.failed) {
         if rc == 0 {
             unsafe { flock_cuda_free(out) };

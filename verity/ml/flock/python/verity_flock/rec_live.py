@@ -37,6 +37,14 @@ zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A refusa
 is a **stop**: the coin server's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
 session.
 
+**Live coins.** Each round's coins are drawn by the coin server when the round's commitments reach it, never before
+(`RecursiveSound`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
+after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
+coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
+points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those
+commitments (``commitments``) stops a session whose coins do not open their commitment or come without an opening, and a
+proxy given none stops one whose coins come with an opening, as the contract decides under the public input's ``coins``.
+
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
 top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
@@ -87,12 +95,21 @@ RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_DRAW = range(1
 
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
+#: `Flock.Firewall.Contract.COINS_TAG`: the coin message's tag
+COINS_TAG = b"verity/firewall-coins/v0\0"
+#: the stream name of the link points' coins (``Commit``'s answer), round 0, in the challenger's commitments and the transcript
+LINK_COINS = "link"
+COINS_KIND = "rec/inner-coins/v0"
 F_WORDS = 8
 MASK64 = (1 << 64) - 1
 
 #: a flock-circuit statement's session (`schedule_for`): its one table, fast100's reps, the link's points (one ``y``
 #: element each, a table) and each point's free in-block coordinates (``circuit.rs`` ``PT_LOCAL``; ``nbl`` block ones follow)
 TABLE, REPS, LINK_POINTS, PT_LOCAL = "circuit", 2, 2, 24
+#: candidate 3's stacked table R (`stacked_rounds`)
+STACKED = "stacked"
+#: candidate 3's sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
+SPARSE = "sparse"
 
 
 # --- wire codec (live/src/lib.rs `Req`, `Resp`) -------------------------------------------------------------------------------
@@ -341,6 +358,21 @@ def commit_top(cap: bytes, salts: list[bytes]) -> list[bytes]:
     return commit_rows(top_rows(cap), salts)
 
 
+def coin_message(stream: str, k: int, coins: list[int]) -> bytes:
+    """What the challenger commits to for round ``k`` of ``stream``'s coins (`Flock.Firewall.Contract.coinMsg`): the tag,
+    the stream's UTF-8 bytes after their length, the round, the coin count (each 4 bytes big-endian), then each coin's 16
+    bytes (`f128_bytes`)."""
+    s = stream.encode()
+    return COINS_TAG + struct.pack(">I", len(s)) + s + struct.pack(">II", k, len(coins)) + b"".join(f128_bytes(c) for c in coins)
+
+
+def coin_commitment(stream: str, k: int, coins: list[int], salt: bytes) -> bytes:
+    """The challenger's commitment to a round's coins: hm96-sha512's ``b || c`` of SHA-512(`coin_message`) under ``salt``
+    (`Flock.Firewall.Contract.commitBC`, the commit items' commitment); ``salt`` is its opening."""
+    inst = hm96.SHA512
+    return inst.commit_string(inst.default_key, hashlib.sha512(coin_message(stream, k, coins)).digest(), salt)
+
+
 def refused(what: str) -> str:
     return f"FIREWALL-REFUSED: {what}"
 
@@ -384,23 +416,67 @@ def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], in
     return out
 
 
-def schedule_for(statement: dict) -> dict:
+def zp_round(m: int, k_log: int) -> int:
+    """The index in `rep_rounds` of the round that absorbs z_partial (64 elements) and squeezes r′."""
+    return m + k_log - 7
+
+
+def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:
+    """`rep_rounds` with hidden unit circuits (`rec_algebra.Shape.holo`): z_partial's round squeezes nothing (its frames end
+    in a squeeze of no coins, `verity_flock.rec_session`; `rec_algebra.Coins` skips it), and a round of its own absorbs h (64
+    elements) and squeezes r′ (`rec_algebra.h_round`)."""
+    out, k = rep_rounds(m, k_log, claims), zp_round(m, k_log)
+    if out[k] != (1, [], 0, 64):
+        raise AssertionError(f"round {k} is not z_partial's")
+    return out[:k] + [(0, [], 0, 64), (1, [], 0, 64)] + out[k + 1:]
+
+
+def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
+    """The stream of the stacked table R (``2^m`` cells) that candidate 3's opening-only prover runs (``flock-circuit
+    stacked``, its one rep): the binding round, which also absorbs the first claim's s_hat_v and squeezes its ring switch's
+    coins, then `rep_rounds`' second ring switch, the gammas and Ligerito at fast100(m)."""
+    if type(m) is not int or not 22 <= m <= 35:
+        raise ValueError(f"the stacked table's m is 22 to 35, not {m}")
+    return [(7, [], 1, 128)] + rep_rounds(m, 6, 2)[m + 1:]
+
+
+def sparse_rounds(sh) -> list[tuple[int, list[int], int, int]]:
+    """A rep's sparse phase at `verity_flock.rec_sparse`'s shape ``sh`` (`rec_sparse.prove`'s draws, each message one row): ζ_c,
+    H2's rounds, v2's (no coins), H3's, u's (ζ_p), and with T > 1 vt's (ρ_t)."""
+    from .rec_sparse import PRE_ROUNDS
+
+    out = [(PRE_ROUNDS, [], 0, 0)] + [(1, [], 0, 2)] * PRE_ROUNDS + [(0, [], 0, 1)]
+    out += [(1, [], 0, d) for d in sh.degrees] + [(sh.P_LOG, [], 0, sh.PP)]
+    return out + ([(sh.T_LOG, [], 0, sh.T)] if sh.stacked else [])
+
+
+def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None, sparse=None) -> dict:
     """The schedule of a flock-circuit statement's inner session (one table, fast100's two reps, live OS coins) from the
     statement's public shape alone: ``dense_m``, ``k_log``, ``nbl`` and ``regions`` of ``flock-circuit statement``'s
     ``STATEMENT`` record (`statement_of`), the four numbers the schedule reveals anyway. Each region adds one extra claim a
-    link point."""
+    link point. ``holo``: hidden unit circuits' rounds (`holo_rounds`). ``sparse``: the bucket's `rec_sparse.Shape`; each
+    rep's sparse stream (`sparse_rounds`), opened at its rep's end, follows both reps'. ``stacked``: the stacked table's
+    ``m``; Hello names it after the circuit's table, Commit holds its root, and its stream (`stacked_rounds`) comes last."""
     m, k_log, nbl, regions = (statement.get(k) for k in ("dense_m", "k_log", "nbl", "regions"))
     if not all(type(v) is int and v >= 0 for v in (m, k_log, nbl, regions)):
         raise ValueError("a STATEMENT record names dense_m, k_log, nbl and regions")
-    rep = rep_rounds(m, k_log, 2 + LINK_POINTS * regions)
-    streams = [f"{TABLE}/rep{r}" for r in range(REPS)]
+    rep = (holo_rounds if holo else rep_rounds)(m, k_log, 2 + LINK_POINTS * regions)
+    streams = {f"{TABLE}/rep{r}": rep for r in range(REPS)}
+    at = {s: ("", 0) for s in streams}
+    roots = {TABLE: 1 << fast100(m).levels[0].cap}
+    if sparse is not None:
+        for r in range(REPS):
+            streams[f"{SPARSE}/rep{r}"], at[f"{SPARSE}/rep{r}"] = sparse_rounds(sparse), (f"{TABLE}/rep{r}", len(rep))
+    if stacked is not None:
+        streams[f"{STACKED}/rep0"], roots[STACKED] = stacked_rounds(stacked), 1 << fast100(stacked).levels[0].cap
+        at[f"{STACKED}/rep0"] = ("", 0)
     return {"kind": KIND + "/schedule",
             "hello": {"digests": "sha512", "flavor": "rs", "link": {"m": PT_LOCAL + nbl, "points": LINK_POINTS}, "profile": "fast100",
-                      "reps": REPS, "rounds": "bytes retained", "tables": [TABLE]},
-            "roots": {TABLE: 1 << fast100(m).levels[0].cap}, "link": {"y": LINK_POINTS},
-            "streams": {s: {"parent": "", "at": 0, "rounds": len(rep)} for s in streams},
+                      "reps": REPS, "rounds": "bytes retained", "tables": list(roots)},
+            "roots": roots, "link": {"y": LINK_POINTS},
+            "streams": {s: {"parent": at[s][0], "at": at[s][1], "rounds": len(rs)} for s, rs in streams.items()},
             "rounds": [{"stream": s, "k": k, "n": n, "tops": tops, "level0": level0, "commits": int(e > 0)}
-                       for s in streams for k, (n, tops, level0, e) in enumerate(rep)]}
+                       for s, rs in streams.items() for k, (n, tops, level0, e) in enumerate(rs)]}
 
 
 def statement_of(text: str) -> dict:
@@ -454,11 +530,58 @@ class CoinServer:
         self.rounds: list[dict] = []
         #: how the session ended: "finish", or "stop" (a refusal, or a session that ended without Finish)
         self.end: str | None = None
+        #: the coins `commit_coins` drew before the session, by (stream, round), each with the salt that opens its commitment
+        self.committed: dict[tuple[str, int], tuple[list[int], bytes]] | None = None
+        #: `commit_coins`'s answer: the commitments in hex, per stream and round
+        self.commitments: dict[str, list[str]] | None = None
+        #: the opening sent with each round's coins, by (stream, round)
+        self.openings: dict[tuple[str, int], bytes] = {}
 
     def _coins(self, n: int) -> list[int]:
         b = self.rand(16 * n)
         return [int.from_bytes(b[16 * i:16 * i + 8], "little") | (int.from_bytes(b[16 * i + 8:16 * i + 16], "little") << 64)
                 for i in range(n)]
+
+    def commit_coins(self, schedule: dict, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict[str, list[str]]:
+        """Commit to every coin of the session before it starts (Goldreich–Kahan): draw the coins the pinned schedule needs,
+        the link points then each round's in the schedule's order (so ``rand`` is read as the rounds would read it), and
+        commit to each round's under a salt of its own (`coin_commitment`). Returns the commitments in hex, per stream and
+        round in order: the verifier's public input's ``coins`` (`firewall_transcript.public`). Each round's coins then go
+        out with their salt as the opening (``openings``), and a round whose coins were not committed is refused. A
+        schedule's round that is not its stream's next (no session reaches it: the firewall holds its i-th round to the
+        schedule's i-th) gets no commitment."""
+        if self.committed is not None or self.hello is not None:
+            raise ValueError("the challenger commits to its coins once, before Hello")
+        link = check_schedule(schedule)["hello"]["link"]
+        plan = [(LINK_COINS, 0, link["points"] * link["m"])] + [(r["stream"], r["k"], r["n"]) for r in schedule["rounds"]]
+        self.committed, out = {}, {}
+        for stream, k, n in plan:
+            if len(out.setdefault(stream, [])) != k:
+                continue
+            coins, salt = self._coins(n), fresh_salt()
+            self.committed[(stream, k)] = (coins, salt)
+            out[stream].append(coin_commitment(stream, k, coins, salt).hex())
+        self.commitments = out
+        return out
+
+    def commitment_record(self) -> dict:
+        """``coins.json``: the commitments `commit_coins` made (``coins``) and the opening sent with each round's coins
+        (``openings``, per stream in round order; a round the session never reached has none)."""
+        openings: dict[str, list[str]] = {}
+        for (s, _k), y in sorted(self.openings.items()):
+            openings.setdefault(s, []).append(y.hex())
+        return {"kind": COINS_KIND, "coins": self.commitments, "openings": openings}
+
+    def _draw(self, stream: str, k: int, n: int) -> list[int]:
+        """Round ``k`` of ``stream``'s ``n`` coins: the committed ones with their opening, or live ones if nothing was
+        committed."""
+        if self.committed is None:
+            return self._coins(n)
+        got = self.committed.get((stream, k))
+        if got is None or len(got[0]) != n or (stream, k) in self.openings:
+            raise ValueError(f"{stream} round {k}: {n} coins the challenger never committed to")
+        self.openings[(stream, k)] = got[1]
+        return list(got[0])
 
     def start(self, hello: dict) -> None:
         if self.hello is not None:
@@ -473,7 +596,7 @@ class CoinServer:
         if self.hello is None or self.link is not None:
             raise ValueError("the link points are drawn once, after Hello")
         spec = self.hello["link"]
-        pts = self._coins(spec["points"] * spec["m"])
+        pts = self._draw(LINK_COINS, 0, spec["points"] * spec["m"])
         self.link = {"roots": {t: [b.hex() for b in bcs] for t, bcs in sorted(roots.items())}, "points": [f128_hex(c) for c in pts],
                      "y": None}
         return pts
@@ -496,7 +619,7 @@ class CoinServer:
         st = self.streams.get(stream)
         if st is None:
             raise ValueError(f"a round on stream {stream}, never opened")
-        coins = self._coins(n)
+        coins = self._draw(stream, st["rounds"], n)
         self.rounds.append({"stream": stream, "k": st["rounds"], "tops": [[b.hex() for b in t] for t in tops], "level0": level0,
                             "commits": [c.hex() for c in commits], "n": n, "coins": [f128_hex(c) for c in coins]})
         st["rounds"] += 1
@@ -526,12 +649,17 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
 class Proxy:
     """The live server's part on the prover's side: answers the unmodified prover, takes every coin from ``coins`` (shown only
     the schedule and salted hashes), holds the session to ``schedule`` (`check_schedule`), and keeps what the session record
-    and V*'s witness need."""
+    and V*'s witness need. ``commitments``, when the challenger committed to its coins before the session
+    (`CoinServer.commit_coins`), are those commitments: every coin answer must then come with the salt that opens its
+    round's commitment. Without them the coins are live, and a coin answer that comes with an opening stops the session
+    (`Flock.Firewall.Contract`'s rule)."""
 
-    def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict):
+    def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
+                 commitments: dict[str, list[str]] | None = None):
         self.coins = coins
         self.fresh_salt = fresh_salt
         self.schedule = check_schedule(schedule)
+        self.commitments = commitments
         self.hello: str | None = None
         self.hello_v: dict | None = None
         self.commit: tuple | None = None
@@ -552,6 +680,22 @@ class Proxy:
     def _pinned(self, what: str, got, want) -> None:
         if canonical(got) != canonical(want):
             raise ValueError(refused(f"{what}: {canonical(got)} where the pinned schedule has {canonical(want)}"))
+
+    def _opened(self, stream: str, k: int, coins: list[int]) -> None:
+        """Round ``k`` of ``stream``'s coins open the challenger's commitment to them under the salt sent with them; live
+        coins (no commitments) come with no opening."""
+        y = self.coins.openings.get((stream, k))
+        if not self.commitments:
+            if y is not None:
+                raise ValueError(refused(f"{stream} round {k}: an opening of coins the challenger never committed to"))
+            return
+        cs = self.commitments.get(stream, [])
+        if k >= len(cs):
+            raise ValueError(refused(f"{stream} round {k}: coins the challenger never committed to"))
+        if y is None:
+            raise ValueError(refused(f"{stream} round {k}: coins without the opening of the challenger's commitment"))
+        if len(y) != hm96.SHA512.salt_bytes or coin_commitment(stream, k, coins, y).hex() != cs[k]:
+            raise ValueError(refused(f"{stream} round {k}: coins that do not open the challenger's commitment"))
 
     def stop(self, why: str) -> None:
         """The session stops (its first reason is kept), and the coin server's record says so (``end``: ``stop``)."""
@@ -612,6 +756,7 @@ class Proxy:
             for t, cap in roots:
                 bcs[t], self.roots[t] = self._salted(cap)
             pts = self.coins.commit(bcs)
+            self._opened(LINK_COINS, 0, pts)
             m = self.hello_v["link"]["m"]
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
@@ -666,6 +811,7 @@ class Proxy:
             st["rounds"].append({"content": content, "n": n, "coins": coins})
             self.private.append({"stream": stream, "k": k, "tops": [o for _, o in tops], "elements": [f128_hex(v) for v in s.free],
                                  "rows": rows, "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces]})
+            self._opened(stream, k, coins)
             return resp_coins(coins)
         if t == REQ_PROOF:
             _, table, rep, b = r
@@ -711,7 +857,8 @@ class Proxy:
                 "proof_sha512": [{"stream": f"{t}/rep{r}", "bytes": len(b), "sha512": _dg(b)} for (t, r), b in sorted(self.proofs.items())]}
 
     def write(self, out: Path) -> Path:
-        """The session directory (``session.json``, ``<table>.rep<r>.bin``), ``public.json`` and ``private.json``."""
+        """The session directory (``session.json``, ``<table>.rep<r>.bin``), ``public.json``, ``private.json`` and, when the
+        challenger committed to its coins, its commitments and openings, ``coins.json``."""
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
@@ -719,6 +866,8 @@ class Proxy:
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
         (out / "public.json").write_text(json.dumps(self.coins.record(), indent=1))
+        if self.commitments:
+            (out / "coins.json").write_text(json.dumps(self.coins.commitment_record(), indent=1))
         (out / "private.json").write_text(json.dumps({"kind": KIND + "/private", "tops": TOPS, "roots": self.roots, "rounds": self.private}))
         return sess
 
@@ -731,8 +880,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
     (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
-    frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. ``ready`` is called
-    with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
+    frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. Each session's coins
+    are live: the challenger commits to none. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
     algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
@@ -822,6 +971,9 @@ def main(argv=None) -> int:
     ap.add_argument("--schedule", help="the schedule every session is held to (required to serve: --schedule-for's)")
     ap.add_argument("--schedule-for", metavar="STATEMENT",
                     help="print the schedule of a statement (flock-circuit statement's output, or its STATEMENT record) and exit")
+    ap.add_argument("--holo", action="store_true", help="--schedule-for: hidden unit circuits' rounds (h after z_partial)")
+    ap.add_argument("--stacked", type=int, metavar="M_R", help="--schedule-for: the stacked table R's stream, R of 2^M_R cells")
+    ap.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="--schedule-for: each rep's sparse stream at this RecSparse shape")
     ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
     ap.add_argument("--firewall", metavar="DIR", help="the firewall's state: each session opens a recursive session on it")
     ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
@@ -833,7 +985,11 @@ def main(argv=None) -> int:
                          "plus W0 + ... + Wj (--firewall)")
     a = ap.parse_args(argv)
     if a.schedule_for:
-        print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text())), indent=1))
+        sparse = None
+        if a.sparse:
+            from .rec_sparse import Shape
+            sparse = Shape(*(int(v) for v in a.sparse.split(",")))
+        print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text()), a.holo, a.stacked, sparse), indent=1))
         return 0
     if a.schedule_of:
         print(json.dumps(schedule_of(json.loads(Path(a.schedule_of).read_text())), indent=1))

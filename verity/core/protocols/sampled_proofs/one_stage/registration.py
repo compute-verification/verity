@@ -46,7 +46,7 @@ KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
-_HEX = re.compile(r"^[0-9a-f]+$")
+_HEX = re.compile(r"[0-9a-f]+")
 
 
 def query_digest(query: Mapping[str, Any]) -> str:
@@ -112,7 +112,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`) and a value an earlier record of the log registered to that record's root (`held_roots`):
-    a value is committed once, and the log is the only place the verifier holds its roots."""
+    a value is committed once, and the log is the only place the verifier holds its roots.  R3 reads `ports` by name, so
+    its codes come in the ports' sorted order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
     keys = _KEYS | {"registered"} if v2 else _KEYS
@@ -160,11 +161,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         got = {r["port"]: r for r in roots}
         if len(got) != len(roots) or set(got) != set(ports):
             c.fail("R3-ports", {"registered": [r["port"] for r in roots], "verifier": sorted(ports)})
-        for p, want in ports.items():
+        for p, want in sorted(ports.items()):
             r = got.get(p)
             if r is None:
                 continue
-            if not (isinstance(r["root"], str) and _HEX.match(r["root"])):
+            if not (isinstance(r["root"], str) and _HEX.fullmatch(r["root"])):
                 c.fail("R3-root", p)
             if r["leaves"] != want["leaves"]:
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
@@ -205,7 +206,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         e = by_value.get(v)
         if e is None:
             continue
-        if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.match(e["root"])):
+        if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.fullmatch(e["root"])):
             c.fail("R7-root", v)
         # a count is an int, never a float or bool equal to it, and 16 is named by leaving word_bits out: one record
         # digest per registration

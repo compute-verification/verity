@@ -86,16 +86,6 @@ def _root_.Pouw.Guarantees.PearlC.GammaFp4Sm120LoopLut256_8192 : Prop :=
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- `G_γ^U` gives `G_γ` when `W_ref` is non-negative. -/
-def _root_.Pouw.Guarantees.PearlC.GammaUImpliesGamma : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u) (h : GγU CM P D γ η),
-    Gγ CM P D γ η
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `γ = 5473473967/895794400000` (0.61102%). -/
@@ -194,58 +184,6 @@ def _root_.Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut : Prop :=
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-open Finset Pouw.Fp8Atom
-
-/-- **The fragment corollary** (the 16:05Z ruling's item 5), a supporting line: P2 rests on `ttOutRowSeed_of_ttOut`
-alone, and this takes no TT_OUT. Under the named assumption `FragDraw` at `Λ = 100`, (C4) and (C6): for every
-adversary program `T` with at most `q` oracle calls whose result is a skip program on unit `u`, the probability over
-the oracle that the skip program is in the skip class and saves more than `(4096/11)·100` units per row of the unit,
-against the honest program on some activation input and state, is at most `(q + m)/2^128`, `m` the unit's rows. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutRowSeedSkipClass : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] {CM : CostModel Q R S} {sem : PearlCSem Q R S} {p : Pipeline} {G : ℕ} {s : S} {U : Workload} {u : ℕ} {xJ : Q} {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (e : SkipEmbed CM sem p G U u) (hD : sem.RowDrawn s U u xJ key) (hF : Assumptions.FragDraw sem p G s U u key 100) (hC4 : CM.FragmentPriced e) (T : QTree Q R SkipProgram) (q : ℕ) (hq : ∀ H, T.calls H ≤ q),
-    pr (fun H : Q → R => (T.eval H).InClass sem p G s U u H ∧ ∃ (act : ℕ → Codes) (σ : State),
-      4096 / 11 * 100 * ((U.layout.shape u).m : ℝ) <
-        CM.cost e.honest H U act σ s - CM.cost (e.embed (T.eval H)) H U act σ s)
-    ≤ (q + (U.layout.shape u).m) / 2 ^ 128
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **Row additivity for P2 per audit tile (a theorem).** rev1's TT_OUT per tile at `sem` bounds the row-seeded game
-per tile at `sem'`, with the cap checked per credited row: each credited row of a good tile is a good one-row tile of
-the split layout carrying that row's credit, and the error is the split layout's, at `R = Σ_u m_u` units. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutTileRowSeedOfTTOutTile : Prop :=
-  ∀ {Q R S : Type} {sem sem' : PearlCSem Q R S} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S} {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16),
-    TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ)
-    (pearlCDomainDev d) (1 / 400)
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **An admitted unit has at most a `ρ` share of its atom-words flagged**, at every shape: a debit within
-`ρ·chainCreditDev` has `32·atoms ≤ ρ·m·k·n`. -/
-def _root_.Pouw.Guarantees.PearlC.ChainCapFlaggedLe : Prop :=
-  ∀ (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (ρ : ℚ) (s : Shape) (x : Debit) (h : debitDev d x ≤ ρ * chainCreditDev d s),
-    32 * (x.atoms : ℚ) ≤ ρ * ((s.m : ℚ) * s.k * s.n)
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.Fp8Atom
-
-/-- **The saving bound** (`fragSkip_saving_le`): at 4,096 units per omitted instruction, the undebited slots of a skip
-program whose words stay correct save at most `(4096/11)·Σ_i fragCount i`. -/
-def _root_.Pouw.Guarantees.PearlC.FragSkipSavingLe : Prop :=
-  ∀ (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ → Finset (ℕ × ℕ)) (hb : ∀ s ∈ slots, 16 * s.1 + 16 ≤ m) (hJ : ∀ s ∈ slots, s.2.1 < n / 8) (ht : ∀ s ∈ slots, s.2.2 < k / 32) (hp : ∀ s ∈ slots, (patch s).card ≤ 5) (hcorrect : ∀ (i : Fin m) (j : Fin n), SkipSetU p G (rowAtoms (A i) (B j)) (omittedAt slots patch i j)) (hundebited : ∀ s ∈ slots, ∀ (i : Fin m) (j : Fin n), (i : ℕ) / 16 = s.1 → (j : ℕ) / 8 = s.2.1 → ((i : ℕ), (j : ℕ)) ∉ patch s → SkipP.flagsAt p G k (A i) (B j) s.2.2 = false),
-    (4096 * slots.card : ℚ) ≤ 4096 / 11 * ∑ i : Fin m, (fragCount p G A B i : ℚ)
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions
 
 /-- Pearl-C4's chain-only γ at FP32 8.00, the `lut256` scale path, 8192³, cap `1/400`:
@@ -286,40 +224,6 @@ open Pouw.PearlC.Assumptions
 def _root_.Pouw.Guarantees.PearlC.GammaFp4Sm120IssueLut256_8192 : Prop :=
   ∀ (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At 8 Fp4ScalePath.lut256),
     gammaFp4 d (1 / 400) sh8192 = 6492677 / 917600000
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- A record without promotion admits a `1 × 1 × 128` unit. -/
-def _root_.Pouw.Guarantees.PearlC.DomainDevUnpromoted : Prop :=
-  ∀ (d : PearlCDevice) (hG : d.G = 0),
-    pearlCDomainDev d ⟨1, fun _ => ⟨1, 1, 128⟩, fun _ => 0⟩
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Assumptions Pouw.Fp8Atom Matrix
-
-/-- The worst case at 16384³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
-def _root_.Pouw.Guarantees.PearlC.Gamma16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)),
-    Gγ CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh16384)
-    ((536953 / 103540000 : ℚ) : ℝ) εPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Assumptions Pouw.Fp8Atom Matrix
-
-/-- The worst case at 8192³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
-def _root_.Pouw.Guarantees.PearlC.Gamma8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)),
-    Gγ CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh8192)
-    ((281273 / 52340000 : ℚ) : ℝ) εPearlC
 
 end Pouw.PearlC
 
@@ -908,66 +812,230 @@ def _root_.Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192 : Prop :=
 
 end Pouw.PearlC
 
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
+namespace Pouw.Guarantees.PearlC
 
-/-- **The chain cap asserts less than the per-unit cap at the same `ρ`.** -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevChainCapOfCap : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDevChainCap CM d sem ρ
+open Pouw.PearlC Pouw.PearlC.Assumptions
 
-end Pouw.PearlC
+/-! ## Llama-3.1-8B's linears at any batch size
 
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
+γ at v1's in-loop record under rev1 at the cap 1/1,000 (`Proofs.Pouw.PearlC.ServedRev1Gamma`, `ServedMixedRev1Gamma`),
+per linear and on the served layout, whose γ is the max of the four. -/
 
-/-- **A stricter cap asserts less under rev1**: rev1's TT_OUT at a device record at cap `ρ` gives it at any cap
-`ρ' ≤ ρ ≤ 1`. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1CapAnti : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevRev1 CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ'
+/-- **v1 under rev1 at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at 8.376, the honest
+cast at 8.72: `γ = 851373343/226641700000` (0.37565%). -/
+def GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 6144 4096)
+      ((851373343 / 226641700000 : ℚ) : ℝ) εPearlC
 
-end Pouw.PearlC
+/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8.376, the honest
+cast at 8.72: `γ = 295006781/75957050000` (0.38839%). -/
+def GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 4096)
+      ((295006781 / 75957050000 : ℚ) : ℝ) εPearlC
 
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
+/-- **v1 under rev1 at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8.376, the
+honest cast at 8.72: `γ = 1863165467/524322650000` (0.35535%). -/
+def GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 28672 4096)
+      ((1863165467 / 524322650000 : ℚ) : ℝ) εPearlC
 
-/-- **rev1 asserts less than the granted TT_OUT at the same record**, for non-negative prices and `0 ≤ ρ ≤ 1`. An
-implication only: its premise `TTOutPearlCDev` is falsified by the first-promotion skip (rating D) at the H100 and
-sm_120 records, so it carries no evidence for rev1. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfGranted : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ
+/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8.376, the honest
+cast at 8.72: `γ = 3045273083/782596025000` (0.38912%). -/
+def GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 14336)
+      ((3045273083 / 782596025000 : ℚ) : ℝ) εPearlC
 
-end Pouw.PearlC
+/-- **v1 under rev1 at the cap 1/1,000 on Llama-3.1-8B's served layout**, its four linears at any `m` in one layout,
+FP32 at 8.376, the honest cast at 8.72: `γ = 3045273083/782596025000` (0.38912%), the down projection's, the max of the
+four. -/
+def GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevShapes (devSm120v1 Prices.sm120Loop) llama31_8bLinears)
+      ((3045273083 / 782596025000 : ℚ) : ℝ) εPearlC
 
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at
+8.376, the honest cast at 8.72: `γ = 851373343/226641700000` (0.37565%). -/
+def SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 6144 4096)
+      ((851373343 / 226641700000 : ℚ) : ℝ) εPearlC
 
-open Classical in
-/-- **TT_OUT over U asserts more than the (C̃, U) row** at the same record, for non-negative prices and `ρ ≤ 1`. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfUOnly : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevUOnly CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8.376,
+the honest cast at 8.72: `γ = 295006781/75957050000` (0.38839%). -/
+def SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 4096)
+      ((295006781 / 75957050000 : ℚ) : ℝ) εPearlC
 
-end Pouw.PearlC
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at
+8.376, the honest cast at 8.72: `γ = 1863165467/524322650000` (0.35535%). -/
+def SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 28672 4096)
+      ((1863165467 / 524322650000 : ℚ) : ℝ) εPearlC
 
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at
+8.376, the honest cast at 8.72: `γ = 3045273083/782596025000` (0.38912%). -/
+def SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 14336)
+      ((3045273083 / 782596025000 : ℚ) : ℝ) εPearlC
 
-/-- **A stricter cap asserts less**: TT_OUT at a device record at cap `ρ` gives it at any cap `ρ' ≤ ρ ≤ 1`. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevCapAnti : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDev CM d sem ρ'
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 on Llama-3.1-8B's served layout**, its four linears at any `m` in
+one layout, FP32 at 8.376, the honest cast at 8.72: `γ = 3045273083/782596025000` (0.38912%), the down projection's, the
+max of the four. -/
+def SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevShapes (devSm120v1 Prices.sm120Loop) llama31_8bLinears)
+      ((3045273083 / 782596025000 : ℚ) : ℝ) εPearlC
 
-end Pouw.PearlC
+/-! ## Llama-3.1-8B's linears with FP32 at 8
 
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
+The same γ at v1's record with the cheapest bit-exact FP32 add, 8 (`Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma`), the
+twin the ledger reads beside the in-loop one. Each is below the in-loop γ at the same linear. -/
 
-/-- **The chain cap per tile asserts less than the per-unit cap per tile at the same `ρ`.** -/
-def _root_.Pouw.Guarantees.PearlC.TTOutTilePearlCDevChainCapOfCap : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutTilePearlCDev CM d sem ρ),
-    TTOutTilePearlCDevChainCap CM d sem ρ
+/-- **v1 under rev1 at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at 8, the honest cast at 8.72:
+`γ = 508661/135634400` (0.37502%). -/
+def GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 6144 4096)
+      ((508661 / 135634400 : ℚ) : ℝ) εPearlC
 
-end Pouw.PearlC
+/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8, the honest cast at 8.72:
+`γ = 1359/350750` (0.38746%). -/
+def GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 4096 4096)
+      ((1359 / 350750 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8, the honest cast at 8.72:
+`γ = 928813/261481000` (0.35521%). -/
+def GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 28672 4096)
+      ((928813 / 261481000 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8, the honest cast at 8.72:
+`γ = 106307/27386000` (0.38818%). -/
+def GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 4096 14336)
+      ((106307 / 27386000 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 at the cap 1/1,000, Llama-3.1-8B's served layout, its four linears at any `m` in one layout**, FP32 at 8, the honest cast at 8.72:
+`γ = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
+def GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevShapes (devSm120v1 Prices.sm120) llama31_8bLinears)
+      ((106307 / 27386000 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at 8, the honest cast at 8.72:
+`γ = 508661/135634400` (0.37502%). -/
+def SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 6144 4096)
+      ((508661 / 135634400 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8, the honest cast at 8.72:
+`γ = 1359/350750` (0.38746%). -/
+def SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 4096 4096)
+      ((1359 / 350750 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8, the honest cast at 8.72:
+`γ = 928813/261481000` (0.35521%). -/
+def SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 28672 4096)
+      ((928813 / 261481000 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8, the honest cast at 8.72:
+`γ = 106307/27386000` (0.38818%). -/
+def SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120) 4096 14336)
+      ((106307 / 27386000 : ℚ) : ℝ) εPearlC
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, Llama-3.1-8B's served layout, its four linears at any `m` in one layout**, FP32 at 8, the honest cast at 8.72:
+`γ = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
+def SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000) →
+    Pouw.PearlC.GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
+      (pearlCDomainDevShapes (devSm120v1 Prices.sm120) llama31_8bLinears)
+      ((106307 / 27386000 : ℚ) : ℝ) εPearlC
+
+end Pouw.Guarantees.PearlC

@@ -106,6 +106,17 @@ def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
         assert got == N2 and len(skipped) == 1 and skipped[0].startswith(f"{N1}: ") and why in skipped[0], (why, skipped)
 
 
+def test_a_machine_whose_deadline_is_nearer_than_a_full_check_is_skipped_by_name():
+    """The lander's ask (9 Oct): node 2 stops at 05:30Z on 10 Oct, so from 03:00Z a full check placed there would be cut off."""
+    n1 = machine([slot("c", HOLDER)], [waiter()], pools=lean())
+    n2 = {**machine([slot("d")]), "deadline_in_s": CHECK.FULL_CHECK_S - 60}
+    got, _, skipped = CHECK.choose([N1, N2], {N1: n1, N2: n2})
+    assert got == N1 and skipped == [f"{N2}: its deadline is 149 min away, under the 150 min a full check takes"]
+    assert CHECK.twins([N1, N2], {N1: n1, N2: n2}, N1) == []                      # and it gets no twin
+    assert CHECK.choose([N1, N2], {N1: n1, N2: {**n2, "deadline_in_s": CHECK.FULL_CHECK_S + 60}})[0] == N2
+    assert CHECK.choose([N1, N2], {N1: n1, N2: {**n2, "deadline_in_s": None}})[0] == N2      # no deadline file
+
+
 def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch, capsys):
     monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: "exit 255: no route to host" for n in names})
     calls = []
@@ -119,6 +130,7 @@ def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch,
 
 def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, capsys):
     docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d")])}
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
     asked = []
     monkeypatch.setattr(CHECK, "read_slots", lambda names: asked.append(names) or {n: docs[n] for n in names})
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
@@ -132,6 +144,44 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
     assert CHECK.record(["--on", f"{N1},{N2}"]) == 0 and asked[-1] == [N1, N2]
     assert calls[-1][calls[-1].index("--on") + 1] == N2
     assert CHECK.record(["--on", N1]) == 0 and len(asked) == 2                     # one machine named: no reading
+    assert calls[-1][calls[-1].index("--on") + 1] == N1
+
+
+def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_can_run_it(monkeypatch, capsys):
+    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, each placed when no slot was free
+    and moved by hand. Now such a check waits in each line as twins (`slot.py --twin`) and runs in the first slot to free."""
+    docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d", HOLDER)])}
+    monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: docs[n] for n in names})
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    calls, launched, rcs = [], [], []
+    monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+
+    class Popen:
+        def __init__(self, cmd, **kw):
+            launched.append(cmd)
+            self.rc = rcs[len(launched) - 1]
+
+        def wait(self):
+            return self.rc
+
+    monkeypatch.setattr(CHECK.subprocess, "Popen", Popen)
+    rcs[:] = [CHECK.SLOT.NOT_STARTED, 0]
+    assert CHECK.record(["--on", "auto"]) == 0                                    # the twin that ran passed
+    assert [c[c.index("--on") + 1] for c in launched] == [N2, N1]                  # choose's pick (fewest ahead) holds the claims
+    pair = launched[0][launched[0].index("--twin") + 1]
+    assert [c[c.index("--") + 1:][:5] for c in launched] == [["python3", "tools/verity/check/slot.py", "--twin", t, "--"]
+                                                             for t in (pair, f"{pair}@{N2}")]
+    assert f"check: --on: twins {pair} on {N2}, {N1}: the first to take a check slot runs" in capsys.readouterr().out
+    launched.clear()
+    rcs[:] = [1, CHECK.SLOT.NOT_STARTED]
+    assert CHECK.record(["--on", "auto"]) == 1                                    # it ran and failed
+    launched.clear()
+    docs[N1] = "exit 255: no route to host"                                       # one machine left: it waits there alone
+    assert CHECK.record(["--on", "auto"]) == 0 and launched == [] and "--twin" not in calls[-1]
+    docs[N1], docs[N2] = machine([slot("c")], pools=lean()), machine([slot("d", HOLDER)])
+    assert CHECK.record(["--on", "auto"]) == 0 and launched == []                 # a slot free: no twins
     assert calls[-1][calls[-1].index("--on") + 1] == N1
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`python3 tools/verity/check/slot.py [--priority] [--by NAME] [--wait-max S] [--run-max S] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
+"""`python3 tools/verity/check/slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max S] [--run-max S] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
 
 `check.py --record --on MACHINE` starts its check through this, so a lane's own check queues behind the train checks for a slot
 instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two unslotted checks on 0-127 at load 137).
@@ -17,7 +17,9 @@ minutes: a check there would run into a whole-node timed measurement. A slot wit
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM), so a
 check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
-8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs).  With every slot busy it retries every POLL_S, reading
+8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs), and CMD gets GB as SLOT_MEM_ENV, which check.py makes
+circuit-check's budget, so two checks' circuit-checks never each budget all the memory free when they began (node 2, 10 Oct
+20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice).  With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
@@ -35,6 +37,15 @@ being taken: inside a `research run` (RESEARCH_RUN_DIR), the run's timeout, whic
 run so far plus SECONDS, through its harness's control file (research.telemetry.run's CONTROL_TIMEOUT). `research queue ready
 --on` sends both (#1344, #1282, #1314 timed out in node 1's line and were reported failed).
 
+`--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
+free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them (9 Oct: four checks waited up to
+54 min on node 1 while a node 2 slot was free). Each waits in its own machine's line. The one holding a slot runs only if it
+claims PAIR first: `mkdir TWINS/PAIR` beside SLOTS on this machine (`--twin PAIR`) or on HOME, over the ssh PEERS names for it.
+Its twins, finding the claim (each poll here, every TWIN_PEEK_S from another machine, and whenever one holds a slot), leave
+their line and exit NOT_STARTED. A claim that can't be made (HOME unreachable or not in PEERS) also exits NOT_STARTED, so a
+pair never runs twice: the twin on HOME still runs. It fails closed: when HOME's own claim can't be written, or HOME is gone,
+no twin runs, and every one exits NOT_STARTED, which `check.py --record` returns as "rerun".
+
 `python3 tools/verity/check/slot.py --status [--json]`: one line per slot, with who holds its lock (the pid in /proc/locks, when that
 process started, its command) or `free`, and the window that blocks it, if any, then a line for each of its windows open now or
 starting within AHEAD_H (6) hours (start, minutes, its comment's first words); then one line per live waiter, a priority one
@@ -43,13 +54,17 @@ check that came through here also names its run (RESEARCH_RUN_ID), the tree it c
 `research run` names by commit) and who asked (`--by NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in
 `check-NAME.who` beside the lock, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the check that
 came before it. A waiting check prints the same lines, the waiters before it only, each time its reason to wait changes, so its
-log says whom it waits behind.
+log says whom it waits behind. Inside a `research run` (RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and
+why), held (which slot, since when) or left (why), so `research status` shows a run whose check waits here as `waiting`, not running.
 """
 from __future__ import annotations
 
 import fcntl
 import json
 import os
+import re
+import shlex
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -62,7 +77,18 @@ POLL_S = 20
 NOT_STARTED = 75
 #: the run's timeout control file, relative to RESEARCH_RUN_DIR (research.telemetry.run.CONTROL_TIMEOUT)
 RUN_TIMEOUT = Path("control") / "timeout_s"
-USAGE = "usage: slot.py [--priority] [--by NAME] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
+#: the run's slot record, relative to RESEARCH_RUN_DIR (research.runs.SLOT_FILE): whether CMD waits in the line, holds a slot or left
+RUN_SLOT = "slot.json"
+#: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+USAGE = "usage: slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
+#: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
+TWINS = "twins"
+#: machine name, then the ssh destination and options with which this machine's research user reaches it (`--twin PAIR@HOME`)
+PEERS = Path(os.environ.get("CHECK_PEERS", "/etc/vy/peers"))
+#: how often a waiting twin whose claims are on another machine looks there for its twin's claim
+TWIN_PEEK_S = 120
+TWIN_SSH_S = 30
 
 
 def cpulist(s: str) -> set[int]:
@@ -87,7 +113,9 @@ def parse(text: str) -> list[dict]:
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use, in GiB: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's
-    session scope and the user slice on a VM; a pod's /proc/meminfo is the host's)."""
+    session scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's page cache (active_file and
+    inactive_file in its memory.stat) is in its memory.current but the kernel reclaims it at the limit, so it counts as left:
+    on vy-nebius-cpu-1 273 GB of cache held slot a's 560 GB line shut with 677 GB available (9 Oct 20:50Z)."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()
@@ -101,7 +129,9 @@ def memory_gb(root: Path = Path("/")) -> int:
             d = top / line[3:].strip("/")
             for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
                 if (m := read(c / "memory.max")).isdigit():
-                    left.append(int(m) - int(read(c / "memory.current") or 0))
+                    stat = dict(ln.split()[:2] for ln in read(c / "memory.stat").splitlines() if len(ln.split()) >= 2)
+                    cache = sum(int(stat.get(k, 0)) for k in ("active_file", "inactive_file") if stat.get(k, "").isdigit())
+                    left.append(int(m) - int(read(c / "memory.current") or 0) + cache)
     return max(0, min(left)) >> 30 if left else 0
 
 
@@ -189,15 +219,17 @@ def started(pid: int, proc: Path = Path("/proc")) -> datetime | None:
     return datetime.fromtimestamp(btime + ticks / os.sysconf("SC_CLK_TCK"), timezone.utc)
 
 
-def asker(by: str | None = None) -> dict:
-    """Who asked for a slot: this process, the run it belongs to, the tree it checks and who (--by, else RESEARCH_AGENT_URL)."""
+def asker(by: str | None = None, twin: str | None = None) -> dict:
+    """Who asked for a slot: this process, the run it belongs to, the tree it checks and who (--by, else RESEARCH_AGENT_URL),
+    and its pair when it is a twin."""
     return {"pid": os.getpid(), "run": os.environ.get("RESEARCH_RUN_ID"), "tree": os.getcwd(),
-            "by": by or os.environ.get("RESEARCH_AGENT_URL")}
+            "by": by or os.environ.get("RESEARCH_AGENT_URL"), **({"twin": twin} if twin else {})}
 
 
 def describe(who: dict) -> str:
     parts = [f"run {who['run']}" if who.get("run") else "", f"tree {Path(who['tree']).name}" if who.get("tree") else "",
-             f"by {who['by']}" if who.get("by") else "", f"slot taken {who['took']}" if who.get("took") else ""]
+             f"by {who['by']}" if who.get("by") else "", f"twin {who['twin']}" if who.get("twin") else "",
+             f"slot taken {who['took']}" if who.get("took") else ""]
     return ", ".join(p for p in parts if p)
 
 
@@ -208,14 +240,14 @@ def _read(p: Path) -> dict:
         return {}
 
 
-def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None]:
-    """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0) from the arguments before `--`; SystemExit
-    with the usage on anything else."""
+def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None, str | None]:
+    """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0) and --twin PAIR[@HOME] from the arguments
+    before `--`; SystemExit with the usage on anything else."""
     priority, vals, i = False, {}, 0
     while i < len(opts):
         if opts[i] == "--priority":
             priority, i = True, i + 1
-        elif opts[i] in ("--by", "--wait-max", "--run-max") and i + 1 < len(opts):
+        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin") and i + 1 < len(opts):
             vals[opts[i]], i = opts[i + 1], i + 2
         else:
             sys.exit(USAGE)
@@ -227,7 +259,10 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
             sys.exit(f"slot: {k} {vals[k]!r} is not a number of seconds; {USAGE}")
         if secs[k] is not None and not secs[k] > 0:
             sys.exit(f"slot: {k} must be more than 0 seconds; {USAGE}")
-    return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"]
+    twin = vals.get("--twin")
+    if twin is not None and not re.fullmatch(r"[A-Za-z0-9._-]+(@[A-Za-z0-9._-]+)?", twin):
+        sys.exit(f"slot: --twin {twin!r} is not PAIR or PAIR@HOME (letters, digits, '.', '_', '-'); {USAGE}")
+    return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin
 
 
 def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotonic) -> str:
@@ -247,6 +282,21 @@ def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotoni
                                "reason": f"slot.py --run-max: {run_max:g} s from taking check slot {slot}"}) + "\n")
     os.replace(tmp, ctl)
     return f"slot: the run's timeout is now {t:g} s from its start: {run_max:g} s from taking slot {slot}"
+
+
+def record_slot(run_dir: str | None, doc: dict) -> None:
+    """``doc`` as the run's RUN_SLOT, replaced whole, so `research status` shows a check waiting in the line as waiting and not as
+    running since its run began (10 Oct: af2d waited 95 min on node 1 and was reported running all along). Nothing outside a
+    `research run`; a write that fails never stops the check."""
+    if not run_dir:
+        return
+    p = Path(run_dir) / RUN_SLOT
+    tmp = p.with_name(f".{p.name}.{os.getpid()}")
+    try:
+        tmp.write_text(json.dumps(doc) + "\n")
+        os.replace(tmp, p)
+    except OSError as e:
+        print(f"slot: the run's {RUN_SLOT} not written: {e}", file=sys.stderr, flush=True)
 
 
 def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
@@ -291,7 +341,7 @@ def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc"
            "minutes": round((now - t).total_seconds() / 60) if t else None, "cmd": cmd[:200]}
     who = _read(who_file)
     if who.get("pid") == pid:
-        out.update({k: who[k] for k in ("run", "tree", "by", "took") if who.get(k)})
+        out.update({k: who[k] for k in ("run", "tree", "by", "twin", "took") if who.get(k)})
     return out
 
 
@@ -342,7 +392,7 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
         who = _read(p)
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
-                    **{k: who[k] for k in ("run", "tree", "by") if who.get(k)}})
+                    **{k: who[k] for k in ("run", "tree", "by", "twin") if who.get(k)}})
     return out
 
 
@@ -410,6 +460,81 @@ def reread(slots: list[dict]) -> list[dict]:
         return slots
 
 
+def peers(path: Path | None = None) -> dict[str, list[str]]:
+    """PEERS, one line per machine: its name, then ssh's options and destination for reaching it (`vy-nebius-1 -i KEY research@IP`)."""
+    try:
+        text = (path or PEERS).read_text()
+    except OSError:
+        return {}
+    return {f[0]: f[1:] for f in (ln.split("#")[0].split() for ln in text.splitlines()) if len(f) >= 2}
+
+
+def twin_here(op: str, lock_dir: Path, pair: str, who: dict) -> tuple[str, dict]:
+    """`claim` (mkdir TWINS/PAIR under ``lock_dir``, first removing claims a week old) or `peek`: ("claimed", who), ("taken", the
+    claimer's who), ("free", {}) or ("unreachable", why) when the claim can't be written."""
+    t, d = lock_dir / TWINS, lock_dir / TWINS / pair
+    try:
+        if op == "claim":
+            t.mkdir(exist_ok=True)
+            for old in t.iterdir():
+                try:
+                    if time.time() - old.stat().st_mtime > 7 * 86400:
+                        (old / "who").unlink(missing_ok=True)
+                        old.rmdir()
+                except OSError:
+                    pass                                            # another claimer removed it first
+            try:
+                d.mkdir()
+            except FileExistsError:
+                pass
+            else:
+                (d / "who").write_text(json.dumps(who) + "\n")
+                return "claimed", who
+    except OSError as e:
+        return "unreachable", {"why": f"{type(e).__name__}: {e}"}
+    return ("taken", _read(d / "who")) if d.is_dir() else ("free", {})
+
+
+def twin_there(op: str, home: str, lock_dir: Path, pair: str, who: dict) -> tuple[str, dict]:
+    """`twin_here` on machine ``home`` (its claims under the same ``lock_dir``), over the ssh PEERS names; ("unreachable", why)
+    when it can't be asked."""
+    ssh = peers().get(home)
+    if not ssh:
+        return "unreachable", {"why": f"{home} isn't in {PEERS}"}
+    t, d = shlex.quote(str(lock_dir / TWINS)), shlex.quote(str(lock_dir / TWINS / pair))
+    look = f'if [ -d {d} ]; then echo taken; cat {d}/who 2>/dev/null; else echo free; fi'
+    script = look if op == "peek" else (
+        f'mkdir -p {t} && find {t} -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {{}} + ; '
+        f'if mkdir {d} 2>/dev/null; then printf "%s\\n" {shlex.quote(json.dumps(who))} > {d}/who; echo claimed; else {look}; fi')
+    try:
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", *ssh, script], capture_output=True, text=True,
+                timeout=TWIN_SSH_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        return "unreachable", {"why": f"ssh to {home}: {type(e).__name__}: {e}"}
+    state, _, rest = r.stdout.partition("\n")
+    if r.returncode or state not in ("claimed", "taken", "free"):
+        return "unreachable", {"why": f"ssh to {home} (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-200:]}"}
+    try:
+        info = json.loads(rest) if rest.strip() else {}
+    except ValueError:
+        info = {}
+    return state, who if state == "claimed" else info if isinstance(info, dict) else {}
+
+
+def twin(op: str, spec: str, who: dict) -> tuple[str, dict]:
+    """`--twin PAIR` (its claims here) or `--twin PAIR@HOME`: `twin_here` or `twin_there`."""
+    pair, _, home = spec.partition("@")
+    return twin_there(op, home, SLOTS.parent, pair, who) if home else twin_here(op, SLOTS.parent, pair, who)
+
+
+def leave(ticket: Path, tfd: int, why: str) -> int:
+    """Leave the line without running CMD: NOT_STARTED."""
+    ticket.unlink(missing_ok=True)
+    os.close(tfd)
+    print(f"slot: not started: {why}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+    return NOT_STARTED
+
+
 def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
     if argv[:1] == ["--status"]:
         if argv[1:] == ["--json"]:
@@ -422,7 +547,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
-    priority, by, wait_max, run_max = options(opts)
+    priority, by, wait_max, run_max, pair = options(opts)
     if not cmd:
         sys.exit(USAGE)
     if not SLOTS.exists():
@@ -439,12 +564,36 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores; {DIRECT_CPUS_FIX}")
     if not priority and all(s["trains"] for s in slots):
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine")
-    ticket, tfd = join(SLOTS.parent, priority=priority, who=asker(by))
-    told, joined = None, now()
+    me = asker(by, pair)
+    ticket, tfd = join(SLOTS.parent, priority=priority, who=me)
+    told, joined, peeked = None, now(), None
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {})}
+    record_slot(run_dir, {"state": "waiting", **since})
+
+    def gone(why: str) -> int:
+        record_slot(run_dir, {"state": "left", **since, "left": f"{now():%Y-%m-%dT%H:%M:%SZ}", "why": why})
+        return leave(ticket, tfd, why)
+
+    if pair:
+        print(f"slot: twin {pair}: runs only if it takes a slot before its twins do", file=sys.stderr, flush=True)
     while True:
         slots = usable(reread(slots)) or slots
+        if pair and ("@" not in pair or peeked is None or (now() - peeked).total_seconds() >= TWIN_PEEK_S):
+            state, info = twin("peek", pair, me)
+            peeked = now()
+            if state == "taken":
+                return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
         n = ahead(ticket)
         got = None if n else take(slots if priority else [s for s in slots if not s["trains"]], SLOTS.parent, now())
+        if got and pair:
+            state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
+            if state != "claimed":
+                os.close(got[1])
+                return gone(f"its twin took a slot first ({describe(info) or 'claimed'})" if state == "taken" else
+                            f"twin {pair} can't be claimed ({info.get('why')}), so its twin there runs instead" if "@" in pair else
+                            f"twin {pair}'s claim can't be written here ({info.get('why')}), and no twin runs without it: "
+                            "rerun the check")
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
@@ -454,30 +603,29 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
             for ln in status(slots, SLOTS.parent, now(), before=ticket.name):
                 print(f"slot:   {ln}", file=sys.stderr, flush=True)
+            record_slot(run_dir, {"state": "waiting", **since, "why": why})
             told = why
         if wait_max is not None and (now() - joined).total_seconds() >= wait_max:
-            ticket.unlink()
-            os.close(tfd)
-            print(f"slot: not started: no check slot within --wait-max {wait_max:g} s ({why}); exit {NOT_STARTED}",
-                  file=sys.stderr, flush=True)
-            return NOT_STARTED
+            return gone(f"no check slot within --wait-max {wait_max:g} s ({why})")
         sleep(POLL_S)
     ticket.unlink()
     os.close(tfd)
     slot, fd = got
     who = SLOTS.parent / f"check-{slot['name']}.who"
     tmp = who.with_name(f".{who.name}.{os.getpid()}")
-    tmp.write_text(json.dumps(asker(by)) + "\n")
+    tmp.write_text(json.dumps(me) + "\n")
     tmp.chmod(0o664)
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
-    env = {k: v for k, v in os.environ.items() if k != "LEASE_DIR"}
+    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
-               VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"))
+               VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
+               **({SLOT_MEM_ENV: str(slot["mem"])} if slot.get("mem") else {}))
+    record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": f"{now():%Y-%m-%dT%H:%M:%SZ}"})
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if run_max is not None:
-        print(limit_run(run_max, slot["name"], os.environ.get("RESEARCH_RUN_DIR")), file=sys.stderr, flush=True)
+        print(limit_run(run_max, slot["name"], run_dir), file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 
 

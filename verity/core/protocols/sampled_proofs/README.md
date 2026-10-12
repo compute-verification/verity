@@ -4,9 +4,9 @@ Sampled proofs spot-check a committed computation. While serving, the developer 
 proof-unit boundary of a partition of the program and registers the commitment roots. The verifier then draws proof units
 from its own randomness, the developer proves the drawn units, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.core.protocols.profile.IntegrityProfile`): except with
-probability δ, at most so many units are wrong, a unit being wrong when its committed outputs differ from its gates applied
-to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it, points to the
-code, and lists what the Lean does not state yet.
+probability δ, at most so many units are faulty, a unit being faulty when its committed outputs differ from its gates
+applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
+points to the code, and lists what the Lean does not state yet.
 
 ## Outline
 
@@ -14,10 +14,10 @@ code, and lists what the Lean does not state yet.
 
 1. Serving commits the values that the partition's units read and write, and sends the roots.
 2. The developer registers a record that fixes everything a drawn unit's statement can depend on: the program, the query
-   that partitions it, the law, the commitment scheme and the roots. The verifier checks the record against its own copies
-   and logs a receipt before it draws.
-3. The verifier draws units from its operating system's randomness under the agreed law and sends the draw in the clear,
-   before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
+   that partitions it, the sampling design, the commitment scheme and the roots. The verifier checks the record against
+   its own copies and logs a receipt before it draws.
+3. The verifier draws units from its operating system's randomness under the agreed sampling design and sends the draw
+   in the clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
 4. The drawn units are proved in one session, whose statement is the drawn units'.
 5. Each verifier that runs checks the proofs. The Lean verifier is the verifier of record.
 6. The audit record keeps the registration, the receipt, the draw, the proved units, the statement's digests and every
@@ -33,8 +33,8 @@ Everything the auditor observes must be a function of those items. A `Stream` pe
 rule and then to one-stage's checks, draws once, binds the delivered proof to its outcome, and counts failures against a
 public budget. The design is `note:proofs/20261006T0307Z-draft-proof-service-architecture`.
 
-**The laws.** `subset:K` is a uniform `K`-subset of the `N` units, and `bernoulli:NUM/DEN` takes each unit independently
-with probability `NUM/DEN`.
+**The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` units, and `bernoulli:NUM/DEN` takes each unit
+independently with probability `NUM/DEN`.
 The default is `stratified:K` (Daniel, Sep 27): one stratum per template, and inside each an independent uniform draw
 without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` units, that is `K n_s / N` rounded half up and never fewer
 than one, so every template is exercised in every audit. `work:K` (Daniel, Sep 28) keeps those strata and that sampler
@@ -43,23 +43,25 @@ but sizes each stratum by the work its units are credited: with `W = Σ_s w_s n_
 A work draw may add a closure, units proved with the drawn ones. Each verifier derives the strata from its own program and
 query, never from the prover.
 
-**What an accepted audit establishes.** A set of wrong units escapes a stratified draw with probability
-`Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its units in stratum `s`, so a template that is wrong in every unit
-is never missed. Under the work law, wrong units doing a fraction `ε` of the credited work escape with probability at
-most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share escapes with at most `2^-40`. The per-unit proof system adds its
-knowledge and link terms. Applications weight the profile's wrong units by what each one costs them: exfiltration
-security by their output bits, plus a term for which units are wrong, and compute security by their work.
+**What an accepted audit establishes.** Under a stratified draw, a set of faulty units has acceptance probability
+`Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its units in
+stratum `s`, so a template that is faulty in every unit is never missed. Under the work sampling design, faulty units
+doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
+has at most `2^-40`. The per-unit proof system adds its knowledge-soundness and binding errors (ε_ks and ε_bind).
+Applications weight the profile's faulty units by what each one costs them: exfiltration security by their output bits,
+plus a term for which units are faulty, and compute security by their work.
 
-**The two-stage law** is the alternative for a prover that replays part of the computation to build its witness. The
+**Two-stage sampling** is the alternative for a prover that replays part of the computation to build its witness. The
 prover commits the boundary of its replay units (RUs) and registers the root. The verifier draws RUs, per RU class either
-each with probability `p` or under any one-stage law over the class's RUs (`subset`, `bernoulli`, `stratified`, or `work`
-with the verifier's closure); the prover replays the drawn RUs and commits and registers their interiors, and the
-verifier then checks `k` of each drawn RU's proof units, or all of them when it holds fewer. Both draws come from the
-verifier's own randomness, each after the registration it follows, and each checked proof unit is established on its
-authenticated boundary values. Since the interiors are committed after the first draw, a wrong RU escapes with
-probability at most `1 − p k / n_v` under a Bernoulli first stage, independently across RUs, so an accepted audit's
-profile, one per RU class, is over the RUs at that rate, at the class's largest RU. A subset, stratified or work first
-stage checks every proof unit of a drawn RU, so there is no second draw, and the profile is that law's over the RUs.
+each with probability `p` or under any one-stage sampling design over the class's RUs (`subset`, `bernoulli`,
+`stratified`, or `work` with the verifier's closure); the prover replays the drawn RUs and commits and registers their
+interiors, and the verifier then checks `k` of each drawn RU's proof units, or all of them when it holds fewer. Both
+draws come from the verifier's own randomness, each after the registration it follows, and each checked proof unit is
+established on its authenticated boundary values. Since the interiors are committed after the first draw, a faulty RU
+has acceptance probability at most `1 − p k / n_v` under a Bernoulli first stage, independently across RUs, so an
+accepted audit's profile, one per RU class, is over the RUs at that rate, at the class's largest RU. A subset,
+stratified or work first stage checks every proof unit of a drawn RU, so there is no second draw, and the profile is
+that sampling design's over the RUs.
 
 The proof service runs the two-stage audit whose first stage checks every proof unit of a drawn RU (`service.TwoStage`
 with `check="all"`). Not built yet: a second draw (a count `k`), the security function and its red-team review
@@ -71,25 +73,33 @@ captured from serving, and says so (`window.kind = "stand-in"`).
 ## Where things are
 
 - **The Lean.** Today it sits in C-Flock's soundness package, `Security/Proofs/Flock/Soundness/Audit/`,
-  whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the laws (`Law`, `Stratified`, `StratifiedMiss`,
-  `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), two stages (`TwoStage`, with the tight and
-  insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer (`Extraction`) and composition
-  (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are assumption A3
-  (`Assumptions.UniformRandomBytes`).
+  whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the sampling designs (`Law`, `Stratified`,
+  `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), two stages (`TwoStage`,
+  with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
+  (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are
+  assumption A3 (`Assumptions.UniformRandomBytes`).
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
-  prove that its draws escape no more often than the modelled laws, and `Audit/FlockWork.lean` that its sizes are the
-  model's.
-- **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit: `registration`, `draw` (the draw's checks, not
-  a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
-  draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is the two-stage law and the
+  prove that its draws accept faulty units no more often than the modelled sampling designs do, and
+  `Audit/FlockWork.lean` that its sizes are the model's.
+- **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
+  `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
+  (`check`), `matches_public`, `check_draw`, `check_proved`, the whole audit record (`audit_record`), and the service's
+  public-items rule (`check_public`) and hold on an outcome's verdicts (`check_verdicts`). Its one line
+  `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
+  beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
+  `benchmarks/one_stage` call it. The two are held to each other by
+  `verity/core/service/sampled_proofs/tests/test_difftest.py`.
+- **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
+  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
+  draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
   verifier's randomness, and
   `verity.core.protocols.sampled_proofs.plan` holds verification plans over IR Programs.
 - **The Lean-generated vectors.** `verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean (`verity/core/protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean`, regenerated by
   `verity/core/protocols/sampled_proofs/tests/lean/generate.sh`), and `verity/core/protocols/sampled_proofs/tests/test_consumers.py` holds the consumers to it. `tests/test_two_stage.py` checks the
-  samplers and stage 1's draw under a one-stage law against the Lean verifier's (`drawOn`) on raw bytes, and
+  samplers and stage 1's draw under a one-stage sampling design against the Lean verifier's (`drawOn`) on raw bytes, and
   `tests/test_one_stage.py` the work sizes against the ones C-Flock's
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's draw against `one_stage.draw`.
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
@@ -112,28 +122,34 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
 
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law`, `TwoStage`
   and `Sequential`.
-  - `check_public` is the public-items rule on a registration.
-  - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select` (with a work law's `closure=`),
-    `register_interiors` (under `TwoStage`), `deliver` and `outcome`, which raise `Refused` (with its `Verdict`) or
-    `Pending`.
+  - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
+    to before the audit record (the Python; a `Stream` runs each by the verifier of record, `verifier.check_public` and
+    `verifier.check_verdicts`).
+  - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select` (with a work sampling design's
+    `closure=`), `register_interiors` (under `TwoStage`), `deliver` and `outcome`, which raise `Refused` (with its
+    `Verdict`) or `Pending`.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
   served root's commitment domain.
-- `draw`: `parse_law` reads a law's text, `derive` expands a rule over the verifier's program and query (and a work
-  table), `check_draw` holds a draw to the registration and the verifier's law, and `check_proved` holds the proved units
-  to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
+- `draw`: `parse_law` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
+  a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
+  holds the proved units to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the test programs `population_program` and `mixed_population_program`.
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
-  law as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
-- `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code.
+  sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
+- `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
+  (and `verifiers`, both verifiers' outcomes, from `verifier`).
+- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `audit_record` and
+  `check_public` and `check_verdicts` (given the service's Python verdict) by the Lean and the Python, `RECORD_VERDICT`
+  naming whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `two_stage`: `TwoStageLaw` of `Stage`s and its `profile`; stage 1's draws `select_replay_units` and `draw_first` (a
-  one-stage law's draw object over the RUs, with `closure_of` for a work law's closure), stage 2's `select_proof_units`,
-  all from `OwnRandomness`; and `check_probability`.
+  one-stage sampling design's draw object over the RUs, with `closure_of` for a work sampling design's closure), stage
+  2's `select_proof_units`, all from `OwnRandomness`; and `check_probability`.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 
@@ -149,7 +165,7 @@ named with each. A rule leaves this list in the change whose Lean states it.
 ~~~text
 {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
  "program": "<SHA-512 of the program>", "query": "<SHA-512 of canon(query)>", "partition": "<partition digest>",
- "population": <units the query derives>, "law": <the law object, expanded>, "scheme": "<leaf and tree scheme>",
+ "population": <units the query derives>, "law": <the sampling design's object, expanded>, "scheme": "<leaf and tree scheme>",
  "roots": [{"port": ..., "root": "<hex>", "leaves": ..., "domain": ...}, ...],
  "leaf_layer": "<SHA-512 of the verifier's public file>" | null,
  "anchors": [...], "window": {"kind": "served" | "stand-in", ...provenance}, "previous": null | "<digest>"}
@@ -161,8 +177,9 @@ named with each. A rule leaves this list in the change whose Lean states it.
   before the draw. The verifier checks the record against its own copies, writes a receipt with its own clock, and only
   then draws.
 - The checks (`check`): the record has exactly these keys, and
-  - R1: the format and protocol are these, and the law is the verifier's own law expanded over its program and query
-    (`draw.derive`, with its own work table for `work`), as canonical bytes; `window.kind` is `served` or `stand-in`;
+  - R1: the format and protocol are these, and the sampling design is the verifier's own, expanded over its program and
+    query (`draw.derive`, with its own work table for `work`), as canonical bytes; `window.kind` is `served` or
+    `stand-in`;
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
     object must be over the verifier's program);
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
@@ -174,7 +191,9 @@ named with each. A rule leaves this list in the change whose Lean states it.
 - The receipt is `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier": ..., "received":
   "<UTC, %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
 - The verifier holds its own public file (scheme, roots, their domains, its instance count) to the record
-  (`matches_public`).
+  (`matches_public`). That those roots, domains and instance count are the proved rows' is flock-verify's check of the
+  public file (`checkPublic`), stated deterministically by the Lean guarantee
+  `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
 - `window` is provenance only: `served` roots are what serving committed, and `stand-in` roots a fresh commitment to
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,
@@ -225,8 +244,10 @@ only inside a proof (`one_stage.registered`).
   and one whose units it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
   registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
-  (`audit.session_registered`) reads them off the accepted verdicts of record (the Lean verdict's `registered`), never
-  off the registration; `benchmarks/one_stage`'s driver passes it.
+  (`audit.session_registered(verdicts, registration)`) reads them off the accepted verdicts of record (the Lean
+  verdict's `registered`), never off the registration, for the registration's own values (its roots' ports and
+  registered values), as the service splits the sessions' roots between a boundary and its interiors;
+  `verifier.audit_record` reads them so on both sides.
 
 Pinned by `tests/test_registered.py` and, for the Lean verifier's check, `verity/ml/flock/tests/test_lean_registered_reads.py`.
 
@@ -242,7 +263,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The one-stage audit applies only `Q_template_instance` v0 and `Q_template_instances` v0: each instance of a listed
   template in the program's root body is one unit, in canonical order (node, then member), with no width rule. They are
   demo queries for template runs, not the serving partition. Only they define strata; any other query refuses the
-  stratified and work laws.
+  stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same
   rule (`partition.digest`).
 
@@ -253,18 +274,20 @@ which `tests/test_one_stage.py` replays (`test_the_partition_is_cores_on_the_pin
 `test_a_malformed_query_has_no_units_and_no_digest`, `test_a_program_that_is_not_topological_has_no_units`,
 `test_a_pre_canonical_object_keeps_its_digest`).
 
-### Laws as text and as registered
+### Sampling designs as text and as registered
 
-- A law's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (M0's `serve --draw` syntax), or one
-  of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`).
+Code and records call a sampling design a `law`; the name stays until a format version renames it.
+
+- A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (M0's `serve --draw`
+  syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`).
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
-  law expanded.
-- `derive` refuses a `K` outside `[1, N]`, a work law without the verifier's work table, a template the table does not
-  name, and a population that does no work.
-- Two laws are the same when their canonical JSON bytes are (`draw.same_law`), so `true` is not `1`, as the Lean verifier
-  reads them.
+  sampling design expanded.
+- `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a template the
+  table does not name, and a population that does no work.
+- Two sampling designs are the same when their canonical JSON bytes are (`draw.same_law`), so `true` is not `1`, as the
+  Lean verifier reads them.
 - `check_draw` also holds the draw's population to the registration's.
 
 Pinned by `tests/test_one_stage.py` (`test_draw_checks`, `test_derive_expands_the_rule_over_the_verifiers_program`,
@@ -273,26 +296,27 @@ Pinned by `tests/test_one_stage.py` (`test_draw_checks`, `test_derive_expands_th
 
 ### What a unit's work may count
 
-The work law's escape bound holds over the work the table credits; what the table may credit is a rule of its own (the
-Pearl-C statement review, item 5), documented with `draw.work_table`:
+The work sampling design's bound on acceptance probability holds over the work the table credits; what the table may
+credit is a rule of its own (the Pearl-C statement review, item 5), documented with `draw.work_table`:
 
 - A unit's work is counted on the rows the Program declares, never on rows a kernel pads it with.
 - Filler is credited nothing: a unit of filler only, or one the prover declares uncredited before the draw, does work 0.
   Its floor still draws it for integrity, and missing it costs no work. A unit mixing real and filler rows is credited
   its real cells only.
-- The law weights by template, so every unit of a template is credited the same work. A template whose units are padded
-  differently is split before the law is derived, or credited 0: the bound needs every unit's inclusion probability to be
-  at least `K w_u / W` over the credited `W`, which a per-template work that over-credits a unit breaks.
+- The work sampling design weights by template, so every unit of a template is credited the same work. A template whose
+  units are padded differently is split before the sampling design is derived, or credited 0: the bound needs every
+  unit's inclusion probability to be at least `K w_u / W` over the credited `W`, which a per-template work that
+  over-credits a unit breaks.
 
 `test_derive_expands_the_work_rule_over_the_verifiers_table` covers a template credited nothing.
 
 ### The audit record and the profile
 
 The one-stage profile (`audit.profile`) is core's `IntegrityProfile` of one level `unit` (`Level("unit", <partition
-digest>)`) with `sizes = (population,)`, drawn by the law (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum
-per template), with `delta`, the program's digest and the count drawn. It bounds wrong units and weights nothing. The work
-law's profile is `Stratified` over the same strata at the work sizes, counting the drawn units only: a closure proves
-more, which only helps.
+digest>)`) with `sizes =
+(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds faulty units and weights nothing. The work
+sampling design's profile is `Stratified` over the same strata at the work sizes, counting the drawn units only: a
+closure proves more, which only helps.
 
 The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v0", "registration", "registration_digest",
 "receipt", "draw", "law", "proved_units", "statement", "checks", "verdicts", "accepted", "complete", "profile",
@@ -307,11 +331,11 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   other verdict that ran accepted, and every check passed. The profiles are present only then.
 - A session that proves one template's units is served that template's share as a `subset:k_s` draw over its `n_s` units,
   in its own indices; the record keeps the union draw.
-- `profile` is the profile's JSON, except that a stratified or work law keeps the v0 form: the law's JSON with `delta`
-  and the count drawn per template.
+- `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
+  `delta` and the count drawn per template.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
   `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and the linear relaxation for
-  `bernoulli`; a stratified or work law adds each template's own bound.
+  `bernoulli`; a stratified or work sampling design adds each template's own bound.
 - `integrity_profile` is `verity/integrity-profile/v1`: `{"format", "protocol", "program", "query", "partition",
   "population", "registration": <digest>, "scheme", "roots": [{"port", "root", "leaves"}], "law", "drawn",
   "inputs": {"anchored": <anchors>, "linked": []}, "budget_log2_t": null, "terms": null, "epsilon_log2": null,
@@ -333,7 +357,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` units, 0 when `K ≤ 0` or `n = 0`, `n` when
   `2K ≥ n`, and otherwise `n H₂(K/n) (1 + MARGIN)` rounded up to the next float, at most `n`. The Lean states the bound
   (`audit_exfiltration`, `card_admissible_le`), and the tests hold the Python to be at least it.
-- `compute_bound(profile, work)` is `harm_bound(work)`. Under the two-stage profile a wrong RU is charged its class's
+- `compute_bound(profile, work)` is `harm_bound(work)`. Under the two-stage profile a faulty RU is charged its class's
   `n_v` proof units, the most work it can hold. Policies and PoUW pass their own utility to `worst_case`.
 - A unit's output bits or work is one number for every unit, or per stratum a number or `(bits, units)` pairs.
 
@@ -350,14 +374,15 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   Spec declares in `public` with its kind (`structure`, `output`, `coins` or `commitment`) and reason. The declared
   items a record shows are `population` (for `population`, `program` and `partition`), `population:<template>` for each
   stratum, `window`, `leaf_layer` and `anchors` when not empty, and each value's `leaves:<v>` and `domain:<v>`, with
-  `words:<v>` and `word_bits:<v>` for a registered value. Its codes are `keys`, `roots`, `unsalted`, `query` and
-  `undeclared`.
+  `words:<v>` and `word_bits:<v>` for a registered value, an entry's fields read in key order. Its codes are `keys`,
+  `roots`, `unsalted`, `query` and `undeclared`; the `Stream` runs it by the verifier of record.
 - **The order.** A stream holds one open registration at a time. `register` logs the record and its receipt, whose
   `received` is the record's position in the stream's log. `select` then draws once, from the challenger's coins as
   `two_stage.draw_first` reads them (the Lean verifier's `Flock.Draw.drawWith` on the same bytes, with no derivation),
-  or from the stream's `sampler`; either draw is held to `draw.check_draw`. Under a work law, `select(closure=)` takes
-  the challenger's closure map over `[0, N)`, refused on another law or out of range before any coin is read, and the
-  draw carries the drawn units' closure (`two_stage.closure_of`), which the proof proves with them (`draw.proved`).
+  or from the stream's `sampler`; either draw is held to `draw.check_draw`. Under a work sampling design,
+  `select(closure=)` takes the challenger's closure map over `[0, N)`, refused on another sampling design or out of
+  range before any coin is read, and the draw carries the drawn units' closure (`two_stage.closure_of`), which the proof
+  proves with them (`draw.proved`).
 - **Two stages.** `TwoStage(replay, "all")` draws RUs by `replay`, and every proof unit of a drawn RU is checked, so
   there is no second draw; a count `k` is refused. The Spec's values split into the boundary (committed by serve time)
   and the interiors (phase `interior`, never registered values), and each registration holds only its own stage's roots.
@@ -367,11 +392,12 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   logged after the boundary, so the next boundary's `previous` is the interiors' digest. A proof delivered before the
   interiors is refused (`interior`), unless no RU was drawn or the proof is late. The outcome accepts only when both
   registrations' audit records accept, `session_roots` split between them by value, and its profile is the boundary's,
-  the replay law's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`, `interior-registered`,
-  `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
+  the replay sampling design's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`,
+  `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
 - **No retries.** A second `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
   `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`. An outcome is pending until every
-  verifier of record has run, and each verdict of record names the delivered sessions.
+  verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
+  alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
 - **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the
   Spec's digest>, "budget", "delta", "challenger"}`. An outcome's record is `{"format":
@@ -403,33 +429,35 @@ accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over
 `test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`,
 `test_what_a_two_stage_spec_and_stream_refuse`, `test_the_draw_is_the_challengers_own_randomness`).
 
-### The two-stage law
+### Two-stage sampling
 
 `two_stage.TwoStageLaw({class: Stage(first, k)})` (decision 43):
 
-- `first` is a probability `0 ≤ p ≤ 1` (each RU of the class independently with `p`), or a one-stage law object over
-  the class's RUs (`draw`'s `subset`, `bernoulli`, or `stratified` and `work` expanded by `draw.derive`), its positions
-  the class's RUs in index order. `k ≥ 0`, or `k = None` for every proof unit; an RU of `n_v` proof units has
-  `min(k, n_v)` checked. A subset, stratified or work first stage takes `k = None`: thinned by a second draw, its escape
-  is no law a profile states. The Bernoulli law over single units is the case where every unit is its own RU with
-  `k = 1` (`TwoStageLaw.bernoulli`), and a gate-level `plan.VerificationPlan` is that case, every gate its own RU.
-- An RU with `m` incorrect proof units passes with probability `1 − p + p C(n_v − m, k) / C(n_v, k)`, but that is not
-  the profile's law: the prover picks `m` after the RU draw, and `m = 1` always leaves a skipped RU wrong.
+- `first` is a probability `0 ≤ p ≤ 1` (each RU of the class independently with `p`), or a one-stage sampling design's
+  object over the class's RUs (`draw`'s `subset`, `bernoulli`, or `stratified` and `work` expanded by `draw.derive`),
+  its positions the class's RUs in index order. `k ≥ 0`, or `k = None` for every proof unit; an RU of `n_v` proof units
+  has `min(k, n_v)` checked. A subset, stratified or work first stage takes `k = None`: thinned by a second draw, its
+  acceptance probability is no sampling design a profile states. The Bernoulli sampling design over single units is the
+  case where every unit is its own RU with `k = 1` (`TwoStageLaw.bernoulli`), and a gate-level `plan.VerificationPlan`
+  is that case, every gate its own RU.
+- An RU with `m` faulty proof units passes with probability `1 − p + p C(n_v − m, k) / C(n_v, k)`, but that is not
+  the profile's sampling design: the prover picks `m` after the RU draw, and `m = 1` always leaves a skipped RU faulty.
 - `TwoStageLaw.profile` is one level `replay` over the class's `n_r` RUs, with `delta`, the exhaustively checked facts
   (`programs`, `prescribed`, `linked`, `covered`) and `drawn`. Under a Bernoulli first stage (a probability, or a
-  `bernoulli` law) it is drawn `Bernoulli(p min(k, n_v) / n_v)` with `n_v` the class's largest RU; under a subset,
-  stratified or work law it is that law's profile over the RUs, `Subset(k)` or `audit.core_law`'s `Stratified`, as
-  `audit.profile` gives it over units, counting the drawn RUs (a closure only helps). A caller's `n_r` must equal the
-  class's count, and its `n_v` cannot be smaller than the largest. It counts wrong RUs and weights nothing.
+  `bernoulli` sampling design) it is drawn `Bernoulli(p min(k, n_v) / n_v)` with `n_v` the class's largest RU; under a
+  subset, stratified or work sampling design it is that sampling design's profile over the RUs, `Subset(k)` or
+  `audit.core_law`'s `Stratified`, as `audit.profile` gives it over units, counting the drawn RUs (a closure only
+  helps). A caller's `n_r` must equal the class's count, and its `n_v` cannot be smaller than the largest. It counts
+  faulty RUs and weights nothing.
 - The rate rests on the proof-unit draw being made by the verifier from its own randomness after the interiors are
   committed. A stage that checks every proof unit of a drawn RU draws nothing in stage 2.
 - RUs are addressed by their index in the committed order, and the indices are distinct.
 
 The closest Lean is `TwoStage.lean`'s `effEscape_full` and `twoStage_full_profile` (stage 2 checking all: the first
-stage's own escape, for any first-stage law, `Closure.lean`'s `Law.closure` among them), `effEscape_bernoulli_prod`, and
-`Examples.lean`'s `effEscape_bernoulli`, `two_stage_b_tight`, `naive_two_level_unsound` and `late_interior_insecure`;
-whether they cover `TwoStageLaw.profile` exactly, its largest-RU rule among them, is unchecked. Pinned by
-`tests/test_two_stage.py` (`test_detection_matches_the_per_ru_law_and_the_profile_bounds_it`,
+stage's own acceptance probability, for any first-stage sampling design, `Closure.lean`'s `Law.closure` among them),
+`effEscape_bernoulli_prod`, and `Examples.lean`'s `effEscape_bernoulli`, `two_stage_b_tight`, `naive_two_level_unsound`
+and `late_interior_insecure`; whether they cover `TwoStageLaw.profile` exactly, its largest-RU rule among them, is
+unchecked. Pinned by `tests/test_two_stage.py` (`test_detection_matches_the_per_ru_law_and_the_profile_bounds_it`,
 `test_toy_attack_is_admitted`, `test_the_profile_is_over_replay_units`,
 `test_a_mixed_class_is_profiled_at_its_largest_replay_unit`, `test_bernoulli_is_the_single_unit_law`,
 `test_indices_must_be_distinct_and_classes_known`, `test_a_first_stage_is_any_one_stage_law_and_checks_all_unless_bernoulli`,
@@ -441,11 +469,11 @@ The draw of record is `two_stage.OwnRandomness`: the operating system's generato
 samplers (`Flock.Draw`), with no hash, no derivation and no beacon, the RU draw after the boundary is registered and the
 proof-unit draw after the interiors are.
 
-- Stage 1 under a one-stage law (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does: `subset` and `bernoulli`
-  on one stream (`bernoulli` at its `NUM/DEN` as written), `stratified` and `work` one stream per stratum, each of
-  `2 k_s · width(n_s) + 64` bytes, extended by as many again and rerun whenever it runs out. The result is the one-stage
-  draw object, which `draw.check_draw` holds to the registration and the law; the verifier's closure map widens a work
-  draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
+- Stage 1 under a one-stage sampling design (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does: `subset` and
+  `bernoulli` on one stream (`bernoulli` at its `NUM/DEN` as written), `stratified` and `work` one stream per stratum,
+  each of `2 k_s · width(n_s) + 64` bytes, extended by as many again and rerun whenever it runs out. The result is the
+  one-stage draw object, which `draw.check_draw` holds to the registration and the sampling design; the verifier's
+  closure map widens a work draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
 - Nothing here derives a draw, the proof service's included (`service.Stream.select` is `draw_first` on the
   challenger's coins). vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
   under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.

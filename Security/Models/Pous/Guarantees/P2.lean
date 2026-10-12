@@ -36,7 +36,9 @@ certificate route gives. Storing floor(S/w) code blocks raw breaks `Meets` at k 
 Scope: abstract M1p only, not a concrete SMS or timing theorem. This pin resolves the ideal-domain cardinality
 mismatch by using `[0,p)`, but Lean does not prove primality, the concrete byte/bit encoding or packing, the
 per-block SMS-to-M1p instantiation, SeqRoot, the wall-clock-to-`Q` calibration, authentication, accounting or
-fresh setup. -/
+fresh setup.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2MeetsM1pB19Uncond : Prop :=
   ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 →
     ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) b) .sequential D (2 ^ 20) 88 Params.εMax
@@ -46,7 +48,9 @@ exact 16,448-bit domain.** For every B with `2^8 ≤ B ≤ 2^23` and every `b` w
 `m1p B 16448 (2^16448 − 21065) b` meets the requirement with sequential reveal, `2^20` forward queries per answer, any
 forward-query depth, 88 challenges and `ε = 2^-128`. Pinned as drafted
 (`lean/submissions/efficient-crypto/p2-domain/P2Domain.lean`, `PousP2p.family`). `k = 85` fails at its `2^19` instance,
-for every `b` (`family_k85_fails`). Scope: as `P2MeetsM1pB19Uncond`. -/
+for every `b` (`family_k85_fails`). Scope: as `P2MeetsM1pB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2MeetsM1pFamilyUncond : Prop :=
   ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 →
     ∀ D, Meets (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential D (2 ^ 20) 88 Params.εMax
@@ -57,7 +61,9 @@ each block carrying `b` payload bits (`Pous.m1p`), meet the requirement with seq
 per answer, any forward-query depth, 90 challenges and `ε = 2^-128`, for every `b` with `20·8192 ≤ 21·b` and
 `b ≤ 8191`. Instances: `b = 8191` and `b = 8176` (1,022 bytes). Pinned as drafted
 (`lean/submissions/efficient-crypto/p2-domain/P2Domain.lean`, `PousP2p.p2_meets_m1p_8192`).
-Scope: as `P2MeetsM1pB19Uncond`; it asserts no zero-RTT or root-latency fact. -/
+Scope: as `P2MeetsM1pB19Uncond`; it asserts no zero-RTT or root-latency fact.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2MeetsM1pW8192Uncond : Prop :=
   ∀ b, 20 * 8192 ≤ 21 * b → b ≤ 8191 →
     ∀ D, Meets (m1p (2 ^ 24) 8192 (2 ^ 8192 - 9345) b) .sequential D (2 ^ 20) 90 Params.εMax
@@ -80,7 +86,9 @@ accounting or fresh setup. The slack `λ` is a budget for structural savings an 
 derived from any instantiation. The `λ·B` allowance conservatively covers leakage representable as at most `λ`
 retained advice bits per block, aggregated into arbitrary global state. It does not cover leakage that changes the
 online oracle interface, creates cross-block correlations in the instantiated maps, or exceeds `λ·B` bits of reusable
-information. -/
+information.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2SlackB19Uncond : Prop :=
   ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     let sch := m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) b
@@ -107,7 +115,9 @@ the uniform certificate `g = ⌊c·B⌋ + 1` does not reach the lower k. At `λ 
 bound `logHistGammaM1_le` at some such `B` (for example `B = 275`), while the lower bound on `Γ` does not rule the
 lower `k` out there, so the family's lower `k` for small `B` is open. Statement non-vacuity: as `P2SlackB19Uncond`,
 at `B = 2^19`.
-Scope: as `P2SlackB19Uncond`. -/
+Scope: as `P2SlackB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2SlackFamilyUncond : Prop :=
   ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     let sch := m1p B 16448 (2 ^ 16448 - 21065) b
@@ -133,7 +143,9 @@ half of the `2^-128` budget. The proved `log₂(|Hist|·Γ)` bounds are about `�
 `−1.2·10^6` (`PousMargin.log_b19_*`). Proposed in `lean/submissions/efficient-crypto/p2-margin/P2Margin.lean`
 (`PousMargin.b19_meets_129`, `b19_64_129`, `b19_128_129`, `b19_256_129`). Scope: as `P2SlackB19Uncond`. Under an
 external reduction in which all unmodelled errors add and total at most `2^-129`, the combined cryptographic error is
-at most `2^-128`; Lean proves neither that reduction nor the external bound. -/
+at most `2^-128`; Lean proves neither that reduction nor the external bound.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2ErrorSplitB19Uncond : Prop :=
   ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     let sch := m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) b
@@ -158,7 +170,9 @@ blocks not decoding to `W` with probability at most `2^-128`, which the profile'
 statement. `ρ_eff` is `ρ` of the blocks that must be stored. The proof (`Pous.FreeBlocks.p2_slack_family_free_blocks`)
 counts the free blocks in the 1% term, `((g − 1 + ⌊B/100⌋)/B)^140 ≤ (0.9576 + 0.01)^140 ≤ 1/100` with
 `g = ⌊0.9576·B⌋ + 1`, and the state is below `P2SlackFamilyUncond`'s `λ = 0` one, so it shows `1% + 2^-129`; the `2^-128`
-term is slack. Scope: as `P2SlackB19Uncond`. -/
+term is slack. Scope: as `P2SlackB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2SlackFamilyFreeBlocks : Prop :=
   ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     let sch := m1p B 16448 (2 ^ 16448 - 21065) b

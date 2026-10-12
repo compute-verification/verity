@@ -14,3 +14,7 @@ verity = { workspace = true }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# record.py's mixes are workloads of the vLLM integration, which test_consistency loads.
+inputs = ["integrations/vllm/workloads"]

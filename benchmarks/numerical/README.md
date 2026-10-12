@@ -1,7 +1,9 @@
 # benchmarks/numerical
 
 Frozen: kept, still in the tables, not developed. The exception is the bench spine `verity_numerical.bench` (the result
-contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read.
+contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read,
+and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampled units, work weight) over the census
+workloads.
 What the merge gate runs here: `../../archive/README.md`.
 
 Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST` (rules: `archive/AGENTS.md`). `verity_numerical.reference`

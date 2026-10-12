@@ -423,7 +423,8 @@ def descriptor_size(program_or_desc) -> int:
 # decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
 # package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
 # `program.INPUT_ID` or `program.REGISTERED_ID` always denotes the IR's own `Input<w>` or `RegisteredInput<w>`, ahead of
-# any registry entry.
+# any registry entry.  A pattern matches the whole id, and the member it makes must carry that id: a family has one spelling
+# per member.
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []
 
 
@@ -513,9 +514,12 @@ def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     if fid in registry:
         return registry[fid]  # type: ignore[return-value]
     for pat, make in _LAZY_PRIMITIVE_FAMILIES:
-        m = pat.match(fid)
+        m = pat.fullmatch(fid)
         if m:
-            return make(m)
+            p = make(m)
+            if p.id != fid:
+                raise KeyError(f"primitive {fid} is not in the registry: its family spells that member {p.id}")
+            return p
     raise KeyError(f"primitive {fid} is not in the registry")
 
 

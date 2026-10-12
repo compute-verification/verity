@@ -1,7 +1,7 @@
 import Proofs.Pous.P3.Column.BandComb
 import Definitions.Pous
 import Models.Pous.Assumptions
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 

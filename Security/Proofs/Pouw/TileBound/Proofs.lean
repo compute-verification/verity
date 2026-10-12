@@ -1,5 +1,4 @@
 import Definitions.Pouw.TileBound.Defs
-import Models.Pouw.Guarantees.TileBound
 
 /-!
 # The FP4-tile model: the block-support count and what it bounds (proofs)
@@ -574,41 +573,3 @@ theorem realizesAt_nonvacuous : ∃ (P : TileProg ℚ 16 64 8 1) (gs : Fin 1 →
   simp [QuadProg.eval, BilinProg.toQuad, TileProg.toBilin, oneGateProg, unitForm, Fintype.sum_prod_type]
 
 end Pouw.TileBound
-
-theorem Pouw.SecurityProofs.TileBound.BilinSupport : Pouw.Guarantees.TileBound.BilinSupport := @Pouw.TileBound.bilin_support
-
-theorem Pouw.SecurityProofs.TileBound.BlockCount : Pouw.Guarantees.TileBound.BlockCount := @Pouw.TileBound.block_count
-
-theorem Pouw.SecurityProofs.TileBound.CostGe : Pouw.Guarantees.TileBound.CostGe := @Pouw.TileBound.cost_ge
-
-theorem Pouw.SecurityProofs.TileBound.CostGeSupport : Pouw.Guarantees.TileBound.CostGeSupport := @Pouw.TileBound.cost_ge_support
-
-theorem Pouw.SecurityProofs.TileBound.CostGeSupportAt : Pouw.Guarantees.TileBound.CostGeSupportAt := @Pouw.TileBound.cost_ge_supportAt
-
-theorem Pouw.SecurityProofs.TileBound.CrossOnOfEval : Pouw.Guarantees.TileBound.CrossOnOfEval := @Pouw.TileBound.crossOn_of_eval
-
-theorem Pouw.SecurityProofs.TileBound.CrossXCount : Pouw.Guarantees.TileBound.CrossXCount := @Pouw.TileBound.crossX_count
-
-theorem Pouw.SecurityProofs.TileBound.CrossYCount.{u_1, u_2, u_4} : Pouw.Guarantees.TileBound.CrossYCount.{u_1, u_2, u_4} := @Pouw.TileBound.crossY_count
-
-theorem Pouw.SecurityProofs.TileBound.FmtClosedIff : Pouw.Guarantees.TileBound.FmtClosedIff := @Pouw.TileBound.fmt_closed_iff
-
-theorem Pouw.SecurityProofs.TileBound.Fp32ClosedUpto : Pouw.Guarantees.TileBound.Fp32ClosedUpto := @Pouw.TileBound.fp32_closed_upto
-
-theorem Pouw.SecurityProofs.TileBound.Fp32OpenAt : Pouw.Guarantees.TileBound.Fp32OpenAt := @Pouw.TileBound.fp32_open_at
-
-theorem Pouw.SecurityProofs.TileBound.NLiveAll : Pouw.Guarantees.TileBound.NLiveAll := @Pouw.TileBound.nLive_all
-
-theorem Pouw.SecurityProofs.TileBound.OpenFp32 : Pouw.Guarantees.TileBound.OpenFp32 := @Pouw.TileBound.open_fp32
-
-theorem Pouw.SecurityProofs.TileBound.OpenTf32 : Pouw.Guarantees.TileBound.OpenTf32 := @Pouw.TileBound.open_tf32
-
-theorem Pouw.SecurityProofs.TileBound.QuadSupport : Pouw.Guarantees.TileBound.QuadSupport := @Pouw.TileBound.quad_support
-
-theorem Pouw.SecurityProofs.TileBound.Tf32ClosedUpto : Pouw.Guarantees.TileBound.Tf32ClosedUpto := @Pouw.TileBound.tf32_closed_upto
-
-theorem Pouw.SecurityProofs.TileBound.Tf32OpenAt : Pouw.Guarantees.TileBound.Tf32OpenAt := @Pouw.TileBound.tf32_open_at
-
-theorem Pouw.SecurityProofs.TileBound.TileCostGe.{u_1, u_3} : Pouw.Guarantees.TileBound.TileCostGe.{u_1, u_3} := @Pouw.TileBound.tile_cost_ge
-
-theorem Pouw.SecurityProofs.TileBound.TileCount.{u_1, u_3} : Pouw.Guarantees.TileBound.TileCount.{u_1, u_3} := @Pouw.TileBound.tile_count

@@ -2,9 +2,10 @@
 # `verity/core/protocols/pouw/core_check.py`: the verifier's parameters, the window's registration and its digest,
 # the proof service's answer, and PoUW's rule over them. Lean core only; its properties are stated in
 # `Security/Properties/Pouw/Check.lean`, and the difftest (`tests/test_difftest.py`, on the shared harness) holds
-# `pouw-check serve` to the Python on generated cases.
+# `pouw-check serve` and `pouw-check-difftest` (a unit's opening, `PouwCheck.Opening`; the window's pass and draw,
+# `PouwCheck.Pass`) to the Python on generated cases.
 name = "pouw_check"
-defaultTargets = ["PouwCheck", "pouw-check"]
+defaultTargets = ["PouwCheck", "pouw-check", "pouw-check-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -20,7 +21,12 @@ path = "../window"
 
 [[lean_lib]]
 name = "PouwCheck"
+roots = ["PouwCheck", "PouwCheck.Difftest"]
 
 [[lean_exe]]
 name = "pouw-check"
 root = "PouwCheck.Main"
+
+[[lean_exe]]
+name = "pouw-check-difftest"
+root = "PouwCheck.DifftestMain"

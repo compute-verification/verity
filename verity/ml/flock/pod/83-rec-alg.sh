@@ -8,7 +8,10 @@
 # challenge) beside the honest w, which both verifiers must reject. Run from the verity tree (research run --cwd source).
 # Outputs under out/: host.txt, stage.json, time-stage.txt, honest/ and forged/ (time-prove.txt, prove.txt/.err, serve.log,
 # lean.log, time-lean.txt, replay.txt, sizes.txt), summary.json.
-# env: INNER=DIR (required: claims.json, session/)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)
+# Lean checks each statement's v against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement
+# REC_STMT and INNER's session, the one the verifier served, for the forged statement too.
+# env: INNER=DIR (required: claims.json, session/)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)  REC_STMT=DIR (the inner
+#      statement: circuit.txt, pub-N.bin and the verity/partition/v1 object it binds, partition.json; default INNER/stage)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
@@ -25,6 +28,9 @@ python3 verity/ml/flock/pod/rec_inner.py forge --what challenge --inner $FI > $O
 /usr/bin/time -v -o $O/time-stage.txt python3 -m verity_flock.rec_residuals $INNER $S/st --forged $FI > $O/stage.json 2> $O/stage.err
 echo "stage exit $?"
 wait $LP
+REC_STMT=${REC_STMT:-$INNER/stage}; REC_PUB=($REC_STMT/pub-*.bin)
+REC_INNER=(--rec-inner-circuit $REC_STMT/circuit.txt --rec-inner-public ${REC_PUB[0]} --rec-inner-partition $REC_STMT/partition.json
+  --rec-inner-session $INNER/session)
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
@@ -46,7 +52,7 @@ prove() {
   local SESS=$(find $D/sessions -name session.json -printf '%h\n' | sort | head -1)
   [ -n "$SESS" ] || { echo "$1: no session"; return 1; }
   /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin \
-    --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $SESS > $D/lean.log 2>&1
+    --partition $C/partition.json --program $C/program.json --registered $C/registered.json "${REC_INNER[@]}" --session $SESS > $D/lean.log 2>&1
   echo "$1 lean exit $?"
   $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS > $D/replay.txt 2>&1
   echo "$1 replay exit $?"

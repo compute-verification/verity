@@ -264,8 +264,12 @@ theorem tileCheck4_computesWords_core (ρ : ℚ)
 
 end Pouw.PearlC.WholeCircuit
 
-theorem Pouw.SecurityProofs.PearlC.TileCheck8WordsCore : Pouw.Guarantees.PearlC.TileCheck8WordsCore :=
-  @Pouw.PearlC.WholeCircuit.tileCheck8_computesWords_core
+theorem Pouw.SecurityProofs.PearlC.TileCheck8WordsCore : Pouw.Guarantees.PearlC.TileCheck8WordsCore := by
+  intro Q R S p pr c ρ noise U H s g cm X hacc hgr hw hU hg
+  obtain ⟨l, w, zf⟩ := p
+  obtain rfl : l = [32] := hgr
+  exact (Pouw.PearlC.WholeCircuit.tileCheck8_computesWords_core hw zf pr c ρ noise U hU H s g hg cm X hacc).resolve_right id
 
-theorem Pouw.SecurityProofs.PearlC.TileCheck4WordsCore : Pouw.Guarantees.PearlC.TileCheck4WordsCore :=
-  @Pouw.PearlC.WholeCircuit.tileCheck4_computesWords_core
+theorem Pouw.SecurityProofs.PearlC.TileCheck4WordsCore : Pouw.Guarantees.PearlC.TileCheck4WordsCore := by
+  intro Q R S ρ lines U H s g cm X hacc hU hg
+  exact (Pouw.PearlC.WholeCircuit.tileCheck4_computesWords_core ρ lines U hU H s g hg cm X hacc).resolve_right id

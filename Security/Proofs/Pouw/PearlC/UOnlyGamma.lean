@@ -175,5 +175,3 @@ end Pouw.PearlC
 theorem Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192 : Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192 := @Pouw.PearlC.pearlCGammaUOnlySm120Rev1_8192
 
 theorem Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192 := @Pouw.PearlC.pearlCGammaUOnlyUnpromotedCap1000_8192
-
-theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfUOnly : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfUOnly := @Pouw.PearlC.ttOutPearlCDevRev1_of_uOnly

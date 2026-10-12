@@ -19,7 +19,10 @@ from . import record, result
 
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
 TERMINAL = ("done", "failed", "cancelled")
-ACTIVE = ("submitted", "admitted", "running", "preserving")
+ACTIVE = ("submitted", "admitted", "waiting", "running", "preserving")
+#: a check's slot record in its run dir, kept by tools/verity/check/slot.py (RUN_SLOT): `waiting` in a machine's check line, `held`
+#: (the slot and when it was taken) or `left`; while it waits, the run is `waiting`, since its check hasn't started
+SLOT_FILE = "slot.json"
 DISK_FLOOR_ENV = "RESEARCH_DISK_FLOOR_GB"
 DISK_FLOOR_GB = 1.5                 # `research run` and `research fetch` refuse below this much free space (0 turns the floor off)
 
@@ -100,6 +103,9 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         state = "runner-gone"                    # its status says active, but the machine has no runner for it (remote.json says why)
     else:
         state = status.get("state", "unknown" if not raw_job else "submitted")
+    slot = _read(run_dir / SLOT_FILE)
+    if state == "running" and (slot or {}).get("state") == "waiting":
+        state = "waiting"
     if remote_rec and not raw_job:
         # not fetched yet: what the control side knew at launch
         own = {"project": remote_rec.get("project")}
@@ -128,6 +134,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "why": failure.get("why"),
         "started_utc": started,
         "ended_utc": ended,
+        "slot": slot,
         "command": exe.get("command"),
         "remote": run_sec.get("remote") or ({"machine": remote_rec.get("machine"), "pod_id": remote_rec.get("pod_id"), "root": remote_rec.get("root"),
                                               "tool": remote_rec.get("tool"), "source_sha": remote_rec.get("source_sha")} if remote_rec else None),

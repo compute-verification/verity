@@ -50,10 +50,11 @@ def DomainRefusals : Prop :=
     (binding.size = 32 ∨ binding.size = 64) ∧ -2 ≤ owner
 
 /-- A leaf `Hm96Domain.leaf` gives is of a value at least its 192-byte salt long, and in a tile tree of a 64-byte digest
-and its salt; a plain tree's leaf takes any value. -/
+and its salt. -/
 def LeafRefusals : Prop :=
-  ∀ (d : RowsDomain) rank schema (v x : ByteArray), d.leaf rank schema v = .ok x →
-    d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256)
+  (∀ frame digests rank schema (v x : ByteArray),
+      (RowsDomain.mk frame true digests).leaf rank schema v = .ok x → 192 ≤ v.size) ∧
+    ∀ frame rank schema (v x : ByteArray), (RowsDomain.mk frame true true).leaf rank schema v = .ok x → v.size = 256
 
 /-- `coin_reason` answers (a reason or none) only for a label in `LABELS`, and, once the epoch, the label and the sizes
 match, only for a path whose every item is 32 or 64 bytes (`Opening`'s refusal). -/
@@ -151,10 +152,10 @@ def CoinBinding : Prop :=
 
 /-- The trees' framing separates them: frame-v3 messages with different tags or parts differ, so equal digests of
 different domain ids, leaves, nodes, pads or empty roots are a collision of the frame's hash on the two framed messages. A
-tag's length is framed in 32 bits and a part's in 64, which bound them (Python's frame refuses longer ones). -/
+tag's length is framed in 32 bits and a part's in 64, and the frame refuses longer ones (`frameHash?`, as Python's does):
+two frames it accepts with one digest `d`. -/
 def FrameInjective : Prop :=
-  ∀ h tag tag' (parts parts' : List ByteArray), tag.toUTF8.size < 2 ^ 32 → tag'.toUTF8.size < 2 ^ 32 →
-    (∀ p ∈ parts, p.size < 2 ^ 64) → (∀ p ∈ parts', p.size < 2 ^ 64) → frameHash h tag parts = frameHash h tag' parts' →
+  ∀ h tag tag' (parts parts' : List ByteArray) d, frameHash? h tag parts = .ok d → frameHash? h tag' parts' = .ok d →
     (tag = tag' ∧ parts = parts') ∨
       (frameBytes tag parts ≠ frameBytes tag' parts' ∧ h.run (frameBytes tag parts) = h.run (frameBytes tag' parts'))
 

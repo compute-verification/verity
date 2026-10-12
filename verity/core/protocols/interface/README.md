@@ -9,7 +9,7 @@ defines one `Core.Protocol` value, and makes its executable `def main (args) := 
 | field | type | what it is |
 | --- | --- | --- |
 | `id` | `String` | the protocol id and version, e.g. `verity/pouw/v1` |
-| `Params`, `params` | `Json → V Params` | the public parameters (k, Δ, the law), read from canonical JSON |
+| `Params`, `params` | `Json → V Params` | the public parameters (k, Δ, the sampling design), read from canonical JSON |
 | `Commitment`, `commitment` | `ByteArray → V Commitment` | what the prover committed to before the challenge |
 | `digest` | `Commitment → ByteArray` | the digest that binds it, which a record or certificate cites |
 | `Evidence`, `evidence` | `ByteArray → V Evidence` | everything else the check reads: record, transcript, proofs, certificate |
@@ -56,8 +56,8 @@ profile's types derive `DecidableEq`.
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
-protocol whose acceptance isn't a sampling law over units (a timed storage audit, a certificate check) declares its own
-profile type and JSON.
+protocol whose acceptance isn't a sampling design over units (a timed storage audit, a certificate check) declares its
+own profile type and JSON.
 
 ## Properties
 

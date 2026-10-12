@@ -43,14 +43,15 @@ and then it is swept; without it the sweep runs before anyone pushes, finds noth
 same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
-These after-landing steps (the spec DM, the mirror, `after_land`) follow the remote's main, not the push: AFTER_LAND_REF on the
+These after-landing steps (the spec DM, the mirror, `after_land`, and one line per landing in the merge thread: what it merged
+and its `Checked:` run, `report_landings`) follow the remote's main, not the push: AFTER_LAND_REF on the
 remote is the main they last ran for, and every `research merge` that can change something (all but --dry-run, --mirror,
 --canary and --guard-push) catches them up, once, for whatever landed past it since, however it was pushed (`caught_up`).
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
-reads each again when the tip lands (`unstacked`); a train member needs no ready mark and no grant, since the train's own check
-is the gate (Daniel, 6 and 8 Oct).
+reads each again when the tip lands (`unstacked`). It reads no ready mark and no grant, since the train's own check is the gate
+(Daniel, 6 and 8 Oct); the owner's ready mark is what admits a PR to a train (`research queue`), not part of this gate.
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`). Generated files never keep merged text: every merge runs the tree's own
@@ -97,7 +98,7 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
-#: `--priority` and `--by NAME` when given, then `--`
+#: `--priority`, `--by NAME` and `--twin PAIR[@HOME]` when given, then `--`
 SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`
@@ -118,6 +119,7 @@ def invocation(argv, command) -> tuple[str, object]:
         opts = argv[2:]
         opts = opts[1:] if opts[:1] == ["--priority"] else opts
         opts = opts[2:] if opts[:1] == ["--by"] and len(opts) > 1 else opts
+        opts = opts[2:] if opts[:1] == ["--twin"] and len(opts) > 1 else opts
         run = opts[1:] if opts[:1] == ["--"] else argv
     if run[:len(command)] != list(command):
         return "refused", f"its command `{shlex.join(argv)}` isn't the target's declared `{shlex.join(command)}`"
@@ -1205,7 +1207,8 @@ def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> b
 def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip (a later landing's `post_train.py` tests the ones before it too), then move the marker to the tip.  The spec DM
+    on the tip (a later landing's `post_train.py` tests the ones before it too), post each landing to the merge thread
+    (`report_landings`), then move the marker to the tip.  The spec DM
     (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
     when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
     the markers.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
@@ -1252,10 +1255,84 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
         if remote == "origin" and (name := mirror_name()):
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log)
+        if remote == "origin":
+            report_landings(repo, start, tip, log=log)
     if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
         log(f"research merge: {remote} had no {AFTER_LAND_REF}; set it to main ({tip[:12]}): the steps after a landing are "
             "caught up from here, and nothing before it was looked at")
     return tip if start else None
+
+
+#: what a landing merged, in its own subject or its train's (`prepare`): a pull request, a branch of origin, or a commit
+MERGED_REF = re.compile(r"Merge (#\d+|origin/\S+|[0-9a-f]{12,40}) \([0-9a-f]{7,40}\)")
+CHECK_TRAILER = re.compile(r"^Check(?:ed)?: (.*)$", re.M)
+#: a run id, or the lander's `r20261010-*-9827` for one whose launch time it didn't copy
+RUN_ID = re.compile(r"r20\d{6}-(?:\d{6}|\*)-[0-9a-f]{4}")
+
+
+def _merged_name(ref: str, prs: dict[str, int]) -> str:
+    if ref.startswith("#"):
+        return ref
+    if (branch := ref.removeprefix("origin/")) != ref:
+        return f"#{prs[branch]}" if branch in prs else branch
+    sha = next((k for k in prs if len(k) == 40 and k.startswith(ref)), None)
+    return f"#{prs[sha]}" if sha else ref[:12]
+
+
+def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None = None) -> list[str]:
+    """One line per commit on ``tip``'s first-parent line after ``start``: what it merged (pull requests, or the branches and
+    commits ``prs``, head branch or head sha to number, doesn't map to one) and the runs its `Check:` or `Checked:` trailer
+    names.  Read from main's log, since a pull request's state can't stand in: a stacked member such as #1706 reads closed on
+    GitHub without having landed on its own."""
+    prs = prs or {}
+    lines = []
+    for c in _git(repo, "rev-list", "--first-parent", "--reverse", f"{start}..{tip}").stdout.split():
+        parents = _git(repo, "rev-list", "--parents", "-n", "1", c).stdout.split()[1:]
+        subject, body = _git(repo, "log", "-1", "--format=%s%x00%b", c).stdout.split("\0", 1)
+        subjects = [subject]
+        if len(parents) == 2:
+            subjects += _git(repo, "log", "--first-parent", "--format=%s", f"{parents[0]}..{parents[1]}").stdout.splitlines()
+        merged = []
+        for s in subjects:
+            for m in MERGED_REF.finditer(s):
+                if len(parents) == 2 and parents[1].startswith(m[1]):
+                    continue                            # the train's own tip, whose merges name what it holds
+                if (ref := _merged_name(m[1], prs)) not in merged:
+                    merged.append(ref)
+        what = " + ".join(reversed(merged)) if merged else f"“{subject}”"
+        runs = [r for t in CHECK_TRAILER.findall(body) for r in RUN_ID.findall(t)]
+        lines.append(f"landed on main: {c[:12]} {what}; checked by {', '.join(dict.fromkeys(runs)) or 'no run (no Check: trailer)'}")
+    return lines
+
+
+def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print) -> bool:
+    """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
+    whoever pushed it (two of 10 Oct's were missing from the lander's own reports).  True when posted or there was nothing to
+    post; a failure is printed and returns False, and nothing raises, since the landings stand."""
+    from .monitors import MERGE_THREAD
+    from .slack import FRONT_DOOR, QUIET, Slack, _footer, load_registry, registry_path
+
+    try:
+        gh = gh or (lambda *a: _gh_cli(repo, *a))
+        try:
+            prs = {k: p["number"] for p in sorted(json.loads(gh("pr", "list", "--state", "all", "--limit", "300", "--json",
+                                                                 "number,headRefName,headRefOid")), key=lambda p: p["number"])
+                   for k in (p["headRefName"], p["headRefOid"])}
+        except Exception:                               # noqa: BLE001: without GitHub a branch is named by its branch
+            prs = {}
+        lines = landing_lines(repo, start, tip, prs)
+        if not lines:
+            return True
+        reg = reg if reg is not None else load_registry(registry_path())
+        api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
+        api.call("chat.postMessage", channel=reg["channels"][FRONT_DOOR]["id"], thread_ts=MERGE_THREAD,
+                 text="\n".join(lines) + _footer((QUIET,)), username="research merge", unfurl_links=False)
+        log(f"research merge: posted {len(lines)} landing(s) to the merge thread")
+        return True
+    except Exception as e:                              # noqa: BLE001: a report that fails leaves the landings as they are
+        print(f"research merge: the landings {start[:12]}..{tip[:12]} weren't posted to the merge thread: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return False
 
 
 def spec_alert_lag(repo: Path, remote: str) -> str:

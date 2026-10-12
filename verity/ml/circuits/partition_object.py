@@ -175,7 +175,7 @@ def validate(obj: Any) -> CutVerdict:
         fail("keys", sorted(set(obj) ^ _KEYS, key=repr))
     if obj.get("format") != FORMAT:
         fail("format", obj.get("format"))
-    if not isinstance(obj.get("program"), str) or not _SHA512.match(obj["program"]):
+    if not isinstance(obj.get("program"), str) or not _SHA512.fullmatch(obj["program"]):
         fail("program-digest", obj.get("program"))
     q = obj.get("query")
     if not isinstance(q, Mapping) or set(q) != _QUERY_KEYS:

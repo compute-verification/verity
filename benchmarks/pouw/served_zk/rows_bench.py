@@ -5,8 +5,9 @@ Llama-3.1-8B's four linears with m = 32 (decode_served.py's shapes): a microbenc
 
 Gates before any timing, per shape, from outputs poisoned to 0xA5: hm96_rows.cu's x (sha512/row-seg/v1 and sha512/row/v2),
 b ‖ c, the hm96 leaf and the frame-v3-sha512 root equal Python's (verity.ml.commitments: rowleaf, hm96.SHA512,
-merkle) under salts that are C-Flock's ChaCha20 stream (zk_hooks::LeafSalts, recomputed here); each no-write control (the
-launch left out) leaves them unequal.
+merkle) under salts read from the OS on the host, as C-Flock's are (zk_hooks::LeafSalts), and handed to the device: 192 bytes a
+row, read and copied once per commitment, outside the timed graphs; each no-write control (the launch left out) leaves them
+unequal.
 
 Each variant's launches, CALLS times over in one stream, are captured as a CUDA graph and replayed REPS rounds in rotated
 order; the figure is the median replay over CALLS, in µs a call.  Variants, per shape:
@@ -50,7 +51,6 @@ import importlib.util
 import json
 import os
 import statistics
-import struct
 import sys
 import time
 from pathlib import Path
@@ -66,11 +66,9 @@ SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "dow
 POISON, SLOT, SEG_TPB = 0xA5, 256, 256
 INST, KEY = hm96.SHA512, hm96.SHA512.default_key
 SEG, V2 = RL.SCHEMA_HM96_SHA512_ROW_SEG, RL.SCHEMA_HM96_SHA512_ROW_V2
-SALT_KEY = hashlib.sha256(b"served-zk/rows-bench/salt-key").digest()
 HASH_A = ("hash_rows_a", "tree_a")
 HASH_T = ("hash_msg", "hash_leaf", "tree_leaves_t", "tree_t")
 CALL_PHASES = ("commit", "forming", "cleanup", "hashing")
-M32 = 0xFFFFFFFF
 
 
 def load(name: str, path: Path):
@@ -78,29 +76,6 @@ def load(name: str, path: Path):
     mod = sys.modules[name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
-    """sha512.cuh's chacha20_block: 20 rounds, a 64-bit counter (words 12-13) and a 64-bit nonce (words 14-15)."""
-    s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
-         counter & M32, counter >> 32, nonce & M32, nonce >> 32]
-    x = list(s)
-
-    def qr(a, b, c, d):
-        x[a] = (x[a] + x[b]) & M32; x[d] ^= x[a]; x[d] = ((x[d] << 16) | (x[d] >> 16)) & M32  # noqa: E702
-        x[c] = (x[c] + x[d]) & M32; x[b] ^= x[c]; x[b] = ((x[b] << 12) | (x[b] >> 20)) & M32  # noqa: E702
-        x[a] = (x[a] + x[b]) & M32; x[d] ^= x[a]; x[d] = ((x[d] << 8) | (x[d] >> 24)) & M32  # noqa: E702
-        x[c] = (x[c] + x[d]) & M32; x[b] ^= x[c]; x[b] = ((x[b] << 7) | (x[b] >> 25)) & M32  # noqa: E702
-
-    for _ in range(10):
-        qr(0, 4, 8, 12); qr(1, 5, 9, 13); qr(2, 6, 10, 14); qr(3, 7, 11, 15)  # noqa: E702
-        qr(0, 5, 10, 15); qr(1, 6, 11, 12); qr(2, 7, 8, 13); qr(3, 4, 9, 14)  # noqa: E702
-    return struct.pack("<16I", *[(x[i] + s[i]) & M32 for i in range(16)])
-
-
-def salt(nonce: int, i: int, key: bytes = SALT_KEY) -> bytes:
-    """Leaf i's 192-byte salt: ChaCha20 blocks 3i, 3i + 1, 3i + 2 (hm96_salt)."""
-    return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
 
 
 def slots(heads: list[bytes]) -> bytes:
@@ -120,12 +95,11 @@ def node_head(dom: MK.CommitmentDomain, level: int, index: int) -> bytes:
             + (64).to_bytes(8, "big"))
 
 
-def constants(h, salt_key: bytes = SALT_KEY) -> dict:
-    """hm96_rows.cu's constants on the device: M_key's byte tables, the salt stream's key, and the midstates of hm96's salt
-    and leaf prefixes."""
+def constants(h) -> dict:
+    """hm96_rows.cu's constants on the device: M_key's byte tables and the midstates of hm96's salt and leaf prefixes."""
     tables = b"".join(v.to_bytes(64, "little") for row in INST.byte_tables(KEY) for v in row)
     pre = h.put(INST.salt_prefix + INST.leaf_prefix(KEY))
-    consts = {"tables": h.put(tables), "salt_key": h.put(salt_key), "salt_key_bytes": salt_key, "hm_mid": h.alloc(128)}
+    consts = {"tables": h.put(tables), "hm_mid": h.alloc(128)}
     h.launch("sz_mid", 1, 32, p=(pre, consts["hm_mid"]), i=(2,))
     return consts
 
@@ -133,12 +107,14 @@ def constants(h, salt_key: bytes = SALT_KEY) -> dict:
 class Commit:
     """One call's rows (`rows` of `nbytes` each at device address `data`, stride `stride`) as hm96-sha512 leaves of a
     frame-v3-sha512 tree under schema `schema` (SEG: row-seg/v1 rows, any whole number of 128-byte chunks a segment; V2: rows of
-    at most 111 bytes), with its constants on the device."""
+    at most 111 bytes), with its constants on the device, and its rows' salts read from the OS (`fresh_salts` reads new ones)."""
 
-    def __init__(self, dev, h, consts: dict, tag: str, data: int, rows: int, nbytes: int, stride: int, schema: str, nonce: int,
+    def __init__(self, dev, h, consts: dict, tag: str, data: int, rows: int, nbytes: int, stride: int, schema: str,
                  prefix: str = "served-zk/rows-bench"):
         self.dev, self.h, self.data, self.rows, self.nbytes, self.stride, self.schema = dev, h, data, rows, nbytes, stride, schema
-        self.nonce, self.c = nonce, consts
+        self.c = consts
+        self.salts = os.urandom(192 * rows)
+        self.d_salts = h.put(self.salts)
         n_bits = 8 * nbytes
         if schema == SEG:
             segs = RL.sha512_row_seg_segments(n_bits)
@@ -170,6 +146,11 @@ class Commit:
         self.pads = b"".join(self.dom.pad(r) for r in range(rows, self.width))
         self.write_pads()
 
+    def fresh_salts(self) -> None:
+        """New salts from the OS for the next commitment, copied on the device's stream (after every launch already on it)."""
+        self.salts = os.urandom(192 * self.rows)
+        self.h.ck("cuMemcpyHtoDAsync_v2", C.c_uint64(self.d_salts), C.c_char_p(self.salts), len(self.salts), self.h.stream)
+
     def write_pads(self) -> None:
         if self.pads:
             self.dev.ck("cuMemcpyHtoD_v2", C.c_uint64(self.tree + 64 * self.rows), C.c_char_p(self.pads), len(self.pads))
@@ -185,9 +166,9 @@ class Commit:
         c = self.c
         block = min(256, 32 * (-(-self.rows // 32))) if one_cta else 128
         grid = 1 if one_cta else -(-self.rows // block)
-        self.h.launch("sz_finish", grid, block, p=(self.digests if self.s else self.data, self.q_mid, c["tables"], c["salt_key"],
+        self.h.launch("sz_finish", grid, block, p=(self.digests if self.s else self.data, self.q_mid, c["tables"], self.d_salts,
                                                     c["hm_mid"], self.leaf_heads, self.node_heads, self.x, self.bc, self.tree),
-                      i=(self.rows, self.s, self.stride, mode, self.nonce & M32, self.nonce >> 32, self.width, self.nbytes))
+                      i=(self.rows, self.s, self.stride, mode, 0, 0, self.width, self.nbytes))
         if mode == 2 and not one_cta:
             w, off, heads = self.width, 0, self.node_heads
             while w > 1:
@@ -202,8 +183,7 @@ class Commit:
         """Python's x, b ‖ c, hm96 leaves and root for these row bytes."""
         n_bits = 8 * self.nbytes
         xs = [RL.sha512_row_seg_digest(r, n_bits) if self.schema == SEG else RL.sha512_row_v2_digest(r, n_bits) for r in rows]
-        key = self.c.get("salt_key_bytes", SALT_KEY)
-        bcs = [INST.commit_string(KEY, x, salt(self.nonce, i, key)) for i, x in enumerate(xs)]
+        bcs = [INST.commit_string(KEY, x, self.salts[192 * i:192 * (i + 1)]) for i, x in enumerate(xs)]
         hls = [INST.tree_leaf(KEY, bc) for bc in bcs]
         levels = MK.tree_levels(self.dom, [RL.row_leaf(self.dom, i, hl, self.schema) for i, hl in enumerate(hls)])
         return {"x": b"".join(xs), "bc": b"".join(bcs), "hl": b"".join(hls), "root": levels[-1][0]}
@@ -279,7 +259,7 @@ def main() -> int:
             g[name] = got == same
 
     for shape, (n, k) in SHAPES.items():
-        rb, nonce = 4 * k, int.from_bytes(hashlib.sha256(f"served-zk/{shape}".encode()).digest()[:8], "little")
+        rb = 4 * k
         xa, xb = dev.alloc(m * rb), dev.alloc(n * rb)
         dev.launch("gen_f32", R.cdiv(M_REAL * k, 256), 256, p=(xa,), i=(M_REAL, k, 11))
         dev.launch("gen_f32", R.cdiv(n * k, 256), 256, p=(xb,), i=(n, k, 12))
@@ -294,9 +274,9 @@ def main() -> int:
         xp = dev.alloc(M_REAL * pb)
         dev.launch("gen_f32", R.cdiv(M_REAL * pb // 4, 256), 256, p=(xp,), i=(M_REAL, pb // 4, 13))
         tiles = pipes["s"].tiles
-        cm_a = Commit(dev, h, consts, f"{shape}/a", xa, M_REAL, rb, rb, SEG, nonce)
-        cm_p = Commit(dev, h, consts, f"{shape}/p", xp, M_REAL, pb, pb, SEG, nonce + 1)
-        cm_t = Commit(dev, h, consts, f"{shape}/t", pipes["w"].b["leaves"], tiles, 32, 32, V2, nonce + 2)
+        cm_a = Commit(dev, h, consts, f"{shape}/a", xa, M_REAL, rb, rb, SEG)
+        cm_p = Commit(dev, h, consts, f"{shape}/p", xp, M_REAL, pb, pb, SEG)
+        cm_t = Commit(dev, h, consts, f"{shape}/t", pipes["w"].b["leaves"], tiles, 32, 32, V2)
         dev.sync()
         g: dict = {}
         gate(cm_a, 2, "a.hm96", g)
@@ -338,8 +318,8 @@ def main() -> int:
         graphs[shape] = {nm: capture(fn) for nm, fn in v.items()}
         tdig = [steps["w"][nm] for nm in (*nohash, "hash_msg", "hash_leaf") if nm in steps["w"]]
         per[shape] = {"h2": call_s, "nohash": v["call.nohash"], "hm96": call_hm96, "tdig": hm96_call(lambda: None, lambda: None, tdig),
-                      "a": [Commit(dev, h, consts, f"{shape}/a/{lyr}", xa, M_REAL, rb, rb, SEG, nonce + 16 * lyr) for lyr in range(LAYERS)],
-                      "t": [Commit(dev, h, consts, f"{shape}/t/{lyr}", pipes["s"].b["leaves"], tiles, 32, 32, V2, nonce + 16 * lyr + 1)
+                      "a": [Commit(dev, h, consts, f"{shape}/a/{lyr}", xa, M_REAL, rb, rb, SEG) for lyr in range(LAYERS)],
+                      "t": [Commit(dev, h, consts, f"{shape}/t/{lyr}", pipes["s"].b["leaves"], tiles, 32, 32, V2)
                             for lyr in range(LAYERS)]}
         dev.sync()
     # a decode step's four linears, LAYERS deep, and one batched commitment of all of its rows
@@ -353,15 +333,15 @@ def main() -> int:
     for k, rows in step_rows.items():
         x = dev.alloc(rows * 4 * k)
         dev.launch("gen_f32", R.cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, 31))
-        batch.append(Commit(dev, h, consts, f"step/a/{k}", x, rows, 4 * k, 4 * k, SEG, 1000 + k))
+        batch.append(Commit(dev, h, consts, f"step/a/{k}", x, rows, 4 * k, 4 * k, SEG))
     tl = dev.alloc(step_tiles * 32)
     dev.launch("gen_f32", R.cdiv(step_tiles * 8, 256), 256, p=(tl,), i=(step_tiles, 8, 32))
-    batch.append(Commit(dev, h, consts, "step/t", tl, step_tiles, 32, 32, V2, 999))
+    batch.append(Commit(dev, h, consts, "step/t", tl, step_tiles, 32, 32, V2))
     batch_p = []
     for k, rows in step_rows.items():
         x = dev.alloc(rows * (k + 128))
         dev.launch("gen_f32", R.cdiv(rows * (k + 128) // 4, 256), 256, p=(x,), i=(rows, (k + 128) // 4, 33))
-        batch_p.append(Commit(dev, h, consts, f"step/p/{k}", x, rows, k + 128, k + 128, SEG, 2000 + k))
+        batch_p.append(Commit(dev, h, consts, f"step/p/{k}", x, rows, k + 128, k + 128, SEG))
     dev.sync()
     g = {}
     for cm, tag in zip(batch + batch_p, ("batch.a4096", "batch.a14336", "batch.t", "batch.p4096", "batch.p14336")):
@@ -454,7 +434,7 @@ def main() -> int:
         tree, sk = dev.alloc(32 * prefill), dev.alloc(32 * 16)
         b3s = lambda: dev.launch("hash_rows_b3s", prefill, 32 * R.cdiv(R.cdiv(rb, R.B3S_SEG), 32),  # noqa: E731
                                  p=(x, tree, keys["dom_a"], sk, keys["t_row"]), i=(prefill, rb, 0, R.b3s_template_len(R.ROW_SCHEMA)))
-        cm = Commit(dev, h, consts, f"prefill/{k}", x, prefill, rb, rb, SEG, 7)
+        cm = Commit(dev, h, consts, f"prefill/{k}", x, prefill, rb, rb, SEG)
         dev.sync()
         row = {}
         for nm, fn in (("b3s", b3s), ("hm96", lambda: cm.run(2, one_cta=False)), ("sha512", lambda: cm.run(0, one_cta=False)),

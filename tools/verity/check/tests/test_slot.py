@@ -31,6 +31,12 @@ def any_core(monkeypatch):
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
 
 
+@pytest.fixture(autouse=True)
+def outside_a_run(monkeypatch):
+    """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+
+
 def _hold(path: Path) -> int:
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -64,6 +70,7 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setenv("LEASE_DIR", "/run/lease")
+    monkeypatch.setenv(SLOT.SLOT_MEM_ENV, "560")
     held = [_hold(tmp_path / "check-a.lock")]
     ran = {}
 
@@ -81,7 +88,7 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert ran["argv"] == ["uv", "run", "check.py"] and ran["cpus"] == {0}
     env = ran["env"]
     assert "LEASE_DIR" not in env and env["LEASE_DEADLINE_FILE"] == "/nonexistent/research-deadline" and env["CHECK_SLOT"] == "a"
-    assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a")
+    assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a") and SLOT.SLOT_MEM_ENV not in env
 
 
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
@@ -269,6 +276,45 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
             SLOT.main([*bad, "--", "true"])
 
 
+def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
+    """af2d (10 Oct) waited 95 min in node 1's line and was reported running since its launch: its run's slot.json says waiting,
+    and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    held, t, seen = [_hold(tmp_path / "check-a.lock")], [NOW], []
+
+    def sleep(s):
+        seen.append(json.loads((run / SLOT.RUN_SLOT).read_text()))
+        t[0] += timedelta(seconds=s)
+        os.close(held.pop())
+
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: (_ for _ in ()).throw(Exec()))
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "true"], now=lambda: t[0], sleep=sleep)
+    assert seen == [{"state": "waiting", "since": "2026-10-01T09:00:00Z", "priority": True,
+                     "why": "every check slot is taken (a: busy)"}]
+    assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:00Z", "priority": True,
+                                                              "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z"}
+    (tmp_path / "again").mkdir()
+    (tmp_path / "again" / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "again" / "slots")
+    held = [_hold(tmp_path / "again" / "check-a.lock")]
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran without a slot"))
+    assert SLOT.main(["--wait-max", "20", "--", "true"], now=lambda: t[0],
+                     sleep=lambda s: t.__setitem__(0, t[0] + timedelta(seconds=s))) == SLOT.NOT_STARTED
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert doc["state"] == "left" and doc["since"] == "2026-10-01T09:00:20Z" and doc["why"].startswith("no check slot within --wait-max 20 s")
+    os.close(held[0])
+    (run / SLOT.RUN_SLOT).unlink()
+    run.rmdir()
+    SLOT.record_slot(str(run), {"state": "waiting"})                       # an unwritable run dir never stops the check
+    assert not run.exists()
+
+
 def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
     """The real exec: the child runs pinned, and the slot's lock is held for as long as it runs."""
     cpu = min(os.sched_getaffinity(0))
@@ -430,6 +476,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
+    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
     calls = []
 
     def run(cmd, **kw):
@@ -531,6 +578,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
+    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -563,6 +611,22 @@ def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(
     assert SLOT.memory_gb(tmp_path / "absent") == 0
 
 
+def test_memory_gb_counts_a_cgroups_page_cache_as_left(tmp_path):
+    """vy-nebius-cpu-1, 9 Oct 20:50Z: 273 GB of page cache in the user slice held slot a (mem=560) shut with 677 GB available."""
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {677 << 20} kB\n")
+    (tmp_path / "proc/self").mkdir()
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice\n")
+    cg = tmp_path / "sys/fs/cgroup/user.slice"
+    cg.mkdir(parents=True)
+    (cg / "memory.max").write_text(f"{700 << 30}\n")
+    (cg / "memory.current").write_text(f"{347 << 30}\n")
+    assert SLOT.memory_gb(tmp_path) == 353
+    (cg / "memory.stat").write_text(f"anon {74 << 30}\nfile {273 << 30}\nactive_file {200 << 30}\ninactive_file {73 << 30}\n"
+                                    f"shmem 0\n")
+    assert SLOT.memory_gb(tmp_path) == 626
+
+
 def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, monkeypatch, capsys):
     """Node 1, 8 Oct 02:00Z: OOM kills at 1,605 of 1,716 GB across ~8 runs under the user slice; a check whose peak doesn't fit
     waits in line instead of starting and being killed with the others."""
@@ -577,12 +641,96 @@ def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, 
     ran = {}
 
     def execvpe(f, argv, env):
-        ran.update(slot=env["CHECK_SLOT"])
+        ran.update(slot=env["CHECK_SLOT"], mem=env.get(SLOT.SLOT_MEM_ENV))
         raise Exec
 
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
     monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
     with pytest.raises(Exec):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: free.pop(0))
-    assert ran["slot"] == "a" and free == [600]
+    assert ran == {"slot": "a", "mem": "560"} and free == [600]
     assert "a: 300 GB of memory free, under the 560 GB a check here may peak at" in capsys.readouterr().err
+
+
+def _twin_ssh(monkeypatch, here: Path, home: Path, sent: list):
+    """slot.py's ssh to HOME, run by sh on this machine with HOME's lock directory in place of this one's (both nodes keep their
+    locks at the same path)."""
+    real = subprocess.run
+
+    def run(argv, **kw):
+        if argv[:1] != ["ssh"]:
+            return real(argv, **kw)
+        sent.append(argv[:-1])
+        return real(["sh", "-c", argv[-1].replace(str(here), str(home))], **kw)
+
+    monkeypatch.setattr(SLOT.subprocess, "run", run)
+
+
+def test_a_twin_runs_only_if_it_claims_its_pair_first_and_its_twins_then_leave_their_lines(tmp_path, monkeypatch, capsys):
+    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, until each was moved by hand. Twins
+    wait in both lines; the first to hold a slot claims the pair on HOME and runs, and the other leaves its line (75)."""
+    n1, n2 = tmp_path / "n1", tmp_path / "n2"
+    for d in (n1, n2):
+        d.mkdir()
+        (d / "slots").write_text("a 0\n")
+    peers = tmp_path / "peers"
+    peers.write_text("# machine, ssh options and destination\nvy-nebius-1 -i /k -o IdentitiesOnly=yes research@10.0.0.1\n")
+    monkeypatch.setattr(SLOT, "PEERS", peers)
+    sent = []
+    _twin_ssh(monkeypatch, n2, n1, sent)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: (_ for _ in ()).throw(Exec()))
+    held = _hold(n1 / "check-a.lock")                                              # node 1's slot is busy: its twin waits there
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-n2")
+    monkeypatch.setattr(SLOT, "SLOTS", n2 / "slots")
+    with pytest.raises(Exec):                                                      # node 2's frees first: its twin claims and runs
+        SLOT.main(["--twin", "p1@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None)
+    assert sent[-1] == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-i", "/k", "-o", "IdentitiesOnly=yes", "research@10.0.0.1"]
+    claim = json.loads((n1 / "twins" / "p1" / "who").read_text())
+    assert (claim["run"], claim["twin"], claim["took"]) == ("r-n2", "p1@vy-nebius-1", "2026-10-01T09:00Z")
+    assert not (n2 / "twins").exists()
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-n1")
+    monkeypatch.setattr(SLOT, "SLOTS", n1 / "slots")
+    assert SLOT.main(["--twin", "p1", "--", "check"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert "slot: not started: its twin took a slot first (run r-n2, " in capsys.readouterr().err
+    assert list((n1 / SLOT.LINE).iterdir()) == []
+    os.close(held)
+
+
+def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_lets_the_slot_go(tmp_path, monkeypatch, capsys):
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "PEERS", tmp_path / "absent-peers")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    assert SLOT.main(["--twin", "p2@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert (f"slot: not started: twin p2@vy-nebius-1 can't be claimed (vy-nebius-1 isn't in {tmp_path / 'absent-peers'}), "
+            "so its twin there runs instead; exit 75") in capsys.readouterr().err
+    monkeypatch.setattr(SLOT, "twin_here", lambda *a: ("unreachable", {"why": "PermissionError: twins"}))
+    assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
+            in capsys.readouterr().err)
+    monkeypatch.undo()                                                             # undoes any_core's pin too
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
+    t = [NOW]
+    peeks = []
+    real = SLOT.twin
+
+    def twin(op, spec, who):
+        peeks.append(op)
+        return ("free", {}) if op == "peek" else real(op, spec, who)              # the claim lands between a peek and the take
+
+    monkeypatch.setattr(SLOT, "twin", twin)
+    assert SLOT.main(["--twin", "p3", "--", "check"], now=lambda: t[0], sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert peeks == ["peek", "claim"] and "its twin took a slot first (run r-other)" in capsys.readouterr().err
+    slot, fd = SLOT.take(SLOT.parse("a 0"), tmp_path, NOW)                         # the slot it held is free again
+    os.close(fd)
+
+
+def test_twin_is_parsed_and_shown_and_a_bad_pair_is_refused(tmp_path, capsys):
+    assert SLOT.options(["--by", "x", "--twin", "20261009T0440Z-ab12@vy-nebius-2"])[4] == "20261009T0440Z-ab12@vy-nebius-2"
+    with pytest.raises(SystemExit, match="is not PAIR or PAIR@HOME"):
+        SLOT.options(["--twin", "p;rm -rf /"])
+    assert "twin p1" in SLOT.describe({"run": "r1", "twin": "p1"})

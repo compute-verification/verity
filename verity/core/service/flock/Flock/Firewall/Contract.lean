@@ -26,8 +26,16 @@ What the contract holds a transcript to is the verifier's public input (`PublicI
 copy of it. The tape's salts are pairwise distinct as bytes, and so are its pads, so a tape number names one value and a
 salt or pad the workers saw under one number is not used under another.
 
-Coins go to the workers exactly as the challenger sent them (`Item.coins`). They are live coins the challenger never
-committed to, so a coins item carries no opening, and one that does is refused.
+Coins go to the workers exactly as the challenger sent them (`Item.coins`), and only after every commitment the schedule
+owes (`State.owed`): in the inner phase each round's coins are live, drawn after its commitments, as `RecursiveSound`'s game
+and `RecursiveZK` draw them. A public input may also declare the challenger's commitments to its coins
+(`PublicInput.coins`): for each stream, one per round, the hm96-sha512 commit string `b ‖ c` (`commitBC`, the commit items'
+commitment) of the round's coin message (`coinMsg`: the stream, the round and the coins) under a salt of the challenger's.
+A coins item then carries that salt as its opening, and it leaves only if the opening opens the round's commitment to its
+coins, once a round: a session whose public input declares commitments is refused coins without an opening, coins that
+don't open, and coins of a round it holds no commitment for. A session that declares none (the inner phase, and the outer
+phase, whose coins are C-Flock's coin tree, checked by its prover before the transcript is written) relays coins without
+an opening, and it refuses coins that carry one.
 
 A transcript is the firewall's candidate outbound items in order: the values it would release, each tagged with its case,
 with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The firewall's send check
@@ -36,7 +44,8 @@ stops the session, nothing after it leaves, and the auditor sees a stop. A sessi
 and the last one is `finish`; one that ends without `finish` is a stop at its end.
 
 `holds_commit`, `holds_masked`, `holds_fixed`, `holds_coins` and `holds_finish` say what an accepted session lets out, in
-those terms. The transcript's JSON form is `Transcript.ofJson`'s and the public input's `PublicInput.ofJson`'s;
+those terms; `holds_coins_binding` is the coins' binding in the fork form: two accepted sessions under one public input
+that relay different coin messages for one committed round give a SHA-512 collision on two inputs computed from them. The transcript's JSON form is `Transcript.ofJson`'s and the public input's `PublicInput.ofJson`'s;
 `flock-firewall contract [--public FILE] TRANSCRIPT…` prints `run`'s verdict for each transcript.
 -/
 import Flock.Canon
@@ -88,8 +97,9 @@ inductive Item where
   | fixed (what : String) (src : By) (want sent : ByteArray) (pads : Array Nat)
   /-- the firewall's check of `relation` on the values masked under `pads`, and its outcome (nothing leaves) -/
   | check (relation : String) (pads : Array Nat) (ok : Bool)
-  /-- round `round` of `stream`'s coins from the challenger, `relayed` to the workers, with the challenger's `opening` -/
-  | coins (stream : String) (round : Nat) (coins relayed opening : Array F128)
+  /-- round `round` of `stream`'s coins from the challenger, `relayed` to the workers, with the challenger's `opening` of its
+  commitment to them (its salt), empty when it made none -/
+  | coins (stream : String) (round : Nat) (coins relayed : Array F128) (opening : ByteArray)
   /-- the session's end -/
   | finish
   deriving Inhabited
@@ -107,17 +117,27 @@ structure Transcript where
 
 /-- The verifier's public input, which the contract holds a transcript to and never reads from it: the session's public
 schedule (the inner phase's `SCHEDULE_FORMAT`), every relation the verifier checks on the masked values,
-the values the public statement fixes by name, and the names of the values the firewall fixes by its own computation. -/
+the values the public statement fixes by name, the names of the values the firewall fixes by its own computation, and the
+challenger's commitments to its coins, if it made any before the session: per stream, round `k`'s at `k`. -/
 structure PublicInput where
   schedule : Option Json := none
   relations : Array String := #[]
   statement : Array (String × ByteArray) := #[]
   computes : Array String := #[]
+  coins : Array (String × Array ByteArray) := #[]
   deriving Inhabited
 
 /-- The value the public statement fixes for `what`. -/
 def PublicInput.lookup (pub : PublicInput) (what : String) : Option ByteArray :=
   (pub.statement.find? (·.1 == what)).map (·.2)
+
+/-- The challenger's commitment to round `k` of `stream`'s coins, if it made one. -/
+def PublicInput.coinCommit (pub : PublicInput) (stream : String) (k : Nat) : Option ByteArray :=
+  (pub.coins.find? (·.1 == stream)).bind (·.2[k]?)
+
+theorem PublicInput.coinCommit_empty {pub : PublicInput} (h : pub.coins = #[]) (stream : String) (k : Nat) :
+    pub.coinCommit stream k = none := by
+  simp [PublicInput.coinCommit, h]
 
 def bytesEq (a b : ByteArray) : Bool := a.data == b.data
 
@@ -136,6 +156,16 @@ def commitLeaf (msg salt : ByteArray) : ByteArray := Hm96.Default512.leaf (Sha51
 
 theorem commitLeaf_eq (msg salt : ByteArray) : commitLeaf msg salt = Hm96.Default512.treeLeaf (commitBC msg salt) := rfl
 
+/-- The coin message's tag, which no other SHA-512 input of a session begins with. -/
+def COINS_TAG : ByteArray := "verity/firewall-coins/v0".toUTF8.push 0
+
+/-- The message the challenger commits to for round `k` of `stream`'s coins `cs`: the tag, the stream's UTF-8 bytes after
+their length, the round, the coin count (each number 4 bytes big-endian), then each coin's 16 bytes, `le64(lo) ‖ le64(hi)`
+(`F128.toBytes`). -/
+def coinMsg (stream : String) (k : Nat) (cs : Array F128) : ByteArray :=
+  cs.foldl F128.pushBytes
+    (COINS_TAG ++ be32 stream.utf8ByteSize.toUInt32 ++ stream.toUTF8 ++ be32 k.toUInt32 ++ be32 cs.size.toUInt32)
+
 /-- The schedule's items in their one order: `hello`, `roots`, `link.y`, then each `round:<i>` in the schedule's order,
 every stream's `open:<s>` just before its first round, and `finish` after the last round. Each item has one place, so the
 order carries nothing either: where a worker sent its Open does not reach the challenger. -/
@@ -153,6 +183,8 @@ structure State where
   order : Order := {}
   /-- the commitments the last schedule item carries that have not yet come; nothing else may leave until they have -/
   owed : Nat := 0
+  /-- the committed rounds whose coins have gone to the workers -/
+  coined : Array (String × Nat) := #[]
   finished : Bool := false
   deriving Inhabited
 
@@ -322,8 +354,18 @@ def step (pub : PublicInput) (t : Transcript) (s : State) : Item → V State
   | .coins stream k cs relayed opening => do
     need (s.owed == 0) s!"{stream} round {k}: coins before the commitments the schedule owes"
     need (decide (relayed = cs)) s!"{stream} round {k}: the workers' coins are not the challenger's"
-    need opening.isEmpty s!"{stream} round {k}: an opening of coins the challenger never committed to"
-    return s
+    match pub.coinCommit stream k with
+    | some c =>
+      need (opening.size != 0) s!"{stream} round {k}: coins without the opening of the challenger's commitment"
+      need (opening.size == SALT_BYTES) s!"{stream} round {k}: an opening of {opening.size} bytes, not a {SALT_BYTES}-byte salt"
+      need (bytesEq c (commitBC (coinMsg stream k cs) opening))
+        s!"{stream} round {k}: coins that do not open the challenger's commitment"
+      need (!s.coined.contains (stream, k)) s!"{stream} round {k}: coins a second time"
+      return { s with coined := s.coined.push (stream, k) }
+    | none =>
+      need pub.coins.isEmpty s!"{stream} round {k}: coins the challenger never committed to"
+      need (opening.size == 0) s!"{stream} round {k}: an opening of coins the challenger never committed to"
+      return s
   | .finish => do
     need (s.owed == 0) "Finish: before the commitments the schedule owes"
     need ((List.range t.pads.size).all fun p => !s.usedPad[p]! || s.checked pub p)
@@ -410,11 +452,30 @@ theorem step_masked {pub : PublicInput} {t : Transcript} {s s' : State} {v : F12
   simp only [step, need, bind, Except.bind] at h
   repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
 
-/-- The workers' coins are the challenger's. -/
+/-- The workers' coins are the challenger's, and either they open the challenger's commitment to their round, a round
+whose coins have not gone before, or the session declares no commitment, and they carry no opening. -/
 theorem step_coins {pub : PublicInput} {t : Transcript} {s s' : State} {stream : String} {k : Nat}
-    {cs relayed opening : Array F128} (h : step pub t s (.coins stream k cs relayed opening) = .ok s') : relayed = cs := by
-  simp only [step, need, bind, Except.bind] at h
-  repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
+    {cs relayed : Array F128} {opening : ByteArray} (h : step pub t s (.coins stream k cs relayed opening) = .ok s') :
+    relayed = cs ∧
+      ((∃ c, pub.coinCommit stream k = some c ∧ opening.size = SALT_BYTES ∧
+          c.data = (commitBC (coinMsg stream k cs) opening).data ∧ s.coined.contains (stream, k) = false) ∨
+        (pub.coinCommit stream k = none ∧ pub.coins = #[] ∧ opening.size = 0)) := by
+  simp only [step] at h
+  obtain ⟨-, h⟩ := need_ok h
+  obtain ⟨h1, h⟩ := need_ok h
+  refine ⟨by simpa using h1, ?_⟩
+  split at h
+  · rename_i c hc
+    obtain ⟨-, h⟩ := need_ok h
+    obtain ⟨h3, h⟩ := need_ok h
+    obtain ⟨h4, h⟩ := need_ok h
+    obtain ⟨h5, -⟩ := need_ok h
+    exact .inl ⟨c, hc, by simpa using h3, by simpa [bytesEq] using h4, by simpa using h5⟩
+  · rename_i hc
+    obtain ⟨h3, h⟩ := need_ok h
+    obtain ⟨h4, -⟩ := need_ok h
+    simp only [Array.isEmpty_iff] at h3
+    exact .inr ⟨hc, h3, by simpa using h4⟩
 
 /-- What `fixes` fixes a value to: the schedule's own value, the public statement's, or, for a name the public input lists
 as the firewall's own computation, the value the transcript reports. -/
@@ -551,11 +612,116 @@ theorem holds_masked {pub : PublicInput} {t : Transcript} (h : Holds pub t) {v :
   have := pairwiseDistinct_ne (tapeError_none ht).2 hq a hne
   simpa [f128Eq] using this
 
-/-- On an accepted session the workers received exactly the challenger's coins. -/
+/-- On an accepted session the workers received exactly the challenger's coins. In a session whose public input declares
+commitments they are the coins the challenger committed to before the session: the opening, a 192-byte salt, opens the
+public input's commitment to their round to their coin message, hm96-sha512's `b ‖ c` of it (`commitBC`). A session that
+declares none (the inner phase, whose coins are live, and the outer phase) relays them with no opening. -/
 theorem holds_coins {pub : PublicInput} {t : Transcript} (h : Holds pub t) {stream : String} {k : Nat}
-    {cs relayed opening : Array F128} (hm : Item.coins stream k cs relayed opening ∈ t.items.toList) : relayed = cs := by
+    {cs relayed : Array F128} {opening : ByteArray} (hm : Item.coins stream k cs relayed opening ∈ t.items.toList) :
+    relayed = cs ∧
+      ((∃ c, pub.coinCommit stream k = some c ∧ opening.size = SALT_BYTES ∧
+          c.data = (commitBC (coinMsg stream k cs) opening).data) ∨
+        (pub.coins = #[] ∧ opening.size = 0)) := by
   obtain ⟨_, _, -, hs⟩ := go_steps (holds_go h).2 _ hm
-  exact step_coins hs
+  obtain ⟨h1, h2 | h2⟩ := step_coins hs
+  · obtain ⟨c, a, b, d, -⟩ := h2
+    exact ⟨h1, .inl ⟨c, a, b, d⟩⟩
+  · exact ⟨h1, .inr h2.2⟩
+
+/-- A session that declares commitments relays, in an accepted run, only committed coins. -/
+theorem holds_coins_committed {pub : PublicInput} {t : Transcript} (h : Holds pub t) {stream : String} {k : Nat}
+    {cs relayed : Array F128} {opening : ByteArray} (hm : Item.coins stream k cs relayed opening ∈ t.items.toList)
+    (hd : pub.coins ≠ #[]) :
+    relayed = cs ∧ ∃ c, pub.coinCommit stream k = some c ∧ opening.size = SALT_BYTES ∧
+      c.data = (commitBC (coinMsg stream k cs) opening).data := by
+  obtain ⟨h1, h2 | h2⟩ := holds_coins h hm
+  · exact ⟨h1, h2⟩
+  · exact absurd h2.1 hd
+
+/-! ## The coins' binding -/
+
+theorem sha512_size (m : ByteArray) : (Sha512.hash m).size = 64 := by
+  unfold Sha512.hash
+  exact Array.size_ofFn
+
+theorem eq_of_get!_64 {x x' : ByteArray} (hx : x.size = 64) (hx' : x'.size = 64)
+    (h : ∀ i, i < 64 → x.get! i = x'.get! i) : x = x' := by
+  apply ByteArray.ext
+  apply Array.ext
+  · rw [ByteArray.size_data, ByteArray.size_data, hx, hx']
+  · intro i h1 h2
+    have hi : i < 64 := by rw [ByteArray.size_data, hx] at h1; exact h1
+    have := h i hi
+    change x.data[i]! = x'.data[i]! at this
+    rwa [getElem!_pos x.data i h1, getElem!_pos x'.data i h2] at this
+
+/-- `b`, the masked digest of a commit string: `x ⊕ m` over 64 bytes. -/
+def xor64 (x m : ByteArray) : ByteArray := ByteArray.mk ((Array.range 64).map fun i => x.get! i ^^^ m.get! i)
+
+theorem xor64_size (x m : ByteArray) : (xor64 x m).size = 64 := by
+  rw [← ByteArray.size_data]
+  simp [xor64]
+
+theorem xor64_cancel {x x' m : ByteArray} (hx : x.size = 64) (hx' : x'.size = 64) (h : xor64 x m = xor64 x' m) :
+    x = x' := by
+  apply eq_of_get!_64 hx hx'
+  intro i hi
+  have := congrArg (fun b : ByteArray => b.data[i]!) h
+  simp only [xor64] at this
+  rw [getElem!_pos _ i (by simpa using hi), getElem!_pos _ i (by simpa using hi)] at this
+  simpa [Array.getElem_map, Array.getElem_range] using this
+
+theorem commitBC_eq (msg y : ByteArray) :
+    commitBC msg y = xor64 (Sha512.hash msg) (Hm96.Default512.mask y) ++ Sha512.hash (Hm96.Default512.saltPrefix ++ y) :=
+  rfl
+
+/-- The two SHA-512 inputs that collide when two openings `y`, `y'` of one commitment open the messages `m`, `m'`: the
+messages when the salts are one (the masks then cancel), else the salts' with the salt prefix. -/
+def coinPair (m m' y y' : ByteArray) : ByteArray × ByteArray :=
+  if Hm96.Default512.saltPrefix ++ y = Hm96.Default512.saltPrefix ++ y' then (m, m')
+  else (Hm96.Default512.saltPrefix ++ y, Hm96.Default512.saltPrefix ++ y')
+
+/-- **hm96-sha512's commit string binds its message**: two different messages with one `b ‖ c` give a SHA-512 collision
+on `coinPair`'s two inputs, computed from the two openings. -/
+theorem commitBC_binding {m m' y y' : ByteArray} (hne : m ≠ m') (h : (commitBC m y).data = (commitBC m' y').data) :
+    (coinPair m m' y y').1 ≠ (coinPair m m' y y').2 ∧
+      Sha512.hash (coinPair m m' y y').1 = Sha512.hash (coinPair m m' y y').2 := by
+  have h' : commitBC m y = commitBC m' y' := ByteArray.ext h
+  rw [commitBC_eq, commitBC_eq] at h'
+  have hb := ByteArray.append_inj_left h' (by rw [xor64_size, xor64_size])
+  rw [hb] at h'
+  have hc := (ByteArray.append_right_inj _).mp h'
+  by_cases hs : Hm96.Default512.saltPrefix ++ y = Hm96.Default512.saltPrefix ++ y'
+  · simp only [coinPair, hs, ↓reduceIte]
+    have hy : y = y' := (ByteArray.append_right_inj _).mp hs
+    subst hy
+    exact ⟨hne, xor64_cancel (sha512_size _) (sha512_size _) hb⟩
+  · simp only [coinPair, hs, ↓reduceIte]
+    exact ⟨hs, hc⟩
+
+/-- **The coins' binding, in the fork form**: two accepted sessions under one public input that relay coins of one
+committed round whose coin messages differ give a SHA-512 collision on two inputs computed from the two coins items. The
+inner phase's coins are live, and its public input declares no committed round. -/
+theorem holds_coins_binding {pub : PublicInput} {t t' : Transcript} (h : Holds pub t) (h' : Holds pub t')
+    {stream : String} {k : Nat} {cs cs' relayed relayed' : Array F128} {y y' : ByteArray}
+    (hm : Item.coins stream k cs relayed y ∈ t.items.toList) (hm' : Item.coins stream k cs' relayed' y' ∈ t'.items.toList)
+    (hc : pub.coinCommit stream k ≠ none) (hne : coinMsg stream k cs ≠ coinMsg stream k cs') :
+    (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').1 ≠
+        (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').2 ∧
+      Sha512.hash (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').1 =
+        Sha512.hash (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').2 := by
+  have one : ∀ {t : Transcript} {cs r : Array F128} {y : ByteArray}, Holds pub t →
+      Item.coins stream k cs r y ∈ t.items.toList →
+      ∃ c, pub.coinCommit stream k = some c ∧ c.data = (commitBC (coinMsg stream k cs) y).data := by
+    intro t cs r y h hm
+    obtain ⟨-, ⟨c, a, -, b⟩ | ⟨e, -⟩⟩ := holds_coins h hm
+    · exact ⟨c, a, b⟩
+    · exact absurd (PublicInput.coinCommit_empty e stream k) hc
+  obtain ⟨c, a, b⟩ := one h hm
+  obtain ⟨c', a', b'⟩ := one h' hm'
+  rw [a] at a'
+  cases a'
+  exact commitBC_binding hne (b.symm.trans b')
 
 /-- (c) on an accepted session: every fixed value that left is the public schedule's own (`scheduled`), the public
 statement's, or, under a name the public input lists as the firewall's own computation, the value the transcript reports
@@ -617,7 +783,7 @@ def Item.ofJson (j : Json) (ctx : String) : V Item := do
         (← nats v "pads" ctx)
     | #[("check", v)] => return .check (← J.str v "relation" ctx) (← nats v "pads" ctx) (← J.bool v "ok" ctx)
     | #[("coins", v)] =>
-      let opening ← if J.has v "opening" then f128s v "opening" ctx else pure #[]
+      let opening ← if J.has v "opening" then hexField v "opening" ctx else pure ByteArray.empty
       return .coins (← J.str v "stream" ctx) (← J.nat v "round" ctx) (← f128s v "coins" ctx) (← f128s v "relayed" ctx) opening
     | #[("finish", _)] => return .finish
     | _ => throw s!"{ctx}: not one item of commit, masked, fixed, check, coins or finish"
@@ -637,7 +803,8 @@ def Transcript.ofJson (j : Json) : V Transcript := do
            exposedSalts := ← nats exposed "salts" "exposed", exposedPads := ← nats exposed "pads" "exposed", items }
 
 /-- The public input's JSON form, `verity/firewall-public/v0`: `schedule` (or `null`), `relations` and `computes` (lists
-of names), and `statement`, an object from each name the statement fixes to its value in hex. A transcript's own
+of names), `statement`, an object from each name the statement fixes to its value in hex, and `coins`, an object from each
+stream to the challenger's commitments to its rounds' coins in order, each `b ‖ c` in hex. A transcript's own
 `schedule` or `relations`, if it carries them, are never read. -/
 def PublicInput.ofJson (j : Json) : V PublicInput := do
   let kind ← J.str j "kind" "public input"
@@ -656,7 +823,17 @@ def PublicInput.ofJson (j : Json) : V PublicInput := do
         | .ok b => pure (w, b)
         | .error e => throw s!"public input.statement.{w}: {e}"
     | _ => throw "public input.statement: not an object"
-  return { schedule, relations := ← names "relations", statement, computes := ← names "computes" }
+  let coins ← if !J.has j "coins" then pure #[] else
+    match ← J.get j "coins" "public input" with
+    | Json.obj kvs => kvs.toArray.mapM fun (s, v) => do
+        let ctx := s!"public input.coins.{s}"
+        let bcs ← (← J.asArr v ctx).mapM fun c => do
+          match unhex (← J.asStr c ctx) with
+          | .ok b => pure b
+          | .error e => throw s!"{ctx}: {e}"
+        pure (s, bcs)
+    | _ => throw "public input.coins: not an object"
+  return { schedule, relations := ← names "relations", statement, computes := ← names "computes", coins }
 
 def Verdict.toJson (v : Verdict) : Json :=
   Json.mkObj [("accepted", Json.bool v.accepted), ("released", Json.num v.released),

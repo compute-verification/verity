@@ -34,7 +34,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -124,8 +124,8 @@ def main() -> int:
     want = {port: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
             for port, (schema, leaves) in a0.ports(st["meta"], n).items()}
     leaf_layer = a0.sha512_file(st_dir / f"pub-{n}.bin")
-    checks = {"registration": R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
-              "public": R.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json(),
+    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
+              "public": V.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json(),
               "circuit": {"ok": header.get("circuit_sha512") == mine["pin"], "codes": [] if header.get("circuit_sha512") == mine["pin"] else ["pin"],
                           "detail": {"public": header.get("circuit_sha512"), "verifier": mine["pin"]}},
               "bindings": a0.bindings(st["meta"], header, rec, mine.get("class_sha512", ""))}
@@ -157,19 +157,19 @@ def main() -> int:
     nl = body.index(b"\n") + 1
     flipped = body[:nl] + bytes([body[nl] ^ 1]) + body[nl + 1:]
     import hashlib
-    v = R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
+    v = V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
     neg["public-file-b||c-byte-flipped (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(rec, program, query, law, a0.SCHEME,
+    v = V.check(rec, program, query, law, a0.SCHEME,
                 {p_: {**w, "domain": R.served_domain(part["program"], P.digest(part), p_, s_, w["leaves"], run_id + "-other")}
                  for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer,
                 partition=part)
     neg["domains-of-another-run (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(rec, P.population_program(template, n - 1), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(rec, P.population_program(template, n - 1), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
-    v = D.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)
+    v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if "registration" in result:
         neg.update(a0.audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))

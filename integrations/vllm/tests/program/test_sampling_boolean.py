@@ -1,7 +1,7 @@
 """`verity_vllm.program.registry.sampling_boolean`: the Boolean greedy path agrees with its word Definitions (`trace.word_of`):
 `ArgmaxStep_v2` with `ArgmaxStep_v1` on special and random carries, `TokenSelect_v2{V}` with `TokenSelect_v1{V}` on over 90,000
-logit rows (ties, signed zeros, infinities, NaNs, a NaN first logit) and at the served vocabularies (SmolLM2's 49,152, Gemma-2's
-256,000); its stages chained as root Calls give the same token, each stage is separable and partitions under `Q_word_v1` with
+logit rows (ties, signed zeros, infinities, NaNs, a NaN first logit) and at the served vocabularies (SmolLM2's 49,152,
+Llama-3.2's 128,256, Gemma-2's 256,000), the maximum at the first and the last index included; its stages chained as root Calls give the same token, each stage is separable and partitions under `Q_word_v1` with
 no violation at either vocabulary, and the Definitions carry exactly their builders' live ANDs, pinned by gate count and
 program digest. The f32 tree (`F32ArgmaxStage_v1`) gives the first maximum on over 80,000 f32 rows, a restatement tied to
 `GumbelSelectF32_v1` at temp 0, and partitions likewise."""
@@ -42,7 +42,8 @@ PINS = {
 }
 
 #: the served vocabularies: TokenSelect_v2{V}'s And gates (54 per logit) and the tree's candidate counts per level
-SERVED = {49152: (2654157, [49152, 768, 12, 1]), 256000: (13823948, [256000, 4000, 63, 1])}
+SERVED = {49152: (2654157, [49152, 768, 12, 1]), 128256: (6925774, [128256, 2004, 32, 1]),
+          256000: (13823948, [256000, 4000, 63, 1])}
 
 NEG_INF, POS_INF = 0xFF80, 0x7F80
 #: signed zeros, subnormals, ones, the largest finite values, infinities, and NaNs (quiet, signalling, all-ones, negative)
@@ -297,13 +298,24 @@ def test_stages_partition(V, stage) -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("V", sorted(SERVED))
 def test_served_vocabulary(V) -> None:
-    """The served sizes (V = 256,000: about 25 s): the gate count, each stage's partition, and 64 rows against `first_max`,
-    which `test_first_max_is_the_word_definition` ties to the word Definition (its scan takes minutes on these rows)."""
+    """The served sizes (V = 256,000: about 25 s): the gate count and levels, each stage's partition, and 64 rows against
+    `first_max`, which `test_first_max_is_the_word_definition` ties to the word Definition (its scan takes minutes on these
+    rows); rows 16-35 put the maximum at the last index or tie it with the first, each with its token stated."""
     target = bind(SB.TokenSelect, V=V)
     assert BS.compile(target).counts["and"] == SERVED[V][0]
+    assert SB.levels(V) == SERVED[V][1]
     _partitions(V)
     x = logit_rows(V, 64, _rng("served", V))
     x[:8] = 0x7FC0
     x[8:16, 0] = 0x7FC1
+    x[16:36] = NEG_INF
+    x[16:20, V - 1] = 0x3F80             # the maximum alone at the last index
+    x[20:24, [0, V - 1]] = 0x4000        # tied at the first and the last index
+    x[24:28, 1:] = 0x7FC0                # NaNs never win: -0 at the last index beats -inf at the first
+    x[24:28, V - 1] = 0x8000
+    x[28:32, 0], x[28:32, V - 1] = 0x8000, 0x0000   # -0 and +0 tie
+    x[32:36, V - 1] = POS_INF            # +inf at the last index
+    x[32:36, V - 2] = 0x7F7F
     got = BS.evaluate_words(target, x).astype(np.int64).reshape(-1)
+    assert got[16:36].tolist() == [V - 1] * 4 + [0] * 4 + [V - 1] * 4 + [0] * 4 + [V - 1] * 4
     assert got.tolist() == first_max(x).tolist()

@@ -20,7 +20,9 @@
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
-                                                            refuses when no machine's slots can be read
+                                                            refuses when no machine's slots can be read; with no slot free on
+                                                            any, twins: the check on each machine it can run on (`twins`),
+                                                            the first to take a slot runs; exit 75 when none ran: rerun
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -73,8 +75,10 @@ doesn't name:
     circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
-                    `circuit-check --all --jobs` the other half, at most one per 128 GB of memory (`circuit_check_jobs`):
-                    every registered Definition and template (`tools/verity/circuit_check`),
+                    `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
+                    (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
+                    slot.py's CHECK_SLOT_MEM_GB): every registered Definition and template
+                    (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
@@ -245,21 +249,40 @@ SHARD_PARTS = "check-shard-parts.json"
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 
 
-def slot_wrap(priority: bool = False) -> list[str]:
+def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks."""
+    with --priority for the lander's train checks and --twin for one of a check's twins."""
     by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []), SLOT_WRAP[-1]]
+    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []),
+            *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
+
+
+def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False) -> list[str]:
+    """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home`` first: every one a check can run
+    on (`placement` refuses none) when ``home``, `choose`'s pick, has no slot free for it; else none, and it runs on ``home``."""
+    def runs(name: str) -> bool:
+        try:
+            placement(docs[name], priority)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return False
+        return True
+
+    if placement(docs[home], priority)[0]:
+        return []
+    out = [home, *(n for n in names if n != home and runs(n))]
+    return out if len(out) > 1 else []
 
 
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
 AUTO = ("vy-nebius-1", "vy-nebius-2")
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
+#: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
+FULL_CHECK_S = 9000
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
-#: each `{"error": ...}` when it can't be read there
+#: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
-import json, sys, types
+import json, sys, time, types
 from datetime import datetime, timezone
 
 
@@ -281,7 +304,11 @@ def doc(f):
 now = datetime.now(timezone.utc)
 slot = load("check_slot_for_lean_slot", SLOT_SRC, "tools/verity/check/slot.py")
 lean = load("check_lean_slot", LEAN_SRC, "tools/verity/check/lean_slot.py")
-print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now))}))
+try:
+    left = int(open("/etc/research/deadline").read().split()[0]) - time.time()
+except (OSError, ValueError, IndexError):
+    left = None
+print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now)), "deadline_in_s": left}))
 '''
 SLOT = _load("slot")
 
@@ -336,11 +363,14 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
     ``priority``, a train check's, only the priority ones), and the state in a few words. ValueError when no check can run
-    there: a document has an error, the slots file lists no slot, or the Lean slots file grants check's lean-audit step none."""
+    there: a document has an error, the slots file lists no slot, the Lean slots file grants check's lean-audit step none, or the
+    machine's deadline is nearer than FULL_CHECK_S."""
     check, lean = doc["check"], doc["lean"]
     for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
         if "error" in d:
             raise ValueError(f"its {what} can't be read: {d['error']}")
+    if (left := doc.get("deadline_in_s")) is not None and left < FULL_CHECK_S:
+        raise ValueError(f"its deadline is {max(left, 0) / 60:.0f} min away, under the {FULL_CHECK_S / 60:.0f} min a full check takes")
     ahead = len([w for w in check["waiters"] if w["priority"] or not priority])
     waiting = f"{ahead} waiting ahead" + (" with priority" if priority else "")
     if check["slots"] is None:
@@ -603,17 +633,6 @@ def memory_gb(root: Path = Path("/")) -> int:
     return max(0, min(left)) >> 30 if left else 0
 
 
-#: the memory circuit-check counts on per worker: a cold `--all` on vy-nebius-cpu-1 (755 GB) at 23 workers grew six of them to
-#: 136, 84, 80, 54, 51 and 40 GiB and took the node down twice (7 Oct,
-#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1)
-CIRCUIT_CHECK_GB_PER_JOB = 128
-
-
-def circuit_check_jobs(b: int) -> int:
-    """circuit-check's `--jobs`: its share ``b`` of the cores, at most one per `CIRCUIT_CHECK_GB_PER_JOB` of this process's memory."""
-    return max(1, min(b, memory_gb() // CIRCUIT_CHECK_GB_PER_JOB))
-
-
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
 #: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
 #: (tip 38's shard 2/3, 6 Oct)
@@ -756,7 +775,9 @@ def record(argv: list[str]) -> int:
     pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
     REF (default origin/main, fetched first), or whenever --agreement is given, and the newest recorded checks' verdicts
     (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
-    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all."""
+    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
+    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it)."""
     on = base = None
     agreement = priority = False
     rest = []
@@ -772,9 +793,11 @@ def record(argv: list[str]) -> int:
             priority = True
         else:
             rest.append(x)
+    pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
-        got, why, skipped = choose(names, read_slots(names), priority)
+        docs = read_slots(names)
+        got, why, skipped = choose(names, docs, priority)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:
@@ -782,6 +805,10 @@ def record(argv: list[str]) -> int:
             return 2
         print(f"check: --on {on}: {got}: {why}", flush=True)
         on = got
+        if both := twins(names, docs, got, priority):
+            pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
+            print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
+                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
@@ -847,8 +874,17 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    cmd += ["--", *(slot_wrap(priority) if on else []), *tool.CHECK.command, *rest]
     try:
+        if both:
+            procs = []
+            for m in both:
+                c = list(cmd)
+                c[c.index("--on") + 1] = m
+                procs.append(subprocess.Popen([*c, "--", *slot_wrap(priority, pair if m == on else f"{pair}@{on}"),
+                                               *tool.CHECK.command, *rest], cwd=ROOT, env=env))
+            rcs = [p.wait() for p in procs]
+            return 0 if 0 in rcs else next((rc for rc in rcs if rc != SLOT.NOT_STARTED), rcs[0])
+        cmd += ["--", *(slot_wrap(priority) if on else []), *tool.CHECK.command, *rest]
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
         shutil.rmtree(d, ignore_errors=True)
@@ -862,11 +898,15 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
     `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
     recorded runs' packs are taken.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
-    flag turns reuse off but `--no-cache`.  None when there is no pack at all (the check then runs on its own cache)."""
+    flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
+    verdicts are recomputed, never reused; a refused pack given is an error.  None when there is no pack at all (the check then
+    runs on its own cache)."""
     from research.store.local import LocalStore
 
     if given is not None and not given.is_file():
         raise SystemExit(f"check: --verdicts-in {given}: no such pack")
+    if given is not None and (why := VERDICTS.refusal(given)):
+        raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
     packs = [given] if given is not None else []
     try:
         store = store or LocalStore()
@@ -877,7 +917,12 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
-                packs.append(store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz")
+                pack = store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
+                if why := VERDICTS.refusal(pack):
+                    print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed",
+                          flush=True)
+                    continue
+                packs.append(pack)
                 if len(packs) == limit + (given is not None):
                     break
     except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
@@ -930,8 +975,9 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
+    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
+          *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
+          *(["--mem-gb", m] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1154,18 +1200,88 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree). Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = os.environ.get("UV") or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT)]
+            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
+
+
+#: preflight steps that judge the machine the check runs on, so `--preflight` elsewhere (a train's prep) only reports them
+ON_NODE = ("preflight-fixtures",)
+
+
+def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
+    """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
+    from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
+    train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
+    never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
+    store keeps a train moving before the export (top, 10 Oct).  Raises when the public export is needed and there is none."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from research.store.fetchset import public_url
+    from research.store.fixtures import _is_tracked, entries, fixture_id, load_map, tracked
+    from research.store.local import LocalStore, manifest_key
+    from research.store.remote import HttpRemote
+
+    git = tracked(root)
+    arts = {a: path for a, path in entries(load_map(root)).items() if not _is_tracked(path, git)}
+    ask = sorted(arts)
+    if not ask:
+        return {}, []
+    base = public_url(url)
+    if not base:
+        raise RuntimeError(f"no public source (RESEARCH_PUBLIC_URL is empty) to ask for {len(ask)} fixture(s)")
+    head = head or HttpRemote(base).head
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        found = list(ex.map(lambda a: head(manifest_key(a.removeprefix("art:"))), ask))
+    where = {a: "the public export" for a, h in zip(ask, found) if h is not None}
+    where |= {a: "the tree" for a in ask if a not in where and (root / arts[a]).is_file() and fixture_id(root / arts[a]) == a}
+    rest = [a for a in ask if a not in where]
+    try:
+        if rest:
+            store = store or LocalStore()
+            where |= {a: "this machine's store" for a in rest if store.has_local(a)}
+    except Exception as e:                              # noqa: BLE001: a store that can't be read holds nothing
+        print(f"check: fixtures: this machine's store can't be read ({type(e).__name__}: {e})", file=sys.stderr)
+    return where, [a for a in rest if a not in where]
+
+
+def fixtures_only() -> int:
+    """`--fixtures`: 0 when every fetched fixture can come from somewhere on this machine (`fetchable_fixtures`), saying from
+    where; else 1 naming the ids that can't."""
+    from collections import Counter
+
+    try:
+        where, missing = fetchable_fixtures()
+    except Exception as e:                              # noqa: BLE001: a source that can't be asked shows nothing
+        print(f"check: fixtures: could not ask the public export ({type(e).__name__}: {e})", file=sys.stderr)
+        return 1
+    by = Counter(where.values())
+    found = ", ".join(f"{n} from {w}" for w, n in sorted(by.items()))
+    for a, w in sorted(where.items()):
+        if w != "the public export":
+            print(f"check: fixtures: {a} from {w}, not the public export")
+    if missing:
+        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json are in neither this "
+              f"machine's store nor the public export ({found or 'none found'}): {' '.join(missing)}; run `research data "
+              f"export` for each, or put it in this machine's store", file=sys.stderr)
+        return 1
+    print(f"check: fixtures: every fetched fixture fixtures/artifacts.json registers can be fetched here ({found or 'none'})")
+    return 0
 
 
 def preflight_only() -> int:
-    """`--preflight`: every preflight step, its output here; 0 when all pass."""
+    """`--preflight`: every preflight step, its output here; 0 when all pass but those that judge another machine (`ON_NODE`),
+    which only report: a train's prep can't see the node its check runs on, whose own preflight refuses there."""
     failed = []
     for name, argv, cwd in preflight():
         ok = not isinstance(argv, str) and subprocess.run(argv, cwd=cwd).returncode == 0
+        if not ok and name in ON_NODE:
+            print(f"check: {name}: not refused here: it judges the machine the check runs on, which refuses there", flush=True)
+            continue
         print(f"check: {name}: {'passed' if ok else argv if isinstance(argv, str) else 'FAILED'}", flush=True)
         failed += [] if ok else [name]
     return 1 if failed else 0
@@ -1469,6 +1585,8 @@ def main(argv: list[str]) -> int:
         os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
     if argv == ["--preflight"]:
         return preflight_only()
+    if argv == ["--fixtures"]:
+        return fixtures_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
     if "--record" in argv:

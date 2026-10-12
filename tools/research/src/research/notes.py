@@ -1748,10 +1748,11 @@ def gc_worktrees(root: Path, repo: Path, wt_root: Path | None = None, apply: boo
         states = {h: _state(root, h, now) for h in sorted({latest(x, succ, lanes) for x in who})}
         live = [h for h, s in states.items() if s not in DONE]
         st = _git(p, "status", "--porcelain")
-        dirty = ["(git status failed)"] if st is None else [x for x in st.splitlines() if x.strip()]
+        dirty = [x for x in (st or "").splitlines() if x.strip()]
         tip = (_git(repo, "rev-parse", f"refs/heads/{branch}") or "").strip()
         pushed = bool(tip) and bool((_git(repo, "for-each-ref", "--count=1", "--contains", tip, "refs/remotes/origin") or "").strip())
         keep = ("no lane" if not states else f"lane {live[0]} is {states[live[0]]}" if live else
+                "git status failed" if st is None else
                 f"dirty ({len(dirty)} paths)" if dirty else None if pushed else "branch tip not on origin")
         row = {"worktree": str(p), "branch": branch, "lanes": states, "keep": keep}
         if apply and keep is None:
