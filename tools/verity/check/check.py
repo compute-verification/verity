@@ -855,7 +855,10 @@ def record(argv: list[str]) -> int:
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
     audits = not combining and (parts is None or any(p.startswith("lean-audit:") for p in parts))
     if audits and (urls := lean_deps_url_file(d)):
-        print(f"check: sending presigned URLs for {len(json.loads(urls.read_text()))} pinned Lean dependency bundle(s)")
+        sent = json.loads(urls.read_text())
+        shared = sum(k.startswith("lean-artifacts/") for k in sent)
+        print(f"check: sending presigned URLs for {len(sent) - shared} pinned Lean dependency bundle(s) and {shared} Lean artifact "
+              f"bundle(s) of recent checks")
         if on:
             cmd += ["--send", str(urls)]
         else:

@@ -7,8 +7,7 @@ import Proofs.Flock.Soundness.Assumptions.Recursive
 # Recursion: the compile gap
 
 `RecursiveSound` at C-Flock's compiled inner protocol (`flockInnerCL`), with the inner protocol's soundness in fork form
-and the interactive table's error as its inner term. Two lemmas are open, each stated here with its proof `sorry`; every
-other declaration is proved.
+and the interactive table's error as its inner term. Every declaration is proved.
 
 * `ClashCL`, `clashPickCL`: two runs of the compiled table that clash (either run self-clashes, `SelfClashL`, or the two
   open a position of the level-0 cap or of a rep's recorded cap to different rows), and the inner fork's output: on two
