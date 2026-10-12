@@ -9,18 +9,18 @@ import Proofs.Pouw.PearlC.W1BudgetAbort
 
 Pearl-C's game with `t` tickets weighted by `w`, at units whose `W_ref` is `κ·w`: an accepted run whose correct units
 carry at least `1 − ε_s` of the tickets' weight carry at least `1 − ε_s` of `W_ref`, so a cost below
-`(1 − γ)(1 − ε_s)·∑ W_ref` wins the γ-gap game (`winsPearlC_of_accept`). Work-weighted sampling and `Gγ` bound the two
-(`pearlC_endToEnd`, every adversary within a sure budget), and truncation (`pr_lt_of_abort`, with `abortPearlC`) makes it
-per run. A run that realizes Pearl-C's game with its cost covered by the priced sum has the compute audit's per-run
-guarantee on that sum.
+`(1 − γ)(1 − ε_s)·∑ W_ref` wins the γ-gap game (`winsPearlC_of_accept`). Work-weighted sampling and `Gγ` bound the
+two (`pearlC_endToEnd`, every adversary within a sure budget), and truncation (`pr_lt_of_abort`, with `abortPearlC`)
+makes it per run. A run that realizes Pearl-C's game with its cost covered by the priced sum has the compute audit's
+per-run guarantee on that sum.
 
 When the reads are attributed, the bits read over the window are the bandwidth account's, the compute account's and the
 rest (`Run.read_add_pouwRead_add_covertRead`), within the device's `BW·T`. So, beside the compute account's work and
 every other account's within `F·T`, a run whose priced sum and window reads reach their certificates leaves the other
 accounts at most `(F + pRead·BW)·T − (W + pRead·Q)` of priced work and reads (`Run.pricedLt_of_covert`).
 
-`BudgetAbortPearlC` is compute-accounting's `Pouw.PearlC.W1BudgetAbort.BudgetAbortPearlC` (`budgetAbortPearlC_iff`), and a
-cost model whose costs and calls don't depend on the coins satisfies it (`budgetAbortPearlC_of_oblivious`).
+`BudgetAbortPearlC` is compute-accounting's `Pouw.PearlC.W1BudgetAbort.BudgetAbortPearlC` (`budgetAbortPearlC_iff`),
+and a cost model whose costs and calls don't depend on the coins satisfies it (`budgetAbortPearlC_of_oblivious`).
 -/
 
 namespace Accounting
@@ -33,8 +33,8 @@ theorem budgetAbortPearlC_iff (CM : PearlC.CostModel Q R S) :
     BudgetAbortPearlC CM ↔ PearlC.W1BudgetAbort.BudgetAbortPearlC CM :=
   Iff.rfl
 
-/-- A Pearl-C cost model whose programs' costs and calls do not depend on the oracle, the preprocessed state or the salt,
-with nonnegative costs and a program that costs nothing and calls nothing, truncates, so `BudgetAbortPearlC` is
+/-- A Pearl-C cost model whose programs' costs and calls do not depend on the oracle, the preprocessed state or the
+salt, with nonnegative costs and a program that costs nothing and calls nothing, truncates, so `BudgetAbortPearlC` is
 satisfiable. -/
 theorem budgetAbortPearlC_of_oblivious (CM : PearlC.CostModel Q R S)
     (hnn : ∀ prog H U act σ s, 0 ≤ CM.cost prog H U act σ s)
@@ -90,8 +90,8 @@ theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (
     _ ≤ (1 - γ) * ∑ u ∈ PearlC.correctSet P U H s τ, P.Wref U.layout u := mul_le_mul_of_nonneg_left hgood h1γ.le
     _ = _ := by ring
 
-/-- **Pearl-C's γ-gap property, audited by work-weighted tickets**: an adversary within a sure budget `T` is accepted with
-`T < (1 − γ)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + η(q, N)`. -/
+/-- **Pearl-C's γ-gap property, audited by work-weighted tickets**: an adversary within a sure budget `T` is accepted
+with `T < (1 − γ)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 theorem pearlC_endToEnd [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : PearlC.CostModel Q R S}
     {P : PearlC.Protocol Q R S} {D : PearlC.Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
     (hG : PearlC.Gγ CM P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)

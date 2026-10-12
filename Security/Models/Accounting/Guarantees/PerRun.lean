@@ -20,20 +20,21 @@ already per-run: its event reads the ingress of the run itself. PoUS's `EndToEnd
 type, not a charge that varies with the coins, so its per-run form is a matter of how a run's device memory maps to a
 server's state, in the capacity embedding.
 
-**Priced.** Under the machine's pricing (Daniel's decision 9, 11 Oct), the compute account pays W1's instruction prices
-with no fetch charge and no refund, the bandwidth account pays for every first fetch of a pre-salt or supplied byte, and
-the compute certificate is on the priced sum: the compute account's work plus `pRead` per bit it read from device memory
-(`Accounting.Run.ComputeSoundPerRunPriced`). Tables cite the work and the bits separately; the certificate is on their
-priced sum. Pearl-C's game gives that guarantee by the same truncation, from its γ-gap property at a priced cost model
-that truncates (`PearlCEndToEndPerRun`, `ComputeOfPearlCPerRunPriced`): at W1 with fetches priced, `Gγ` is a hypothesis
-until compute-accounting's `gγ_w1Priced` lands, and `BudgetAbortPearlC` is one too. PoUW's reads and the bandwidth audit's
-window reads are charged to different accounts over one window (`Accounting.Run.ReadsAttributed`), so no bit read is
-credited twice (`JointPerRunPriced`), and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)`
-(`CovertResidualPerRunPriced`). The unpriced statements stay: a compute guarantee on the work alone gives the priced
-one at any `pRead ≥ 0` (`Accounting.Run.computeSoundPerRunPriced_of_perRun`).
+**Priced.** The machine prices a PoUW run's arithmetic at W1's instruction prices, with no fetch charge and no refund,
+and its first fetches of pre-salt or supplied bytes, deduplicated within the run, at the device's price of a bit read
+(Daniel's decision 9, 11 Oct). The compute certificate is on the priced sum: the compute account's work plus `pRead` per
+bit it read from device memory (`Accounting.Run.ComputeSoundPerRunPriced`). Tables cite the work and the bits
+separately; the certificate is on their priced sum. Pearl-C's game gives that guarantee by the same truncation, from
+its γ-gap property at a priced cost model that truncates (`PearlCEndToEndPerRun`, `ComputeOfPearlCPerRunPriced`): at W1
+with fetches priced, `Gγ` is a hypothesis until compute-accounting's `gγ_w1Priced` lands, and `BudgetAbortPearlC` is
+one too. PoUW's reads and the bandwidth audit's window reads are charged to different accounts over one window
+(`Accounting.Run.ReadsAttributed`), so no bit read is credited twice (`JointPerRunPriced`), and the covert residual is
+one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)` (`CovertResidualPerRunPriced`). The unpriced statements stay: a
+compute guarantee on the work alone gives the priced one at any `pRead ≥ 0`
+(`Accounting.Run.computeSoundPerRunPriced_of_perRun`).
 
-Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.PerRunPouw`,
-`Proofs.Accounting.PerRunJoint` and `Proofs.Accounting.PerRunPriced`).
+Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G`
+(`Proofs.Accounting.PerRunPouw`, `Proofs.Accounting.PerRunJoint` and `Proofs.Accounting.PerRunPriced`).
 -/
 
 namespace Accounting.Guarantees
@@ -165,8 +166,8 @@ def JointPerRunPriced : Prop :=
 /-- **The covert residual, per run, as one priced budget.** Under `JointPerRunPriced`'s hypotheses and a read price
 `pRead ≥ 0`, the probability that every audit accepts and, on that run, the work of the accounts other than the compute
 account plus `pRead` per bit read by the accounts other than the compute and bandwidth accounts exceeds
-`(F + pRead·BW)·T − (W + pRead·Q)`, or the other accounts held more than `M − S` bits of device memory on average over the
-capacity window, is at most `εW + εQ + εS`. `F` is the device's priced work per tick, `BW` its bits read from device
+`(F + pRead·BW)·T − (W + pRead·Q)`, or the other accounts held more than `M − S` bits of device memory on average over
+the capacity window, is at most `εW + εQ + εS`. `F` is the device's priced work per tick, `BW` its bits read from device
 memory per tick and `T` the window's length. -/
 def CovertResidualPerRunPriced : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]

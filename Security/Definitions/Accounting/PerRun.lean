@@ -18,15 +18,15 @@ budget `b` costs at most `b` on every coin, and commits `A`'s transcript whereve
 model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
 whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
 
-**Pricing.** The machine's pricing charges each run twice over, once per account (Daniel's decision 9, 11 Oct): the
-compute account pays W1's instruction prices for its arithmetic, with no fetch charge and no refund, and the bandwidth
-account pays for every first fetch of a pre-salt or supplied byte, deduplicated within the run. The compute audit's
-certificate is on the priced sum, its work plus `pRead` per bit the compute account read from device memory
-(`Run.ComputeSoundPerRunPriced`, `pRead` the device's price of a bit read in the work unit), and tables cite the two
-terms separately. PoUW's reads and the bandwidth audit's window reads are charged to different accounts over one window
-(`Run.ReadsAttributed`), so no bit read is credited to both certificates. Pearl-C's game is a game of its own, with its
-own cost model; `BudgetAbortPearlC` is truncation for it, and `RealizesPearlCPriced` is a run whose compute audit is
-Pearl-C's audit, its cost covered by the priced sum.
+**Pricing.** The machine prices a PoUW run in two parts (Daniel's decision 9, 11 Oct): its arithmetic at W1's
+instruction prices, with no fetch charge and no refund, and every first fetch of a pre-salt or supplied byte,
+deduplicated within the run, at the device's price of a bit read. In the device model those fetches are reads by the
+compute account (`Run.pouwRead`). The compute audit's certificate is on the priced sum, the compute account's work plus
+`pRead` per bit it read from device memory (`Run.ComputeSoundPerRunPriced`, `pRead` the price of a bit read in the unit
+the work is counted in), and tables cite the two terms separately. PoUW's reads and the bandwidth audit's window reads
+are charged to different accounts over one window (`Run.ReadsAttributed`), so no bit read is credited to both
+certificates. Pearl-C's game is a game of its own, with its own cost model; `BudgetAbortPearlC` is truncation for it,
+and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the priced sum.
 -/
 
 namespace Accounting
