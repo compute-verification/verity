@@ -66,7 +66,7 @@ theorem fixedPrice_budgetAbort : BudgetAbortG (fixedPrice Q R S) := by
     cases p with
     | none => exact le_rfl
     | some c => exact Nat.cast_nonneg _
-  · intro p _ _ _ _ _ _ _
+  · intro p _ _ _ _ _ _ _ _
     cases p <;> rfl
   · intro _ _ _ _ _
     exact ⟨le_rfl, rfl⟩

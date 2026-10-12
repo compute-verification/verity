@@ -81,7 +81,7 @@ end Prices
 
 /-- A run only adds to its cost and its fetches. -/
 theorem exec_mono (dv : W1Device) (h : Positive dv) :
-    ∀ (c : Code) (t : Bool) (st : St), st.cost ≤ (exec dv t c st).cost ∧ st.fetched <+: (exec dv t c st).fetched
+    ∀ (c : W1.Code) (t : Bool) (st : St), st.cost ≤ (exec dv t c st).cost ∧ st.fetched <+: (exec dv t c st).fetched
   | .done, _, _ => ⟨le_rfl, List.prefix_refl _⟩
   | .op i k, t, st => by
       obtain ⟨h1, h2⟩ := exec_mono dv h k t
@@ -158,7 +158,7 @@ theorem small_exec {dv : W1Device} (h : Positive dv) {t : Bool} {i : Instr} {M :
 
 /-- **A run W1 charges nothing, with no pre-salt fetch, keeps the words outside the pre-salt regions small.** -/
 theorem small_exec_code (dv : W1Device) (h : Positive dv) :
-    ∀ (c : Code) (t : Bool) (st : St), (exec dv t c st).cost = st.cost → (exec dv t c st).fetched = st.fetched →
+    ∀ (c : W1.Code) (t : Bool) (st : St), (exec dv t c st).cost = st.cost → (exec dv t c st).fetched = st.fetched →
       Small st.mem → Small (exec dv t c st).mem
   | .done, _, _ => fun _ _ hM => by simpa only [exec] using hM
   | .op i k, t, st => fun hc hf hM => by
@@ -214,6 +214,7 @@ theorem copy_ticket (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ 
 
 /-- **W1 doesn't truncate**: given positive prices, a one-unit workload whose first activation word is 256 or more, and
 oracles under which `copyAct`'s unit 0 is correct and isn't, no program of W1 is `copyAct` aborted at budget 0. -/
+open Classical in
 theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R S) (salt : S → List ℕ)
     (U : Workload) (act : ℕ → Codes) (s : S) (H₁ H₂ : Q → R) (hN : U.layout.N = 1) (hm : 0 < (U.layout.shape 0).m)
     (hk : 0 < (U.layout.shape 0).k) (hbig : 256 ≤ w32 (act 0 0 0))
@@ -228,8 +229,7 @@ theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R
     · exact hm
     · exact hk
   have c1 : (w1 dv P salt).cost copyAct H₁ U act [] s ≤ 0 := by
-    simp only [w1, copy_cost, copy_fetched, List.dedup_cons_of_not_mem (List.not_mem_nil (a := actAt 0 0 0)),
-      List.dedup_nil, List.filter_cons, List.filter_nil]
+    simp only [w1, copy_cost, copy_fetched, List.dedup_eq_self.mpr (List.nodup_singleton (actAt 0 0 0))]
     simp [hfree]
   have hrun := (hp' H₁ [] s).2.2 c1
   have hc2 := (hp' H₂ [] s).1
