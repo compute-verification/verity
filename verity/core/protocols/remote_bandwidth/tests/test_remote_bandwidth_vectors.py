@@ -3,11 +3,12 @@ kv/v0's at p512."""
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import remote_bandwidth_vectors as rv
 
-from verity.core.protocols.remote_bandwidth import audit, codec
+from verity.core.protocols.remote_bandwidth import audit, codec, coins
 
 # `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", cursor/ra-word-codec-10bf at 56818bb77): the kv/v0 codec
 # the KV kernel (`kv.cu`) implements, under its vector seed SHA256("verity/word-codec/kv/vectors").
@@ -29,27 +30,41 @@ def test_vectors_are_reproduced() -> None:
     assert rv.generate() == json.loads(rv.PATH.read_text())
 
 
-def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_a_chain() -> None:
+def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_distinct_coins() -> None:
     pinned = json.loads(rv.PATH.read_text())
     assert pinned["codec"]["words"][0]["payload"] == "00" * 64
     assert rv.BLOCKS % 16 == 5 and rv.PLANS[1].length % 16 == 10 and list(rv.PLANS[1])[:2] == [16, 17]
-    chain = pinned["chain"]["passes"]
-    assert chain[0]["previous"] == pinned["registration"]["digest"]
-    assert all(b["previous"] == a["root"] for a, b in zip(chain, chain[1:]))
-    assert chain[0]["plan_digest"] == chain[2]["plan_digest"] != chain[1]["plan_digest"]
+    passes = pinned["passes"]["passes"]
+    assert len({p["coin"] for p in passes} | {pinned["openings"]["coin"]}) == 4
+    assert passes[0]["coin"] == pinned["coins"]["coin_0"]["coin"]
+    assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
+    assert pinned["openings"]["index"] == 3 and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
 
 
-def test_the_provers_passes_reproduce_the_pinned_chain() -> None:
-    """The generator computes receipts on its own; the audit's `Prover` must agree with it."""
-    payloads = [rv.payload(j) for j in range(rv.BLOCKS)]
-    root = audit.payload_tree(rv.NODE, payloads).commitment.root
+def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones() -> None:
+    """The generator computes receipts and draws on its own; the audit's `Prover` and `Session` must agree with it."""
+    payloads, salts = [rv.payload(j) for j in range(rv.BLOCKS)], rv.payload_salts()
+    root = audit.payload_tree(rv.NODE, payloads, salts).commitment.root
     reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
-    prover = audit.Prover(audit.Store(reg, payloads), audit.NoiseTiles(96))
-    previous = reg.digest
-    for i, (plan, pinned) in enumerate(zip(rv.PLANS, json.loads(rv.PATH.read_text())["chain"]["passes"], strict=True)):
-        ps = prover.run(0, rv.CHALLENGE, i, previous, plan)
-        assert ps.root.hex() == pinned["root"] and ps.plan.runs == tuple(map(tuple, pinned["plan"]))
-        previous = ps.root
+    challenger = coins.Challenger(reg.digest, 0, rv.PARAMS.coins, entropy=rv.Entropy(rv.COIN_LABEL))
+    s = audit.Session(rv.PARAMS, reg, audit.NoiseTiles(96), challenger, clock=itertools.count().__next__)
+    prover = audit.Prover(audit.Store(reg, payloads, salts), audit.NoiseTiles(96), s.commitment,
+                          entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
+    pinned = json.loads(rv.PATH.read_text())
+    for plan, want in zip(rv.PLANS, pinned["passes"]["passes"], strict=True):
+        ps = prover.run(s.release(), plan)
+        assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
+        assert s.receive(ps.index, ps.root, ps.plan.runs) is None
+    assert list(s.close(0)) == [unit(u) for u in pinned["openings"]["draws"]]
+
+
+def unit(u: int) -> tuple[int, int]:
+    """Draw u of the window's units as (pass, position)."""
+    for k, plan in enumerate(rv.PLANS):
+        if u < plan.length:
+            return k, u
+        u -= plan.length
+    raise IndexError(u)
 
 
 def test_codec_is_kv_v0_at_p512() -> None:

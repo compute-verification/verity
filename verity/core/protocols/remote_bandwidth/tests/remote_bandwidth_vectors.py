@@ -3,9 +3,13 @@
 
 Payload blocks are generated, not stored: payload `j` is 64 words, word w the first 64 bytes of
 `SHA512("verity/remote-bandwidth/test-payload/v0\\0" ‖ u64be j ‖ u32be w)` with its top byte cleared (below p), and
-payload 0 is all zeros (the weights may be).  A GPU receipter fills its store with the same payloads, encodes them
-under the pinned codec seed, and checks its blocks, receipts and roots against these.  The chain's middle pass reads a
-partial plan out of store order, so its receipt for position p is block plan[p]'s and its tree has 10 positions.
+payload 0 is all zeros (the weights may be).  Every coin and salt comes from `entropy(label)`, SHA-512 in counter mode:
+call c returns the first n bytes of `SHA512(label ‖ u64be c) ‖ SHA512(label ‖ u64be c + 1) ‖ …`, the counter running on
+across calls (`Entropy`).  The challenger draws coin k and then its salt, k = 0 … 3; the payload salts are drawn in
+block order and the receipt leaves' salts pass by pass, leaf by leaf.  A GPU receipter fills its store with the same
+payloads, encodes them under the pinned codec seed, and checks its blocks, receipts and roots against these.  The middle
+pass reads a partial plan out of store order, so its receipt for position p is block plan[p]'s and its tree has 10
+positions.
 """
 
 from __future__ import annotations
@@ -14,7 +18,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.randomness import derive
 
 PATH = Path(__file__).with_name("vectors.json")
@@ -22,9 +27,24 @@ PAYLOAD_DOMAIN = b"verity/remote-bandwidth/test-payload/v0\0"
 SOURCE = b"verity remote bandwidth vector source"
 NODE = b"verity remote bandwidth vector node"
 NONCE = bytes(range(32))
-CHALLENGE = bytes(range(32, 64))
+COIN_LABEL = b"verity remote bandwidth vector coins"
+PAYLOAD_SALT_LABEL = b"verity remote bandwidth vector payload salts"
+LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
 BLOCKS = 21
 PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
+PARAMS = audit.Params(blocks=BLOCKS, passes=len(PLANS), interval_ns=2, deadline_ns=10, windows=1, samples=7, delta=1e-6)
+
+
+class Entropy:
+    def __init__(self, label: bytes) -> None:
+        self.label, self.count = label, 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
+            self.count += 1
+        return out[:n]
 
 
 def payload(j: int) -> bytes:
@@ -35,48 +55,69 @@ def payload(j: int) -> bytes:
     return b"".join(words)
 
 
+def payload_salts() -> list[bytes]:
+    e = Entropy(PAYLOAD_SALT_LABEL)
+    return [e(receipts.SALT_BYTES) for _ in range(BLOCKS)]
+
+
 def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
 def generate() -> dict:
-    payloads = [payload(j) for j in range(BLOCKS)]
-    tree = audit.payload_tree(NODE, payloads)
+    payloads, salts = [payload(j) for j in range(BLOCKS)], payload_salts()
+    tree = audit.payload_tree(NODE, payloads, salts)
     reg = audit.register(SOURCE, NODE, BLOCKS, tree.commitment.root, nonce=NONCE)
     key = reg.key
     blocks = [codec.encode(m, j, key) for j, m in enumerate(payloads)]
     tiles = audit.NoiseTiles(96)
+    challenger = coins.Challenger(reg.digest, 0, PARAMS.coins, entropy=Entropy(COIN_LABEL))
+    leaf_salts = Entropy(LEAF_SALT_LABEL)
 
-    chain, previous = [], reg.digest
-    for i, plan in enumerate(PLANS):
-        s = receipts.seed(CHALLENGE, i, previous)
+    passes = []
+    for k, plan in enumerate(PLANS):
+        coin = challenger.open(k)
+        s = receipts.seed(coin.coin, k)
         receipter = receipts.Receipter(s)
         ys = [receipter(j, blocks[j], tiles.output(s, j)) for j in plan]
-        root = receipts.tree(s, plan, ys).commitment.root
-        chain.append({"i": i, "previous": previous.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
-                      "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),
-                      "plan_digest": plan.digest.hex(), "binding": receipts.binding(s, plan).hex(),
-                      "z_1": tiles.output(s, 1).hex(),
-                      "y": {str(p): ys[p].hex() for p in (0, 1, plan.length - 1)},
-                      "receipts_sha512": _sha(b"".join(ys)), "root": root.hex()})
-        previous = root
+        ss = [leaf_salts(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length))]
+        leaf0 = b"".join(ys[:receipts.PER_LEAF])
+        passes.append({"k": k, "coin": coin.coin.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
+                       "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),
+                       "plan_digest": plan.digest.hex(), "binding": receipts.binding(s, plan).hex(),
+                       "z_1": tiles.output(s, 1).hex(), "y": {str(p): ys[p].hex() for p in (0, 1, plan.length - 1)},
+                       "receipts_sha512": _sha(b"".join(ys)),
+                       "leaf_0": {"x": sha512_row_v2_digest(leaf0, 8 * len(leaf0)).hex(), "salt": ss[0].hex(),
+                                  "value": receipts.hidden(leaf0, ss[0]).hex()},
+                       "root": receipts.tree(s, plan, ys, ss).commitment.root.hex()})
 
+    opening = challenger.open(PARAMS.windows * PARAMS.passes)
+    draw_key = derive(opening.coin, audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
+    first = coins.Challenger(reg.digest, 0, PARAMS.coins, entropy=Entropy(COIN_LABEL)).open(0)
     z_short, z_long = bytes(range(100)), bytes((7 * u) % 251 for u in range(codec.BLOCK_BYTES + 1000))
-    window = derive(SOURCE, audit.WINDOW_DOMAIN, {"registration": reg.digest, "window": 0, "nonce": NONCE})
     return {
         "codec": {"domain": codec.DOMAIN.decode(), "seed": reg.codec_seed.hex(), "rounds": reg.rounds,
                   "c": [format(c, "x") for c in key.c], "tau": format(key.tau, "x"),
                   "words": [{"j": j, "w": w, "payload": payloads[j][64 * w:64 * (w + 1)].hex(),
                              "word": blocks[j][64 * w:64 * (w + 1)].hex()} for j, w in ((0, 0), (0, 63), (1, 0), (20, 5))],
                   "blocks_sha512": _sha(b"".join(blocks))},
+        "payload": {"schema": audit.PAYLOAD_SCHEMA, "binding": audit.payload_domain(NODE, BLOCKS).binding.hex(),
+                    "leaf_0": {"x": sha512_row_v2_digest(payloads[0], 8 * codec.BLOCK_BYTES).hex(), "salt": salts[0].hex(),
+                               "value": receipts.hidden(payloads[0], salts[0]).hex()},
+                    "root": tree.commitment.root.hex()},
         "registration": {"source": SOURCE.hex(), "node": NODE.hex(), "blocks": BLOCKS, "nonce": NONCE.hex(),
                          "payload_root": reg.payload_root.hex(), "codec_seed": reg.codec_seed.hex(),
                          "digest": reg.digest.hex()},
-        "window": {"nonce": NONCE.hex(), "challenge": window.stream("challenge", receipts.CHALLENGE_BYTES).hex(),
-                   "draws": list(window.subset(7, 3 * BLOCKS, "openings"))},
+        "coins": {"scheme": coins.SCHEME, "session": 0, "count": PARAMS.coins,
+                  "binding": coins.domain(reg.digest, 0, PARAMS.coins).binding.hex(),
+                  "coin_0": {"coin": first.coin.hex(), "salt": first.salt.hex(),
+                             "value": coins.leaf_value(first.coin, first.salt).hex(), "path": [x.hex() for x in first.path]},
+                  "root": challenger.commitment.root.hex()},
         "spread": {"short": {"z": z_short.hex(), "sha512": _sha(receipts.spread(z_short))},
                    "long": {"z_len": len(z_long), "sha512": _sha(receipts.spread(z_long))}},
-        "chain": {"challenge": CHALLENGE.hex(), "z_bytes": tiles.z_bytes, "passes": chain},
+        "passes": {"z_bytes": tiles.z_bytes, "passes": passes},
+        "openings": {"coin": opening.coin.hex(), "index": opening.index, "units": sum(p.length for p in PLANS),
+                     "draws": list(draw_key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))},
     }
 
 
