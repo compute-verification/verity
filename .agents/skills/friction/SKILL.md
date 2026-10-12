@@ -102,6 +102,15 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (1:48 PM PDT), the remote bandwidth audit:
+  - The first goal is a mega-secure but slow implementation, and about 4× step overhead is acceptable for now. So
+    the stated codec gets the margin: three rounds, the public XOR mask between rounds (σ_K) and a 1,024-bit word.
+    Two rounds is a later upgrade, once the partial-completion attack is measured.
+  - "99%" is against the node's read capacity over time (R·T). A standing workstream hill-climbs on keeping compute
+    and memory bandwidth full with registered filler reads and matmul tiles.
+  - The claim is the hybrid: 0.15% averaged over a 10-minute horizon, with every window at most 1%.
+  - Never change the model's logits: the lm_head is encoded with a BF16 payload.
+
 - 2026-10-12 (11:55 AM PDT): the remote bandwidth audit may derive each pass's seed by Fiat–Shamir, from the window's
   challenge, the pass index and the previous pass's root. Live coins per pass are impractical at its rate. This
   narrows 5 Oct's "live coins only" for that protocol, for now. The same message: if a prover's CPUs can compute what
