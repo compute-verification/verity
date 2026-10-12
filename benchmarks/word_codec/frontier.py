@@ -49,6 +49,9 @@ delta       decode's share of compute per native pass (Δ)
 tau         the tag's share (τ)
 measured    true for a measured point, false for a modelled one
 reference   optional: true for a reference point (P2)
+ingress     optional: the share of E's bytes the step reads back from HBM besides E (tags, sketches or leaves it wrote
+            earlier: red team F19), charged to μ's budget, so x* = (d − τ)/(μ_budget − ingress); a ra-codec-wide
+            point without it has it from its arithmetic (`ingress_of`), any other lane's is 0
 label       optional free text
 run, art    the run id and evidence artifact the numbers come from (art may be null when run names it)
 ~~~
@@ -140,6 +143,20 @@ def tensor_points(docs: list[tuple[dict, str | None]]) -> list[dict]:
     return out
 
 
+def ingress_of(p: dict) -> float:
+    """The point's HBM read-back over E (F19): its own `ingress`, or for ra-codec-wide's points from before the field,
+    by their arithmetic: a commit after the pass reads back 36 B a tag (the tag and a sixteenth of a 64-byte leaf), one
+    committing as it goes the leaves' 4 B (its tags come back from L2), one that folds them a 64th of that; a tag
+    covers 256 B of E a record (512 with tb2) or 2,048 a sketch vector, times the expansion."""
+    if "ingress" in p:
+        return p["ingress"]
+    if p.get("lane") != "ra-codec-wide" or p.get("reference"):
+        return 0.0
+    a = p["arithmetic"]
+    e = (2048 if "/sketch" in a else 512 if "/tb2" in a else 256) * p.get("expansion", 1.0)
+    return 4 / e / 64 if "/folded-per-linear" in a else 4 / e if "-per-linear" in a else 36 / e
+
+
 def check(points: list[dict]) -> list[dict]:
     out = []
     for p in points:
@@ -150,6 +167,7 @@ def check(points: list[dict]) -> list[dict]:
             raise ValueError(f"a point lacks {missing}: {p}")
         p.setdefault("y_base", p["y_total"] - p["y_decode"] - p["y_tag"] - p["y_commit"])
         p.setdefault("measured", True)
+        p["ingress"] = ingress_of(p)
         if p.get("ks"):
             k = min(p["ks"].values())
             p.update(k_mean=p["k"], x=p["x"] * k / p["k"], k=k)
@@ -159,6 +177,12 @@ def check(points: list[dict]) -> list[dict]:
 
 def x_star(tau: float, budget: float, d: float = 1.0) -> float:
     return (d - tau) / budget
+
+
+def x_star_of(p: dict, budget: float, d: float | None = None, idle: float = IDLE_8B) -> float:
+    """The point's x*, its read-back charged to μ's budget (inf when that leaves none)."""
+    left = budget - p.get("ingress", 0.0)
+    return x_star(p["tau"], left, step(p, d, idle)) if left > 0 else float("inf")
 
 
 def step(p: dict, d: float | None, idle: float = IDLE_8B) -> float:
@@ -194,8 +218,9 @@ def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = 
 def sketch_twins(points: list[dict], cost: dict[int, float], tau: float = 0.0) -> list[dict]:
     """For each measured point (its commit serial: the overlapped twin has the same base and decode), a modelled twin
     with the sketch-then-hash tag in place of the full-byte one: its own base and decode, plus `cost[batch]`, the
-    sketch's tag and commit together (ra-sketch-tag's measured y on a plain store), and τ the sketch's (0 grants the
-    adversary the most); a point whose tag is the sketch already has none."""
+    sketch's tag and commit together (ra-sketch-tag's measured y on a plain store), τ the sketch's (0 grants the
+    adversary the most) and the read-back of a commit after the pass; a point whose tag is the sketch already has
+    none."""
     out = []
     for p in points:
         if (p.get("reference") or not p["measured"] or p["batch"] not in cost or "/sketch" in p["arithmetic"]
@@ -203,7 +228,8 @@ def sketch_twins(points: list[dict], cost: dict[int, float], tau: float = 0.0) -
             continue
         y = p["y_base"] + p["y_decode"] + cost[p["batch"]]
         out.append({**p, "arithmetic": p["arithmetic"] + "/sketch-model", "y_total": y, "y_tag": cost[p["batch"]],
-                    "y_commit": 0.0, "tau": tau, "measured": False, "label": f"{p.get('label', '')} + sketch (model)"})
+                    "y_commit": 0.0, "tau": tau, "measured": False, "label": f"{p.get('label', '')} + sketch (model)",
+                    "ingress": 36 / (2048 * p.get("expansion", 1.0))})
     return out
 
 
@@ -211,7 +237,7 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
              boost: float = BOOST) -> dict[int, dict | None]:
     best = {}
     for p in points:
-        if p.get("reference") or x_eff(p, boost) < x_star(p["tau"], budget, step(p, d, idle)):
+        if p.get("reference") or x_eff(p, boost) < x_star_of(p, budget, d, idle):
             continue
         b = best.get(p["batch"])
         if b is None or p["y_total"] < b["y_total"]:
@@ -221,17 +247,18 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
 
 def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None, idle: float = IDLE_8B,
           boost: float = BOOST) -> str:
-    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
-             "| source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | ingress | y_total | decode | tag | commit "
+             "| measured | source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     best = frontier(points, budget, d, idle, boost)
     for mb in batches:
         p = best.get(mb)
         if p is None:
-            lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | |")
+            lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | | |")
             continue
         dd, xe = step(p, d, idle), x_eff(p, boost)
-        lines.append(f"| {mb} | {p['b']} | {p['k']:.3g} | {p['arithmetic']} | {xe:.0f} | {x_star(p['tau'], budget, dd):.0f} "
-                     f"| {(dd - p['tau']) / xe * 100:.2f}% | {p['y_total']:.2f} | {p['y_decode']:.2f} "
+        lines.append(f"| {mb} | {p['b']} | {p['k']:.3g} | {p['arithmetic']} | {xe:.0f} | {x_star_of(p, budget, d, idle):.0f} "
+                     f"| {(dd - p['tau']) / xe * 100:.2f}% | {p.get('ingress', 0.0) * 100:.3f}% | {p['y_total']:.2f} "
+                     f"| {p['y_decode']:.2f} "
                      f"| {p['y_tag']:.2f} | {p['y_commit']:.2f} | {'yes' if p['measured'] else 'model'} "
                      f"| {p.get('art') or p.get('run') or p.get('lane')} |")
     return "\n".join(lines)

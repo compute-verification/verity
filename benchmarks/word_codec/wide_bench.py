@@ -984,7 +984,9 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     ".../sketch" (hashed in the kernel, τ the sketch's), and ".../sketch-apart" (hashed by a kernel after each
     call); and the passes that commit as they go, at their whole pass's time over native (".../leaves-per-linear",
     its ".../hi" on a high-priority stream, ".../folded-per-linear/hi", the commit their excess over the same GEMMs
-    alone, which for ".../sketch-apart/..." includes the hash)."""
+    alone, which for ".../sketch-apart/..." includes the hash). `ingress` is the share of E's bytes each reads back
+    from HBM (red team F19): a commit after the pass reads every tag and leaf of it, one committing as it goes the leaves
+    (its tags come back from L2), one that folds them every 2^SUB-th node."""
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
@@ -993,13 +995,16 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
              + (f"/maxreg{lib.maxreg}" if getattr(lib, "maxreg", 0) else "") + ("/sku" if getattr(lib, "sku", 0) else ""))
     out = []
 
-    def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str) -> dict:
+    tag_e, sk_e = 4 * f.limbs * f.lane_words() * lib.tb, 32 * WS.steps(f) * WS.T  # E's bytes a tag, a sketch vector
+    after, per_linear = 36 / sk_e, 4 / sk_e  # read back: a tag and a sixteenth of a leaf a vector; the leaves alone
+
+    def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str, ingress: float) -> dict:
         return {"schema": POINT_SCHEMA, "lane": "ra-codec-wide", "model": MODEL, "b": f.bits, "k": k,
                 "arithmetic": arith + suffix,
                 "packing": f.payload, "expansion": f.expansion(), "batch": mb,
                 "y_total": y["y_total"] - y["y_commit"] + y_commit, "y_decode": y["y_decode"], "y_tag": y["y_tag"],
                 "y_commit": y_commit, "y_commit_linear": y.get("y_commit_linear"), "y_base": y["y_base"],
-                "x": q["x"], "delta": q["delta"], "tau": q["tau"], "mu_rebuild": q["mu_rebuild"],
+                "x": q["x"], "delta": q["delta"], "tau": q["tau"], "mu_rebuild": q["mu_rebuild"], "ingress": ingress,
                 "payload_per_stored_bit": 1 / f.expansion(),
                 "measured": True, "label": f"{f.name} k={k} {lib.name}{suffix}", "run": run_id, "art": None,
                 "gpu": gpu, "sm_mhz": sm_mhz}
@@ -1011,28 +1016,30 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
         for k, q in fq.items():
             if k not in row:
                 continue
-            out.append(point(k, mb, q, row[k], row[k]["y_commit"], ""))
+            out.append(point(k, mb, q, row[k], row[k]["y_commit"], "", 36 / tag_e))
             o = (po or {}).get(k, {}).get("per_batch", {}).get(mb)
             if o is not None:
-                out.append(point(k, mb, q, row[k], max(0.0, o["y_commit_overlap"]), "/commit-overlapped"))
+                out.append(point(k, mb, q, row[k], max(0.0, o["y_commit_overlap"]), "/commit-overlapped", 36 / tag_e))
             y = row[k].get("sketch")
             if y is None:
                 continue
-            out.append(point(k, mb, sketch_q(q), y, y["y_commit"], "/sketch"))
+            out.append(point(k, mb, sketch_q(q), y, y["y_commit"], "/sketch", after))
             out.append(point(k, mb, sketch_q(q), dict(y, y_total=y["y_total_apart"], y_tag=y["y_tag_apart"]),
-                             y["y_commit"], "/sketch-apart"))
+                             y["y_commit"], "/sketch-apart", after))
             o = (po_sk or {}).get(k, {}).get("per_batch", {}).get(mb)
             if o is not None:
-                out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped"))
+                out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped",
+                                 after))
                 ym = o.get("y_mode", {})
-                for mode, base, suffix in (("leaves", "alone", "/sketch/leaves-per-linear"),
-                                           ("leaves_hi", "alone", "/sketch/leaves-per-linear/hi"),
-                                           ("fold_hi", "alone", "/sketch/folded-per-linear/hi"),
-                                           ("apart", "alone_s", "/sketch-apart/leaves-per-linear")):
+                for mode, base, suffix, ing in (
+                        ("leaves", "alone", "/sketch/leaves-per-linear", per_linear),
+                        ("leaves_hi", "alone", "/sketch/leaves-per-linear/hi", per_linear),
+                        ("fold_hi", "alone", "/sketch/folded-per-linear/hi", per_linear / (1 << getattr(lib, "sub", 6))),
+                        ("apart", "alone_s", "/sketch-apart/leaves-per-linear", per_linear)):
                     if mode in ym:
                         yc = max(0.0, ym[mode] - ym[base])
                         yp = dict(y, y_total=ym[mode], y_commit=yc, y_tag=ym[mode] - yc - y["y_base"] - y["y_decode"])
-                        out.append(point(k, mb, sketch_q(q), yp, yc, suffix))
+                        out.append(point(k, mb, sketch_q(q), yp, yc, suffix, ing))
     return out
 
 

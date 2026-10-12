@@ -29,6 +29,22 @@ def test_check_prices_a_mixed_k_point_at_its_smallest_k():
     assert (p["k"], p["k_mean"], p["x"]) == (1, 1.75, pytest.approx(250.0))
 
 
+def test_check_charges_a_points_read_back_to_the_budget_and_infers_old_wide_points():
+    wide = dict(lane="ra-codec-wide", b=512, y_total=1.3, tau=0.04, x=280.0, x_boosted=True)
+    after, lv, fold, other, given = F.check([point(arithmetic="a/sketch", **wide),
+                                             point(arithmetic="a/sketch/leaves-per-linear/hi", **wide),
+                                             point(arithmetic="a/sketch/folded-per-linear/hi", **wide),
+                                             point(arithmetic="a/sketch"), point(ingress=0.01)])
+    assert after["ingress"] == pytest.approx(36 / 2048) and lv["ingress"] == pytest.approx(4 / 2048)
+    assert fold["ingress"] == pytest.approx(4 / 2048 / 64) and other["ingress"] == 0.0 and given["ingress"] == 0.01
+    # d − τ = 1.36: x* 272 with nothing read back, 303 with the leaves' 0.2%, inf with every tag's 1.76%
+    assert F.x_star_of(fold, 0.005, idle=0.1) == pytest.approx(1.36 / (0.005 - 4 / 2048 / 64))
+    assert F.x_star_of(lv, 0.005, idle=0.1) == pytest.approx(1.36 / (0.005 - 4 / 2048))
+    assert F.x_star_of(after, 0.005, idle=0.1) == float("inf")
+    assert F.frontier([after, lv, fold], 0.005, idle=0.1)[1] is fold
+    assert "| 0.003% |" in F.table([fold], 0.005, batches=(1,), idle=0.1)
+
+
 def test_check_refuses_other_schemas_and_missing_fields():
     with pytest.raises(ValueError):
         F.check([point(schema="other")])
@@ -168,6 +184,8 @@ def test_a_pass_committing_as_it_goes_is_priced_at_its_whole_time_and_commits_it
     pts = {p["arithmetic"].split("/cc/b3u2")[1]: p for p in F.check(wide_bench.points(lib, fq, bd, "r", "g", None, None,
                                                                                          po_sk))}
     lv, ap = pts["/sketch/leaves-per-linear"], pts["/sketch-apart/leaves-per-linear"]
+    assert lv["ingress"] == pytest.approx(4 / 2048) and pts["/sketch"]["ingress"] == pytest.approx(36 / 2048)
+    assert pts[""]["ingress"] == pytest.approx(36 / 256)
     assert lv["y_total"] == pytest.approx(1.20) and lv["y_commit"] == pytest.approx(0.03)
     assert lv["y_tag"] == pytest.approx(1.17 - 1.01 - 0.08) and lv["tau"] == 0.04
     assert ap["y_total"] == pytest.approx(1.16) and ap["y_commit"] == pytest.approx(0.04)
