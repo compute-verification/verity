@@ -253,15 +253,22 @@ theorem toClaim_eval (c : RegClaim F sh) :
     refine Finset.sum_congr rfl fun a _ => ?_
     simp only [hf, RegClaim.toClaim, dite_eq_left a.isLt, Fin.eta]
     rw [coord_split c a.val a.isLt]
-  have h2 : 2 ^ sh.mReg = 2 ^ sh.nu * (2 ^ sh.pLog * 2 ^ sh.tLog) := by
-    rw [SparseShape.mReg, pow_add, pow_add, mul_assoc]
-  rw [h1, show Finset.range (2 ^ sh.mReg) = Finset.range (2 ^ sh.nu * (2 ^ sh.pLog * 2 ^ sh.tLog)) by rw [h2],
+  have hcut : ∑ a ∈ Finset.range (2 ^ sh.mReg), f a =
+      ∑ a ∈ Finset.range (2 ^ (sh.nu + sh.pLog + sh.tLog)), f a := by
+    refine (Finset.sum_subset (fun a ha => Finset.mem_range.2 (lt_of_lt_of_le (Finset.mem_range.1 ha)
+      (Nat.pow_le_pow_right (by norm_num) (by unfold SparseShape.mReg; omega)))) fun a ha hna => ?_).symm
+    simp only [hf]
+    rw [eqAt_coord_high c (not_lt.1 fun h => hna (Finset.mem_range.2 h)) (Finset.mem_range.1 ha), zero_mul]
+  have h2 : 2 ^ (sh.nu + sh.pLog + sh.tLog) = 2 ^ sh.nu * (2 ^ sh.pLog * 2 ^ sh.tLog) := by
+    rw [pow_add, pow_add, mul_assoc]
+  rw [h1, hcut, show Finset.range (2 ^ (sh.nu + sh.pLog + sh.tLog)) =
+      Finset.range (2 ^ sh.nu * (2 ^ sh.pLog * 2 ^ sh.tLog)) by rw [h2],
     sum_range_mul, sum_range_mul]
   simp only [Finset.sum_range]
   simp only [typeVal, planeExt, Finset.mul_sum]
   refine Finset.sum_congr rfl fun t _ => Finset.sum_congr rfl fun p _ => Finset.sum_congr rfl fun k _ => ?_
   simp only [hf, planeAt]
-  rw [coord_eqAt c k.val p.val t.val k.isLt p.isLt]
+  rw [coord_eqAt c k.val p.val t.val k.isLt p.isLt t.isLt]
   ring
 
 end Sums

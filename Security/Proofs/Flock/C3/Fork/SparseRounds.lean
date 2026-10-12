@@ -271,8 +271,9 @@ theorem sum_range_mul {M : Type} [AddCommMonoid M] (m n : ℕ) (f : ℕ → M) :
 theorem lt_two_pow_pLog (sh : SparseShape) {p : ℕ} (hp : p ≤ 2 * sh.ell + 1) : p < 2 ^ sh.pLog :=
   lt_of_le_of_lt hp Nat.lt_log2_self
 
-theorem coord_eq_zero {sh : SparseShape} (c : RegClaim F sh) {j : ℕ} (hj : sh.mReg ≤ j) : c.coord j = 0 := by
-  unfold SparseShape.mReg at hj
+/-- A registered claim's point is zero past the cells, in the padding as past `mReg`. -/
+theorem coord_eq_zero {sh : SparseShape} (c : RegClaim F sh) {j : ℕ} (hj : sh.nu + sh.pLog + sh.tLog ≤ j) :
+    c.coord j = 0 := by
   simp only [RegClaim.coord, vget]
   rw [ite_eq_right (by omega), ite_eq_right (by omega), dite_eq_right (by omega)]
 
@@ -297,19 +298,59 @@ theorem coord_split {sh : SparseShape} (c : RegClaim F sh) (a : ℕ) (ha : a < 2
     (a / 64) (Nat.mod_lt _ (by norm_num))
   rw [show a % 64 + 2 ^ 6 * (a / 64) = a by
     rw [show (2 : ℕ) ^ 6 = 64 by norm_num]; exact Nat.mod_add_div a 64] at h
-  rw [← eqAt_cut (N := 6 + (sh.mReg - 6)) sh.mReg (by omega) (fun j => c.coord j) (fun j hj => coord_eq_zero c hj) a ha, h]
+  rw [← eqAt_cut (N := 6 + (sh.mReg - 6)) sh.mReg (by omega) (fun j => c.coord j)
+    (fun j hj => coord_eq_zero c (by unfold SparseShape.mReg at hj; omega)) a ha, h]
   congr 1
   congr 1
   funext i
   exact congrArg _ (Nat.add_comm _ _)
 
+/-- Past the cells a registered claim's point weighs nothing: a row of the padding has a bit set where the point is
+zero (`coord_eq_zero`). -/
+theorem eqAt_coord_high {sh : SparseShape} (c : RegClaim F sh) {a : ℕ}
+    (ha : 2 ^ (sh.nu + sh.pLog + sh.tLog) ≤ a) (ha' : a < 2 ^ sh.mReg) :
+    eqAt (fun j : Fin sh.mReg => c.coord j.val) a = 0 := by
+  have hCm : sh.nu + sh.pLog + sh.tLog ≤ sh.mReg := by unfold SparseShape.mReg; omega
+  have hpos : 0 < 2 ^ (sh.nu + sh.pLog + sh.tLog) := Nat.pos_of_ne_zero (pow_ne_zero _ two_ne_zero)
+  have h := eqAt_split_at (sh.nu + sh.pLog + sh.tLog) (sh.mReg - (sh.nu + sh.pLog + sh.tLog)) (by omega)
+    (fun j : Fin sh.mReg => c.coord j.val) (a % 2 ^ (sh.nu + sh.pLog + sh.tLog))
+    (a / 2 ^ (sh.nu + sh.pLog + sh.tLog)) (Nat.mod_lt _ hpos)
+  rw [Nat.mod_add_div] at h
+  rw [h]
+  refine mul_eq_zero_of_right _ ?_
+  have hb0 : 0 < a / 2 ^ (sh.nu + sh.pLog + sh.tLog) := Nat.div_pos ha hpos
+  have hlt : a / 2 ^ (sh.nu + sh.pLog + sh.tLog) < 2 ^ (sh.mReg - (sh.nu + sh.pLog + sh.tLog)) := by
+    rw [Nat.div_lt_iff_lt_mul hpos, ← pow_add, Nat.sub_add_cancel hCm]
+    exact ha'
+  have hbit : ∃ j : Fin (sh.mReg - (sh.nu + sh.pLog + sh.tLog)),
+      (a / 2 ^ (sh.nu + sh.pLog + sh.tLog)).testBit j.val = true := by
+    by_contra hall
+    push Not at hall
+    refine (Nat.pos_iff_ne_zero.1 hb0) (Nat.eq_of_testBit_eq fun i => ?_)
+    rw [Nat.zero_testBit]
+    by_cases hi : i < sh.mReg - (sh.nu + sh.pLog + sh.tLog)
+    · simpa using hall ⟨i, hi⟩
+    · exact Nat.testBit_eq_false_of_lt (lt_of_lt_of_le hlt (Nat.pow_le_pow_right (by norm_num) (by omega)))
+  obtain ⟨j, hj⟩ := hbit
+  unfold eqAt
+  refine Finset.prod_eq_zero (Finset.mem_univ j) ?_
+  rw [if_pos hj]
+  exact coord_eq_zero c (Nat.le_add_right _ _)
+
 /-- A registered claim's point, split into the entries', the planes' and the type's. -/
 theorem coord_eqAt {sh : SparseShape} (c : RegClaim F sh) (k p t : ℕ) (hk : k < 2 ^ sh.nu)
-    (hp : p < 2 ^ sh.pLog) :
+    (hp : p < 2 ^ sh.pLog) (ht : t < 2 ^ sh.tLog) :
     eqAt (fun j : Fin sh.mReg => c.coord j.val) (k + 2 ^ sh.nu * (p + 2 ^ sh.pLog * t)) =
       eqAt c.rk k * (eqAt c.zetaP p * eqAt c.rho t) := by
-  rw [eqAt_split_at sh.nu (sh.pLog + sh.tLog) (by unfold SparseShape.mReg; omega) _ k _ hk,
-    eqAt_split_at sh.pLog sh.tLog rfl _ p t hp]
+  have key : ∀ {a m b n : ℕ}, a < m → b < n → a + m * b < m * n := by
+    intro a m b n ha hb
+    calc a + m * b < m + m * b := by omega
+      _ = m * (b + 1) := by ring
+      _ ≤ m * n := Nat.mul_le_mul (le_refl m) (by omega)
+  rw [eqAt_cut (N := sh.mReg) (sh.nu + (sh.pLog + sh.tLog)) (by unfold SparseShape.mReg; omega) c.coord
+      (fun j hj => coord_eq_zero c (by omega)) (k + 2 ^ sh.nu * (p + 2 ^ sh.pLog * t))
+      (by rw [pow_add, pow_add]; exact key hk (key hp ht)),
+    eqAt_split_at sh.nu (sh.pLog + sh.tLog) rfl _ k _ hk, eqAt_split_at sh.pLog sh.tLog rfl _ p t hp]
   congr 1
   · congr 1; funext j; simp [RegClaim.coord, vget]
   · congr 1
