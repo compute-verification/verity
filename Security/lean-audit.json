@@ -414,9 +414,31 @@
    "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), and they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "Models.Nci.Assumptions", "Definitions.Accounting", "Models.Accounting.Guarantees"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "Models.Nci.Assumptions",
+    "Definitions.Accounting",
+    "Models.Accounting.Guarantees"
+   ],
    "except": [],
    "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses"
+  },
+  "Definitions.Accounting.Bandwidth": {
+   "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
+   "except": [],
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof"
+  },
+  "Models.Accounting.Guarantees.Bandwidth": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Accounting.Bandwidth",
+    "Models.Accounting.Guarantees.Bandwidth"
+   ],
+   "except": [],
+   "why": "a guarantee is stated over the bandwidth audit's game, never over a proof"
   }
  },
  "reads_exempt": {
@@ -523,6 +545,30 @@
    "signature": ["Accounting.SecurityProofs.Tag.PolyUnpredictable : Accounting.Guarantees.Tag.PolyUnpredictable"],
    "assumptions": [],
    "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035"
+  },
+  "Bandwidth.SecurityProofs.AuditInteractive": {
+   "owner": "@memory-accounting"
+  },
+  "Bandwidth.SecurityProofs.AuditInteractiveRO": {
+   "owner": "@memory-accounting"
+  },
+  "Bandwidth.SecurityProofs.AuditRO": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
+   "assumptions": [],
+   "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
+  },
+  "Bandwidth.SecurityProofs.AuditRelay": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.AuditRelay : Bandwidth.Guarantees.AuditRelay"],
+   "assumptions": [],
+   "type_hash": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e"
+  },
+  "Bandwidth.SecurityProofs.HonestPasses": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.HonestPasses : Bandwidth.Guarantees.HonestPasses"],
+   "assumptions": [],
+   "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -4047,7 +4093,12 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p."
+   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
+   "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
+   "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
+   "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
+   "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
+   "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -4072,6 +4123,63 @@
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Definitions.Accounting.Bandwidth.Game": {
+   "digest": "419713f54ecb1553848ac084adeaab4e0a2db5738e1f27422be1050001d17ef0",
+   "definitions": {
+    "Bandwidth.Accepts": "e0bd08492460be18678e3282dfa068086b3c6e2d948e830d5e83a3db266a52b8",
+    "Bandwidth.Chip": "d45ebdb58abcdf8efc1b28e7bc4486fde30e16042446b9e02a0b279be2cc60f0",
+    "Bandwidth.Chip.below": "bb601ba183ce2e00b180f88a4056ccaa203f06b96efb324822340ff56e21d4df",
+    "Bandwidth.Chip.brecOn": "d6ae4146cbb47deb9bedcde350fafce683d0c4e4c73e0b97ba8a81145cb37758",
+    "Bandwidth.Chip.brecOn.go": "96932ebdb15eeac09e165fe22a8b89d464c71745d1809824bcb49b2773459aa8",
+    "Bandwidth.Chip.casesOn": "c93abf8f65fcb224fab8c29cd20353dd5c63ffb162fde7d08e877342ac065328",
+    "Bandwidth.Chip.done": "500286417fb8c754443ba87e9707b55903f2ee6c2415b3e864aba6a515c1aaaa",
+    "Bandwidth.Chip.ingress": "4c4aa8f8cf05183e5314d3a84a3345ef90af112eb55bdb982dde35cc1d4b42f4",
+    "Bandwidth.Chip.ingressBits": "c742a4a97c4585ee40046a027fceed817dc3e990c18a2caf1fac0565d1278c09",
+    "Bandwidth.Chip.queries": "d4e2e04b2d282eb6575fa2482d647c6080e8dba6988430eed644f74b184fdb28",
+    "Bandwidth.Chip.rec": "15011d328e665a5e6bbfade46d3e9c3fb0ccf878e7d9c478d70f26e7343f18b3",
+    "Bandwidth.Chip.regen": "88152855e208ae7daa93948380847295801b7ea7a6c1a589c30bf1a2bd3f6e04",
+    "Bandwidth.Chip.regens": "c73db498b34f8166c8055388982023473c0c953734df8a2d2f9636ac5e5c4332",
+    "Bandwidth.Chip.run": "d3ba71b334065b9b9c195e3399288ae8e531833ad35cf5c992c466baf4d030cf",
+    "Bandwidth.Chip.side": "c0f2ad3c3702aa70e52bf55844c80bbb722e605981b8be1371e76cd2e1c654a0",
+    "Bandwidth.Chip.sideBits": "141d32368d0786c9265410ad894f49caa90ea8a5b0fde8bc5c8117d7ca1c0c67",
+    "Bandwidth.Chip.tag": "69fc2badff916fbc3d79b67253633f3a0e732579c301eee23fab4f79ba2ce4cd",
+    "Bandwidth.Device": "8337e59b024471c7c84210e675bed3911444d809fce91a643b3e8a982695df1d",
+    "Bandwidth.Device.chip": "458f55105a6bc6dedf46e474a9ca6e72db2d6f029ba383946096da2993438507",
+    "Bandwidth.Device.ingress": "e7cd27e527fd802ea70b828679a336534f6c87f0f469ab50aa9dffae49ab45c3",
+    "Bandwidth.Device.mem": "3a9878dea6546e1442a17a7e527d19b04f57a72b57ff915d4733b4ec6c5c85a0",
+    "Bandwidth.Device.side": "f6a832e092295e65f52ab0fb8c3d36a20bc2addaf75813268307649ade926b9a",
+    "Bandwidth.Device.state": "74147efd3edbb2ab9604ee3a2bccc177be62bbca0a6992fc74a0cadcbf730b1a",
+    "Bandwidth.Device.tags": "48978632c53a2f5de4fd8eb7201d47ad99e3408b06acd7cff8d7a52ea4485791",
+    "Bandwidth.Device.world": "d38a7e62e80d0bd0f0e3262976752d10d9edcc9c1770e8f38de7f81fea3e121d",
+    "Bandwidth.Oracle": "00ba99c07d062a5499b309208fe1e4c3810334fa842eb2f437000dda6f8a04d5",
+    "Bandwidth.Store": "856a234f1ff4bc32b7603e9d223a26e7189b5c78d81dad699e2ba4d2e9cc1688",
+    "Bandwidth.World": "2f274b1c4548afd44a3098351cb44afc7570e8fbc78ab003372ca3f3fccc9b61",
+    "Bandwidth.World.block": "2ad5c8ac78c796224c8c65b59e59c02f6cd397e152ce8a715595903e8e284a8c",
+    "Bandwidth.World.mem": "529ee68a8130789546b62ff0661ff9ed7d739e72ed93c4fb56abf86f5d97d1bc",
+    "Bandwidth.World.oracle": "f624d94a48e3c59ebf88fa87dd1224d0287c1d02e19270d236d424eeec1f8d56",
+    "Bandwidth.World.side": "f566a8353998a8afde7363fd5ca5b98c5cb9ade02af1f79d543430fb1b1e8b99"
+   },
+   "guarantees": [
+    "Bandwidth.SecurityProofs.AuditRO",
+    "Bandwidth.SecurityProofs.AuditRelay",
+    "Bandwidth.SecurityProofs.HonestPasses"
+   ]
+  },
+  "Definitions.Accounting.Bandwidth.Relay": {
+   "digest": "768e53f0dd6fc6ed9b3fca0c18075a70e938e754107f6063d01a47ba9e4062f3",
+   "definitions": {
+    "Bandwidth.RelayDevice": "c3d3daf4e8debd4ac420b44a9654fece5ae010be8bb8f7b1cd842ea0dbe37943",
+    "Bandwidth.RelayDevice.Accepts": "7913ad96ee613083888b543768476840efdeb3b23cf1952a32cad8d4e1e4ac30",
+    "Bandwidth.RelayDevice.chip": "c48e72b5e86f0859a330ccc8b2d15aa1ac9bd4c200ca76f9a4758cacca5176c3",
+    "Bandwidth.RelayDevice.ingress": "451a85553fa83f900b5ea8921f5f423e94565c7d188f68ab5421043ba0853fe7",
+    "Bandwidth.RelayDevice.mem": "b066b8ef340d8366031e4c1ac1487549968a9585a57513328450c3b325aacff7",
+    "Bandwidth.RelayDevice.side": "0cb919d3ab780b012e6f20343b984c034bf2f058032f1b847adb65c56bb16dcc",
+    "Bandwidth.RelayDevice.state": "95d8c13b7eac42c944a1fc7e60f68c703453764d6a9b45c7692154a0dff96679",
+    "Bandwidth.RelayDevice.tags": "01eab5a842e41b1fe973ea7faf17797dfcaa1a998fb60314341e989978442a31",
+    "Bandwidth.RelayDevice.world": "13fe38d320a6de66ef78260883153c8ab287ff297b7b390e73d65af809c6cef6"
+   },
+   "guarantees": ["Bandwidth.SecurityProofs.AuditRelay"]
+  },
   "Definitions.Accounting.Tag.PolyHash": {
    "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
    "definitions": {
@@ -4580,6 +4688,9 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Bandwidth.SecurityProofs.AuditRO",
+    "Bandwidth.SecurityProofs.AuditRelay",
+    "Bandwidth.SecurityProofs.HonestPasses",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -12461,6 +12572,19 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+   ]
+  },
+  "Models.Accounting.Guarantees.Bandwidth": {
+   "digest": "741eaa1df3d5f934d52853d1a28834db4b920744e780ac64dec0b491b57dc208",
+   "definitions": {
+    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20",
+    "Bandwidth.Guarantees.AuditRelay": "d79eb32b815f2d9722200c33e7a91ea3372fa9dc0133873016ea7e2a1750fe37",
+    "Bandwidth.Guarantees.HonestPasses": "ea463a38fea8188b52f9b1c359364c3adc9256df140c00493c7e612ffe2f8f2d"
+   },
+   "guarantees": [
+    "Bandwidth.SecurityProofs.AuditRO",
+    "Bandwidth.SecurityProofs.AuditRelay",
+    "Bandwidth.SecurityProofs.HonestPasses"
    ]
   },
   "Models.Accounting.Guarantees.Sketch": {

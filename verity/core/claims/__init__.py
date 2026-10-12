@@ -110,6 +110,38 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
+    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Models/Accounting/Guarantees/Bandwidth.lean): the
+    # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
+    # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
+    # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
+    Entry("bandwidth-device", "model",
+          "Bandwidth device model: the bound is stated for a co-audited set of whole PCIe-only GPUs (no MIG slices, no NVLink; "
+          "NVLink domains are to be certified as sets later) running simultaneous windows over pairwise-distinct stores, with "
+          "every device that could hold a copy of a store in the set or isolated, so that the set's side sources are its "
+          "external links. The set is a chip whose on-chip state, device memory and side sources are laid out before the "
+          "verifier's fresh seed, which reads device memory only through counted ingress, computes every tag on chip, and "
+          "commits to the tags before the sample is drawn. A device whose side sources may carry tags a peer computed is "
+          "covered by AuditRelay instead, at the deficit c + m * b for m relayed blocks", "Bandwidth device"),
+    # falsified by an on-chip working set above S_chip: a pointer-chase sweep on the stated device finding more bytes served
+    # faster than device memory (registers, shared memory and L1, L2, any other SRAM), or a datasheet listing more
+    Entry("bandwidth-s-chip", "assumption",
+          "Bandwidth on-chip state: on the stated device, all on-chip storage (registers, shared memory and L1, L2 and any "
+          "other SRAM) holds at most S_chip bits", "Bandwidth S_chip", "measured"),
+    # falsified by a measured transfer into the device above cap_side during a window: host-to-device copies over PCIe, peer
+    # copies over NVLink or PCIe, and any other path into the chip that bypasses device memory, run at their peak
+    Entry("bandwidth-side-cap", "assumption",
+          "Bandwidth side channels: during a window of length T, the stated device receives at most cap_side * T bits from "
+          "outside its device memory and chip (PCIe from the host and its devices, peer links)", "Bandwidth side cap",
+          "measured"),
+    # falsified by a faster rebuild of one block of E from setup: for P2 blocks, the measurement behind pous-ring-speed (a
+    # root's 16,447 sequential squarings, about 2 ms)
+    Entry("bandwidth-regen-time", "assumption",
+          "Bandwidth regeneration: rebuilding one block of E from setup takes at least R_regen on the stated device, so a "
+          "window of length T rebuilds at most T / R_regen blocks per device that rebuilds", "Bandwidth regeneration time",
+          "measured"),
+    Entry("bandwidth-instantiation", "assumption",
+          "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
+          "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
