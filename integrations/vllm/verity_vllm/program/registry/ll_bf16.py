@@ -16,8 +16,11 @@ on decode steps, as its two kernels reduce K (vLLM d9105ea80 `kernels/linear/cut
                                              (x: Array<K, BF16>, w: Array<N, Array<K, BF16>>) -> Array<N, F32>
         the dot on each W row: one token row of the router logits
 
-on words (`F32Fma_v1`, `F32Mul_v1`, `F32Add_v1`, `DotBf16`'s step), and each one's v2 the same body on bits (`F32Fma_v3`,
-`F32Mul_v3`, `F32Add_v3`, the step's Boolean version; its ``word`` the v1, so `boolean.boolean_version` finds it).  vLLM's sm_90
+on words (`F32Fma_v1`, `F32Mul_v1`, `F32Add_v1`, `DotBf16`'s step), and each one's v2 the same body on bits (`F32Add_v3`, the
+step's Boolean version; its ``word`` the v1, so `boolean.boolean_version` finds it).  The dotprod's step on bits is one element
+Definition traced from the bf16 words, as `boolean_dense`'s are: `LlBf16FmaStep_v1` (`F32Fma_v1` on the widened words) when
+FMA = 1, else `LlBf16MulAddStep_v1` (`F32Mul_v1`, then `F32Add_v1`), so the widened operands' 16 zero bits fold into its gates,
+where `F32Fma_v3` or `F32Mul_v3` on widened words would compute the same constant gates again in every step.  vLLM's sm_90
 dispatch at GLM-5.3's gate (K 6144, N 256): M <= 4 the dotprod at BS 128 (VEC 8, so 6 tiles of 1024); M 9 and 11 the split-K at
 SPLIT_K 8, else SPLIT_K 6 (TILE_K 256, WARPS 4, `mma.sync.m16n8k16`, `HopperBF16WgmmaDot16_v1`); `bf16_gemm_check.dispatch_sm90`,
 beside the numpy models.  The H200's kernels are pinned by `tests/properties/glm53_bf16_gemm_capture_gpu.py`, which also decides
@@ -26,17 +29,17 @@ FMA.
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.trace import word_of
+from verity.ml.circuits.boolean.trace import definition, word_of
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops.boolean import cast as BC
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.refs import Coll, broadcast
+from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array
 
-__all__ = ["LlBf16DotprodDot", "LlBf16DotprodDotWord", "LlBf16DotprodGemm", "LlBf16DotprodGemmWord", "LlBf16SplitKDot",
-           "LlBf16SplitKDotWord", "LlBf16SplitKGemm", "LlBf16SplitKGemmWord", "WARP"]
+__all__ = ["LlBf16DotprodDot", "LlBf16DotprodDotWord", "LlBf16DotprodGemm", "LlBf16DotprodGemmWord", "LlBf16FmaStep",
+           "LlBf16MulAddStep", "LlBf16SplitKDot", "LlBf16SplitKDotWord", "LlBf16SplitKGemm", "LlBf16SplitKGemmWord", "WARP"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 WARP = 32
@@ -58,8 +61,19 @@ def _bits_zero(B) -> Coll:
     return Coll(F32, broadcast(space, idx, leaf, 32))
 
 
+_STEP_PARAMS = (("x", BF16), ("w", BF16), ("acc", F32))
+LlBf16FmaStep = definition("LlBf16FmaStep", 1, lambda C, x, w, acc: fp.f32_fma(C, fp.bf16_to_f32(x), fp.bf16_to_f32(w), acc),
+                           _STEP_PARAMS, F32, doc="fma(f32(x), f32(w), acc), one FFMA: F32Fma_v1 on the widened words",
+                           conformance=CONFORMANCE)
+LlBf16MulAddStep = definition(
+    "LlBf16MulAddStep", 1,
+    lambda C, x, w, acc: fp.f32_add(C, acc, fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(w), ir_nan=True), ir_nan=True),
+    _STEP_PARAMS, F32, doc="acc + f32(x) * f32(w), an FMUL then an FADD: F32Mul_v1's and F32Add_v1's NaN words",
+    conformance=CONFORMANCE)
+
 WORD = {"zero": _word_zero, "widen": P.Bf16ToF32, "fma": W.F32Fma, "mul": W.F32Mul, "add": W.F32Add}
-BITS = {"zero": _bits_zero, "widen": BC.Bf16ToF32, "fma": EW.F32Fma, "mul": EW.F32Mul, "add": EW.F32Add}
+#: on bits the dotprod calls one step per element on the bf16 words, by FMA
+BITS = {"zero": _bits_zero, "add": EW.F32Add, "step": {1: LlBf16FmaStep, 0: LlBf16MulAddStep}}
 
 
 def _ordered_sum(B, ops, parts) -> Coll:
@@ -74,17 +88,18 @@ def _dotprod(ops):
         tile = S.VEC * S.BS
         _check("LlBf16DotprodDot", K_multiple_of_VEC_BS=S.K > 0 and S.K % tile == 0, BS_whole_warps=S.BS > 0 and S.BS % WARP == 0,
                FMA_0_or_1=S.FMA in (0, 1))
-        xf, wf = (B.batch(ops["widen"], a, axes=(0,)) for a in (x, w))
+        if "step" in ops:
+            step = lambda k, acc: B.call(ops["step"][S.FMA], x[k], w[k], acc)  # noqa: E731
+        else:
+            xf, wf = (B.batch(ops["widen"], a, axes=(0,)) for a in (x, w))
+            step = lambda k, acc: (B.call(ops["fma"], xf[k], wf[k], acc) if S.FMA  # noqa: E731
+                                   else B.call(ops["add"], acc, B.call(ops["mul"], xf[k], wf[k])))
         lanes = []
         for t in range(S.BS):
             acc = ops["zero"](B)
             for i in range(S.K // tile):
                 for v in range(S.VEC):
-                    k = tile * i + S.VEC * t + v
-                    if S.FMA:
-                        acc = B.call(ops["fma"], xf[k], wf[k], acc)
-                    else:
-                        acc = B.call(ops["add"], acc, B.call(ops["mul"], xf[k], wf[k]))
+                    acc = step(tile * i + S.VEC * t + v, acc)
             lanes.append(acc)
         sums = []
         for j in range(S.BS // WARP):

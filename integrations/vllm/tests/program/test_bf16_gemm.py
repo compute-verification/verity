@@ -1,7 +1,8 @@
 """`registry.cublas_bf16` and `registry.ll_bf16`, GLM-5.3's bf16 GEMMs on sm_90: on bits they are Boolean and are the Boolean
 versions of their words; they agree with their words (the reference evaluator) and with `bf16_gemm_check`'s numpy models of the
 kernels on random words and on words at every class edge (signed zeros, subnormals, infinities, NaNs, and products that overflow
-or underflow f32, the only inputs on which the dotprod's contraction changes a word); `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
+or underflow f32, the only inputs on which the dotprod's contraction changes a word); the dotprod's steps agree with the f32 words
+they widen into, on accumulators that cancel the product too; `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
 function; the words at GLM-5.3's gate statics (K 6144) agree with the models; `dispatch_sm90` is vLLM's table; and each is pinned
 by gate count and program digest."""
 from __future__ import annotations
@@ -16,6 +17,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.batch import type_shape
 from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
+from verity.ml.circuits.ops import fp32 as W
+from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.registry import bf16_gemm_check as C
@@ -30,21 +33,27 @@ HOPW = word_of(HOP)
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
+    "LlBf16FmaStep_v1":
+        (2167, 3453, 201, "f6ded7743772c6c349b96e32f829ff932af4750b8774e1bb40bc75d68dcaa3b57820d91381f9d6229c2ff0657984fea9d91b074be401c67ef8233fc2c46bd084"),
+    "LlBf16MulAddStep_v1":
+        (1561, 2492, 191, "b14dad780cce876d2ab12111a04ac0d3dfc337a95890c7c91ac1ff57c225eb0acb7070c7445ebfc376cf84ef1c47a0f8d5e9a7a9f8b8d8ef6b8c0d3a57d80e62"),
     "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
         (47232, 90294, 4566, "3f63d9f7123b765e7ce6a1d981accb6b9bf30ddd8857db8c619cf9da3d3b461536d3ad9c6b0e0746417cb0853e5a4bde0c29cdbf3d6428e1d4adbf899040628b"),
     "BatchedGemm_v2{B=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
         (94860, 181176, 9222, "d1b876b03912d35319d3a8d818e86459dd37556f384e309a370e5cc1ff4c78b6eb17e6ef9fae3a98dca67af35d2616b69d93f55be5e51ba24777fee38f772ee4"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=1}":
-        (1200128, 2102208, 75712, "ee7e0114e6f337a91cdf018c646bc41aff5e1584c7e76e73bf50a65ee496802d95782138ddd400f412733638c7b0bf67860372befb9658fe89806b2f5af12ab6"),
+        (606720, 973248, 58816, "a7b83ce34457940e8ef318a1a9834c7d451004d9cf6752071277cdf704b83d6f70471a4284e427fe6ef2d835c250b6f03490e21f14dd48d682da82067d5468ff"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=0}":
-        (881920, 1636800, 64960, "7f0d8204e8d54979b80199893b83db241aa46354ee3748617db47bb8bccad0a29097299e0c2661441a11684a1818bbf6ab00a520e0820bad939210185b777098"),
+        (451584, 727232, 56256, "4513f97fa91da6198b5a9a3b6cf112723c6f5718ca3fcb9fcfe06ee6c474df22f97cb2f7ac231d58d8234768a15cb46bfb8649c8eefaa78230b6d1893ed2658a"),
     "LlBf16SplitKDot_v2{K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
         (67848, 128762, 6778, "438a7d3e324cfcb4d025466be392931c8872377c9019ee676a5331eb5b1212a59b859aec141b190fdd0ef9aa20b099fcb26685cf5c624bc54809978696ae59eb"),
     "LlBf16DotprodGemm_v2{N=2,K=128,BS=64,VEC=2,FMA=1}":
-        (1252096, 2191488, 83072, "bc236b02a555828cd9d0949abf47545bbe1ef47f6cef8ad18226fa0e779d4b83f3fba148483cbec06e38f002f5a270a42666d3f4922862643024a47ae7bd6b4f"),
+        (658688, 1062528, 66176, "5012d48a02849357a616fce904f2d516a20376c184e77089674ec5dc66b83b75ea249758b87b4664e00928ba4e7969f95ee3891b44267b7dbfadee18e560428c"),
     "LlBf16SplitKGemm_v2{N=2,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
         (135696, 257524, 13556, "aec7c44c327014f6ffd016196643cdc5618d4daf01e1b83b689234b67c61e45c4d2ce171218a4f54620f20b17e29ade587f157bea43d41fbac7f2e173e9feffb"),
 }
+#: the dotprod's steps, element Definitions with no word of their own
+STEPS = [bind(LL.LlBf16FmaStep), bind(LL.LlBf16MulAddStep)]
 PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
@@ -72,6 +81,13 @@ def _bf16_words(rng, shape, kind: str) -> np.ndarray:
     return x.reshape(shape)
 
 
+def _f32_words(rng, shape, kind: str) -> np.ndarray:
+    """f32 words of a kind: a bf16 word of it with random low bits, except on infinities and NaNs, which keep theirs."""
+    hi = _bf16_words(rng, shape, kind).astype(U32)
+    lo = rng.integers(0, 1 << 16, hi.shape).astype(U32)
+    return (hi << 16) | np.where((hi >> 7) & 0xFF == 0xFF, 0, lo).astype(U32)
+
+
 def _rows(rng, M: int, N: int, K: int) -> list[tuple[np.ndarray, np.ndarray]]:
     """(x (M, K), w (N, K)) of each kind."""
     return [(_bf16_words(rng, (M, K), k), _bf16_words(rng, (N, K), k)) for k in KINDS]
@@ -90,6 +106,7 @@ def test_every_definition_is_boolean_and_the_boolean_version_of_its_word() -> No
     for t in PINNED:
         assert BL.is_boolean(t), t.id
         assert boolean_version(word_of(t)).id == t.id
+    assert all(BL.is_boolean(t) for t in STEPS)
 
 
 @pytest.mark.parametrize("target", PINNED, ids=[t.id for t in PINNED])
@@ -102,6 +119,29 @@ def test_bits_agree_with_the_word(target) -> None:
         got = np.asarray(BS.evaluate_words(target, *args)).reshape(8, -1)
         want = np.array([evaluate(word, *(a[i].reshape(-1).astype(np.int64).tolist() for a in args)) for i in range(8)])
         assert np.array_equal(got.astype(np.int64), want.astype(np.int64)), (target.id, kind)
+
+
+#: each step's words: fma(f32(x), f32(w), acc), and acc + f32(x) * f32(w)
+STEP_WORDS = {"LlBf16FmaStep_v1": lambda x, w, acc: W.F32Fma.evaluate(P.Bf16ToF32.evaluate(x), P.Bf16ToF32.evaluate(w), acc),
+              "LlBf16MulAddStep_v1": lambda x, w, acc: W.F32Add.evaluate(acc, W.F32Mul.evaluate(P.Bf16ToF32.evaluate(x),
+                                                                                                P.Bf16ToF32.evaluate(w)))}
+
+
+@pytest.mark.parametrize("target", STEPS, ids=[t.id for t in STEPS])
+def test_steps_agree_with_their_words(target) -> None:
+    """The dotprod's steps on bits against `F32Fma_v1`, and `F32Mul_v1` then `F32Add_v1`, on the widened words: 256 instances of
+    each kind, and accumulators that cancel the product exactly (a bf16 product is exact in f32), where the sum's zero takes its
+    sign from the rounding mode."""
+    rng = np.random.default_rng(8)
+    word = STEP_WORDS[target.id]
+    cases = [(_bf16_words(rng, (256,), k), _bf16_words(rng, (256,), k), _f32_words(rng, (256,), k)) for k in KINDS]
+    x, w = _bf16_words(rng, (256,), "spread"), _bf16_words(rng, (256,), "spread")
+    product = (x.astype(U32) << 16).view(np.float32) * (w.astype(U32) << 16).view(np.float32)
+    cases.append((x, w, MK.u32(-product)))
+    for x, w, acc in cases:
+        got = np.asarray(BS.evaluate_words(target, x, w, acc)).astype(np.int64)
+        want = [word(int(a), int(b), int(c)) for a, b, c in zip(x, w, acc)]
+        assert np.array_equal(got, np.array(want, np.int64)), target.id
 
 
 @pytest.mark.parametrize("FMA", [1, 0])
@@ -205,7 +245,7 @@ def test_the_definitions_refuse_what_they_do_not_model() -> None:
         _ = bind(LL.LlBf16SplitKDot, K=64, SPLIT_K=3, TILE_K=32, WARPS=2, DOT=HOP).body
 
 
-@pytest.mark.parametrize("target", PINNED, ids=[t.id for t in PINNED])
+@pytest.mark.parametrize("target", STEPS + PINNED, ids=[t.id for t in STEPS + PINNED])
 def test_pinned_counts_and_digests(target) -> None:
     pin = PINS[target.id]
     prog, _ = standalone_call(target)
@@ -214,4 +254,4 @@ def test_pinned_counts_and_digests(target) -> None:
 
 
 def test_every_pin_is_a_target() -> None:
-    assert sorted(PINS) == sorted(t.id for t in PINNED)
+    assert sorted(PINS) == sorted(t.id for t in STEPS + PINNED)
