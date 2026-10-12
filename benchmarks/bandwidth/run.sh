@@ -10,7 +10,8 @@
 # `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's and keyed BLAKE3's known answers; every tag's roots
 # against the reference with the output buffers poisoned; a control without the tag kernel that must not match), then its
 # timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: honest windows through `audit.Verifier` at
-# DEADLINE_NS (default the largest it allows), and windows that tag only part of the store.  After the lease:
+# DEADLINE_NS (default the largest it allows), each after an untimed warm pass and a read scrub, and windows that tag
+# only part of the store.  After the lease:
 # `summarize.py`.
 # Env: BLOCKS (default 524,288, the certificate's store), SEED (hex, default 00..1f), REPS (default 100), WINDOWS (20),
 # DEADLINE_NS, WORKERS (the reference's processes, default 32), TIMED.

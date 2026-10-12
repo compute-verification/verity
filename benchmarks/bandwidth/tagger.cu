@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <vector>
 
 #define CK(x)                                                                                                  \
@@ -761,10 +762,17 @@ static int read_root(const Pass& p, uint8_t root[64], cudaStream_t st) {
   return 0;
 }
 
+static cudaEvent_t pass_events[3];
+
 static int tag_pass(const Pass& p, const void* E, const uint8_t seed[32], uint8_t root[64], cudaStream_t st,
                     uint64_t tagged) {
+  if (!pass_events[0])
+    for (cudaEvent_t& e : pass_events) CK(cudaEventCreate(&e));
+  CK(cudaEventRecord(pass_events[0], st));
   launch_tags(p, E, seed, tagged, st);
+  CK(cudaEventRecord(pass_events[1], st));
   launch_tree(p, st);
+  CK(cudaEventRecord(pass_events[2], st));
   CK(cudaGetLastError());
   return read_root(p, root, st);
 }
@@ -827,6 +835,14 @@ int bw_fill_test_store(void* store, uint64_t blocks) {
   return 0;
 }
 
+// The last pass's device time, from its first tag kernel to its root: the tags alone and the whole pass, in ms.
+int bw_last_pass_ms(float* tags_ms, float* pass_ms) {
+  if (!bw::pass_events[0]) return -1;
+  CK(cudaEventElapsedTime(tags_ms, bw::pass_events[0], bw::pass_events[1]));
+  CK(cudaEventElapsedTime(pass_ms, bw::pass_events[0], bw::pass_events[2]));
+  return 0;
+}
+
 // Block j's 2,056 bytes.
 int bw_read_block(const void* store, uint64_t j, uint8_t* out) {
   CK(cudaMemcpy(out, (const uint8_t*)store + j * bw::BLOCK_BYTES, bw::BLOCK_BYTES, cudaMemcpyDeviceToHost));
@@ -871,6 +887,8 @@ int bw_read_scrub(const void* buf, size_t bytes) {
 namespace {
 
 using bw::Pass;
+
+constexpr int IDLE_MS = 250;
 
 std::string hex(const uint8_t* b, size_t n) {
   static const char* d = "0123456789abcdef";
@@ -1112,18 +1130,21 @@ int main(int argc, char** argv) {
     CK(cudaMalloc(&ws, bw::workspace_bytes(tag, blocks)));
     Pass p = bw::make_pass(tag, blocks, ws);
     // cold: L2 full of dirty lines (a 512 MiB write); warm: whatever the last pass left; clean: L2 holding clean lines
-    // of another buffer (a 512 MiB read), which an honest prover can arrange before every window.
-    const char* const conds[3] = {"cold", "warm", "clean"};
-    for (int cond = 0; cond < 3; ++cond) {
+    // of another buffer (a 512 MiB read), which an honest prover can arrange before every window.  idle: clean after
+    // the GPU sat idle for IDLE_MS (as between the harness's windows, while the host opens and checks), at most 20 reps.
+    const char* const conds[4] = {"cold", "warm", "clean", "idle"};
+    for (int cond = 0; cond < 4; ++cond) {
       std::vector<double> dev, tags_ms, tree_ms, host;
-      for (int r = 0; r < reps; ++r) {
+      for (int r = 0; r < (cond == 3 ? std::min(reps, 20) : reps); ++r) {
         uint8_t s[32], root[64];
         memcpy(s, seed, 32);
         s[0] ^= (uint8_t)r;
         s[1] ^= (uint8_t)(r >> 8);
         s[2] ^= (uint8_t)(cond + 1);
         if (cond == 0) CK(cudaMemsetAsync(scrub, r & 0xff, scrub_bytes));
-        if (cond == 2) bw::read_kernel<<<prop.multiProcessorCount * 8, 512>>>((const uint4*)scrub, scrub_bytes / 16, sink);
+        if (cond == 3) std::this_thread::sleep_for(std::chrono::milliseconds(IDLE_MS));
+        if (cond >= 2)
+          bw::read_kernel<<<prop.multiProcessorCount * 8, 512>>>((const uint4*)scrub, scrub_bytes / 16, sink);
         CK(cudaDeviceSynchronize());
         auto h0 = std::chrono::steady_clock::now();
         CK(cudaEventRecord(e0));
