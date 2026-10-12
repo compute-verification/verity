@@ -2,9 +2,11 @@
 
 ~~~text
 field      p = 2^n − c, p ≡ 3 (mod 4), c the smallest such that p is prime: n = 256U − 1 for U = 1 … 5 (a word fills U
-           32-byte chunks, the tensor-core squaring's unit; 2^255 − 19 is 1 mod 4, so p255 = 2^255 − 765), and m521
-word       S = ⌈n/8⌉ bytes, little-endian, canonical (< p): 32U, and 66 for m521
-payload    B = ⌊(n − 1)/8⌋ bytes, little-endian (m < 2^(8B) < p): 32U − 1, and 65
+           32-byte chunks, the tensor-core squaring's unit; 2^255 − 19 is 1 mod 4, so p255 = 2^255 − 765), m521, and
+           the full-slot p512 = 2^512 − 569 and p768 = 2^768 − 825
+word       S = ⌈n/8⌉ bytes, little-endian, canonical (< p): 32U, 66 for m521, 64 and 96 for the full-slot fields
+payload    B = ⌊(n − 1)/8⌋ bytes, little-endian (m < 2^(8B) < p): 32U − 1, and 65; a full-slot field's payload is the
+           whole word, any m < p, which every S FP8 weights are unless the last is 0xFF (an E4M3 NaN)
 ρ(a)       Sloth's permutation: s = a^((p+1)/4); if s² = a the even one of {s, p − s}, else (s² = −a) the odd one
 ρ⁻¹(y)     y² if y is even, p − y² if y is odd: one squaring and the sign rule
 XOF(m)     SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ …
@@ -12,7 +14,7 @@ c_j        LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be j)[0 : S + 8]) mod p, j = 
 τ          the same at j = 2^32 − 1, and 1 in place of 0
 t(i)       τ · i mod p, i the word's index in the store
 round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the payload, decode rounds k − 1 … 0 inverted,
-           x ↦ ρ⁻¹(x) − c_j − t(i), and a word decodes only if the result is < 2^(8B)
+           x ↦ ρ⁻¹(x) − c_j − t(i), and a word decodes only if the result is < 2^(8B) (every word, at full slot)
 ~~~
 
 The seed is drawn after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
@@ -51,8 +53,16 @@ class Field:
         return -(-self.n // 8)
 
     @property
+    def full_slot(self) -> bool:
+        return self.n % 32 == 0
+
+    @property
     def payload_bytes(self) -> int:
-        return (self.n - 1) // 8
+        return self.n // 8 if self.full_slot else (self.n - 1) // 8
+
+    @property
+    def max_payload(self) -> int:
+        return self.p - 1 if self.full_slot else (1 << (8 * self.payload_bytes)) - 1
 
     @property
     def root_exp(self) -> int:
@@ -60,8 +70,9 @@ class Field:
 
 
 FIELDS = {f.name: f for f in (Field("p255", 255, 765), Field("p511", 511, 481), Field("m521", 521, 1),
-                               Field("p767", 767, 1081), Field("p1023", 1023, 361), Field("m1279", 1279, 1))}
-TASK_WORDS = {"p255": 265, "p511": 131, "m521": 128, "p767": 87, "p1023": 65, "m1279": 52}
+                               Field("p767", 767, 1081), Field("p1023", 1023, 361), Field("m1279", 1279, 1),
+                               Field("p512", 512, 569), Field("p768", 768, 825))}
+TASK_WORDS = {"p255": 265, "p511": 131, "m521": 128, "p767": 87, "p1023": 65, "m1279": 52, "p512": 128, "p768": 86}
 
 
 def field(name: str) -> Field:
@@ -74,7 +85,10 @@ def field(name: str) -> Field:
 def check_fields() -> None:
     for f in FIELDS.values():
         assert f.p % 4 == 3 and f.p.bit_length() == f.n
-        assert 1 << (8 * f.payload_bytes) < f.p
+        if f.full_slot:
+            assert f.payload_bytes == f.word_bytes and (1 << (8 * f.word_bytes)) - (1 << (8 * f.word_bytes - 8)) <= f.p
+        else:
+            assert 1 << (8 * f.payload_bytes) < f.p
         lw = TASK_WORDS[f.name]
         assert (lw * f.word_bytes) % 16 == 0 and lw * f.payload_bytes >= TASK_BYTES
 
@@ -138,8 +152,8 @@ def rho_inv(y: int, f: Field) -> int:
 
 def encode_word(m: int, i: int, k: Key) -> int:
     f = k.field
-    if not 0 <= m < 1 << (8 * f.payload_bytes):
-        raise ValueError(f"a payload is {f.payload_bytes} bytes")
+    if not 0 <= m <= f.max_payload:
+        raise ValueError(f"a payload is {f.payload_bytes} bytes" + (", below p" if f.full_slot else ""))
     t = k.tweak(i)
     x = m
     for c in k.c:
@@ -156,7 +170,7 @@ def decode_word(y: int, i: int, k: Key) -> int:
     x = y
     for c in reversed(k.c):
         x = (rho_inv(x, f) - c - t) % f.p
-    if x >> (8 * f.payload_bytes):
+    if x > f.max_payload:
         raise ValueError(f"word {i} decodes to no payload")
     return x
 
@@ -294,7 +308,7 @@ SHUF_ROUNDS = {1: 11, 2: 6, 3: 5, 4: 4, 5: 3}
 
 
 def tc_ok(f: Field) -> bool:
-    return f.word_bytes % 32 == 0
+    return f.word_bytes % 32 == 0 and f.n == 8 * f.word_bytes - 1
 
 
 def _lookahead(v: list[int], db: int) -> tuple[list[int], int]:

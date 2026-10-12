@@ -11,11 +11,12 @@ Nothing is timed before its gate passed, in this order:
   both at once in one CTA (`wt_mix`), decode and encode chains on CUDA cores;
 - `decode`: a store of `--store-gib` encoded on the device, its decode on CUDA and tensor cores equal to the payloads,
   then each decode timed (read, decode, XOR);
-- `gemm`: at Llama-3.1-8B's linears and batch 1-32, the fused kernel's partial sums equal the plain kernel's bit for bit,
-  the plain kernel's within FP32 rounding of torch's; then interleaved reps (each on cold weights, a ring of copies past
-  the L2, queued behind a spin kernel) of cuBLASLt FP8 (`torch._scaled_mm`), the plain FP8 kernel, the plain kernel with
-  `--mma-knobs` extra int8 MMAs a tile or `--imad-knobs` extra IMADs a tile a thread (the budget a decode on tensor or
-  CUDA cores has before it slows the memory-bound step), and the fused decode at k = 1 (and `--gemm-ks`).
+- `gemm`: at a Llama-3.1 model's linears (`--model`, 70B or 8B) and batch 1-32, the fused kernel's partial sums equal
+  the plain kernel's bit for bit, the plain kernel's within FP32 rounding of torch's; then interleaved reps (each on cold
+  weights, a ring of copies past the L2, queued behind a spin kernel) of cuBLASLt FP8 (`torch._scaled_mm`), the plain
+  FP8 kernel, the plain kernel with `--mma-knobs` extra int8 MMAs a tile or `--imad-knobs` extra IMADs a tile a thread
+  (the budget a decode on tensor or CUDA cores has before it slows the memory-bound step), and the fused decode at k = 1
+  (and `--gemm-ks`); per batch, the layer's time over native with each linear at its best arm.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ import importlib.util
 import json
 import os
 import random
+import re
 import statistics
 import sys
 import time
@@ -42,9 +44,11 @@ TAG_SEED = hashlib.sha256(b"verity/codec-tensor/bench/tag-seed").digest()   # th
 TAG_BASE = (1 << 32) + 3                                                      # E's index of a layer's first block
 B3_PER_BLOCK = (67, 72)        # compressions a block (4,096 message bytes): the fewest (64 chunk, 3 parent), and the
                                # tag warps' (4 lanes, 16 + 2 each)
-LAYERS = 32                    # Llama-3.1-8B's, for the tree's share of a layer
 PIPE_OPS = ("imad_wide", "imad", "iadd", "mac")   # wt_chain 5's ops
-SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
+MODELS = {   # Llama-3.1's layers (for the tree's share of a step) and linears (N, K)
+    "8b": (32, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}),
+    "70b": (80, {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)}),
+}
 BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
 SPIN_CYCLES = 20_000_000
@@ -133,6 +137,16 @@ def queued(lib: Lib, torch, fn) -> tuple[float, float]:
     return a.elapsed_time(b) / 1e3, h
 
 
+def sm_clock(lib: Lib, torch, cycles: int = 20_000_000) -> float:
+    """The SM clock (Hz) now: a one-thread spin of `cycles` clock64 ticks over its event time."""
+    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    a.record()
+    lib.call("wt_spin", cycles, stream(torch))
+    b.record()
+    b.synchronize()
+    return cycles / (a.elapsed_time(b) / 1e3)
+
+
 def limbs_bytes(x: int, nl: int) -> bytes:
     return x.to_bytes(4 * nl, "little")
 
@@ -163,9 +177,9 @@ def gate_codec(lib: Lib, torch, k: int, n_words: int, log) -> dict:
     key = W.key(f.name, SEED, k)
     set_key(lib, torch, key)
     rng = random.Random(7 + k + f.n)
-    top = (1 << (8 * f.payload_bytes)) - 1
+    top = f.max_payload
     payloads = [0, 1, 2, top, top - 1, 1 << (8 * f.payload_bytes - 1)]
-    payloads += [rng.getrandbits(8 * f.payload_bytes) for _ in range(n_words - len(payloads))]
+    payloads += [rng.randrange(top + 1) for _ in range(n_words - len(payloads))]
     base = (1 << 40) + 12345
     m = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in payloads))
     store = torch.zeros(n_words * f.word_bytes, dtype=torch.uint8, device="cuda")
@@ -391,7 +405,7 @@ def fused_cfgs(lib: Lib, spec: str) -> list[tuple[int, int, int]]:
     warp tags once its own work is done), each checked against wt_fused's bounds. `auto`: untagged, the most decoder
     warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1); tagged,
     0, 2, 4 and 6 of those warps tagging from the start, at 4 fewer stages."""
-    smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (lib.sb + 32)
+    smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (lib.sb + 40)
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":
@@ -466,10 +480,29 @@ def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int) -> dict:
 def mismatch(pf, pp, nch: int, mb: int, n: int, groups: int) -> dict:
     """Where a fused run's partial sums differ from the plain kernel's: the tasks (K chunk kc, row block g; the CTA
     (kc, g mod groups) takes it as its task g // groups) and how many of their elements."""
-    d = (pf.view(nch, mb, n) != pp.view(nch, mb, n)).any(1).view(nch, n // 16, 16).sum(2)
+    f, p = pf.view(nch, mb, n), pp.view(nch, mb, n)
+    d = (f != p).any(1).view(nch, n // 16, 16).sum(2)
     idx = d.nonzero().tolist()
-    tasks = [{"kc": kc, "g": g, "cta_g0": g % groups, "i": g // groups, "cols": int(d[kc, g])} for kc, g in idx[:12]]
-    return {"tasks": len(idx), "elements": int((pf != pp).sum()), "first": tasks}
+    nbs = n // 16
+
+    def task(kc, g):
+        fb, out = f[kc, :, 16 * g:16 * g + 16], {"kc": kc, "g": g, "cta_g0": g % groups, "i": g // groups,
+                                                  "cols": int(d[kc, g])}
+        out["zeros"] = int((fb == 0).sum())
+        out["equals_task"] = [j for j in range(-8, 9) if j and 0 <= g + groups * j < nbs
+                              and torch_equal(fb, p[kc, :, 16 * (g + groups * j):16 * (g + groups * j) + 16])]
+        return out
+
+    ctas = {}
+    for kc, g in idx:
+        ctas.setdefault((kc, g % groups), []).append(g // groups)
+    return {"tasks": len(idx), "elements": int((f != p).sum()), "per_kc": [int(v) for v in (d > 0).sum(1).tolist()],
+            "ctas": len(ctas), "per_cta": [{"kc": kc, "g0": g0, "i": v} for (kc, g0), v in list(ctas.items())[:6]],
+            "first": [task(kc, g) for kc, g in idx[:6]]}
+
+
+def torch_equal(a, b) -> bool:
+    return bool((a == b).all())
 
 
 def commit_time(lib: Lib, torch, nblk: int, reps: int) -> dict:
@@ -698,6 +731,25 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     return res
 
 
+def layer_ratios(gemm: dict, batches, ks) -> dict:
+    """Per batch, a layer's time over its native time with each linear at its best arm: the plain kernel, and per k the
+    fused decode untagged and tagged."""
+    out = {}
+    for mb in batches:
+        meds = [g["times"][mb]["median_s"] for g in gemm.values()]
+        native = sum(g["times"][mb]["native_s"] for g in gemm.values())
+        row = {"cublas": sum(m["cublas"] for m in meds) / native,
+               "plain": sum(min(v for a, v in m.items() if a.startswith("plain_")) for m in meds) / native}
+        for k in ks:
+            for tagged, label in ((False, f"fused_k{k}"), (True, f"fused_k{k}_tagged")):
+                arms = [[v for a, v in m.items() if a.startswith(f"fused_k{k}_")
+                         and bool(re.search(r"t\d+$", a)) == tagged] for m in meds]
+                if all(arms):
+                    row[label] = sum(min(v) for v in arms) / native
+        out[mb] = row
+    return out
+
+
 # --- analysis ----------------------------------------------------------------------------------------------------------
 
 def analysis(lib: Lib, read_gbps: float, r: dict) -> dict:
@@ -738,7 +790,8 @@ def main() -> int:
     ap.add_argument("--gate-words", type=int, default=256)
     ap.add_argument("--gate-reps", type=int, default=1,
                     help="runs of each fused gate; above 1, every batch is gated and a failure logs where it differs")
-    ap.add_argument("--shapes", default=",".join(SHAPES))
+    ap.add_argument("--model", default="70b", choices=sorted(MODELS))
+    ap.add_argument("--shapes", default="", help="the model's linears to run (default: all)")
     ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
     ap.add_argument("--gemm-libs", default="", help="field names the GEMM runs with (default: all)")
     ap.add_argument("--gemm-ks", default="1")
@@ -820,12 +873,12 @@ def main() -> int:
         save()
     if "pipes" in phases:
         xr = torch.zeros(1, dtype=torch.int64, device="cuda")
-        clock_hz = torch.cuda.clock_rate() * 1e6
-        res["pipes"] = {"clock_hz": clock_hz}
+        res["pipes"] = {}
         for op, name in enumerate(PIPE_OPS):
             r = max((dict(calibrated(torch, lambda s: libs[0].call("wt_chain", 5, 1, op, s, ptr(xr), sms * m,
                                                                    stream(torch)), sms * m * 128 * 8, 0.08, a.reps),
                           grid_per_sm=m) for m in (4, 8, 16)), key=lambda v: v["per_s"])
+            r["clock_hz"] = clock_hz = sm_clock(libs[0], torch)
             r["lanes_per_sm_clock"] = r["per_s"] / (sms * clock_hz)
             res["pipes"][name] = r
             log(f"pipe {name}: {r['per_s']:.3e}/s, {r['lanes_per_sm_clock']:.1f} lanes an SM a clock "
@@ -836,23 +889,31 @@ def main() -> int:
         ks = [int(k) for k in a.gemm_ks.split(",")]
         batches = [int(b) for b in a.batches.split(",")]
         knobs = ([int(v) for v in a.mma_knobs.split(",") if v], [int(v) for v in a.imad_knobs.split(",") if v])
+        layers, shapes = MODELS[a.model]
+        res["model"] = {"name": a.model, "layers": layers, "shapes": shapes}
         for lib in [l for l in libs if l.name in names]:
             e = res["libs"][lib.name]
             e["gemm"] = {}
-            for name in a.shapes.split(","):
-                n, kd = SHAPES[name]
+            for name in a.shapes.split(",") if a.shapes else shapes:
+                n, kd = shapes[name]
                 g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain),
                               fused_cfgs(lib, a.fused), *knobs, gate_reps=a.gate_reps)
                 e["gemm"][name] = g
                 res["ok"] &= g.get("ok", False)
                 save()
-            if all(g.get("ok") for g in e["gemm"].values()) and any(c[2] >= 0 for c in fused_cfgs(lib, a.fused)):
-                c = commit_time(lib, torch, LAYERS * sum(g["tag_blocks"] for g in e["gemm"].values()), a.reps)
+            if not all(g.get("ok") for g in e["gemm"].values()):
+                continue
+            e["layer"] = layer_ratios(e["gemm"], batches, ks)
+            for mb, row in e["layer"].items():
+                log(f"layer {lib.name} M={mb} ({'+'.join(e['gemm'])}): "
+                    + ", ".join(f"{kk} {v:.3f}" for kk, v in row.items()))
+            if any(c[2] >= 0 for c in fused_cfgs(lib, a.fused)):
+                c = commit_time(lib, torch, layers * sum(g["tag_blocks"] for g in e["gemm"].values()), a.reps)
                 for mb in batches:
-                    step = LAYERS * sum(g["times"][mb]["native_s"] for g in e["gemm"].values())
+                    step = layers * sum(g["times"][mb]["native_s"] for g in e["gemm"].values())
                     c.setdefault("y_commit", {})[mb] = (c["leaves_s"] + c["tree_s"]) / step
                 e["commit_step"] = c
-                log(f"commit {lib.name}: {c['blocks']} tags, {c['leaves']} leaves ({LAYERS} layers): leaves "
+                log(f"commit {lib.name}: {c['blocks']} tags, {c['leaves']} leaves ({layers} layers): leaves "
                     f"{c['leaves_s'] * 1e6:.0f} us, tree {c['tree_s'] * 1e6:.0f} us; y_commit "
                     + " ".join(f"M={mb}:{v:.3f}" for mb, v in c["y_commit"].items()))
                 save()

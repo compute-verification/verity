@@ -51,6 +51,11 @@ def test_fields():
         assert not any(_probably_prime((1 << f.n) - c) for c in range(1, f.c, 4)), f"{f.name}: c is the smallest"
         if W.tc_ok(f):
             assert f.n % 256 == 255 and (1 << (8 * f.word_bytes)) % f.p == 2 * f.c
+    assert [n for n, f in W.FIELDS.items() if f.full_slot] == ["p512", "p768"]
+    for name in ("p512", "p768"):
+        f = W.field(name)
+        top = int.from_bytes(b"\xff" * (f.word_bytes - 1) + b"\xfe", "little")
+        assert f.payload_bytes == f.word_bytes and top < f.p, "S weights fit unless the last is 0xFF"
     assert ((1 << 255) - 19) % 4 == 1
     with pytest.raises(ValueError, match="unknown field"):
         W.field("p256")
@@ -113,7 +118,7 @@ def test_word_round_trip(name, rounds):
     k = W.key(name, SEED, rounds)
     f = k.field
     rng = random.Random(f"{name}/{rounds}")
-    top = (1 << (8 * f.payload_bytes)) - 1
+    top = f.max_payload
     for m, i in [(0, 0), (top, 1), (1, (1 << 40) + 3)] + [(rng.randrange(top + 1), rng.randrange(1 << 32)) for _ in range(8)]:
         y = W.encode_word(m, i, k)
         assert 0 <= y < f.p
@@ -121,6 +126,8 @@ def test_word_round_trip(name, rounds):
         assert W.decode_word(y, i, k) == m
     with pytest.raises(ValueError, match="payload"):
         W.encode_word(top + 1, 0, k)
+    if f.full_slot:
+        return
     for _ in range(4096):
         y = rng.randrange(f.p)
         try:
@@ -132,7 +139,7 @@ def test_word_round_trip(name, rounds):
         pytest.fail("every random word decoded")
 
 
-@pytest.mark.parametrize("name", ["p255", "m521", "m1279"])
+@pytest.mark.parametrize("name", ["p255", "m521", "m1279", "p512", "p768"])
 def test_tasks_round_trip(name):
     k = W.key(name, SEED, 1)
     f = k.field
