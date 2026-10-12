@@ -18,15 +18,29 @@ CUBE = {"cube8192": (8192, 8192)}
 SHAPES = {**LLAMA31_8B, **CUBE}
 BATCHES = (1, 8, 32, 128, 512, 2048)
 LENGTH = 32
-#: the arms a point can run (`chain.ARMS` builds them); the native ones are the divisors
-NATIVE = ("native-bf16", "native-fp8")
+#: the arms a point can run (`chain.py` builds them); the native ones are the divisors: torch's GEMM, and the tuned arms' (the
+#: fastest correct cuBLASLt or CUTLASS GEMM at the point, `tuned.py`)
+TUNED = ("native-bf16-tuned", "native-fp8-tuned")
+NATIVE = ("native-bf16", "native-fp8", *TUNED)
 POUW = ("pearl-c", "pearl-c-deferred", "pearl-c-nohash")
 ARMS = NATIVE + POUW
+#: each arm's precision: its weights' format, and a native arm's activations' too
+PRECISION = {"native-bf16": "bf16", "native-bf16-tuned": "bf16", "native-fp8": "fp8", "native-fp8-tuned": "fp8",
+             "pearl-c": "fp8", "pearl-c-deferred": "fp8", "pearl-c-nohash": "fp8"}
 #: the bytes each arm's GEMM reads per weight element: BF16 W, E4M3 W, and Pearl-C's B̃ (E4M3 codes, formed once per install)
-WEIGHT_BYTES = {"native-bf16": 2, "native-fp8": 1, "pearl-c": 1, "pearl-c-deferred": 1, "pearl-c-nohash": 1}
-#: the divisor each arm's overhead is over: the plain GEMM of its precision (the PoUW panel's rule)
-DIVISOR = {"native-bf16": "native-bf16", "native-fp8": "native-fp8", "pearl-c": "native-fp8", "pearl-c-deferred": "native-fp8",
-           "pearl-c-nohash": "native-fp8"}
+WEIGHT_BYTES = {a: 2 if p == "bf16" else 1 for a, p in PRECISION.items()}
+
+
+def divisor(arm: str, seconds: dict[str, float]) -> str | None:
+    """The arm a point divides `arm`'s time by: the fastest native arm of its precision the point measured (the PoUW
+    panel's rule: the fastest plain GEMM of the precision), from each arm's median chain `seconds`."""
+    natives = [a for a in NATIVE if PRECISION[a] == PRECISION[arm] and a in seconds]
+    return min(natives, key=lambda a: (seconds[a], a)) if natives else None
+
+
+def fp8(arms: tuple[str, ...]) -> bool:
+    """Whether a native arm needs the E4M3 weights."""
+    return any(a in NATIVE and PRECISION[a] == "fp8" for a in arms)
 
 
 @dataclass(frozen=True)
@@ -91,7 +105,7 @@ def weight_bytes(n: int, k: int, length: int, arms: tuple[str, ...]) -> int:
     """Device memory the arms' weights hold at one shape: BF16 W (every arm's source), E4M3 W for the FP8 arm, and Pearl-C's
     weight side, about 4 bytes per element beside the BF16 (B̃, E_B's and F's codes, the tree)."""
     total = 2 * n * k * length
-    if "native-fp8" in arms:
+    if fp8(arms):
         total += n * k * length
     if any(a.startswith("pearl-c") for a in arms):
         total += 4 * n * k * length

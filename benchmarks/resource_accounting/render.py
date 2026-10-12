@@ -4,11 +4,12 @@ prints is stored, in Git or the evidence store.
   python render.py art:XXXXXXXX [--json]      the run's tree from the evidence store (``research data fetch``)
   python render.py OUT/chain.json [--json]
 
-Per point and arm: the chain's time (the median over reps), its overhead over its divisor (`sweep.DIVISOR`), useful TFLOP/s
-(2·B·n·k·L over the time, the batch's real rows only), the native GEMM rate at the shape (the native arms' GEMMs alone), and
-the device-memory rate the chain achieved, estimated as its weights' and activations' bytes read once over its time (a lower
-bound: the weights are at least twice the L2).  For the Pearl-C arms, `certified`'s columns: W_cert (as TFLOP/s-equivalent,
-2·W_cert over the time) and the compute residual's split as shares of F·T, with F the native FP8 chain's rate; Q_cert is
+Per point and arm: the chain's time (the median over reps), its overhead over its divisor (`sweep.divisor`: the fastest native
+arm of its precision the point measured, a tuned one among them), useful TFLOP/s (2·B·n·k·L over the time, the batch's real
+rows only), the native GEMM rate at the shape (the native arms' GEMMs alone), and the device-memory rate the chain achieved,
+estimated as its weights' and activations' bytes read once over its time (a lower bound: the weights are at least twice the
+L2).  The tuned arms' picks follow the table.  For the Pearl-C arms, `certified`'s columns: W_cert (as TFLOP/s-equivalent,
+2·W_cert over the time) and the compute residual's split as shares of F·T, with F the fastest native FP8 chain's rate; Q_cert is
 pending (times and raw rates only) and S_cert says why it is unproved.  Every residual is the weak form (`certified.RESIDUAL`).
 The retained pass's verdicts, when the run kept one, head the table.  A run with a PoUS arm (`chain.beside`) adds its section:
 the honest audit's answers against the limit while the chain ran, S_cert from the harness's storage profile with the
@@ -75,7 +76,7 @@ def load(source: str) -> tuple[dict, dict, dict | None, dict[str, dict]]:
 def bytes_read(p: dict, arm: str) -> int:
     """A chain's weights and activations, each read once: L·n·k at the arm's weight bytes, and per call B·k inputs (E4M3 for
     the FP8 arm, BF16 otherwise) and B·n BF16 outputs."""
-    x = 1 if arm == "native-fp8" else 2
+    x = 1 if arm in S.NATIVE and S.PRECISION[arm] == "fp8" else 2
     return p["length"] * (p["n"] * p["k"] * S.WEIGHT_BYTES[arm] + p["batch"] * (p["k"] * x + p["n"] * 2))
 
 
@@ -89,15 +90,16 @@ def rows(doc: dict) -> list[dict]:
             out.append({"key": p["key"], "error": (p.get("error") or p.get("skipped") or "").strip().splitlines()[-1:]})
             continue
         t = {a: r["median_s"] for a, r in p["arms"].items()}
-        fp8 = t.get("native-fp8")
+        fp8 = t.get(S.divisor("native-fp8", t))
         F = p["macs"] / fp8 if fp8 else None
         for arm in (a for a in S.ARMS if a in t):
             r, T = p["arms"][arm], t[arm]
-            div = t.get(S.DIVISOR[arm])
+            by = S.divisor(arm, t)
+            div = t.get(by)
             row = {"key": p["key"], "shape": p["shape"], "n": p["n"], "k": p["k"], "batch": p["batch"], "length": p["length"],
                    "arm": arm, "mode": r.get("mode", "graph"), "chains": r["chains"], "chain_ms": T * 1e3,
-                   "spread": (max(r["seconds"]) - min(r["seconds"])) / T if r["seconds"] else None,
-                   "overhead": None if div is None or arm == S.DIVISOR[arm] else T / div - 1,
+                   "spread": (max(r["seconds"]) - min(r["seconds"])) / T if r["seconds"] else None, "divisor": by,
+                   "overhead": None if div is None or arm == by else T / div - 1,
                    "useful_tflops": 2 * p["macs"] / T / 1e12,
                    "gemm_tflops": 2 * p["macs"] / t[arm + "-gemm"] / 1e12 if arm + "-gemm" in t else None,
                    "bytes_per_s": bytes_read(p, arm) / T,
@@ -566,6 +568,35 @@ def _verdict(line: str | None) -> str:
     return line.split()[0] + (f" ({drawn[1]}, of {drawn[2]} tiles)" if drawn else "")
 
 
+def tuned_lines(doc: dict) -> list[str]:
+    """The tuned arms' picks: per point, the GEMM each took, its time as the chain's L GEMMs alone, the candidates the gate
+    passed, and the fastest one the arm can't take."""
+    tuner = doc.get("tuner")
+    if tuner is None:
+        return []
+    if "error" in tuner:
+        return ["", f"Tuned arms: no tuner ({tuner['error'].strip().splitlines()[-1]})."]
+    libs = ", ".join(f"{x['prefix']} {x['version']}" for x in (tuner.get("versions") or {}).get("cublaslt_libs") or [])
+    lines = ["", (f"Tuned arms (tuned.py): every cuBLASLt heuristic candidate ({tuner['lt_candidates']} a library: {libs}) and "
+                  f"every CUTLASS kernel of the family ({tuner['cutlass_kernels']} in the registry, "
+                  f"{'in each tile order' if tuner['cutlass_sched'] else 'in its default tile order'}), gated bit-exactly by "
+                  "the PoUW harness's gate with its known-bad variants rejected, then timed as the chain's L GEMMs alone; "
+                  "the fastest eligible is the pick."),
+             "", "| point | arm | pick | library | L GEMMs ms | gated / tried | fastest ruled out |", "|---|---|---|---|---|---|---|"]
+    for p in doc["points"]:
+        for arm, t in (p.get("tuned") or {}).items():
+            where = f"{p['shape']} B={p['batch']} L={p['length']}"
+            if "pick" not in t:
+                why = (t.get("error") or "").strip().splitlines()[-1:]
+                lines.append(f"| {where} | {arm} | refused: {' '.join(why)} | | | | |")
+                continue
+            out = t.get("fastest_ineligible")
+            ruled = "–" if out is None else f"{out['name']} {out['ms']:.3f} ms ({out['library']}: no scale)"
+            lines.append(f"| {where} | {arm} | {t['pick']['name']} | {t['pick']['library']} | {t['pick']['ms']:.3f} | "
+                         f"{t['gated']} / {t['tried']} | {ruled} |")
+    return lines
+
+
 def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None, rounds: dict[str, dict] | None = None) -> str:
     ident, rr, p = doc.get("identity") or {}, doc.get("read_rate") or {}, pous(doc, result)
     hr = hosted(doc, rounds or {})
@@ -596,8 +627,10 @@ def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None,
             res = f"unproved ({r['compute_honest_overhead']:.1%} + ?)"
         q = "pending" if r["arm"] in S.POUW else "–"
         s = "none" if r["arm"] in S.POUW else "–"
+        over = ("the divisor" if r["arm"] == r["divisor"] else "–" if r["overhead"] is None
+                else f"{r['overhead']:+.1%} ÷ {r['divisor']}")
         lines.append(f"| {r['shape']} B={r['batch']} L={r['length']} | {r['arm']} | {r['mode']} | {r['chain_ms']:.3f} | "
-                     f"{_f(r['overhead'], '+.1%')} | {r['useful_tflops']:.1f} | {_f(r['gemm_tflops'], '.1f')} | "
+                     f"{over} | {r['useful_tflops']:.1f} | {_f(r['gemm_tflops'], '.1f')} | "
                      f"{r['bytes_per_s'] / 1e9:.0f} ({_f(r['read_share'], '.0%')}) | {wc} | {res} | {q} | {s} |")
     notes = sorted({r.get("w_unproved") for r in rows(doc) if r.get("w_unproved")})
     if notes:
@@ -607,10 +640,11 @@ def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None,
               *q_cert_lines(ident),
               "S_cert: " + (C.NO_POUS if p is None and hr is None else
                             "the table's chains ran alone; the PoUS sections' ran beside or inside its audit") + ".",
-              (f"Compute {C.RESIDUAL}: F·T − W_cert as a share of F·T (F the native FP8 chain's rate at the shape, T the arm's "
+              (f"Compute {C.RESIDUAL}: F·T − W_cert as a share of F·T (F the fastest native FP8 chain's rate at the point, T the arm's "
                "chain time), split into honest overhead (F·T − ΣW_ref) and soundness slack (ΣW_ref − W_cert). Every residual "
                "here is CovertResidual's weak form, worst case over each audit's own coins, not a per-run covert bound; lane "
                "ra-per-run is proving the per-run form.")]
+    lines += tuned_lines(doc)
     if p is not None:
         lines += pous_lines(p)
     if hr is not None:

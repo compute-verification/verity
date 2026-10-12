@@ -1,7 +1,8 @@
 """The matmul chain on one RTX PRO 6000 (sm_120), native and under Pearl-C, rep by rep: what `run.sh` runs under its lease.
 
   python chain.py --out OUT/chain.json [--shapes o,qkv,gate_up,down,cube8192] [--batches 1,8,32,128,512,2048] [--lengths 32]
-      [--arms native-bf16,native-fp8,pearl-c,...] [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
+      [--arms native-bf16,native-fp8,pearl-c,...] [--tuned-lib BUILD/libpouw_harness.so]
+      [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
       [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25] [--beside DIR --beside-cmd CMD [--beside-log F] [--beside-cpus V,R] [--beside-idle]]
       [--probe] [--rounds separate,inproc,joint,joint-v1 [--tagger libbwtag.so] [--pause-every none,10,100,1000,10-noprep]
        --host-bench benchmarks/pous/bench.py ARGS...]
@@ -14,6 +15,9 @@ repeated when n < k), then SiLU and an RMS norm, so every call sees inputs of on
 * ``native-bf16``, ``native-fp8``: torch's cuBLAS GEMM (`torch.nn.functional.linear` in BF16; `torch._scaled_mm` on E4M3
   weights with a per-tensor scale and E4M3 activations at scale 1), the whole chain, act included, as one CUDA graph.  Their
   GEMMs alone (the chain's L GEMMs on one input, also one graph) give the native GEMM rate at the shape.
+* ``native-bf16-tuned``, ``native-fp8-tuned``: the same chain, each GEMM the fastest correct cuBLASLt or CUTLASS GEMM of its
+  precision at the point (`tuned.py`, through the PoUW harness's library, ``--tuned-lib``), on buffers of its own.  A
+  point's overhead is over the fastest native arm of the arm's precision that it measured (`sweep.divisor`).
 * ``pearl-c``: `pouw_pearl_c_device.PearlCDeviceRun` (`pearl-c-sm120-v1-h3`, the served runtime as is) on the chain's
   weights, one install per shape (its weight side and epoch), one pass per item, serial schedule.  Calls of B rows run as
   fast as the runtime allows: the chain captured whole into one CUDA graph (`whole_capture_begin`; B a multiple of 16 and
@@ -152,12 +156,13 @@ class Act:
         import torch
         self.k, self.idx = k, None if n >= k else torch.arange(k, device=device) % n
 
-    def __call__(self, y, dtype):
+    def __call__(self, y, dtype, out=None):
+        """x as `dtype`, or into `out` (of that dtype: the same cast, in place)."""
         import torch
         z = y[:, :self.k] if self.idx is None else y.index_select(1, self.idx)
         z = torch.nn.functional.silu(z.float())
         z = z * torch.rsqrt(z.pow(2).mean(1, keepdim=True) + 1e-6)
-        return z.to(dtype)
+        return z.to(dtype) if out is None else out.copy_(z)
 
 
 def rel_rms(a, b) -> float:
@@ -194,7 +199,7 @@ class Native:
     def __init__(self, arm: str, W: Weights, act: Act, x0):
         import torch
         self.arm, self.W, self.act = arm, W, act
-        self.dtype = torch.bfloat16 if arm == "native-bf16" else torch.float8_e4m3fn
+        self.dtype = torch.bfloat16 if S.PRECISION[arm] == "bf16" else torch.float8_e4m3fn
         self.x0 = x0.to(self.dtype)
         self.x = self.x0.clone()
         self.chain, self.gemms, self.eager = self._graph(self._chain), self._graph(self._gemms), None
@@ -229,7 +234,7 @@ class Native:
         self.chain[0].replay()
         torch.cuda.synchronize()
         ref = self.x0.float() @ (self.W.bf16[0].float().T)
-        first = self.W.mm(self.arm, 0, self.x0)
+        first = self.first()
         err = rel_rms(first, ref)
         self.eager = eager
         return {"check": "native", "arm": self.arm, "rel_rms_first_call": err, "graph_equals_eager": bool(torch.equal(eager, self.chain[1])),
@@ -261,8 +266,79 @@ class Native:
             out["held_s"] = z.elapsed_time(a) / 1e3
         return out
 
-    def final(self):
-        return self.chain[1]
+    def first(self):
+        """The first call alone on x_0."""
+        return self.W.mm(self.arm, 0, self.x0)
+
+    def close(self) -> None:
+        pass
+
+
+class Tuned(Native):
+    """A tuned native arm at one batch: `Native`'s chain and GEMMs alone, each GEMM the point's pick (`tuned.Tuner`), on
+    buffers of its own: x_i (x_L the last act's, as `Native` computes it too) and y_i."""
+
+    def __init__(self, arm: str, W: Weights, act: Act, x0, tuner):
+        import torch
+        self.arm, self.W, self.act = arm, W, act
+        self.dtype = torch.bfloat16 if S.PRECISION[arm] == "bf16" else torch.float8_e4m3fn
+        self.x0 = x0.to(self.dtype)
+        self.x = self.x0.clone()
+        m, L = self.x0.shape[0], W.length
+        self.xs = [self.x] + [torch.empty(m, W.k, dtype=self.dtype, device="cuda") for _ in range(L)]
+        self.ys = [torch.empty(m, W.n, dtype=torch.bfloat16, device="cuda") for _ in range(L)]
+        fp8 = S.PRECISION[arm] == "fp8"
+        operands = (W.fp8 if fp8 else W.bf16, W.scale if fp8 else None, W.one)
+        self.pick = tuner.pick(arm, *operands, self.x0, self.ys)
+        self.calls = self.gemm_calls = []
+        try:
+            self.calls = tuner.calls(self.pick, self.pick.shape, *operands, self.xs[:L], self.ys)
+            self.gemm_calls = tuner.calls(self.pick, self.pick.shape, *operands, [self.x0] * L, self.ys)
+            self.chain, self.gemms, self.eager = self._graph(self._chain), self._graph(self._gemms), None
+        except Exception:
+            self.close()
+            raise
+
+    @staticmethod
+    def _stream() -> int:
+        import torch
+        return torch.cuda.current_stream().cuda_stream
+
+    def _chain(self):
+        self.x.copy_(self.x0)
+        s = self._stream()
+        for i, call in enumerate(self.calls):
+            call.launch(s)
+            self.act(self.ys[i], self.dtype, out=self.xs[i + 1])
+        return self.ys[-1]
+
+    def _gemms(self):
+        s = self._stream()
+        for call in self.gemm_calls:
+            call.launch(s)
+        return self.ys[-1]
+
+    def first(self):
+        self.gemm_calls[0].launch(self._stream())
+        return self.ys[0].clone()
+
+    def close(self) -> None:
+        for call in (*self.calls, *self.gemm_calls):
+            call.free()
+        self.calls = self.gemm_calls = []
+
+
+#: the run's tuner (`tuned.Tuner`), when an arm is tuned
+TUNER = None
+
+
+def native(arm: str, W: Weights, act: Act, x0) -> Native:
+    """A native arm at one batch: torch's GEMM, or a tuned arm's pick (`TUNER`)."""
+    if arm in S.TUNED:
+        if TUNER is None:
+            raise RuntimeError(f"{arm} needs the PoUW harness's library (--tuned-lib), and this run has no tuner")
+        return Tuned(arm, W, act, x0, TUNER)
+    return Native(arm, W, act, x0)
 
 
 class Issued:
@@ -474,10 +550,14 @@ def run_point(p: S.Point, arms: tuple[str, ...], W: Weights, act: Act, pc: Pearl
     finals: dict[str, object] = {}
     for arm in (a for a in arms if a in S.NATIVE):
         try:
-            nat = Native(arm, W, act, x0)
+            nat = native(arm, W, act, x0)
+            if isinstance(nat, Tuned):
+                out.setdefault("tuned", {})[arm] = nat.pick.record
             gate = nat.gates()
         except Exception as ex:  # noqa: BLE001 - the arm is refused at this point, recorded
             out["refused"][arm] = f"{type(ex).__name__}: {ex}"
+            if arm in S.TUNED:
+                out.setdefault("tuned", {}).setdefault(arm, {})["error"] = traceback.format_exc(limit=6)
             continue
         out["gates"].append(gate)
         if not gate["ok"]:
@@ -547,6 +627,8 @@ def run_point(p: S.Point, arms: tuple[str, ...], W: Weights, act: Act, pc: Pearl
         if rec["roots"]:
             rec["roots_repeat"] = len(set(rec["roots"])) == 1
             rec["roots"] = sorted(set(rec["roots"]))
+    for item in {id(v): v for v in items.values() if isinstance(v, Native)}.values():
+        item.close()
     del items, finals, refs
     return out
 
@@ -599,7 +681,7 @@ class Turns:
         pts = [p for p in group if p.key in self.plans]
         self.keys, self.pc, self.i = [p.key for p in pts], pc, 0
         self.x0s = {p.key: chain_input(p, act) for p in pts}
-        self.natives = {(p.key, arm): Native(arm, W, act, self.x0s[p.key]) for p in pts for arm in arms if arm in S.NATIVE
+        self.natives = {(p.key, arm): native(arm, W, act, self.x0s[p.key]) for p in pts for arm in arms if arm in S.NATIVE
                         and arm in self.plans[p.key]["arms"]}
         self.turns = [(p, arm, m) for p in pts for arm, m in self.plans[p.key]["arms"].items() if not arm.endswith("-gemm")
                       and (arm not in S.NATIVE or (p.key, arm) in self.natives) and (arm in S.NATIVE or pc is not None)]
@@ -649,6 +731,8 @@ class Turns:
         return points
 
     def close(self) -> None:
+        for nat in self.natives.values():
+            nat.close()
         self.natives.clear()
 
 
@@ -870,17 +954,20 @@ def run_probe(a, group: list[S.Point], W: Weights, act: Act, measured: list[dict
         return {"error": "no point of the shape was measured alone"}
     p = min(pts, key=lambda q: q.batch)
     x0 = chain_input(p, act)
-    natives = {arm: Native(arm, W, act, x0) for arm in S.NATIVE if arm in plans[p.key]["arms"]}
+    natives = {arm: native(arm, W, act, x0) for arm in S.NATIVE if arm in plans[p.key]["arms"]}
     argv = a.host_bench[1:] if a.host_bench else []
     cpus = [flag(argv, "--verifier-cpu"), flag(argv, "--responder-cpu")] if argv else (a.beside_cpus or "").split(",")
     try:
         return {"point": p.key, **P.run(natives, {arm: plans[p.key]["arms"][arm]["chains"] for arm in natives}, uuid,
                                         {int(x) for x in cpus if x})}
     finally:
+        for nat in natives.values():
+            nat.close()
         natives.clear()
 
 
 def main(argv: list[str] | None = None) -> int:
+    global TUNER
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path)
     ap.add_argument("--shapes", default="o,qkv,gate_up,down,cube8192")
@@ -908,6 +995,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pause-every", default="none,10,100,1000,10-noprep",
                     help="the joint-v1 round's window cadences in turn: none, <ms> of chain, or <ms>-noprep (no preparation)")
     ap.add_argument("--pause-segment-s", type=float, default=2.5, help="the joint-v1 round's seconds a segment")
+    ap.add_argument("--tuned-lib", default=os.environ.get("POUW_HARNESS_LIB"),
+                    help="the PoUW harness's libpouw_harness.so (its build.json beside it), for the tuned arms (tuned.py)")
     ap.add_argument("--probe", action="store_true",
                     help="after the first shape's points, time its smallest batch's native chains by stream and beside a "
                          "second CUDA process (probe.py)")
@@ -945,6 +1034,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.out is None:
         ap.error("--out is required")
+    if set(arms) & set(S.TUNED) and not a.tuned_lib:
+        ap.error("the tuned arms need --tuned-lib (or POUW_HARNESS_LIB)")
     import torch
     start = time.perf_counter()
     uuid = (os.environ.get("GPU_LEASE_UUID") or "").split(",")[0] or None
@@ -962,6 +1053,13 @@ def main(argv: list[str] | None = None) -> int:
     over = lambda: left() < 0
     with torch.inference_mode():
         doc["read_rate"] = read_rate()
+        if set(arms) & set(S.TUNED):
+            import tuned as T
+            try:
+                TUNER = T.Tuner(a.tuned_lib, uuid=uuid)
+                doc["tuner"] = TUNER.record
+            except Exception:  # noqa: BLE001 - the tuned arms are refused at every point, recorded
+                doc["tuner"] = {"error": traceback.format_exc(limit=6)}
         save(a.out, doc)
         kernel = None
         if a.kernel and any(x in S.POUW for x in arms):
@@ -980,7 +1078,7 @@ def main(argv: list[str] | None = None) -> int:
             rec = doc["shapes"][f"{name}-L{length}"] = {"n": n, "k": k, "length": length,
                                                         "weight_bytes": S.weight_bytes(n, k, length, arms)}
             try:
-                W = Weights(n, k, length, "native-fp8" in arms, SEED + epoch)
+                W = Weights(n, k, length, S.fp8(arms), SEED + epoch)
             except torch.OutOfMemoryError:
                 rec["refused"] = traceback.format_exc(limit=2)
                 print(f"chain: {name}-L{length} refused: its weights don't fit", flush=True)

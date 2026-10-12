@@ -23,6 +23,10 @@
 # IMPL=p2-v3-mc-gpu BENCH_HOST='chain.py ...', which measures the shape's points alone in the harness's venv and then runs
 # each round with the chain as the honest audit's load. POUS_AUDITS (default 100 here), POUS_WS and POUS_SEGMENTS as for
 # POUS=1; the outputs go to $OUT/pous, each round's harness under $OUT/pous/bench/<round>. PROBE=1 adds chain.py --probe.
+# TUNED=<build dir|art:id> (ARMS with native-bf16-tuned or native-fp8-tuned) is the PoUW harness's library for the tuned
+# arms (tuned.py), a build.sh output such as `pouw-harness-build/v1`: before the lease its jobs/env.sh gives the cuBLASLt and
+# CUDA runtime 12.9 wheels it links (sonames .so.12, which torch's .so.13 never resolve to) on LD_LIBRARY_PATH, and
+# POUW_HARNESS_LIB, for chain.py in either mode; its build.json goes to $OUT/tuned-build.json.
 # Scratch (the ship's check fixture, the retained passes) is a mktemp -d under /workspace/tmp, deleted on exit.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}/out}; mkdir -p "$OUT"
@@ -35,6 +39,17 @@ LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}
 stamp() { echo "ra-matmul: $* at $(date -u +%H:%M:%SZ)"; }
 export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
+
+case ",$ARMS," in *-tuned,*)
+  [ -n "${TUNED:-}" ] || { stamp "RUN_FAIL_TUNED: a tuned arm needs TUNED=<build dir|art:id>"; exit 2; }
+  stamp "the PoUW harness's library for the tuned arms"
+  TUNED_ENV=$(bash -c '. benchmarks/pouw/harness/jobs/env.sh "$1" >&2 && printf "%s\n%s\n" "$POUW_HARNESS_LIB" "$LD_LIBRARY_PATH"' \
+    _ "$TUNED" 2> "$OUT/tuned-env.log") || { stamp "RUN_FAIL_TUNED_ENV"; tail -20 "$OUT/tuned-env.log"; exit 15; }
+  POUW_HARNESS_LIB=$(sed -n 1p <<< "$TUNED_ENV"); LD_LIBRARY_PATH=$(sed -n 2p <<< "$TUNED_ENV")
+  export POUW_HARNESS_LIB LD_LIBRARY_PATH
+  cp "${POUW_HARNESS_LIB%/*}/build.json" "$OUT/tuned-build.json"
+  ;;
+esac
 
 if [ -n "${JOINT:-}" ]; then
   [ -z "${POUS:-}" ] || { stamp "RUN_FAIL_JOINT: JOINT and POUS are two modes"; exit 2; }

@@ -4,9 +4,14 @@ A chain of L dependent calls y_{i+1} = act(W_i · y_i), every W_i its own weight
 layer shapes and one cube, timed on one RTX PRO 6000 (sm_120) natively and under the protocols, with what each run
 certifies beside what it did.
 
-- `sweep.py`: the plan, pure: the shapes, batches, chain length, arms and each arm's divisor.
+- `sweep.py`: the plan, pure: the shapes, batches, chain length, arms and each arm's divisor (the fastest native arm of its
+  precision the point measured).
 - `chain.py`: the runner on the GPU (its docstring says what each arm runs, the gates and the timing); `--plan` lists the
   points without a GPU.
+- `tuned.py`: the tuned native arms' GEMM at each point, the fastest correct one of the precision: every cuBLASLt
+  heuristic candidate and CUTLASS kernel the PoUW harness's library (`benchmarks/pouw/harness`) has, gated bit-exactly by
+  its gate with the known-bad variants rejected, then timed as the chain's L GEMMs on the chain's own operands. The FP8
+  chain's weights have a per-tensor scale, which the registry's plain FP8 kernels don't read, so its pick is cuBLASLt's.
 - `certified.py`: the certified columns, pure: γ from the pinned price twins (`benchmarks/pouw/harness/price_twins.py`,
   the larger of the two prices; only at a cube, so W_cert is unproved at the Llama shapes), W_cert = (1 − γ)(1 − εs)·ΣWref
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
@@ -29,7 +34,8 @@ certifies beside what it did.
   `JOINT=separate,inproc,joint,joint-v1` (one shape, native arms, `--cwd clone`) instead runs `chain.py` inside the
   harness's process (`pod.sh BENCH_HOST`), one harness run a round with the chain as its honest audit's load: its
   responder in a process of its own, or a thread of the chain's (no MPS), and the joint rounds with `joint.py`'s arms.
-  `PROBE=1` adds `probe.py` once the shape's points are measured alone.
+  `PROBE=1` adds `probe.py` once the shape's points are measured alone. A tuned arm in `ARMS` needs `TUNED=<build dir|art:id>`,
+  the harness's library as its `native/build.sh` makes it (`pouw-harness-build/v1`).
 - `render.py`: the table, from a run's `art:` id (or a local `chain.json`), on demand, with the PoUS section when the run
   had that arm, the rounds' (the responder's isolation, the chain's time in each, (d), (e) and (f)) when it hosted the
   harness, and the probe's. No table is stored.
@@ -48,4 +54,4 @@ python benchmarks/resource_accounting/render.py art:<id>
 
 The tests (`tests/`) run the pure parts only: the plan, the certified columns against the pinned twins, the PoUS arm's
 S_cert and capacity residual, `joint.py`'s windows and pause hook over a CPU prover (its verifier a thread, and once a
-process), the probe's summaries, and the table from a synthetic run.
+process), the probe's summaries, the tune's finalists and the divisor rule, and the table from a synthetic run.

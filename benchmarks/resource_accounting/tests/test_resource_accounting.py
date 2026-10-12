@@ -119,6 +119,66 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert "not a per-run covert bound; lane ra-per-run is proving the per-run form" in md
 
 
+def test_an_arm_divides_by_the_fastest_native_of_its_precision_the_point_measured():
+    """The divisor is the fastest plain GEMM of the arm's precision (the PoUW panel's rule): a tuned arm that beats torch's
+    is Pearl-C's divisor and F, torch's own arm is shown over it, and a tuned arm torch beats divides by torch's."""
+    assert S.divisor("pearl-c", {"native-fp8": 2.0, "native-fp8-tuned": 1.5, "native-bf16-tuned": 1.0}) == "native-fp8-tuned"
+    assert S.divisor("native-bf16-tuned", {"native-bf16": 1.0, "native-bf16-tuned": 1.2}) == "native-bf16"
+    assert S.divisor("pearl-c", {"native-bf16": 1.0}) is None
+    assert S.fp8(("native-bf16", "native-fp8-tuned")) and not S.fp8(("native-bf16-tuned", "pearl-c"))
+    assert S.weight_bytes(16, 16, 2, ("native-fp8-tuned",)) == 2 * 16 * 16 * 2 + 16 * 16 * 2
+    doc = _doc()
+    cube = doc["points"][0]
+    cube["arms"] |= {"native-fp8-tuned": _arm(0.0016), "native-fp8-tuned-gemm": _arm(0.0015)}
+    t = {"pick": {"name": "lt13_fp8-e4m3_0_2_algo66_tile20", "library": "lt13", "ms": 1.5}, "gated": 40, "tried": 52,
+         "fastest_ineligible": {"name": "cutlass3x_fp8_128x128", "library": "cutlass", "ms": 1.4, "ineligible": "no scale"}}
+    cube["tuned"] = {"native-fp8-tuned": t}
+    doc["points"][1]["tuned"] = {"native-fp8-tuned": {"error": "Traceback ...\nRuntimeError: no eligible candidate"}}
+    doc["tuner"] = {"lt_candidates": 32, "cutlass_kernels": 30, "cutlass_sched": True,
+                    "versions": {"cublaslt_libs": [{"prefix": "lt", "version": 120902}, {"prefix": "lt13", "version": 130101}]}}
+    by = {(r["key"], r["arm"]): r for r in R.rows(doc) if "arm" in r}
+    key = "cube8192-n8192-k8192-b32-L32"
+    assert by[(key, "pearl-c")]["divisor"] == "native-fp8-tuned"
+    assert by[(key, "pearl-c")]["overhead"] == pytest.approx(0.0030 / 0.0016 - 1)
+    assert by[(key, "native-fp8")]["overhead"] == pytest.approx(0.0020 / 0.0016 - 1)
+    assert by[(key, "native-fp8-tuned")]["overhead"] is None
+    assert by[(key, "native-fp8-tuned")]["bytes_per_s"] == by[(key, "native-fp8")]["bytes_per_s"] * 0.0020 / 0.0016
+    plain = {(r["key"], r["arm"]): r for r in R.rows(_doc()) if "arm" in r}
+    assert by[(key, "pearl-c")]["w_cert"] == plain[(key, "pearl-c")]["w_cert"]
+    assert by[(key, "pearl-c")]["compute_residual"] > plain[(key, "pearl-c")]["compute_residual"]
+    md = R.markdown(doc, {}, "fixture")
+    assert "| +87.5% ÷ native-fp8-tuned |" in md and "| cube8192 B=32 L=32 | native-fp8-tuned | graph | 1.600 | the divisor |" in md
+    assert "(32 a library: lt 120902, lt13 130101) and every CUTLASS kernel of the family (30 in the registry, in each tile" in md
+    assert ("| cube8192 B=32 L=32 | native-fp8-tuned | lt13_fp8-e4m3_0_2_algo66_tile20 | lt13 | 1.500 | 40 / 52 | "
+            "cutlass3x_fp8_128x128 1.400 ms (cutlass: no scale) |") in md
+    assert "| o B=1 L=32 | native-fp8-tuned | refused: RuntimeError: no eligible candidate | | | | |" in md
+    doc["tuner"] = {"error": "Traceback\nOSError: libcublasLt.so.12: cannot open shared object file"}
+    assert "Tuned arms: no tuner (OSError: libcublasLt.so.12: cannot open shared object file)." in R.markdown(doc, {}, "fixture")
+
+
+def test_the_tune_takes_the_fastest_eligible_and_times_each_library_s_best_beside_it():
+    """The finalists are the fastest eligible screened candidates and each library's fastest eligible one; the kind-1
+    registry kernels, which read no scale, are not the FP8 chain's."""
+    T = _load("tuned")
+
+    class Cand:
+        def __init__(self, source, cutlass=None, **config):
+            self.source, self.cutlass, self.config = source, cutlass, config
+
+    assert T.ineligible("fp8-e4m3", Cand("cutlass", cutlass=3)) and T.ineligible("fp8-e4m3", Cand("verity", cutlass=9))
+    assert T.ineligible("fp8-e4m3", Cand("cublaslt", library="lt")) is None and T.ineligible("bf16", Cand("cutlass", 3)) is None
+    assert T.library(Cand("cublaslt", library="lt13")) == "lt13" and T.library(Cand("cutlass", 3)) == "cutlass"
+    timed = [{"name": "a", "library": "lt", "ms": 1.0, "ineligible": None},
+             {"name": "b", "library": "lt", "ms": 0.9, "ineligible": None},
+             {"name": "c", "library": "lt", "ms": 1.1, "ineligible": None},
+             {"name": "d", "library": "lt", "ms": 1.2, "ineligible": None},
+             {"name": "e", "library": "lt13", "ms": 1.5, "ineligible": None},
+             {"name": "f", "library": "cutlass", "ms": 0.5, "ineligible": "no scale"},
+             {"name": "g", "library": "cutlass", "ms": None, "ineligible": None, "error": "prepare"}]
+    assert [t["name"] for t in T.finalists(timed)] == ["b", "a", "c", "e"]
+    assert T.finalists(timed[5:]) == []
+
+
 def test_render_reads_a_chain_json_and_refuses_another_schema(tmp_path):
     p = tmp_path / "chain.json"
     p.write_text(json.dumps(_doc()))
