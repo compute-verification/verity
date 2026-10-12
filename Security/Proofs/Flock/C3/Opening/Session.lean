@@ -96,7 +96,7 @@ theorem openingRead_of_session (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
   intro R ω t R₂ τ o hacc
   obtain ⟨op, hop, hsh', hw, ⟨S, gs, sess, un, cp, hS, hg, hparts⟩, ⟨acc, sessA, unA, cpA, hopen, hcoef, hrd⟩⟩ :=
     hsess R ω t R₂ τ o hacc
-  obtain ⟨-, a, b, src, lins, k₁, res, bs, -, -, ha, hb, hrun, hbuild, hSeq, hv, hk⟩ := opening_ok hop
+  obtain ⟨_, a, b, src, lins, k₁, res, bs, _, _, ha, hb, hrun, hbuild, hSeq, hv, hk⟩ := opening_ok hop
   rw [hsh'] at ha hb hrun hbuild hSeq
   rw [hk] at hcoef
   obtain rfl := Except.ok.inj (hS.symm.trans hSeq)
