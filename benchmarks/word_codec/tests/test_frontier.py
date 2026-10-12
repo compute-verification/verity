@@ -144,6 +144,14 @@ def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
                     ("t", 1, 1, False): 1.0}
 
 
+def test_best_per_config_with_a_budget_prefers_a_point_at_x_at_least_x_star():
+    # d − τ = 1.2 − 0.6 + 0.37: x* 194 with nothing read back; the 1.1 point reads back 0.2% of E (x* 323 > 230)
+    pts = F.check([point(y_total=1.1, ingress=0.002), point(y_total=1.2), point(k=2, y_total=1.5, ingress=0.002)])
+    best = {p["k"]: p["y_total"] for p in F.best_per_config(pts, 0.005, idle=0.37, boost=1.0)}
+    assert best == {1: 1.2, 2: 1.5}
+    assert {p["y_total"] for p in F.best_per_config(pts)} == {1.1, 1.5}
+
+
 def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the_serial_one():
     import types
 

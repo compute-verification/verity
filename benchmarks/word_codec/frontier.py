@@ -264,15 +264,21 @@ def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = 
     return "\n".join(lines)
 
 
-def best_per_config(points: list[dict]) -> list[dict]:
+def admissible(p: dict, budget: float, d: float | None = None, idle: float = IDLE_8B, boost: float = BOOST) -> bool:
+    return not p.get("reference") and x_eff(p, boost) >= x_star_of(p, budget, d, idle)
+
+
+def best_per_config(points: list[dict], budget: float | None = None, d: float | None = None, idle: float = IDLE_8B,
+                    boost: float = BOOST) -> list[dict]:
     """The lowest y_total of each (lane, b, k, batch, measured, reference): one bar per configuration, whichever run,
-    arithmetic or kernel variant gave it."""
+    arithmetic or kernel variant gave it; with `budget`, the lowest of its points at x ≥ x* if it has any."""
     best = {}
     for p in points:
         key = (p.get("lane"), p["b"], p["k"], p["batch"], bool(p["measured"]), bool(p.get("reference")))
-        if key not in best or p["y_total"] < best[key]["y_total"]:
-            best[key] = p
-    return list(best.values())
+        rank = (budget is not None and not admissible(p, budget, d, idle, boost), p["y_total"])
+        if key not in best or rank < best[key][0]:
+            best[key] = (rank, p)
+    return [p for _, p in best.values()]
 
 
 def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
@@ -285,11 +291,14 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
 
     pts = [p for p in points if p["batch"] in batches]
     if not show_all:
-        pts = best_per_config(pts)
+        pts = best_per_config(pts, budget, None, idle, boost)
     lanes = {p.get("lane") for p in pts if not p.get("reference")}
     if not pts:
         raise SystemExit("no points at the plotted batches")
-    tau_ref = statistics.median(p["tau"] for p in pts) if tau_ref is None else tau_ref
+    front = frontier(pts, budget, None, idle, boost).get(batches[0])
+    if tau_ref is None:
+        tau_ref = front["tau"] if front else statistics.median(p["tau"] for p in pts)
+    ingress_ref = front.get("ingress", 0.0) if front else 0.0
     fig, ax = plt.subplots(figsize=(12, 6.5))
     colors = {"base": "#9e9e9e", "decode": "#1f77b4", "tag": "#ff7f0e", "commit": "#2ca02c"}
     offset = {mb: 1.0 + 0.09 * (i - (len(batches) - 1) / 2) for i, mb in enumerate(batches)}
@@ -297,11 +306,12 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
         xc = x_eff(p, boost) * offset[p["batch"]]
         width = xc * 0.07
         bottom = 0.0
+        alpha = 1.0 if p.get("reference") or admissible(p, budget, None, idle, boost) else 0.35
         for part, key in (("base", "y_base"), ("decode", "y_decode"), ("tag", "y_tag"), ("commit", "y_commit")):
             h = max(p[key], 0.0)
             kw = {"color": colors[part]} if p["measured"] else {"facecolor": "none", "edgecolor": colors[part],
                                                                   "linewidth": 1.2}
-            ax.bar(xc, h, width=width, bottom=bottom, align="center", **kw)
+            ax.bar(xc, h, width=width, bottom=bottom, align="center", alpha=alpha, **kw)
             bottom += h
         if p.get("reference"):
             ax.scatter([xc], [p["y_total"]], marker="*", s=160, color="k" if p["measured"] else "none", edgecolors="k",
@@ -322,9 +332,8 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
             ax.text(xs, ax.get_ylim()[1] * 0.97, f" x* (d=1, τ={tau:.2f})", fontsize=7, va="top", rotation=90)
     lo, hi = ax.get_xlim()
     xx = np.geomspace(lo, hi, 200)
-    ax.plot(xx, tau_ref - idle + budget * xx, color="purple", linewidth=1)
-    ax.text(hi, tau_ref - idle + budget * hi, f"y = τ − {idle:g} + {budget:g}·x (x* at d = y + {idle:g}, "
-            f"τ={tau_ref:.2f}) ", color="purple", fontsize=7, ha="right", va="bottom")
+    left = budget - ingress_ref
+    boundary, = ax.plot(xx, tau_ref - idle + left * xx, color="purple", linewidth=1)
     ax.set_xlim(lo, hi)
     ax.set_ylim(0, max(3.0, max(p["y_total"] for p in pts) * 1.1))
     ax.set_xlabel(f"x: encode time of one pass's data, in native passes, at the adversary's clock (÷{boost:g} where "
@@ -337,8 +346,12 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
     sec = ax.secondary_xaxis("top", functions=(mu, mu))
     sec.set_xlabel(f"μ_rebuild = (d − τ)/x, % (d = 1, τ = {tau_ref:.2f})")
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in colors.values()]
-    handles += [plt.Rectangle((0, 0), 1, 1, facecolor="none", edgecolor="k")]
-    ax.legend(handles, [*colors, "modelled (hollow)"], loc="upper left", fontsize=8)
+    handles += [plt.Rectangle((0, 0), 1, 1, facecolor="none", edgecolor="k"),
+                plt.Rectangle((0, 0), 1, 1, color="k", alpha=0.35), boundary]
+    ax.legend(handles, [*colors, "modelled (hollow)", "x < x* (pale)",
+                        f"y = τ − {idle:g} + ({budget:g} − ingress)·x: x* at d = y + {idle:g}\n"
+                        f"(τ {tau_ref:.3f}, ingress {ingress_ref * 100:.3f}%: batch {batches[0]}'s frontier)"],
+              loc="upper left", fontsize=8)
     ax.set_title(f"Rate-audit frontier: batches {', '.join(map(str, batches))} (left to right at each x); "
                  f"μ budget {budget * 100:.1f}%")
     fig.tight_layout()
