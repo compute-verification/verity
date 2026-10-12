@@ -188,8 +188,9 @@ def main() -> int:
     ap.add_argument("--fill-chunk-mib", type=int, default=512)
     ap.add_argument("--token-gate", type=int, default=0)
     ap.add_argument("--seq-shift", type=int, default=8, help="seq: epochs of 2^shift units of 128 KiB")
-    ap.add_argument("--seq-step-priority", choices=("greatest", "least"), default="greatest",
-                    help="seq: the STEP kernels' stream priority (IDLE's is the least)")
+    ap.add_argument("--seq-step-priority", choices=("greatest", "default", "least"), default="greatest",
+                    help="seq: the STEP and PREFILL kernels' stream priority (default: the runner's, 0; IDLE's is the "
+                         "least)")
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
@@ -472,7 +473,7 @@ def main() -> int:
                 if mode not in FILL_WARPS:
                     continue
                 sq.start(regions, RUN_SEED, base_ctas=0, warps=FILL_WARPS[mode], shift=a.seq_shift, priority=least,
-                         step_priority=greatest if a.seq_step_priority == "greatest" else least)
+                         step_priority={"greatest": greatest, "default": 0, "least": least}[a.seq_step_priority])
                 tu.so.sq_idle(1, 0)
                 cur["seq_step"], cur["seq_prefill"] = ctas, int(pat or 0)
                 if a.token_gate:
