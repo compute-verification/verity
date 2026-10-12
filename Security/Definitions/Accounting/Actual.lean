@@ -1,17 +1,18 @@
 import Definitions.Core.Circuit
+import Definitions.Core.Declaration
 import Mathlib.Data.ENat.Lattice
 import Mathlib.Order.Interval.Set.Defs
 
 /-!
 # The actual circuit (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model`, section 1. The *actual circuit* of a run is the
-circuit of everything that ran (`Verity.Circuit`): a gate for each operation any unit performed, a wire for each
-dependence, and each gate placed at a leaf `x g` of the tree of spatial units and a tick `t g` (`Placed`). A unit is a
-set of leaves (`Finset L`); the tree is laminar and never needed explicitly. Its input gates are the values that existed
-before the run, such as stored weights and the prover's secrets.
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2), section 2. The *actual circuit* of a run is
+the circuit of everything the hardware did (`Verity.Circuit`): a gate for each operation, a wire for each dependence,
+and each gate placed at a leaf `x g` of the tree of locations and a tick `t g` (`Placed`). A location is a set of leaves
+(`Finset L`); the tree is laminar and never needed explicitly. Its input gates are the values that existed before the
+run, such as stored weights and the prover's secrets (the model places them at tick 0; nothing here needs it).
 
-For a unit `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, or `[t, ∞)`, `Set.Ici t`):
+For a location `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, or `[t, ∞)`, `Set.Ici t`):
 * `region X I`: `A[X, I]`, the computed gates placed in `X` during `I`. Input gates are in no region, as they are in no
   unit of a `Verity.Partition`: a region reads the values it starts from, so `state` counts what `X` stores;
 * `work π R`: `π(R)`, the work of a set of gates at a pricing `π`;
@@ -21,21 +22,22 @@ For a unit `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, or `
 * `state X t`: `mem_X(t)`, the bits `X` carries across `t`: the width of the gates placed in `X` that `A[X, [t, ∞))`
   reads from outside itself, the gates `X` computed before `t` and the input gates it stores.
 
-What a region reads from outside itself is what its unit carried in plus what crossed its boundary (the split,
-`Accounting.SecurityProofs.Actual.width_into_region_le`), when wires run forward in time inside the unit (`Forward`):
+What a region reads from outside itself is what its location carried in plus what crossed its boundary (the split,
+`Accounting.SecurityProofs.Actual.width_into_region_le`), when wires run forward in time inside the location (`Forward`):
 causality at latency 0, inside `X`, for computed sources, which is all the split needs.
 
 `cut S` is a set `S` of gates as a circuit whose inputs are what it reads: `A` with every gate outside `S` an input gate,
-and the gates of `S` its outputs. The *runtime* of a circuit `P` on `A` in the developer's unit `X` (`runtime X P`) is
-the least `t` at which `A[X, [0, t))`, so cut, implements `P`, and `⊤` when no `t` does.
+and the gates of `S` its outputs. The *runtime* `t_A(P)` of a circuit `P` on `A` at the developer's locations, whose
+leaves are `X` (`runtime X P`), is the least `t` at which `A[X, [0, t))`, so cut, implements `P`, and `⊤` when no `t`
+does. `declaration X t θ` is that cut with the baseline `θ_A`, the input gates committed before the run, as NCI's
+`Declaration`.
 -/
 
 namespace Accounting
 
 open Verity Finset
 
-/-- **An actual circuit**: a circuit, each gate `g` placed at a leaf `x g` of the tree of spatial units and a tick
-`t g`. -/
+/-- **An actual circuit**: a circuit, each gate `g` placed at a leaf `x g` of the tree of locations and a tick `t g`. -/
 structure Placed (L : Type*) extends Circuit where
   /-- The leaf at which gate `g` ran. -/
   x : Fin N → L
@@ -47,7 +49,7 @@ namespace Placed
 variable {L : Type*} (A : Placed L)
 
 open Classical in
-/-- **The region** `A[X, I]`: the computed gates placed in the unit `X` during the ticks `I`. -/
+/-- **The region** `A[X, I]`: the computed gates placed in the location `X` during the ticks `I`. -/
 noncomputable def region (X : Finset L) (I : Set ℕ) : Finset (Fin A.N) :=
   A.computed.filter fun g => A.x g ∈ X ∧ A.t g ∈ I
 
@@ -100,10 +102,20 @@ noncomputable def cut (S : Finset (Fin A.N)) : Circuit where
     · simp [hS]
   outputs := S
 
-/-- **The runtime** `t_A(P)` of a circuit `P` in the developer's unit `X`: the least `t` at which the developer's region
-`A[X, [0, t))`, as a circuit whose inputs are what it reads, implements `P`; `⊤` when it never does. -/
+/-- **The runtime** `t_A(P)` of a circuit `P` at the developer's locations, whose leaves are `X`: the least `t` at which
+the developer's region `A[X, [0, t))`, as a circuit whose inputs are what it reads, implements `P`; `⊤` when it never
+does. -/
 noncomputable def runtime (X : Finset L) (P : Circuit) : ℕ∞ :=
   ⨅ (t : ℕ) (_ : Implements P (A.cut (A.region X (Set.Iio t)))), (t : ℕ∞)
+
+/-- **The developer's declaration** over `[0, t)`: `A[X, [0, t))` as a circuit whose inputs are what it reads, with the
+baseline `θ`, input gates of `A` (the model's `θ_A`, those committed before the run). Every input gate of `A` is an
+input gate of the cut, so `θ` needs no restricting. -/
+noncomputable def declaration (X : Finset L) (t : ℕ) (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) :
+    Declaration where
+  D := A.cut (A.region X (Set.Iio t))
+  θ := θ
+  θ_input a ha := by simp [cut, hθ a ha]
 
 end Placed
 
