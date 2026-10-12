@@ -174,6 +174,9 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
 // At full slot, limb k of the lazy x takes t's columns k and k + NL at once (r and h, each pair once), so t is never
 // held: x = sum (r_k + c h_k + carry) 2^(32k) = t mod p, then fold's second stage. The low columns' carries stay in
 // that sum, so its carry out of 2^n, (c1, c0), is below (NL + 1) 2^32 + c, not c: (c1, c0) c < 2^50 goes back in.
+// It needs fewer registers than sqr_full + fold but runs 1-16% slower (three multiplies by c a limb, not one), so
+// only the fused decoders that need the registers use it (decode_word_fresh); sqr and mul, the encode's, do not.
+// x must not be a.
 __device__ __forceinline__ void fold_limb(u32 &x, u32 &c0, u32 &c1, const u32 (&r)[3], const u32 (&h)[3]) {
   u64 v = (u64)h[0] * CF + r[0] + c0;
   x = (u32)v;
@@ -215,49 +218,21 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
   fold_top(x, c0, c1);
 }
 
-__device__ __forceinline__ void mul_fold(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
-  u32 c0 = 0, c1 = 0;
-#pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    u32 r[3] = {0, 0, 0}, h[3] = {0, 0, 0};
-#pragma unroll
-    for (int i = 0; i <= k; ++i) mac(r, a[i], b[k - i]);
-#pragma unroll
-    for (int i = k + 1; i < NL; ++i) mac(h, a[i], b[k + NL - i]);
-    fold_limb(x[k], c0, c1, r, h);
-  }
-  fold_top(x, c0, c1);
+__device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
+  u32 t[2 * NL];
+  sqr_full(a, t);
+  fold(t, x);
+}
+
+__device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  u32 t[2 * NL];
+  mul_full(a, b, t);
+  fold(t, x);
 }
 
 __device__ __forceinline__ void copy(u32 (&d)[NL], const u32 (&s)[NL]) {
 #pragma unroll
   for (int k = 0; k < NL; ++k) d[k] = s[k];
-}
-
-// x may be a or b (pow_root's mul(t, r, r)): the fold forms write x[k] while later limbs still read a and b, so they
-// build into y.
-__device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
-  if constexpr (FULL_SLOT) {
-    u32 y[NL];
-    sqr_fold(a, y);
-    copy(x, y);
-  } else {
-    u32 t[2 * NL];
-    sqr_full(a, t);
-    fold(t, x);
-  }
-}
-
-__device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
-  if constexpr (FULL_SLOT) {
-    u32 y[NL];
-    mul_fold(a, b, y);
-    copy(x, y);
-  } else {
-    u32 t[2 * NL];
-    mul_full(a, b, t);
-    fold(t, x);
-  }
 }
 
 // x < 2p to [0, p): x - p = x + c - 2^n when x + c >= 2^n.
@@ -565,7 +540,7 @@ __device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
 // decode_word_w with c_0 + t made from the word's index after the square (ct_of), so no tweak is held across words.
 __device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i) {
   u32 q[NL], u[NL];
-  sqr(y, q);
+  sqr_fold(y, q);
   canon_cc(q);
   neg_if(q, y[0] & 1);
   ct_of(i, u);
@@ -1685,9 +1660,10 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // loads: an earlier arrive lets the next bulk copy (async proxy) overwrite the stage under loads still in flight.
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
-// 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word and its square,
-// at full slot (sqr_fold) not the double-width square, and the tweak unless it is made a word at a time (FRESH).
-constexpr int FUSED_WARPS = FULL_SLOT ? (NL <= 24 ? 16 : (NL <= 48 ? 12 : 8)) : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
+// 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word, its square and
+// the tweak. At full slot and NL > 24 it holds neither the double-width square nor the tweak (FRESH: sqr_fold, and
+// c_0 + t made a word at a time), which fits 12 warps at NL = 48.
+constexpr int FUSED_WARPS = FULL_SLOT && NL > 24 && NL <= 48 ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
