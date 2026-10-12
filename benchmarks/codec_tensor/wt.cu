@@ -548,10 +548,10 @@ __device__ __forceinline__ void decode_word_wk(u32 (&y)[NL], const u32 (&w)[NL])
   decode_word_w(y, w);
 }
 
-// u = (c_0 + tau i) mod p, canonical, at full slot and without a double-width product: limb k sums c_0's, tau_k lo
-// and tau_(k-1) hi into the carry (three words), and the part above 2^n (< 2^66) comes back times c.
+// u = (c_0 + tau i) mod p, canonical, at full slot (2^n = c; FRESH_DECODE, its one caller, is full slot only) and
+// without a double-width product: limb k sums c_0's, tau_k lo and tau_(k-1) hi into the carry (three words), and the
+// part above 2^n (< 2^66) comes back times c.
 __device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
-  static_assert(FULL_SLOT, "2^n = c");
   const u32 lo = (u32)i, hi = (u32)(i >> 32);
   u32 r[3] = {0, 0, 0};
 #pragma unroll
