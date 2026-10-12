@@ -34,11 +34,10 @@ class FakeCodec:
 
 
 class FakeReceipt:
-    """SHA-512 over the seed, the block index, the block and the bound input; four receipts a leaf."""
+    """SHA-512 over the seed, the block index, the block and the bound input."""
 
     name = "fake-sha512"
     receipt_bytes = 64
-    per_leaf = 4
     binds = ("z",)
 
     def keyed(self, seed: bytes):
@@ -267,14 +266,110 @@ def test_an_opening_of_a_rewritten_block_is_stale():
     assert s.open([(0, 1)])[0].block == 1
 
 
-def test_a_device_reader_hands_in_segment_roots():
-    s = Store()
-    weights(s)
+def _aligned_store() -> tuple[Store, dict[str, ArrayBacking]]:
+    """Weights of 40 and 20 blocks and two KV layers of 4 pages of 4 blocks: whole subtrees of 2, 1, 1 and 1 leaves,
+    then a tail of 8 and 4 blocks."""
+    s = Store(salt_key=bytes(32))
+    w, _ = weights(s, "w", 40)
+    w2, _ = weights(s, "w2", 20, seed=1)
+    bs, _ = pool(s)
+    s.kv_alloc([0, 1, 2, 3])
+    s.kv_write_reference([Append(p, 0, 8) for p in range(4)], kv_payload, step=0)
+    return s, {"w": w, "w2": w2, "kv/0": bs[0], "kv/1": bs[1]}
+
+
+def _driver_root(s: Store, backings: dict[str, ArrayBacking], pc) -> bytes:
+    """The pass's root as the driver builds it (`remote_bandwidth.receipts.tree`): every receipt in plan order, sixteen
+    to a hidden leaf, in one frame-v3-sha512 `MerkleTree`."""
+    from verity.ml.commitments import MerkleTree
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+    from verity_vllm.store.registry import hidden, tree_domain
+    plan, keyed, regions = s.plan(pc.index), RECEIPT.keyed(pc.seed), s.layout().regions
+    ys = []
+    for j in plan.tolist():
+        info = next(r for r in regions if r.first <= j < r.first + r.blocks)
+        ys.append(keyed(j, backings[info.name].read((j - info.first) * BLOCK, BLOCK)))
+    dom = tree_domain(pc.seed, pc.plan_digest, len(plan))
+    values = {c: hidden(b"".join(ys[16 * c:16 * (c + 1)]), s.salt(pc.seed, c)) for c in range(dom.count)}
+    return MerkleTree(dom, values, lambda _c: SCHEMA_HM96_SHA512_ROW_V2).commitment.root
+
+
+def test_a_pass_lays_its_segments_out_as_subtrees_of_the_drivers_tree():
+    from verity_vllm.store.registry import aligned
+    s, backings = _aligned_store()
+    (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
+    got = [(x.region, x.count, x.position, aligned(x)) for x in pc.segments]
+    assert got == [("w", 32, 0, True), ("w2", 16, 32, True), ("kv/0", 16, 48, True), ("kv/1", 16, 64, True),
+                   ("w", 8, 80, False), ("w2", 4, 88, False)]
+    plan = s.plan(0).tolist()
+    assert plan == [*range(32), *range(40, 56), *range(60, 76), *range(76, 92), *range(32, 40), *range(56, 60)]
+    assert pc.root == _driver_root(s, backings, pc)
+
+
+def test_the_tree_is_the_drivers_byte_for_byte():
+    """Vectors from the driver's `receipts.tree` (branch cursor/ra-remote-driver-e45e, fa415ca47): one pass of four
+    whole leaves, and one of five with a short last leaf and three pads."""
+    from verity.ml.commitments import merkle_depth
+    from verity_vllm.store.registry import _node, leaf_digest, plan_digest, tree_domain
+    seed = hashlib.sha512(b"vector seed").digest()
+    for runs, want in [(((0, 40), (100, 3), (50, 20), (7000, 1)), "6dfd110e0e789747f28a81f02ffba89d38c7dce6a1827e5f58044"
+                        "0a06ed9e5ad73f6b18bd4dff25bdc7d99e6d9d343a132922745622c7ce1734493da51595808"),
+                       (((0, 40), (100, 10), (50, 20), (7000, 1)), "cdd5a788b35761b7f88900c49dac163e121c830211b727bea09"
+                        "2d6cc3c777aee4e45344651b0e5e247af7e560593c1ca1064ee4ecb3cc234b947e029eb1da51d")]:
+        positions = sum(c for _, c in runs)
+        ys = [hashlib.sha512(b"y" + p.to_bytes(4, "big")).digest() for p in range(positions)]
+        dom = tree_domain(seed, plan_digest(np.array(runs)), positions)
+        leaves = [leaf_digest(dom, c, b"".join(ys[16 * c:16 * (c + 1)]),
+                              hashlib.shake_256(b"salt" + c.to_bytes(4, "big")).digest(192)) for c in range(dom.count)]
+        assert _node(dom, dom.count, merkle_depth(dom.count), 0, leaves.__getitem__, {}).hex() == want
+
+
+def _opened(**end) -> Store:
+    s, _ = _aligned_store()
     s.begin_window(SIGMA)
-    s.begin_pass()
-    pc = s.end_pass(roots={0: b"\x07" * 64})
-    assert pc.segment_roots == (b"\x07" * 64,)
-    s.end_window()
+    s.begin_pass([0, 1, 2, 3])
+    s.end_pass(**end)
+    return s
+
+
+def test_a_device_reader_hands_in_its_aligned_segments_roots_or_the_root():
+    ref = _opened()
+    pc = ref.end_window().passes[0]
+    s = _opened(roots={k: pc.segment_roots[k] for k in range(4)})
+    given = s.end_window().passes[0]
+    assert (given.root, given.segment_roots) == (pc.root, pc.segment_roots)
+    assert s.open([(0, 3)]) == ref.open([(0, 3)])
+    assert _opened(roots={1: bytes(64)}).end_window().passes[0].root != pc.root
+    t, _ = _aligned_store()
+    t.begin_window(SIGMA)
+    t.begin_pass([0, 1, 2, 3])
+    with pytest.raises(ValueError):
+        t.end_pass(roots={4: bytes(64)})
+    assert t.in_pass
+    whole = _opened(root=b"\x07" * 64)
+    (pw,) = whole.end_window().passes
+    assert (pw.root, pw.segment_roots) == (b"\x07" * 64, ())
+    with pytest.raises(RuntimeError):
+        whole.open([(0, 0)])
+
+
+def test_openings_of_subtrees_and_the_tail_verify_as_the_drivers():
+    from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening as verify_leaf
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+    from verity_vllm.store.registry import hidden, tree_domain
+    s, _ = _aligned_store()
+    (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
+    plan, lay = s.plan(0), s.layout()
+    dom = tree_domain(pc.seed, pc.plan_digest, len(plan))
+    for o in s.open([(0, q) for q in range(pc.blocks)]):
+        info = next(r for r in lay.regions if r.name == o.region)
+        assert verify_opening(info, pc, plan, o, RECEIPT, CODEC.decode, None)
+        c = o.position // 16
+        driver = Opening(c, hidden(b"".join(o.leaf_receipts), o.salt), o.leaf_path + o.segment_path)
+        assert verify_leaf(dom, Commitment(pc.root, dom.count), driver, SCHEMA_HM96_SHA512_ROW_V2, VerificationLimits())
+    o = s.open([(0, 85)])[0]
+    assert not verify_opening(s.region("w"), pc, plan, o.__class__(**{**o.__dict__, "salt": bytes(192)}), RECEIPT,
+                              CODEC.decode, None)
 
 
 def test_identity_codec_and_tag_receipts():

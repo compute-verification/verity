@@ -12,21 +12,27 @@ a block of a page is *registered* unless a write reached it and has not complete
 - ``kv_free`` returns pages to filler with their bytes as they are: a registered block stays registered, a dirty block
   (a page freed part-written) stays out of every plan until a later write completes it.
 
-A pass's plan is the weights' regions whole, then each KV layer region over the blocks attention reads (the live
-pages' blocks that writes completed), then the filler the `filler_plan` policy picks (`idle_blocks` lists the
-registered blocks no attention reads: free pages, and allocated pages' blocks no write reached).  Positions run in
-that order, and no block is read twice in a pass (a plan that repeats one is refused).  Inside a window each pass is
+A pass reads the weights' regions whole, each KV layer region over the blocks attention reads (the live pages'
+blocks that writes completed), and the filler the `filler_plan` policy picks (`idle_blocks` lists the registered
+blocks no attention reads: free pages, and allocated pages' blocks no write reached); no block twice (a plan that
+repeats one is refused).  Its segments are laid out as subtrees of the pass's tree: each part cut into power-of-two
+runs of whole leaves, the largest first, so that each starts at a multiple of its size, and the parts' last
+``count % PER_LEAF`` blocks after them all (the tail, whose leaves may mix regions).  Inside a window each pass is
 seeded from the window's challenge and the root before it (`chain`): the session's previous pass, across windows, and
 the registration's root before the session's first.  The reference computes every receipt from the bytes
-(`receipts`); a device reader hands each segment's root to `end_pass`.
+(`receipts`); a device reader hands `end_pass` its aligned segments' roots, or the pass's root.
 
-The seed and the plan digest are the remote bandwidth driver's (`remote_bandwidth.receipts`: `seed`, `Plan.digest`
-over the plan's canonical runs); the tree over a pass's receipts is this store's (each segment's tree, then theirs).
+The seed, the plan digest and the tree are the remote bandwidth driver's (`remote_bandwidth.receipts`: `seed`,
+`Plan.digest` over the plan's canonical runs, and `tree`: frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan
+order, each hidden as an hm96-sha512/row/v2 leaf under its salt).  A leaf's salt is `Store.salt`, a PRF of the
+store's secret key, so no salt is kept.
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
+import secrets
 import struct
 import time
 from collections.abc import Callable, Sequence
@@ -45,8 +51,10 @@ KEY_BYTES = 32
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
 SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
 PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
-PASS_DOMAIN = b"verity/store/pass/v1\0"
-EMPTY_ROOT = hashlib.sha512(b"").digest()
+TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
+SALT_DOMAIN = b"verity/store/salt/v0\0"
+PER_LEAF = 16
+SALT_BYTES = 192
 
 FillerPlan = Callable[["Store", int], Sequence[tuple[str, Sequence[int]]]]
 
@@ -92,29 +100,60 @@ def plan_digest(runs: np.ndarray) -> bytes:
     return hashlib.sha512(PLAN_DOMAIN + struct.pack(">I", len(runs)) + np.asarray(runs, ">u8").tobytes()).digest()
 
 
-def _leaves(receipt: Receipt, seed: bytes, ys: Sequence[bytes]) -> list[bytes]:
-    from verity.core.protocols.bandwidth import tags
-    head, per = tags.leaf_head(receipt, seed[:KEY_BYTES]), receipt.per_leaf
-    return [tags.leaf_hash(head, c, ys[c * per:(c + 1) * per]) for c in range(-(-len(ys) // per))]
+def tree_domain(seed: bytes, digest: bytes, positions: int):
+    """The driver's receipt tree of a pass of ``positions`` positions: frame-v3-sha512 over ``⌈positions / PER_LEAF⌉``
+    leaves, bound to ``SHA512(TREE_DOMAIN ‖ seed ‖ plan digest)``, owner 0."""
+    from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain
+    binding = hashlib.sha512(TREE_DOMAIN + seed + digest).digest()
+    return CommitmentDomain(binding, 0, RangeIndexedDomain(0, -(-positions // PER_LEAF)), hash="sha512")
 
 
-def _tree(leaves: Sequence[bytes]):
-    from verity.core.protocols.pous.verifier import MerkleTree
-    return MerkleTree(leaves)
+def hidden(receipts: bytes, salt: bytes) -> bytes:
+    """A leaf's committed value: its receipts as an hm96-sha512/row/v2 leaf under ``salt`` (the driver's `hidden`)."""
+    from verity.ml.commitments import hm96
+    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+    h = hm96.SHA512
+    return h.tree_leaf(h.default_key, h.commit_string(h.default_key, sha512_row_v2_digest(receipts, 8 * len(receipts)),
+                                                      salt))
 
 
-def segment_root(receipt: Receipt, seed: bytes, ys: Sequence[bytes]) -> bytes:
-    """The RFC 6962 SHA-512 tree over a segment's receipt leaves (the bandwidth audit's `leaf_hash`, ``per_leaf``
-    receipts a leaf); an empty segment's root is SHA-512 of nothing."""
-    return _tree(_leaves(receipt, seed, ys)).root if ys else EMPTY_ROOT
+def leaf_digest(dom: Any, c: int, receipts: bytes, salt: bytes) -> bytes:
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+    return dom.leaf(c, c, SCHEMA_HM96_SHA512_ROW_V2, hidden(receipts, salt))
 
 
-def pass_root(index: int, seed: bytes, plan_digest: bytes, segments: Sequence[Segment],
-              roots: Sequence[bytes]) -> bytes:
-    """``SHA512(D ‖ u32be j ‖ seed ‖ plan digest ‖ u32be S ‖ (u64be count) × S ‖ tree(segment roots))``."""
-    body = (PASS_DOMAIN + struct.pack(">I", index) + seed + plan_digest + struct.pack(">I", len(segments))
-            + b"".join(struct.pack(">Q", s.count) for s in segments))
-    return hashlib.sha512(body + (_tree(list(roots)).root if roots else EMPTY_ROOT)).digest()
+def node_of(segment: Segment) -> tuple[int, int]:
+    """``(level, index)``: the least node of the pass's tree over the segment's leaves, its subtree's root when the
+    segment is `aligned`."""
+    a, b = segment.position // PER_LEAF, (segment.position + segment.count - 1) // PER_LEAF
+    level = (a ^ b).bit_length()
+    return level, a >> level
+
+
+def aligned(segment: Segment) -> bool:
+    """Whether the segment is exactly a subtree: ``PER_LEAF · 2^h`` blocks from a multiple of that."""
+    level, index = node_of(segment)
+    return segment.count == PER_LEAF << level and segment.position == (index << level) * PER_LEAF
+
+
+def _node(dom: Any, leaves: int, level: int, index: int, leaf: Callable[[int], bytes], memo: dict) -> bytes:
+    """Node ``(level, index)`` of the tree over ``leaves`` leaves (``leaf(c)``), pads past them; ``memo`` holds the nodes
+    known and gains those computed."""
+    key = (level, index)
+    if key not in memo:
+        if level == 0:
+            memo[key] = leaf(index) if index < leaves else dom.pad(index)
+        else:
+            memo[key] = dom.node(level - 1, index, _node(dom, leaves, level - 1, 2 * index, leaf, memo),
+                                 _node(dom, leaves, level - 1, 2 * index + 1, leaf, memo))
+    return memo[key]
+
+
+def _climb(dom: Any, digest: bytes, c: int, level: int, path: Sequence[bytes]) -> bytes:
+    for k, sibling in enumerate(path, level):
+        at = c >> k
+        digest = dom.node(k, at >> 1, *((digest, sibling) if at % 2 == 0 else (sibling, digest)))
+    return digest
 
 
 @dataclass(frozen=True)
@@ -131,10 +170,6 @@ class TagReceipt:
     @property
     def receipt_bytes(self) -> int:
         return self.tag.tag_bytes
-
-    @property
-    def per_leaf(self) -> int:
-        return self.tag.per_leaf
 
     def keyed(self, seed: bytes):
         k = self.tag.keyed(seed[:KEY_BYTES])
@@ -201,9 +236,42 @@ class _Pass:
     seed: bytes | None
     segments: list[Segment]
     blocks: list[np.ndarray | None]             # each segment's region blocks in read order; None: its run
+    views: dict[int, tuple[int, int]] = field(default_factory=dict)    # array segments: (id of the part's, offset)
     epochs: dict[int, np.ndarray] = field(default_factory=dict)
     receipts: dict[int, list[bytes]] = field(default_factory=dict)
     digest: bytes = b""
+    top: dict[tuple[int, int], bytes] | None = None     # the tree's nodes outside the aligned segments; None: the reader's
+    positions: int = 0
+    starts: list[int] = field(default_factory=list)
+
+    def lay_out(self, parts: Sequence[tuple[str, int, int, np.ndarray | None, np.ndarray | None]]) -> None:
+        """Segments from ``parts`` (region, start, count, blocks or None for a run, epochs or None) as subtrees: each
+        part's power-of-two runs of whole leaves, the largest first, then each part's last ``count % PER_LEAF``."""
+        whole, tail = [], []
+        for part in parts:
+            q, r = divmod(part[2], PER_LEAF)
+            lo = 0
+            for h in range(q.bit_length() - 1, -1, -1):
+                if q >> h & 1:
+                    whole.append((-h, len(whole), part, lo, PER_LEAF << h))
+                    lo += PER_LEAF << h
+            if r:
+                tail.append((part, lo, r))
+        whole.sort(key=lambda w: w[:2])
+        for (region, start, _, blocks, epochs), lo, n in [w[2:] for w in whole] + tail:
+            k = len(self.segments)
+            self.segments.append(Segment(region, start + lo if blocks is None else -1, n, self.positions))
+            self.blocks.append(None if blocks is None else blocks[lo:lo + n])
+            if blocks is not None:
+                self.views[k] = (id(blocks), lo)
+            if epochs is not None:
+                self.epochs[k] = epochs[lo:lo + n]
+            self.starts.append(self.positions)
+            self.positions += n
+
+    def at(self, position: int) -> int:
+        """The segment holding ``position``."""
+        return bisect.bisect_right(self.starts, position) - 1
 
     def segment_blocks(self, i: int) -> np.ndarray:
         b, s = self.blocks[i], self.segments[i]
@@ -217,10 +285,11 @@ class _Pass:
 class Store:
     """The node's store.  ``filler_plan(store, pass_index)`` returns the filler a pass reads after the weights and the
     KV, as ``(region, blocks)`` pairs (region block indices in read order); ``chaining`` derives each pass's seed
-    (`chain`)."""
+    (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by default."""
 
     def __init__(self, *, filler_plan: FillerPlan | None = None,
-                 chaining: Callable[[bytes, bytes, int], bytes] = chain) -> None:
+                 chaining: Callable[[bytes, bytes, int], bytes] = chain, salt_key: bytes | None = None) -> None:
+        self._salt_key = secrets.token_bytes(32) if salt_key is None else salt_key
         self._regions: list[_Region] = []
         self._by_name: dict[str, _Region] = {}
         self._blocks = 0
@@ -465,10 +534,7 @@ class Store:
         if self._challenge is not None:
             seed = self.chaining(self._challenge, self._last_root, j)
         ps = _Pass(j, seed, [], [])
-        for r in self._regions:
-            if r.info.kind == "weights":
-                ps.segments.append(Segment(r.info.name, 0, r.info.blocks, 0))
-                ps.blocks.append(None)
+        parts = [(r.info.name, 0, r.info.blocks, None, None) for r in self._regions if r.info.kind == "weights"]
         if self._pool is not None and live_pages is None:
             live_pages = np.nonzero(self._pool.allocated)[0]
         if self._pool is not None and len(live_pages):
@@ -476,23 +542,15 @@ class Store:
             pages = np.unique(np.asarray(live_pages, np.int64))
             read = p.read(pages)
             ids, epochs = p.ids[pages][read], p.epoch[pages][read]
-            for rn in p.regions:
-                ps.segments.append(Segment(rn, -1, len(ids), 0))
-                ps.blocks.append(ids)
-                ps.epochs[len(ps.segments) - 1] = epochs
+            parts += [(rn, -1, len(ids), ids, epochs) for rn in p.regions]
         if self.filler_plan is not None:
             for rn, blocks in self.filler_plan(self, j):
                 blk = np.asarray(blocks, np.int64)
                 run = len(blk) > 0 and bool((np.diff(blk) == 1).all())
-                ps.segments.append(Segment(rn, int(blk[0]) if run else -1, len(blk), 0))
-                ps.blocks.append(None if run else blk)
                 r = self._by_name[rn]
-                if r.pool is not None:
-                    ps.epochs[len(ps.segments) - 1] = r.pool.epoch[r.pool.page_of[blk], r.pool.slot_of[blk]]
-        pos = 0
-        for i, s in enumerate(ps.segments):
-            ps.segments[i] = Segment(s.region, s.start, s.count, pos)
-            pos += s.count
+                ep = r.pool.epoch[r.pool.page_of[blk], r.pool.slot_of[blk]] if r.pool is not None else None
+                parts.append((rn, int(blk[0]) if run else -1, len(blk), None if run else blk, ep))
+        ps.lay_out(parts)
         if seed is not None:
             runs = self.plan_runs(ps)
             if not distinct(runs):
@@ -508,14 +566,35 @@ class Store:
         for i, s in enumerate(ps.segments):
             first, b = self._by_name[s.region].info.first, ps.blocks[i]
             if b is None:
-                if s.count:
-                    parts.append(np.array([[first + s.start, s.count]], np.int64))
+                parts.append(np.array([[first + s.start, s.count]], np.int64))
                 continue
-            key = id(b)
+            key = (*ps.views[i], s.count)
             if key not in local:
                 local[key] = runs_of(b)
             parts.append(local[key] + np.array([first, 0], np.int64))
         return canonical(np.concatenate(parts)) if parts else np.zeros((0, 2), np.int64)
+
+    def salt(self, seed: bytes, leaf: int) -> bytes:
+        """Leaf ``leaf``'s salt in the pass seeded ``seed``: ``SHAKE256(D ‖ key ‖ seed ‖ u64be leaf)``, 192 bytes."""
+        return hashlib.shake_256(SALT_DOMAIN + self._salt_key + seed + struct.pack(">Q", leaf)).digest(SALT_BYTES)
+
+    def receipts_at(self, ps: _Pass, lo: int, hi: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
+        """The receipts of positions ``[lo, hi)``, the reference reader's (`receipts`) for the segments they fall in."""
+        out, k = [], ps.at(lo)
+        while lo < hi:
+            s = ps.segments[k]
+            if k not in ps.receipts:
+                ps.receipts[k] = self.receipts(ps, k, z)
+            end = min(hi, s.position + s.count)
+            out += ps.receipts[k][lo - s.position:end - s.position]
+            lo, k = end, k + 1
+        return out
+
+    def _leaf(self, ps: _Pass, dom: Any, z: Callable[[str, int], bytes | None] | None = None) -> Callable[[int], bytes]:
+        def leaf(c: int) -> bytes:
+            ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions), z)
+            return leaf_digest(dom, c, b"".join(ys), self.salt(ps.seed, c))
+        return leaf
 
     def receipts(self, ps: _Pass, index: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
         """The reference reader: segment ``index``'s receipts, from its blocks' bytes now."""
@@ -525,27 +604,33 @@ class Store:
         return [keyed(first + b, r.backing.read(b * bb, bb), z(seg.region, b) if z else None)
                 for b in ps.segment_blocks(index).tolist()]
 
-    def end_pass(self, roots: dict[int, bytes] | None = None,
-                 z: Callable[[str, int], bytes | None] | None = None) -> PassCommitment | None:
-        """Close the open pass.  Each segment's root is the device reader's (``roots``) or the reference's from its
-        receipts now; returns the commitment (None outside a window)."""
+    def end_pass(self, roots: dict[int, bytes] | None = None, z: Callable[[str, int], bytes | None] | None = None, *,
+                 root: bytes | None = None) -> PassCommitment | None:
+        """Close the open pass and return its commitment (None outside a window).  A device reader hands in its
+        aligned segments' roots (``roots``, by segment number), the reference computing the rest of the tree from its
+        receipts now, or the pass's ``root`` when it built the whole tree (then it, not the store, opens the pass)."""
         t = time.perf_counter()
         ps = self._open_pass
         if ps is None:
             raise RuntimeError("no pass is open")
+        roots = roots or {}
+        if any(not aligned(ps.segments[k]) for k in roots):
+            raise ValueError(f"pass {ps.index}'s segments {sorted(roots)} are not all subtrees of its tree")
         self._open_pass = None
         if ps.seed is None:
             self.counters.add("end_pass", time.perf_counter() - t)
             return None
-        seg_roots = []
-        for i, s in enumerate(ps.segments):
-            if roots is not None and i in roots:
-                seg_roots.append(roots[i])
-                continue
-            ps.receipts[i] = self.receipts(ps, i, z)
-            seg_roots.append(segment_root(self._by_name[s.region].receipt, ps.seed, ps.receipts[i]))
-        root = pass_root(ps.index, ps.seed, ps.digest, ps.segments, seg_roots)
-        pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, tuple(seg_roots), root)
+        if root is not None:
+            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, (), root)
+        else:
+            from verity.ml.commitments import merkle_depth
+            dom = tree_domain(ps.seed, ps.digest, ps.positions)
+            leaf, n = self._leaf(ps, dom, z), dom.count
+            ps.top = {node_of(s): roots[k] if k in roots else _node(dom, n, *node_of(s), leaf, {})
+                      for k, s in enumerate(ps.segments) if aligned(s)}
+            root = _node(dom, n, merkle_depth(n), 0, leaf, ps.top) if n else dom.empty_root()
+            seg_roots = tuple(_node(dom, n, *node_of(s), leaf, ps.top) for s in ps.segments)
+            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root)
         self._passes.append(pc)
         self._last_root = root
         self._retained[ps.index] = ps
@@ -578,12 +663,15 @@ class Store:
     def open(self, sample: Sequence[tuple[int, int]]) -> list[Opening]:
         """Each sampled (pass, position) as that pass read it.  A KV block re-registered since (its epoch moved) or
         dirty now raises `Stale`: the binder keeps freed pages out of reuse within a window."""
-        out = []
+        from verity.ml.commitments import merkle_depth
+        out, inner = [], {}
         for j, position in sample:
             ps = self._retained.get(j)
             if ps is None:
                 raise KeyError(f"pass {j} is not retained")
-            k = next(i for i, s in enumerate(ps.segments) if s.position <= position < s.position + s.count)
+            if ps.top is None:
+                raise RuntimeError(f"pass {j}'s tree is its reader's, which opens it")
+            k = ps.at(position)
             seg, q = ps.segments[k], position - ps.segments[k].position
             r = self._by_name[seg.region]
             b = ps.block(k, q)
@@ -592,15 +680,15 @@ class Store:
                 page, c = p.page_of[b], p.slot_of[b]
                 if p.epoch[page, c] != ps.epochs[k][q] or p.dirty[page, c]:
                     raise Stale(f"{seg.region} block {b} was rewritten after pass {j}")
-            if k not in ps.receipts:
-                ps.receipts[k] = self.receipts(ps, k)
-            ys, per = ps.receipts[k], r.receipt.per_leaf
-            seg_tree = _tree(_leaves(r.receipt, ps.seed, ys))
-            pass_tree = _tree(list(self._passes[j].segment_roots))
+            dom = tree_domain(ps.seed, ps.digest, ps.positions)
+            leaf, n, c, (level, _) = self._leaf(ps, dom), dom.count, position // PER_LEAF, node_of(seg)
+            memo = inner.setdefault((j, k), {}) if aligned(seg) else ps.top
+            path = [_node(dom, n, h, (c >> h) ^ 1, leaf, memo if h < level else ps.top) for h in range(merkle_depth(n))]
+            ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions))
             bb = r.info.block_bytes
             out.append(Opening(j, position, r.info.first + b, seg.region, r.info.tier, self.kind_now(seg.region, b),
-                               r.backing.read(b * bb, bb), ys[q], tuple(ys[(q // per) * per:(q // per + 1) * per]),
-                               seg_tree.path(q // per), pass_tree.path(k), self.source(seg.region, b)))
+                               r.backing.read(b * bb, bb), ys[position % PER_LEAF], tuple(ys), tuple(path[:level]),
+                               tuple(path[level:]), self.source(seg.region, b), self.salt(ps.seed, c)))
         return out
 
 
@@ -626,26 +714,28 @@ def _page_blocks(layout: PageLayout, block_bytes: int) -> tuple[np.ndarray, np.n
 def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o: Opening, receipt: Receipt,
                    decode: Callable[[bytes, int], bytes], payload: bytes | None, z: bytes | None = None) -> bool:
     """The verifier's side of one opening (the reference): the plan's block at the position, its digest, the receipt
-    recomputed from the block, the leaf and segment paths to the pass's root, and, with ``payload`` (what the block's
-    registration source names), the block decoding to it."""
-    from verity.core.protocols.bandwidth import tags
-    from verity.core.protocols.pous.verifier import verify_path
-    k = next(i for i, s in enumerate(pc.segments) if s.position <= o.position < s.position + s.count)
-    seg, per = pc.segments[k], receipt.per_leaf
-    q = o.position - seg.position
+    recomputed from the block, its leaf (under the opened salt) and the leaf's path through its segment's node to the
+    pass's root (the two paths together are the driver's), and, with ``payload`` (what the block's registration
+    source names), the block decoding to it."""
+    from verity.ml.commitments import merkle_depth
+    k = bisect.bisect_right([s.position for s in pc.segments], o.position) - 1
+    seg, c, positions = pc.segments[k], o.position // PER_LEAF, len(plan)
     if int(plan[o.position]) != o.block or seg.region != o.region or not info.first <= o.block < info.first + info.blocks:
         return False
     runs = canonical(runs_of(plan))
-    if not distinct(runs) or plan_digest(runs) != pc.plan_digest or sum(s.count for s in pc.segments) != len(plan):
+    if not distinct(runs) or plan_digest(runs) != pc.plan_digest or sum(s.count for s in pc.segments) != positions:
         return False
-    if receipt.keyed(pc.seed)(o.block, o.data, z) != o.receipt or o.leaf_receipts[q % per] != o.receipt:
+    if receipt.keyed(pc.seed)(o.block, o.data, z) != o.receipt:
         return False
-    leaf = tags.leaf_hash(tags.leaf_head(receipt, pc.seed[:KEY_BYTES]), q // per, o.leaf_receipts)
-    if not verify_path(pc.segment_roots[k], -(-seg.count // per), q // per, leaf, o.leaf_path):
+    if len(o.leaf_receipts) != min(PER_LEAF, positions - c * PER_LEAF) or o.leaf_receipts[o.position % PER_LEAF] != o.receipt:
         return False
-    if not verify_path(_tree(list(pc.segment_roots)).root, len(pc.segment_roots), k, pc.segment_roots[k],
-                       o.segment_path):
+    dom = tree_domain(pc.seed, pc.plan_digest, positions)
+    level, _ = node_of(seg)
+    if len(o.leaf_path) != level or level + len(o.segment_path) != merkle_depth(dom.count):
         return False
-    if pass_root(pc.index, pc.seed, pc.plan_digest, pc.segments, pc.segment_roots) != pc.root:
+    node = _climb(dom, leaf_digest(dom, c, b"".join(o.leaf_receipts), o.salt), c, 0, o.leaf_path)
+    if pc.segment_roots and node != pc.segment_roots[k]:
+        return False
+    if _climb(dom, node, c, level, o.segment_path) != pc.root:
         return False
     return payload is None or decode(o.data, info.word_index(o.block - info.first)) == payload

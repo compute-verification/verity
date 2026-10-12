@@ -11,7 +11,7 @@ BlockPool.touch                     refused: a prefix-cache hit would bring a pa
 Scheduler.schedule                  after: kv_append of the scheduled tokens' slots, then begin_pass over the
                                     allocated pages (a pass still open from an earlier schedule is ended first; with
                                     a challenge, a window ends after its passes and the next begins)
-Scheduler.update_from_output        before: end_pass, with the device reader's segment roots
+Scheduler.update_from_output        before: end_pass, with the device reader's roots
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -174,14 +174,15 @@ def _unwrap(m: Any) -> Any:
 
 class Binder:
     """The store's hooks.  ``weights(runner)`` lists the weight regions after load (default `model_weights`);
-    ``reader(segments)``, if given, returns the step's segment roots (by segment number) for `end_pass`; ``fifo``
+    ``reader(segments)``, if given, returns the step's aligned segments' roots (by segment number), or the pass's root
+    when it built the whole tree, for `end_pass`; ``fifo``
     reuses freed pages in the order they were freed.  With ``challenge``, the steps run in windows of ``window_passes``
     passes, window ``t`` under ``challenge(t)``, each window's record handed to ``on_window``; without a reader, a
     window's receipts are the reference's, every block read on the CPU."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
-                 reader: Callable[[Sequence[Segment]], dict[int, bytes] | None] | None = None, fifo: bool = True,
+                 reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  challenge: Callable[[int], bytes] | None = None, window_passes: int = 0,
                  on_window: Callable[[WindowRecord], None] | None = None) -> None:
         if challenge is not None and window_passes < 1:
@@ -289,7 +290,8 @@ class Binder:
 
     def end(self) -> None:
         if self.store.in_pass:
-            self.store.end_pass(self.reader(self._segments) if self.reader else None)
+            read = self.reader(self._segments) if self.reader else None
+            self.store.end_pass(root=read) if isinstance(read, bytes) else self.store.end_pass(read)
 
     def end_window(self) -> None:
         """Close the open window (after its last pass), if one is."""

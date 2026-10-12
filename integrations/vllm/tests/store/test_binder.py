@@ -139,7 +139,7 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
     s, recs = Store(), []
     sigma = [bytes([t]) * 32 for t in range(3)]
     b = Binder(s, block_bytes=1024, challenge=sigma.__getitem__, window_passes=2, on_window=recs.append,
-               reader=lambda segments: dict.fromkeys(range(len(segments)), b"\x01" * 64))
+               reader=lambda segments: b"\x01" * 64)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -150,4 +150,4 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
     b.end_window()
     assert [len(w.passes) for w in recs] == [2, 2, 1] and [w.challenge for w in recs] == sigma
     assert recs[1].passes[0].seed == chain(sigma[1], recs[0].passes[-1].root, 0)
-    assert recs[0].passes[0].segment_roots == (b"\x01" * 64,) and b.stats()["windows"] == 3
+    assert (recs[0].passes[0].root, recs[0].passes[0].segment_roots) == (b"\x01" * 64, ()) and b.stats()["windows"] == 3

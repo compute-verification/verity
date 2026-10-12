@@ -15,13 +15,15 @@ window      the interval of one challenge σ: `begin_window(σ)` ... `end_window
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
             is chained, seed_j = H(σ, j, commitment before it) across windows (the registration's root before the
             session's first), so pass j's receipts can't start before the pass before it is committed
-segment     a run of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
-            sweep) receipts it and its receipts make one subtree
-commitment  a pass's root: SHA-512 over the pass index, its seed, the plan's digest (over the plan's runs of store
-            indices), its segments' sizes and the RFC 6962 tree over their roots, each segment's root the tree over its
-            receipt leaves (`tags.leaf_hash`, `per_leaf` a leaf)
-opening     for a sampled (pass, position): the block's bytes as read, its receipt, its paths to the pass's root and
-            its registration record, from which the verifier recomputes the receipt and checks the decoding
+segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
+            sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power
+            of two of them, from a multiple of their number), but for a tail of the parts' last blocks
+commitment  a pass's root, the remote bandwidth driver's: frame-v3-sha512 over leaves of 16 receipts in plan order, each
+            hidden as an hm96-sha512/row/v2 leaf under a salt, bound to the pass's seed and the plan's digest (over
+            the plan's runs of store indices)
+opening     for a sampled (pass, position): the block's bytes as read, its receipt, its leaf's receipts and salt, the
+            leaf's path to the pass's root and its registration record, from which the verifier recomputes the
+            receipt and checks the decoding
 ~~~
 """
 from __future__ import annotations
@@ -60,11 +62,11 @@ class Codec(Protocol):
 @runtime_checkable
 class Receipt(Protocol):
     """A receipt construction (the bandwidth audit's `Tag` with the optional bound input ``z``).  ``binds`` names what a
-    receipt reads beside the block: ``()`` for sketch-then-hash, ``("z",)`` for one bound to the prior tile's output."""
+    receipt reads beside the block: ``()`` for sketch-then-hash, ``("z",)`` for one bound to the prior tile's output.
+    The driver's leaves are of 64-byte receipts."""
 
     name: str
     receipt_bytes: int
-    per_leaf: int
     binds: tuple[str, ...]
 
     def keyed(self, seed: bytes) -> Keyed: ...
@@ -168,8 +170,9 @@ class Segment:
 @dataclass(frozen=True)
 class PassCommitment:
     """Pass ``index`` of its window: its seed, its plan (the segments in read order, and ``plan_digest`` over the
-    plan's runs of store indices, `StoreView.plan`), each segment's root and the pass's root, which seeds the next
-    pass, in this window or the next."""
+    plan's runs of store indices, `StoreView.plan`), each segment's node's root (the least node of the pass's tree
+    over its leaves; ``()`` when the reader built the tree) and the pass's root, which seeds the next pass, in this
+    window or the next."""
 
     index: int
     seed: bytes
@@ -194,8 +197,9 @@ class WindowRecord:
 @dataclass(frozen=True)
 class Opening:
     """Block ``block`` (region ``region``, tier and kind as read) at position ``position`` of pass ``pass_index``: the
-    bytes read, the receipt, the leaf's receipts (its ``per_leaf`` neighbours), the leaf's path in its segment's tree,
-    the segment's path in the pass's tree, and the registration ``source`` the decoding is checked against."""
+    bytes read, the receipt, the leaf's receipts (up to 16, in plan order), the leaf's path to its segment's node and
+    the node's path to the pass's root (together the driver's path), the registration ``source`` the decoding is
+    checked against, and the leaf's ``salt``."""
 
     pass_index: int
     position: int
@@ -209,6 +213,7 @@ class Opening:
     leaf_path: tuple[bytes, ...]
     segment_path: tuple[bytes, ...]
     source: Source
+    salt: bytes
 
 
 class Stale(RuntimeError):
@@ -253,7 +258,8 @@ class Lifecycle(Protocol):
     bytes, `kv_append` re-registers the blocks the step's tokens complete (encoded on append, on the device, by the
     codec's ``encode_slots_``), and `kv_free` returns pages to filler with their encoded bytes, already registered
     blocks, as they are.  `begin_pass` and `end_pass` bound a step: the pass's plan, then its commitment, from the
-    segment roots a device reader hands in (``roots``, by segment number) or from the reference's receipts."""
+    aligned segments' roots a device reader hands in (``roots``, by segment number) and the reference's receipts for
+    the rest, or from the ``root`` of the tree a reader built whole."""
 
     def register(self, name: str, tier: str, kind: str, backing: Backing, *, block_bytes: int, codec: Codec,
                  receipt: Receipt, source: str, encode: bool = True) -> RegionInfo: ...
@@ -271,7 +277,7 @@ class Lifecycle(Protocol):
 
     def begin_pass(self, live_pages: Sequence[int] | None = ()) -> Any: ...
 
-    def end_pass(self, roots: dict[int, bytes] | None = None) -> PassCommitment | None: ...
+    def end_pass(self, roots: dict[int, bytes] | None = None, *, root: bytes | None = None) -> PassCommitment | None: ...
 
 
 @dataclass
