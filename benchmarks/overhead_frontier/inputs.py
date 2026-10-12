@@ -177,22 +177,25 @@ INPUTS: dict[str, Input] = {
                                "read z from PoUW's transcript"),
     "receipt_bits": Input(512, "bits", "a SHA-512 receipt", "policy"),
     # η, the share of R·T the honest engine leaves unread, by phase: stock vLLM 8B on ra-kv-filler's bursty trace 1
-    # (trace 2, decode-heavy, in each source; r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01).
+    # (trace 2, decode-heavy, in each source).
     "eta_counted": Input(False, "switch", "exhaustion against a declared load: the frontier's step reads at R by "
                          "construction, so η is what γ leaves (``eta_allowance``); against R·T, γ adds the phases "
                          "(with Daniel, STEERING 19:40Z)", "policy"),
     "eta_decode": Input(0.190, "of R·T", "ra-kv-filler §7: decode steps read at 0.75 R (trace 2: 0.80 R, 0.172), "
-                        "the step's own shortfall", "measured", 0.05,
+                        "the step's own shortfall (r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)",
+                        "measured", 0.05,
                         "a decode step that reads at 0.95 R throughout, as the fused sketch GEMM does (estimate; a "
                         "side stream nets only 0.0075 R per 1% of step time, ra-kv-filler)"),
-    "eta_prefill": Input(0.092, "of R·T", "ra-kv-filler §7: prefill reads at 0.041 R (trace 2: 0.095 R, 0.033)",
-                         "measured", 0.005,
+    "eta_prefill": Input(0.092, "of R·T", "ra-kv-filler §7: prefill reads at 0.041 R (trace 2: 0.095 R, 0.033; "
+                         "r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured", 0.005,
                          "weights re-streamed and sketched beside the compute-bound prefill at 0.95 R, about +0.9% of "
                          "busy time (ra-kv-filler, estimate)"),
     "eta_gaps": Input(0.040, "of R·T", "ra-kv-filler §7: the engine's host time between steps, median 0.38 ms a step "
-                      "(trace 2: 0.82 ms, 0.065)", "measured", 0.0,
+                      "(trace 2: 0.82 ms, 0.065; r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)",
+                      "measured", 0.0,
                       "the next step queued on the GPU before the host's output work (the engine's job, estimate)"),
-    "eta_idle": Input(0.095, "of R·T", "ra-kv-filler §7: no request running (trace 2: 0.034)", "measured", 0.005,
+    "eta_idle": Input(0.095, "of R·T", "ra-kv-filler §7: no request running (trace 2: 0.034; "
+                      "r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured", 0.005,
                       "the idle top-up's plain read, which fills 0.88–0.95 of it at +0.1% TPOT (ra-kv-filler)"),
     "mu_cpu": Input(0.0, "of capacity", "the host CPUs' tile work (Daniel 18:55Z: a capacity to exhaust or count). "
                     "Under C they are counted: their squarings in μ_rebuild (h), their DRAM in ΣR, their caches as "
@@ -214,7 +217,8 @@ INPUTS: dict[str, Input] = {
                        "sessions of 1,000 chained windows (17 minutes), so a padded pass's tail costs a tenth"),
     "p_over_o": Input(0.47, "prompt tokens per output token", "ra-kv-filler's decode-heavy trace 2 (93,312 prompt and "
                       "200,192 output tokens): each step also encodes P/O prompt tokens a sequence, k·x₁ a byte over "
-                      "the reads it gets; the prompt encode was +7.3% / +11.0% of busy time at k = 2 / 3", "measured"),
+                      "the reads it gets; the prompt encode was +7.3% / +11.0% of busy time at k = 2 / 3 "
+                      "(r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured"),
 }
 
 # The floor: each lever past its realistic improvement to the best any measurement or bound supports, so that the
