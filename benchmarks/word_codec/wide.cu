@@ -1352,29 +1352,15 @@ struct Levels {
   uint64_t off[SUB + 1];  // in nodes: level t's node for the range's first, t = 0..SUB
 };
 
-// `sketch_leaves` and the levels 1 … SUB above them in one launch: block b's 2^SUB threads hash the range's leaves
-// [b·2^SUB, (b + 1)·2^SUB) and fold them in shared memory, one level per barrier, writing every level to the workspace
-// (for openings). The range's first leaf and its count are multiples of 2^SUB, so every node is the hash of two.
-__global__ void __launch_bounds__(1 << SUB) sketch_leaves_fold(const uint32_t* __restrict__ tags, uint64_t B,
-                                                               uint64_t leaf0, bw::Mid leafmid,
-                                                               uint64_t* __restrict__ nodes, Levels lv) {
-  __shared__ uint64_t sm[1 << SUB][8];
-  const int x = threadIdx.x;
-  const uint64_t i = blockIdx.x * (uint64_t)(1 << SUB) + x;
-  uint64_t s[8];
-  sketch_leaf(tags + 16 * i * 8, B, leaf0 + i, leafmid, s);
-#pragma unroll
-  for (int e = 0; e < 8; ++e) nodes[(lv.off[0] + i) * 8 + e] = sm[x][e] = s[e];
+// `ww_sketch_fold`'s levels with one warp a block (2^SUB leaves, 2^(SUB−1) threads at level 1), so that a block's
+// registers fit in what three fused-GEMM CTAs an SM leave (4096 at 160 registers) and it never waits for a CTA's slot.
+static_assert(SUB == 6, "one warp a block at level 1");
+__global__ void __launch_bounds__(32) fold_warp(uint64_t* nodes, Levels lv, uint64_t c) {
 #pragma unroll 1
-  for (int t = 1; t <= SUB; ++t) {
-    const int w = (1 << SUB) >> t;
-    __syncthreads();
-    if (x < w) bw::node_hash(sm[2 * x], sm[2 * x + 1], s);
-    __syncthreads();
-    if (x < w) {
-#pragma unroll
-      for (int e = 0; e < 8; ++e) nodes[(lv.off[t] + blockIdx.x * (uint64_t)w + x) * 8 + e] = sm[x][e] = s[e];
-    }
+  for (int t = 0; t < SUB; ++t) {
+    const uint64_t w = 32 >> t;
+    if (threadIdx.x < w) bw::level_step(nodes + lv.off[t] * 8, c >> t, nodes + lv.off[t + 1] * 8, blockIdx.x * w + threadIdx.x);
+    __syncwarp();
   }
 }
 
@@ -1720,27 +1706,36 @@ int ww_sketch_commit(void* workspace, uint64_t n, const uint8_t* seed, uint8_t* 
 }
 
 // `ww_sketch_commit`'s leaves of the pass's tags [jbase, jbase + n) (jbase a multiple of 16), read from `tags`, into
-// the leaves of the commit workspace of a pass of `blocks` tags; its own tag area is not read.
+// the leaves of the commit workspace of a pass of `blocks` tags; its own tag area is not read. threads (32 or 128) a
+// block: at 32 a block's registers fit beside three fused-GEMM CTAs an SM.
 int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
-                     const uint8_t* seed, cudaStream_t s) {
-  if (jbase % 16 || jbase + n > blocks) return 2;
+                     const uint8_t* seed, int threads, cudaStream_t s) {
+  if (jbase % 16 || jbase + n > blocks || (threads != 32 && threads != 128)) return 2;
   if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
-  sketch_leaves<<<(unsigned)(((n + 15) / 16 + 127) / 128), 128, 0, s>>>(tags, blocks, jbase / 16, n, lm, p.nodes);
+  sketch_leaves<<<(unsigned)(((n + 15) / 16 + threads - 1) / threads), threads, 0, s>>>(tags, blocks, jbase / 16, n, lm,
+                                                                                        p.nodes);
   return cudaGetLastError() ? 4 : 0;
 }
 
 // The tree's levels 1 … SUB over the leaves [jbase / 16, (jbase + n) / 16) that `ww_sketch_leaves` wrote, while L2
-// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node), in one `node_span`
-// launch: `ww_sketch_tree` from level SUB then reads back 64 B a 2^SUB leaves rather than every leaf.
-int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n, cudaStream_t s) {
+// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node), in one launch
+// (`node_span`, or with warp `fold_warp`): `ww_sketch_tree` from level SUB then reads back 64 B a 2^SUB leaves rather
+// than every leaf.
+int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n, int warp, cudaStream_t s) {
   const uint64_t span = 16ull << SUB;
   if (jbase % span || n % span || jbase + n > blocks) return 2;
   if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   if (p.lv.n.size() <= (size_t)SUB) return 2;
   const uint64_t l0 = jbase / 16, c = n / 16;
+  if (warp) {
+    Levels lv;
+    for (int t = 0; t <= SUB; ++t) lv.off[t] = p.lv.off[t] + (l0 >> t);
+    fold_warp<<<(unsigned)(c >> SUB), 32, 0, s>>>(p.nodes, lv, c);
+    return cudaGetLastError() ? 4 : 0;
+  }
   static_assert(SUB <= bw::SPAN, "one node_span launch");
   bw::Span sp;
   sp.levels = SUB;
@@ -1749,22 +1744,6 @@ int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n,
     sp.n[t] = c >> t;
   }
   bw::node_span<<<(unsigned)((c + 2 * bw::SPAN_THREADS - 1) / (2 * bw::SPAN_THREADS)), bw::SPAN_THREADS, 0, s>>>(p.nodes, sp);
-  return cudaGetLastError() ? 4 : 0;
-}
-
-// `ww_sketch_leaves` then `ww_sketch_fold` over the same tags in one launch (`sketch_leaves_fold`): no second launch
-// waits for the first, and the leaves are folded from shared memory. Same conditions as `ww_sketch_fold`.
-int ww_sketch_leaves_fold(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
-                          const uint8_t* seed, cudaStream_t s) {
-  const uint64_t span = 16ull << SUB;
-  if (jbase % span || n % span || jbase + n > blocks) return 2;
-  if (!n) return 0;
-  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
-  if (p.lv.n.size() <= (size_t)SUB) return 2;
-  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
-  Levels lv;
-  for (int t = 0; t <= SUB; ++t) lv.off[t] = p.lv.off[t] + ((jbase / 16) >> t);
-  sketch_leaves_fold<<<(unsigned)(n / span), 1 << SUB, 0, s>>>(tags, blocks, jbase / 16, lm, p.nodes, lv);
   return cudaGetLastError() ? 4 : 0;
 }
 
