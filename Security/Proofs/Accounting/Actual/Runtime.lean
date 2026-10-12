@@ -4,7 +4,7 @@ import Proofs.Nci.Reads
 /-!
 # The runtime corollary
 
-At a `t'` at or before `t` by which the developer has `P`'s outputs in every run of the strategy, the run's windows
+At a `t'` at or before `t` by which the developer holds `P`'s outputs at fixed positions in every run, the run's windows
 divide its region over `[0, t')` into `n ⌈t'/ω⌉` IUs of at most `Γ` gates, each reading at most `K` (`Windows`), so B5
 (`Nci.SecurityProofs.UpdatedMatMulReads`) gives `G f(K) ≤ n ⌈t'/ω⌉ K`, and `⌈t'/ω⌉ ω ≤ t' + ω`.
 -/

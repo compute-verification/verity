@@ -26,9 +26,9 @@ outside during `[t, u)`; the state is the run's own, so fixing coins keeps it. W
 its inputs, its gates before `t` and what it read from outside before `t`) and links as alphabets (`Alphabet`, by
 `signal`) are further hypotheses on a strategy.
 
-The *runtime* `t_A(P)` (v2.7, section 7; `Actual.runtime`) reads the strategy too: the least `t` such that, for every
-value of `P`'s inputs put in place of `A`'s, the run has `P`'s outputs among the values of the developer's gates placed
-before `t` (`Actual.Computes`).
+The *runtime* `t_A(P)` (v2.8, section 7; `Actual.runtime`) reads the strategy too: the least `t` for which some
+positions before `t` (leaf of the developer's, cell, tick), the same for every value of `P`'s inputs put in place of
+`A`'s, hold `P`'s outputs in the run with that value (`Actual.Computes`).
 
 A guarantee `E` reads a strategy and a coin (a property of the run, or of how the strategy varies with the coins). It
 is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every strategy causal from every tick with runs in `𝓕`
@@ -148,18 +148,21 @@ def CausalFrom {Ω L : Type*} [LinearOrder L] (S : Ω → Actual.Run L) : Prop :
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico t u) = (S r').crossing (↑X)ᶜ ↑X (Set.Ico t u) →
     (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)
 
-/-- **The developer at `X` has `P`'s outputs before `t`** (v2.7), across the runs `S v`, one for each value `v` of `P`'s
-inputs (`P.eval v` reads only them): `S v` is the strategy's run with `v` in place of `A`'s values at `P`'s inputs, the
-other inputs and the coins the same, which this takes as given. In each, every output of `P` at `v` is the value, at its
-width, of a gate placed in `X` before `t`. -/
+/-- **The developer at `X` holds `P`'s outputs at fixed positions before `t`** (v2.8), across the runs `S v`, one for
+each value `v` of `P`'s inputs (`P.eval v` reads only them): `S v` is the strategy's run with `v` in place of `A`'s
+values at `P`'s inputs, the other inputs and the coins the same, which this takes as given. Each output `o` of `P` has a
+position, a leaf `y` of `X`, a cell `c` and a tick `u < t`, chosen before `v`, at which every run `S v` places a gate
+with `o`'s width and its value at `v`. With the position chosen after `v`, a one-bit output is among almost any run's
+values (v2.7's form, a runtime of about 0). -/
 def Actual.Computes {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actual.Run L) (X : Finset L) (t : ℕ) :
     Prop :=
-  ∀ v, ∀ o ∈ P.outputs, ∃ g, (S v).A.x g ∈ X ∧ (S v).A.t g < t ∧ (S v).A.w g = P.w o ∧
-    ((S v).val g).toNat = (P.eval v o).toNat
+  ∀ o ∈ P.outputs, ∃ y ∈ X, ∃ c u, u < t ∧ ∀ v, ∃ g, (S v).A.x g = y ∧ (S v).A.cell g = c ∧ (S v).A.t g = u ∧
+    (S v).A.w g = P.w o ∧ ((S v).val g).toNat = (P.eval v o).toNat
 
-/-- **The runtime** `t_A(P)` (v2.7) of a circuit `P` at the developer's leaves `X`, read off the strategy: the least `t`
-at which every run `S v` has `P`'s outputs at `v` among the values of its gates placed in `X` before `t`
-(`Actual.Computes`); `⊤` when no `t` does. One run holds only the branches its data took, so no one run says this. -/
+/-- **The runtime** `t_A(P)` (v2.8) of a circuit `P` at the developer's leaves `X`, read off the strategy: the least `t`
+by which some positions before `t` in `X`, the same for every value of `P`'s inputs, hold `P`'s outputs in every run
+`S v` (`Actual.Computes`); `⊤` when no `t` does. One run holds only the branches its data took, so no one run says
+this. -/
 noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actual.Run L) (X : Finset L) :
     ℕ∞ :=
   ⨅ (t : ℕ) (_ : Actual.Computes S X t), (t : ℕ∞)
