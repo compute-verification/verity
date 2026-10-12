@@ -561,6 +561,9 @@
   "Bandwidth.SecurityProofs.AuditInteractiveRO": {
    "owner": "@memory-accounting"
   },
+  "Bandwidth.SecurityProofs.AuditJoint": {
+   "owner": "@memory-accounting"
+  },
   "Bandwidth.SecurityProofs.AuditRO": {
    "owner": "@memory-accounting",
    "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
@@ -4111,7 +4114,8 @@
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
    "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
-   "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound."
+   "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound.",
+   "Bandwidth.SecurityProofs.AuditJoint": "frozen (no-function,hash): As AuditRO, for a device whose layout also reads n bits z, uniform and independent of the store, which its chip outputs (Security/Definitions/Accounting/Bandwidth/Joint.lean): the compression over the pair (store, z) moves the floor up by n, so an accept gives n <= ingress - cert_bw at AuditRO's error (Mbw, bandwidth additivity by counting)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
