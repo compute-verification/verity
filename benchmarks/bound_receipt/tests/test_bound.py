@@ -49,6 +49,10 @@ def test_shapes_and_the_kernel_constants():
     assert [BR.batch_blocks(m) for m in (1, 8, 9, 16, 17, 32, 33, 64)] == [1, 1, 2, 2, 4, 4, 8, 8]
     with pytest.raises(ValueError):
         BR.batch_blocks(65)
+    src = (HERE.parent / "bound.cu").read_text()
+    assert f'BOUND_NAME[] = "{BR.NAME}"' in src
+    assert "s4 = 4 * ((z4 + 4u * grid - 1) / (4u * grid));" in src and "(2048u * warp + 4u * lane) % s4, 128u % s4" in src
+    assert "return Mb <= 8 ? 1 : Mb <= 16 ? 2 : Mb <= 32 ? 4 : 8;" in src
 
 
 def test_from_fragments_inverts_sign_fragments():
