@@ -706,7 +706,8 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="8b", choices=sorted(MODELS))
     ap.add_argument("--ks", default="1,2,3")
-    ap.add_argument("--gate-cells", default="4x1000,2x4096")
+    ap.add_argument("--gate-cells", default="4x1000,2x4096,64x1024",
+                    help="64 x 1024 has more of mma-dyn's work items than the SMs hold CTAs at every split")
     ap.add_argument("--cells", default="160x4096,80x8192,40x16384")
     ap.add_argument("--write-batches", default="", help="the write side's batches (default: the cells')")
     ap.add_argument("--reps", type=int, default=3)
@@ -717,7 +718,8 @@ def main() -> int:
                     "each encoded form's plain form among them")
     ap.add_argument("--write-only", action="store_true",
                     help="time the write side only (the cells give the model check's step, not timed)")
-    ap.add_argument("--sanitize", action="store_true", help="one tiny gate cell of 2 layers, then stop")
+    ap.add_argument("--sanitize", action="store_true",
+                    help="two tiny gate cells of 2 layers (24 x 100 gives mma-dyn's CTAs several items), then stop")
     ap.add_argument("--ncu", action="store_true", help="launch each form of --forms once on one layer of the first "
                     "cell at the first k (plain forms at k = 1) and --ncu-splits, for Nsight Compute, then stop")
     ap.add_argument("--ncu-splits", type=int, default=8)
@@ -748,7 +750,7 @@ def main() -> int:
         + ", ".join(f"{l.name} {shape(l)}" for l in libs))
     if a.sanitize:
         for lib in libs:
-            g = attn_gate(lib, torch, m, [(2, 100)], ks[:1], log, layers_override=2)
+            g = attn_gate(lib, torch, m, [(2, 100), (24, 100)], ks[:1], log, layers_override=2)
             rg = receipt_gate(lib, torch, m, [(2, 100)], ks[:1], log, layers_override=2)
             res["ok"] &= all(c["ok"] for c in g.values()) and all(c["ok"] for c in rg.values())
             B.set_key(lib, K.key(lib.field.name, B.SEED, ks[0]))
