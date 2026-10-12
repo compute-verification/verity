@@ -44,7 +44,7 @@ if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $CT/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
 [ -n "${COMPILE_ONLY:-}" ] && exit 0
-export B PY CT FIELDS BUILDS="${BUILDS[*]}" BENCH_ARGS=${BENCH_ARGS:-} PROFILE=${PROFILE:-}
+export B PY CT FIELDS BUILD_NAMES="${BUILDS[*]}" BENCH_ARGS=${BENCH_ARGS:-} PROFILE=${PROFILE:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -52,7 +52,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu --format=csv,noheader \
           -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
-  LIBS=(); for n in $BUILDS; do LIBS+=(--lib "$B/wt-$n.so"); done
+  LIBS=(); for n in $BUILD_NAMES; do LIBS+=(--lib "$B/wt-$n.so"); done
   NCU=(); [ -n "$PROFILE" ] && NCU=(ncu $PROFILE -f -o "$O/prof")
   # shellcheck disable=SC2086
   "${NCU[@]}" "$PY" $CT/bench.py "${LIBS[@]}" --out "$O" $BENCH_ARGS; rc=$?
