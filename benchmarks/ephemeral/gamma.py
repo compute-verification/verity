@@ -1,6 +1,6 @@
 """The ephemeral γ terms at the checkpoint's depth, from fetched runs: per model, mode, batch and context, the plain
 lm_head's share of a step's reads and of R·T, the rest's (everything unregistered but the lm_head) eager and fused, μ_eph
-= rest / (R·T), and writes over reads.
+= rest / (R·T), writes over reads, and μ_eph with the writes' bus time counted at R, (rest + writes) / (R·T).
 
     uv run python benchmarks/ephemeral/gamma.py OUT_DIR... [--json PATH]
 
@@ -65,7 +65,7 @@ def rows_of(best: dict, times: dict) -> list[dict]:
             row[mode] = {"source": hit[1]["tag"], "per_kernel": hit[0][1], "read": rd, "rest": rest, "write": wr,
                          "lm_head": lm, "T_s": T, "R": R, "rest_share": rest / rd, "lm_share": lm / rd,
                          "lm_time": lm / (R * T) if T else None, "mu_eph": rest / (R * T) if T else None,
-                         "write_over_read": wr / rd}
+                         "mu_eph_writes": (rest + wr) / (R * T) if T else None, "write_over_read": wr / rd}
         out.append(row)
     return out
 
@@ -76,7 +76,8 @@ def pc(x: float | None, d: int = 2) -> str:
 
 def table(rows: list[dict], model: str) -> str:
     lines = ["| B | ctx | T eager / fused (ms) | plain lm_head, % of reads (% of R·T) | rest, eager | rest, fused | "
-             "μ_eph eager / fused (% of R·T) | writes / reads, eager / fused |", "| --- " * 8 + "|"]
+             "μ_eph eager / fused (% of R·T) | writes / reads, eager / fused | μ_eph with writes, eager / fused |",
+             "| --- " * 9 + "|"]
     for r in rows:
         if r["model"] != model:
             continue
@@ -87,9 +88,11 @@ def table(rows: list[dict], model: str) -> str:
         lm = pc(base["lm_share"], 1) + (f" ({pc(base['lm_time'], 1)})" if base.get("lm_time") else "")
         rest = [f"{pc(x['rest_share'])}{'*' if x['per_kernel'] else ''} ({x['rest'] / 1e6:.0f} MB)" if x else "–"
                 for x in (e, f)]
-        mu = " / ".join(pc(x.get("mu_eph"), 3) for x in (e, f)) if any(x.get("mu_eph") for x in (e, f)) else "–"
+        mu, muw = ((" / ".join(pc(x.get(k), 3) for x in (e, f)) if any(x.get(k) for x in (e, f)) else "–")
+                   for k in ("mu_eph", "mu_eph_writes"))
         wr = " / ".join(pc(x["write_over_read"], 1) if x else "–" for x in (e, f))
-        lines.append(f"| {r['batch']} | {r['context'] // 1024}k | {t} | {lm} | {rest[0]} | {rest[1]} | {mu} | {wr} |")
+        lines.append(f"| {r['batch']} | {r['context'] // 1024}k | {t} | {lm} | {rest[0]} | {rest[1]} | {mu} | {wr} | "
+                     f"{muw} |")
     return "\n".join(lines)
 
 

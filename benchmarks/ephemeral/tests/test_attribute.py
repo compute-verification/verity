@@ -175,4 +175,5 @@ def test_gamma_prefers_a_full_depth_graph_arm_and_divides_by_r_t(tmp_path: Path)
     assert e["source"] == "8b-L0-0-graph" and not e["per_kernel"]
     assert e["rest"] == pytest.approx(52) and e["write"] == pytest.approx(9)
     assert e["mu_eph"] == pytest.approx(52 / 1e3) and e["lm_time"] == pytest.approx(500 / 1e3)
+    assert e["mu_eph_writes"] == pytest.approx((52 + 9) / 1e3)
     assert "*" not in G.table([row], "8b")
