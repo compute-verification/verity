@@ -51,7 +51,9 @@ theorem w1_cost_le_priced (dv : W1Device) (hf : 0 ≤ dv.prices.fetch) (P : Prot
     (w1 dv P salt).cost pr H U act σ s ≤ (w1Priced dv salt).cost pr H U act σ s := by
   simp only [w1, w1Priced, w1Read]
   rw [Rat.cast_le]
-  exact add_le_add_left (mul_le_mul_of_nonneg_left (by exact_mod_cast List.length_filter_le _ _) hf) _
+  apply add_le_add_left
+  refine mul_le_mul_of_nonneg_left ?_ hf
+  exact_mod_cast List.length_filter_le _ _
 
 /-- **The γ-gap property over the priced sum** follows from W1's, at the same `γ` and `η`. -/
 theorem gγ_w1Priced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1Device) (hf : 0 ≤ dv.prices.fetch)
