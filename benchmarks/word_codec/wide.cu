@@ -94,6 +94,16 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #ifndef WW_SKEND
 #define WW_SKEND 0
 #endif
+// WW_MAXREG: the fused GEMM's registers a thread (`__maxnreg__`, in place of WW_OCC's bounds), such as 160, at which
+// three CTAs an SM leave a warp of `sketch_subtrees` room beside them.
+#ifndef WW_MAXREG
+#define WW_MAXREG 0
+#endif
+#if WW_MAXREG
+#define WW_GEMM_BOUNDS __maxnreg__(WW_MAXREG)
+#else
+#define WW_GEMM_BOUNDS __launch_bounds__(GEMM_WARPS * 32, WW_OCC)
+#endif
 
 namespace ww {
 
@@ -1086,7 +1096,7 @@ __device__ __forceinline__ void pair_sync() {
 // into tags[8 v …] before its decode, its upper 16 lanes repeating the lower's so the warp never diverges. WW_SKEND:
 // the sum and the hash after the GEMM instead.
 template <int KR, int NB8, bool PARTIALS, bool TAG, int SK>
-__global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
+__global__ void WW_GEMM_BOUNDS gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
                                                                uint32_t* __restrict__ tags, int ahead,
@@ -1290,16 +1300,12 @@ __global__ void __launch_bounds__(128) sketch_tags_kernel(const int32_t* __restr
   o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
 }
 
-// `bw::b3_leaves` over the n tags [16 leaf0, 16 leaf0 + n) of a pass of B tags, held at `tags` (one linear's, read while
-// L2 still has them), each leaf at its index in the pass.
-__global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf0,
-                                                     uint64_t n, bw::Mid leafmid, uint64_t* __restrict__ leaves) {
-  const uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x, leaf = leaf0 + i, first = leaf * 16;
-  if (16 * i >= n) return;
+// `bw::b3_leaves`'s leaf `leaf` of a pass of B tags, over its tags at T.
+__device__ __forceinline__ void sketch_leaf(const uint32_t* __restrict__ T, uint64_t B, uint64_t leaf,
+                                            const bw::Mid& leafmid, uint64_t s[8]) {
+  const uint64_t first = leaf * 16;
   const int c = (int)(B - first < 16 ? B - first : 16);
   const int data = 1 + 4 * c, nb = (8 * data + 17 + 127) / 128;
-  const uint32_t* T = tags + 16 * i * 8;
-  uint64_t s[8];
 #pragma unroll
   for (int e = 0; e < 8; ++e) s[e] = leafmid.h[e];
 #pragma unroll 1
@@ -1320,8 +1326,42 @@ __global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict_
     }
     bw::compress(s, w);
   }
+}
+
+// The leaves over the n tags [16 leaf0, 16 leaf0 + n) of a pass of B tags, held at `tags` (one linear's, read while
+// L2 still has them), each leaf at its index in the pass.
+__global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf0,
+                                                     uint64_t n, bw::Mid leafmid, uint64_t* __restrict__ leaves) {
+  const uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x, leaf = leaf0 + i;
+  if (16 * i >= n) return;
+  uint64_t s[8];
+  sketch_leaf(tags + 16 * i * 8, B, leaf, leafmid, s);
 #pragma unroll
   for (int e = 0; e < 8; ++e) leaves[leaf * 8 + e] = s[e];
+}
+
+// `sketch_leaves` and the tree over them up SUB levels in shared memory, a block of 2^SUB threads 2^SUB leaves (leaf0
+// a multiple of 2^SUB): only the level-SUB nodes are written, node leaf0 / 2^SUB + b at `nodes` (the level's). They are
+// the pass's level-SUB nodes when every level-SUB node's leaves are all there, as RFC 6962 carries only a level's last.
+// One warp a block: its 32 · 96 registers fit in the 4096 that three 156-register GEMM CTAs leave an SM, so it runs
+// beside the GEMM rather than in its wave tails.
+constexpr int SUB = 5;
+__global__ void __launch_bounds__(1 << SUB) sketch_subtrees(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf0,
+                                                            bw::Mid leafmid, uint64_t* __restrict__ nodes) {
+  __shared__ uint64_t nd[2][1 << SUB][8];
+  const int t = threadIdx.x;
+  const uint64_t i = ((uint64_t)blockIdx.x << SUB) + t;
+  uint64_t s[8];
+  sketch_leaf(tags + 16 * i * 8, B, leaf0 + i, leafmid, s);
+#pragma unroll
+  for (int e = 0; e < 8; ++e) nd[0][t][e] = s[e];
+  __syncthreads();
+#pragma unroll 1
+  for (int lv = 0; lv < SUB; ++lv) {
+    if (t < ((1 << SUB) >> (lv + 1))) bw::node_hash(nd[lv & 1][2 * t], nd[lv & 1][2 * t + 1], nd[(lv + 1) & 1][t]);
+    __syncthreads();
+  }
+  if (t < 8) nodes[((leaf0 >> SUB) + blockIdx.x) * 8 + t] = nd[SUB & 1][0][t];
 }
 
 __global__ void dtw_kernel(uint32_t* out) {
@@ -1446,7 +1486,7 @@ extern "C" {
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
   out[7] = KMAX; out[8] = WW_SQR; out[9] = TAG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
-  out[13] = WW_B3U; out[14] = TB; out[15] = KW; out[16] = SK_M; out[17] = WW_SKEND;
+  out[13] = WW_B3U; out[14] = TB; out[15] = KW; out[16] = SK_M; out[17] = WW_SKEND; out[18] = SUB; out[19] = WW_MAXREG;
   return 0;
 }
 
@@ -1676,10 +1716,26 @@ int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uin
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The tree over the leaves `ww_sketch_leaves` wrote; with root non-null, the root's 64 bytes (and a sync).
-int ww_sketch_tree(void* workspace, uint64_t blocks, uint8_t* root, cudaStream_t s) {
+// `ww_sketch_leaves` through `sketch_subtrees`: the pass's level-SUB nodes over its leaves [jbase / 16, (jbase + n) / 16),
+// the leaves themselves never written; jbase and n multiples of 16 · 2^SUB.
+int ww_sketch_subtrees(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
+                       const uint8_t* seed, cudaStream_t s) {
+  const uint64_t span = 16ull << SUB;
+  if (jbase % span || n % span || jbase + n > blocks) return 2;
+  if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
-  bw::launch_tree(p, s);
+  if (p.lv.n.size() <= (size_t)SUB) return 2;
+  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
+  sketch_subtrees<<<(unsigned)(n / span), 1 << SUB, 0, s>>>(tags, blocks, jbase / 16, lm, p.nodes + p.lv.off[SUB] * 8);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The tree from level `from` (0: the leaves `ww_sketch_leaves` wrote; SUB: the nodes `ww_sketch_subtrees` wrote); with
+// root non-null, the root's 64 bytes (and a sync).
+int ww_sketch_tree(void* workspace, uint64_t blocks, int from, uint8_t* root, cudaStream_t s) {
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  if (from < 0 || (size_t)from >= p.lv.n.size()) return 2;
+  bw::launch_tree(p, s, (size_t)from);
   if (cudaGetLastError()) return 4;
   return root ? bw::read_root(p, root, s) : 0;
 }
