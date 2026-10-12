@@ -4175,9 +4175,9 @@
    ]
   },
   "Definitions.Accounting.Confidence": {
-   "digest": "652d93c1a057cd8c8f8ac5319879b71bfc1eb0bc032bb3320207f1cdd3d81354",
+   "digest": "977dafd69575333d30e4aa5abd7796e2a94d3f778e41c24d710d9863071934df",
    "definitions": {
-    "Accounting.Actual.Computes": "cecf806cf7b146be6d3e88a777fb9dbe4c0dce6af9f5979490d8448f080ef0b8",
+    "Accounting.Actual.Computes": "9319720c640d412d7ba1e51b57f32c7ca303ac42c727e20f0055ae79c371c1cf",
     "Accounting.Actual.Run": "59b9a32712cd5c6f246f1b7e6a3ee435e2d35f3e1882d7a7cf003a7a1be22974",
     "Accounting.Actual.Run.A": "1ccbd66f55cb59225749e02b0e16da0880011e930bebe5a1d2ecb38e007f4ceb",
     "Accounting.Actual.Run.acts": "e50ce6296f25ae4559694bc99c37f198b750c60f595aa96931814260475e3b35",
@@ -4306,7 +4306,7 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "cdfd51d3be6b18e63af4cf75eed8d5e48b8b260c393cd04af81568b2d8b44db8",
+   "digest": "04e38614f5b111891b7f64e345ea8ff3b85db3eab10d56739a2e272151f1e1ac",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
@@ -4317,7 +4317,7 @@
     "Accounting.Placed.Spec.op": "c84d3febe360a3a38ec798620ea3667ac688d142d66d2d8967813cee3ca31188",
     "Accounting.Placed.Spec.reads": "84f3b8534ac1c418e755de3b9fee4cc1f65a8cd20d472d4180005da1bfc7cbf3",
     "Accounting.Placed.readOn": "060e103ff34a579b5dab2ed4dabc64b5849a89ad95e7987745d343bfdb4bc9c3",
-    "Accounting.TrustedUnits": "08cc3f60ad3622c0fe2ab26cdcaedaa090effef6c24bd68870e4e4c734b6750b",
+    "Accounting.TrustedUnits": "d7c47c66b606793b60119a93001827de25bf7ebb191e3b152f84a92efb9727e2",
     "Accounting.boundary": "07676e3178e9dc4629bc1bca42bd192e63e44646aa29bff077eb221d15948522",
     "Accounting.linkCapacity": "d6970a625a14a173064adabe913bdf66c7ff1260f2b49553265e1cde9959e69c",
     "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
@@ -12773,10 +12773,10 @@
    "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Accounting.SecurityProofs.Actual.Windows"]
   },
   "Models.Accounting.Guarantees.Bridges": {
-   "digest": "d1f0e1b56190a9c43f0ee9d5f1f08222eeb1fe0545268dcfaef22d51f38a0780",
+   "digest": "26f85801505572a224a4b8833397fce889422d396b88c238265015169138faa2",
    "definitions": {
     "Accounting.Guarantees.B1": "c74386e3ceabe9d2f16360aa3120a74016750e7b3bc295394d49436ae386e242",
-    "Accounting.Guarantees.B4": "2b4d44387e8a6051f6903c67048df69469cd836adfa31a28e4d3dcd076c39680",
+    "Accounting.Guarantees.B4": "80b5e1ac77b04ded390b07d4c4ebc6d7b64c9ef3bb9563252466d0ab38678e4d",
     "Accounting.Guarantees.pouwRow": "6a594dc2e7ef18c12bee36e69e071cbafb8720d5281f33dbd810b02fa54f9786"
    },
    "guarantees": ["Accounting.SecurityProofs.B4", "Accounting.SecurityProofs.pouwRow"]
