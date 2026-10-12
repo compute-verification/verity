@@ -76,6 +76,7 @@ class Lib:
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3c": [i, i, i, v, v, v, v, i, i, i, u64, v, v, i, i, v, v, u64, i, i, i, i, v],
+            "tf_fused3p": [i, i, v, v, v, v, i, i, i, u64, v, v, ctypes.c_uint32, i, v],
             "tf_commit": [v, i, v], "tf_commit_plan": [v, v, v, i, v, v, u64, i, v, v, i], "tf_commit_job_bytes": [],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
@@ -678,10 +679,17 @@ def commit_costs(lib: Lib, torch, spans, reps: int, log) -> dict:
 STEP_GROUPS = (4, 8)
 
 
-def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_ptr, jbase, xr, company=None):
+def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_ptr, jbase, xr, company=None, pf=None):
     """One launch of a timed arm on one layer's copy of a shape (plain layout `pl`, row-major `wf`). company: a fused3
-    tag arm in fused3c_kernel, (commit job pointer, its CTAs, tag_ctas, deferred (w, tags, jbase, n, k, bid0, blocks))."""
+    tag arm in fused3c_kernel, (commit job pointer, its CTAs, tag_ctas, deferred (w, tags, jbase, n, k, bid0, blocks)).
+    pf: a fused3 arm at one quad ahead in fused3p_kernel, (next launch's store, its units, quads to prefetch)."""
     so, xp, yp, xrp = lib.so, ptr(x.view(torch.uint8)), ptr(y), ptr(xr)
+    if pf is not None:
+        m = FORM.match(arm)
+        if not (m and m["rpd"] == "1" and m["stage"] in "gt"):
+            raise ValueError(f"{arm}: only fused3 forms at one quad ahead prefetch")
+        lanes, mode = int(m["span"]) or 1, {"g": MODE_GEMM, "t": MODE_TAGS}[m["stage"]]
+        return lambda: so.tf_fused3p(lanes, mode, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, *pf, stream(torch))
     if arm == "cublas":
         one = torch.ones((), device="cuda")
         wt = wf.t()
@@ -737,6 +745,7 @@ def step_launches(weights: dict, g: int, nsm: int) -> list[dict]:
 
 
 BEHIND_SLACK = 1.5
+PF_QUADS = (2, 4)
 
 
 def commit_plan(lib: Lib, torch, launches: list[dict], g: int, tags, nodes, nsm: int, behind: bool = False) -> dict:
@@ -779,6 +788,9 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     behindL  tagdL with the commit of a finished step's tags in its launches, no drain: the steady state when each
              step's commit runs behind the next step
     Every tagd, commitin and behind arm's tags must equal tagL's and its tree commitL's, every node, or it is dropped.
+    tagpLqP  tagrL in fused3p_kernel: each launch, its loads done, prefetches the last P quads of the next launch's
+             units into L2 (gated like tagd)
+    gemmp0qP g0kr1 at every shape with the same prefetch, a native candidate: y is over the fastest of native and these
     probe4   u4kw4s3 at every shape: 4-round BLAKE3, uncertified
     """
     names = list(layout.SHAPES)
@@ -804,6 +816,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     done_tags = {g: torch.zeros_like(tbs[g]) for g in groups}
     plans = {g: commit_plan(lib, torch, launches[g], g, tbs[g], nodes_in[g], nsm) for g in groups}
     behind = {g: commit_plan(lib, torch, launches[g], g, done_tags[g], nodes_behind[g], nsm, True) for g in groups}
+    log(f"L2 {torch.cuda.get_device_properties(0).L2_cache_size / 2**20:.0f} MiB; prefetch quads {PF_QUADS}")
     for g in groups:
         log(f"commit plan {g} KiB: {plans[g]['launches']} launches + {plans[g]['jobs'] - plans[g]['launches']} drains, "
             f"commit CTAs up to {max(plans[g]['cblocks'])}; behind: {behind[g]['jobs'] - behind[g]['launches']} drains;"
@@ -824,9 +837,12 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                 xcs[name][:mb] = xs[name]
             ys[name] = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
 
-        def seq(pick, g=None, company=False, plan=None, drain=False):
+        order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
+
+        def seq(pick, g=None, company=False, plan=None, drain=False, pfq=0):
             """The step's launches: pick(name) is the arm of each shape, tags at their offsets in tbs[g]; in company,
-            fused3c_kernel with launches[g]'s deferrals and, with a plan, each launch's commit job (then its drain)."""
+            fused3c_kernel with launches[g]'s deferrals and, with a plan, each launch's commit job (then its drain);
+            pfq: fused3p_kernel, each launch but the last prefetching the last pfq quads of the next one's units."""
             fs, off = [], 0
             for layer in range(layout.LAYERS):
                 for name in names:
@@ -844,8 +860,16 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                             d = (ptr(copies[prev["name"]][prev["layer"]][0]), ptr(tbs[g]) + 32 * prev["off"],
                                  prev["off"], prev["n"], prev["k"], prev["tag_ctas"], launch["defer"])
                         with_ = (*cj, launch["tag_ctas"], d)
+                    pf = None
+                    if pfq:
+                        q = len(fs)
+                        pf = (0, 0, 0)
+                        if q + 1 < len(order):
+                            nl, nn = order[q + 1]
+                            pn, pk, _ = weights[nn]
+                            pf = (ptr(copies[nn][nl][0]), (pn // 16) * (pk // F3_COLS), pfq)
                     fs.append(launcher(lib, torch, pick(name), n, k, mb, timing[name]["batches"][mb]["cublas_m"], pl,
-                                       wf, xs[name], xcs[name], ys[name], tp, off, xr, with_))
+                                       wf, xs[name], xcs[name], ys[name], tp, off, xr, with_, pf))
                     if g:
                         off += layout.chunk_block_count(n, k, g)
             return fs + (drain_fns(plan) if drain else [])
@@ -928,17 +952,31 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                     arms[f"{what}{g}"] = f
             if gates[g]["commitin"]:
                 arms[f"drain{g}"] = run(drain_fns(plans[g]), f"drain{g}")
+            for q in PF_QUADS:
+                f = run(seq(lambda name: rpick[name], g, pfq=q), f"tagp{g}q{q}")
+                tbs[g].zero_()
+                f()
+                torch.cuda.synchronize()
+                ok = bool(torch.equal(tbs[g], want))
+                gates[g][f"tagp{g}q{q}"] = ok
+                log(f"gate step M={mb} tagp{g}q{q}: {'ok' if ok else 'FAIL'} (tags)")
+                if ok:
+                    arms[f"tagp{g}q{q}"] = f
+        for q in PF_QUADS:
+            arms[f"gemmp0q{q}"] = run(seq(lambda name: "g0kr1", pfq=q), f"gemmp0q{q}")
         if 4 in groups and all("u4kw4s3" in timing[name]["batches"][mb]["median_s"] for name in names):
             arms["probe4"] = run(seq(lambda name: "u4kw4s3", 4), "probe4")
         with torch.cuda.stream(hp):
             r = interleave(lib, torch, arms, reps, 1)
         med = r["median_s"]
         nat_sum = layout.LAYERS * sum(timing[name]["batches"][mb]["native_s"] for name in names)
-        r.update({"picks": picks, "gates": gates, "native_sum_s": nat_sum,
-                  "y": {a: med[a] / med["native"] for a in med}})
+        nat_arm = min((a for a in med if a == "native" or a.startswith("gemmp")), key=lambda a: med[a])
+        r.update({"picks": picks, "gates": gates, "native_sum_s": nat_sum, "native_arm": nat_arm,
+                  "y": {a: med[a] / med[nat_arm] for a in med}, "y_plain_native": {a: med[a] / med["native"] for a in med}})
         out[mb] = r
-        log(f"step M={mb}: native {med['native'] * 1e3:.3f} ms (32 x the shapes' medians {nat_sum * 1e3:.3f}); "
-            + ", ".join(f"{a} {med[a] / med['native']:.3f}" for a in med if a != "native")
+        log(f"step M={mb}: native {med['native'] * 1e3:.3f} ms (32 x the shapes' medians {nat_sum * 1e3:.3f}), best "
+            f"native {nat_arm} {med[nat_arm] * 1e3:.3f} ms; over it: "
+            + ", ".join(f"{a} {med[a] / med[nat_arm]:.3f}" for a in med if a != nat_arm)
             + (" HOST-BOUND" if r["host_bound"] else ""))
     return out
 
@@ -991,14 +1029,15 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
             out.append({**base, "block_bytes": bb, "form": "per-shape best", "batch": mb, "y": t["y"], "stage": "tag",
                         "weighting": "layer", "picks": t["picks"]})
         for a, y in s["step"].get(mb, {}).items():
-            if a == "native":
+            what, g, q = re.fullmatch(r"([a-z]+)(\d*)(?:q(\d+))?", a).groups()
+            if what in ("native", "gemmp"):
                 continue
-            what, g = re.fullmatch(r"([a-z]+)(\d+)", a).groups()
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": {"tag": "tag", "commit": "tag+commit", "overlap": "tag+commit overlapped",
                                   "top": "commit's tree top alone", "probe": "tag", "tagr": "tag", "tagd": "tag",
                                   "commitin": "tag+commit in the launches", "drain": "commit's drain alone",
-                                  "behind": "tag+commit of the previous step in the launches"}[what],
+                                  "behind": "tag+commit of the previous step in the launches", "tagp": "tag"}[what],
+                        **({"prefetch_quads": int(q)} if q else {}),
                         **({"certified": False, "rounds": PROBE_ROUNDS} if what == "probe" else {})})
     return out
 

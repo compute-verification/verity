@@ -378,6 +378,29 @@ __device__ __forceinline__ uint4 ldw(const uint4* p) {
   return v;
 }
 
+// ldw under an L2 eviction policy, and a bulk prefetch into L2 under one (createpolicy's).
+__device__ __forceinline__ uint64_t l2_policy_first() {
+  uint64_t p;
+  asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(p));
+  return p;
+}
+__device__ __forceinline__ uint64_t l2_policy_last() {
+  uint64_t p;
+  asm volatile("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(p));
+  return p;
+}
+__device__ __forceinline__ uint4 ldw_hint(const uint4* p, uint64_t pol) {
+  uint4 v;
+  asm volatile("ld.global.nc.L1::no_allocate.L2::cache_hint.L2::256B.v4.u32 {%0,%1,%2,%3}, [%4], %5;"
+               : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
+               : "l"(p), "l"(pol));
+  return v;
+}
+__device__ __forceinline__ void prefetch_l2(const void* g, uint32_t bytes, uint64_t pol) {
+  asm volatile("cp.async.bulk.prefetch.L2.global.L2::cache_hint [%0], %1, %2;" ::"l"(g), "r"(bytes), "l"(pol)
+               : "memory");
+}
+
 constexpr int MODE_GEMM = 0, MODE_TAGS = 1, MODE_SINK = 2, MODE_TAGONLY = 3;
 
 // A CTA of FW warps takes span s of row blocks nb = FW * (blockIdx.x / nspans) + warp, x's columns of the span in shared
@@ -853,13 +876,23 @@ struct CommitJob {
 
 __device__ void commit_warp(const CommitJob* __restrict__ cj, int w);
 
+// The next launch's store (units of 64 tiles) and how many of each unit's last quads to prefetch into L2.
+struct Pf {
+  const uint4* w;
+  uint32_t units;
+  int q;
+};
+
 // fused2's chunk-block map in fused_kernel's shape: FW warps a CTA on one span s of consecutive row blocks (spans fastest
 // in the grid), each lane's chunk loaded into registers PD quads ahead (no ring, no cp.async), x's M rows of the span in
-// shared memory. Tags and modes as fused2_kernel's; bid is the CTA's index in the GEMM's grid.
-template <int V, int L, int NB8, int MODE, int PD>
+// shared memory. Tags and modes as fused2_kernel's; bid is the CTA's index in the GEMM's grid. PF: the weights stream
+// evict-first, and once a warp's loads are done it prefetches its share of the last pf.q quads of every unit of the next
+// launch's store into L2 (evict-last), so DRAM stays busy through this launch's finish and the next one's last quads hit
+// L2 (the hashing tail then overlaps the prefetch for the launch after).
+template <int V, int L, int NB8, int MODE, int PD, bool PF = false>
 __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                             float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N, int Kd,
-                                            uint64_t jbase, unsigned int* __restrict__ xr) {
+                                            uint64_t jbase, unsigned int* __restrict__ xr, Pf pf = {}) {
   constexpr bool GEMM = MODE != MODE_TAGONLY, TAG = MODE != MODE_GEMM;
   constexpr int NQ = CHUNK_TILES / 4, DEPTH = PD + 1;
   extern __shared__ __align__(16) uint8_t xs[];
@@ -869,9 +902,15 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
   const int lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
   const uint4* wp = wstore + ((size_t)nb * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
   uint4 buf[DEPTH][4];
+  [[maybe_unused]] const uint64_t pol = PF ? l2_policy_first() : 0;
   auto load = [&](uint4 (&q)[4], int qd) {
 #pragma unroll
-    for (int i = 0; i < 4; ++i) q[i] = ldw(wp + (4 * qd + i) * LANES);
+    for (int i = 0; i < 4; ++i) {
+      if constexpr (PF)
+        q[i] = ldw_hint(wp + (4 * qd + i) * LANES, pol);
+      else
+        q[i] = ldw(wp + (4 * qd + i) * LANES);
+    }
   };
 #pragma unroll
   for (int p = 0; p < PD; ++p) load(buf[p], p);
@@ -921,6 +960,12 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
       }
     }
   }
+  if constexpr (PF) {
+    const uint64_t items = (uint64_t)pf.units * pf.q, nw = (uint64_t)(N / 16) * (Kd / CCOLS);
+    const uint64_t pl = l2_policy_last();
+    for (uint64_t i = (uint64_t)bid * FW + threadIdx.x / 32 + lane * nw; i < items; i += 32 * nw)
+      prefetch_l2(pf.w + ((i / pf.q) * CHUNK_TILES + 4 * (NQ - pf.q + (int)(i % pf.q))) * LANES, QUAD_BYTES, pl);
+  }
   if constexpr (GEMM) {
 #pragma unroll
     for (int j = 0; j < NB8; ++j) {
@@ -952,6 +997,14 @@ __global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict
                                                          float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                          int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
   fused3_body<V, L, NB8, MODE, PD>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr);
+}
+
+template <int V, int L, int NB8, int MODE, int PD>
+__global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
+                                                          float* __restrict__ y, uint32_t* __restrict__ tags, int M,
+                                                          int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr,
+                                                          Pf pf) {
+  fused3_body<V, L, NB8, MODE, PD, true>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr, pf);
 }
 
 // An earlier launch's CTAs bid0 .. bid0 + blocks - 1, which it ran GEMM-only, as tags only.
@@ -1425,6 +1478,24 @@ int tf_fused3(int lanes, int mode, int pd, const void* w, const uint8_t* x, floa
   if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
   kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, M * CXS, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
+  return cudaGetLastError() ? 2 : 0;
+}
+
+// tf_fused3 at one quad ahead in fused3p_kernel: the weights stream evict-first, and each warp, its loads done,
+// prefetches its share of the last pfq quads of each of the pfunits 32 KiB units at pfw (the next launch's store) into L2.
+int tf_fused3p(int lanes, int mode, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
+               uint64_t jbase, unsigned int* xr, const void* pfw, uint32_t pfunits, int pfq, cudaStream_t st) {
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || pfq < 0 ||
+      pfq > CHUNK_TILES / 4 || (pfq && !pfw))
+    return 1;
+  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, pd = 1;
+  if (mode == MODE_GEMM) lanes = 1;
+  void (*kern)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*, Pf) = nullptr;
+  F3(fused3p_kernel, 1, 0, 1) F3(fused3p_kernel, 1, 1, 1) F3(fused3p_kernel, 4, 1, 1) F3(fused3p_kernel, 8, 1, 1)
+  if (!kern) return 3;
+  if (const int rc = configure3((const void*)kern, M)) return rc;
+  const Pf pf{(const uint4*)pfw, pfunits, pfq};
+  kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, M * CXS, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr, pf);
   return cudaGetLastError() ? 2 : 0;
 }
 
