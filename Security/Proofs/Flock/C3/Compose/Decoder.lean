@@ -53,32 +53,38 @@ local notation "ℐ" => holoInnerAt T CT st hp
 section decoder
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
-  (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-  (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-  (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-  (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
 
 /-- **The inner protocol's messages, round by round**, at a history and V*'s layers: the source's run's steps'
 messages cut at their coins (`PlaysCoin.cut`). -/
-def c3Msgs (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin S) → (Vs j).Bits) : List (List Game.Msg) :=
+def c3Msgs (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin S) → (Vs j).Bits) : List (List Game.Msg) :=
   PlaysCoin.cut ((runSteps (src R ω t l)).map Exec.kindOf) ((runSteps (src R ω t l)).filterMap Sum.getLeft?)
 
 /-- **At every accepted outer proof**, at the history and the source's run there. -/
-def AtSrc (P : List (Cm × (ℐ).Coin) → C3Run (holoAt st hp) → Prop) : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → P t (src R ω t (layers zs dg N k Rw R ω t R₂ τ))
+def AtSrc (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (P : List (Cm × (ℐ).Coin) → C3Run (holoAt st hp) → Prop) : Prop :=
+  ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
+    P t (src R ω t (layers zs dg N k Rw R ω t R₂ τ))
 
 /-- Obligation: false as `VBridge` is quantified (G's `HLeaf`); discharged once `VBridge` is stated at whole histories,
 as `recGame` reads it, or the family's sessions refuse a short history.
 **V*'s sessions accept only at a whole history**: at every accepted outer proof, the history has a coin for each of
 the inner protocol's rounds. -/
-def HLeafC3 : Prop := ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → (ℐ).r ≤ t.length
+def HLeafC3 (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → (ℐ).r ≤ t.length
 
 /-- **The table's round-`i` messages are read from stage `i`'s commit strings** (G's `MsgsRead`): two accepted outer
 proofs whose layers agree on the read wires of stage `i`'s commit strings (`maskOf` at `skOf own sel`) have the same
 round-`i` messages (`c3Msgs`). -/
-def MsgsReadC3 : Prop :=
-  ∀ i R ω t R₂ τ o R' ω' t' R₂' τ' o', Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
-    Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' →
+def MsgsReadC3 (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
+  ∀ i R ω t R₂ τ o R' ω' t' R₂' τ' o', FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
+    FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' →
     maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ) =
       maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R' ω' t' R₂' τ') →
     (c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ))[i]? =
@@ -86,27 +92,38 @@ def MsgsReadC3 : Prop :=
 
 /-- **The inner protocol's message types are V*'s**: at every accepted outer proof, each of the source's messages has
 its type among the schedule's message types `T`. -/
-def MsgTysC3 : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
+def MsgTysC3 (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) : Prop :=
+  ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
     ∀ g ∈ c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ), ∀ m ∈ g, ∃ j, T j = m.1
 
 open Classical in
 /-- **The decoder**: round `i`'s message at the read wires `Xs` of stage `i`'s commit strings is the source's round-`i`
 messages at any accepted outer proof whose layers read `Xs` there, typed by `T` (`toSs`), and none elsewhere. -/
-def c3DecOf (i : ℕ) (Xs : (j : Fin S) → (Vs j).Bits) : (ℐ).Msg :=
-  if h : ∃ g : List Game.Msg, ∃ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o ∧
+def c3DecOf (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (i : ℕ) (Xs : (j : Fin S) → (Vs j).Bits) : (ℐ).Msg :=
+  if h : ∃ g : List Game.Msg, ∃ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o ∧
       maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ) = Xs ∧
       (c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ))[i]?.getD [] = g
   then toSs T (Classical.choose h) else []
 
 /-- **The decoder reads round `i`**, at an accepted outer proof: its message at the layers' stage-`i` commit strings
 is the source's round `i` (`MsgsReadC3`, `MsgTysC3`). -/
-theorem c3DecOf_spec (hread : MsgsReadC3 zs dg N k Rw src own sel) (htys : MsgTysC3 zs dg N k Rw src)
+theorem c3DecOf_spec {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    (hread : MsgsReadC3 zs dg N k Rw src own sel) (htys : MsgTysC3 zs dg N k Rw src)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (i : ℕ) :
+    (h : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (i : ℕ) :
     roundMsgs T (c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ))) =
       (c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ))[i]?.getD [] := by
-  have hex : ∃ g : List Game.Msg, ∃ R' ω' t' R₂' τ' o', Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' ∧
+  have hex : ∃ g : List Game.Msg, ∃ R' ω' t' R₂' τ' o',
+      FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' ∧
       maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R' ω' t' R₂' τ') =
         maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ) ∧
       (c3Msgs src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))[i]?.getD [] = g :=
@@ -131,7 +148,10 @@ theorem c3DecOf_spec (hread : MsgsReadC3 zs dg N k Rw src own sel) (htys : MsgTy
 /-- **The source's obligations**: the history is whole (`HLeafC3`), the source's coin steps are the history's
 (`coinSteps`), its round-`i` messages are read from stage `i`'s commit strings and typed by `T`, and its run is the
 decode of its steps (`decodeRun`, as it is where each stage plays on its steps: `stageOf_of_playsT`). -/
-def SrcOK : Prop :=
+def SrcOK (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   HLeafC3 zs dg N k Rw ∧
     AtSrc zs dg N k Rw src (fun t u => (runSteps u).filterMap Sum.getRight? = coinSteps CT 0 (t.map Prod.snd)) ∧
     MsgsReadC3 zs dg N k Rw src own sel ∧ MsgTysC3 zs dg N k Rw src ∧
@@ -142,8 +162,12 @@ def SrcOK : Prop :=
 source's obligations hold: the decoder's round `i` is the source's round `i` (`c3DecOf_spec`), the history has a coin
 for each round but the last and they are the source's coin steps, so the schedule weaves the source's messages with
 its coins as its steps do (`schedSteps`, `PlaysCoin.cut`). -/
-theorem tape_c3DecOf (hs : SrcOK zs dg N k Rw src own sel) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)}
-    {R₂ : Reg₂} {τ o} (h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) :
+theorem tape_c3DecOf {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    (hs : SrcOK zs dg N k Rw src own sel) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) :
     schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (ℐ).r (c3DecOf zs dg N k Rw src own sel)
       (layers zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) =
       runSteps (src R ω t (layers zs dg N k Rw R ω t R₂ τ)) := by
@@ -165,12 +189,14 @@ section honest
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParses Flock.Tags.circuit ish bind Vs}
-  {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
+  {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+    (Vs j).OuterR Reg'}
   {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {tr : Lean.Json} {record : String} {reg : Lean.Json} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-  {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → C3Run (holoAt st hp)}
+  {src : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) →
+    C3Run (holoAt st hp)}
 
 local notation "𝒵" => Flock.Guarantees.custodied zr hCust h
 local notation "𝓓" => C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc
@@ -183,7 +209,7 @@ theorem at_c3DecOf {P : List Step → C3Run (holoAt st hp) → Prop} (hs : SrcOK
     (𝓓).AtAccepted dg N k Rw fun R ω t Lb =>
       P (schedSteps T CT 0 (((𝓓).wmsg Lb).zip (t.map Prod.snd))) ((𝓓).run R ω t Lb) := by
   intro R ω t R₂ τ o hacc
-  have e := tape_c3DecOf 𝒵 dg N k Rw src own sel hs hacc
+  have e := tape_c3DecOf hs hacc
   obtain ⟨-, -, -, -, hdec⟩ := hs
   have hd : decodeRun (holoAt st hp) (runSteps (src R ω t (layers 𝒵 dg N k Rw R ω t R₂ τ))) =
       src R ω t (layers 𝒵 dg N k Rw R ω t R₂ τ) := hdec R ω t R₂ τ o hacc
