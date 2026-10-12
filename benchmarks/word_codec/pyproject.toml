@@ -1,6 +1,7 @@
 # The word codec's benchmark and its tests. Not a package: `wc.cu` and `bench.py` run on a GPU node (`run.sh`), and the
-# byte-exact reference (`codec.py`) with the kernel's arithmetic twin (`twin.py`) run here as a suite
-# (`uv run tools/verity/check/suites.py benchmarks/word_codec`). Stdlib only.
+# byte-exact reference (`codec.py`) with the kernel's arithmetic twin (`twin.py`), and the rate audit's γ bound as
+# arithmetic (`model/gamma.py`), run here as a suite (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
+# Stdlib only.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
