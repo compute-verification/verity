@@ -240,6 +240,10 @@ class Install:
             lins = [lin for _, lin in self.linears]
             lins[0].first = lins[-1].last = True
             if wide:
+                for name, lin in self.linears:
+                    lin.seal = name.endswith("qkv_proj")  # the last linear before attention, where a piece ends
+                if not any(lin.seal for lin in lins):
+                    raise RuntimeError("the wide commit joins its folds before attention, and no linear is qkv_proj")
                 wlib.commit_every_step([lin.blocks for lin in lins])
                 gates["commit"] = check_wide_commit(self.linears, 1)
             else:

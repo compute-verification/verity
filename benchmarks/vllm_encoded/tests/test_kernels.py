@@ -152,27 +152,33 @@ class Ptr:
 
 
 class WideStepLib:
-    """A WideLib's in-step commit without the library: the ring's slots are pointers 100 and 200, and `leaves` and
-    `tree` are logged with their streams."""
+    """A WideLib's in-step commit without the library: the ring's slots are pointers 100 and 200, and `leaves`, `fold`
+    (when the step folds) and `tree` are logged with their streams."""
 
-    def __init__(self, log: Log, capacity: int) -> None:
+    def __init__(self, log: Log, capacity: int, fold: bool) -> None:
         self.log, self.sketch = log, {"t": 4}
         self.step = {"ring": [Ptr(100), Ptr(200)], "vectors": capacity, "at": 0, "slot": 0, "pending": None,
-                     "side": log.stream("side"), "roots": {}}
+                     "side": log.stream("side"), "folds": log.stream("folds"), "fold": fold, "unjoined": None,
+                     "roots": {}}
 
     def leaves(self, tags, at, nvec, s):
         self.log.append(("leaves", s, tags, at, nvec))
+
+    def fold(self, tags, at, nvec, s):
+        if self.step["fold"]:
+            self.log.append(("fold", s, at, nvec))
 
     def tree(self, s):
         self.log.append(("tree", s))
 
 
-def wide_step(monkeypatch, blocks: list[int], capacity: int):
+def wide_step(monkeypatch, blocks: list[int], capacity: int, fold: bool = False, seal: tuple[int, ...] = ()):
     log = Log()
-    w, lins = WideStepLib(log, capacity), []
-    for nv in blocks:
+    w, lins = WideStepLib(log, capacity, fold), []
+    for i, nv in enumerate(blocks):
         lin = object.__new__(K.WideLinear)
         lin.wlib, lin.blocks, lin.at, lin.first, lin.last, lin.fork = w, nv, None, False, False, None
+        lin.seal = i in seal
         lins.append(lin)
     lins[0].first = lins[-1].last = True
     cur = log.stream("cur")
@@ -206,6 +212,33 @@ def test_a_wide_step_hashes_each_linears_leaves_beside_the_next_gemm(monkeypatch
     for lin in lins:
         lin.forward(torch.zeros(K.MAX_ROWS + 1, 8), None)
     assert log == []
+
+
+def test_a_folding_wide_step_folds_each_linears_leaves_on_a_third_stream_joined_at_a_seal(monkeypatch):
+    """The fold waits only for its linear's leaves, so the GEMM after next has its ring slot once they are hashed; the
+    folds join the GEMM's stream at a sealed linear (the last before attention) and at the step's last."""
+    log, w, lins = wide_step(monkeypatch, [32, 48, 16, 64, 32], 192, fold=True, seal=(1,))
+
+    def hashed(i, tags, at, nv):
+        f, j, d = (getattr(lins[i], a).name for a in ("fork", "join", "folded"))
+        return [("record", "cur", f), ("wait", "side", f), ("leaves", "side", tags, at, nv), ("record", "side", j),
+                ("wait", "folds", j), ("fold", "folds", at, nv), ("record", "folds", d)]
+
+    for m in (1, 8):
+        del log[:]
+        for lin in lins:
+            lin.forward(torch.zeros(m, 8), None)
+        e = [x for x in log if x[0] != "event"]
+        j = [getattr(lin, "join", None) and lin.join.name for lin in lins]
+        d = [getattr(lin, "folded", None) and lin.folded.name for lin in lins]
+        assert e == ([("gemm", 0, 100)]
+                     + hashed(1, 100, 0, 32) + [("gemm", 32, 200), ("wait", "cur", j[1]), ("wait", "cur", d[1])]
+                     + hashed(2, 200, 32, 48) + [("gemm", 80, 100), ("wait", "cur", j[2])]
+                     + hashed(3, 100, 80, 16) + [("gemm", 96, 200), ("wait", "cur", j[3])]
+                     + hashed(4, 200, 96, 64) + [("gemm", 160, 100), ("wait", "cur", j[4]),
+                                                 ("leaves", "cur", 100, 160, 32), ("fold", "cur", 160, 32),
+                                                 ("wait", "cur", d[4]), ("tree", "cur")])
+        assert w.step["roots"][m] == 192 and w.step["unjoined"] is None
 
 
 def test_a_wide_step_refuses_to_overflow_its_commit(monkeypatch):

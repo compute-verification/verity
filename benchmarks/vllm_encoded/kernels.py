@@ -175,8 +175,9 @@ class WideLib:
     def commit_every_step(self, per_linear: list[int]) -> None:
         """Each decode step's commit as the step goes (``per_linear``: each linear's vectors, in step order): a linear's
         tags go to one slot of a two-slot ring, which L2 holds, and the next linear hashes their leaves into the step's
-        tree (and folds them `sub` levels, when every linear's tags are whole 16·2^sub) on a second stream beside its
-        own GEMM; the step's last linear hashes its own and the tree."""
+        tree on a second stream beside its own GEMM; when every linear's tags are whole 16·2^sub, a third stream folds
+        those leaves `sub` levels, waiting only for them, so the ring slot is free once the leaves have read it
+        (ra-codec-wide's run E); the step's last linear hashes its own and the tree."""
         if self.sketch is None:
             raise ValueError("the in-step commit is the sketch tag's")
         vectors, n = sum(per_linear), -(-sum(per_linear) // 16)
@@ -193,12 +194,17 @@ class WideLib:
         self.step = {"ring": [torch.empty(8 * max(per_linear), dtype=torch.int32, device="cuda") for _ in range(2)],
                      "nodes": nodes_t, "ws": nodes_t.data_ptr() - tag_area, "vectors": vectors,
                      "fold": all(v % (16 << self.sub) == 0 for v in per_linear), "at": 0, "slot": 0, "pending": None,
-                     "side": torch.cuda.Stream(priority=-1), "roots": {}}
+                     "side": torch.cuda.Stream(priority=-1), "folds": torch.cuda.Stream(priority=-1), "unjoined": None,
+                     "roots": {}}
 
     def leaves(self, tags: int, at: int, nvec: int, s: int) -> None:
-        """The step's leaves of its tags [at, at + nvec), read from ``tags``, folded when the step folds."""
+        """The step's leaves of its tags [at, at + nvec), read from ``tags``."""
         st = self.step
         self.call("ww_sketch_leaves", st["ws"], st["vectors"], tags, at, nvec, self._seed, s)
+
+    def fold(self, tags: int, at: int, nvec: int, s: int) -> None:
+        """Those leaves folded `sub` levels, when the step folds (``tags`` unread: the leaves are in the nodes)."""
+        st = self.step
         if st["fold"]:
             self.call("ww_sketch_fold", st["ws"], st["vectors"], at, nvec, s)
 
@@ -576,9 +582,9 @@ class WideLinear(Linear):
         self.words = layout.wide_store_words(self.n, self.kd, wlib.payload)
         self.blocks = wlib.vectors(self.n, self.kd) if wlib.sketch else self.words // wlib.lane_words
         self.tag_base = base // wlib.lane_words if tag_base is None else tag_base
-        self.first = self.last = False
+        self.first = self.last = self.seal = False
         self.at: int | None = None
-        self.fork = self.join = None
+        self.fork = self.join = self.folded = None
         payloads = layout.wide_payloads(w, wlib.payload, wlib.limbs)
         if k:
             self.store = torch.empty_like(payloads)
@@ -622,25 +628,32 @@ class WideLinear(Linear):
     def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         """As `Linear.forward`; under the lib's in-step commit, the step's first linear starts its tags at index 0 and
         each next one's after the previous one's, in the other ring slot, while the previous one's leaves are hashed on
-        the second stream (forked and joined within this call, so every CUDA graph vLLM captures holds both ends); the
-        last one hashes its own leaves and the tree."""
+        the second stream (forked and joined within this call) and, folding, folded on the third, which waits only for
+        them and joins at the next `seal`ed linear (the last before a CUDA-graph piece ends, at attention), so every
+        graph vLLM captures, piecewise or whole, holds both ends of each fork; the last one hashes its own leaves and
+        the tree."""
         w, m = self.wlib, x8.shape[0]
         st = w.step
         if st is None or m > MAX_ROWS:
             return super().forward(x8, xs)
         if self.first:
-            st["at"], st["slot"], st["pending"] = 0, 1, None
+            st["at"], st["slot"], st["pending"], st["unjoined"] = 0, 1, None, None
         at, end, pend = st["at"], st["at"] + self.blocks, st["pending"]
         if end > st["vectors"]:
             raise RuntimeError(f"a step's tags overflow its commit of {st['vectors']}")
         cur = torch.cuda.current_stream()
         if pend is not None:
             if self.fork is None:
-                self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
+                self.fork, self.join, self.folded = torch.cuda.Event(), torch.cuda.Event(), torch.cuda.Event()
             self.fork.record(cur)
             st["side"].wait_event(self.fork)
             w.leaves(*pend, st["side"].cuda_stream)
             self.join.record(st["side"])
+            if st["fold"]:
+                st["folds"].wait_event(self.join)
+                w.fold(*pend, st["folds"].cuda_stream)
+                self.folded.record(st["folds"])
+                st["unjoined"] = self.folded
         st["slot"], self.at = 1 - st["slot"], at
         try:
             y = super().forward(x8, xs)
@@ -651,6 +664,11 @@ class WideLinear(Linear):
         st["at"], st["pending"] = end, (st["ring"][st["slot"]].data_ptr(), at, self.blocks)
         if self.last:
             w.leaves(*st["pending"], cur.cuda_stream)
+            w.fold(*st["pending"], cur.cuda_stream)
+        if (self.seal or self.last) and st["unjoined"] is not None:
+            cur.wait_event(st["unjoined"])
+            st["unjoined"] = None
+        if self.last:
             w.tree(cur.cuda_stream)
             st["pending"], st["roots"][m] = None, end
         return y
