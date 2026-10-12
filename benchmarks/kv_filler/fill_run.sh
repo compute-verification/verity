@@ -19,6 +19,8 @@ if [ -f $KF/fill.cu ]; then
 fi
 if grep -E "[1-9][0-9]* bytes spill" "$O"/*.ptxas; then echo "REFUSED: a kernel spills"; exit 4; fi
 sha256sum $KF/*.cu "$B"/*.so >> "$O/build.txt"
+# Under `research run --queue --gpus 1` the queue leases the GPU around the whole job: QUEUED=1 skips gpu-lease.
+LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" --)
+[ "${QUEUED:-0}" = 1 ] && LEASE=()
 # shellcheck disable=SC2086
-gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" -- \
-  "$PY" $KF/fill.py "${CMD:-read}" --readers-lib "$B/libreaders.so" ${ARGS:-} --out "$O"
+"${LEASE[@]}" "$PY" $KF/fill.py "${CMD:-read}" --readers-lib "$B/libreaders.so" ${ARGS:-} --out "$O"
