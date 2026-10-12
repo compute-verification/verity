@@ -558,8 +558,9 @@ def main() -> int:
     ap.add_argument("--theta", type=float, default=0.21,
                     help="the tensor cores' encode capacity over the CUDA cores': MMA-bound, four squarings a "
                          "mma.m16n8k32 at 4e14 MAC/s against 1.8e12 squarings/s")
-    ap.add_argument("--ws", default="2x2,4x3,4x4,8x4,8x6",
-                    help="the warp-specialized GEMM's configurations, CONSUMERSxSTAGES, comma-separated ('' for none)")
+    ap.add_argument("--ws", default="2x1,2x2,4x1,4x2,8x1",
+                    help="the warp-specialized GEMM's configurations, CONSUMERSxSTAGES (stages a consumer), "
+                         "comma-separated ('' for none)")
     ap.add_argument("--gemm-only", action="store_true",
                     help="after the gates, only the GEMM: no read, decode, rates or analysis")
     a = ap.parse_args()

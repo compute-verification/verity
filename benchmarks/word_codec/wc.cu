@@ -470,11 +470,15 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_pipe_kernel(const void* 
 }
 
 // The warp-specialized form: a CTA keeps one 512-column chunk of x in shared memory and takes the 16-row blocks
-// nb = g0 + i * groups. Its last warp's lane 0 is the producer: it copies task i's words (or plain fragments) into stage
-// i mod S of a shared-memory ring with one bulk asynchronous copy, completing on the stage's `full` barrier, once the
-// stage's `empty` barrier says task i - S was read. Consumer warp c takes tasks c, c + C, ...: it reads its stage into
-// registers, releases it, decodes, and runs the 16 tiles in order, so its sums are the plain kernel's bit for bit. Loads
-// are in flight in shared memory, not in registers, so S, not occupancy, sets how much of the read is hidden.
+// nb = g0 + i * groups. Consumer warp c of C takes tasks i = c + u C, u = 0, 1, ..., from a ring of S stages of its own
+// (u mod S). The last warp's lane 0 is the producer: in task order it copies task i's words (or plain fragments) into
+// its stage with one bulk asynchronous copy, completing on the stage's `full` barrier, once the stage's `empty` barrier
+// says the consumer read task i - S C. A consumer reads its stage into registers, releases it, decodes, and runs the 16
+// tiles in order, so its sums are the plain kernel's bit for bit. Loads are in flight in shared memory, not in
+// registers, so S C, not occupancy, sets how much of the read is hidden.
+//
+// A stage is waited on only by its consumer, which has waited on its previous use: copies complete out of order, and a
+// parity wait one use ahead of an incomplete phase would pass at once.
 __device__ __forceinline__ uint32_t smem_u32(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 
 __device__ __forceinline__ void mbar_init(uint64_t* bar, uint32_t count) {
@@ -518,8 +522,9 @@ __global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(co
                                                                              const uint8_t* __restrict__ x,
                                                                              float* __restrict__ y, int M, int N, int Kd,
                                                                              uint64_t base, int groups, int consumers,
-                                                                             int stages) {
+                                                                             int per_consumer) {
   constexpr int SB = ws_stage_bytes<KR>();
+  const int stages = consumers * per_consumer;
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   uint64_t* full = reinterpret_cast<uint64_t*>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
@@ -543,8 +548,8 @@ __global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(co
   if (warp == consumers) {
     if (lane == 0) {
       for (int i = 0; i < ntasks; ++i) {
-        const int s = i % stages;
-        if (i >= stages) mbar_wait(empty + s, (i / stages - 1) & 1);
+        const int u = i / consumers, s = (i % consumers) * per_consumer + u % per_consumer;
+        if (u >= per_consumer) mbar_wait(empty + s, (u / per_consumer - 1) & 1);
         const uint64_t q = (uint64_t)(g0 + i * groups) * nchunks + kc;
         mbar_expect_tx(full + s, SB);
         bulk_load(smem + s * SB, static_cast<const uint8_t*>(wstore) + q * SB, SB, full + s);
@@ -554,10 +559,10 @@ __global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(co
   }
 
   const uint64_t t32 = KR > 0 ? mulmod(kTau, LANES) : 0;
-  for (int i = warp; i < ntasks; i += consumers) {
-    const int s = i % stages, nb = g0 + i * groups;
+  for (int u = 0, i = warp; i < ntasks; ++u, i += consumers) {
+    const int s = warp * per_consumer + u % per_consumer, nb = g0 + i * groups;
     const uint64_t q = (uint64_t)nb * nchunks + kc;
-    mbar_wait(full + s, (i / stages) & 1);
+    mbar_wait(full + s, (u / per_consumer) & 1);
     float acc[NB8][4];
 #pragma unroll
     for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
@@ -787,13 +792,15 @@ int wc_gemm_pipe(int k, const void* w, const uint8_t* x, float* y, int M, int N,
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The warp-specialized form: `consumers` consumer warps and one producer warp a CTA, `stages` tasks in the ring. groups
-// <= 0: as many CTAs as fit on the device at once (times -groups when groups < 0), split evenly over the chunks.
+// The warp-specialized form: `consumers` consumer warps and one producer warp a CTA, `per_consumer` stages each consumer's
+// ring. groups <= 0: as many CTAs as fit on the device at once (times -groups when groups < 0), split evenly over the
+// chunks.
 int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
-               int consumers, int stages, int groups, int* launched, cudaStream_t s) {
+               int consumers, int per_consumer, int groups, int* launched, cudaStream_t s) {
   if (M < 1 || M > 32 || N % 16 || Kd % TASK_COLS || k < 0 || k > MAXK || consumers < 1 ||
-      consumers > WS_MAX_CONSUMERS || stages < 1 || stages > 32)
+      consumers > WS_MAX_CONSUMERS || per_consumer < 1 || consumers * per_consumer > 32)
     return 1;
+  const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / TASK_COLS, nbs = N / 16;
   const int threads = (consumers + 1) * 32;
   int sms = 0, per_sm = 0, dev = 0;
@@ -808,7 +815,7 @@ int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, i
       groups = mult * sms * per_sm / nchunks > 0 ? mult * sms * per_sm / nchunks : 1; \
     } \
     if (groups > nbs) groups = nbs; \
-    kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, stages); } while (0)
+    kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer); } while (0)
 #define GK(KR) do { if (nb8 == 1) G(KR, 1); else if (nb8 == 2) G(KR, 2); else G(KR, 4); } while (0)
   switch (k) {
     case 0: GK(0); break;
