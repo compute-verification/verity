@@ -421,6 +421,22 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
     lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T06:00:00Z")
     assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
     assert StoreLabels(LocalStore(tmp_path / "q3"), since="2026-10-12T06:00:00Z").ready(12, head) is True
+    lane.add_label(label_target(12, head), vocab.READY, False, "memory-accounting", ts="2026-10-12T10:20:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q4")).ready(12, head) is False         # an ejection, seen by every queue
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T11:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q5")).ready(12, head) is True          # until its owner marks it again
+
+
+def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
+    """12 Oct: #1824's ejection lived in the ejecting VM's queue state; drive, on another VM, rebuilt `next` with it."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    q.eject(1, "held for Daniel's decision 10", "memory-accounting")
+    head = next(p.head for p in world.gh.open_prs() if p.number == 1)
+    (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
+    assert (lab.value, lab.by) == (False, "memory-accounting")
 
 
 def test_rules_name_the_hold_label_and_refuse_anything_else():

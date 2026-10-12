@@ -212,9 +212,11 @@ class StoreLabels:
         self._pulled: set[int] = set()
 
     def ready(self, pr: int, head: str) -> bool:
-        """Whether someone asserted `ready = true` on `pr:{n}@{head}`, at or after ``since`` (`--marked-after`) when given."""
-        return any(str(lab.value).lower() == "true" and (self.since is None or lab.ts >= self.since)
-                   for lab in self._labels(pr, head, vocab.READY))
+        """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
+        given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue until the owner
+        marks it again or pushes a new head (12 Oct: #1824's ejection lived in the ejecting VM's state, and drive re-admitted it)."""
+        labs = sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts)
+        return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
 
     def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
         """{head: its ``key`` labels} for each head of pull request ``pr`` but ``head`` that has some, after pulling every head's
@@ -465,6 +467,15 @@ class Queue:
             raise QueueError(f"#{pr} isn't an open PR")
         state = self.load_state()
         state["ejected"][str(pr)] = {"head": prs[pr].head, "why": reason, "by": by, "at": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime())}
+        if self.store is not None and not self.shadow:
+            from .store.cli import _label_write_through
+
+            target = label_target(pr, prs[pr].head)
+            self.store.add_label(target, vocab.READY, False, by)
+            said, lost = _label_write_through(self.store, target)
+            self.log(f"research queue: #{pr}'s ready mark at {prs[pr].head[:12]} is withdrawn ({target}); {said}")
+            if lost:
+                raise QueueError(f"#{pr}'s withdrawn mark didn't reach the store's remote, so other queues may still admit it: {said}")
         self.notify(Entry(prs[pr]), "eject", f"ejected from `{self.branch}`: {reason}", state, False)
         self.save_state(state)
 
