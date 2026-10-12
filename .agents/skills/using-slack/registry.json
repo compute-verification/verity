@@ -131,7 +131,9 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
-        "benchmarks/bandwidth/"
+        "benchmarks/bandwidth/",
+        "benchmarks/kv_filler/",
+        "benchmarks/word_codec/"
       ]
     },
     {
