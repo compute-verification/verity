@@ -19,6 +19,18 @@ the port's words, not the parameter's leaf count.
 claiming the registered rows (a statement the verifier refuses: its row does not open the root). ``extra`` registers rows
 past the description's, which no instance reads (refused: the registration's rows are not the statement's).
 
+**The circuit registration** (`bind`): the staged statement's one-stage ``verity/registration/v2`` record
+(`REGISTRATION`, beside ``circuit.txt``), whose ``registered`` entries are every value registered at staging (``prog``
+when `register` is given the statement's program and partition object; candidate 3's stacked table R's top,
+`verity_flock.rec_session.stage_stacked`). Its ``program``, ``query`` and ``partition`` are the partition object's that
+META names (``program_sha512``, ``partition``), its law one-stage's ``stratified`` over the population, its scheme the
+statement's (`circuit.SCHEME`), no served roots (the inner tables' are committed in the session), and its window
+``stand-in``: it depends on the circuit and the registration's salts alone. META's ``registration`` (`REGISTRATION_KEY`)
+is the record's digest (one-stage ``registration.digest``), so the circuit's SHA-512, the statement digest the prover
+absorbs before every inner stream's first coin and Σ all bind the record. The salts of a value whose rows are not the
+statement's (R's top) are the prover's alone (`PRIVATE`, beside ``inst-N.bin``): never in the record, META, a transcript or
+a verifier's file.
+
     python -m verity_flock.inner_registered register STAGE [--port PORT=VALUE] [--extra K]
     python -m verity_flock.inner_registered claim STAGE --from STAGE
 """
@@ -39,6 +51,15 @@ from . import circuit as FC
 #: the registered value a description port reads (`rec_inner.program_unit`'s parameter)
 VALUE = "prog"
 OWN = "registered.json"
+#: the staged statement's circuit registration (one-stage ``verity/registration/v2``), public, beside ``circuit.txt``
+REGISTRATION = "circuit-registration.json"
+#: META's key for the circuit registration's digest (one-stage ``registration.digest``)
+REGISTRATION_KEY = "registration"
+#: the prover's own openings of the registered values whose rows are not the statement's (``{value: {nodes, salts}}``),
+#: beside ``inst-N.bin``
+PRIVATE = "circuit-registration-private.json"
+PRIVATE_KIND = "flock-circuit/registration-private/v0"
+WINDOW = {"kind": "stand-in", "of": "the staged statement's circuit registration: its values registered at staging, before any session"}
 
 
 def _files(stage: Path) -> tuple[Path, Path]:
@@ -108,18 +129,103 @@ def _write_header(stage: Path, entries: Mapping[str, dict]) -> dict:
     return head
 
 
-def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0) -> dict:
+def meta(stage: Path) -> dict:
+    """The staged statement's META."""
+    return json.loads((Path(stage) / "circuit.txt").read_text().split("\n", 2)[1][5:])
+
+
+def registration_record(program, partition: Mapping, entries: Sequence[Mapping]) -> dict:
+    """The circuit registration over ``program`` (a core ``Program``) and its ``verity/partition/v1`` object ``partition``,
+    registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the law ``stratified`` over the
+    population, the statement's scheme, no served roots and the `WINDOW` (the module docstring)."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+
+    query = partition["query"]
+    return R.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
+                    partition=partition, registered=list(entries))
+
+
+def _bind_meta(stage: Path, digest: str) -> None:
+    """``circuit.txt`` with META's `REGISTRATION_KEY` ``digest``, and both files' headers' circuit SHA-512 and classes its."""
+    text = (stage / "circuit.txt").read_text()
+    head, line, rest = text.split("\n", 2)
+    m = dict(json.loads(line[5:]), **{REGISTRATION_KEY: digest})
+    text = head + "\nMETA " + json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n" + rest
+    (stage / "circuit.txt").write_text(text)
+    inst, pub = _files(stage)
+    for path in (inst, pub):
+        h, body = _split(path)
+        h = dict(h, circuit_sha512=FC.digest(text), units=dict(h["units"], classes=[FC.class_digest(text)] * h["instances"]))
+        _put(path, h, body)
+
+
+def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], private: Mapping[str, Mapping] | None = None) -> dict:
+    """Register ``entries`` with the staged statement in ``stage``: its circuit registration (`registration_record`, with
+    every value an earlier `bind` registered; a value is registered once) written to `REGISTRATION`, its digest bound into
+    META (`REGISTRATION_KEY`), and ``private`` (``{value: {"nodes", "salts"}}``, the prover's openings) added to `PRIVATE`.
+    Refused unless META names ``partition`` and its program. Returns the record."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+
+    stage = Path(stage)
+    m = meta(stage)
+    if m.get("program_sha512") != partition["program"] or m.get("partition") != {"rule": P.FORMAT, "digest": P.digest(partition)}:
+        raise ValueError(f"{stage}: META binds program {m.get('program_sha512')} and partition {m.get('partition')}, not the "
+                         f"registration's {partition['program']} and {P.digest(partition)}")
+    old = json.loads((stage / REGISTRATION).read_text())["registered"] if (stage / REGISTRATION).exists() else []
+    names = [e["value"] for e in [*old, *entries]]
+    if len(set(names)) != len(names):
+        raise ValueError(f"a value is registered once, and the registration would name {sorted(names)}")
+    rec = registration_record(program, partition, [*old, *entries])
+    (stage / REGISTRATION).write_text(json.dumps(rec, indent=1))
+    _bind_meta(stage, R.digest(rec))
+    if private:
+        own = json.loads((stage / PRIVATE).read_text())["values"] if (stage / PRIVATE).exists() else {}
+        own.update({v: {"nodes": list(o["nodes"]), "salts": list(o["salts"])} for v, o in private.items()})
+        (stage / PRIVATE).write_text(json.dumps({"kind": PRIVATE_KIND, "values": own}))
+    return rec
+
+
+def bound(stage: Path) -> dict:
+    """The staged statement's circuit registration, refused unless its digest is the one META carries."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    stage = Path(stage)
+    want = meta(stage).get(REGISTRATION_KEY)
+    if want is None:
+        raise ValueError(f"{stage}: META binds no circuit registration")
+    if not (stage / REGISTRATION).exists():
+        raise ValueError(f"{stage}: no {REGISTRATION}, the circuit registration META binds")
+    rec = json.loads((stage / REGISTRATION).read_text())
+    if R.digest(rec) != want:
+        raise ValueError(f"{stage}: {REGISTRATION}'s digest {R.digest(rec)} is not the registration META binds ({want})")
+    return rec
+
+
+def private(stage: Path, value: str) -> dict:
+    """The prover's opening (``nodes``, ``salts``) of ``value`` registered at staging (`PRIVATE`)."""
+    path = Path(stage) / PRIVATE
+    got = json.loads(path.read_text())["values"].get(value) if path.exists() else None
+    if got is None:
+        raise ValueError(f"{stage}: the prover holds no opening of the registered value {value} ({PRIVATE})")
+    return got
+
+
+def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0, program=None,
+             partition: Mapping | None = None) -> dict:
     """Register the description rows of the staged statement in ``stage`` (``ports``: ``{port: value}``, default the one
     `description_port` as `VALUE`) and write the header's ``registered`` and the verifier's ``registered.json``. ``extra``:
-    that many more registered rows (zero rows under fresh salts) past the table's, which no instance reads. Returns
-    ``{port: {"entry", "root", "leaves", "positions"}}``."""
+    that many more registered rows (zero rows under fresh salts) past the table's, which no instance reads. With
+    ``program`` and ``partition`` (the statement's core ``Program`` and ``verity/partition/v1`` object), the entries also
+    join the circuit registration (`bind`). Returns ``{port: {"entry", "root", "leaves", "positions"}}``."""
+    if (program is None) != (partition is None):
+        raise ValueError("the circuit registration takes the statement's program and its partition object together")
     head, tabs = tables(stage)
     meta = head["meta"]
     ports = dict(ports) if ports else {description_port(head): VALUE}
-    program = meta.get("program_sha512")
-    if not program:
+    program_sha512 = meta.get("program_sha512")
+    if not program_sha512:
         raise ValueError(f"{stage}: META names no program_sha512, which the registration's domain binds")
-    entries, own, out = {}, {}, {}
+    entries, own, out, records = {}, {}, {}, []
     population = max(head["units"]["indices"], default=-1) + 1
     for name, value in ports.items():
         if name not in head["input_ports"]:
@@ -130,7 +236,7 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
         if extra:
             rows += [(0,) * len(rows[0])] * extra
             salts += [os.urandom(FC.SALT_BYTES) for _ in range(extra)]
-        reg = G.Registered.commit(program, value, rows, salts)
+        reg = G.Registered.commit(program_sha512, value, rows, salts)
         if list(reg.bcs[:len(t["bcs"])]) != t["bcs"]:
             raise AssertionError(f"port {name}: the registration's b || c are not the statement's")
         positions = list(range(len(t["bcs"])))
@@ -140,8 +246,11 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
             reads[u] = t["refs"][i]
         own[name] = {**reg.entry(), "word_bits": G.WORD_BITS, "reads": reads}
         out[name] = {"entry": entries[name], "root": reg.root.hex(), "leaves": reg.leaves, "positions": positions}
+        records.append(reg.entry())
     _write_header(stage, entries)
     (stage / OWN).write_text(json.dumps({"format": G.READS, "ports": own}, sort_keys=True))
+    if program is not None:
+        bind(stage, program, partition, records)
     return out
 
 
