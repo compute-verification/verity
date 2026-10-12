@@ -9,5 +9,6 @@ import Proofs.Accounting.Bandwidth.Ticked
 completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee with relayed tags
 (`Bandwidth.SecurityProofs.AuditRelay`), with side sources that answer what the chip sent
 (`Bandwidth.SecurityProofs.AuditInteractive`, and `AuditInteractiveRO` when they ignore the oracle), and on the actual
-circuit given a simulation (`Bandwidth.SecurityProofs.Actual.audit`, B3), and for the cores as a tick transducer over
-the links' alphabets (`Bandwidth.SecurityProofs.Ticked.audit`, B3 in the capacity form). -/
+circuit given a simulation (`Bandwidth.SecurityProofs.Actual.audit`, B3), and for the chip as a tick transducer over
+the links' signals (B3: `Bandwidth.SecurityProofs.Ticked.audit_reads` in the reads form, given passive memory, and
+`Ticked.audit` in the capacity form). -/
