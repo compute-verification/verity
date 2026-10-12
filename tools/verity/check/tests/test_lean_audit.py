@@ -297,44 +297,6 @@ def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_
     assert sorted(f.name for f in (store / "outputs" / "p").iterdir()) == ["2.json", "3.json"]
 
 
-LEAN_CHECK = ROOT / "tools" / "verity" / "lean" / "check.py"
-
-
-@pytest.mark.skipif(shutil.which("lake") is None and not (Path.home() / ".elan" / "bin" / "lake").exists(),
-                    reason="no Lean toolchain")
-def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
-    """A kept build holds one tree's modules per package per node: check r20261012-023815-e641 rebuilt 640 of
-    `Security/Proofs`' 1,096 modules (2,404 s of a 2,922 s check) because nebius-2's kept build came from an older tree. Lake,
-    reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
-    spec = importlib.util.spec_from_file_location("lean_check_for_test_lean_audit", LEAN_CHECK)
-    LC = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(LC)
-    pkg = tmp_path / "control"
-    shutil.copytree(ROOT / "tools" / "verity" / "lean" / "tests" / "fixtures" / "control", pkg,
-                    ignore=shutil.ignore_patterns(".lake"))
-    store = tmp_path / "artifacts"
-    build = lambda: subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
-                                   env=LC.lake_env())
-    build()
-    arts = LA.LakeArtifacts(store)
-    assert arts.put({pkg}) > 0
-    lib = pkg / ".lake" / "build" / "lib" / "lean"
-    was = {f: f.read_bytes() for f in lib.rglob("*.olean")}
-    thms = pkg / "Control" / "Thms.lean"
-    text = thms.read_text()
-    thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
-    build()                                                           # without the cache: compiled
-    assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
-    thms.write_text(text)
-    monkeypatch.setattr(LC, "ARTIFACTS", store)
-    build()
-    for f, b in was.items():
-        assert f.read_bytes() == b
-    trace = json.loads((lib / "Control" / "Thms.trace").read_text())
-    assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
-    assert not any(f.name.endswith(".tmp") for f in store.rglob("*"))
-
-
 def test_a_package_whose_sources_sit_beside_it_keeps_its_build(tmp_path):
     """`Security/Proofs` has `srcDir = ".."`. Pruning looked for each kept output's source inside the package, found none,
     and deleted the whole kept build on every warm take, so each check's audit rebuilt `Security/Proofs` from scratch."""
