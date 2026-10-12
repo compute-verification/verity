@@ -6,15 +6,18 @@ import Models.Pous.Assumptions.P2
 /-!
 # B2: a location as PoUS's responder (trusted)
 
-Obligation B2 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4), on PoUS's ring model. A strategy `S`
-maps PoUS's outcome (the primitive `ω`, the encoder's coins, the `k` challenges) to a run, causal from every tick.
-Challenge `j` reaches the location `X` at tick `t j`, and its answer is read off what `X` does during window `j`.
+Obligation B2 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.6), on PoUS's ring model, for a location
+that does no arithmetic modulo `p` during a window (the oracle-location form, where it does, is not stated yet). A
+strategy `S` maps PoUS's outcome (the primitive `ω`, the encoder's coins, the `k` challenges) to a run, causal from
+every tick. Challenge `j` reaches the location `X` at tick `t j`, the ticks increasing, and its answer is read off what
+`X` does during window `j`. What `X` does during a window includes its state at the window's end (v2.6), so its state
+at each challenge tick is a function of its state at the previous one and of what reached it in between.
 
 * `LengthCode`, the coding lemma: strings of at most `M` bits inject into `M + 1` bits (`lengthCode`). With `Recall`'s
   `length (content X t) ≤ mem X t`, a state of `mem ≤ M` bits fits in an `(M + 1)`-bit code.
 * `B2`: if `X`'s state at the first challenge depends on the outcome only through the primitive and the encoding, what
   reaches `X` during window `j` only through challenge `j` and a *help* that the setup fixes and that takes at most
-  `2^H` values, and `X`'s state is decided at the challenge ticks (`Decided`), then a preprocessing and a sequential
+  `2^H` values, and the challenge ticks increase, then a preprocessing and a sequential
   responder with `N ≥ M + 1 + H` bits of state answer every challenge exactly as `X` does, at every outcome where
   `mem_X(t_j) ≤ M` before each challenge. Its state before challenge `j` is the `(M + 1)`-bit code of `content X t_j`
   and an `H`-bit code of the help. It makes no query (`RingBounded 0 0 0`): with `ω` among the coins and
@@ -48,14 +51,14 @@ def LengthCode : Prop := ∀ M : ℕ, Set.InjOn (lengthCode M) {l : List Bool | 
 /-- **B2.** For a ring-model scheme, `k` challenges at `W`, a strategy `S` causal from every tick over PoUS's outcomes,
 a location `X`, challenge ticks `t`, answers read off what `X` does in each window (`ans`) and a help `help` with at
 most `2^H` values: if `X`'s state at `t 0` and the help depend on the outcome only through the primitive and the
-encoding, what reaches `X` during window `j` only through the help and challenge `j`, and `X`'s state is decided at the
-challenge ticks, then some `N`-bit preprocessing and sequential responder that makes no query (`N ≥ M + 1 + H`)
+encoding, what reaches `X` during window `j` only through the help and challenge `j`, and the challenge ticks increase,
+then some `N`-bit preprocessing and sequential responder that makes no query (`N ≥ M + 1 + H`)
 answer, at every outcome where `X`'s state has at most `M` bits at each challenge tick, exactly what `X` answers. -/
 def B2 : Prop :=
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
     (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ),
-    CausalFrom S → Decided S X t k →
+    CausalFrom S → StrictMono t →
     (∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') →
     (∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
@@ -65,7 +68,7 @@ def B2 : Prop :=
       ∀ x, (∀ j : Fin k, (S x).mem X (t j) ≤ M) →
         Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
             (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-          List.ofFn fun j : Fin k => ans j ((S x).acts ↑X (window t j))
+          List.ofFn fun j : Fin k => ans j ((S x).acts X (window t j))
 
 /-- **B2, against PoUS's guarantee.** When PoUS's sequential audit with `k` challenges accepts every `N`-bit responder
 that makes no query with probability at most `δ + ε`, a strategy meeting `B2`'s hypotheses passes the audit with
@@ -75,7 +78,7 @@ def B2Audit : Prop :=
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε →
     ∀ (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
       (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (H : ℕ),
-      CausalFrom S → Decided S X t k →
+      CausalFrom S → StrictMono t →
       (∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
         (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') →
       (∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
@@ -92,7 +95,7 @@ def B2P2Ring : Prop :=
       (S : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L)
       (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ)
       {α : Type*} (help : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (H : ℕ),
-      CausalFrom S → Decided S X t 105 →
+      CausalFrom S → StrictMono t →
       (∀ x x', x.1 = x'.1 →
         (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 =
           (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
@@ -115,7 +118,7 @@ def B2Determines : Prop :=
     (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
     (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Bits q → Pous.Outcome sch k → α)
     (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
-    (∀ z, CausalFrom (S z)) → (∀ z, Decided (S z) X t k) →
+    (∀ z, CausalFrom (S z)) → StrictMono t →
     (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
     (∀ z x x' (j : Fin k), help z x = help z x' → x.2.2 j = x'.2.2 j →
@@ -130,6 +133,6 @@ def B2Determines : Prop :=
           ((List.ofFn x.2.2).take j) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) = z) ∧
       ∀ z x, Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
           (List.ofFn x.2.2) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-        List.ofFn fun j : Fin k => ans j ((S z x).acts ↑X (window t j))
+        List.ofFn fun j : Fin k => ans j ((S z x).acts X (window t j))
 
 end Accounting.Guarantees
