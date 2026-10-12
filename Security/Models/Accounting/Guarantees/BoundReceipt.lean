@@ -5,9 +5,10 @@ import Models.Pouw.Assumptions.NCP.RouteUAssumptions
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
 
-The game is `Security/Definitions/Accounting/BoundReceipt.lean`; proofs are in `Security/Proofs/Accounting/BoundReceipt/`.
-No named assumption of its own: the generic-mix model (the mix a random oracle, the tile outputs uniform) is the game,
-and the claims registry carries it to the deployed receipt (`random-oracle` for the mix and the sketch inside it,
+The game is `Security/Definitions/Accounting/BoundReceipt.lean`; proofs are in
+`Security/Proofs/Accounting/BoundReceipt/`. No named assumption of its own: the generic-mix model (the mix a random
+oracle, the tile outputs uniform) is the game, and the claims registry carries it to the deployed receipt
+(`random-oracle` for the mix and the sketch inside it,
 `rate-codec-work` for `c_enc`, `bandwidth-instantiation` for the store), with the ideal tile's work half stated in
 PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 

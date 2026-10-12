@@ -4,6 +4,7 @@ import Proofs.Accounting.Joint
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.BandwidthAudit
 import Proofs.Accounting.RateAudit
+import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Tag
