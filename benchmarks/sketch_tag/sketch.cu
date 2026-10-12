@@ -1,0 +1,350 @@
+// Sketch-then-hash on the RTX PRO 6000 (sm_120), fused into the word codec's warp-specialized FP8 GEMM: `sketch.py` is
+// the reference.
+//
+// A consumer warp holds a task's store bytes in registers as the A operand of the FP8 MMA; the same registers (the
+// encoded words before the decode, or the plain FP8 bytes) are the A operand of mma.m16n8k32.s8.s8.s32 against the
+// window's ±1 signs (B), k/8 MMAs per 32-byte step, so each fragment row's int32 sketch accumulates in the warp's
+// registers over a run of the tile's tasks (`sketch.py`: tile (G, kc) is row blocks G T .. G T + T - 1 at chunk kc).
+// A run of RUN tasks (RUN divides T) is one unit of the warp-specialized schedule: RUN = T stores the tile's sketch, RUN < T
+// adds it atomically (exact: int32 addition is order-free), so a small layer still spreads over the device.
+//
+// Signs: the B fragments' bits, packed per (tile task i, step group u, lane) as 4 u32 words (`sketch.sign_fragments`,
+// MP steps a task, 128 / k a group): pair p = (s mod 128/k) k/8 + blk of a group holds b0's four signs at bits 8 q + 2 (p
+// mod 4) and b1's at the next bit of word p / 4, so a register is ((w >> sh) & 0x01010101) * 0xFE + 0x01010101.
+//
+// The tag: ro-sketch-blake3/v0, BLAKE3-keyed(K, u64be j ‖ the k int32 little-endian), K from the name's prefix; leaves
+// (16 tags, one tile) and the tree are benchmarks/bandwidth/tagger.cu's.
+#include "../word_codec/wc.cu"
+
+namespace sk {
+using namespace wc;
+
+static const char* const NAME = "ro-sketch-blake3/v0";
+
+template <int KR>
+__host__ __device__ constexpr int steps() { return KR > 0 ? (8 * LANE_WORDS + 15) / 16 : TASK_TILES; }
+template <int KR, int KS>
+__host__ __device__ constexpr int sgroups() { return (steps<KR>() + 128 / KS - 1) / (128 / KS); }
+
+__device__ __forceinline__ void mma_s8(int (&d)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+      : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+}
+
+__device__ __forceinline__ uint32_t sgn(uint32_t w, int sh) { return ((w >> sh) & 0x01010101u) * 0xFEu + 0x01010101u; }
+
+// Step s's k/8 sign MMAs; sw holds the task's packed sign words (4 a group).
+template <int KS>
+__device__ __forceinline__ void sketch_step(int (&acc)[KS / 8][4], const uint32_t (&a)[4], const uint32_t* sw, int s) {
+  constexpr int SPL = 128 / KS, KB = KS / 8;
+#pragma unroll
+  for (int blk = 0; blk < KB; ++blk) {
+    const int p = (s % SPL) * KB + blk, w = 4 * (s / SPL) + p / 4, sh = 2 * (p % 4);
+    mma_s8(acc[blk], a, sgn(sw[w], sh), sgn(sw[w], sh + 1));
+  }
+}
+
+template <int KR, int NB8, int KS, bool SK>
+__global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __restrict__ wstore,
+                                                                 const uint8_t* __restrict__ x, float* __restrict__ y,
+                                                                 int M, int N, int Kd, uint64_t base, int groups,
+                                                                 int consumers, int per_consumer, int partials, int T,
+                                                                 int RUN, const uint4* __restrict__ signs,
+                                                                 int* __restrict__ sk, int decode) {
+  constexpr int SB = ws_stage_bytes<KR>(), KB = KS / 8, SG = sgroups<KR, KS>(), MS = steps<KR>();
+  const int stages = consumers * per_consumer;
+  extern __shared__ __align__(128) uint8_t smem[];
+  uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
+  uint64_t* full = reinterpret_cast<uint64_t*>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
+  uint64_t* empty = full + stages;
+  const int nchunks = Kd / TASK_COLS;
+  const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
+  const int rpt = T / RUN, nruns = (nbs + T - 1) / T * rpt;
+  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
+  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += blockDim.x) {
+    int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
+    uint4 v = make_uint4(0, 0, 0, 0);
+    if (b < M) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
+    *reinterpret_cast<uint4*>(&xs[b][16 * c]) = v;
+  }
+  if (threadIdx.x == 0) {
+    for (int s = 0; s < stages; ++s) { mbar_init(full + s, 1); mbar_init(empty + s, 1); }
+    asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
+  }
+  __syncthreads();
+  // consumer c's u-th task: run R = g0 + (c + consumers (u / RUN)) groups, row block (R / rpt) T + (R % rpt) RUN + u % RUN
+  auto task_nb = [&](int c, int u) -> int {
+    const int R = g0 + (c + consumers * (u / RUN)) * groups;
+    if (R >= nruns) return -1;
+    const int nb = (R / rpt) * T + (R % rpt) * RUN + u % RUN;
+    return nb < nbs ? nb : -2;
+  };
+
+  if (warp == consumers) {
+    if (lane == 0) {
+      for (int u = 0;; ++u) {
+        bool live = false;
+        for (int c = 0; c < consumers; ++c) {
+          const int nb = task_nb(c, u);
+          live |= nb != -1;
+          if (nb < 0) continue;
+          const int s = c * per_consumer + u % per_consumer;
+          if (u >= per_consumer) mbar_wait(empty + s, (u / per_consumer - 1) & 1);
+          const uint64_t q = (uint64_t)nb * nchunks + kc;
+          mbar_expect_tx(full + s, SB);
+          bulk_load(smem + s * SB, static_cast<const uint8_t*>(wstore) + q * SB, SB, full + s);
+        }
+        if (!live) break;
+      }
+    }
+    return;
+  }
+  if (warp > consumers) return;
+
+  const uint64_t t32 = KR > 0 ? mulmod(kTau, LANES) : 0;
+  int acc_s[KB][4];
+  for (int u = 0;; ++u) {
+    const int nb = task_nb(warp, u);
+    if (nb == -1) break;
+    if (u % RUN == 0) {
+#pragma unroll
+      for (int b = 0; b < KB; ++b) acc_s[b][0] = acc_s[b][1] = acc_s[b][2] = acc_s[b][3] = 0;
+    }
+    if (nb >= 0) {
+      const int s = warp * per_consumer + u % per_consumer, i = nb % T;
+      const uint64_t q = (uint64_t)nb * nchunks + kc;
+      uint32_t sw[SK ? 4 * SG : 1];
+      if constexpr (SK) {
+        const uint4* sp = signs + (size_t)i * SG * LANES + lane;
+#pragma unroll
+        for (int v = 0; v < SG; ++v) {
+          const uint4 t = __ldg(sp + v * LANES);
+          sw[4 * v] = t.x; sw[4 * v + 1] = t.y; sw[4 * v + 2] = t.z; sw[4 * v + 3] = t.w;
+        }
+      }
+      mbar_wait(full + s, (u / per_consumer) & 1);
+      float acc[NB8][4];
+#pragma unroll
+      for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+      auto tile = [&](int tt, const uint32_t (&a)[4]) {
+#pragma unroll
+        for (int j = 0; j < NB8; ++j) {
+          uint32_t b0 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 4 * tq]);
+          uint32_t b1 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
+          mma_e4m3(acc[j], a, b0, b1);
+        }
+      };
+      if constexpr (KR == 0) {
+        const uint4* st = reinterpret_cast<const uint4*>(smem + s * SB) + lane;
+        uint4 w[TASK_TILES];
+#pragma unroll
+        for (int tt = 0; tt < TASK_TILES; ++tt) w[tt] = st[tt * LANES];
+        __syncwarp();
+        if (lane == 0) mbar_arrive(empty + s);
+#pragma unroll
+        for (int tt = 0; tt < TASK_TILES; ++tt) {
+          const uint32_t a[4] = {w[tt].x, w[tt].y, w[tt].z, w[tt].w};
+          tile(tt, a);
+          if constexpr (SK) sketch_step<KS>(acc_s, a, sw, tt);
+        }
+      } else {
+        const unsigned long long* st = reinterpret_cast<const unsigned long long*>(smem + s * SB) + lane;
+        uint64_t xw[LANE_WORDS];
+#pragma unroll
+        for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
+        __syncwarp();
+        if (lane == 0) mbar_arrive(empty + s);
+        if constexpr (SK) {
+#pragma unroll
+          for (int st8 = 0; st8 < MS; ++st8) {
+            const uint64_t w0 = xw[2 * st8], w1 = 2 * st8 + 1 < LANE_WORDS ? xw[2 * st8 + 1] : 0;
+            const uint32_t a[4] = {(uint32_t)w0, (uint32_t)(w0 >> 32), (uint32_t)w1, (uint32_t)(w1 >> 32)};
+            sketch_step<KS>(acc_s, a, sw, st8);
+          }
+        }
+        if (decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
+#pragma unroll
+        for (int tt = 0; tt < TASK_TILES; ++tt) {
+          const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),
+                                 take4(xw, 128 * tt + 96)};
+          tile(tt, a);
+        }
+      }
+#pragma unroll
+      for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+        for (int e = 0; e < 4; ++e) {
+          int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+          if (b < M) {
+            if (partials) y[((size_t)kc * M + b) * N + n] = acc[j][e];
+            else atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+          }
+        }
+      }
+    }
+    if (SK && (u % RUN == RUN - 1)) {
+      const int R = g0 + (warp + consumers * (u / RUN)) * groups;
+      const size_t tl = (size_t)(R / rpt) * nchunks + kc;
+#pragma unroll
+      for (int b = 0; b < KB; ++b) {
+        int* r0 = sk + (tl * 16 + g) * KS + 8 * b + 2 * tq;
+        int* r1 = r0 + 8 * KS;
+        if (RUN == T) {
+          *reinterpret_cast<int2*>(r0) = make_int2(acc_s[b][0], acc_s[b][1]);
+          *reinterpret_cast<int2*>(r1) = make_int2(acc_s[b][2], acc_s[b][3]);
+        } else {
+          atomicAdd(r0, acc_s[b][0]); atomicAdd(r0 + 1, acc_s[b][1]);
+          atomicAdd(r1, acc_s[b][2]); atomicAdd(r1 + 1, acc_s[b][3]);
+        }
+      }
+    }
+  }
+}
+
+// ro-sketch-blake3/v0 over vectors [0, nvec) of sk: one thread a vector, its message u64be (jbase + v) ‖ KS int32 LE.
+template <int KS>
+__global__ void __launch_bounds__(128) sk_hash_kernel(const int* __restrict__ sk, uint64_t nvec, bw::Key3 key,
+                                                      uint64_t jbase, uint32_t* __restrict__ tags) {
+  const uint64_t v = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
+  if (v >= nvec) return;
+  constexpr int MSG = 2 + KS, BLOCKS = (MSG + 15) / 16;
+  uint32_t w[KS];
+  const uint4* src = reinterpret_cast<const uint4*>(sk + v * KS);
+#pragma unroll
+  for (int i = 0; i < KS / 4; ++i) {
+    const uint4 q = src[i];
+    w[4 * i] = q.x; w[4 * i + 1] = q.y; w[4 * i + 2] = q.z; w[4 * i + 3] = q.w;
+  }
+  const uint64_t j = jbase + v;
+  uint32_t cv[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+  for (int b = 0; b < BLOCKS; ++b) {
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int u = 16 * b + i;
+      m[i] = u == 0 ? bw::bswap32((uint32_t)(j >> 32)) : u == 1 ? bw::bswap32((uint32_t)j) : u < MSG ? w[u - 2] : 0u;
+    }
+    const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+    const uint32_t flags =
+        bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+    bw::b3_compress(cv, m, 0, len, flags, cv);
+  }
+  uint4* o = reinterpret_cast<uint4*>(tags + 8 * v);
+  o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+  o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+}
+
+// K = SHA512(prefix(TAG_DOMAIN, NAME, seed))[0:32] as BLAKE3's little-endian key words (tagger.cu's b3_key, this name).
+static bw::Key3 sk_key(const uint8_t seed[32]) {
+  std::vector<uint8_t> p = bw::prefix_block(bw::TAG_DOMAIN, NAME, seed);
+  uint64_t d[8];
+  bw::sha512_host(p.data(), p.size(), d);
+  bw::Key3 k;
+  for (int i = 0; i < 8; ++i) {
+    const uint64_t w = d[i / 2];
+    const uint32_t be = (uint32_t)(i & 1 ? w : w >> 32);
+    k.k[i] = (be >> 24) | ((be >> 8) & 0xff00u) | ((be << 8) & 0xff0000u) | (be << 24);
+  }
+  return k;
+}
+
+}  // namespace sk
+
+#ifndef SK_KMAX
+#define SK_KMAX 3
+#endif
+
+extern "C" {
+
+int sk_constants(int* out) {
+  out[0] = wc::LANES; out[1] = wc::LANE_WORDS; out[2] = wc::PB; out[3] = sk::steps<0>(); out[4] = sk::steps<1>();
+  out[5] = SK_KMAX; out[6] = wc::WS_MAX_WARPS;
+  return 0;
+}
+
+// The fused GEMM with the sketch: ks in {8, 16, 32} (0: the same schedule without it); kr the codec's rounds (0: the plain
+// store); T row blocks a tile, RUN tasks a run (RUN divides T; RUN < T needs sk zeroed); signs as sketch.sign_fragments for
+// (ks, T); sk gets tile t's 16 × ks int32 at 16 ks t. groups <= 0: as many CTAs as fit (times -groups), split over the
+// chunks.
+int sk_gemm(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
+            int consumers, int per_consumer, int groups, int* launched, int T, int RUN, const void* signs, int* skout,
+            int decode, cudaStream_t s) {
+  if (M < 1 || M > 32 || N % 16 || Kd % wc::TASK_COLS || kr < 0 || kr > SK_KMAX || consumers < 1 ||
+      consumers > wc::WS_MAX_CONSUMERS || per_consumer < 1 || consumers * per_consumer > 32 || T < 1 || RUN < 1 ||
+      T % RUN || (ks && (!signs || !skout)) || (ks != 0 && ks != 8 && ks != 16 && ks != 32))
+    return 1;
+  const int stages = consumers * per_consumer;
+  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / wc::TASK_COLS, nbs = N / 16;
+  const int nruns = (nbs + T - 1) / T * (T / RUN);
+  const int threads = (consumers + 1) * 32;
+  int sms = 0, per_sm = 0, dev = 0;
+  if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) return 2;
+  const uint4* sg = static_cast<const uint4*>(signs);
+#define G(KR, NB, KS, SKB) do { \
+    auto kern = sk::sk_ws_kernel<KR, NB, KS, SKB>; \
+    const int smem = wc::ws_smem_bytes<KR, NB>(stages); \
+    if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2; \
+    if (groups <= 0) { \
+      if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, threads, smem) || per_sm < 1) return 2; \
+      const int mult = groups < 0 ? -groups : 1; \
+      groups = mult * sms * per_sm / nchunks > 0 ? mult * sms * per_sm / nchunks : 1; \
+    } \
+    if (groups > nruns) groups = nruns; \
+    kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer, partials, T, \
+                                                 RUN, sg, skout, decode); } while (0)
+#define GS(KR, NB) do { switch (ks) { case 0: G(KR, NB, 8, false); break; case 8: G(KR, NB, 8, true); break; \
+                                      case 16: G(KR, NB, 16, true); break; default: G(KR, NB, 32, true); } } while (0)
+#define GK(KR) do { if (nb8 == 1) GS(KR, 1); else if (nb8 == 2) GS(KR, 2); else GS(KR, 4); } while (0)
+  switch (kr) {
+    case 0: GK(0); break;
+    case 1: GK(1); break;
+#if SK_KMAX >= 2
+    case 2: GK(2); break;
+#endif
+#if SK_KMAX >= 3
+    case 3: GK(3); break;
+#endif
+    default: return 1;
+  }
+#undef GK
+#undef GS
+#undef G
+  if (launched) *launched = groups * nchunks;
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The tags of vectors [0, nvec) of sk into tags (32 bytes each, tagger.cu's b3 layout), block index jbase + v.
+int sk_hash(int ks, const int* skin, uint64_t nvec, const uint8_t* seed, uint64_t jbase, uint32_t* tags, cudaStream_t s) {
+  static uint8_t last[32];
+  static bool have = false;
+  static bw::Key3 key;
+  if (!have || memcmp(last, seed, 32)) {
+    memcpy(last, seed, 32);
+    have = true;
+    key = sk::sk_key(seed);
+  }
+  const unsigned grid = (unsigned)((nvec + 127) / 128);
+  switch (ks) {
+    case 8: sk::sk_hash_kernel<8><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags); break;
+    case 16: sk::sk_hash_kernel<16><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags); break;
+    case 32: sk::sk_hash_kernel<32><<<grid, 128, 0, s>>>(skin, nvec, key, jbase, tags); break;
+    default: return 1;
+  }
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The leaves of the workspace's tags (wc_commit_bytes(nvec) bytes) under this tag's name.
+int sk_leaves(void* workspace, uint64_t nvec, const uint8_t* seed, cudaStream_t s) {
+  bw::Pass p = bw::make_pass(bw::TAG_B3, nvec, workspace);
+  const uint64_t leaves = (nvec + 15) / 16;
+  bw::b3_leaves<<<(unsigned)((leaves + 127) / 128), 128, 0, s>>>(
+      p.tags, nvec, nvec, bw::prefix_midstate(bw::LEAF_DOMAIN, sk::NAME, seed), p.nodes);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+}  // extern "C"
