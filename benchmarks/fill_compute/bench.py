@@ -742,11 +742,12 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
 
 
 def l2_of(l2: dict, arm: dict) -> str:
-    """The L2 write gate's verdict for the arm's store mode at its tile (`none` for an arm without a filler)."""
+    """The L2 write gate's verdict for the arm's kernel (`none` for an arm without a filler)."""
     if "store" not in arm:
         return "none"
-    key = arm["store"] if arm.get("tile", TILE) == TILE else f"{arm['store']}@{arm['tile']}"
-    return l2.get("by_store", {}).get(key, l2.get("status", "not run"))
+    kernel = f"fill_{'persist' if arm['mode'] == 'persist' else 'chunk'}{'128' if arm.get('tile', TILE) == 128 else ''}_1_" \
+             f"{STORES[arm['store']]}"
+    return l2.get("by_kernel", {}).get(kernel, l2.get("status", "not run"))
 
 
 def run_arm(lib, f, refs, credit, step, reps, base, arm, lo, peer, clock, starve_s, head, log, l2) -> dict:
