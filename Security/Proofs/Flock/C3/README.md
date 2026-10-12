@@ -40,28 +40,38 @@ Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), 
 free fields. n0 fixes the decoder (`C3Family.honest`, `C3/Compose/Honest.lean`): `run` decodes the inner transcript's
 steps stage by stage on the prefix each stage's game plays (`decodeRun`), `row` is the verifier's `fixedRow` at its
 hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved) is the guarantee's `_hbr`
-at it, from n1 and the four stages at it as hypotheses; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is
-free, and every stage reads `dec`'s messages, so a stage does not follow from the public rows: perturb one message on
-a stage's rounds and every stage still plays a prefix of the same length while that stage's verdict fails (Worker S's
-counterexample, at rep 0's `v₂`). So n2–n5 are restated on read facts (round 4): `hX_of_read`, over any family, from
-its stage's read fact (its rounds' messages on the tape are its prover's for a witness its verifier row accepts), and
-n6 gives the read facts at a decoder that reads the sessions' values. The stubs `hX_honest` in the pieces' files are
-false as stated at some `dec` and unused; round 5 replaces them by `hX_of_read`.
+at it; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is free, and every stage reads `dec`'s messages, so a
+stage does not follow from the public rows: perturb one message on a stage's rounds and every stage still plays a
+prefix of the same length while that stage's verdict fails (Worker S's counterexample, at rep 0's `v₂`). So each stage
+is its read fact (its rounds' messages on the tape are its prover's for a witness its verifier row accepts), from which
+`hX_of_read` gives the stage over any family, and the tape is its frame (`HFrame`, `hTape_of_frame`): obligations on
+`dec` that n6 states at a fixed decoder. The round 3 stubs `hX_honest`, false at some `dec`, are deleted (round 5).
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean` | 60 | `checkStackedShape`, `candidate3`'s every-round-from-0 hold | W |
-| n1 | `hPubRows_of_check` (from `ChecksPubRows`); `hTape_honest` (from n2–n5: the stages' prefixes and the openings are the whole tape) | `C3/PubRows/Honest.lean` | 150, 300 | n1b; `Registered.entry` at the session's reads | W |
-| n2 | `hReps_of_read`: `HReps` from `HPubRows` and the reps' read fact | `C3/HoloValues/Read.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W |
-| n2a | a transcript-level holo rep program (RepConverse's `repProg` with the `h` round before r′) and its converse, and its refinement to `holoRepC` (only abstract today); no definition states it yet, so it is a row, not a stub | `Soundness/Refine/` | 300 | c1 | W |
-| n3 | `hSparse_of_read`: `HSparse` from `HPubRows`, `HReps` and `SparseRead` | `C3/Sparse/Read.lean` | 250 | `sparse_refines`, `sparsePhase_plays`; the claim round's `c_k` as RecSparse's `claim` check | W |
-| n4 | `hOpening_of_read`: `HOpening` from `HPubRows`, `HReps`, `HSparse` and the opening's read fact (`HOpenSteps`): O1–O6 at `mReg` (`seven_le_mReg`) | `C3/Opening/Read.lean` | 300 | c1's `ringSwitch_of_residuals` | W |
-| n5 | `hRegLevels_of_read`: `HRegLevels` from `HPubRows`, n2–n4, R's top (`∃ lv, StackedTop lv st reg xR.cap`, `_hstk`) and Ligerito's read fact | `C3/RegLevels/Read.lean` | 250 | c1's `ligerito_of_residuals_at` | W |
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
+| n1 | `hPubRows_of_check'` (from `ChecksPubRows`, `RowsHeld`, `PortsNamed`, `SparseAtShape`); `hTape_of_frame` (from `HFrame`, `hTape_iff_frame`) | `C3/PubRows/Honest.lean`, `Check.lean`, `Frame.lean` | proved (round 4) | `SparseAtShape` from the verifier's shape check | W (H, `SparseAtShape`) |
+| n2 | `hReps_of_read`: `HReps` from the reps' read fact (`RepsRead`) | `C3/HoloValues/Read.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W (C) |
+| n2a | the transcript-level holo rep program `holoRepProg`, its refinement to `holoRepC` (`holoRep_refines`) and its run from the stages' checks (`holoProg_of_checks`) | `Soundness/Refine/HoloRep.lean`, `HoloRefines.lean`, `HoloRepConverse.lean` | proved (round 4) | | |
+| n3 | `hSparse_of_read` (with `hStages_honest`, so `hSparse_honest_of_read`): `HSparse` from `SparseRead` | `C3/Sparse/Read.lean` | proved (round 4) | | |
+| n4 | `hOpening_of_decode`, `hOpening_of_read`: `HOpening` from `OpeningRead`, O1–O6 at `mReg` | `C3/Opening/Read.lean` | proved (round 4) | | |
+| n5 | `hRegLevels_of_read` (with `hLgStages_honest`, so `hRegLevels_honest_of_read`): `HRegLevels` from `RegLevelsRead`, R's tape against `xR.cap` | `C3/RegLevels/Read.lean` | proved (round 4) | | |
 | n6 | the read facts at the honest family, at a fixed decoder: round `i`'s message at stage `i`'s read wires is the value V*'s registered rows hold for round `i` at an accepted outcome that reads them there (G's `decOf`, typed by `toSs`), with `MsgsRead`'s obligation that round `i`'s values are read only from stage `i`'s commit strings, and each session's acceptance of its stage's verifier row | `C3/Compose/` | 500–900 | the four read facts; a C3 `tableMsgs` from V*'s layers, as G's `Family/Transcript.lean` | L |
 
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved; `hdec` is
-`vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes beyond the stubs, and is no premise of the
-guarantee yet:
+`vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes (round 5), each with who discharges it:
+
+* `hreps` (`HReps`): n2, C's `RepsRead` and `hReps_of_read`; then the read fact at n6's decoder.
+* `hsread`, `horead`, `hlread` (`SparseRead`, `OpeningRead`, `RegLevelsRead`) and `hfr` (`HFrame`): n6, at the fixed
+  decoder (L states them, round 5; their proofs in parallel next).
+* `hchk` (`ChecksPubRows`): n1b, below.
+* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
+* `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
+* `hspsh` (`SparseAtShape`): the verifier's shape check (H, round 5).
+* `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
+* `hheld` (`HeldIs`): n1c, below.
+* `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
+  and is what n6's `RegLevelsRead` reads.
 
 * n1b, the V* session checks: VBridge reads V*'s sessions' acceptance as `AcceptsZKR`, which does not include the
   checks the verifier makes of them under `--rec-inner` (`checkPubRows`, check 5's, `checkStmt`). `hchk`
@@ -73,9 +83,6 @@ guarantee yet:
   the coin server's writer `wr` of the inner record), which gives `HeldIs` (`heldIs_of_custody`, proved). It is
   `live-verifier` at the inner session: no premise and no check of the verifier's gives it, so it is a new named
   assumption, and the guarantee would read the record at the history (`wr t`) in place of `tr` and `record`.
-* `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
-* `hss` and `htop` are the event's (`AcceptsC3`'s list and hold of the inner transcript, with t0): `_hbr` at the honest
-  family is used only where they hold.
 
 ## Circuits' code
 

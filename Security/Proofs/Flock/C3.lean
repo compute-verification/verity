@@ -22,7 +22,8 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
   `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
-  n0) and `_hbr` at it from n1–n5 (`hbr_honest`).
+  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), and the fixed decoder at which n6 states the
+  read facts (`C3/Compose/Decoder.lean`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3).
 * (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from

@@ -10,14 +10,13 @@ import Proofs.Flock.C3.PubRows.Check
 /-!
 # n1: the public rows, the tape and the commitments at the honest family
 
-* `hPubRows_of_check` (stub): `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's
-  public file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as
-  `FlockVerify`'s `--rec-inner` path runs it after setup). `AcceptsZKR` does not make that check, and no premise of the
-  guarantee says it was made (gap n1b). The check reads less than `HPubRows` does: the drawn units only, the first
-  port of a name, and a rec-sparse unit's rows at its own shape. `hPubRows_of_check'` proves it with those
-  (`RowsHeld`, `PortsNamed`, `SparseAtShape`, `PubRows/Check.lean`).
-* `hTape_honest` (stub): `HTape` at the honest family, from the stages' obligations there. Those read only the decode,
-  and no step after the openings changes it, so they don't give `HTape`: at the honest family it is exactly `HFrame`
+* `hPubRows_of_check'`: `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's public
+  file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as `FlockVerify`'s
+  `--rec-inner` path runs it after setup; `AcceptsZKR` does not make it, gap n1b) where the check reads every row
+  `HPubRows` does: the drawn units (`RowsHeld`), the first port of a name (`PortsNamed`) and a rec-sparse unit's rows
+  at its own shape (`SparseAtShape`, `PubRows/Check.lean`).
+* `hTape_of_frame`: `HTape` at the honest family from `HFrame`. The stages' obligations read only the decode, and no
+  step after the openings changes it, so they don't give `HTape`: at the honest family it is exactly `HFrame`
   (`hTape_iff_frame`, `PubRows/Frame.lean`), the tape's cap and link points first and the openings alone after the
   stages, an obligation on the decoder `dec`.
 * `hCommits_honest`: `VCommits` at the honest family, from `HPubRows`, the sessions' reads being `own`'s (`OwnIs`) and
@@ -79,17 +78,6 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg
 
-/-- **(n1) The public rows at the honest family**, from the verifier's check of them. A stub. -/
-theorem hPubRows_of_check (hchk : ChecksPubRows 𝓗 tr record reg) : HPubRows 𝓗 := by
-  sorry
-
-/-- **(n1) The tape at the honest family**, from the stages' obligations there. A stub. -/
-theorem hTape_honest {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hrows : HPubRows 𝓗)
-    (hreps : FlockC3.HoloValues.HReps 𝓗 dg N k Rw) (hsp : FlockC3.Sparse.HSparse 𝓗 dg N k Rw)
-    (hop : FlockC3.Opening.HOpening 𝓗 dg N k Rw) (hlv : FlockC3.RegLevels.HRegLevels 𝓗 dg N k Rw) :
-    HTape 𝓗 dg N k Rw := by
-  sorry
-
 /-- **(n1) The tape at the honest family is its frame**: `decodeRun` takes each stage on a prefix of what is left
 (`decodeRun_split`), so the tape is `holoSteps` of its decode exactly where the cap, the link points and the openings
 frame the stages (`holoSteps_iff_framed`). -/
@@ -97,8 +85,7 @@ theorem hTape_iff_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HTape �
   ⟨fun h R ω t R₂ τ o hacc => framed_of_holoSteps (e := holoAt st hp) (h R ω t R₂ τ o hacc),
     fun h R ω t R₂ τ o hacc => holoSteps_of_framed (e := holoAt st hp) (h R ω t R₂ τ o hacc)⟩
 
-/-- **(n1) The tape at the honest family, from its frame**: `hTape_honest` with `HFrame` for the stages' obligations,
-which `HTape` does not need. -/
+/-- **(n1) The tape at the honest family, from its frame**, an obligation on the decoder that n6 states at a fixed one. -/
 theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFrame 𝓗 dg N k Rw) : HTape 𝓗 dg N k Rw :=
   hTape_iff_frame.2 hfr
 
