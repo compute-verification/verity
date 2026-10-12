@@ -230,7 +230,9 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
 def fill_gate(tu: Topup, torch) -> dict:
     """fill-sk16/v0 against `fill_ref`: the signs; every unit root and the check word of a chunk over three regions of
     random bytes (one ending mid-unit), at 3 CTAs and at the default grid, at each warp count; and the top-up thread's
-    check words, chunk after chunk, the plan wrapping, with the gate down to one CTA for chunks 4-7."""
+    check words, chunk after chunk, the plan wrapping, with the gate first closed (the chunks in flight cut to the units
+    taken), then down to one CTA, then open: every chunk's place in the plan, and the receipts of the first 12 and of
+    the cut ones (`fill_cut_chunks` counts them)."""
     import fill_ref as F
     out = {}
     sb = ctypes.create_string_buffer(8192)
@@ -256,28 +258,29 @@ def fill_gate(tu: Topup, torch) -> dict:
     out["fill_units"] = ok
     # the thread: chunks of 4 units over the 15-unit plan
     tu.start(regions, 4, 4 * F.UNIT_BYTES, 2, 0, RUN_SEED, ctas=3)
-    gated = False
+    for busy, idle in ((0, 0), (1, 1), (-1, -1)):  # closed: the chunks in flight return cut; then one CTA; then all
+        tu.so.tu_gate(busy, idle)
+        time.sleep(0.02)
     while True:
         prog = (ctypes.c_uint64 * 2)()
         tu.so.tu_progress(prog)
         if prog[1] >= 12:
             break
-        if 4 <= prog[1] < 8 and not gated:
-            tu.so.tu_gate(1, 1)
-            gated = True
-        elif prog[1] >= 8 and gated:
-            tu.so.tu_gate(-1, -1)
-            gated = False
         time.sleep(0.01)
     tu.stop()
-    recs, bad, cursor = tu.log()[:12], [], 0
-    for _, _, n, unit0, root4, c in recs:
-        units = min(4, 15 - cursor)
-        _, x = F.chunk(blobs, unit0, units, F.chunk_seed(RUN_SEED, c), RUN_SEED)
-        if unit0 != cursor or int(n) != units * F.UNIT_BYTES or root4 != x:
+    recs, bad, cursor, checked, cut = tu.log(), [], 0, 0, 0
+    for k, (_, _, n, unit0, root4, c) in enumerate(recs):
+        planned, units = min(4, 15 - cursor), int(n) // F.UNIT_BYTES
+        cut += units < planned
+        if unit0 != cursor or units > planned or int(n) != units * F.UNIT_BYTES:
             bad.append(c)
-        cursor = (cursor + units) % 15
-    out["fill_thread_receipts"] = not bad and len(recs) == 12
+        elif (k < 12 or units < planned) and checked < 64:
+            checked += 1
+            if root4 != F.chunk(blobs, unit0, units, F.chunk_seed(RUN_SEED, c), RUN_SEED)[1]:
+                bad.append(c)
+        cursor = (cursor + planned) % 15
+    out["fill_thread_receipts"] = not bad and len(recs) >= 12
+    out["fill_cut_chunks"] = cut
     return out
 
 

@@ -34,7 +34,9 @@ struct Key {
 
 // Which CTAs of a resident fill kernel take units: CTA b does while b < (busy > 0 ? busy_ctas : idle_ctas), and the
 // rest sleep, so the host (tu_gate) or the step's own stream (tu_gate_step: busy += ±1 at a step's start and end) moves
-// the filler's grid within a unit's time instead of a chunk's. Which CTA takes a unit doesn't enter its root.
+// the filler's grid within a unit's time instead of a chunk's. Which CTA takes a unit doesn't enter its root. Closed
+// both ways, the kernel returns, its chunk cut to the units taken (a prefix: they are taken in order), so that nothing
+// waiting on the device waits on a closed gate.
 struct Gate {
   int busy;
   uint32_t busy_ctas, idle_ctas, pad;
@@ -198,7 +200,8 @@ __device__ __forceinline__ void unit(const uint8_t* __restrict__ p, uint64_t j0,
 }
 
 // Units [unit0, unit0 + units) of the plan over `R`, W warps a CTA, taken a warp at a time from `ctr` (zeroed before the launch); unit
-// u's root at roots[8 (u − unit0)], and the XOR of the roots' first words into *xr (the chunk's check word).
+// u's root at roots[8 (u − unit0)], and the XOR of the roots' first words into *xr (the chunk's check word); the units
+// done are min(*ctr, units).
 template <int W>
 __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t unit0, uint64_t units,
                                                            const uint32_t* __restrict__ signs, Key K,
@@ -212,11 +215,12 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
     if (lane == 0) {
       const volatile Gate* g = gate;
       for (;;) {
-        if (blockIdx.x < (g->busy > 0 ? g->busy_ctas : g->idle_ctas)) {
+        const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
+        if (blockIdx.x < (g->busy > 0 ? busy_ctas : idle_ctas)) {
           u = atomicAdd(ctr, 1ull);
           break;
         }
-        if (*(volatile unsigned long long*)ctr >= units) {
+        if ((busy_ctas == 0 && idle_ctas == 0) || *(volatile unsigned long long*)ctr >= units) {
           u = units;
           break;
         }

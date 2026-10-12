@@ -263,8 +263,11 @@ static int gate_init() {
 
 static uint32_t gate_value(int ctas) { return ctas < 0 ? fl::ALL : (uint32_t)ctas; }
 
+static std::atomic<int> gate_closed{0};  // both ways: the thread launches no chunk
+
 static int gate_set(int busy_ctas, int idle_ctas, bool reset) {
   if (int rc = gate_init()) return rc;
+  gate_closed = busy_ctas == 0 && idle_ctas == 0;
   fl::gate_set<<<1, 1, 0, gate_stream>>>(gate, gate_value(busy_ctas), gate_value(idle_ctas), reset);
   return (int)cudaStreamSynchronize(gate_stream);
 }
@@ -333,7 +336,10 @@ static int finish(State& st, int i) {
   cudaEventElapsedTime(&b, st.start, st.e1[i]);
   uint32_t root4 = 0;
   if (st.mode == MODE_FILL) {
-    memcpy(&root4, st.roots_h + 64 * i, 4);
+    uint64_t taken = 0;
+    memcpy(&taken, st.roots_h + 64 * i, 8);
+    memcpy(&root4, st.roots_h + 64 * i + 8, 4);
+    st.slot_bytes[i] = std::min<uint64_t>(taken * fl::UNIT_BYTES, st.slot_bytes[i]);
   } else if (st.mode >= 0) {
     uint8_t root[64];
     bw::digest_bytes((const uint64_t*)(st.roots_h + 64 * i), root);
@@ -383,7 +389,7 @@ static int launch_fill(State& st, int i) {
   if (e != cudaSuccess) return (int)e;
   int rc = fill_launch(st.plan, unit0, units, st.signs, seed, st.ws[i], st.ctas.load(), s);
   if (rc) return rc;
-  e = cudaMemcpyAsync(st.roots_h + 64 * i, (uint8_t*)st.ws[i] + 32 * units + 8, 4, cudaMemcpyDeviceToHost, s);
+  e = cudaMemcpyAsync(st.roots_h + 64 * i, (uint8_t*)st.ws[i] + 32 * units, 12, cudaMemcpyDeviceToHost, s);
   if (e != cudaSuccess) return (int)e;
   e = cudaEventRecord(st.e1[i], s);
   if (e != cudaSuccess) return (int)e;
@@ -437,7 +443,7 @@ static void loop(State* sp) {
   int i = 0, rc = 0;
   while (st.run.load() && !rc) {
     if (st.busy[i] && (rc = finish(st, i))) break;
-    if (st.paused.load()) {
+    if (st.paused.load() || (st.mode == MODE_FILL && gate_closed.load())) {
       bool any = false;
       for (int d = 0; d < st.depth && !rc; ++d) {
         const int j = (i + d) % st.depth;
