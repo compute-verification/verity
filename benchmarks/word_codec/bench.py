@@ -10,7 +10,7 @@ Nothing is timed before its gate passed, in this order:
   the payloads', then the decode timed (mode 0: read, decode, XOR);
 - `rates`: compute-only throughputs: decode and encode (words/s, each step's input the previous output, the tweak
   advancing), the bare squaring (best over ILP 1-8), the GF(2^31 - 1) Horner step of the bandwidth tag;
-- `gemm`: at Llama-3.1-8B's linears and batch 1-32, the fused kernel's partial sums equal the plain kernel's bit for bit
+- `gemm`: at `--model`'s linears (default Llama-3.1-8B's) and batch 1-32, the fused kernel's partial sums equal the plain kernel's bit for bit
   at every k and both are within FP32 rounding of torch's; then interleaved reps of cuBLASLt FP8 (`torch._scaled_mm`), the
   plain FP8 kernel and the fused kernel at each k, each in three forms (one task a warp, `wc_gemm`; persistent with the
   next half-task's loads in flight, `wc_gemm_pipe`; warp-specialized, a producer warp filling a shared-memory ring for
@@ -54,9 +54,14 @@ AUDIT_TREE_CFGS = ((1, 0, 2), (0, 0, 2), (0, 0, 8), (0, 1, 2), (0, 1, 8), (0, 2,
 AUDIT_TREE_GATE_TASKS = (1, 3, 37, 167, 1029, 4101)
 WS_MAX_WARPS = 10         # wc.cu's: consumers, the producer and the committers
 TAG_MODES = ((1, ""), (2, "i"))  # wc_gemm_ws_tag's decode: the tag then the decode, or interleaved (a cfg's suffix)
-LAYERS = 32               # Llama-3.1-8B's, each with the four linears
 KMAX = 8
-SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
+# each model's layers and its four linears (out × in), every layer the same; --model picks one
+MODELS = {"llama-3.1-8b": (32, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096),
+                                "down": (4096, 14336)}),
+          "llama-3.1-70b": (80, {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192),
+                                 "down": (8192, 28672)})}
+MODEL = "llama-3.1-8b"
+LAYERS, SHAPES = MODELS[MODEL]
 BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
 
@@ -789,6 +794,9 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
     commits, it never decodes): wc_audit_tag alone, and wc_audit_commit, the tags and their leaves in one pass, gated
     equal to wc_audit_tag's tags and wc_commit_leaves over them."""
     blocks = window_blocks()
+    free, _ = torch.cuda.mem_get_info()
+    if blocks * C.lane_words(lib.bits) * 8 + 3 * lib.so.wc_commit_bytes(blocks) > 0.9 * free:
+        return audit_window_one(lib, torch, reps, log, blocks)
     store = torch.empty(blocks * C.lane_words(lib.bits), dtype=torch.int64, device="cuda").random_()
     a, b = Commit(lib, torch, blocks), Commit(lib, torch, blocks)
     st, grid = stream(torch), torch.cuda.get_device_properties(0).multi_processor_count * 8
@@ -831,6 +839,48 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
         f"{out['audit_tree_s'] * 1e3:.3f} ms ({out['store_bytes'] / out['audit_tree_s'] / 1e9:.0f} GB/s; "
         + ", ".join(f"{n} {v['s'] * 1e3:.3f}{'' if v['ok'] else ' FAIL'}" for n, v in trees.items()) + ")")
     del store, a, b, c
+    torch.cuda.empty_cache()
+    return out
+
+
+def audit_window_one(lib: Lib, torch, reps: int, log, blocks: int) -> dict:
+    """audit_window in one workspace, for a store too large to hold three beside it (70B's): wc_audit_commit and
+    wc_commit_tree first, their leaves and tree kept as the reference, then each wc_audit_tree configuration gated equal
+    to them over the whole window (its tags are gated at audit_tree_gate's sizes)."""
+    store = torch.empty(blocks * C.lane_words(lib.bits), dtype=torch.int64, device="cuda").random_()
+    c = Commit(lib, torch, blocks)
+    st, sms = stream(torch), torch.cuda.get_device_properties(0).multi_processor_count
+    grid, ol = sms * 8, c.leaves - c.ptr
+    lib.call("wc_audit_commit", ptr(store), blocks, TAG_SEED, 0, c.tags, c.leaves, grid, st)
+    lib.call("wc_commit_tree", c.ptr, blocks, None, st)
+    torch.cuda.synchronize()
+    ref = c.buf[ol:].clone()
+    tg = timed(torch, lambda: lib.call("wc_audit_tag", ptr(store), blocks, TAG_SEED, 0, c.tags, grid, st), reps)
+    tc = timed(torch, lambda: lib.call("wc_audit_commit", ptr(store), blocks, TAG_SEED, 0, c.tags, c.leaves, grid, st),
+               reps)
+    tree_gate = audit_tree_gate(lib, torch, log)
+    trees, ok = {}, True
+    for keep, form, per_sm in AUDIT_TREE_CFGS:
+        name, g = audit_tree_name(keep, form, per_sm), sms * per_sm
+        c.buf.zero_()
+        lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, keep, form, g, st)
+        torch.cuda.synchronize()
+        same = bool(torch.equal(c.buf[ol:], ref))
+        t = timed(torch, lambda: lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, keep, form, g, st),
+                  reps)
+        trees[name] = {"keep_tags": keep, "form": form, "grid": g, "ok": same, "s": statistics.median(t), "times_s": t}
+        ok &= same
+    best = min(trees, key=lambda n: trees[n]["s"])
+    out = {"blocks": blocks, "store_bytes": store.numel() * 8, "grid": grid, "one_workspace": True,
+           "ok": ok and tree_gate["ok"], "audit_tag_s": statistics.median(tg), "audit_tag_times_s": tg,
+           "audit_commit_s": statistics.median(tc), "audit_commit_times_s": tc,
+           "audit_tree_s": trees[best]["s"], "audit_tree_best": best, "audit_tree": trees, "audit_tree_gate": tree_gate}
+    log(f"audit window {lib.name} (one workspace): {'ok' if out['ok'] else 'FAIL'}, {blocks} lane blocks "
+        f"({out['store_bytes'] / 1e9:.2f} GB): tags {out['audit_tag_s'] * 1e3:.3f} ms, tags and leaves "
+        f"{out['audit_commit_s'] * 1e3:.3f} ms, the whole commit {best} {out['audit_tree_s'] * 1e3:.3f} ms "
+        f"({out['store_bytes'] / out['audit_tree_s'] / 1e9:.0f} GB/s; "
+        + ", ".join(f"{n} {v['s'] * 1e3:.3f}{'' if v['ok'] else ' FAIL'}" for n, v in trees.items()) + ")")
+    del store, c, ref
     torch.cuda.empty_cache()
     return out
 
@@ -994,7 +1044,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                         pt["mu_rebuild_window_overlap"] = ((window - pt["tau_overlap"] - pt["c_overlap"])
                                                            / pt["x_native"])
                     points.append(pt)
-    shared = [{"schema": "verity/codec-frontier-point/v0", "lane": "ra-word-codec", "b": 61, "k": p["k"],
+    shared = [{"schema": "verity/codec-frontier-point/v0", "lane": "ra-word-codec", "model": MODEL, "b": 61, "k": p["k"],
                "arithmetic": f"cuda-int32/mersenne61/{p['lib']}/pb{p['payload_bits']}/ws/commit-{p['commit']}",
                "batch": p["batch"],
                "y_total": p["y"], "y_base": p["stack"]["base"], "y_decode": p["stack"]["decode"],
@@ -1003,6 +1053,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                "window": p["window"], "c_commit": p.get("c_commit_native"), "mu_window": p.get("mu_rebuild_window"),
                "mu_window_overlap": p.get("mu_rebuild_window_overlap"), "x_floor": p.get("x_floor_native"),
                "mu_window_floor": p.get("mu_rebuild_window_floor"),
+               **({"d": p["window"]} if p["commit"].startswith("audit") else {}),
                "label": f"Sloth p61, {p['payload_bits']}-bit packing, warp-specialized, "
                         + {"audit": "decode-only step, the tags an audit pass of their own, the leaves and the tree "
                                     "passes after it",
@@ -1014,7 +1065,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                "run": os.environ.get("RESEARCH_RUN_ID"), "art": None}
               for p in points if "x_native" in p and "tau_native" in p]
     return {"schema": "verity/word-codec/frontier-points/v0", "run_id": os.environ.get("RESEARCH_RUN_ID"),
-            "layers": LAYERS, "shapes": {k: list(v) for k, v in SHAPES.items()}, "encode_words_s": enc_best,
+            "model": MODEL, "layers": LAYERS, "shapes": {k: list(v) for k, v in SHAPES.items()}, "encode_words_s": enc_best,
             "decode_words_s": dec_best, "b3_compressions_s": b3_best, "sha512_compressions_s": sha_best,
             "commit_window": cw, "points": points,
             "shared": shared}
@@ -1062,7 +1113,8 @@ def main() -> int:
     ap.add_argument("--store-gib", type=float, default=4.0)
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--gate-words", type=int, default=1 << 16)
-    ap.add_argument("--shapes", default=",".join(SHAPES))
+    ap.add_argument("--model", default=MODEL, choices=list(MODELS), help="whose layers and linears the step is")
+    ap.add_argument("--shapes", default="", help="a subset of the model's linears, comma-separated (default all)")
     ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
     ap.add_argument("--ks", default=",".join(map(str, range(1, KMAX + 1))))
     ap.add_argument("--b-side", type=float, default=63.0)
@@ -1079,6 +1131,10 @@ def main() -> int:
                     help="after the gates, only the compute-only rates and the GEMM, with every library: no read, "
                          "standalone decode or analysis")
     a = ap.parse_args()
+    global MODEL, LAYERS, SHAPES
+    MODEL = a.model
+    LAYERS, SHAPES = MODELS[MODEL]
+    a.shapes = a.shapes or ",".join(SHAPES)
 
     import torch
     out_dir = Path(a.out)
@@ -1138,7 +1194,8 @@ def main() -> int:
         return 0
 
     res = {"device": {"name": props.name, "sms": sms, "cc": f"{props.major}.{props.minor}",
-                      "memory_bytes": props.total_memory}, "seed": SEED.hex(), "libs": {}, "ok": True}
+                      "memory_bytes": props.total_memory}, "model": MODEL, "layers": LAYERS,
+           "shapes": {k: list(v) for k, v in SHAPES.items()}, "seed": SEED.hex(), "libs": {}, "ok": True}
     log(f"device {props.name}, {sms} SMs")
     lay = gate_layouts(torch, log)
     res["layouts"] = lay
