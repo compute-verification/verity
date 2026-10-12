@@ -9,6 +9,7 @@ import Models.Pouw.Guarantees
 import Models.NetworkCertifier.Assumptions
 import Models.NetworkCertifier.Guarantees
 import Models.Flock.Guarantees
+import Models.Accounting.Assumptions
 import Models.Accounting.Guarantees
 import Models.Accounting.Guarantees.Bandwidth
 

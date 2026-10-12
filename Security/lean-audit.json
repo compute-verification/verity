@@ -2,6 +2,12 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": {
+  "Accounting.Assumptions.ComputeAdditive": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Assumptions.WorkHardness": {
+   "owner": "@memory-accounting"
+  },
   "Flock.Assumptions.VBridge": {
    "owner": "@proofs",
    "digest": "928812a52c621ba8f1c48148872bf2c21c58388a45335bf64fc92e571ac56ef1"
@@ -235,6 +241,7 @@
   "Proofs.Flock.ZeroKnowledgeHidden",
   "Proofs.Pouw.PearlC.FlockTile",
   "Definitions.Accounting",
+  "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",
   "Definitions.Accounting.Bandwidth",
   "Models.Accounting.Guarantees.Bandwidth"
@@ -415,16 +422,22 @@
    "except": [],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); they import no assumption, guarantee or proof"
   },
+  "Models.Accounting.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Accounting", "Models.Accounting.Assumptions"],
+   "except": [],
+   "why": "a named assumption of resource accounting reads its definitions (the device model, a joint run, the rate audit's games), never a guarantee or a proof"
+  },
   "Models.Accounting.Guarantees": {
    "imports": [
     "Mathlib",
     "Definitions.Pouw",
     "Models.Pouw.Assumptions",
     "Definitions.Accounting",
+    "Models.Accounting.Assumptions",
     "Models.Accounting.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and PoUW's named assumption TT as hypotheses, never over a proof"
+   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees, PoUW's named assumption TT and resource accounting's (WorkHardness, ComputeAdditive) as hypotheses, never over a proof"
   },
   "Definitions.Accounting.Bandwidth": {
    "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
@@ -3798,6 +3811,18 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.RateAuditPartial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RatePartialHonest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateOfAuditPartial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateOfAuditPartialPasses": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -4224,7 +4249,11 @@
    "Accounting.SecurityProofs.RateAuditInteractiveRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the certified stream and what was sent, but not of the oracle (Security/Definitions/Accounting/RateAuditInteractive.lean), at RateAudit's floor and error, with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the InteractiveDevice it ranges over, not the rate audit's code; sends are unbounded and free.",
    "Accounting.SecurityProofs.RateAuditInteractive": "frozen (no-function,hash): As Accounting.SecurityProofs.RateAuditInteractiveRO, for side sources whose answers may also depend on the oracle: relayed tags cost m * b of the floor (RateAudit's floor at k - m words) and C(N, m) * 2^L / 2^(h * m) in place of the tag-guessing term.",
    "Accounting.SecurityProofs.RateOfAuditInteractive": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAuditInteractive, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditInteractive.lean), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.RateOfAuditInteractiveRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateOfAuditInteractive, carrying Accounting.SecurityProofs.RateAuditInteractiveRO, for side sources whose answers ignore the oracle at every value of the other audits' coins."
+   "Accounting.SecurityProofs.RateOfAuditInteractiveRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateOfAuditInteractive, carrying Accounting.SecurityProofs.RateAuditInteractiveRO, for side sources whose answers ignore the oracle at every value of the other audits' coins.",
+   "Accounting.SecurityProofs.RateAuditPartial": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may complete any x of a word's b bits at cost x (Security/Definitions/Accounting/RateAuditPartial.lean), at RateAudit's floor and error with c_enc = rounds * c_root, under the named assumption Accounting.Assumptions.WorkHardness, with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the PartialDevice it ranges over and the compute budget, c_tag and the cost of a completion as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work (WorkHardness, at k >= 2 rounds; F27 breaks it at k = 1), rate-device, bandwidth-instantiation and random-oracle carry it to a deployed device.",
+   "Accounting.SecurityProofs.RatePartialHonest": "completeness: RateHonest's honest device as a partial device (no on-chip state or free side sources, a link carrying exactly the certified stream, N queries, nothing completed) is accepted on every store, stream, oracle and sample with footprint and ingress exactly N * b and compute N * c_tag at every price of a completion, so RateAuditPartial's event is not vacuous",
+   "Accounting.SecurityProofs.RateOfAuditPartial": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAuditPartial, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditPartial.lean), with the compute account's work and the game's compute adding by the named assumption Accounting.Assumptions.ComputeAdditive (W), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.RateOfAuditPartialPasses": "frozen (no-function,hash): As Accounting.SecurityProofs.RateOfAuditPartial, with the rebuild term in passes (mu_rebuild <= (1 - tau) * d / (k * x1)) under x1 * b * F <= c_root * BW."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

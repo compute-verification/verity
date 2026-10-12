@@ -6,6 +6,7 @@ import Definitions.Accounting.Capacity
 import Definitions.Accounting.RateAudit
 import Definitions.Accounting.RateAuditJoint
 import Definitions.Accounting.RateAuditInteractive
+import Definitions.Accounting.RateAuditPartial
 import Definitions.Accounting.RateAuditSketch
 import Definitions.Accounting.RateAuditSketchInteractive
 import Definitions.Accounting.Tag

@@ -73,8 +73,9 @@ so the link's bits that carried them carried nothing about the store. Its comple
 
 The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
 (the red team's F27: at one codec round with the payload known, a lattice completes a word's bottom third far below
-its per-bit price) is outside the game, and the claim `rate-codec-work`, stated for codecs with `k ≥ 2` rounds,
-carries it.
+its per-bit price) is outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor
+and error, under the named assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion
+form, for codecs with `k ≥ 2` rounds).
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
