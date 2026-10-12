@@ -121,7 +121,7 @@ def _windows(windows: dict, name: str) -> dict:
     return {"honest": len(honest), "accepted": sum(r["accepted"] for r in honest),
             "elapsed_ns_p50": el[0], "elapsed_ns_max": el[1], "device_pass_ms_p50": dev[0],
             "device_pass_ms_max": dev[1], "call_ms_p50": call[0], "call_ms_max": call[1],
-            "samples": windows.get("samples"), "warm_pass": windows.get("warm_pass", False),
+            "samples": windows.get("samples"),
             "deadline_ns": honest[0]["deadline_ns"] if honest else None,
             "failures": sorted({r["failure"] for r in honest if r["failure"]}),
             "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}

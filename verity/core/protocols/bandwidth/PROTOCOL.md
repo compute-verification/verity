@@ -103,7 +103,8 @@ verifier that runs this is PoUS's memory challenger, which already holds `vk` an
 A deployment may open a window when the prover says it is ready: the bound holds for every device state laid out
 before `σ`, so the prover's preparation costs the verifier nothing. The honest prover's preparation on the GPU is one
 untimed pass under a throwaway seed, then a read of 512 MiB of another buffer, so the window starts with its launch
-path warm and L2 holding clean lines and no part of `E` (§6).
+path warm and L2 holding clean lines and no part of `E` (§6). The honest client always prepares before it asks for
+`σ` (`gpu.Prover`, checked by `benchmarks/bandwidth/tests/test_prover.py`): a window run without it took 1.195 ms.
 
 ## 4. Tags
 
@@ -333,5 +334,6 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
   salts, window seeds and samples, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
   (`gpu.py`: `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
-  `Opening` this verifier checks; `windows` runs the honest prover's preparation and the windows), its Python twins
+  `Opening` this verifier checks; `Prover.commit(window)` prepares, then takes `σ` and commits; `windows` runs every
+  window through it), its Python twins
   (`benchmarks/bandwidth/tests/test_tagger_twin.py`), and the runs of §6.
