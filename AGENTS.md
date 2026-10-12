@@ -16,7 +16,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
-      its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`), each a Python
+      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`) and
+      the network certifier (`certifier`), each a Python
       verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
       (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
@@ -168,6 +169,12 @@ harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only c
 its suite, and a layout move or a change to the runner reruns everything. The merge
 queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
 something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
+
+Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
+lands on its own passing check without its file owner's review, and the owner is told. infra owns check time as an
+outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Hand
+landing is to be automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
+refuses, and the lander handles what it refuses.
 
 Until reuse and the merge queue exist:
 
