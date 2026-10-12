@@ -7,6 +7,7 @@ import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Sketch
 import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.Chain
+import Proofs.Accounting.RateAudit.Horizon
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows
@@ -21,4 +22,6 @@ conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateCo
 (`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every
 count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`,
 `RateChainPaid`), and for a window whose roots are ground against the Fiat–Shamir seed
-(`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`). -/
+(`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal horizon bound on the samples
+(`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the route `Sampled` it gives a window
+(`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`). -/
