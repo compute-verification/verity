@@ -213,8 +213,8 @@ theorem openMsgsRead_of_layer
   intro j R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX hj _
   obtain ⟨S0, gs, x, _, _, hS, hg, hx, hop⟩ := htie R ω t R₂ τ o hA
   obtain ⟨S0', gs', x', _, _, hS', hg', hx', hop'⟩ := htie R' ω' t' R₂' τ' o' hA'
-  obtain rfl : S0' = S0 := Except.ok.inj (hS'.symm.trans hS)
-  obtain rfl : gs' = gs := Except.ok.inj (hg'.symm.trans hg)
+  obtain rfl : S0 = S0' := Except.ok.inj (hS.symm.trans hS')
+  obtain rfl : gs = gs' := Except.ok.inj (hg.symm.trans hg')
   rw [hop] at hj ⊢
   rw [hop', cutOf_openSteps, cutOf_openSteps]
   have hj3 : j < 3 := hj
