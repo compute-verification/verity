@@ -86,32 +86,47 @@ FLOOR_CTA_WARPS = 4  # kv.cu's WPB / 32
 def shape(lib: B.Lib) -> dict:
     a = (ctypes.c_int * 10)()
     lib.so.kv_attn_shape(ctypes.cast(a, ctypes.c_void_p))
-    return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
+    sh = dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
+    sh["receipts"] = rc_shape(lib)["forms"]
+    return sh
 
 
 def forms_of(sh: dict, only=None) -> list[int]:
-    return [f for f in [0, 1, 2] + ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12] if sh["mma"] else []) if only is None or f in only]
+    """The forms a build runs: the tensor-core ones where whole words fill a head, and a receipt form where its build
+    runs it (form 11 only at 64-byte words)."""
+    mma = [3, 4, 5, 6, 7, 8, 9] + [fm for fm, rc in RECEIPT.items() if sh["receipts"] >> (rc - 1) & 1] + [12]
+    return [f for f in [0, 1, 2] + (mma if sh["mma"] else []) if only is None or f in only]
 
 
 def rc_shape(lib: B.Lib) -> dict:
-    a = (ctypes.c_int * 5)()
+    a = (ctypes.c_int * 7)()
     lib.so.kv_rc_shape(ctypes.cast(a, ctypes.c_void_p))
-    return dict(zip(("rt", "lag", "zw", "mdw", "mt"), a))
+    return dict(zip(("rt", "lag", "zw", "mdw", "mt", "steps", "forms"), a))
 
 
 def rc_setup(lib: B.Lib, seed: bytes) -> dict:
-    """Both receipt forms' sign rows and keys under `seed`; their sign bits by rc."""
+    """The receipt forms' sign rows and keys under `seed`, each form the build runs; their sign bits by rc."""
     v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
     so = lib.so
     so.kv_rc_set.argtypes, so.kv_rc_buffers.argtypes, so.kv_rc_tag.argtypes = [i, v, v], [v, v, v], [i, q, v]
     so.kv_rc_l2.argtypes, so.kv_rc_tag16.argtypes, so.kv_rc_tag8.argtypes = [q, v, v], [i, q, v], [i, q, v]
-    rt = rc_shape(lib)["rt"]
+    rs = rc_shape(lib)
     bits = {}
-    for rc in (1, 2):
-        bits[rc] = R.sign_bits(seed, rc, 128 * rt)
-        table, key = R.rows(bits[rc], rt, rc), R.key_words(seed, rc)
+    for rc in (rc for rc in (1, 2) if rs["forms"] >> (rc - 1) & 1):
+        bits[rc] = R.sign_bits(seed, rc, 32 * rs["steps"] * rs["rt"])
+        table, key = R.rows(bits[rc], rs["rt"], rc), R.key_words(seed, rc)
         lib.call("kv_rc_set", rc, table.ctypes.data, key.ctypes.data)
+    so.kv_rc_sha_set.argtypes, so.kv_rc_sha8.argtypes = [ctypes.c_char_p], [q, v]
+    lib.call("kv_rc_sha_set", R.sha_prefix(seed))
     return bits
+
+
+def sha_equal(sk, tg, nr: int, ends: int) -> bool:
+    """The first and last `ends` of kv_rc_sha8's nr receipts (64 bytes each in the receipt slots) equal kv_receipt's
+    over the same sketches."""
+    skn, tgn = sk.cpu().numpy(), tg.cpu().numpy().view(np.uint8).reshape(-1)
+    return all(R.sha_receipt(RC_SEED, u, skn[8 * u: 8 * u + 8]) == tgn[64 * u: 64 * u + 64].tobytes()
+               for u in sorted(set(range(min(ends, nr))) | set(range(max(0, nr - ends), nr))))
 
 
 def split_tokens(ctx: int, splits: int, tile: int) -> int:
@@ -125,14 +140,17 @@ def receipt_vectors(sh: dict, rs: dict, b: int, ctx: int) -> int:
 
 
 def cta_lanes(encl, seq: int, g: int, t0: int, t1: int, rs: dict):
-    """A CTA's raw words as its decoder lanes hold them, (tiles padded to whole blocks, MDW, 32, 64) uint8."""
-    mt, rt, mdw = rs["mt"], rs["rt"], rs["mdw"]
+    """A CTA's raw words as its decoder lanes hold them, (tiles padded to whole blocks, MDW, 32, WB) uint8: lane l of
+    warp i holds word l % HW of token (32 / HW) i + l // HW, its KV head's K words, then its V words."""
+    mt, rt, mdw, wb = rs["mt"], rs["rt"], rs["mdw"], 16 * rs["steps"]
+    kw = 2 * K.HEAD_DIM // wb
     nt = -(-(t1 - t0) // mt)
     tp = -(-nt // rt) * rt
-    toks = np.zeros((tp * mt, 8, R.WORD_BYTES), np.uint8)
-    words = encl[seq, t0:t1].reshape(t1 - t0, -1, R.WORD_BYTES)
-    toks[: t1 - t0] = words[:, [4 * g + j for j in range(4)] + [32 + 4 * g + j for j in range(4)]]
-    return toks.reshape(tp, mdw, R.LANES, R.WORD_BYTES)
+    toks = np.zeros((tp * mt, 2 * kw, wb), np.uint8)
+    words = encl[seq, t0:t1].reshape(t1 - t0, -1, wb)
+    half = K.TOKEN_LAYER_BYTES // wb // 2
+    toks[: t1 - t0] = words[:, [kw * g + j for j in range(kw)] + [half + kw * g + j for j in range(kw)]]
+    return toks.reshape(tp, mdw, R.LANES, wb)
 
 
 def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: int | None = None) -> dict:
@@ -140,9 +158,11 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
     form 5's bit for bit at every split count where the two split the tokens alike; every sketch equals kv_receipt's
     from the raw words (form 11's from the z it dumped); the z after each CTA's last tile equals its partials bit for
     bit; the first and last 64 receipts equal kv_receipt's; and so do the first and last 32 block receipts
-    (kv_rc_tag16 over the same sketches) and half-block receipts (kv_rc_tag8)."""
+    (kv_rc_tag16 over the same sketches), half-block receipts (kv_rc_tag8) and SHA-512 half-block receipts
+    (kv_rc_sha8). Form 11 runs only at 64-byte words."""
     sh, rs, f = shape(lib), rc_shape(lib), lib.field
-    if not sh["mma"] or sh["kv_heads"] != K.KV_HEADS or rs["mdw"] * R.LANES != rs["mt"] * 8:
+    hw = 4 * K.HEAD_DIM // f.word_bytes
+    if not sh["mma"] or sh["kv_heads"] != K.KV_HEADS or rs["mdw"] * R.LANES != rs["mt"] * hw or not sh["receipts"]:
         return {}
     layers = layers_override or m["layers"]
     layer, st, tl, tle = layers - 1, B.stream(torch), K.TOKEN_LAYER_BYTES, sh["tle"]
@@ -169,7 +189,7 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
         part = part_buffer(torch, sh, b)
         o5, orc = (torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda") for _ in range(2))
         cell = {"batch": b, "context": ctx, "layer": layer, "equal": {}, "sketch": {}, "z": {}, "receipts": {},
-                "block_receipts": {}, "half_block_receipts": {}}
+                "block_receipts": {}, "half_block_receipts": {}, "sha_receipts": {}}
         for k in ks:
             B.set_key(lib, B.lib_key(lib, k))
             lib.call("kv_encode", B.ptr(pad), B.ptr(enc), pad.numel() // f.word_bytes, 0, k, 0, st)
@@ -179,6 +199,8 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
                 nsp = -(-ctx // per)
                 attn_call(lib, st, enc, 5, q, o5, part, b, ctx, layers, layer, sp, k)
                 for fm, rc in RECEIPT.items():
+                    if fm not in forms_of(sh):
+                        continue
                     key = f"{FORMS[fm]}@k{k}"
                     zd = (torch.zeros(b * nsp * K.KV_HEADS * (per // mt) * zw, dtype=torch.int32, device="cuda")
                           if rc == 2 else None)
@@ -234,10 +256,13 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
                                   for u in sorted(set(range(min(32, 2 * nblk))) | set(range(max(0, 2 * nblk - 32),
                                                                                               2 * nblk))))
                     cell["half_block_receipts"][key] = cell["half_block_receipts"].get(key, True) and half_ok
+                    lib.call("kv_rc_sha8", 2 * nblk, st)
+                    torch.cuda.synchronize()
+                    cell["sha_receipts"][key] = cell["sha_receipts"].get(key, True) and sha_equal(sk, tg, 2 * nblk, 32)
                     del zd
-        names = ("equal", "sketch", "receipts", "block_receipts", "half_block_receipts")
+        names = ("equal", "sketch", "receipts", "block_receipts", "half_block_receipts", "sha_receipts")
         cell["ok"] = all(all(cell[n].values()) and cell[n] for n in names) and all(
-            cell["z"].values()) and bool(cell["z"])
+            cell["z"].values()) and (bool(cell["z"]) or 11 not in forms_of(sh))
         log(f"receipt gate {lib.name} B={b} ctx={ctx} L={layers} layer {layer}: {'ok' if cell['ok'] else 'FAIL'}; "
             + "; ".join(f"{n} " + ", ".join(f"{a} {v}" for a, v in cell[n].items()) for n in names + ("z",)))
         out[f"b{b}_ctx{ctx}"] = cell
@@ -528,7 +553,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                         lib.call("kv_rc_buffers", B.ptr(sk), None, None)
                         attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
                         lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
-                        lib.call(fn, RECEIPT[fm], nr, st)
+                        lib.call(fn, *(() if fn == "kv_rc_sha8" else (RECEIPT[fm],)), nr, st)
 
                 for l2 in (False, True):
                     persisting = 0
@@ -580,6 +605,32 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                 if not ok:
                     raise SystemExit(f"{FORMS[fm]} k={k}: a half-block receipt after the sketch differs from "
                                      "kv_receipt's")
+
+                def sha_pass():
+                    for _ in range(layers):
+                        lib.call("kv_rc_sha8", 2 * nblk, st)
+
+                def sha_block_pass():
+                    block_pass("kv_rc_sha8", 2 * nblk)
+
+                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
+                sha_pass()
+                tt = [B.queued(lib, torch, sha_pass, SPIN) / layers for _ in range(reps)]
+                ok = sha_equal(sk, tg, 2 * nblk, 8)
+                sha_block_pass()
+                tb = [B.queued(lib, torch, sha_block_pass, SPIN) / layers for _ in range(reps)]
+                ok_pass = sha_equal(sk, tg, 2 * nblk, 8)
+                row["sha8"] = {"receipts": 2 * nblk, "s": statistics.median(tt), "times_s": tt,
+                               "over_read": statistics.median(tt) / t_read, "receipts_equal": ok,
+                               "pass": {"s": statistics.median(tb), "times_s": tb,
+                                        "over_read": statistics.median(tb) / t_read, "receipts_equal": ok_pass}}
+                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: two SHA-512 receipts a block, 8 vectors "
+                    f"each, their kernel alone {row['sha8']['s'] * 1e3:.3f} ms ({row['sha8']['over_read']:.3f}x the "
+                    f"read); the sketch, then them, a layer {row['sha8']['pass']['s'] * 1e3:.3f} ms "
+                    f"({row['sha8']['pass']['over_read']:.3f}x the read); the first and last 8 equal hashlib's: "
+                    f"{ok and ok_pass}")
+                if not (ok and ok_pass):
+                    raise SystemExit(f"{FORMS[fm]} k={k}: a SHA-512 half-block receipt differs from hashlib's")
 
                 hi, lo = torch.cuda.Stream(priority=-1), torch.cuda.Stream(priority=0)
                 bufs, tgs = (sk, sk2), (tg, tg[2 * nblk:])

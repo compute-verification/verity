@@ -1204,15 +1204,16 @@ static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's
 
 // Receipts inside mma-ws (RC = 1 unbound, 2 bound). A block is RT tiles of one (sequence, KV head) pair, at absolute
 // tile offsets of RT. Each decoder lane feeds its raw word of each tile, before decoding it, to mma.m16n8k32.s8 as the A
-// operand: step s (0..3) is registers x[4s..4s+3], so the warp's 16 A rows are its 16 vectors of 128 bytes a tile
-// (ra-sketch-tag's fragment order: A register 2h + e is row g + 8e, column 16h + 4tq + b of lane 4g + tq, byte b), and
-// its B operand, the 16 sketch columns, is register q = 2 blk + h of step s, loaded from shared memory: word
-// (512 i mod ZW) + 128 s + 4 l + q of the tile's B slot (RC = 1: offset 0, not 512 i). kRcB holds a block's sign rows,
-// word 128 s + 4 l + q of tile τ (kv_receipt.rows): ±1 bytes (RC = 1), or 0x00/0xFF masks M (RC = 2, ro-bound-sketch/v0,
+// operand: step s (0..RS - 1, RS = NL / 4) is registers x[4s..4s+3], so the warp's 16 A rows are its 16 vectors of
+// 32 RS bytes a tile (ra-sketch-tag's fragment order: A register 2h + e is row g + 8e, column 16h + 4tq + b of lane
+// 4g + tq, byte b), and its B operand, the 16 sketch columns, is register q = 2 blk + h of step s, loaded from shared
+// memory: word (512 i mod ZW) + 128 s + 4 l + q of the tile's B slot (RC = 1: offset 0, not 512 i). kRcB holds a
+// block's sign rows, word 128 s + 4 l + q of tile τ (kv_receipt.rows): ±1 bytes (RC = 1), or 0x00/0xFF masks M (RC = 2,
+// ro-bound-sketch/v0, only at 64-byte words,
 // B = R ⊕ M with R's word the z word of the same index, z the MMA warps' PV accumulators after tile j - RLAG: word
 // (w 16 + 2 g + t4) 32 + 4 mt + e of warp w's o[mt][e] at lane 4g + t4, t4 < GROUP / 2; R = 0 for a CTA's first RLAG
 // tiles). The MMA warps fill tile j's slot after folding tile j - RLAG (the first RLAG before their first tile), so the
-// decoder warps spend a tile 4 LDS and 8 IMMA on the sketch. A block's sketch, 16 int32 a vector, goes to
+// decoder warps spend a tile RS LDS and 2 RS IMMA on the sketch. A block's sketch, 16 int32 a vector, goes to
 // rc_sk[vector][16], vector ((pair NBLK + block) MDW + warp) 16 + row; rc_tag_kernel hashes each into its receipt.
 #ifndef KV_RT
 #define KV_RT 16
@@ -1223,7 +1224,10 @@ static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's
 constexpr int RT = KV_RT, RLAG = KV_RLAG, ZB = RLAG, ZW = MW * 8 * (GROUP / 2) * 32;
 static_assert(RLAG >= 1 && (ZW & (ZW - 1)) == 0 && ZW >= 512 && GROUP % 2 == 0, "B slots outlive their readers");
 constexpr int rc_smem(int rc) { return mws_smem() + (rc ? ZB * ZW * 4 + ZB * 8 : 0); }
-__device__ uint4 kRcB[2][RT * 128];
+// RC = 1's B slot is a tile's RCW sign words at offset 0; RC = 2's z indexing assumes 512 of them (64-byte words).
+constexpr int RS = NL / 4, RCW = 128 * RS;
+constexpr bool RC1_OK = MMA_OK && RCW <= ZW, RC2_OK = MMA_OK && RS == 4;
+__device__ uint4 kRcB[2][RT * RCW / 4];
 __constant__ uint32_t kRcKey[2][8];
 
 __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u32 a3, u32 b0, u32 b1) {
@@ -1236,7 +1240,7 @@ __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u
 // One tile of a lane's sketch: br its B words in the tile's slot (shared), step s at br + 128 s.
 __device__ __forceinline__ void rc_sketch(const u32 (&x)[NL], int (&acc)[2][4], const u32 *br) {
 #pragma unroll
-  for (int s = 0; s < 4; ++s) {
+  for (int s = 0; s < RS; ++s) {
     const uint4 b = *reinterpret_cast<const uint4 *>(br + 128 * s);
     imma16832(acc[0], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b.x, b.y);
     imma16832(acc[1], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b.z, b.w);
@@ -1246,10 +1250,10 @@ __device__ __forceinline__ void rc_sketch(const u32 (&x)[NL], int (&acc)[2][4], 
 // The MMA warps' share of tile jt's B slot bs: R = 0, so B is kRcB's rows (both halves of ZW for RC = 2).
 template <int RC>
 __device__ __forceinline__ void rc_fill(u32 *bs, int jt, int mlane) {
-  const uint4 *rows = kRcB[RC - 1] + jt % RT * 128;
+  const uint4 *rows = kRcB[RC - 1] + jt % RT * (RCW / 4);
 #pragma unroll
-  for (int v = mlane; v < (RC == 2 ? ZW : 512) / 4; v += 32 * MW)
-    reinterpret_cast<uint4 *>(bs)[v] = rows[v % 128];
+  for (int v = mlane; v < (RC == 2 ? ZW : RCW) / 4; v += 32 * MW)
+    reinterpret_cast<uint4 *>(bs)[v] = rows[v % (RCW / 4)];
 }
 
 __device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
@@ -1362,7 +1366,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
           const int gid = lane >> 2, t4 = lane & 3;
           if (t4 < ZL) {
             const int zi = (w * 8 * ZL + gid * ZL + t4) * 32;
-            const uint4 *rows = kRcB[1] + jt % RT * 128 + (zi & 511) / 4;
+            const uint4 *rows = kRcB[1] + jt % RT * (RCW / 4) + (zi & (RCW - 1)) / 4;
             u32 *zd = zdump ? zdump + ((size_t)blockIdx.x * (per_split / MT) + tile) * ZW + zi : nullptr;
 #pragma unroll
             for (int mt = 0; mt < 8; ++mt) {
@@ -1515,6 +1519,96 @@ __global__ void __launch_bounds__(128) rc_tag8_kernel(int rc, const int *__restr
   uint4 *o = reinterpret_cast<uint4 *>(tags + u * 8);
   o[0] = make_uint4(out[0], out[1], out[2], out[3]);
   o[1] = make_uint4(out[4], out[5], out[6], out[7]);
+}
+
+#define KV_SHA512_K                                                                                                  \
+  {0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull, 0x3956c25bf348b538ull, \
+   0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull, 0xd807aa98a3030242ull, 0x12835b0145706fbeull, \
+   0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull, 0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull, \
+   0xc19bf174cf692694ull, 0xe49b69c19ef14ad2ull, 0xefbe4786384f25e3ull, 0x0fc19dc68b8cd5b5ull, 0x240ca1cc77ac9c65ull, \
+   0x2de92c6f592b0275ull, 0x4a7484aa6ea6e483ull, 0x5cb0a9dcbd41fbd4ull, 0x76f988da831153b5ull, 0x983e5152ee66dfabull, \
+   0xa831c66d2db43210ull, 0xb00327c898fb213full, 0xbf597fc7beef0ee4ull, 0xc6e00bf33da88fc2ull, 0xd5a79147930aa725ull, \
+   0x06ca6351e003826full, 0x142929670a0e6e70ull, 0x27b70a8546d22ffcull, 0x2e1b21385c26c926ull, 0x4d2c6dfc5ac42aedull, \
+   0x53380d139d95b3dfull, 0x650a73548baf63deull, 0x766a0abb3c77b2a8ull, 0x81c2c92e47edaee6ull, 0x92722c851482353bull, \
+   0xa2bfe8a14cf10364ull, 0xa81a664bbc423001ull, 0xc24b8b70d0f89791ull, 0xc76c51a30654be30ull, 0xd192e819d6ef5218ull, \
+   0xd69906245565a910ull, 0xf40e35855771202aull, 0x106aa07032bbd1b8ull, 0x19a4c116b8d2d0c8ull, 0x1e376c085141ab53ull, \
+   0x2748774cdf8eeb99ull, 0x34b0bcb5e19b48a8ull, 0x391c0cb3c5c95a63ull, 0x4ed8aa4ae3418acbull, 0x5b9cca4f7763e373ull, \
+   0x682e6ff3d6b2b8a3ull, 0x748f82ee5defb2fcull, 0x78a5636f43172f60ull, 0x84c87814a1f0ab72ull, 0x8cc702081a6439ecull, \
+   0x90befffa23631e28ull, 0xa4506cebde82bde9ull, 0xbef9a3f7b2c67915ull, 0xc67178f2e372532bull, 0xca273eceea26619cull, \
+   0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull, 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull, \
+   0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull, \
+   0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull}
+__constant__ u64 kSha512K[80] = KV_SHA512_K;
+#ifndef __CUDA_ARCH__
+static const u64 kSha512KHost[80] = KV_SHA512_K;
+#endif
+__constant__ u64 kRcMid[8];
+
+__host__ __device__ __forceinline__ u64 rotr64(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
+
+// One SHA-512 compression of the big-endian words w (clobbered) into s (`tagger.cu`'s compress).
+__host__ __device__ __forceinline__ void sha512_compress(u64 s[8], u64 w[16]) {
+#ifdef __CUDA_ARCH__
+  const u64 *K = kSha512K;
+#else
+  const u64 *K = kSha512KHost;
+#endif
+  u64 a = s[0], b = s[1], c = s[2], d = s[3], e = s[4], f = s[5], g = s[6], h = s[7];
+#pragma unroll 1
+  for (int r = 0; r < 80; r += 16) {
+#pragma unroll
+    for (int t = 0; t < 16; ++t) {
+      if (r) {
+        const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
+        w[t] += (rotr64(w15, 1) ^ rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
+                (rotr64(w2, 19) ^ rotr64(w2, 61) ^ (w2 >> 6));
+      }
+      const u64 t1 = h + (rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41)) + ((e & f) ^ (~e & g)) + K[r + t] + w[t];
+      const u64 t2 = (rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+      h = g, g = f, f = e, e = d + t1, d = c, c = b, b = a, a = t1 + t2;
+    }
+  }
+  s[0] += a, s[1] += b, s[2] += c, s[3] += d, s[4] += e, s[5] += f, s[6] += g, s[7] += h;
+}
+
+__device__ __forceinline__ u64 be64(u32 lo, u32 hi) {
+  return (u64)__byte_perm(lo, 0, 0x0123) << 32 | __byte_perm(hi, 0, 0x0123);
+}
+
+// The half-block receipt as SHA-512, the remote driver's hash (receipts.py's y, seed-first): SHA512(P ‖ u64be(jbase + u)
+// ‖ rc_sk[8 u .. 8 u + 7] as 128 int32 LE), P one 128-byte block whose midstate kRcMid holds (kv_rc_sha_set). After P
+// the message is 520 bytes, so 5 compressions with the padding; the digest's 64 bytes go to tags[16 u ..].
+__global__ void __launch_bounds__(128) rc_sha8_kernel(const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
+                                                      u64 jbase) {
+  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (u >= n) return;
+  const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 128);
+  u64 s[8], w[16], c = jbase + u;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kRcMid[i];
+#pragma unroll 1
+  for (int t = 0; t < 4; ++t) {
+    w[0] = c;
+#pragma unroll
+    for (int v = 0; v < 8; ++v) {
+      const uint4 q = p[8 * t + v];
+      w[1 + 2 * v] = be64(q.x, q.y);
+      if (v < 7) w[2 + 2 * v] = be64(q.z, q.w); else c = be64(q.z, q.w);
+    }
+    sha512_compress(s, w);
+  }
+  w[0] = c, w[1] = 0x8000000000000000ull;
+#pragma unroll
+  for (int i = 2; i < 15; ++i) w[i] = 0;
+  w[15] = (128 + 520) * 8;
+  sha512_compress(s, w);
+  uint4 *o = reinterpret_cast<uint4 *>(tags + u * 16);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const u64 x = s[2 * i], y = s[2 * i + 1];
+    o[i] = make_uint4(__byte_perm((u32)(x >> 32), 0, 0x0123), __byte_perm((u32)x, 0, 0x0123),
+                      __byte_perm((u32)(y >> 32), 0, 0x0123), __byte_perm((u32)y, 0, 0x0123));
+  }
 }
 
 // The persistent warp-specialized form: gridDim.x CTAs (a CTA pair an SM at most once over), CTA c folding tiles
@@ -1989,16 +2083,18 @@ int kv_attn_occ(int *out) {
 static int *rc_sk = nullptr;
 static uint32_t *rc_tags = nullptr, *rc_zdump = nullptr;
 
-// Receipts' shape: tiles a block, the bound form's lag in tiles, z's words, decoder warps a CTA, and tokens a tile.
+// Receipts' shape: tiles a block, the bound form's lag in tiles, z's words, decoder warps a CTA, tokens a tile, the
+// sketch's steps a tile (a word's bytes / 16), and the forms this build runs (bit rc - 1).
 void kv_rc_shape(int *out) {
-  out[0] = kv::RT; out[1] = kv::RLAG; out[2] = kv::ZW; out[3] = kv::MDW; out[4] = kv::MT;
+  out[0] = kv::RT; out[1] = kv::RLAG; out[2] = kv::ZW; out[3] = kv::MDW; out[4] = kv::MT; out[5] = kv::RS;
+  out[6] = (kv::RC1_OK ? 1 : 0) | (kv::RC2_OK ? 2 : 0);
 }
 
-// kv_attn forms 10 (rc = 1) and 11 (rc = 2): a block's sign rows (RT * 512 u32, kv_receipt.rows) and the BLAKE3 key
+// kv_attn forms 10 (rc = 1) and 11 (rc = 2): a block's sign rows (RT * RCW u32, kv_receipt.rows) and the BLAKE3 key
 // (8 u32).
 int kv_rc_set(int rc, const uint32_t *rows, const uint32_t *key) {
   if (rc < 1 || rc > 2) return -1;
-  const size_t ns = sizeof(uint4) * kv::RT * 128;
+  const size_t ns = sizeof(uint4) * kv::RT * kv::RCW / 4;
   if (cudaMemcpyToSymbol(kv::kRcB, rows, ns, (rc - 1) * ns) != cudaSuccess) return launched();
   if (cudaMemcpyToSymbol(kv::kRcKey, key, 32, (rc - 1) * 32) != cudaSuccess) return launched();
   return 0;
@@ -2030,6 +2126,27 @@ int kv_rc_tag16(int rc, uint64_t n, cudaStream_t s) {
 int kv_rc_tag8(int rc, uint64_t n, cudaStream_t s) {
   if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
   kv::rc_tag8_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
+  return launched();
+}
+
+// rc_sha8_kernel's prefix P, one 128-byte block (kv_receipt.sha_prefix): its midstate, computed once a pass.
+int kv_rc_sha_set(const uint8_t *prefix) {
+  uint64_t s[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
+                   0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull}, w[16];
+  for (int i = 0; i < 16; ++i) {
+    w[i] = 0;
+    for (int b = 0; b < 8; ++b) w[i] = w[i] << 8 | prefix[8 * i + b];
+  }
+  kv::sha512_compress(s, w);
+  if (cudaMemcpyToSymbol(kv::kRcMid, s, sizeof s) != cudaSuccess) return launched();
+  return 0;
+}
+
+// rc_sha8_kernel's receipts of the n halves (8 vectors) of blocks of kv_rc_buffers' sketches, 64 bytes each in the
+// receipt slots (tags[16 u ..]), 64 threads a CTA.
+int kv_rc_sha8(uint64_t n, cudaStream_t s) {
+  if (!rc_sk || !rc_tags) return -1;
+  kv::rc_sha8_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc_sk, rc_tags, n, 0);
   return launched();
 }
 
@@ -2095,7 +2212,7 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
     return launched();
   }
   if (encoded >= 10) {
-    if (!kv::MMA_OK) return -2;
+    if (!kv::MMA_OK || (encoded == 10 && !kv::RC1_OK) || (encoded == 11 && !kv::RC2_OK)) return -2;
     if (!rc_sk) return -1;
     static bool set = false;
     if (!set) {
