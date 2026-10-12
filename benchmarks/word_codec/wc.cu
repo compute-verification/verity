@@ -16,8 +16,15 @@
 //                        carries WC_PB payload bits (56 or 60); three forms: one task a warp (`gemm`), persistent
 //                        with the next half task in registers (`gemm_pipe`), warp-specialized with the next tasks in a
 //                        shared-memory ring (`gemm_ws`)
+//   gemm_ws's tag        the bandwidth audit's ro-blake3/v1 over the encoded words as they arrive, before the decode: block
+//                        j = jbase + 32 q + l is lane l's words of task q, little-endian in order (`codec.lane_block`),
+//                        its tag BLAKE3-keyed(K, u64be j ‖ E_j) in the lane's registers, written to tags[8 (32 q + l)]
+//   gemm_ws's commit     committer warps hash the leaves (16 tags a leaf) of the previous call's tags; the tree above
+//                        the leaves is benchmarks/bandwidth/tagger.cu's (`wc_commit_tree`)
 #include <cstdint>
 #include <cuda_runtime.h>
+
+#include "../bandwidth/tagger.cu"
 
 #ifndef WC_PB
 #define WC_PB 56
@@ -255,6 +262,31 @@ __global__ void __launch_bounds__(256) chain_tag(uint64_t steps, uint32_t g, uns
   uint64_t acc = 0;
 #pragma unroll
   for (int u = 0; u < 2 * U; ++u) acc ^= (uint64_t)a[u] << (u & 1) * 32;
+  atomicXor(xr, (unsigned long long)acc);
+}
+
+// ro-blake3/v1's compression: UU chains a thread, one keyed compression of a full 64-byte block a step, the output the
+// next message's first half.
+template <int UU>
+__global__ void __launch_bounds__(256) chain_b3(uint64_t steps, bw::Key3 key, unsigned long long* xr) {
+  const uint32_t id = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t h[UU][8];
+#pragma unroll
+  for (int u = 0; u < UU; ++u)
+#pragma unroll
+    for (int i = 0; i < 8; ++i) h[u][i] = (id * UU + u) * 0x9E3779B9u + i;
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < UU; ++u) {
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = i < 8 ? h[u][i] : (uint32_t)s + i;
+      bw::b3_compress(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
+    }
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < UU; ++u) acc ^= (uint64_t)h[u][0] << 32 | h[u][1];
   atomicXor(xr, (unsigned long long)acc);
 }
 
@@ -534,6 +566,81 @@ __device__ __forceinline__ void decode_lane(uint64_t (&xw)[LANE_WORDS], uint64_t
 }
 
 constexpr int WS_MAX_CONSUMERS = 8;
+constexpr int WS_MAX_WARPS = 10;   // consumers, the producer and the committers
+
+// The tag and the commit (both off when the pointers are null): `tags` gets block j = jbase + 32 q + l's ro-blake3/v1 tag
+// as 8 little-endian words at 8 (32 q + l); `committers` warps hash the leaves of `ctags` (`cblocks` tags, the previous
+// call's) into `leaves`, 8 big-endian words each. decode = 0 skips the decode (a timing arm: the tag alone).
+struct WsTag {
+  bw::Key3 key;
+  bw::Mid leafmid;
+  uint64_t jbase;
+  uint32_t* tags;
+  const uint32_t* ctags;
+  uint64_t cblocks;
+  uint64_t* leaves;
+  int committers;
+  int decode;
+};
+
+// ro-blake3/v1 over one lane's block: the message u64be j ‖ the LANE_WORDS words little-endian, one chunk of 8 + 8
+// LANE_WORDS bytes (five compressions at either packing).
+__device__ __forceinline__ void b3_lane_tag(const bw::Key3& key, uint64_t j, const uint64_t (&xw)[LANE_WORDS],
+                                            uint32_t (&cv)[8]) {
+  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+  for (int b = 0; b < BLOCKS; ++b) {
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int u = 16 * b + i;
+      m[i] = u == 0   ? bw::bswap32((uint32_t)(j >> 32))
+             : u == 1 ? bw::bswap32((uint32_t)j)
+             : u < MSG ? (uint32_t)(xw[(u - 2) / 2] >> (32 * (u & 1)))
+                       : 0u;
+    }
+    const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+    const uint32_t flags =
+        bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+    bw::b3_compress(cv, m, 0, len, flags, cv);
+  }
+}
+
+// One leaf of bw::b3_leaves: tags 16 c .. 16 c + 15 of B (u64be c ‖ their 512 bytes, five compressions after the leaf
+// prefix's midstate).
+__device__ __forceinline__ void b3_leaf(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf, const bw::Mid& mid,
+                                        uint64_t* __restrict__ leaves) {
+  const uint64_t first = leaf * 16;
+  const int n = (int)(B - first < 16 ? B - first : 16);
+  const int data = 1 + 4 * n, nb = (8 * data + 17 + 127) / 128;
+  const uint32_t* T = tags + first * 8;
+  uint64_t s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = mid.h[i];
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+    uint64_t w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      uint64_t v = 0;
+      if (q == 0)
+        v = leaf;
+      else if (q < data)
+        v = ((uint64_t)bw::bswap32(T[2 * (q - 1)]) << 32) | bw::bswap32(T[2 * (q - 1) + 1]);
+      else if (q == data)
+        v = 0x80ULL << 56;
+      if (q == 16 * nb - 1) v = (uint64_t)(128 + 8 + 32 * n) * 8;
+      w[i] = v;
+    }
+    bw::compress(s, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) leaves[leaf * 8 + i] = s[i];
+}
+
 template <int KR>
 __host__ __device__ constexpr int ws_stage_bytes() { return KR > 0 ? TASK_WORDS * 8 : TASK_TILES * LANES * 16; }
 
@@ -542,12 +649,11 @@ __host__ __device__ constexpr int ws_smem_bytes(int stages) {
   return stages * ws_stage_bytes<KR>() + NB8 * 8 * XS_STRIDE + 2 * stages * 8;
 }
 
-template <int KR, int NB8, bool PARTIALS>
-__global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(const void* __restrict__ wstore,
-                                                                             const uint8_t* __restrict__ x,
-                                                                             float* __restrict__ y, int M, int N, int Kd,
-                                                                             uint64_t base, int groups, int consumers,
-                                                                             int per_consumer) {
+template <int KR, int NB8, bool PARTIALS, bool TAG>
+__global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* __restrict__ wstore,
+                                                                   const uint8_t* __restrict__ x, float* __restrict__ y,
+                                                                   int M, int N, int Kd, uint64_t base, int groups,
+                                                                   int consumers, int per_consumer, WsTag tg) {
   constexpr int SB = ws_stage_bytes<KR>();
   const int stages = consumers * per_consumer;
   extern __shared__ __align__(128) uint8_t smem[];
@@ -580,6 +686,13 @@ __global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(co
         bulk_load(smem + s * SB, static_cast<const uint8_t*>(wstore) + q * SB, SB, full + s);
       }
     }
+    return;
+  }
+  if (warp > consumers) {
+    const uint64_t nleaves = (tg.cblocks + 15) / 16, step = (uint64_t)gridDim.x * tg.committers * 32;
+    for (uint64_t leaf = ((uint64_t)blockIdx.x * tg.committers + (warp - consumers - 1)) * 32 + lane; leaf < nleaves;
+         leaf += step)
+      b3_leaf(tg.ctags, tg.cblocks, leaf, tg.leafmid, tg.leaves);
     return;
   }
 
@@ -618,7 +731,14 @@ __global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(co
       for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
-      decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
+      if constexpr (TAG) {
+        uint32_t cv[8];
+        b3_lane_tag(tg.key, tg.jbase + q * LANES + lane, xw, cv);
+        uint4* o = reinterpret_cast<uint4*>(tg.tags + 8 * (q * LANES + lane));
+        o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+        o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+      }
+      if (tg.decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),
@@ -744,6 +864,15 @@ int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned 
     }
   } else if (what == 3) {
     chain_tag<<<grid, 256, 0, s>>>(steps, 0x2545F491u & M31, xr);
+  } else if (what == 4) {
+    bw::Key3 key;
+    for (int i = 0; i < 8; ++i) key.k[i] = 0x01000193u * (i + 1);
+    switch (ilp) {
+      case 1: chain_b3<1><<<grid, 256, 0, s>>>(steps, key, xr); break;
+      case 2: chain_b3<2><<<grid, 256, 0, s>>>(steps, key, xr); break;
+      case 4: chain_b3<4><<<grid, 256, 0, s>>>(steps, key, xr); break;
+      default: return 1;
+    }
   } else {
     return 1;
   }
@@ -815,18 +944,48 @@ int wc_gemm_pipe(int k, const void* w, const uint8_t* x, float* y, int M, int N,
 // The warp-specialized form: `consumers` consumer warps and one producer warp a CTA, `per_consumer` stages each consumer's
 // ring. groups <= 0: as many CTAs as fit on the device at once (times -groups when groups < 0), split evenly over the
 // chunks.
-int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
-               int consumers, int per_consumer, int groups, int* launched, cudaStream_t s) {
+// The tag's key and the leaves' midstate, derived on the host from the 32-byte seed and kept for the last seed.
+static const WsTag& ws_tag_keys(const uint8_t* seed) {
+  static uint8_t last[32];
+  static bool have = false;
+  static WsTag t{};
+  if (!have || memcmp(last, seed, 32)) {
+    memcpy(last, seed, 32);
+    have = true;
+    t.key = bw::b3_key(seed);
+    t.leafmid = bw::prefix_midstate(bw::LEAF_DOMAIN, bw::TAG_NAMES[bw::TAG_B3], seed);
+  }
+  return t;
+}
+
+// The warp-specialized form with the tag and the commit: seed (32 bytes) or null for neither; tags (null: no tag) as in
+// WsTag, jbase the first block's index; committers > 0 warps hash the leaves of ctags (cblocks tags) into leaves;
+// decode = 0 skips the decode (the partial sums are then the encoded words', a timing arm only).
+int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
+                   int consumers, int per_consumer, int groups, int* launched, int decode, const uint8_t* seed,
+                   uint64_t jbase, uint32_t* tags, int committers, const uint32_t* ctags, uint64_t cblocks,
+                   uint64_t* leaves, cudaStream_t s) {
   if (M < 1 || M > 32 || N % 16 || Kd % TASK_COLS || k < 0 || k > MAXK || consumers < 1 ||
-      consumers > WS_MAX_CONSUMERS || per_consumer < 1 || consumers * per_consumer > 32)
+      consumers > WS_MAX_CONSUMERS || per_consumer < 1 || consumers * per_consumer > 32 || committers < 0 ||
+      consumers + 1 + committers > WS_MAX_WARPS || ((tags || committers) && (!seed || k == 0)) ||
+      (committers && (!ctags || !leaves || !cblocks)))
     return 1;
+  WsTag tg{};
+  if (seed) tg = ws_tag_keys(seed);
+  tg.jbase = jbase;
+  tg.tags = tags;
+  tg.ctags = ctags;
+  tg.cblocks = cblocks;
+  tg.leaves = leaves;
+  tg.committers = committers;
+  tg.decode = decode;
   const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / TASK_COLS, nbs = N / 16;
-  const int threads = (consumers + 1) * 32;
+  const int threads = (consumers + 1 + committers) * 32;
   int sms = 0, per_sm = 0, dev = 0;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) return 2;
-#define G(KR, NB) do { \
-    auto kern = partials ? gemm_ws_kernel<KR, NB, true> : gemm_ws_kernel<KR, NB, false>; \
+#define G(KR, NB, T) do { \
+    auto kern = partials ? gemm_ws_kernel<KR, NB, true, T> : gemm_ws_kernel<KR, NB, false, T>; \
     const int smem = ws_smem_bytes<KR, NB>(stages); \
     if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2; \
     if (groups <= 0) { \
@@ -835,17 +994,49 @@ int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, i
       groups = mult * sms * per_sm / nchunks > 0 ? mult * sms * per_sm / nchunks : 1; \
     } \
     if (groups > nbs) groups = nbs; \
-    kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer); } while (0)
-#define GK(KR) do { if (nb8 == 1) G(KR, 1); else if (nb8 == 2) G(KR, 2); else G(KR, 4); } while (0)
+    kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer, tg); } while (0)
+#define GN(KR, T) do { if (nb8 == 1) G(KR, 1, T); else if (nb8 == 2) G(KR, 2, T); else G(KR, 4, T); } while (0)
+#define GK(KR) do { if (tags) GN(KR, true); else GN(KR, false); } while (0)
   switch (k) {
-    case 0: GK(0); break;
+    case 0: GN(0, false); break;
     WC_CASES(GK)
     default: return 1;
   }
 #undef GK
+#undef GN
 #undef G
   if (launched) *launched = groups * nchunks;
   return cudaGetLastError() ? 4 : 0;
+}
+
+int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
+               int consumers, int per_consumer, int groups, int* launched, cudaStream_t s) {
+  return wc_gemm_ws_tag(k, w, x, y, M, N, Kd, base, partials, consumers, per_consumer, groups, launched, 1, nullptr, 0,
+                        nullptr, 0, nullptr, 0, nullptr, s);
+}
+
+// The commit's workspace for `blocks` tags (tagger.cu's layout: the tags, then every tree level, the leaves first).
+size_t wc_commit_bytes(uint64_t blocks) { return bw::workspace_bytes(bw::TAG_B3, blocks); }
+uint32_t* wc_commit_tags(void* workspace, uint64_t blocks) { return bw::make_pass(bw::TAG_B3, blocks, workspace).tags; }
+uint64_t* wc_commit_leaves_at(void* workspace, uint64_t blocks) {
+  return bw::make_pass(bw::TAG_B3, blocks, workspace).nodes;
+}
+
+// The leaves of the workspace's tags as their own pass (tagger.cu's b3_leaves), against the committer warps.
+int wc_commit_leaves(void* workspace, uint64_t blocks, const uint8_t* seed, cudaStream_t s) {
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  const uint64_t leaves = (blocks + 15) / 16;
+  bw::b3_leaves<<<(unsigned)((leaves + 127) / 128), 128, 0, s>>>(p.tags, blocks, blocks, ws_tag_keys(seed).leafmid,
+                                                                  p.nodes);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The tree above the workspace's leaves, and its root (64 bytes) when root isn't null.
+int wc_commit_tree(void* workspace, uint64_t blocks, uint8_t* root, cudaStream_t s) {
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  bw::launch_tree(p, s);
+  if (cudaGetLastError()) return 4;
+  return root ? bw::read_root(p, root, s) : 0;
 }
 
 }  // extern "C"
