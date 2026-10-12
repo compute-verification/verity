@@ -408,12 +408,38 @@ __device__ void salt_of(u64 c, u64 (&S)[24]) {
   for (int i = 17; i < 24; ++i) S[i] = A[i - 17];
 }
 
+// Thread tid's digest d to out + 8 tid, tid < n. A thread's own eight 8-byte stores, 64 bytes apart across the warp,
+// would fill each 32-byte sector a quarter at a time (4× the digests' bytes in L2 write sectors), so lanes 2a and
+// 2a + 1 write their 128 bytes as four whole sectors, each half from one lane. Every lane of the warp calls it.
+__device__ __forceinline__ void store_digest(u64 *__restrict__ out, u64 tid, u64 n, const u64 (&d)[8]) {
+  const int odd = threadIdx.x & 1;
+  u64 mine[4], theirs[4];
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const int w0 = 4 * (i >> 1) + (i & 1);
+    mine[i] = odd ? d[w0 + 2] : d[w0];
+    theirs[i] = __shfl_xor_sync(0xffffffffu, odd ? d[w0] : d[w0 + 2], 1);
+  }
+  const u64 te = tid & ~(u64)1;
+  if (te + 1 < n) {
+    ulonglong2 *o = reinterpret_cast<ulonglong2 *>(out + 8 * te);
+#pragma unroll
+    for (int s = 0; s < 4; ++s) {
+      const bool own = (s < 2) != (odd == 1);
+      o[2 * s + odd] = own ? make_ulonglong2(mine[2 * (s & 1)], mine[2 * (s & 1) + 1])
+                           : make_ulonglong2(theirs[2 * (s & 1)], theirs[2 * (s & 1) + 1]);
+    }
+  } else if (tid < n) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[8 * tid + i] = d[i];
+  }
+}
+
 // Leaves [c0, c0 + nl) of the pass from their receipts (ys, leaf c0's first), into dig; salts (192 bytes a leaf) if
 // asked for.
 __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys, u64 c0, u64 nl, u64 *__restrict__ dig,
                                                      uint8_t *__restrict__ salts) {
-  const u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x;
-  if (t >= nl) return;
+  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < nl ? tid : nl - 1;
   const u64 c = c0 + t, leaves = (kC.positions + PER_LEAF - 1) / PER_LEAF;
   const int m = c + 1 < leaves ? PER_LEAF : (int)(kC.positions - PER_LEAF * c);
   const u64 *Y = ys + t * PER_LEAF * 8;
@@ -489,9 +515,8 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
   put_schema(msg);
   put_digest(msg, val);
   sha512_finish(msg, d, done);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) dig[8 * t + i] = d[i];
-  if (salts)
+  store_digest(dig, tid, nl, d);
+  if (salts && tid < nl)
     for (int i = 0; i < 24; ++i)
       for (int b = 0; b < 8; ++b) salts[t * SALT + 8 * i + b] = (uint8_t)(S[i] >> (8 * b));
 }
@@ -499,15 +524,13 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
 // --- nodes -------------------------------------------------------------------------------------------------------
 
 __global__ void __launch_bounds__(128) pads_kernel(u64 r0, u64 n, u64 *__restrict__ out) {
-  const u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x;
-  if (t >= n) return;
+  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
   Msg<32> msg;
   put_head(msg, HEAD_PAD);
   put_uint(msg, r0 + t);
   u64 d[8];
   sha512_msg(msg, d);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) out[8 * t + i] = d[i];
+  store_digest(out, tid, n, d);
 }
 
 // Nodes [i0, i0 + n) of the level above level h: node i over in[2 (i − i0)] and in[2 (i − i0) + 1].
@@ -540,25 +563,20 @@ __device__ __forceinline__ void node_digest(const u64 *mid, u64 i, const u64 *L,
 
 __global__ void __launch_bounds__(128) level_kernel(const u64 *__restrict__ in, u64 *__restrict__ out, int h, u64 i0,
                                                     u64 n) {
-  const u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x;
-  if (t >= n) return;
-  if (h < NODE_LEVELS && i0 + t < (1ULL << 48)) {
-    u64 d[8];
-    node_digest(kC.node_mid[h], i0 + t, in + 16 * t, in + 16 * t + 8, d);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) out[8 * t + i] = d[i];
-    return;
-  }
-  Msg<48> msg;
-  put_head(msg, HEAD_NODE);
-  put_uint(msg, (u64)h);
-  put_uint(msg, i0 + t);
-  put_digest(msg, in + 16 * t);
-  put_digest(msg, in + 16 * t + 8);
+  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
   u64 d[8];
-  sha512_msg(msg, d);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) out[8 * t + i] = d[i];
+  if (h < NODE_LEVELS && i0 + t < (1ULL << 48)) {
+    node_digest(kC.node_mid[h], i0 + t, in + 16 * t, in + 16 * t + 8, d);
+  } else {
+    Msg<48> msg;
+    put_head(msg, HEAD_NODE);
+    put_uint(msg, (u64)h);
+    put_uint(msg, i0 + t);
+    put_digest(msg, in + 16 * t);
+    put_digest(msg, in + 16 * t + 8);
+    sha512_msg(msg, d);
+  }
+  store_digest(out, tid, n, d);
 }
 
 __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ p, u64 n16, unsigned long long *xr) {

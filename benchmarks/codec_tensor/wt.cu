@@ -2181,10 +2181,28 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
       for (int i = 10; i < 15; ++i) m[i] = 0;
       m[15] = (128 + LEN) * 8;
       sha512_compress(h, m);
-      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 16 * vi);
+      // Lanes 2a and 2a + 1 hold vectors vi and vi + 1 and write their 128 bytes as four whole 32-byte sectors, each
+      // half from one lane: a lane's own four 16-byte stores would each fill half a sector.
+      // Sector s of the pair is words 4 (s % 2) … of vector vi + s / 2; the even lane writes its first 16 bytes and the
+      // odd lane its last. Each lane keeps its own words 0, 1, 4, 5 (even) or 2, 3, 6, 7 (odd) and takes the other's.
+      static_assert(VW % 2 == 0, "a lane pair's vectors are adjacent");
+      const int odd = lane & 1, nl = nt * VW;
+      const u32 act = nl >= 32 ? 0xffffffffu : (1u << nl) - 1;
+      u64 mine[4], theirs[4];
 #pragma unroll
-      for (int i = 0; i < 4; ++i)
-        o[i] = make_uint4((u32)h[2 * i], (u32)(h[2 * i] >> 32), (u32)h[2 * i + 1], (u32)(h[2 * i + 1] >> 32));
+      for (int i = 0; i < 4; ++i) {
+        const int w0 = 4 * (i >> 1) + (i & 1);
+        mine[i] = odd ? h[w0 + 2] : h[w0];
+        theirs[i] = __shfl_xor_sync(act, odd ? h[w0] : h[w0 + 2], 1);
+      }
+      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 16 * (vi & ~(u64)1));
+#pragma unroll
+      for (int s = 0; s < 4; ++s) {
+        const bool own = (s < 2) != (odd == 1);
+        const u64 a = own ? mine[2 * (s & 1)] : theirs[2 * (s & 1)];
+        const u64 b = own ? mine[2 * (s & 1) + 1] : theirs[2 * (s & 1) + 1];
+        o[2 * s + odd] = make_uint4((u32)a, (u32)(a >> 32), (u32)b, (u32)(b >> 32));
+      }
 #else
       u32 cv[8];
 #pragma unroll
