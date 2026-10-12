@@ -27,6 +27,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "big_alloc.h"
+
 #define ZERO_EXP (-100)
 #define NONE (-1000)
 
@@ -429,7 +431,7 @@ static int bench(int m, int k, int n, int W, int ks, int reps, const char *data)
     if (fread(pool, 1, pool_len, f) != pool_len) return 2;
     fclose(f);
   }
-  uint8_t *a = malloc((size_t)m * k), *bw = aligned_alloc(64, (size_t)W * k * n);
+  uint8_t *a = malloc((size_t)m * k), *bw = big_alloc((size_t)W * k * n);
   fill(a, (size_t)m * k, data, pool, pool_len);
   fill(bw, (size_t)W * k * n, data, pool ? pool + pool_len / 2 : NULL, pool_len / 2);
   Arows A;
@@ -460,10 +462,10 @@ static int bench(int m, int k, int n, int W, int ks, int reps, const char *data)
   }
   double products = (double)m * k * n * W, wbytes = (double)k * n * W;
   printf("{\"kernel\": \"pearl_c_cpu\", \"data\": \"%s\", \"m\": %d, \"k\": %d, \"n\": %d, \"weights\": %d, \"ks\": %d, "
-         "\"prefetch\": %ld, \"fused\": %d, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"products_per_s\": %.4e, "
+         "\"prefetch\": %ld, \"fused\": %d, \"thp\": %d, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"products_per_s\": %.4e, "
          "\"weight_bytes_per_s\": %.4e, \"weight_bytes_per_s_mean\": %.4e, \"slow_lanes\": %ld, \"slow_fraction\": %.3e, "
          "\"fold\": %llu}\n",
-         data, m, k, n, W, ks, prefetch_dist, fuse && m <= 2, nthreads, reps, best, sum / reps, products / best, wbytes / best, wbytes / (sum / reps), slow,
+         data, m, k, n, W, ks, prefetch_dist, fuse && m <= 2, thp_on(), nthreads, reps, best, sum / reps, products / best, wbytes / best, wbytes / (sum / reps), slow,
          slow / (products / 32), (unsigned long long)fold);
   free_a(&A);
   return 0;

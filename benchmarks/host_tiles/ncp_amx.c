@@ -20,6 +20,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "big_alloc.h"
+
 #define ARCH_REQ_XCOMP_PERM 0x1023
 #define XFEATURE_XTILEDATA 18
 
@@ -287,7 +289,7 @@ static int bench(int M, int K, int N, int W, int ks, int reps) {
   int kstep = kstep_of(ks), R = getenv("NCP_REPEAT") ? atoi(getenv("NCP_REPEAT")) : 1;
   int form = getenv("NCP_FORM") && atoi(getenv("NCP_FORM")), k = K / 3, nq = k / 4;
   size_t wbytes = (size_t)K * N, distinct = (size_t)(W + R - 1) / R, stored = form ? 2 * wbytes / 3 : wbytes;
-  int8_t *yp = aligned_alloc(64, stored * distinct);  // formed: [B̃ q | F̃₁ q] per weight
+  int8_t *yp = big_alloc(stored * distinct);  // formed: [B̃ q | F̃₁ q] per weight
   int32_t *pinv = malloc(nq * sizeof *pinv);
   uint64_t *negq = malloc(nq * sizeof *negq);
   for (int q = 0; q < nq; q++) { pinv[q] = q; negq[q] = ~0ull; }
@@ -343,9 +345,9 @@ static int bench(int M, int K, int N, int W, int ks, int reps) {
   double macs = (double)M * K * N * W, mean = total / reps;
   // NCP's K is 3k: a weight of k x n bytes is K/3 x N, so weight bytes covered = W * K * N / 3 (= macs / 3m).
   printf("{\"kernel\": \"ncp_amx\", \"form\": \"%s\", \"y\": \"%s\", \"stored_bytes_per_weight_byte\": %d, \"m\": %d, \"K\": %d, \"n\": %d, \"weights\": %d, \"ks\": %d, "
-         "\"repeat\": %d, \"kstep\": %d, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"mac_per_s\": %.4e, "
+         "\"repeat\": %d, \"kstep\": %d, \"thp\": %d, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"mac_per_s\": %.4e, "
          "\"y_bytes_per_s\": %.4e, \"weight_bytes_per_s\": %.4e, \"weight_bytes_per_s_mean\": %.4e, \"fold\": %llu}\n",
-         M % 32 ? "1x4" : "2x2", form ? "formed" : "stored", form ? 2 : 3, M, K, N, W, ks, R, kstep, nthreads, reps, best, mean, macs / best, (double)wbytes * W / best,
+         M % 32 ? "1x4" : "2x2", form ? "formed" : "stored", form ? 2 : 3, M, K, N, W, ks, R, kstep, thp_on(), nthreads, reps, best, mean, macs / best, (double)wbytes * W / best,
          (double)wbytes * W / 3 / best, (double)wbytes * W / 3 / mean, (unsigned long long)fold);
   return 0;
 }

@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "big_alloc.h"
+
 static double now(void) {
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
@@ -17,7 +19,7 @@ int main(int argc, char **argv) {
   if (argc < 3) { fprintf(stderr, "usage: stream_read GIB REPS\n"); return 2; }
   size_t n = (size_t)(atof(argv[1]) * (1 << 30)) / 256 * 32;
   int reps = atoi(argv[2]), threads = 0;
-  int64_t *buf = aligned_alloc(64, n * 8);
+  int64_t *buf = big_alloc(n * 8);
 #pragma omp parallel for schedule(static)
   for (size_t i = 0; i < n; i++) buf[i] = (int64_t)i;
   double best = 1e30;
@@ -41,7 +43,7 @@ int main(int argc, char **argv) {
     double dt = now() - t0;
     if (r > 0 && dt < best) best = dt;
   }
-  printf("{\"kernel\": \"stream_read\", \"bytes\": %zu, \"threads\": %d, \"best_s\": %.6f, \"bytes_per_s\": %.4e, \"fold\": %lld}\n",
-         n * 8, threads, best, n * 8 / best, (long long)fold);
+  printf("{\"kernel\": \"stream_read\", \"bytes\": %zu, \"threads\": %d, \"thp\": %d, \"best_s\": %.6f, \"bytes_per_s\": %.4e, "
+         "\"fold\": %lld}\n", n * 8, threads, thp_on(), best, n * 8 / best, (long long)fold);
   return 0;
 }
