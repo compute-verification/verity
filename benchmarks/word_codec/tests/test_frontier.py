@@ -50,3 +50,22 @@ def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
     best = {(p["lane"], p["k"], p["batch"], p["measured"]): p["y_total"] for p in F.best_per_config(pts)}
     assert best == {("t", 1, 1, True): 1.6, ("t", 2, 1, True): 1.9, ("u", 1, 1, True): 1.8, ("t", 1, 32, True): 2.0,
                     ("t", 1, 1, False): 1.0}
+
+
+def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the_serial_one():
+    import types
+
+    import wide
+    import wide_bench
+
+    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, name="p521s1r")
+    fq = {1: {"x": 332.0, "delta": 0.9, "tau": 0.82, "mu_rebuild": 0.0005}}
+    bd = {1: {1: {"y_total": 2.5, "y_decode": 0.5, "y_tag": 0.6, "y_commit": 0.4, "y_commit_linear": 0.9,
+                  "y_base": 1.0}}, 32: {1: {"y_total": 2.6, "y_decode": 0.5, "y_tag": 0.7, "y_commit": 0.4,
+                                            "y_commit_linear": 0.9, "y_base": 1.0}}}
+    po = {1: {"per_batch": {1: {"y_commit_overlap": 0.1}}}}
+    pts = F.check(wide_bench.points(lib, fq, bd, "r", "gpu", 2092.0, po))
+    assert [(p["batch"], p["arithmetic"].endswith("/commit-overlapped")) for p in pts] == [
+        (1, False), (1, True), (32, False)]
+    assert pts[0]["y_total"] == pytest.approx(2.5) and pts[1]["y_total"] == pytest.approx(2.2)
+    assert pts[1]["y_commit"] == pytest.approx(0.1) and pts[1]["label"].endswith("/commit-overlapped")

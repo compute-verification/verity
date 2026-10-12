@@ -28,7 +28,9 @@ The frontier's quantities, per field and k (`wide.json` "frontier"):
   y        layer-weighted fused time over native: total = t<k> / native + commit, decode = (d<k> − ww0) / native,
            tag = (t<k> − d<k>) / native; the rest (ww0 / native) is the layout's base. The commit is the window's, once
            a pass: the leaves and tree over the pass's tags (32 layers of the four linears, `pass_commit`) over 32
-           times the four linears' native time; `y_commit_linear` is a commit launched per linear, for comparison
+           times the four linears' native time; `y_commit_linear` is a commit launched per linear, for comparison.
+           A ".../commit-overlapped" point takes the commit as its excess beside the next pass instead (`pass_overlap`:
+           a pass of fused GEMMs alone and with the commit on a second stream, at batch 1 and 32)
 The SM clock is sampled during a squaring chain for each library (`clock`, and each point's `sm_mhz`).
 """
 from __future__ import annotations
@@ -550,6 +552,77 @@ def pass_commit(lib: WLib, torch, reps: int, log) -> dict:
     return {"blocks": blocks, "median_s": med, "times_s": times}
 
 
+def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log) -> dict:
+    """One pass of fused GEMMs (decode and tag at k: LAYERS layers of the four linears in order, 232 MB of store a
+    layer at p521, so each linear's store is cold again by its next layer) alone, and with the previous window's
+    commit (`pass_commit`'s, over the pass's tags) on a second stream from the pass's start. y_commit_overlap is the
+    second's excess over the first, over LAYERS times the four linears' native time: the commit's cost to a prover that
+    commits window n while it steps through window n + 1. The kernels, stores and key are the ones `gemm_case` gated."""
+    f = lib.field
+    lib.set_key(W.key(f, SEED, k))
+    stores, wss = {}, {}
+    for name in cases:
+        n, kd = B.SHAPES[name]
+        pay = payload_store(torch, B.fp8_weights(torch, n, kd, 100 + n + kd).view(torch.uint8), f)
+        s = torch.empty_like(pay)
+        lib.call("ww_encode", ptr(pay), ptr(s), pay.numel() // f.limbs, 0, k, 188 * 4, stream(torch))
+        torch.cuda.synchronize()
+        blocks = pay.numel() // f.limbs // lib.lane_words
+        ws = torch.empty(lib.so.ww_workspace_bytes(blocks), dtype=torch.uint8, device="cuda")
+        stores[name], wss[name] = s, (ws, lib.so.ww_workspace_tags(ptr(ws), blocks))
+        del pay
+    pblocks = pass_blocks(lib)
+    pws = torch.empty(lib.so.ww_workspace_bytes(pblocks), dtype=torch.uint8, device="cuda")
+    torch.as_strided(pws.view(torch.int32), (pblocks * 8,), (1,), 0).random_(-(1 << 31), (1 << 31) - 1)
+    seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
+    sa, sb = torch.cuda.Stream(), torch.cuda.Stream()
+    so = lib.so
+    out = {"k": k, "per_batch": {}}
+    for mb in batches:
+        xs = {name: torch.randn(mb, B.SHAPES[name][1], device="cuda").to(torch.float8_e4m3fn) for name in cases}
+        ys = {name: torch.zeros(mb, B.SHAPES[name][0], dtype=torch.float32, device="cuda") for name in cases}
+        native = LAYERS * sum(c["times"][mb]["native_s"] for c in cases.values())
+
+        def one(with_commit: bool) -> float:
+            a, b, c_end = (torch.cuda.Event(enable_timing=True) for _ in range(3))
+            with torch.cuda.stream(sa):
+                lib.call("ww_spin", B.SPIN_CYCLES, sa.cuda_stream)
+                a.record(sa)
+            if with_commit:
+                sb.wait_event(a)
+                if so.ww_commit(ptr(pws), pblocks, seed_buf, None, sb.cuda_stream):
+                    raise RuntimeError("ww_commit: error")
+                c_end.record(sb)
+            rc = 0
+            for _ in range(LAYERS):
+                for name in cases:
+                    n, kd = B.SHAPES[name]
+                    rc |= so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n, kd,
+                                     0, 0, seed_buf, wss[name][1], 0, sa.cuda_stream)
+            if rc:
+                raise RuntimeError(f"ww_gemm k={k} M={mb}: error {rc}")
+            if with_commit:
+                sa.wait_event(c_end)
+            b.record(sa)
+            b.synchronize()
+            return a.elapsed_time(b) / 1e3
+
+        one(False), one(True)
+        alone, both = [], []
+        for rep in range(reps):
+            for w in ((False, True) if rep % 2 == 0 else (True, False)):
+                (both if w else alone).append(one(w))
+        ta, tb = statistics.median(alone), statistics.median(both)
+        out["per_batch"][mb] = {"alone_s": alone, "with_commit_s": both, "native_pass_s": native,
+                                "y_pass": ta / native, "y_commit_overlap": (tb - ta) / native}
+        log(f"pass overlap {lib.name} k={k} M={mb}: a pass of fused GEMMs {ta * 1e3:.2f} ms ({ta / native:.2f}x native),"
+            f" with the commit beside it {tb * 1e3:.2f} ms: commit +{(tb - ta) / native:.3f}")
+        del xs, ys
+    del stores, wss, pws
+    torch.cuda.empty_cache()
+    return out
+
+
 def breakdown(cases: dict, batches, ks, commit_s: float) -> dict:
     """Layer-weighted: Σ over the four linears of each arm's time over Σ of native's, per batch and k. The commit is
     the window's, once a pass (`pass_commit`), over LAYERS times the four linears' native time; `y_commit_linear` is a
@@ -598,25 +671,33 @@ def clocks(lib: WLib, torch, log, what: str, squarings_s: float) -> dict:
     return res
 
 
-def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: float | None = None) -> list[dict]:
+def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: float | None = None,
+           po: dict | None = None) -> list[dict]:
+    """One point per batch and k with the commit serial after the pass, and, where `pass_overlap` measured it, one
+    with the commit beside the next pass (arithmetic ".../commit-overlapped")."""
     f = lib.field
+    arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
+             + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else ""))
     out = []
+
+    def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str) -> dict:
+        return {"schema": POINT_SCHEMA, "lane": "ra-codec-wide", "b": f.bits, "k": k, "arithmetic": arith + suffix,
+                "packing": f.payload, "expansion": f.expansion(), "batch": mb,
+                "y_total": y["y_total"] - y["y_commit"] + y_commit, "y_decode": y["y_decode"], "y_tag": y["y_tag"],
+                "y_commit": y_commit, "y_commit_linear": y["y_commit_linear"], "y_base": y["y_base"],
+                "x": q["x"], "delta": q["delta"], "tau": q["tau"], "mu_rebuild": q["mu_rebuild"],
+                "payload_per_stored_bit": 1 / f.expansion(),
+                "measured": True, "label": f"{f.name} k={k} {lib.name}{suffix}", "run": run_id, "art": None,
+                "gpu": gpu, "sm_mhz": sm_mhz}
+
     for mb, row in bd.items():
         for k, q in fq.items():
             if k not in row:
                 continue
-            y = row[k]
-            out.append({"schema": POINT_SCHEMA, "lane": "ra-codec-wide", "b": f.bits, "k": k,
-                        "arithmetic": f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}"
-                                      f"/sqr{lib.sqr}" + ("/rolled" if lib.roll else "")
-                                      + (f"/occ{lib.occ}" if lib.occ > 1 else ""),
-                        "packing": f.payload, "expansion": f.expansion(), "batch": mb,
-                        "y_total": y["y_total"], "y_decode": y["y_decode"], "y_tag": y["y_tag"],
-                        "y_commit": y["y_commit"], "y_commit_linear": y["y_commit_linear"], "y_base": y["y_base"],
-                        "x": q["x"], "delta": q["delta"], "tau": q["tau"], "mu_rebuild": q["mu_rebuild"],
-                        "payload_per_stored_bit": 1 / f.expansion(),
-                        "measured": True, "label": f"{f.name} k={k} {lib.name}", "run": run_id, "art": None,
-                        "gpu": gpu, "sm_mhz": sm_mhz})
+            out.append(point(k, mb, q, row[k], row[k]["y_commit"], ""))
+            o = (po or {}).get(k, {}).get("per_batch", {}).get(mb)
+            if o is not None:
+                out.append(point(k, mb, q, row[k], max(0.0, o["y_commit_overlap"]), "/commit-overlapped"))
     return out
 
 
@@ -735,9 +816,13 @@ def main() -> int:
                 res["libs"][lib.name]["pass_commit"] = pc
                 bd = breakdown(cases, batches, ks, pc["median_s"])
                 res["libs"][lib.name]["breakdown"] = bd
+                save()
+                fb = [mb for mb in (1, 32) if mb in batches]
+                po = {k: pass_overlap(lib, torch, cases, k, fb, a.reps, log) for k in ks}
+                res["libs"][lib.name]["pass_overlap"] = po
                 fq = res["frontier"][lib.field.name]
                 res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name,
-                                        res["libs"][lib.name].get("clock", {}).get("sm_mhz"))
+                                        res["libs"][lib.name].get("clock", {}).get("sm_mhz"), po)
                 for mb, row in bd.items():
                     log(f"layer-weighted {lib.name} M={mb}: base {row['base']:.2f}, " + ", ".join(
                         f"k{k} total {row[k]['y_total']:.2f} (decode {row[k]['y_decode']:.2f}, tag {row[k]['y_tag']:.2f}"
