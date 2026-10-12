@@ -41,6 +41,8 @@ TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)
+#: the PR whose (n, k) lookup prices γ at a linear off the pinned cubes (compute-accounting's, stacked on #1808)
+GAMMA_PIN = "#1809"
 PENDING_Q = "pending: parameters not reviewed"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 RESIDUAL = "residual, worst case over the audit's coins; per-run form pending"
@@ -134,7 +136,8 @@ def compute(n: int, k: int, credited_rows: int, seconds: float, native_rate: flo
            "eps_s": str(EPS_S), "draws": g["draws"], "error": "(1 − ε_s)^K + ε_TT(q, N) ≤ 2⁻⁴⁰ + ε_TT(q, N)",
            "w_cert": None, "unproved": None}
     if g["published"] is None or g["pins"] != ["pinned"]:
-        out["unproved"] = "; ".join(g["missing"]) or f"γ's twins are {', '.join(g['pins'])}, not pinned"
+        why = "; ".join(g["missing"]) or f"γ's twins are {', '.join(g['pins'])}, not pinned"
+        out["unproved"] = f"γ pin pending {GAMMA_PIN} ({why})" if g["published"] is None else why
     else:
         out["w_cert"] = float((1 - Fraction(g["published"])) * (1 - EPS_S) * wref)
     out.update(residual(None if native_rate is None else native_rate * seconds, out["wref"], out["w_cert"]))

@@ -73,6 +73,7 @@ def test_w_cert_and_the_residual_split():
     assert 1.08 < float(wref) / (8192 * 8192 * rows) < 1.1
     off = C.compute(4096, 4096, rows, seconds, rate)
     assert off["w_cert"] is None and off["residual"] is None and "pinned cube" in off["unproved"]
+    assert off["unproved"].startswith("γ pin pending #1809 (")
     assert off["honest_overhead"] == pytest.approx(rate * seconds - off["wref"])
 
 
