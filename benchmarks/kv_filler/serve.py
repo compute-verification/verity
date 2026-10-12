@@ -12,7 +12,8 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
   idle      the top-up paused while the engine has work, running at full grid when it has none
   throttle  the idle policy, plus a CTA cap (`--throttle-ctas`) while the engine has work
   full      the top-up at full grid throughout (the interference bound)
-  always    the top-up at `--throttle-ctas` throughout, busy or idle (the fill-sk16/v0 reader's resident form)
+  always    the top-up at `--throttle-ctas` throughout, busy or idle (the fill-sk16/v0 reader's resident form); `always@N`
+            and `throttle@N` take N CTAs instead
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -164,7 +165,8 @@ def main() -> int:
     encode_ks = set()
     for p in a.policies:
         top, _, enc = p.partition("+")
-        if top not in ("none", "idle", "throttle", "full", "gemm", "always") or (enc and not enc.removeprefix("fused").isdigit()):
+        top, _, at = top.partition("@")
+        if (at and not at.isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always") or (enc and not enc.removeprefix("fused").isdigit()):
             ap.error(f"unknown policy {p}")
         if enc:
             encode_ks.add(int(enc.removeprefix("fused")))
@@ -387,6 +389,8 @@ def main() -> int:
     for mode in a.modes:
         for policy in a.policies:
             top, _, enc = policy.partition("+")
+            top, _, at = top.partition("@")
+            ctas = int(at) if at else a.throttle_ctas
             ek = int(enc.removeprefix("fused")) if enc else 0
             if top in ("none", "gemm") and mode != a.modes[0]:
                 continue
@@ -410,12 +414,12 @@ def main() -> int:
             grecs: list[tuple[float, float, int]] = []
             if top not in ("none", "gemm"):
                 chunk = (a.fill_chunk_mib if mode == "fill" else a.chunk_mib) << 20
-                tu.start(regions, MODES[mode], chunk, 3, least, RUN_SEED, ctas=a.throttle_ctas if top == "always" else 0)
+                tu.start(regions, MODES[mode], chunk, 3, least, RUN_SEED, ctas=ctas if top == "always" else 0)
                 if a.token_gate:
                     if top == "idle":
                         tu.so.tu_pause(1)
                     elif top == "throttle":
-                        tu.so.tu_throttle(a.throttle_ctas)
+                        tu.so.tu_throttle(ctas)
                     gate_ids = gate_tokens()
                     if not gate_ref:
                         gate_ref.extend(gate_ids)
@@ -448,7 +452,7 @@ def main() -> int:
                     if top == "idle":
                         tu.so.tu_pause(1)
                     elif top == "throttle":
-                        tu.so.tu_throttle(a.throttle_ctas)
+                        tu.so.tu_throttle(ctas)
                         tu.so.tu_pause(0)
                     cur["call_t0"] = time.perf_counter()
                     outs = eng.step()
