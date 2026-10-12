@@ -58,7 +58,8 @@ print(v.profile().statement())                                                 #
 ~~~
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
-inside the node's isolation boundary. It commits its indices in a coin tree before the session, hashes each whole
+on a machine the prover doesn't control at the prover's site (the auditor's own VM or box, under the auditor's account),
+never a process on the prover's node. It commits its indices in a coin tree before the session, hashes each whole
 answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
 `answer_circuit.py` opens), and signs the session's round records once. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`

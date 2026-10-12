@@ -400,7 +400,7 @@ The on-time condition is:
 elapsed_ns ≤ delta_ns + rtt_allowance_ns
 ```
 
-Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms with an on-node verifier and permits a measured RTT allowance of at most 354 µs (354,000 ns), so `Δ + RTT ≤ 854 µs`, under the hardware/cooperation class in §6 (v1.1, Daniel's ruling, §12; v1: at most 1 ms). Δ and `rtt_allowance_ns` in `AUDIT_OPEN` are the verifier's own: a verifier never opens an audit with Δ ≠ 500,000 ns or an RTT allowance above 354,000 ns. The wire format carries them and assigns no failure code to them. `elapsed_ns` is the verifier's own measurement, recorded as u64; a measurement outside `[0, 2^64)` is the verifier's fault, and the session ends without a `FINAL`. A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
+Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms, with the verifier at the responder's site on a machine the prover doesn't control (§6), and permits a measured RTT allowance of at most 354 µs (354,000 ns), so `Δ + RTT ≤ 854 µs`, under the hardware/cooperation class in §6 (v1.1, Daniel's ruling, §12; v1: at most 1 ms). Δ and `rtt_allowance_ns` in `AUDIT_OPEN` are the verifier's own: a verifier never opens an audit with Δ ≠ 500,000 ns or an RTT allowance above 354,000 ns. The wire format carries them and assigns no failure code to them. `elapsed_ns` is the verifier's own measurement, recorded as u64; a measurement outside `[0, 2^64)` is the verifier's fault, and the session ends without a `FINAL`. A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
 
 Only a frame reported as delivered at a transport frame boundary enters the exact frame sequence. A delivered frame whose header declares more or fewer bytes than that delivered frame contains is malformed code 1; its exact delivered bytes are hashed, including the `truncated-response` vector. If the transport ends or reports loss after a challenge without reporting any complete response-frame delivery event, that round fails with transport code 6; unframed partial bytes are not hashed.
 
@@ -538,7 +538,7 @@ This harness makes the file/process boundary executable for the included toy Pyt
 
 - B = 2^19 blocks, arranged as 8 segments of 65,536 blocks.
 - k = 105 challenges, revealed and answered sequentially.
-- Each answer has Δ = 0.5 ms plus a measured RTT allowance of at most 354 µs (Δ + RTT ≤ 854 µs; v1.1, §12), with the verifier on-node.
+- Each answer has Δ = 0.5 ms plus a measured RTT allowance of at most 354 µs (Δ + RTT ≤ 854 µs; v1.1, §12), with the verifier off the responder's node (§6).
 - Q = 2^20 complete forward decodes per answer in the abstract model.
 - The prover's retained state is at most `floor((18/19)·|C|)` bits, where `|C| = B·w`; it is not `(18/19)` of the payload. The state cap applies between answers.
 - `P2SlackFamilyUncond` certifies that k = 105 absorbs 128 bits per block of bounded, reusable structural leakage for every B from 2^8 through 2^23.
@@ -573,7 +573,7 @@ The frozen F5 decision pins `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2Err
 
 ## 6. Operating point and allowed hardware
 
-The frozen operating point is B = 2^19 blocks, Q = 2^20, w = 16,448, Δ = 0.5 ms with an on-node verifier, and a measured RTT allowance of at most 354 µs, so Δ + RTT ≤ 854 µs (default, Daniel deferred, 2026-09-29; the 354 µs cap is v1.1's, Daniel's ruling of 2026-10-04, §12). The adversary may use a CPU or GPU core with cooperation within one chiplet. ASICs and FPGAs are excluded. The verifier and responder are pinned on the same chiplet. The verifier records the CPU/GPU model, clocks, topology, cooperating cores and measured RTT.
+The frozen operating point is B = 2^19 blocks, Q = 2^20, w = 16,448, Δ = 0.5 ms, and a measured RTT allowance of at most 354 µs, so Δ + RTT ≤ 854 µs (default, Daniel deferred, 2026-09-29; the 354 µs cap is v1.1's, Daniel's ruling of 2026-10-04, §12). The adversary may use a CPU or GPU core with cooperation within one chiplet. ASICs and FPGAs are excluded. The responder is pinned to one chiplet. The verifier is the memory challenger, the auditor's hardware: it runs at the responder's site on a machine the prover doesn't control (the auditor's own VM or box, under the auditor's account), never as a process on the responder's node (Daniel, 12 Oct 2026). Where it runs changes no bound, since the RTT allowance stays capped at 354 µs wherever it is measured; it changes completeness only, and the honest RTT in §12 was measured with the verifier on the responder's node, so an off-node measurement is open. The verifier records the CPU/GPU model, clocks, topology, cooperating cores and measured RTT.
 
 SeqRoot evidence is artifact `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed`, run `r20260929-060834-0ec4`. The fastest measured 16,448-bit root took 12.8 ms with eight cooperating cores. The on-node RTT p99.9 was 10–22 µs. Against the architectural floor with eight cores of one chiplet cooperating, 5,960.5 µs ÷ 3.490 = 1,708.1 µs (*est.*, §12), the 2× margin holds while `Δ + RTT` stays under 854,029 ns, which v1.1's RTT allowance of at most 354 µs keeps. v1's "through approximately 1.9 ms" used a floor about 2.2× too slow (§12). These estimates do not admit cross-chiplet, multi-GPU, FPGA or ASIC cooperation.
 
@@ -654,7 +654,7 @@ Every item below is normative. A policy choice is not a substitute for the corre
 ## 10. Decisions (frozen)
 
 1. F1: `p2-2054B` is the sole deployment payload profile (default, Daniel deferred, 2026-09-29).
-2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 354 µs, and same-chiplet cooperation and pinning as §6 (default, Daniel deferred, 2026-09-29; the RTT cap, at most 1 ms in v1, is v1.1's, Daniel's ruling of 2026-10-04, §12).
+2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 354 µs, and same-chiplet cooperation and pinning as §6, the verifier off the responder's node since 12 Oct 2026 (default, Daniel deferred, 2026-09-29; the RTT cap, at most 1 ms in v1, is v1.1's, Daniel's ruling of 2026-10-04, §12).
 3. F3: the normative error total and allocation in §5 (default, Daniel deferred, 2026-09-29).
 4. F4: accept P2-EXP-IO, realized by counter-mode SHA-512 with v4 framing; ChaCha8 is nonconforming (default, Daniel deferred, 2026-09-29; SHA-512 in place of SHAKE256 by Daniel's ruling of 2026-10-06, §13).
 5. F5: pin `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond` (default, Daniel deferred, 2026-09-29).
@@ -729,7 +729,7 @@ grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`,
   exchange inside one chiplet is a 33 ns core-to-core round trip. The cap rests on the measured speedup, not on this
   model.
 - **Only 8-core cooperation is measured.** A 16-core Zen 5c CCD, or a larger die counted as "one chiplet", is not.
-- **Honest answers fit.** The measured on-node RTT is 6.8–16 µs at the median and 10–22 µs at p99.9. Honest timed
+- **Honest answers fit.** The measured on-node RTT (the verifier on the responder's node, before the 12 Oct ruling; §6) is 6.8–16 µs at the median and 10–22 µs at p99.9. Honest timed
   answers reached at most 161–256 µs (review §4). Both sit inside `Δ + RTT = 854 µs`.
 
 **Alternatives not taken.** Margins are the cooperating root ÷ `(Δ + RTT)` at the measured 3.490×.
@@ -787,8 +787,8 @@ everywhere; SHA-256 retires.
 the frame types and their field order, the failure codes and their precedence, and the state-isolation rules.
 
 **What v4 assumes in place of v1.** `cr/sha-512` (collision resistance of SHA-512) for the commitment and the tree, and
-SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM runs on Nebius, which offers no attesting
-hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.core.claims`; Lean
+SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM, the auditor's on a machine the prover doesn't control, runs on Nebius, which
+offers no attesting hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.core.claims`; Lean
 `Verity.Assumptions.TrustedNebiusHost`, Daniel's answer of 2026-10-06). The help-accounted row ("Help accounting and
 evidence") is about the prover; this is about the verifier's host, the auditor's hardware on a machine the prover
 doesn't control.
