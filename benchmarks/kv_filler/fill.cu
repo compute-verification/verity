@@ -32,6 +32,15 @@ struct Key {
   uint32_t k[8];
 };
 
+// Which CTAs of a resident fill kernel take units: CTA b does while b < (busy > 0 ? busy_ctas : idle_ctas), and the
+// rest sleep, so the host (tu_gate) or the step's own stream (tu_gate_step: busy += ±1 at a step's start and end) moves
+// the filler's grid within a unit's time instead of a chunk's. Which CTA takes a unit doesn't enter its root.
+struct Gate {
+  int busy;
+  uint32_t busy_ctas, idle_ctas, pad;
+};
+constexpr uint32_t ALL = 0xFFFFFFFFu;
+
 struct Regions {
   static constexpr int MAX = 80;
   const uint8_t* base[MAX];
@@ -194,13 +203,26 @@ template <int W>
 __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t unit0, uint64_t units,
                                                            const uint32_t* __restrict__ signs, Key K,
                                                            uint32_t* __restrict__ roots, unsigned long long* ctr,
-                                                           uint32_t* xr) {
+                                                           uint32_t* xr, const Gate* gate) {
   uint64_t pol;
   asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
   const int lane = threadIdx.x & 31;
   for (;;) {
     unsigned long long u = 0;
-    if (lane == 0) u = atomicAdd(ctr, 1ull);
+    if (lane == 0) {
+      const volatile Gate* g = gate;
+      for (;;) {
+        if (blockIdx.x < (g->busy > 0 ? g->busy_ctas : g->idle_ctas)) {
+          u = atomicAdd(ctr, 1ull);
+          break;
+        }
+        if (*(volatile unsigned long long*)ctr >= units) {
+          u = units;
+          break;
+        }
+        __nanosleep(2000);
+      }
+    }
     u = __shfl_sync(0xffffffffu, u, 0);
     if (u >= units) return;
     const uint64_t U = unit0 + u;
@@ -211,6 +233,18 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
     unit(p, U * UNIT_BLOCKS, signs, K, pol, o);
     if (lane == 0) atomicXor(xr, o[0]);
   }
+}
+
+__global__ void gate_set(Gate* g, uint32_t busy_ctas, uint32_t idle_ctas, int reset) {
+  if (reset) g->busy = 0;
+  g->busy_ctas = busy_ctas;
+  g->idle_ctas = idle_ctas;
+  __threadfence();
+}
+
+__global__ void gate_step(Gate* g, int delta) {
+  atomicAdd(&g->busy, delta);
+  __threadfence();
 }
 #endif
 

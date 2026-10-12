@@ -41,7 +41,8 @@ GATE_SEED = bytes(range(32))
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
 BLOCK = 2056
 MODES = {"read": -1, "gf31": 0, "b3": 2, "sk16": 3, "fill": 4}
-FILL_WARPS = {"fill": 4, "fill8": 8, "fill16": 16}  # fill-sk16/v0 at that many warps a CTA
+FILL_WARPS = {"fill": 4, "fill8": 8, "fill16": 16, "fillg": 4}  # fill-sk16/v0 at that many warps a CTA
+GATED = {"fillg"}  # every SM's CTA resident, `ctas` of them let through the gate
 
 
 def mode_of(name: str) -> int:
@@ -63,6 +64,8 @@ class Topup:
         so = self.so = ctypes.CDLL(str(Path(path).resolve()))
         so.tu_start.argtypes = [i, v, v, i, i, q, q, i, i, v, i]
         so.tu_pause.argtypes = [i]
+        so.tu_gate.argtypes = [i, i]
+        so.tu_gate_step.argtypes = [i, v]
         so.tu_now_ms.argtypes = [v]
         so.tu_now_ms.restype = d
         so.tu_progress.argtypes = [v]
@@ -226,8 +229,8 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
 
 def fill_gate(tu: Topup, torch) -> dict:
     """fill-sk16/v0 against `fill_ref`: the signs; every unit root and the check word of a chunk over three regions of
-    random bytes (one ending mid-unit), at 3 CTAs and at the default grid, at each warp count; and the top-up thread's check words, chunk
-    after chunk, the plan wrapping."""
+    random bytes (one ending mid-unit), at 3 CTAs and at the default grid, at each warp count; and the top-up thread's
+    check words, chunk after chunk, the plan wrapping, with the gate down to one CTA for chunks 4-7."""
     import fill_ref as F
     out = {}
     sb = ctypes.create_string_buffer(8192)
@@ -252,12 +255,19 @@ def fill_gate(tu: Topup, torch) -> dict:
     tu.so.tu_fill_warps(4)
     out["fill_units"] = ok
     # the thread: chunks of 4 units over the 15-unit plan
-    tu.start(regions, 4, 4 * F.UNIT_BYTES, 2, 0, RUN_SEED, ctas=2)
+    tu.start(regions, 4, 4 * F.UNIT_BYTES, 2, 0, RUN_SEED, ctas=3)
+    gated = False
     while True:
         prog = (ctypes.c_uint64 * 2)()
         tu.so.tu_progress(prog)
         if prog[1] >= 12:
             break
+        if 4 <= prog[1] < 8 and not gated:
+            tu.so.tu_gate(1, 1)
+            gated = True
+        elif prog[1] >= 8 and gated:
+            tu.so.tu_gate(-1, -1)
+            gated = False
         time.sleep(0.01)
     tu.stop()
     recs, bad, cursor = tu.log()[:12], [], 0
@@ -404,8 +414,11 @@ def cell(tu: Topup, torch, fn, stream, n: int, topup: dict | None, filler, regis
             fn()
     torch.cuda.synchronize()
     if topup:
+        gated = topup.get("gated", False)
         tu.start([(filler.data_ptr(), filler.numel())], topup["mode"], topup["chunk"], topup["depth"],
-                 topup["priority"], RUN_SEED, ctas=topup.get("ctas", 0), warps=topup.get("warps", 4))
+                 topup["priority"], RUN_SEED, ctas=0 if gated else topup.get("ctas", 0), warps=topup.get("warps", 4))
+        if gated:
+            tu.so.tu_gate(topup["ctas"], topup["ctas"])
         time.sleep(0.05)
     t0 = tu.now(stream.cuda_stream) if topup else 0.0
     ts = step_times(torch, fn, stream, n)
@@ -505,7 +518,7 @@ def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int,
             for ctas in args.throttle_ctas:
                 tp = {"mode": mode_of(mode), "chunk": (args.fill_chunk_mib if mode in FILL_WARPS else 64) << 20,
                       "depth": 2 if mode == "read" else 3, "priority": least, "ctas": ctas,
-                      "warps": FILL_WARPS.get(mode, 4)}
+                      "warps": FILL_WARPS.get(mode, 4), "gated": mode in GATED}
                 r = cell(tu, torch, fn, high, n, tp, filler, registered, R)
                 row = {"phase": kind, "size": size, "ctx": ctx, "topup": mode, "ctas": ctas, **r,
                        "slowdown": r["step_ms_median"] / base["step_ms_median"] - 1}

@@ -244,6 +244,31 @@ static fl::Regions fill_regions(const std::vector<Region>& regions) {
 // Warps a fill CTA (4, 8 or 16; tu_fill_warps): at 16 one CTA holds a whole SM's registers.
 static std::atomic<int> fill_warps{4};
 
+// The fill kernels' gate (fill.cu), one for the process, and the stream the host's own gate writes go on.
+static fl::Gate* gate = nullptr;
+static cudaStream_t gate_stream = nullptr;
+static std::mutex gate_mu;
+
+static int gate_init() {
+  std::lock_guard<std::mutex> lk(gate_mu);
+  if (gate) return 0;
+  int lo = 0, hi = 0;
+  cudaDeviceGetStreamPriorityRange(&lo, &hi);
+  cudaError_t e = cudaStreamCreateWithPriority(&gate_stream, cudaStreamNonBlocking, hi);
+  if (e == cudaSuccess) e = cudaMalloc(&gate, sizeof(fl::Gate));
+  if (e != cudaSuccess) return (int)e;
+  fl::gate_set<<<1, 1, 0, gate_stream>>>(gate, fl::ALL, fl::ALL, 1);
+  return (int)cudaStreamSynchronize(gate_stream);
+}
+
+static uint32_t gate_value(int ctas) { return ctas < 0 ? fl::ALL : (uint32_t)ctas; }
+
+static int gate_set(int busy_ctas, int idle_ctas, bool reset) {
+  if (int rc = gate_init()) return rc;
+  fl::gate_set<<<1, 1, 0, gate_stream>>>(gate, gate_value(busy_ctas), gate_value(idle_ctas), reset);
+  return (int)cudaStreamSynchronize(gate_stream);
+}
+
 // One fill chunk: units [unit0, unit0 + units) of the plan, roots into ws, the check word into ws's tail.
 static int fill_launch(const fl::Regions& R, uint64_t unit0, uint64_t units, const uint32_t* signs,
                        const uint8_t seed[32], void* ws, int ctas, cudaStream_t st) {
@@ -257,11 +282,12 @@ static int fill_launch(const fl::Regions& R, uint64_t unit0, uint64_t units, con
     cudaGetDevice(&d);
     cudaDeviceGetAttribute(&grid, cudaDevAttrMultiProcessorCount, d);
   }
+  if (int rc = gate_init()) return rc;
   const fl::Key K = fill_key(seed);
   switch (fill_warps.load()) {
-    case 4: fl::fill_kernel<4><<<grid, 128, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr); break;
-    case 8: fl::fill_kernel<8><<<grid, 256, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr); break;
-    case 16: fl::fill_kernel<16><<<grid, 512, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr); break;
+    case 4: fl::fill_kernel<4><<<grid, 128, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr, gate); break;
+    case 8: fl::fill_kernel<8><<<grid, 256, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr, gate); break;
+    case 16: fl::fill_kernel<16><<<grid, 512, 0, st>>>(R, unit0, units, signs, K, roots, ctr, xr, gate); break;
     default: return -1;
   }
   return (int)cudaGetLastError();
@@ -275,7 +301,7 @@ struct State {
   uint64_t chunk_bytes = 1ull << 28, tile_bytes = 1ull << 16;
   std::vector<Region> regions;
   uint8_t seed[32];
-  cudaStream_t s = nullptr, s2 = nullptr;
+  cudaStream_t s = nullptr;
   cudaEvent_t start = nullptr;
   fl::Regions plan{};
   uint64_t plan_units = 0, fill_unit = 0;
@@ -346,7 +372,7 @@ static void next_chunk(State& st, size_t& region, const uint8_t*& p, uint64_t& b
 }
 
 static int launch_fill(State& st, int i) {
-  cudaStream_t s = (st.chunk & 1) ? st.s2 : st.s;
+  cudaStream_t s = st.s;
   const uint64_t units = std::min<uint64_t>(st.chunk_bytes / fl::UNIT_BYTES, st.plan_units - st.fill_unit);
   const uint64_t unit0 = st.fill_unit;
   st.fill_unit = (st.fill_unit + units) % st.plan_units;
@@ -431,6 +457,15 @@ static void loop(State* sp) {
   st.err = rc;
 }
 
+// In fill mode tu_pause and tu_throttle move the gate at once (paused: no CTA; a cap of 0: every CTA) instead of the
+// next chunk's launch.
+static std::atomic<int> host_paused{0}, host_cap{0};
+
+static void host_gate() {
+  const int c = host_paused ? 0 : host_cap ? host_cap.load() : -1;
+  gate_set(c, c, false);
+}
+
 }  // namespace tu
 
 extern "C" {
@@ -457,12 +492,14 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   for (int k = 0; k < n; ++k) st->regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
   CK(cudaSetDevice(device));
   CK(cudaStreamCreateWithPriority(&st->s, cudaStreamNonBlocking, priority));
-  CK(cudaStreamCreateWithPriority(&st->s2, cudaStreamNonBlocking, priority));
   if (mode == tu::MODE_FILL) {
     if (!tu::fill_ok(st->regions)) return -1;
     st->plan = tu::fill_regions(st->regions);
     st->plan_units = st->plan.first_unit[st->plan.n];
     if (st->plan_units == 0) return -1;
+    tu::host_paused = 0;
+    tu::host_cap = 0;
+    if (int rc = tu::gate_set(-1, -1, true)) return rc;
   }
   CK(cudaEventCreate(&st->start));
   st->e0.resize(depth);
@@ -506,13 +543,39 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
 }
 
 void tu_pause(int on) {
-  if (tu::S) tu::S->paused = on;
+  if (!tu::S) return;
+  if (tu::S->mode == tu::MODE_FILL) {
+    tu::host_paused = on;
+    tu::host_gate();
+  } else {
+    tu::S->paused = on;
+  }
 }
 
 // Sets the CTA cap from the next chunk on (0: none).
 void tu_throttle(int ctas) {
-  if (tu::S) tu::S->ctas = ctas;
+  if (!tu::S) return;
+  if (tu::S->mode == tu::MODE_FILL) {
+    tu::host_cap = ctas;
+    tu::host_gate();
+  } else {
+    tu::S->ctas = ctas;
+  }
 }
+
+// fill-sk16/v0's gate, now (fill.cu): `busy_ctas` CTAs take units while a step is on the GPU, `idle_ctas` otherwise
+// (negative: every CTA; 0: none). A chunk under a closed gate waits; tu_stop opens it.
+int tu_gate(int busy_ctas, int idle_ctas) { return tu::gate_set(busy_ctas, idle_ctas, false); }
+
+// A step's start (+1) or end (-1) on `stream`, ordered with the step's own kernels, so the filler's grid moves at the
+// step's edges on the GPU's clock. tu_gate_reset() zeroes the count and opens the gate.
+int tu_gate_step(int delta, void* stream) {
+  if (int rc = tu::gate_init()) return rc;
+  fl::gate_step<<<1, 1, 0, (cudaStream_t)stream>>>(tu::gate, delta);
+  return (int)cudaGetLastError();
+}
+
+int tu_gate_reset() { return tu::gate_set(-1, -1, true); }
 
 // The start event's time on the GPU's clock, as an event recorded now on `stream` would read: lets a caller place its
 // own events on the top-up's timeline.  Returns the elapsed milliseconds of an event recorded on `stream` after the
@@ -563,6 +626,7 @@ int tu_stop() {
   tu::State* st = tu::S;
   if (!st) return -1;
   st->run = 0;
+  if (st->mode == tu::MODE_FILL) tu::gate_set(-1, -1, true);
   st->th.join();
   int rc = st->err.load();
   for (int i = 0; i < st->depth; ++i) {
@@ -575,7 +639,6 @@ int tu_stop() {
   cudaFree(st->xr);
   if (st->signs) cudaFree(st->signs);
   cudaStreamDestroy(st->s);
-  cudaStreamDestroy(st->s2);
   tu::last_log = std::move(st->log);
   delete st;
   tu::S = nullptr;

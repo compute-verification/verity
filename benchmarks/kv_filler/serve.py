@@ -12,8 +12,10 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
   idle      the top-up paused while the engine has work, running at full grid when it has none
   throttle  the idle policy, plus a CTA cap (`--throttle-ctas`) while the engine has work
   full      the top-up at full grid throughout (the interference bound)
-  always    the top-up at `--throttle-ctas` throughout, busy or idle (the fill-sk16/v0 reader's resident form); `always@N`
-            and `throttle@N` take N CTAs instead
+  always    the top-up at `--throttle-ctas` throughout, busy or idle (the fill-sk16/v0 reader's resident form); `always@N`,
+            `throttle@N` and `step@N` take N CTAs instead
+  step      fill modes: every SM's CTA resident, `--throttle-ctas` of them let through the gate while a model step is on
+            the GPU and all of them otherwise, the gate moved on the runner's stream at each step's start and end
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -166,7 +168,8 @@ def main() -> int:
     for p in a.policies:
         top, _, enc = p.partition("+")
         top, _, at = top.partition("@")
-        if (at and not at.isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always") or (enc and not enc.removeprefix("fused").isdigit()):
+        if ((at and not at.isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step")
+                or (enc and not enc.removeprefix("fused").isdigit())):
             ap.error(f"unknown policy {p}")
         if enc:
             encode_ks.add(int(enc.removeprefix("fused")))
@@ -346,18 +349,29 @@ def main() -> int:
             cur["enc"].append((written, done, dec))
             cur["enc_base"] += dec * TOKEN_WORDS
 
+    def gate(delta: int) -> None:
+        if cur.get("gate_steps"):
+            tu.so.tu_gate_step(delta, torch.cuda.current_stream().cuda_stream)
+
     def execute_model(*args, **kwargs):
         e0 = mark()
+        gate(1)
         out = ex_orig(*args, **kwargs)
         encode_step(args[0] if args else kwargs["scheduler_output"])
         if out is None and st_orig is not None:
             cur["gpu_open"] = e0
-        elif "gpu" in cur:
-            cur["gpu"].append((e0, mark()))
+            cur["gate_open"] = cur.get("gate_open", 0) + 1
+        else:
+            gate(-1)
+            if "gpu" in cur:
+                cur["gpu"].append((e0, mark()))
         return out
 
     def sample_tokens(*args, **kwargs):
         out = st_orig(*args, **kwargs)
+        if cur.get("gate_open"):
+            cur["gate_open"] -= 1
+            gate(-1)
         e0 = cur.pop("gpu_open", None)
         if e0 is not None and "gpu" in cur:
             cur["gpu"].append((e0, mark()))
@@ -416,6 +430,9 @@ def main() -> int:
                 chunk = (a.fill_chunk_mib if mode in FILL_WARPS else a.chunk_mib) << 20
                 tu.start(regions, mode_of(mode), chunk, 3, least, RUN_SEED, ctas=ctas if top == "always" else 0,
                          warps=FILL_WARPS.get(mode, 4))
+                if top == "step":
+                    tu.so.tu_gate(ctas, -1)
+                    cur["gate_steps"] = True
                 if a.token_gate:
                     if top == "idle":
                         tu.so.tu_pause(1)
