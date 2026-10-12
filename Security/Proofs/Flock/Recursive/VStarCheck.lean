@@ -53,7 +53,7 @@ def innerAt (spec : Flock.SessionSpec) (st : Flock.Stmt) : RecVStar.Inner :=
 private (`i.holo`, the verifier's own `--hide`), as V*'s circuit writer writes no holo part yet. -/
 theorem statements_holo {i : RecVStar.Inner} (h : i.holo = true) (ss : Array VStar.Stmt) :
     RecVStar.statements i ≠ .ok ss := by
-  obtain ⟨m, k, c, r, holo⟩ := i
+  obtain ⟨m, k, c, r, holo, sp, st⟩ := i
   dsimp only at h
   subst h
   intro hss
