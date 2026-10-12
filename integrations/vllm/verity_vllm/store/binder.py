@@ -107,24 +107,27 @@ def _torch():
 
 
 def page_layout(t: Any, pages: int, slots: int) -> PageLayout:
-    """A KV layer's `PageLayout` from its tensor: one dimension of ``pages`` (the page stride), one of 2 (K and V,
-    the plane stride: of the dimensions of 2, the one with the largest stride), one of ``slots``; the rest are a
-    slot's bytes, contiguous within a page's plane."""
+    """A KV layer's `PageLayout` from its tensor: one dimension of ``pages`` (the page stride), one of ``slots``, and
+    K and V either two planes (a dimension of 2 outside the slot: of those, the one with the largest stride) or
+    within the slot (vLLM's FlashAttention cache, a slot's K and V interleaved by head); the rest are a slot's bytes,
+    contiguous within a page's plane."""
     elt, shape, dims = t.element_size(), tuple(t.shape), range(t.dim())
     dp = [d for d in dims if shape[d] == pages]
-    twos = sorted((d for d in dims if shape[d] == 2 and d not in dp), key=t.stride)
-    d2 = twos[-1:]
-    ds = [d for d in dims if shape[d] == slots and d not in dp + d2]
-    if len(dp) != 1 or len(d2) != 1 or len(ds) != 1:
-        raise ValueError(f"a KV cache of shape {shape}, strides {t.stride()} is not (pages, 2, slots, ...) in an order "
+    ds = [d for d in dims if shape[d] == slots and d not in dp]
+    if len(dp) != 1 or len(ds) != 1:
+        raise ValueError(f"a KV cache of shape {shape}, strides {t.stride()} is not (pages, slots, ...) in an order "
                          f"the store can read ({pages} pages of {slots} slots)")
-    inner = [d for d in dims if d not in (dp[0], d2[0])]
+    twos = sorted((d for d in dims if shape[d] == 2 and d not in dp + ds and t.stride(d) > t.stride(ds[0])),
+                  key=t.stride)
+    d2 = twos[-1:]
+    inner = [d for d in dims if d not in dp + d2]
     slot_bytes = elt * math.prod(shape[d] for d in inner if d != ds[0])
     span = elt * (1 + sum((shape[d] - 1) * t.stride(d) for d in inner))
     if span != slots * slot_bytes:
         raise ValueError(f"a KV page's plane is not contiguous: shape {shape}, strides {t.stride()}")
-    return PageLayout(pages, slots, slot_bytes, 2, t.stride(dp[0]) * elt, t.stride(d2[0]) * elt,
-                      t.stride(ds[0]) * elt == slot_bytes)
+    planes = len(d2) + 1
+    return PageLayout(pages, slots, slot_bytes, planes, t.stride(dp[0]) * elt,
+                      t.stride(d2[0]) * elt if d2 else 0, t.stride(ds[0]) * elt == slot_bytes)
 
 
 @dataclass

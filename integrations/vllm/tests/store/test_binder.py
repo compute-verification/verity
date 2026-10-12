@@ -24,8 +24,13 @@ def test_page_layout_of_flash_attention_and_flashinfer_caches():
     assert page_layout(fi, PAGES, SLOTS).strides() == (4096, 2048)
     hnd = torch.zeros(PAGES, 2, HEADS, SLOTS, DIM, dtype=torch.bfloat16).permute(0, 1, 3, 2, 4)
     assert not page_layout(hnd, PAGES, SLOTS).slot_major
+    kv = torch.zeros(PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16).permute(0, 2, 1, 3)
+    lay = page_layout(kv, PAGES, SLOTS)
+    assert (lay.planes, lay.slot_bytes, lay.strides(), lay.slot_major) == (1, 256, (4096, 4096), True)
     with pytest.raises(ValueError):
-        page_layout(torch.zeros(PAGES, SLOTS, HEADS, DIM), PAGES, SLOTS)
+        page_layout(torch.zeros(PAGES, SLOTS, HEADS, 2 * DIM)[..., :DIM], PAGES, SLOTS)
+    with pytest.raises(ValueError):
+        page_layout(torch.zeros(PAGES, SLOTS, SLOTS, DIM), PAGES, SLOTS)
 
 
 def test_torch_backing_reads_and_writes_bytes():
@@ -53,9 +58,15 @@ class Queue:
         self.q.extend(bs)
 
 
-def runner(shared: bool = False):
+def runner(shared: bool = False, interleaved: bool = False):
+    """Three layers' caches: each its own tensor, or views of one storage; ``interleaved``: vLLM 0.28's FlashAttention
+    layers, contiguous in one storage, each (pages, heads, slots, 2 * DIM) over a slot-major page with K and V side by
+    side per head."""
     model = torch.nn.Sequential(torch.nn.Linear(64, 32, bias=False), torch.nn.LayerNorm(32))
-    if shared:
+    if interleaved:
+        whole = torch.zeros(3, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)
+        caches = [whole[i].permute(0, 2, 1, 3) for i in range(3)]
+    elif shared:
         whole = torch.zeros(PAGES, 3, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)
         caches = [whole[:, i] for i in range(3)]
     else:
@@ -76,11 +87,11 @@ def test_a_layer_of_a_shared_storage_reads_as_its_own_pages():
     assert t[2, 1, -1, -1, -1:].view(torch.uint8).tolist() == [1, 2] and t[3, 0, 0, 0, :1].view(torch.uint8).tolist() == [3, 4]
 
 
-@pytest.mark.parametrize("shared", [False, True])
-def test_registration_from_a_runner(shared):
+@pytest.mark.parametrize("shared,interleaved", [(False, False), (True, False), (False, True)])
+def test_registration_from_a_runner(shared, interleaved):
     s = Store()
     b = Binder(s, block_bytes=1024)
-    r = runner(shared)
+    r = runner(shared, interleaved)
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     st = b.stats()
