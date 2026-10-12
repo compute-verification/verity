@@ -46,7 +46,7 @@ if [ "$SCRIPT" = serve.py ]; then
   gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
     rc=0
     for pool in $POOLS; do "$@" --pool "$pool" || rc=$?; done
-    exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --out "$O" ${ARGS:-}
+    exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}
   exit $?
 fi
 # shellcheck disable=SC2086

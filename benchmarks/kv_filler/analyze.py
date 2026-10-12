@@ -8,6 +8,9 @@ Two arms, each from `lag.py`:
           slowdown at 64 × 2048), none beside prefill, the alone rate in idle time; until a token is encoded, each
           step reading it reads plain bytes, γ_lag per window = those bytes over R·T
 
+A run of a `+fused<k>` policy, the encode live in `serve.py`, isn't priced: `measured` sets it against the same
+engine's run without the encode, beside the fused arm's prediction from that run's steps.
+
     python analyze.py --bench bench.json --serve serve-large.json serve-sized.json --out conversion.json
 """
 from __future__ import annotations
@@ -131,6 +134,20 @@ def price(run: dict, a: dict, R: float) -> dict:
     return res
 
 
+def measured(run: dict, ref: dict) -> dict:
+    """A live `+fused<k>` run against the same engine's run of its policy without the encode: the increase in busy
+    time on the host's clock (the steps' durations, as `price` states the replay's) and on the GPU's, and in TPOT and
+    TTFT."""
+    def busy(r):
+        return sum(s["t1"] - s["t0"] for s in r["step_records"])
+
+    def rise(key):
+        return run[key] / ref[key] - 1 if run.get(key) and ref.get(key) else None
+
+    return {"overhead": busy(run) / busy(ref) - 1, "overhead_gpu": rise("gpu_busy_s"), "tpot": rise("tpot_ms_median"),
+            "ttft_median": rise("ttft_s_median"), "ttft_p90": rise("ttft_s_p90"), "encode_lag_ms": run["encode_lag_ms"]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--bench", type=Path, required=True)
@@ -147,6 +164,8 @@ def main() -> int:
     for path in a.serve:
         s = json.loads(path.read_text())
         pool = s["args"]["pool"]
+        ident = {"source": str(path), "seed": s["args"]["seed"], "async_scheduling": s.get("async_scheduling"),
+                 "shared_prefix": s["args"].get("shared_prefix", 0)}
         for run in s["runs"]:
             eta = shortfall(phases(run["step_records"]), run["seconds"], s["weight_bytes_per_step"],
                             run["filler_bytes"], R, gpu_steps=run.get("gpu_steps"))
@@ -159,10 +178,22 @@ def main() -> int:
                       f"{n} {g[n]['s']:.1f} s at {g[n]['of_R']:.3f} R, {g[n]['eta']:.3f}"
                       for n in ("decode", "prefill", "empty")) + f", idle {g['idle_s']:.1f} s, {g['eta_idle']:.3f}"
                      if g else ""))
+            if run.get("encode_k"):
+                k = run["encode_k"]
+                ref = next((r for r in s["runs"] if r["policy"] == run["policy"].partition("+")[0]
+                            and r["mode"] == run["mode"]), None)
+                if ref is None or k not in by_k:
+                    continue
+                m, p = measured(run, ref), price(ref, by_k[k], R)["fused"]
+                out["runs"].append({**ident, "pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k,
+                                    "shortfall": eta, "measured": m, "predicted": p})
+                print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} k={k}: measured busy {m['overhead']:+.1%} "
+                      f"(GPU {m['overhead_gpu']:+.1%}), TPOT {m['tpot']:+.1%}, TTFT median {m['ttft_median']:+.1%} "
+                      f"p90 {m['ttft_p90']:+.1%}; the replay of {ref['policy']} predicted fused {p['overhead']:+.1%}")
+                continue
             for k, ar in by_k.items():
-                row = {"source": str(path), "seed": s["args"]["seed"], "async_scheduling": s.get("async_scheduling"),
-                       "shared_prefix": s["args"].get("shared_prefix", 0), "pool": pool, "policy": run["policy"],
-                       "mode": run["mode"], "k": k, "shortfall": eta, "arms": price(run, ar, R)}
+                row = {**ident, "pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k, "shortfall": eta,
+                       "arms": price(run, ar, R)}
                 out["runs"].append(row)
                 print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} k={k}: " + "; ".join(
                     f"{n} +{v['overhead']:.1%} γ_lag {v['gamma_lag_mean']:.3%} (1 s max {v['gamma_lag_max_1s']:.3%})"

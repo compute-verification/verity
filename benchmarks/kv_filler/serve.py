@@ -16,6 +16,12 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
 
+A policy may end in `+fused<k>` (with `--kv-lib`): the page conversion, live. `kv.cu`'s p512 encode at k rounds runs
+over every token a step writes, from one scratch buffer into another (vLLM's pages keep their layout), as `lag.fused`
+prices it: a prompt's tokens on the step's own stream after its forward, so the step absorbs them; a decode token's on
+a least-priority side stream at `--encode-grid` CTAs once the forward has written it, so it is encoded beside the next
+step (`encode_lag_ms`: from written to encoded). The codec passes its gate against `kv.encode_word` first.
+
 Each policy runs in each receipt mode of `--modes` (read, b3, sk16: `topup.cu`'s). A window's registered bytes are
 the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM head, and each
 scheduled request's context of KV, 128 KiB a token: its pages, a lower bound on attention's reads) plus the filler
@@ -24,7 +30,7 @@ bytes the top-up read inside it, its chunks on the GPU's clock placed on the hos
 requests at once), the same for every policy; a step's time is the host's between consecutive scheduler updates, and
 each model step's interval on the GPU is recorded beside it (`gpu_steps`: events before its forward and after its
 sampling). `--shared-prefix` puts one seeded prefix before every prompt, with prefix caching on; `--async-scheduling`
-sets vLLM's, which the record states either way.
+sets vLLM's, which the record states either way. The prefix cache is emptied before each policy.
 """
 from __future__ import annotations
 
@@ -42,9 +48,10 @@ os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from bench import MODES, RUN_SEED, Topup  # noqa: E402
+from bench import MODES, RUN_SEED, Codec, K, Topup, codec_gate  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
+TOKEN_WORDS = KV_TOKEN_BYTES // 64
 CAPTURE = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128]
 GEMM_K, GEMM_SLICE, GEMM_GROUP = 4096, 64 << 20, 4
 
@@ -142,7 +149,17 @@ def main() -> int:
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
                     help="tokens of one seeded prefix before every prompt, with prefix caching on (0: none, caching off)")
+    ap.add_argument("--encode-grid", type=int, default=128, help="CTAs of a decode step's encode on the side stream")
     a = ap.parse_args()
+    encode_ks = set()
+    for p in a.policies:
+        top, _, enc = p.partition("+")
+        if top not in ("none", "idle", "throttle", "full", "gemm") or (enc and not enc.removeprefix("fused").isdigit()):
+            ap.error(f"unknown policy {p}")
+        if enc:
+            encode_ks.add(int(enc.removeprefix("fused")))
+    if encode_ks and not a.kv_lib:
+        ap.error("a +fused policy needs --kv-lib")
     a.out.mkdir(parents=True, exist_ok=True)
     LOGF = (a.out / "serve.log").open("a")
 
@@ -182,6 +199,17 @@ def main() -> int:
             seen.add(tns.data_ptr())
             regions.append((tns.data_ptr(), tns.numel() * tns.element_size()))
     pool_bytes = sum(n for _, n in regions)
+    codec, gate = None, {}
+    if encode_ks:
+        codec = Codec(a.kv_lib)
+        gate = codec_gate(codec, torch, sorted(encode_ks))
+        log(f"codec gate: {gate}")
+        if not all(gate.values()):
+            log("REFUSED: the codec fails its gate")
+            return 6
+        codec.so.kv_encode_carveout(100)
+        enc_src = torch.zeros(a.max_batched_tokens * KV_TOKEN_BYTES, dtype=torch.uint8, device="cuda")
+        enc_dst = torch.empty_like(enc_src)
     # Both sizings register the card down to `--headroom-gib`: the top-up reads the pool and a static buffer for the rest.
     free, card = torch.cuda.mem_get_info()
     static = max(0, free - int(a.headroom_gib * (1 << 30)))
@@ -197,7 +225,7 @@ def main() -> int:
            "filler_bytes": sum(n for _, n in regions), "topup_regions": len(regions), "runs": [],
            "async_scheduling": getattr(eng.vllm_config.scheduler_config, "async_scheduling", None),
            "batch_queue_size": getattr(getattr(getattr(eng, "engine_core", None), "engine_core", None),
-                                       "batch_queue_size", None)}
+                                       "batch_queue_size", None), "codec_gate": gate}
     res["unregistered_bytes"] = card - res["weight_bytes_resident"] - pool_bytes - res["static_filler_bytes"]
     log(f"weights read a step {weight_bytes / 1e9:.2f} GB; pool {pool_bytes / 1e9:.1f} GB in {len(kv_tensors)} tensors;"
         f" static filler {res['static_filler_bytes'] / 1e9:.1f} GB; top-up over {res['filler_bytes'] / 1e9:.1f} GB;"
@@ -214,6 +242,7 @@ def main() -> int:
     tu.so.tu_throttle.argtypes = [ctypes.c_int]
     least, _ = torch.cuda.Stream.priority_range()
     least = max(least, _)
+    eside = torch.cuda.Stream(priority=least)
     vocab = eng.vllm_config.model_config.hf_config.vocab_size
 
     # the GEMM reader: every contiguous tensor of the top-up's regions in FP8 slices of GEMM_K columns
@@ -278,9 +307,34 @@ def main() -> int:
         e.record()
         return e
 
+    def encode_step(so) -> None:
+        k = cur.get("encode_k", 0)
+        if not k:
+            return
+        ns = so.num_scheduled_tokens
+        pre = sum(n for n in ns.values() if n > 1)
+        dec = sum(n for n in ns.values() if n == 1)
+        main = torch.cuda.current_stream()
+        if pre:
+            codec.encode(enc_src.data_ptr(), enc_dst.data_ptr(), pre * TOKEN_WORDS, cur["enc_base"], k,
+                         main.cuda_stream)
+            cur["enc_base"] += pre * TOKEN_WORDS
+            cur["enc_prefill_tokens"] += pre
+        if dec:
+            written = mark()
+            eside.wait_event(written)
+            off = pre * KV_TOKEN_BYTES
+            codec.encode(enc_src.data_ptr() + off, enc_dst.data_ptr() + off, dec * TOKEN_WORDS, cur["enc_base"], k,
+                         eside.cuda_stream, a.encode_grid)
+            done = torch.cuda.Event(enable_timing=True)
+            done.record(eside)
+            cur["enc"].append((written, done, dec))
+            cur["enc_base"] += dec * TOKEN_WORDS
+
     def execute_model(*args, **kwargs):
         e0 = mark()
         out = ex_orig(*args, **kwargs)
+        encode_step(args[0] if args else kwargs["scheduler_output"])
         if out is None and st_orig is not None:
             cur["gpu_open"] = e0
         elif "gpu" in cur:
@@ -308,17 +362,24 @@ def main() -> int:
     log(f"trace: {res['trace']}")
     for mode in a.modes:
         for policy in a.policies:
-            if policy in ("none", "gemm") and mode != a.modes[0]:
+            top, _, enc = policy.partition("+")
+            ek = int(enc.removeprefix("fused")) if enc else 0
+            if top in ("none", "gemm") and mode != a.modes[0]:
                 continue
             cur.clear()
             cur["steps"], cur["gpu"] = [], []
+            cur["encode_k"], cur["enc_base"], cur["enc"], cur["enc_prefill_tokens"] = ek, 0, [], 0
+            if ek:
+                codec.set_key(K.key("p512", RUN_SEED, ek))
+            if a.shared_prefix:
+                log(f"{policy}: prefix cache reset {llm.reset_prefix_cache()}")
             # a step's interval runs from its engine.step call, or the previous step's update if later, to its update
             torch.cuda.synchronize()
             offset_ms = 0.0
             grecs: list[tuple[float, float, int]] = []
-            if policy not in ("none", "gemm"):
+            if top not in ("none", "gemm"):
                 tu.start(regions, MODES[mode], a.chunk_mib << 20, 3, least, RUN_SEED, ctas=0)
-                if policy in ("idle", "throttle"):
+                if top in ("idle", "throttle"):
                     tu.so.tu_pause(1)
                 g = tu.now(0)
                 offset_ms = g - time.perf_counter() * 1e3
@@ -341,9 +402,9 @@ def main() -> int:
                                     SamplingParams(max_tokens=r["output"], ignore_eos=True, temperature=0.0))
                     k += 1
                 if eng.has_unfinished_requests():
-                    if policy == "idle":
+                    if top == "idle":
                         tu.so.tu_pause(1)
-                    elif policy == "throttle":
+                    elif top == "throttle":
                         tu.so.tu_throttle(a.throttle_ctas)
                         tu.so.tu_pause(0)
                     cur["call_t0"] = time.perf_counter()
@@ -355,12 +416,12 @@ def main() -> int:
                         if o.finished:
                             done[o.request_id] = s1
                 else:
-                    if policy in ("idle", "throttle"):
+                    if top in ("idle", "throttle"):
                         tu.so.tu_throttle(0)
                         tu.so.tu_pause(0)
                     i0 = time.perf_counter()
                     nxt = pending[k]["t"] + t_start if k < len(pending) else i0
-                    if policy == "gemm":
+                    if top == "gemm":
                         gemm_idle(min(i0 + 0.05, nxt), grecs)
                     else:
                         time.sleep(max(0.0, min(0.05, nxt - i0)))
@@ -374,9 +435,10 @@ def main() -> int:
                 gpu_busy += max(0.0, g1 - max(g0, edge))
                 edge = max(edge, g1)
             recs = grecs
-            if policy not in ("none", "gemm"):
+            if top not in ("none", "gemm"):
                 tu.stop()
                 recs = tu.log()
+            lag = sorted(w.elapsed_time(d) for w, d, _ in cur["enc"])
             steps = cur["steps"]
             by_id = {f"{policy}-{mode}-{r['id']}": r for r in reqs}
             ttft = [first[i] - (by_id[i]["t"] + t_start) for i in first]
@@ -395,13 +457,21 @@ def main() -> int:
                    "step_records": [{k2: (round(v - t_start, 5) if k2 in ("t0", "t1") else v) for k2, v in s.items()}
                                     for s in steps],
                    "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps}
+            if ek:
+                run.update({"encode_k": ek, "encode_prefill_tokens": cur["enc_prefill_tokens"],
+                            "encode_decode_tokens": sum(n for *_, n in cur["enc"]),
+                            "encode_lag_ms": {"median": statistics.median(lag), "p90": lag[int(0.9 * (len(lag) - 1))],
+                                              "max": lag[-1]} if lag else None})
             res["runs"].append(run)
             w1 = run["windows"][1]
             log(f"{policy}/{mode}: {run['seconds']:.1f} s, {len(steps)} steps, TTFT {run['ttft_s_median']:.3f} s, TPOT "
                 f"{run['tpot_ms_median']:.2f} ms, decode step {run['decode_step_ms_median']:.2f} ms, idle "
                 f"{run['idle_s']:.1f} s, filler {run['filler_bytes'] / 1e9:.0f} GB; 1 s windows mean "
                 f"{w1.get('mean', 0):.3f} p10 {w1.get('p10', 0):.3f} min {w1.get('min', 0):.3f} of R; GPU busy "
-                f"{gpu_busy:.1f} s in {len(gpu_steps)} model steps")
+                f"{gpu_busy:.1f} s in {len(gpu_steps)} model steps" + (
+                    f"; encoded {run['encode_prefill_tokens']} prompt tokens in their steps and "
+                    f"{run['encode_decode_tokens']} decode tokens beside the next, {lag[len(lag) // 2]:.2f} ms "
+                    f"(max {lag[-1]:.2f}) after written" if ek and lag else ""))
             save()
     log("done")
     return 0

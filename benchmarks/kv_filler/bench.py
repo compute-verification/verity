@@ -198,14 +198,23 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
         if int(n) != 1024 * BLOCK or region != (c // 2) % 2 or root4 != int.from_bytes(want[:4], "big"):
             bad.append(c)
     out["sk16_thread_receipts"] = not bad and out["sk16_digests_mismatch"] == 0
-    # the codec
+    out.update(codec_gate(codec, torch, ENCODE_K))
+    out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch"))
+    log(f"gate: {out}")
+    return out
+
+
+def codec_gate(codec: Codec, torch, ks) -> dict:
+    """`kv.cu`'s p512 encode against `kv.encode_word` at each k of `ks`, on edge and random payloads at each base of
+    `KV_GATE_BASES`."""
     f = codec.field
     rng = random.Random(512)
     edges = [0, 1, 2, f.p - 1, f.p - 2, (f.p - 1) // 2, 1 << (f.n - 1), f.c]
     payloads = edges + [rng.randrange(f.p) for _ in range(120)]
     m = torch.frombuffer(bytearray(b"".join(w.to_bytes(64, "little") for w in payloads)), dtype=torch.uint8).cuda()
     y = torch.empty_like(m)
-    for k in ENCODE_K:
+    out = {}
+    for k in ks:
         key = K.key("p512", RUN_SEED, k)
         codec.set_key(key)
         enc_bad = []
@@ -216,8 +225,6 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
             enc_bad += [base + i for i, v in enumerate(payloads)
                         if int.from_bytes(raw[64 * i:64 * i + 64], "little") != K.encode_word(v, base + i, key)]
         out[f"kv_encode_p512_k{k}"] = not enc_bad
-    out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch"))
-    log(f"gate: {out}")
     return out
 
 

@@ -53,6 +53,18 @@ def test_the_gpus_split_pairs_each_record_with_the_interval_whose_end_it_follows
     assert g["decode"]["of_R"] == g["prefill"]["of_R"] == pytest.approx(0.1)
 
 
+def test_measured_sets_a_live_encode_run_against_its_policy_without_it():
+    ref = {"step_records": [step(0, 1, 1, 1, 0, 0), step(1, 3, 100, 1, 100, 0)], "gpu_busy_s": 2.5,
+           "tpot_ms_median": 10.0, "ttft_s_median": 0.2, "ttft_s_p90": 0.4}
+    run = {"step_records": [step(0, 1.1, 1, 1, 0, 0), step(1.1, 4.1, 100, 1, 100, 0)], "gpu_busy_s": 3.75,
+           "tpot_ms_median": 11.0, "ttft_s_median": 0.3, "ttft_s_p90": None, "encode_lag_ms": {"median": 2.0}}
+    m = analyze.measured(run, ref)
+    assert m["overhead"] == pytest.approx(4.1 / 3 - 1)
+    assert (m["overhead_gpu"], m["tpot"], m["ttft_median"]) == (pytest.approx(0.5), pytest.approx(0.1),
+                                                                 pytest.approx(0.5))
+    assert m["ttft_p90"] is None and m["encode_lag_ms"] == {"median": 2.0}
+
+
 def test_phases_counts_a_requests_tokens_past_its_first_as_prefill():
     # vLLM's batch queue puts num_computed_tokens a step ahead: a record may say 0 prefill tokens for a chunk
     s = analyze.phases([step(0, 1, 8192, 8, 0, 0), step(1, 2, 9, 9, 0, 0)])
