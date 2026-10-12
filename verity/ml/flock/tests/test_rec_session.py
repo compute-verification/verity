@@ -575,10 +575,31 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
             V.registered(public, bad, dg)
 
 
+def test_rs_shape_is_metas_as_staging_commits_r(tmp_path):
+    """The registered entry is a cap of 128 nodes, which fixes neither R's m nor its claims, so staging also writes R's
+    opening-only ``Shape(m, 6, claims)`` into META (`rec_session.STACKED_SHAPE_KEY`), which the circuit's SHA-512 and the
+    statement digest bind; `serve` holds the stacked stream's schedule to it (`stacked_shape`) and refuses a META naming
+    none, another m than the bucket's, or other claims than the two reps'."""
+    sp = SP.Shape(9, 7, 2, 0)
+    stage = _toy_circuit(tmp_path, 8)[0].parent
+    with pytest.raises(ValueError, match="META's stacked is None, not R's shape"):
+        RS.stacked_shape(stage, sp)
+    for bad in ({"m": SP.table_m(sp) + 1, "claims": RL.REPS}, {"m": SP.table_m(sp), "claims": RL.REPS + 1}):
+        IR.bind_meta(stage, RS.STACKED_SHAPE_KEY, bad)
+        with pytest.raises(ValueError, match="not R's shape"):
+            RS.stacked_shape(stage, sp)
+    IR.bind_meta(stage, RS.STACKED_SHAPE_KEY, {"m": SP.table_m(sp), "claims": RL.REPS})
+    assert RS.stacked_shape(stage, sp) == SP.table_m(sp) == 22
+    text = (stage / "circuit.txt").read_text()
+    head = json.loads((stage / "pub-1.bin").read_bytes().split(b"\n", 1)[0])
+    assert head["circuit_sha512"] == FC.digest(text), "META's shape is in the circuit the statement digest covers"
+
+
 def test_serve_refuses_to_start_without_the_stacked_entry_meta_binds(tmp_path):
     """`rec_session.serve` with the stacked table reads R's registration from the staged statement beside its circuit
     (`staged_stacked`), and refuses before it listens when META binds no circuit registration, when the record carries
-    no ``stacked`` entry, when the staged record's digest is not META's, or when the prover holds no opening of the entry."""
+    no ``stacked`` entry, when the staged record's digest is not META's, when the prover holds no opening of the entry, or
+    when META names no R shape or another than the bucket's (`stacked_shape`)."""
     circuit, _ = _toy_circuit(tmp_path, 8)
     stage, out = circuit.parent, tmp_path / "out"
     statement = {"dense_m": 22, "k_log": 10, "nbl": 12, "regions": 0}
@@ -598,8 +619,15 @@ def test_serve_refuses_to_start_without_the_stacked_entry_meta_binds(tmp_path):
     with pytest.raises(ValueError, match="is not the registration META binds"):
         serve()
     (stage / IR.REGISTRATION).write_text(json.dumps(registration))
+    with pytest.raises(ValueError, match="META's stacked is None, not R's shape"):
+        serve()
+    private = (stage / IR.PRIVATE).read_bytes()
     (stage / IR.PRIVATE).unlink()
     with pytest.raises(ValueError, match="the prover holds no opening of the registered value stacked"):
+        serve()
+    (stage / IR.PRIVATE).write_bytes(private)
+    IR.bind_meta(stage, RS.STACKED_SHAPE_KEY, {"m": 23, "claims": RL.REPS})
+    with pytest.raises(ValueError, match=r"META's stacked is \{'claims': 2, 'm': 23\}, not R's shape \{'m': 22, 'claims': 2\}"):
         serve()
     assert not out.exists()
 
@@ -637,6 +665,8 @@ def _sparse_relay(circuit: Path, phase_of=lambda ph: ph, stacked: dict | None = 
         shutil.copytree(circuit.parent, stage)
         forge = stacked.get("forge")
         RS.stage_stacked(stage, stacked["bin"], sp, *_partition(), "cell" if forge == "cell" else None, lambda: salts.randbytes(192))
+        assert IR.meta(stage)[RS.STACKED_SHAPE_KEY] == {"m": SP.table_m(sp), "claims": RL.REPS}
+        assert RS.stacked_shape(stage, sp) == SP.table_m(sp)
         registration, bound, registered[RL.STACKED] = RS.staged_stacked(stage)
         for f in (RS.STACKED_TABLE, RS.STACKED_ROOT):
             shutil.copy(stage / f, d / f)

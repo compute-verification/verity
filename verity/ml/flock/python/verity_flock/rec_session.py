@@ -195,6 +195,8 @@ def check_fold(fold: dict, private: dict) -> dict:
 
 #: the prover's own R and its root (``flock-circuit stacked --root-out``), beside the staged ``inst-N.bin``
 STACKED_TABLE, STACKED_ROOT = "R.bin", "ROOT.json"
+#: META's key for R's opening-only shape as staging commits R, ``{"m", "claims"}`` (`stacked_shape`)
+STACKED_SHAPE_KEY = "stacked"
 
 
 def sparse_entries(circuit: Path, sparse, hidden: Sequence[str] = HIDDEN) -> tuple[list, dict]:
@@ -215,12 +217,15 @@ def stage_stacked(stage: Path, bin_: Path, sparse, program, partition: dict, for
     registering an R that is not its circuit's) in `STACKED_TABLE`, its root by ``flock-circuit stacked --root-out``
     (`STACKED_ROOT`), and the root's top registered as the value `rec_live.STACKED` (`rec_live.register_top`, salts from
     ``fresh_salt``, default the operating system's) of the circuit registration (`inner_registered.bind`, over ``program``
-    and ``partition``, the statement's): its entry in the record META binds, its nodes and salts the prover's. Returns
-    `rec_live.register_top`'s opening."""
+    and ``partition``, the statement's): its entry in the record META binds, its nodes and salts the prover's. META's
+    `STACKED_SHAPE_KEY` is R's opening-only ``Shape(m, 6, claims)``: ``m`` R's variables (`rec_sparse.table_m`), ``claims``
+    the two reps' sparse claims, which the entry, a cap of 128 nodes, does not fix. Returns `rec_live.register_top`'s
+    opening."""
     from . import inner_registered as IR
     from . import rec_sparse as SP
 
     stage = Path(stage)
+    IR.bind_meta(stage, STACKED_SHAPE_KEY, {"m": SP.table_m(sparse), "claims": RL.REPS})
     raw = bytearray(SP.table(sparse, sparse_entries(stage / "circuit.txt", sparse)[0]))
     if forge == "cell":
         raw[0] ^= 1
@@ -248,6 +253,19 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     cap = bytes.fromhex("".join(own["nodes"]))
     top = RL.commit_top(cap, [bytes.fromhex(s) for s in own["salts"]])
     return rec, R.digest(rec), {**own, "top": [b.hex() for b in top]}
+
+
+def stacked_shape(stage: Path, sparse) -> int:
+    """R's ``m`` as staging committed R (META's `STACKED_SHAPE_KEY`), refused unless it is the bucket ``sparse``'s
+    (`rec_sparse.table_m`) and R is opened at the two reps' claims."""
+    from . import inner_registered as IR
+    from . import rec_sparse as SP
+
+    got = IR.meta(stage).get(STACKED_SHAPE_KEY)
+    want = {"m": SP.table_m(sparse), "claims": RL.REPS}
+    if got != want:
+        raise ValueError(f"{stage}: META's {STACKED_SHAPE_KEY} is {got}, not R's shape {want} at the bucket {sparse}")
+    return got["m"]
 
 
 # --- the relay -------------------------------------------------------------------------------------------------------------------
@@ -461,13 +479,14 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
             raise ValueError("the stacked table is opened at the sparse phase's claims: stacked needs sparse")
         stage = Path(circuit).parent
         registration, bound, registered[RL.STACKED] = staged_stacked(stage)
+        m_r = stacked_shape(stage, sparse)
         d = Path(out) / "stacked"
         d.mkdir(parents=True, exist_ok=True)
         raw = (stage / STACKED_TABLE).read_bytes()
         (d / STACKED_TABLE).write_bytes(raw)
         (d / STACKED_ROOT).write_bytes((stage / STACKED_ROOT).read_bytes())
-        st = {"bin": Path(stacked), "dir": d, "forge": forge, "raw": raw}
-    schedule = RL.schedule_for(statement, holo=True, sparse=sparse, stacked=None if st is None else SP.table_m(sparse))
+        st = {"bin": Path(stacked), "dir": d, "forge": forge, "raw": raw, "m": m_r}
+    schedule = RL.schedule_for(statement, holo=True, sparse=sparse, stacked=None if st is None else st["m"])
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "schedule.json").write_text(json.dumps(schedule, indent=1))
@@ -498,7 +517,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
             "message_rows": rec["message_rows"], "coins": sum(r["n"] for r in rec["rounds"]), "hidden": list(hidden),
             "h_round": relay.zp + 1, "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()},
             "sparse": None if sparse is None else {"shape": [sparse.NU, sparse.ELL, sparse.S_LOG, sparse.T_LOG], "reps": len(relay.sparse_out)},
-            "stacked": None if st is None else {"m": SP.table_m(sparse), "forge": forge, "root": json.loads((st["dir"] / "ROOT.json").read_text()),
+            "stacked": None if st is None else {"m": st["m"], "forge": forge, "root": json.loads((st["dir"] / "ROOT.json").read_text()),
                                                 "registration": str(out / RL.REGISTRATION)}}
 
 

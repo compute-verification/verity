@@ -145,11 +145,12 @@ def registration_record(program, partition: Mapping, entries: Sequence[Mapping])
                     partition=partition, registered=list(entries))
 
 
-def _bind_meta(stage: Path, digest: str) -> None:
-    """``circuit.txt`` with META's `REGISTRATION_KEY` ``digest``, and both files' headers' circuit SHA-512 and classes its."""
+def bind_meta(stage: Path, key: str, value) -> None:
+    """``circuit.txt`` with META's ``key`` ``value``, and both files' headers' circuit SHA-512 and classes its."""
+    stage = Path(stage)
     text = (stage / "circuit.txt").read_text()
     head, line, rest = text.split("\n", 2)
-    m = dict(json.loads(line[5:]), **{REGISTRATION_KEY: digest})
+    m = dict(json.loads(line[5:]), **{key: value})
     text = head + "\nMETA " + json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n" + rest
     (stage / "circuit.txt").write_text(text)
     inst, pub = _files(stage)
@@ -177,7 +178,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
         raise ValueError(f"a value is registered once, and the registration would name {sorted(names)}")
     rec = registration_record(program, partition, [*old, *entries])
     (stage / REGISTRATION).write_text(json.dumps(rec, indent=1))
-    _bind_meta(stage, R.digest(rec))
+    bind_meta(stage, REGISTRATION_KEY, R.digest(rec))
     if private:
         own = json.loads((stage / PRIVATE).read_text())["values"] if (stage / PRIVATE).exists() else {}
         own.update({v: {"nodes": list(o["nodes"]), "salts": list(o["salts"])} for v, o in private.items()})
