@@ -1,6 +1,7 @@
 import Mathlib
 import Models.Accounting.Guarantees.RateAuditNamed
 import Proofs.Accounting.RateAudit.Conservation
+import Proofs.Accounting.RateAudit.Horizon
 
 /-!
 # Conservation over tiers with named words: the proof
@@ -15,13 +16,17 @@ A run with at least `k` correct receipts falls in one of three events:
   its state and its trace recomputes its queries and its receipts (`Chip.replayRun_trace`), so naming `k` correct words
   locates their contents: at the first replayed query at the word whose oracle value is its receipt (`namedAt`). The
   code is the state, the trace and `k` of the `N` words: `C(N, k)/2^λ` (`card_compress_named_le`).
+
+At every count at once (`RatePaidNamedRO`), the compression is taken at each `k ≤ N` and `∑ₖ C(N, k) = 2^N`
+(`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RateHorizon` and
+that bound at each pass (`Chain.pr_unpaid_le`).
 -/
 
 namespace Accounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
-open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le)
+open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_exists_le)
 
 theorem not_mem_take_idxOf {α : Type} [BEq α] [LawfulBEq α] (y : α) : ∀ l : List α, y ∉ l.take (l.idxOf y)
   | [] => by simp
@@ -390,6 +395,34 @@ theorem pr_compress_named_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk 
   push_cast
   rfl
 
+/-- At some count `k ≤ N`, `k` correct receipts whose words were queried, no collision, and too little else:
+probability at most `∑ₖ C(N, k)/2^λ = 2^N/2^λ`. -/
+theorem pr_compress_any_named_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (N + 1),
+        0 < k.1 ∧ k.1 ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧
+          taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ ∧
+          ¬ Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))
+      ≤ (2 ^ N : ℝ≥0∞) / 2 ^ lam := by
+  classical
+  refine (pr_exists_le _).trans ?_
+  calc ∑ k : Fin (N + 1), pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+          0 < k.1 ∧ k.1 ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧
+            taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ ∧
+            ¬ Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))
+      ≤ ∑ k : Fin (N + 1), (N.choose k.1 : ℝ≥0∞) / 2 ^ lam := by
+        refine Finset.sum_le_sum (fun k _ => ?_)
+        rcases Nat.eq_zero_or_pos k.1 with hk | hk
+        · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
+          rw [Finset.filter_false_of_mem (fun x _ hx => absurd hx.1 (by omega)), Finset.card_empty, zero_mul,
+            zero_mul]
+        · exact (pr_mono (fun x hx => hx.2)).trans (pr_compress_named_le A k.1 lam hk)
+    _ = (2 ^ N : ℝ≥0∞) / 2 ^ lam := by
+        rw [← ENNReal.sum_div]
+        congr 1
+        rw [← Nat.cast_sum, Fin.sum_univ_eq_sum_range (fun k => N.choose k), Nat.sum_range_choose]
+        push_cast
+        rfl
+
 end RelayDevice
 
 end Accounting.Rate
@@ -429,5 +462,46 @@ theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO 
     exact hc
   have := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
   exact Or.inr ⟨hk', by omega, hcol⟩
+
+/-- **Correct receipts are paid for, at every count, with named words** (`Accounting.Guarantees.RatePaidNamedRO`). -/
+theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
+  classical
+  intro N b h ρ S L q lam τ tier A hA
+  have hA' := InteractiveDevice.toRelay_side A hA
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
+    ((pr_or_le _ _).trans (add_le_add (A.toRelay.pr_guess_le hA') (A.toRelay.pr_collides_le hA')))
+    (A.toRelay.pr_compress_any_named_le lam)))
+  by_cases hcol : Collides x.2.2 ((A.toRelay.chip (A.toRelay.state x.1)).queries (A.toRelay.world x.1 x.2.1 x.2.2))
+  · exact Or.inl (Or.inr hcol)
+  by_cases hg : ∃ j, j ∉ queried A.toRelay x.1 x.2.1 x.2.2 ∧
+      A.toRelay.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j)
+  · exact Or.inl (Or.inl hg)
+  have hsub : A.toRelay.correct x.1 x.2.1 x.2.2 ⊆ queried A.toRelay x.1 x.2.1 x.2.2 := fun j hj => by
+    by_contra hq
+    exact hg ⟨j, hq, (Finset.mem_filter.1 hj).2⟩
+  have hk' : (A.toRelay.correct x.1 x.2.1 x.2.2 ∩ queried A.toRelay x.1 x.2.1 x.2.2).card =
+      (A.correct x.1 x.2.1 x.2.2).card := by
+    rw [Finset.inter_eq_left.2 hsub, InteractiveDevice.toRelay_correct]
+  have hN : (A.correct x.1 x.2.1 x.2.2).card ≤ N := (Finset.card_le_univ _).trans (by simp)
+  have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  have hk : 0 < (A.correct x.1 x.2.1 x.2.2).card :=
+    Nat.pos_of_ne_zero (fun h0 => by rw [h0, zero_mul] at hx; omega)
+  refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card, by omega⟩, hk, hk'.ge, ?_, hcol⟩
+  dsimp only
+  omega
+
+/-- **The route `Sampled` with named words, with side sources that ignore the oracle**
+(`Accounting.Guarantees.RateChainSampledNamedRO`). -/
+theorem RateChainSampledNamedRO : Accounting.Guarantees.RateChainSampledNamedRO := by
+  intro P N b h ρ S L q r s K lam τ tier A hA
+  have h₁ := Chain.pr_horizon_le A K
+  have h₂ := Chain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η =>
+    (pr_mono (fun _ hx => by omega)).trans (RatePaidNamedRO N b h ρ S L q lam τ tier (A.device j η) (hA j η)))
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))
+  by_cases hK : ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K
+  · exact Or.inl ⟨hx.1, hK⟩
+  · refine Or.inr (hx.2.trans_le ?_)
+    rw [← Finset.sum_mul]
+    exact Nat.mul_le_mul_right _ (by omega)
 
 end Accounting.SecurityProofs

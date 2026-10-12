@@ -26,4 +26,5 @@ count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `Rat
 (`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal horizon bound on the samples
 (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the route `Sampled` it gives a window
 (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation with the compression naming
-words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`). -/
+words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with its route `Sampled`
+(`Accounting.SecurityProofs.RateChainSampledNamedRO`). -/

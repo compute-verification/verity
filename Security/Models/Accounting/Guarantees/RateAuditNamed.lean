@@ -11,6 +11,10 @@ the chip recomputes its queries and the receipts it committed, and finds each na
 oracle value is that word's receipt. Two of the run's queries with one oracle value could mislead it, at
 `C(q, 2)/2^h`. Proofs are in `Security/Proofs/Accounting/RateAudit/Named.lean`. No named assumption, as for
 `RateConservationRO`.
+
+* `RateConservationNamedRO`: at a count `k`, `C(N, k)/2^λ` in place of `C(q, k)/2^λ`.
+* `RatePaidNamedRO`: at every count at once, `2^N/2^λ` in place of `RatePaidRO`'s `2^q/2^λ`.
+* `RateChainSampledNamedRO`: the route `Sampled` (`RateChainSampledRO`) with that error at each pass.
 -/
 
 namespace Accounting.Guarantees
@@ -46,5 +50,55 @@ def RateConservationNamedRO : Prop :=
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
           ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam < k * b)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (N.choose k : ℝ≥0∞) / 2 ^ lam
+
+/-- **Correct receipts are paid for, at every count, with named words.** For every device of `RatePaidRO`'s class and
+every split into tiers: the probability that the correct receipts' words exceed the reads of every tier, the rebuilt
+words, the on-chip state, the link's free bits and `λ`,
+
+  `∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ < #correct·b`,
+
+is at most `N/2^h + C(q, 2)/2^h + 2^N/2^λ`.
+
+**The reading.** `RatePaidRO` with `2^N` in place of `2^q`: `λ = N + 40` bits a pass makes the term `2^-40`, a
+fraction `1/b` of the store's bits (about `0.003%` at 4 KiB words), whatever the run's query count `q`. `RatePaidRO`
+needs `λ = q + 40`, which grows with every hash the prover makes in a pass.
+
+Proof: `Accounting.SecurityProofs.RatePaidNamedRO`: `RateConservationNamedRO`'s three events, the compression taken at
+each count `k ≤ N`, and `∑ₖ C(N, k) = 2^N`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RatePaidNamedRO : Prop :=
+  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+    (∀ E R O O', A.side E R O = A.side E R O') →
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
+          (A.correct x.1 x.2.1 x.2.2).card * b)
+      ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam
+
+/-- **The route `Sampled` with named words, with side sources that ignore the oracle.** `RateChainSampledRO` with
+`RatePaidNamedRO`'s error at each pass: the probability that every pass is accepted while the passes' reads of every
+tier and rebuilt words, plus each pass's on-chip state, free link bits and `λ`, fall short of `K + 1` words,
+
+  `∑ⱼ (∑ᵢ readsⱼᵢ + rebuiltⱼ·b) + P·(S + (L − ρ) + λ) < (K + 1)·b`,
+
+is at most `(K / (P·N))^(s·P) + P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
+
+**The reading.** At `K = (1 − d̄)·P·N`, a window whose `s·P` openings all pass read, rebuilt or held the words of more
+than `K` correct receipts, at a slack of `N + 40` bits a pass for `λ`.
+
+Proof: `Accounting.SecurityProofs.RateChainSampledNamedRO`: `RateHorizon`, and `RatePaidNamedRO` at each pass through
+`RateChainPaidRO`'s union over passes.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateChainSampledNamedRO : Prop :=
+  ∀ (P N b h ρ S L q r s K lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
+    (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
+          (K + 1) * b)
+      ≤ ((K : ℝ≥0∞) / (P * N)) ^ (s * P) +
+        (P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
 
 end Accounting.Guarantees
