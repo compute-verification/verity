@@ -30,22 +30,23 @@ def gone : Option (Option (List UInt8)) := some none
 #guard row ic "rec-top-stacked-L1" 1 == gone && row ic "rec-top-stacked-L2" 0 == gone
 -- a session of one table's reps holds no stream of R's
 #guard row { reps := ic.reps } "rec-opening-c0" 0 == gone
-#guard row ic "rec-claim" 0 == none && row ic "rec-acc" 0 == none && row ic "rec-top-L1" 0 == none &&
-  row ic "rec-sparse-h" 0 == none
+#guard row ic "rec-acc" 0 == none && row ic "rec-top-L1" 0 == none && row ic "rec-sparse-h" 0 == none
+-- rec-claim is the sparse phase's: without the verifier's RecSparse shape it is fixed by no row
+#guard row ic "rec-claim" 0 == gone
 
-/-! RecSparse at NU 1, ELL 6, S_LOG 1: its message ports `pre0`..`pre5`, `v2`, `sc0`, `sc1`, `u` (ten rounds), and `vt` only
-at T > 1. -/
+/-! RecSparse at NU 1, ELL 6, S_LOG 1: its message ports `pre0`..`pre5`, `v2`, `sc0`, `sc1`, `u`, `vt` only at T > 1, then
+the claim round's `claim` (eleven rounds at T = 1). -/
 
 def sp : Flock.RecSparse.Shape := ⟨1, 6, 1, 0⟩
 def sp4 : Flock.RecSparse.Shape := ⟨1, 6, 1, 2⟩
 
-#guard sparseMessages sp == ["pre0", "pre1", "pre2", "pre3", "pre4", "pre5", "v2", "sc0", "sc1", "u"]
-#guard sparseMessages sp4 == sparseMessages sp ++ ["vt"]
+#guard sparseMessages sp == ["pre0", "pre1", "pre2", "pre3", "pre4", "pre5", "v2", "sc0", "sc1", "u", "claim"]
+#guard sparseMessages sp4 == ["pre0", "pre1", "pre2", "pre3", "pre4", "pre5", "v2", "sc0", "sc1", "u", "vt", "claim"]
 
 def sparseStream (x base n : Nat) : InnerStream :=
   { name := s!"sparse/rep{x}", commits := (Array.range n).map fun i => (2 * i + 1, b (base + i)), tops := #[] }
 
-def ics : InnerCommits := { reps := ic.reps, streams := #[sparseStream 0 20 10, sparseStream 1 40 10] }
+def ics : InnerCommits := { reps := ic.reps, streams := #[sparseStream 0 20 11, sparseStream 1 40 11] }
 
 def srow (cs : InnerCommits) (value : String) (x : Nat) (sh : Option Flock.RecSparse.Shape := some sp) :
     Option (Option (List UInt8)) :=
@@ -56,6 +57,13 @@ def srow (cs : InnerCommits) (value : String) (x : Nat) (sh : Option Flock.RecSp
 #guard srow ics "rec-sparse-v2" 0 == ok 26 && srow ics "rec-sparse-sc1" 1 == ok 48 && srow ics "rec-sparse-u" 0 == ok 29
 -- no round commits v, zero or tau, and h and claim are registered as rec-c<i> and rec-claim
 #guard ["v", "zero", "tau", "h", "claim", "pre", "scx"].all fun p => srow ics s!"rec-sparse-{p}" 0 == none
+-- rec-claim's row x is the verifier's own (`claimRow`): sparse/rep<x>'s last message round, the claim round's c_k, at the
+-- verifier's RecSparse shape, so a statement that is no rec-sparse unit (R's opening) reads it too
+#guard srow ics "rec-claim" 0 == ok 30 && srow ics "rec-claim" 1 == ok 50
+#guard (claimRow ics sp 1).toOption.map (·.1) == some "sparse/rep1's c_10 (claim, inner round 21)"
+-- without the claim round, at another shape, or for a third rep, rec-claim has no row
+#guard srow { ics with streams := #[sparseStream 0 20 10, sparseStream 1 40 10] } "rec-claim" 0 == gone
+#guard srow ics "rec-claim" 0 (some sp4) == gone && srow ics "rec-claim" 2 == gone
 -- vt is a port only at T > 1; a port off the shape, a statement that is no rec-sparse unit, a rep with no sparse stream, or
 -- a stream of other than the shape's rounds is refused
 #guard srow ics "rec-sparse-vt" 0 == gone && srow ics "rec-sparse-pre6" 0 == gone && srow ics "rec-sparse-sc2" 0 == gone
