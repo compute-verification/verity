@@ -104,7 +104,7 @@ def toStatement (R : RegTable cls) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLo
 
 theorem type_lt {a : ℕ} (h : a < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog)) :
     a / 2 ^ (cls.nu + cls.shape.pLog) < 2 ^ cls.tLog := by
-  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add]
+  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add, Nat.add_comm]
   exact h
 
 /-- The stacked table the registered opening reads: bit `k + 2^ν·(p + 2^pLog·t)` is `R t p k`, and the padding's bits
