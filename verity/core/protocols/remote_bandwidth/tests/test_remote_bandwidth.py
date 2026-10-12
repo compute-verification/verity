@@ -44,22 +44,25 @@ class Entropy:
 
 
 def payload(j: int) -> bytes:
+    """64-byte pieces with their top byte cleared, so every word is below p at either field."""
     if j % 3 == 0:
         return bytes(codec.BLOCK_BYTES)
-    return b"".join(hashlib.sha512(b"%d/%d" % (j, w)).digest()[:63] + b"\0" for w in range(codec.BLOCK_WORDS))
+    return b"".join(hashlib.sha512(b"%d/%d" % (j, u)).digest()[:63] + b"\0" for u in range(codec.BLOCK_BYTES // 64))
 
 
 @pytest.fixture(scope="module")
 def store() -> audit.Store:
+    """The store under the fallback codec, p1024 masked at k = 2: about 4 s to encode where the default's k = 3 takes 6.
+    Nothing here depends on k; the vectors' session runs at the default."""
     payloads = [payload(j) for j in range(N)]
     salts = [Entropy(b"payload salts")(receipts.SALT_BYTES * N)[receipts.SALT_BYTES * j:receipts.SALT_BYTES * (j + 1)]
              for j in range(N)]
-    reg = audit.register(SOURCE, NODE, N, audit.payload_tree(NODE, payloads, salts).commitment.root, nonce=bytes(32))
-    return audit.Store(reg, payloads, salts)
+    root = audit.payload_tree(NODE, payloads, salts).commitment.root
+    return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
 
 
 def params(**kw) -> Params:
-    base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6)
+    base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6, codec=codec.FALLBACK)
     return Params(**{**base, **kw})
 
 
@@ -264,22 +267,56 @@ def test_codec_round_trips_and_refuses_one_round(store) -> None:
     assert store.blocks[0] != bytes(codec.BLOCK_BYTES)            # zero weights encode to a store that is not zeros
     assert codec.decode(b"\xff" * codec.BLOCK_BYTES, 0, k) is None
     with pytest.raises(ValueError, match="at least 2 rounds"):
-        codec.key(bytes(32), 1)
-    with pytest.raises(ValueError, match="at least 2 rounds"):
-        params(rounds=1)
+        codec.Codec(codec.P1024, 1, True)
+    with pytest.raises(ValueError, match="a Codec"):
+        params(codec="p1024/k3/masked")
+
+
+def test_the_codecs_are_named_and_each_decodes_its_own_blocks() -> None:
+    """The default is p1024 masked at k = 3, the fallback k = 2 at the same width, and p512 the upgrade path: each a
+    block of 128- or 64-byte words, each its own store, and a block under one is no other's."""
+    p512 = codec.Codec(codec.P512, 2, False)
+    assert [c.name for c in (codec.DEFAULT, codec.FALLBACK, p512)] == ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"]
+    assert (codec.P1024.word_bytes, codec.P1024.block_words, codec.P512.word_bytes, codec.P512.block_words) == (128, 32, 64, 64)
+    assert (codec.DEFAULT.max_blocks, p512.max_blocks) == (1 << 59, 1 << 58)
+    seed, m, j = hashlib.sha256(b"codec seed").digest(), payload(1), 3
+    keys = [codec.key(seed, c) for c in (codec.DEFAULT, codec.FALLBACK, codec.Codec(codec.P1024, 3, False), p512)]
+    blocks = [codec.encode(m, j, k) for k in keys]
+    assert len(set(blocks)) == 4 and all(codec.decode(b, j, k) == m for b, k in zip(blocks, keys))
+    assert all(codec.decode(blocks[0], j, k) != m for k in keys[1:]) and codec.decode(blocks[0], j + 1, keys[0]) != m
+    assert keys[0].c[:2] == keys[1].c and keys[0].mask == keys[1].mask and keys[2].mask is None and keys[3].mask is None
+    assert codec.decode((codec.P1024.p + 1).to_bytes(128, "little") + blocks[0][128:], j, keys[0]) is None
+    with pytest.raises(ValueError, match="below 576460752303423488"):
+        codec.encode(m, 1 << 59, keys[0])
+    with pytest.raises(ValueError, match="one of"):
+        codec.Codec(codec.Field("p1024", 1024, 107), 3, True)
 
 
 def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
     root = hashlib.sha512(b"payloads").digest()
     a = audit.register(SOURCE, NODE, N, root, nonce=bytes(32))
-    assert a == audit.register(SOURCE, NODE, N, root, nonce=bytes(32))
+    assert a == audit.register(SOURCE, NODE, N, root, nonce=bytes(32)) and a.codec == codec.DEFAULT
     others = [audit.register(SOURCE, NODE, N, hashlib.sha512(b"other").digest(), nonce=bytes(32)),
               audit.register(SOURCE, b"another node", N, root, nonce=bytes(32)),
               audit.register(SOURCE, NODE, N + 1, root, nonce=bytes(32)),
               audit.register(SOURCE, NODE, N, root, nonce=bytes([1]) * 32),
-              audit.register(b"another verifier", NODE, N, root, nonce=bytes(32))]
-    assert len({a.codec_seed, *(o.codec_seed for o in others)}) == 6
-    assert len({a.digest, *(o.digest for o in others)}) == 6
+              audit.register(b"another verifier", NODE, N, root, nonce=bytes(32)),
+              audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32))]
+    assert len({a.codec_seed, *(o.codec_seed for o in others)}) == 7
+    assert len({a.digest, *(o.digest for o in others)}) == 7
+    assert dataclasses.replace(a, codec=codec.FALLBACK).digest != a.digest     # the digest binds the codec's name
+    p512 = codec.Codec(codec.P512, 2, False)
+    assert audit.register(SOURCE, NODE, 1 << 58, root, p512, nonce=bytes(32)).blocks == 1 << 58
+    with pytest.raises(ValueError, match="at most"):
+        audit.register(SOURCE, NODE, (1 << 58) + 1, root, p512, nonce=bytes(32))
+    with pytest.raises(ValueError, match="names a Codec"):
+        audit.register(SOURCE, NODE, N, root, "p1024/k3/masked", nonce=bytes(32))
+
+
+def test_a_session_refuses_parameters_that_are_not_the_registrations(store) -> None:
+    for p in (params(codec=codec.DEFAULT), params(blocks=N + 1)):
+        with pytest.raises(ValueError, match="not the registration's"):
+            Session(p, store.registration, audit.NoiseTiles(96), challenger(store, p), clock=Clock())
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:

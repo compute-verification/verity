@@ -3,8 +3,9 @@ many reads of a node's registered blocks the node made in each window, from rece
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
    hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier draw the codec seed from its own secret and
-   a fresh nonce (`register`), and the prover encodes every block under it (`Store`).  `Registration.digest` binds the
-   node, the store's size, the payload root, the codec seed and k.
+   a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
+   names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  `Registration.digest` binds the node, the
+   store's size, the payload root, the codec seed and the codec's name.
 2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
@@ -56,7 +57,7 @@ from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
-from .codec import BLOCK_BYTES
+from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
@@ -78,7 +79,7 @@ FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec"
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
     deadline, the windows `W`, the openings `s` per window at `delta`, the fewest passes a window may certify, and the
-    codec's k."""
+    store's codec, the registration's."""
 
     blocks: int
     deadline_ns: int
@@ -86,7 +87,7 @@ class Params:
     samples: int
     delta: float
     min_passes: int = 1
-    rounds: int = codec.MIN_ROUNDS
+    codec: Codec = codec.DEFAULT
 
     def __post_init__(self) -> None:
         for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes"):
@@ -94,7 +95,8 @@ class Params:
                 raise ValueError(f"{name} is a positive integer")
         if not 0 < self.delta < 1:
             raise ValueError("0 < delta < 1")
-        codec.key(bytes(codec.SEED_BYTES), self.rounds)
+        if type(self.codec) is not Codec:
+            raise ValueError("a session's codec is a Codec")
 
     @property
     def coins(self) -> int:
@@ -126,41 +128,44 @@ def payload_tree(node: bytes, payloads: Sequence[bytes], salts: Sequence[bytes])
 
 @dataclass(frozen=True, slots=True)
 class Registration:
-    """What the store is: the node, `N`, the payload root, the codec seed drawn after it, and k."""
+    """What the store is: the node, `N`, the payload root, the codec seed drawn after it, and the codec it names."""
 
     node: bytes
     blocks: int
     payload_root: bytes
     codec_seed: bytes
-    rounds: int
+    codec: Codec
 
     @property
     def digest(self) -> bytes:
-        """SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖ u8 k): what a record and a
-        session's coin commitment cite, and `root_(0,−1)`, the root a session's first pass follows."""
+        """SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖ frame(codec name)): what a
+        record and a session's coin commitment cite, and `root_(0,−1)`, the root a session's first pass follows."""
         return hashlib.sha512(REGISTRATION_DOMAIN + frame(self.node) + self.blocks.to_bytes(8, "big") + self.payload_root
-                              + self.codec_seed + self.rounds.to_bytes(1, "big")).digest()
+                              + self.codec_seed + frame(self.codec.name)).digest()
 
     @property
     def key(self) -> codec.Key:
-        return codec.key(self.codec_seed, self.rounds)
+        return codec.key(self.codec_seed, self.codec)
 
 
-def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, rounds: int = codec.MIN_ROUNDS, *,
+def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT, *,
              nonce: bytes | None = None) -> Registration:
     """The verifier's side of registration: the codec seed, drawn from its own secret `source` and a fresh nonce only
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
     zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload."""
     receipts.store_blocks(blocks)
+    if type(codec) is not Codec:
+        raise ValueError("a registration names a Codec")
+    if blocks > codec.max_blocks:
+        raise ValueError(f"a store under {codec.name} is at most {codec.max_blocks} blocks")
     if type(payload_root) is not bytes or len(payload_root) != DIGEST_BYTES:
         raise ValueError(f"the payload root is {DIGEST_BYTES} bytes")
     nonce = secrets.token_bytes(NONCE_BYTES) if nonce is None else nonce
     if type(nonce) is not bytes or len(nonce) != NONCE_BYTES:
         raise ValueError(f"a registration's nonce is {NONCE_BYTES} bytes")
-    codec.key(bytes(codec.SEED_BYTES), rounds)
     seed = derive(source, CODEC_DOMAIN, {"node": _node(node), "blocks": blocks, "payload": payload_root,
-                                         "nonce": nonce}).stream("codec", codec.SEED_BYTES)
-    return Registration(node, blocks, payload_root, seed, rounds)
+                                         "codec": codec.name, "nonce": nonce}).stream("codec", SEED_BYTES)
+    return Registration(node, blocks, payload_root, seed, codec)
 
 
 class Tiles(Protocol):
@@ -395,7 +400,7 @@ class Session:
 
     def __init__(self, params: Params, registration: Registration, tiles: Tiles, challenger: coins.Challenger, *,
                  clock: Callable[[], int] = time.monotonic_ns, not_before_ns: int | None = None) -> None:
-        if registration.blocks != params.blocks or registration.rounds != params.rounds:
+        if registration.blocks != params.blocks or registration.codec != params.codec:
             raise ValueError("the parameters are not the registration's")
         c = challenger.commitment
         if c.registration != registration.digest or c.count != params.coins:
