@@ -167,14 +167,14 @@ fast by reusing a part's verdict whenever its inputs haven't changed. Each verdi
 declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and
 harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only change reruns nothing, a deleted test reruns
 its suite, and a layout move or a change to the runner reruns everything. The merge
-queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
+queue runs the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
 something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
 lands on its own passing check without its file owner's review, and the owner is told. infra owns check time as an
-outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Hand
-landing is to be automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
-refuses, and the lander handles what it refuses.
+outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Landing
+is automated, and ci owns it: from a ready mark to `main` moving, no agent acts unless the automation refuses, and the
+lander handles what it refuses.
 
 Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
 right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
@@ -182,31 +182,31 @@ A reused verdict stays in the gate, and the Lean check always runs before landin
 whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
 landing.
 
-Until reuse and the merge queue exist:
+Landing runs through the merge queue's drive (`research queue drive`, `tools/research/src/research/drive.py`), which ci
+runs on a loop every few minutes:
 
-- The lander lands a change by hand once every part whose declared inputs it touches passes: its test suites
-  (`tools/verity/check/suites.py`, minutes on the CPU machines), circuit-check on the circuits it changes (cold workers
-  reach 128-157 GB each, so `--jobs 4` at most on vy-nebius-cpu-1 and 2 on vy-nebius-cpu-2, or run it on vy-nebius-1),
-  the Lean check of every Lake package whose pass misses (`tools/verity/lean/lean_audit.py --out DIR`, which includes each
-  package requiring a changed one by path; `--explain PKG` says why one misses), and `lean-agreement` when it touches
-  C-Flock or its Lean verifier (on its own: `lake build` in `verity/core/service/flock`, then
-  `verity/ml/flock/verifier/ci.py` against the upstream build `upstream.json` pins, under `research run`).
-- The landing is a merge commit with trailers naming those runs (`Checked:`) and the skipped full check
-  (`Skipped-check:`), pushed with `--no-verify`. Then `research merge --sweep` runs what a plain push skips: the spec DM,
-  node 1's mirror and the post-train regression.
-- A layout move and a change to the check or merge tooling (`tools/verity/check/`, `research merge` and its queue, the
-  Lean check) get a full `check` first and land through `research merge --push`.
-- After landings, the lander runs a full `check` of the newest `main` on vy-nebius-1, one at a time. When it fails, the lander finds
-  the landing that broke it and reverts it at once (`git revert -m 1`), and its owner relands with the fix.
-- PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
-- ci takes a PR into a train once its owner marks it ready at its head, by hand if need be:
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass. `research merge` itself reads no ready
-  mark: the train's own check is the gate.
-- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
-- A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
-  the tip; a push to the PR would refuse every tip that pins its old head.
-- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies goes first, alone in
-  its train.
+- An owner's ready mark at a PR's head means "land this": `research queue ready N --mark --by LANE`, or
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, and a new head needs a new mark. The
+  owner is the lane a `Lane NAME` line in the PR's body names, else the Cursor agent id the body carries. Marks written
+  before `marked_after` in `tools/verity/check/queue.toml` are ignored on every VM's queue, and a `hold` label keeps a PR
+  out. No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel,
+  8 Oct).
+- `next` is `main` plus every admitted PR, one merge commit each; a PR whose head contains another open PR's head goes in
+  after it. Drive checks `next` in stacked trains of four with `tools/verity/check/train.sh` (with `--agreement` when a
+  train changes a `lean-audit.json`), and lands the newest commit whose check passed: a fast-forward, or, onto a `main`
+  that moved, a merge commit with `Checked:` and `Skipped-check:` trailers when the commits `main` gained share no file
+  with it and change no check tooling. Then it runs what a landing needs: the spec DM, node 1's mirror, the post-train
+  regression and the landing post.
+- The lander (old-circuits-and-proofs) handles only what drive refuses, which drive posts to it in the merge thread once
+  per commit: a failed check, a conflict, a check missing a step the gate needs, a launch that registered no run. The
+  lander ejects the PR that broke a train (`research queue eject N --reason TEXT`, which withdraws its mark in the store),
+  and the PR's owner fixes it and marks the new head. A passing train that drive missed, the lander lands with
+  `research merge`.
+- A push to a PR in `next` takes it out until the new head is marked, and a check whose commit leaves `next` is
+  cancelled, so a PR keeps its head while its train is checked unless the lander asks for a change.
+- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
+  of the queue: the lander lands it with `research merge` on its own passing check, and drive's next sync rebuilds `next`
+  on it.
 
 ## Lean
 
@@ -329,10 +329,10 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
   (`research notes claim`).
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
-- **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
-  (Checking and merging). Only the lander moves `main`.
-- **Landing is the lander's.** Push your PR, mark it ready and go back to research. Only the lander lands, restacks and
-  reruns, and you hear back only if your PR fails. A lane works on at most two open PRs; one whose head is in a queued
+- **Push your branch after every commit** (never `main`, never `--force`), except to a PR whose train is being checked
+  (Checking and merging). Only drive and the lander move `main`.
+- **Landing is drive's.** Push your PR, mark it ready at its head and go back to research. Drive lands it, the lander
+  handles what drive refuses, and you hear back only if your PR fails or conflicts. A lane works on at most two open PRs; one whose head is in a queued
   or running check, or in a train the lander holds, doesn't count until that check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
