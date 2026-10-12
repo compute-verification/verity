@@ -70,7 +70,7 @@
   "fp8_moe_backend": "TRITON (oracle.fp8: on sm_90 with 128x128 block FP8 and no expert parallelism Triton is moved to the front)",
   "router": "GroupedTopKRouter -> _C.grouped_topk (sigmoid, n_group 1, topk_group 1, renormalize, routed_scaling_factor 2.5 inside the kernel)",
   "rotary": "one shared RotaryEmbedding (is_neox_style false, base 8e6, cos_sin_cache [1048576, 64] bf16); the indexer's rope is the same instance (indexer_rope_interleave true)",
-  "allreduce_norm": "fused_allreduce_rms_norm: FlashInfer TRT-LLM fused all-reduce + residual add + RMSNorm (fp32 accumulation) when the step's token count M <= 0.5 MiB / (H * 2 B) = 42 at TP8 on sm_90 and the NVSwitch workspace exists; otherwise tensor_model_parallel_all_reduce then RMSNorm.forward_cuda (fused_add_rms_norm). Decode steps take the first path, a 256-token prefill the second.",
+  "allreduce_norm": "fused_allreduce_rms_norm: FlashInfer's fused all-reduce + residual add + RMSNorm (trtllm_allreduce_fusion on the mnnvl backend, fp32 accumulation; one-shot to 10 tokens, two-shot past it) when the step's token count M <= 0.5 MiB / (H * 2 B) = 42 at TP8 on sm_90 and the workspace holds it; otherwise tensor_model_parallel_all_reduce (torch's symmetric memory by default, vLLM's custom all-reduce under VLLM_ALLREDUCE_USE_SYMM_MEM=0) then RMSNorm.forward_cuda (fused_add_rms_norm). Decode steps take the first path, a 256-token prefill the second.",
   "embedding": "VocabParallelEmbedding sharded (19360 rows per rank): masked gather then all-reduce; fused_embed_norm is not used (it needs the full table on a rank)",
   "glm52_low_latency_gemm": "inactive (SM103 and BF16 only)",
   "mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"
@@ -263,17 +263,22 @@
    "note": "interleaved (GPT-J) RoPE on the 64 rope dims inside _fused_norm_rope_kernel (k_pe) and fused_q (q_pe): f32 x1*cos - x2*sin, x2*cos + x1*sin from the bf16 cos_sin_cache, to bf16"
   },
   "tp-allreduce": {
-   "status": "committed-only",
+   "status": "port",
    "definitions": [
-    "AllReduce2_v1",
-    "AllReduce_v2"
+    "AllReduceCustom_v1",
+    "AllReduceCustom_v2"
    ],
-   "note": "the TP8 all-reduce on 8xH200 (custom / symm-mem / NCCL, chosen at runtime): AllReduce2_v1 is WORLD 2 and AllReduce_v2 WORLD 4 on L40S, neither this one. Every rank's partial is a tap, so a later AllReduce Program checks against the same root"
+   "note": "tensor_model_parallel_all_reduce at TP 8 on 8x H200 (vLLM d9105ea80): the embedding's, and each o_proj / MoE output past fused_allreduce_rms_norm's 42 tokens. By default vLLM's custom all-reduce below 256 KiB (M <= 21 at H 6144, its 1-stage kernel), then torch's symmetric-memory multimem_all_reduce_ to 64 MiB (NVSwitch in-network reduction, whose order no Definition states), then NCCL; under the switch the custom all-reduce to 8 MiB (M <= 682, 2-stage from 22 tokens), then NCCL. tp_allreduce.AllReduceCustom_v1{WORLD 8, SIZE, STAGE} (Boolean _v2). Every rank's partial is a tap. tests/properties/glm53_tp8_allreduce_capture_gpu.py pins the communicator, the kernel and the words on the 8-GPU node",
+   "when": "VLLM_ALLREDUCE_USE_SYMM_MEM=0 on every rank and at most 682 tokens a call (NCCL past it, which no Definition states); not yet set by the served engine"
   },
   "fused-allreduce-rmsnorm": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "FlashInfer trtllm_allreduce_fusion (one-shot, fp32_acc, AR_RESIDUAL_RMS_NORM) on decode steps; on prefill steps the TP8 all-reduce then fused_add_rms_norm. No Program for either the fused kernel or the TP8 all-reduce"
+   "status": "port",
+   "definitions": [
+    "AllReduceRmsNormMnnvl_v1",
+    "AllReduceMnnvl_v1",
+    "AllReduceMnnvl_v2"
+   ],
+   "note": "FlashInfer trtllm_allreduce_fusion (AR_RESIDUAL_RMS_NORM, fp32 accumulation) on its mnnvl backend (one node with NVSwitch multicast; kernels built with -use_fast_math) when _can_use_flashinfer admits the call, M <= 42 at H 6144 and TP 8: decode steps. One-shot (oneshotAllreduceFusionKernel) to M 10, else two-shot (twoshotAllreduceKernel, then rmsNormLamport). tp_allreduce.AllReduceRmsNormMnnvl_v1{WORLD 8, N 6144, SHOT, CLUSTER, EPS 1e-05, FMA} per token, whose all-reduce is AllReduceMnnvl_v1 (Boolean _v2); the fused norm has no Boolean version yet. FMA (whether ptxas contracts sum * rcp(N) + EPS) is decided per shot by tests/properties/glm53_tp8_allreduce_capture_gpu.py on the 8-GPU node. Past 42 tokens the call is tp-allreduce, then fused_add_rms_norm"
   },
   "cublas-bf16-gemm": {
    "status": "port",
