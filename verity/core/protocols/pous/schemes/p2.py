@@ -92,7 +92,8 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - SeqRoot;
 - counter-mode SHA-512 as a random oracle for the keys (v4's, the spec's P2-EXP-IO), or SHAKE256 for v2's segment seeds
   (whose ChaCha8 streams P2-EXP-IO does not name);
-- perfect isolation;
+- the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
+  held plus the help it received, and nothing attests the prover's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier, whose memory challenger runs on a Nebius VM that nothing attests (core's `trusted-nebius-host`)."""
 
