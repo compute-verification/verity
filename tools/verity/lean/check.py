@@ -11,6 +11,10 @@ environment extension loaded, so none of the package's code runs), and replays t
 
     axioms       a declaration of an audited module uses an axiom outside `axioms` (default propext, Classical.choice,
                  Quot.sound): `sorryAx` is a sorry, `Lean.ofReduceBool` or `Lean.trustCompiler` a native_decide
+    unreported   a declaration of an audited module, or of a package `proved_in` names, holds a `sorry` the elaborator
+                 made for an error it did not report (`sorryAx _ true`): its module built with a warning only, and the
+                 proofs it stands for never ran. `lean_changed.py --records` on a spec package audits no proving package
+                 but reads each one's facts, so this fails its fast path as well, where `axioms` does not
     declared     an audited module declares an `axiom` (assumptions are named `Prop`s, taken as hypotheses)
     escapes      a declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
                  `@[extern]`) is not listed in `escapes` with a reason, or a listed one no longer is one
@@ -866,6 +870,18 @@ def definitions(record: dict) -> dict:
     return d if isinstance(d, dict) else dict.fromkeys(d)
 
 
+def unreported(facts: dict, where: str = "") -> list[str]:
+    """The `unreported` failures of ``facts``' declarations holding a `sorry` the elaborator made for an error it did not
+    report (`unreported_errors`): their modules built, with only warnings, on proofs that never ran."""
+    names = sorted(e["name"] for e in facts.get("unreported_errors", []))
+    if not names:
+        return []
+    more = f" and {len(names) - 8} more" if len(names) > 8 else ""
+    return [f"unreported: {where}{', '.join(names[:8])}{more} hold a `sorry` Lean made for an elaboration error it did not "
+            f"report (`sorryAx _ true`), so the build passed on proofs that never ran (a `variable` whose binders use a local "
+            f"notation or macro over section variables is one way; Lean warns only `declaration uses 'sorry'`)"]
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
           ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -882,6 +898,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         names = sorted(n for n in names if n != a)
         more = f" and {len(names) - 8} more" if len(names) > 8 else ""
         fails.append(f"{what}: {a} is used by {', '.join(names[:8])}{more}")
+    fails += unreported(facts)
     for d in facts["declared_axioms"]:
         if not native(d["name"]):
             fails.append(f"declared: `axiom {d['name']}` in {d['module']}; state an assumption as a named Prop, taken as a "
@@ -1465,6 +1482,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                     hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
                 fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "
                              f"read; move the compile-time code or the declarations to another module")
+        fails += unreported(qf, f"{entry}'s ")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)

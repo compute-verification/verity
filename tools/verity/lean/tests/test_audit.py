@@ -232,6 +232,19 @@ def test_sorry_native_decide_and_other_axioms_are_named():
         "declared: `axiom P.magic` in P.Defs; state an assumption as a named Prop, taken as a hypothesis"]
 
 
+def test_a_sorry_for_an_unreported_error_is_named_apart_from_a_written_one():
+    """A build that passes on a `sorryAx _ true` (the `unreported` control's local-notation binder) never ran its proofs; a
+    spec package's fast path audits no proving package, so `proved` names those of each one it reads."""
+    off = [{"name": "P.stub", "module": "P.Thms", "axioms": ["sorryAx"]}, {"name": "P.unrun", "module": "P.Thms", "axioms": ["sorryAx"]}]
+    fails = A.judge(recorded(), facts(offenders=off, unreported_errors=[{"name": "P.unrun", "module": "P.Thms"}]), FILES)[0]
+    assert "sorry: sorryAx is used by P.stub, P.unrun" in fails
+    (u,) = [f for f in fails if f.startswith("unreported:")]
+    assert u.startswith("unreported: P.unrun hold a `sorry` Lean made for an elaboration error it did not report")
+    assert A.unreported(facts(), "../Proofs's ") == []
+    assert A.unreported(facts(unreported_errors=[{"name": "Q.x", "module": "Q"}]), "../Proofs's ")[0].startswith(
+        "unreported: ../Proofs's Q.x hold")
+
+
 def test_escapes_must_be_listed_and_listed_ones_must_exist():
     esc = [{"name": "P.loop", "module": "P.Defs", "why": ["opaque"]}]
     fails = A.judge(recorded(), facts(escapes=esc), FILES)[0]
