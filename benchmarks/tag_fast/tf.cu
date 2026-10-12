@@ -392,6 +392,10 @@ __device__ __forceinline__ uint4 ldw(const uint4* p) {
   return v;
 }
 
+__device__ __forceinline__ void prefetch_l2(const void* p, uint32_t bytes) {
+  asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(p), "r"(bytes) : "memory");
+}
+
 __device__ __forceinline__ int ld_acquire(const int* p) {
   int v;
   asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
@@ -1018,7 +1022,7 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
                                             uint64_t jbase, unsigned int* __restrict__ xr, const Tail tl = Tail{},
                                             uint4* __restrict__ cvo = nullptr, uint2* __restrict__ dout = nullptr,
                                             const int* wait_ctr = nullptr, int wait_n = 0, int* done_ctr = nullptr,
-                                            unsigned long long* trace = nullptr, bool early = false) {
+                                            unsigned long long* trace = nullptr, int l2q = 0) {
   static_assert(!DF || (MODE == MODE_TAGS && PD == 1 && !PK), "deferred ends: tags, one quad ahead");
   static_assert(DF || !DOWN, "own ends deferred only in a deferring launch");
   static_assert(!NE || (MODE == MODE_SINK && !DF && !PK), "no chunk ends: a sink diagnostic");
@@ -1040,9 +1044,9 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
     atomicMin(trace + TR_START_MIN, t);
     atomicMax(trace + TR_START_MAX, t);
   }
-  if (done_ctr && early) asm volatile("griddepcontrol.launch_dependents;");
 #pragma unroll
   for (int p = 0; p < PD; ++p) load(buf[p], p);
+  if (l2q && lane == 0 && PD < NQ) prefetch_l2(wp + 4 * PD * LANES, QUAD_BYTES * min(l2q, NQ - PD));
   if (wait_ctr) {
     if (threadIdx.x == 0)
       while (ld_acquire(wait_ctr) < wait_n) __nanosleep(32);
@@ -1096,6 +1100,7 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
       const int qd = qb + v;
       if (NQ % DEPTH == 0 || qd < NQ) {
         if (qd + PD < NQ) load(buf[(v + PD) % DEPTH], qd + PD);
+        if (l2q && lane == 0 && qd + PD + l2q < NQ) prefetch_l2(wp + 4 * (qd + PD + l2q) * LANES, QUAD_BYTES);
         step(buf[v], qd);
         if constexpr (DF) {
           const int p = qd - 1, ji = p / TailJob<V, L>::PHASES, pw = gw + ji * gws;
@@ -1115,7 +1120,7 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
     atomicMin(trace + TR_LOOP_MIN, t);
     atomicMax(trace + TR_LOOP_MAX, t);
   }
-  if (done_ctr && !early) asm volatile("griddepcontrol.launch_dependents;");
+  if (done_ctr) asm volatile("griddepcontrol.launch_dependents;");
   if constexpr (GEMM) {
 #pragma unroll
     for (int j = 0; j < NB8; ++j) {
@@ -1171,16 +1176,16 @@ __global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict
 }
 
 // fused3_kernel in a chain of programmatic dependent launches: it reads x once *wait_ctr reaches wait_n (the CTAs of
-// the launch before it that have written their y), lets the next launch start after its loop (early: as it starts),
-// counts itself into *done_ctr once its y is written, and before exiting waits for the launch before it to complete
-// (so each launch's completion implies every earlier one's). Its chunk ends overlap the next launch's loads.
+// the launch before it that have written their y), lets the next launch start after its loop, counts itself into
+// *done_ctr once its y is written, and before exiting waits for the launch before it to complete (so each launch's
+// completion implies every earlier one's). Its chunk ends overlap the next launch's loads.
 template <int V, int L, int NB8, int MODE, int PD>
 __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
-                                                          int* done_ctr, unsigned long long* trace, int early) {
+                                                          int* done_ctr, unsigned long long* trace, int l2q) {
   fused3_body<V, L, NB8, MODE, PD>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, nullptr, Tail{}, nullptr, nullptr,
-                                   wait_ctr, wait_n, done_ctr, trace, early != 0);
+                                   wait_ctr, wait_n, done_ctr, trace, l2q);
   asm volatile("griddepcontrol.wait;" ::: "memory");
   if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
 }
@@ -1687,16 +1692,16 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 }
 
 // fused3p_kernel: tf_fused3's g0kr1 (mode GEMM), t4kr1 and t8kr1 (mode tags, lanes 4 or 8) as a link of a chain of
-// programmatic dependent launches (pdl's bit 0; a plain launch without it), letting the next launch start after its
-// loop or, with pdl's bit 1, as it starts. wait_ctr null for the chain's first link; done_ctr counts this launch's
+// programmatic dependent launches (pdl 1; 0 a plain launch). wait_ctr null for the chain's first link; done_ctr counts this launch's
 // CTAs once their y is written, (N / 16 / FW) (Kd / 2,048) of them. occ > 0: at most occ CTAs an SM (dynamic shared
 // memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd some SMs. pd: quads
-// of register prefetch, 1 or 2. trace: null, or this launch's TR_WORDS words.
+// of register prefetch, 1 or 2. l2q > 0: each warp keeps its weights' next l2q quads past those in an L2 prefetch.
+// trace: null, or this launch's TR_WORDS words.
 int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
-               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ,
+               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ, int l2q,
                unsigned long long* trace, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr ||
-      pd < 1 || pd > 2)
+      pd < 1 || pd > 2 || l2q < 0)
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
   using KernP = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, const int*, int,
@@ -1727,11 +1732,11 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
   cfg.stream = st;
   cudaLaunchAttribute attr[1];
   attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attr[0].val.programmaticStreamSerializationAllowed = pdl & 1;
+  attr[0].val.programmaticStreamSerializationAllowed = pdl ? 1 : 0;
   cfg.attrs = attr;
   cfg.numAttrs = 1;
   if (cudaLaunchKernelEx(&cfg, kern, (const uint4*)w, x, y, tags, M, N, Kd, jbase, wait_ctr, wait_n, done_ctr, trace,
-                         (pdl >> 1) & 1))
+                         l2q))
     return 2;
   return cudaGetLastError() ? 2 : 0;
 }
