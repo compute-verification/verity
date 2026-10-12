@@ -790,6 +790,8 @@ struct Args {
   std::vector<size_t> sizes_mib = {16, 32, 48, 56, 60, 64};
   double deadline_us = 0;              // foldlive: fold_live stops this long after it starts (0: never)
   std::vector<int> fold_ctas = {2, 4, 8};  // foldlive: the grids, in whole SMs
+  size_t live_slot = 256u << 10;       // foldlive, foldtwo: the frontier's slot, the bytes a generator writes at a time
+  int mps_challenger_pct = 0, mps_prover_pct = 0;  // foldtwo: each process's CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (0: unset)
 };
 
 static Device dev;
@@ -1790,10 +1792,15 @@ static int mode_fold(const Args& a) {
 // --deadline-us D, fold_live stops D after it starts, and the window certifies the chunks it folded: every fold is
 // either S's (regenerated from K_s) or untouched, and the folds that match are the CTAs' finished steps.  The buffer is
 // evicted from the host's caches before σ; every root is checked against an untimed pass.
+static bool slots_ok(const Args& a) {
+  return a.live_slot >= 1024 && a.live_slot % 1024 == 0 &&
+         std::all_of(a.sizes_mib.begin(), a.sizes_mib.end(), [&](size_t m) { return (m << 20) % a.live_slot == 0; });
+}
+
 static int mode_fold_live(const Args& a) {
-  if (a.live < 1 || a.live + 2 > (int)cpus.size() ||
+  if (a.live < 1 || a.live + 2 > (int)cpus.size() || !slots_ok(a) ||
       std::any_of(a.fold_ctas.begin(), a.fold_ctas.end(), [](int c) { return c < 1 || c > 64; })) {
-    fprintf(stderr, "foldlive takes --live G, G + 2 CPUs and --fold-ctas from 1 to 64\n");
+    fprintf(stderr, "foldlive takes --live G, G + 2 CPUs, --fold-ctas from 1 to 64 and sizes in whole slots\n");
     return 2;
   }
   Store E = make_store(a);
@@ -1808,7 +1815,7 @@ static int mode_fold_live(const Args& a) {
   Spinner publisher(cpus[1 + a.live]);
   size_t nmax = 0;
   for (size_t m : a.sizes_mib) nmax = std::max(nmax, m << 20);
-  const size_t smax = nmax / LIVE_SLOT;
+  const size_t smax = nmax / a.live_slot;
   uint8_t *hm, *hm_dev;
   unsigned long long *frontier, *frontier_dev;
   OK(cudaHostAlloc(&hm, nmax, cudaHostAllocMapped));
@@ -1833,12 +1840,12 @@ static int mode_fold_live(const Args& a) {
   Timer ft;
   const uint64_t deadline_ns = (uint64_t)(a.deadline_us * 1e3);
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
-                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"deadline_us\":" + num(a.deadline_us) +
+                  ",\"live_slot\":" + std::to_string(a.live_slot) + ",\"deadline_us\":" + num(a.deadline_us) +
                   ",\"runs\":[";
   bool first = true;
   for (int ctas : a.fold_ctas)
     for (size_t m : a.sizes_mib) {
-      const size_t n = m << 20, chunks = n / 1024, slots = n / LIVE_SLOT;
+      const size_t n = m << 20, chunks = n / 1024, slots = n / a.live_slot;
       // arm 0 beside the tag pass, 1 alone, 2 alone with S written and the frontier set before σ, 3 fold_chunks over that
       std::vector<double> pass, wall[4], fold_ms[4], landed_mb[4];
       for (int arm = 0; arm < 4; ++arm)
@@ -1866,14 +1873,14 @@ static int mode_fold_live(const Args& a) {
           if (arm == 3)
             fold_chunks<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout);
           else
-            fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, LIVE_SLOT / 1024,
+            fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, a.live_slot / 1024,
                                                  epoch, deadline_ns, dsteps);
           OK(cudaEventRecord(ft.b, s_fold));
           if (arm < 2) {
             for (auto& g : gens)
               g->post([&] {
                 for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
-                  sg_ctr_vaes_nt(gen.rk, k * (LIVE_SLOT / 16), hm + k * LIVE_SLOT, LIVE_SLOT / 16);
+                  sg_ctr_vaes_nt(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot, a.live_slot / 16);
                   done[k].store(epoch, std::memory_order_release);
                 }
               });
@@ -1971,7 +1978,7 @@ static int fold_two_challenger(const Args& a, Two& sh) {
   Spinner publisher(cpus[1 + a.live]);
   size_t nmax = 0;
   for (size_t m : a.sizes_mib) nmax = std::max(nmax, m << 20);
-  const size_t smax = nmax / LIVE_SLOT;
+  const size_t smax = nmax / a.live_slot;
   uint8_t *hm, *hm_dev;
   unsigned long long *frontier, *frontier_dev;
   OK(cudaHostAlloc(&hm, nmax, cudaHostAllocMapped));
@@ -1993,7 +2000,7 @@ static int fold_two_challenger(const Args& a, Two& sh) {
   const uint64_t deadline_ns = (uint64_t)(a.deadline_us * 1e3);
   for (int ctas : a.fold_ctas)
     for (size_t m : a.sizes_mib) {
-      const size_t n = m << 20, chunks = n / 1024, slots = n / LIVE_SLOT;
+      const size_t n = m << 20, chunks = n / 1024, slots = n / a.live_slot;
       for (int arm = 0; arm < 3; ++arm)
         for (int r = 0; r < a.windows; ++r) {
           const uint32_t i = ++w % Two::MAX;
@@ -2017,14 +2024,14 @@ static int fold_two_challenger(const Args& a, Two& sh) {
           sh.ready.store(w, std::memory_order_release);
           await(sh.go, w, 0);
           OK(cudaEventRecord(ft.a, s_fold));
-          fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, LIVE_SLOT / 1024, epoch,
+          fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, a.live_slot / 1024, epoch,
                                                deadline_ns, dsteps);
           OK(cudaEventRecord(ft.b, s_fold));
           sh.launched.store(w, std::memory_order_release);
           for (auto& g : gens)
             g->post([&] {
               for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
-                sg_ctr_vaes_nt(gen.rk, k * (LIVE_SLOT / 16), hm + k * LIVE_SLOT, LIVE_SLOT / 16);
+                sg_ctr_vaes_nt(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot, a.live_slot / 16);
                 done[k].store(epoch, std::memory_order_release);
               }
             });
@@ -2077,8 +2084,10 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
   if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
   const char* mps = getenv("CUDA_MPS_PIPE_DIRECTORY");
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
-                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"deadline_us\":" + num(a.deadline_us) +
-                  ",\"mps\":" + (mps && *mps ? "true" : "false") + ",\"runs\":[";
+                  ",\"live_slot\":" + std::to_string(a.live_slot) + ",\"deadline_us\":" + num(a.deadline_us) +
+                  ",\"mps\":" + (mps && *mps ? "true" : "false") + ",\"mps_challenger_pct\":" +
+                  std::to_string(a.mps_challenger_pct) + ",\"mps_prover_pct\":" + std::to_string(a.mps_prover_pct) +
+                  ",\"runs\":[";
   uint32_t w = 0;
   int bad = 0;
   bool first = true;
@@ -2155,6 +2164,9 @@ int main(int argc, char** argv) {
     else if (k == "--interfere-mib") a.interfere_mib = std::stoull(v());
     else if (k == "--deadline-us") a.deadline_us = std::stod(v());
     else if (k == "--mps-dir") a.mps_dir = v();
+    else if (k == "--live-slot-kib") a.live_slot = std::stoull(v()) << 10;
+    else if (k == "--mps-challenger-pct") a.mps_challenger_pct = std::stoi(v());
+    else if (k == "--mps-prover-pct") a.mps_prover_pct = std::stoi(v());
     else if (k == "--fold-ctas") {
       a.fold_ctas.clear();
       std::stringstream ss(v());
@@ -2176,9 +2188,9 @@ int main(int argc, char** argv) {
   st::Two* two = nullptr;
   pid_t child = -1;
   if (a.mode == "foldtwo") {
-    if (a.live < 1 || a.live + 3 > (int)st::cpus.size() ||
+    if (a.live < 1 || a.live + 3 > (int)st::cpus.size() || !st::slots_ok(a) ||
         std::any_of(a.fold_ctas.begin(), a.fold_ctas.end(), [](int c) { return c < 1 || c > 64; })) {
-      fprintf(stderr, "foldtwo takes --live G, G + 3 CPUs and --fold-ctas from 1 to 64\n");
+      fprintf(stderr, "foldtwo takes --live G, G + 3 CPUs, --fold-ctas from 1 to 64 and sizes in whole slots\n");
       return 2;
     }
     void* p = mmap(nullptr, sizeof(st::Two), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -2187,6 +2199,9 @@ int main(int argc, char** argv) {
     fflush(stdout);
     child = fork();
     if (child < 0) return st::fail("fork");
+    // read by each process's own MPS client at context creation, so the two can hold different shares of the SMs
+    const int pct = child == 0 ? a.mps_challenger_pct : a.mps_prover_pct;
+    if (pct > 0) setenv("CUDA_MPS_ACTIVE_THREAD_PERCENTAGE", std::to_string(pct).c_str(), 1);
   }
   OK(cudaSetDevice(0));
   OK(cudaDeviceGetAttribute(&st::dev.sms, cudaDevAttrMultiProcessorCount, 0));
