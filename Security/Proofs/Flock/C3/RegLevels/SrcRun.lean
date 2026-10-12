@@ -33,7 +33,7 @@ theorem shape_spec {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape? m
     · simp [hf, hc] at h
     · simp [hf, hc] at h
       subst h
-      exact ⟨rfl, hf⟩
+      exact ⟨rfl, rfl⟩
 
 /-- **R's shape is on R's registered schedule** where `ℓ` is in the class's range: `holoAt`'s is `schedAt mReg`, the
 model schedule of `fast100`'s at `mReg`, where `RecOpening.shape?` found R's. -/
@@ -45,9 +45,9 @@ theorem schedOf_holoAt {st : Flock.Stmt} {hp : HoloParams} {cl : ℕ} {sh : Floc
   refine ⟨by rw [hm]; exact hf, ?_⟩
   have e : (holoAt st hp).rsch.sch =
       if hp.EllOk (execClassAt st).cls.kLog then schedAt (holoAt st hp).cls.shape.mReg else default := rfl
-  rw [e, if_pos hell]
+  rw [e, ite_eq_left hell]
   unfold FlockSoundness.Discharge.Recursion.schedAt
-  rw [hf] <;> rfl
+  rw [hf]
 
 /-- **R's opening's algebra** is its claims' ring switches, then Ligerito from the absorbed `T` on their output, then
 the absorbed `T` minus the batched sum. -/
@@ -123,7 +123,7 @@ theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ
   have hcons : consumed rs k₂ c.size = (List.range' k₂ (c.size - k₂)).map (fun i => c[i]!) := by
     unfold consumed
     refine List.map_congr_left fun j hj => ?_
-    obtain ⟨-, hj'⟩ := List.mem_range'_1.mp hj
+    obtain ⟨hj1, hj2⟩ := List.mem_range'_1.mp hj
     exact (hget j (by omega)).2.1
   exact ⟨msId, m, sch, tIn, sws, nc, cap, p, ⟨rs, k₂, ByteArray.empty⟩, ⟨rs, c.size, P'⟩, hf, hsch, hcap, hop, hwf,
     hF rs hfit, hk, hl, hr.trans (congrArg (List.map (coinArr fOf)) hcons.symm), ho⟩

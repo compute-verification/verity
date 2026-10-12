@@ -48,7 +48,7 @@ theorem regTape_of_levelTie {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} (h :
   obtain ⟨msId, m, sch, Tw, sws, nc, cap, p, rt, rt', hf, hsch, hcap, hop, hwf, hlig, hk, hl, hr, ho⟩ := h
   rw [tapeR_runSteps]
   exact ⟨msId, m, sch, Tw, sws, nc, cap, p, rt, rt', u.lg, u.os, hf, hsch, hcap, hop, hwf, hlig,
-    List.prefix_append _ _, hk, hl, hr, by rw [List.drop_left] <;> rfl, ho⟩
+    List.prefix_append _ _, hk, hl, hr, by rw [List.drop_left]; rfl, ho⟩
 
 noncomputable section
 
