@@ -175,6 +175,12 @@ outcome. Spend past a budget line, and moving a part out of what `main`'s passin
 landing is to be automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
 refuses, and the lander handles what it refuses.
 
+Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
+right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
+A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
+whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
+landing.
+
 Until reuse and the merge queue exist:
 
 - The lander lands a change by hand once every part whose declared inputs it touches passes: its test suites
