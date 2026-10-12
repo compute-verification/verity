@@ -7,8 +7,8 @@ Nothing is timed before its gate passed:
 - `gate`: kv_bench's codec gate at every k of `--ks`;
 - `attn_gate`: at each batch x context of `--gate-cells`, with the model's layers, every `kv_attn` form at every split
   count of SPLITS, at layers 0 and L - 1: each encoded form's output equals its plain form's bit for bit (the CUDA-core
-  forms 1 and 2 form 0's, the tensor-core form 4 form 3's), and each plain form is within RTOL of float64 attention
-  over the same bf16 values.
+  forms 1 and 2 form 0's, the tensor-core forms 4 and 5 form 3's, and 7, at the standalone decode's occupancy, its own
+  plain form 6's), and each plain form is within RTOL of float64 attention over the same bf16 values.
 
 Then, at each batch x context of `--cells`, one store holding the cell's whole KV cache (batch x context x layers
 token-layers in kv.py's slot layout, so a layer's call reads 4 KB a token at the slots' stride) of random canonical
@@ -59,10 +59,11 @@ MODELS = {
            "shapes": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}},
     "70b": {"heads": 64, "layers": 80, "shapes": B.SHAPES_70B},
 }
-FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws"}
-PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3}
+FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws",
+         6: "mma-occ-plain", 7: "mma-occ"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6}
 SPLITS = (1, 2, 4, 8, 16)
-RTOL = {0: 1e-3, 3: 8e-3}  # the tensor-core form rounds P to bf16
+RTOL = {0: 1e-3, 3: 8e-3, 6: 8e-3}  # the tensor-core forms round P to bf16
 SPIN = 60_000_000
 WRITE_GRIDS = (0, 1, 2, 4)  # the encode's grid beside the GEMM: a thread a word (0), or this many CTAs an SM
 ENC_SMEM_CARVEOUTS = (100,)  # the encode's preferred shared memory carveout (-1 the driver's choice): the most
@@ -78,8 +79,16 @@ def shape(lib: B.Lib) -> dict:
     return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
 
 
-def forms_of(sh: dict) -> list[int]:
-    return [0, 1, 2] + ([3, 4, 5] if sh["mma"] else [])
+def forms_of(sh: dict, only=None) -> list[int]:
+    return [f for f in [0, 1, 2] + ([3, 4, 5, 6, 7] if sh["mma"] else []) if only is None or f in only]
+
+
+def attn_occ(lib: B.Lib) -> dict:
+    a = (ctypes.c_int * 4)()
+    if lib.so.kv_attn_occ(ctypes.cast(a, ctypes.c_void_p)) != 0:
+        return {}
+    return {FORMS[5]: {"ctas_per_sm": a[0], "decoder_warps_per_sm": a[0] * a[1]},
+            FORMS[7]: {"ctas_per_sm": a[2], "decoder_warps_per_sm": a[2] * a[3]}}
 
 
 def attn_call(lib, st, store, form, q, o, part, b, ctx, layers, layer, splits, k) -> None:
@@ -227,7 +236,7 @@ def floor_occ(lib: B.Lib, torch, store, n_words: int, k: int, sms: int, reps: in
     return {"ok": True, "by_ctas": out}
 
 
-def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sms: int, log) -> dict:
+def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sms: int, log, only=None) -> dict:
     sh, f = shape(lib), lib.field
     heads, layers, tle = sh["heads"], m["layers"], sh["tle"]
     st = B.stream(torch)
@@ -268,7 +277,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     q = (torch.randn(b, heads, K.HEAD_DIM, device="cuda") * 0.1).to(torch.bfloat16).contiguous()
     o = torch.empty(b, heads, K.HEAD_DIM, dtype=torch.float32, device="cuda")
     part = part_buffer(torch, sh, b)
-    for fm in forms_of(sh):
+    for fm in forms_of(sh, only):
         for k in ([1] if fm in RTOL else ks):
             B.set_key(lib, K.key(f.name, B.SEED, k))
             per = {}
@@ -287,7 +296,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
             log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]}" + ("" if fm in RTOL else f" k={k}")
                 + f": a layer {row['s'] * 1e3:.3f} ms at {sp} splits, {row['gbps']:.0f} GB/s, {row['over_read']:.3f}x"
                 " the read")
-    for fm in forms_of(sh):
+    for fm in forms_of(sh, only):
         if fm in RTOL:
             continue
         fe, fp = cell["forms"][FORMS[fm]], cell["forms"][FORMS[PLAIN_OF[fm]]][1]
@@ -304,7 +313,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     cell["floor_fit"] = fit(ks_f, [cell["floor"][k]["over_read"] - 1.0 for k in ks_f])
     log(f"exhaust {lib.name} B={b} ctx={ctx}: overhead a KV byte over the read, " + "; ".join(
         f"{FORMS[fm]} " + ", ".join(f"k={k} {cell['forms'][FORMS[fm]][k]['overhead_vs_read']:+.3f}" for k in ks)
-        for fm in forms_of(sh) if fm not in RTOL) + "; floor " + ", ".join(
+        for fm in forms_of(sh, only) if fm not in RTOL) + "; floor " + ", ".join(
         f"k={k} {cell['floor'][k]['over_read'] - 1:+.3f}" for k in ks_f))
     del store, q, o, part
     torch.cuda.empty_cache()
@@ -462,8 +471,10 @@ def write_result(res: dict, libs, out_dir: Path) -> None:
                 for k, row in rows.items():
                     if isinstance(k, int):
                         ms.append({"name": f"{lib.name}_{name}_{form}_k{k}", "value": row["s"], "unit": "s"})
-    rel = os.path.relpath(out_dir, run_dir)
-    files = [f"{rel}/kv-exhaust.json", f"{rel}/kv.log"]
+    # every process's files, where run.sh's KV_REPEAT runs this script more than once under one run
+    names = ("kv-exhaust.json", "kv.log")
+    files = sorted({os.path.relpath(p, run_dir) for p in (Path(run_dir) / "out").rglob("*") if p.name in names}
+                   | {os.path.relpath(out_dir / n, run_dir) for n in names})
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
                                     "seed": B.SEED.hex()},
@@ -493,6 +504,8 @@ def main() -> int:
     ap.add_argument("--layers", type=int, default=0,
                     help="the cells' and the write side's layers (default: the model's); at 1 a layer's call reads "
                     "contiguous token-layers with the same grid")
+    ap.add_argument("--forms", default="", help="the kv_attn forms the cells time (default all; every gate runs all), "
+                    "each encoded form's plain form among them")
     ap.add_argument("--write-only", action="store_true",
                     help="time the write side only (the cells give the model check's step, not timed)")
     ap.add_argument("--sanitize", action="store_true", help="one tiny gate cell of 2 layers, then stop")
@@ -511,6 +524,9 @@ def main() -> int:
 
     m = dict(MODELS[a.model], layers=a.layers or MODELS[a.model]["layers"])
     ks = [int(v) for v in a.ks.split(",")]
+    only = {int(v) for v in a.forms.split(",") if v} or None
+    if only and any(f in PLAIN_OF and PLAIN_OF[f] not in only for f in only):
+        ap.error("--forms: every encoded form's plain form is timed too")
     libs = [B.Lib(*spec.split("=", 1)) for spec in a.lib]
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
@@ -529,10 +545,13 @@ def main() -> int:
         log("sanitize smoke done" if res["ok"] else "sanitize smoke FAILED")
         return 0 if res["ok"] else 1
     for lib in libs:
+        occ = attn_occ(lib)
+        log(f"occupancy {lib.name}: " + ", ".join(f"{n} {v['ctas_per_sm']} CTAs an SM, {v['decoder_warps_per_sm']} "
+                                                  "decoder warps" for n, v in occ.items()))
         pg = prim_gate(lib, torch, log)
         g = B.gate(lib, torch, ks, 48, 1 << 16, log)
         ag = attn_gate(lib, torch, m, cells_of(a.gate_cells), ks, log)
-        res["libs"][lib.name] = {"prim_gate": pg, "gate": g, "attn_gate": ag}
+        res["libs"][lib.name] = {"occupancy": occ, "prim_gate": pg, "gate": g, "attn_gate": ag}
         res["ok"] &= pg["ok"] and all(v["ok"] for v in g.values()) and all(c["ok"] for c in ag.values())
     if not res["ok"]:
         log("a gate failed: nothing timed")
@@ -552,7 +571,8 @@ def main() -> int:
                 if need + (6 << 30) > props.total_memory:
                     log(f"exhaust {lib.name} B={b} ctx={ctx}: {need / 1e9:.1f} GB doesn't fit; skipped")
                     continue
-                cell = lr["exhaust"][f"b{b}_ctx{ctx}"] = exhaust_cell(lib, torch, m, b, ctx, ks, a.reps, sms, log)
+                cell = lr["exhaust"][f"b{b}_ctx{ctx}"] = exhaust_cell(lib, torch, m, b, ctx, ks, a.reps, sms, log,
+                                                                      only)
                 res["ok"] &= cell["ok"]
             wb = [int(v) for v in a.write_batches.split(",") if v] or sorted({b for b, _ in cells_of(a.cells)})
             if wb:

@@ -949,16 +949,22 @@ __device__ __forceinline__ void mma_load_q(const uint16_t *q, int seq, int g, in
   }
 }
 
-// A warp's 16 tokens at shared address src, nt of them valid (the rest zero, so P V stays finite).
-__device__ __forceinline__ void mma_chunk(unsigned src, const u32 (&qa)[8][2], int lane, int nt, float (&o)[8][4],
-                                          float &m_own, float &l_own) {
+// A warp's 16 tokens at shared address src, nt of them valid (the rest zero, so P V stays finite). SW: the tile's rows
+// are 2 HB bytes, unpadded, and the 16-byte chunk c of token t is stored at chunk c ^ (t & 7) (src a multiple of 8
+// tokens into its tile), so ldmatrix's 8 rows still fall in distinct banks. o holds NMT of the 8 blocks of 16 dims,
+// from block mt0 on.
+template <bool SW = false, int NMT = 8>
+__device__ __forceinline__ void mma_chunk(unsigned src, const u32 (&qa)[8][2], int lane, int nt, float (&o)[NMT][4],
+                                          float &m_own, float &l_own, int mt0 = 0) {
   const int t4 = lane & 3, mi = lane >> 3, r8 = lane & 7;
-  const unsigned row = src + (8 * (mi >> 1) + r8) * MTS + 16 * (mi & 1);
+  const unsigned row = src + (8 * (mi >> 1) + r8) * (SW ? 2 * HB : MTS);
+  const unsigned c0 = SW ? 16 * ((mi & 1) ^ (r8 & 1)) + 32 * (r8 >> 1) : 16 * (mi & 1);
+  const auto at = [&](int c) { return row + (SW ? c0 ^ (32 * c) : c0 + 32 * c); };
   float s[2][4] = {};
 #pragma unroll
   for (int ks = 0; ks < 8; ++ks) {
     u32 b00, b01, b10, b11;
-    ldsm4(row + 32 * ks, b00, b01, b10, b11);
+    ldsm4(at(ks), b00, b01, b10, b11);
     mma16816(s[0], qa[ks][0], 0u, qa[ks][1], 0u, b00, b01);
     mma16816(s[1], qa[ks][0], 0u, qa[ks][1], 0u, b10, b11);
   }
@@ -981,9 +987,9 @@ __device__ __forceinline__ void mma_chunk(unsigned src, const u32 (&qa)[8][2], i
   m_own = m_new;
   const float s0 = __shfl_sync(0xffffffffu, sc, 8 * t4), s1 = __shfl_sync(0xffffffffu, sc, 8 * t4 + 4);
 #pragma unroll
-  for (int mt = 0; mt < 8; ++mt) {
+  for (int mt = 0; mt < NMT; ++mt) {
     u32 a0, a1, a2, a3;
-    ldsm4t(row + HB + 32 * mt, a0, a1, a2, a3);
+    ldsm4t(at(mt0 + mt) + HB, a0, a1, a2, a3);
     o[mt][0] = __fmul_rn(o[mt][0], s0);
     o[mt][1] = __fmul_rn(o[mt][1], s1);
     o[mt][2] = __fmul_rn(o[mt][2], s0);
@@ -992,19 +998,22 @@ __device__ __forceinline__ void mma_chunk(unsigned src, const u32 (&qa)[8][2], i
   }
 }
 
-// A warp's partials: o[h][d] for the group's heads, then their max (finite, -1e30 for no tokens) and sum.
-__device__ __forceinline__ void mma_out(float *op, int g, int lane, const float (&o)[8][4], float m_own, float l_own) {
+// A warp's partials: o[h][d] for the group's heads (o's NMT blocks of 16 dims from mt0 on), then, if ml, their max
+// (finite, -1e30 for no tokens) and sum.
+template <int NMT = 8>
+__device__ __forceinline__ void mma_out(float *op, int g, int lane, const float (&o)[NMT][4], float m_own, float l_own,
+                                        int mt0 = 0, bool ml = true) {
   const int gid = lane >> 2, t4 = lane & 3;
   l_own += __shfl_xor_sync(0xffffffffu, l_own, 1);
   l_own += __shfl_xor_sync(0xffffffffu, l_own, 2);
 #pragma unroll
-  for (int mt = 0; mt < 8; ++mt)
+  for (int mt = 0; mt < NMT; ++mt)
 #pragma unroll
     for (int e = 0; e < 4; ++e) {
-      const int h = 2 * t4 + (e & 1), d = 16 * mt + gid + 8 * (e >> 1);
+      const int h = 2 * t4 + (e & 1), d = 16 * (mt0 + mt) + gid + 8 * (e >> 1);
       if (h < GROUP) op[(g * GROUP + h) * HEAD_DIM + d] = o[mt][e];
     }
-  if (t4 == 0 && gid < GROUP) {
+  if (ml && t4 == 0 && gid < GROUP) {
     op[HEADS * HEAD_DIM + g * GROUP + gid] = l_own > 0.f ? m_own : -1e30f;
     op[HEADS * HEAD_DIM + HEADS + g * GROUP + gid] = l_own;
   }
@@ -1151,6 +1160,92 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
   }
 }
 
+// The warp-specialized form at the standalone decode's occupancy: ODW = 12 decoder warps and the MW MMA warps a CTA, two
+// CTAs an SM at 72 registers, so 24 decoder warps an SM. A decoder lane holds no next word in registers: it loads its
+// word of a tile of OT tokens, decodes it and stores it, and the SM's other warps hide the load, as in decode_kernel.
+// The ring of MNB tiles is unpadded and swizzled (mma_chunk's SW), so two CTAs' rings fit an SM. Each MMA warp folds
+// every chunk of 16 tokens into OMT of the 8 blocks of 16 dims (both compute the scores; the dims split keeps their
+// registers within 72), so a CTA leaves one split's partials. Its plain form (ENC = false) stores the words undecoded,
+// so the two agree bit for bit.
+constexpr int ODW = 12, OT = MMA_OK ? 32 * ODW / HW : 16, OC = OT / 16, OWT = 32 * (ODW + MW), OMT = 8 / MW;
+constexpr int occ_smem() { return MNB * OT * 2 * HB + 2 * MNB * 8 + NL * 4; }
+static_assert(!MMA_OK || (OT % 16 == 0 && WB % 16 == 0), "whole chunks, 16-byte stores");
+
+template <bool ENC>
+__global__ void __launch_bounds__(OWT, 2) attn_occ_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
+                                                         float *__restrict__ part, int ctx, int layers, int layer,
+                                                         int per_split, int splits, int k) {
+  if constexpr (MMA_OK) {
+    constexpr int TB = OT * 2 * HB;
+    extern __shared__ __align__(16) uint8_t sm[];
+    uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * TB), *empty = full + MNB;
+    u32 *td = reinterpret_cast<u32 *>(empty + MNB);
+    const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
+    const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
+    const int ntiles = t1 > t0 ? (t1 - t0 + OT - 1) / OT : 0;
+    const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    if (threadIdx.x == 0) {
+      for (int b = 0; b < MNB; ++b) {
+        mbar_init(full + b, 32 * ODW);
+        mbar_init(empty + b, 32 * MW);
+      }
+      if (ENC) {
+        u32 s[NL];
+        tweak((u64)OT * layers * TLW, s);
+#pragma unroll
+        for (int l = 0; l < NL; ++l) td[l] = s[l];
+      }
+    }
+    __syncthreads();
+    if (w >= MW) {
+      const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
+      const int wi = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
+      const u64 w0 = (((u64)seq * ctx + t0 + t) * layers + layer) * TLW + wi;
+      const u32 *src = reinterpret_cast<const u32 *>(kv) + w0 * NL;
+      const u64 step = (u64)OT * layers * TLW * NL;
+      u32 tw[NL];
+      if (ENC) tweak(w0, tw);
+      uint8_t *row = sm + t * 2 * HB;
+#pragma unroll 1
+      for (int tile = 0; tile < ntiles; ++tile, src += step) {
+        const int nt = min(OT, t1 - t0 - tile * OT);
+        u32 x[NL];
+        if (ENC && tile) tweak_step(tw, td);
+        if (t < nt) {
+          ldg_word(src, x);
+          if (ENC) decode_word_t(x, tw, k);
+        } else {
+#pragma unroll
+          for (int l = 0; l < NL; ++l) x[l] = 0u;
+        }
+        if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
+        uint8_t *dst = row + (tile % MNB) * TB;
+#pragma unroll
+        for (int c = 0; c < WB / 16; ++c)
+          *reinterpret_cast<uint4 *>(dst + 16 * ((WB / 16 * j + c) ^ (t & 7))) =
+              make_uint4(x[4 * c], x[4 * c + 1], x[4 * c + 2], x[4 * c + 3]);
+        mbar_arrive(full + tile % MNB);
+      }
+      return;
+    }
+    u32 qa[8][2];
+    float o[OMT][4] = {};
+    float m_own = -INFINITY, l_own = 0.f;
+    mma_load_q(q, seq, g, lane, qa);
+#pragma unroll 1
+    for (int tile = 0; tile < ntiles; ++tile) {
+      const int b = tile % MNB, nt = min(OT, t1 - t0 - tile * OT);
+      mbar_wait(full + b, (tile / MNB) & 1);
+#pragma unroll 1
+      for (int c = 0; c < OC && nt > 16 * c; ++c)
+        mma_chunk<true, OMT>(smem_u32(sm + b * TB + 16 * c * 2 * HB), qa, lane, min(16, nt - 16 * c), o, m_own, l_own,
+                             OMT * w);
+      mbar_arrive(empty + b);
+    }
+    mma_out<OMT>(part + (size_t)sq * PART, g, lane, o, m_own, l_own, OMT * w, w == 0);
+  }
+}
+
 // A block a sequence's head: warp w folds splits w, w + CW, ... online, a lane 4 dims, and the warps' folds merge in
 // shared memory. Every split holds at least one token, so warp 0's max is finite.
 constexpr int CW = 8;
@@ -1290,18 +1385,33 @@ void kv_attn_shape(int *out) {
   out[6] = kv::PART; out[7] = kv::MW; out[8] = kv::MMA_OK; out[9] = kv::MT;
 }
 
+// The CTAs an SM the occupancy calculator grants kv_attn's tensor-core forms 5 and 7 (warp-specialized, and at the
+// decode's occupancy), and their decoder warps a CTA: out[0..3].
+int kv_attn_occ(int *out) {
+  if (!kv::MMA_OK) return -2;
+  cudaFuncSetAttribute(kv::attn_mma_ws_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mws_smem());
+  cudaFuncSetAttribute(kv::attn_occ_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::occ_smem());
+  cudaFuncSetAttribute(kv::attn_occ_kernel<true>, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(out, kv::attn_mma_ws_kernel, kv::MWT, kv::mws_smem());
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(out + 2, kv::attn_occ_kernel<true>, kv::OWT, kv::occ_smem());
+  out[1] = kv::MDW;
+  out[3] = kv::ODW;
+  return launched();
+}
+
 // One layer's decode attention for `batch` sequences of `ctx` tokens (attn_kernel's layout): kv plain (encoded = 0) or
 // its words (encoded = 1, k rounds; encoded = 2 the warp-specialized form, the same output); on the tensor cores,
-// encoded = 3 plain, 4 its words and 5 its words in the warp-specialized form (4 and 5 the same output as 3, not as 0).
+// encoded = 3 plain, 4 its words and 5 its words in the warp-specialized form (4 and 5 the same output as 3, not as 0);
+// encoded = 6 the tensor-core form at the decode's occupancy, plain, and 7 its words (the same output as 6).
 // q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
 // splits * kv_attn_shape's out[6] floats (times out[7] from 3 on). The tokens are split into at most `splits` ranges of
 // whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
-  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 5 ||
-      (encoded != 0 && encoded != 3 && (k < 1 || k > kv::KMAX)))
+  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 7 ||
+      (encoded != 0 && encoded != 3 && encoded != 6 && (k < 1 || k > kv::KMAX)))
     return -1;
-  const int tile = encoded >= 3 ? kv::MT : kv::TT;
+  const int tile = encoded >= 6 ? kv::OT : encoded >= 3 ? kv::MT : kv::TT;
   const int per = (ctx + splits - 1) / splits, per_split = (per + tile - 1) / tile * tile;
   const int sp = (ctx + per_split - 1) / per_split;
   const auto *p = static_cast<const uint8_t *>(kv_);
@@ -1312,16 +1422,23 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
       cudaFuncSetAttribute(kv::attn_mma_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mma_smem());
       cudaFuncSetAttribute(kv::attn_mma_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mma_smem());
       cudaFuncSetAttribute(kv::attn_mma_ws_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mws_smem());
+      for (auto *f : {kv::attn_occ_kernel<true>, kv::attn_occ_kernel<false>}) {
+        cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::occ_smem());
+        cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+      }
       set = true;
     }
     const int grid = batch * sp * kv::KV_HEADS;
-    if (encoded == 5)
+    if (encoded >= 6)
+      (encoded == 7 ? kv::attn_occ_kernel<true> : kv::attn_occ_kernel<false>)<<<grid, kv::OWT, kv::occ_smem(), s>>>(
+          p, q, part, ctx, layers, layer, per_split, sp, k);
+    else if (encoded == 5)
       kv::attn_mma_ws_kernel<<<grid, kv::MWT, kv::mws_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
     else if (encoded == 4)
       kv::attn_mma_kernel<true><<<grid, kv::MTH, kv::mma_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
     else
       kv::attn_mma_kernel<false><<<grid, kv::MTH, kv::mma_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
-    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
+    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, encoded >= 6 ? sp : sp * kv::MW);
     return launched();
   }
   if (encoded == 2) {
