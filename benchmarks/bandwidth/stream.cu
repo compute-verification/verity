@@ -26,6 +26,8 @@
 //           64th piece, which must fail both; the verifier's openings timed.  With --live G the challenger generates S
 //           only after σ, on G pinned threads in LIVE_SLOT slots taken in order, and each piece (--first-piece doubling
 //           to --piece) is copied once its slots are written; every byte sent is checked against S regenerated from K_s
+//   fold    what a zero-copy absorb with a cheap leaf (each 1 KiB chunk's XOR, fold_chunks) costs the tag pass, over
+//           grids from a few whole SMs to one warp on every SM; every fold checked against the host's
 
 #include "tagger.cu"
 
@@ -185,6 +187,36 @@ __global__ void read_any(const uint4* __restrict__ p, uint64_t n16, uint32_t* si
 #pragma unroll
   for (int d = 16; d; d >>= 1) acc ^= __shfl_xor_sync(0xffffffffu, acc, d);
   if ((threadIdx.x & 31) == 0) atomicXor(sink, acc);
+}
+
+// A leaf far cheaper than BLAKE3, for `fold`: out[c] = the XOR of 1 KiB chunk c's 64 uint4, read from p (mapped host
+// memory) by one warp, four chunks (eight loads a lane) in flight.
+__global__ void fold_chunks(const uint4* __restrict__ p, uint64_t chunks, uint4* __restrict__ out) {
+  const uint32_t lane = threadIdx.x & 31;
+  const uint64_t warp = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5;
+  const uint64_t warps = ((uint64_t)gridDim.x * blockDim.x) >> 5;
+  for (uint64_t c0 = 4 * warp; c0 < chunks; c0 += 4 * warps) {
+    uint4 v[4];
+#pragma unroll
+    for (int k = 0; k < 4; ++k) {
+      v[k] = make_uint4(0, 0, 0, 0);
+      if (c0 + k < chunks) {
+        const uint4 x = __ldcs(p + (c0 + k) * 64 + lane), y = __ldcs(p + (c0 + k) * 64 + 32 + lane);
+        v[k] = make_uint4(x.x ^ y.x, x.y ^ y.y, x.z ^ y.z, x.w ^ y.w);
+      }
+    }
+#pragma unroll
+    for (int k = 0; k < 4; ++k) {
+#pragma unroll
+      for (int d = 16; d; d >>= 1) {
+        v[k].x ^= __shfl_xor_sync(0xffffffffu, v[k].x, d);
+        v[k].y ^= __shfl_xor_sync(0xffffffffu, v[k].y, d);
+        v[k].z ^= __shfl_xor_sync(0xffffffffu, v[k].z, d);
+        v[k].w ^= __shfl_xor_sync(0xffffffffu, v[k].w, d);
+      }
+      if (lane == 0 && c0 + k < chunks) out[c0 + k] = v[k];
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1555,6 +1587,84 @@ static int mode_interfere(const Args& a) {
   return bad ? fail("an interference arm's root or digest") : 0;
 }
 
+// What a zero-copy absorb with a cheap leaf would cost the tag pass: the pass alone, then beside fold_chunks over
+// --interfere-mib of mapped host memory (launched first, at high priority), for grids from a few whole SMs to one
+// warp on every SM; then each grid alone, for its rate.  Every fold is checked against the host's, every root against
+// an untimed pass.
+static int mode_fold(const Args& a) {
+  Store E = make_store(a);
+  int lo, hi;
+  OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t s_tag, s_fold;
+  OK(cudaStreamCreateWithPriority(&s_tag, cudaStreamNonBlocking, lo));
+  OK(cudaStreamCreateWithPriority(&s_fold, cudaStreamNonBlocking, hi));
+  const size_t n = a.interfere_mib << 20, chunks = n / 1024;
+  uint8_t ks[16], seed[32], throwaway[32] = {0}, root[64], want[64];
+  fresh(ks, 16);
+  fresh(seed, 32);
+  Gen gen(ks);
+  uint8_t *hm, *hm_dev;
+  OK(cudaHostAlloc(&hm, n, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&hm_dev, hm, 0));
+  generate(gen, hm, n, a.gen_threads, cpus);
+  std::vector<uint32_t> ref(chunks * 4, 0), got(chunks * 4);
+  for (size_t c = 0; c < chunks; ++c)
+    for (size_t w = 0; w < 256; ++w) ref[4 * c + w % 4] ^= ((const uint32_t*)hm)[256 * c + w];
+  uint4* dout;
+  OK(cudaMalloc(&dout, chunks * 16));
+  if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
+  struct Grid {
+    int ctas, threads;
+  };
+  const std::vector<Grid> grids = {{0, 0},           {4, 1024},         {8, 1024},         {16, 1024},
+                                   {dev.sms, 32},    {dev.sms, 64},     {dev.sms, 128},    {2 * dev.sms, 128}};
+  Timer ft;
+  std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"bytes\":" + std::to_string(n) + ",\"grids\":[";
+  int bad = 0;
+  for (size_t gi = 0; gi < grids.size(); ++gi) {
+    const Grid g = grids[gi];
+    std::vector<double> wall, pass, fold_ms, alone_ms;
+    for (int alone = 0; alone < (g.ctas ? 2 : 1); ++alone)
+      for (int r = 0; r < a.windows; ++r) {
+        bw_tag_pass(bw::TAG_B3, E.E, a.blocks, throwaway, E.ws, root, s_tag);
+        bw_read_scrub(dev.scrub, SCRUB);
+        OK(cudaMemsetAsync(dout, 0, chunks * 16, s_fold));
+        OK(cudaStreamSynchronize(s_fold));
+        const double t0 = now_s();
+        if (g.ctas) {
+          OK(cudaEventRecord(ft.a, s_fold));
+          fold_chunks<<<g.ctas, g.threads, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout);
+          OK(cudaEventRecord(ft.b, s_fold));
+        }
+        if (!alone) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
+        OK(cudaStreamSynchronize(s_fold));
+        const double t1 = now_s();
+        if (!alone) {
+          float tags_ms = 0, pass_ms = 0;
+          bw_last_pass_ms(&tags_ms, &pass_ms);
+          pass.push_back(pass_ms);
+          wall.push_back((t1 - t0) * 1e3);
+          bad += memcmp(root, want, 64) != 0;
+        }
+        if (g.ctas) {
+          (alone ? alone_ms : fold_ms).push_back(ft.ms());
+          OK(cudaMemcpy(got.data(), dout, chunks * 16, cudaMemcpyDeviceToHost));
+          bad += got != ref;
+        }
+      }
+    auto gbs = [&](const std::vector<double>& ms) { return ms.empty() ? 0.0 : n / (median(ms) * 1e-3) / 1e9; };
+    j += std::string(gi ? "," : "") + "{\"ctas\":" + std::to_string(g.ctas) + ",\"threads\":" +
+         std::to_string(g.threads) + ",\"window_ms\":" + stats(wall) + ",\"device_pass_ms\":" + stats(pass) +
+         ",\"fold_ms\":" + stats(fold_ms) + ",\"fold_gbs\":" + num(gbs(fold_ms)) + ",\"fold_alone_ms\":" +
+         stats(alone_ms) + ",\"fold_alone_gbs\":" + num(gbs(alone_ms)) + "}";
+  }
+  j += "],\"bad\":" + std::to_string(bad) + "}";
+  write(a, "fold", j);
+  cudaFree(dout);
+  cudaFreeHost(hm);
+  return bad ? fail("a fold or a root") : 0;
+}
+
 }  // namespace st
 
 int main(int argc, char** argv) {
@@ -1603,6 +1713,7 @@ int main(int argc, char** argv) {
   if (a.mode == "absorb") return st::mode_absorb(a);
   if (a.mode == "window") return st::mode_window(a);
   if (a.mode == "interfere") return st::mode_interfere(a);
+  if (a.mode == "fold") return st::mode_fold(a);
   fprintf(stderr, "unknown mode %s\n", a.mode.c_str());
   return 2;
 }
