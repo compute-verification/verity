@@ -1702,18 +1702,23 @@ int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uin
 }
 
 // The tree's levels 1 … SUB over the leaves [jbase / 16, (jbase + n) / 16) that `ww_sketch_leaves` wrote, while L2
-// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node): `ww_sketch_tree`
-// from level SUB then reads back 64 B a 2^SUB leaves rather than every leaf.
+// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node), in one `node_span`
+// launch: `ww_sketch_tree` from level SUB then reads back 64 B a 2^SUB leaves rather than every leaf.
 int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n, cudaStream_t s) {
   const uint64_t span = 16ull << SUB;
   if (jbase % span || n % span || jbase + n > blocks) return 2;
   if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   if (p.lv.n.size() <= (size_t)SUB) return 2;
-  uint64_t l0 = jbase / 16, c = n / 16;
-  for (int k = 0; k < SUB; ++k, l0 >>= 1, c >>= 1)
-    bw::node_level<<<(unsigned)((c / 2 + 127) / 128), 128, 0, s>>>(p.nodes + (p.lv.off[k] + l0) * 8, c,
-                                                                    p.nodes + (p.lv.off[k + 1] + l0 / 2) * 8);
+  const uint64_t l0 = jbase / 16, c = n / 16;
+  static_assert(SUB <= bw::SPAN, "one node_span launch");
+  bw::Span sp;
+  sp.levels = SUB;
+  for (int t = 0; t <= SUB; ++t) {
+    sp.off[t] = p.lv.off[t] + (l0 >> t);
+    sp.n[t] = c >> t;
+  }
+  bw::node_span<<<(unsigned)((c + 2 * bw::SPAN_THREADS - 1) / (2 * bw::SPAN_THREADS)), bw::SPAN_THREADS, 0, s>>>(p.nodes, sp);
   return cudaGetLastError() ? 4 : 0;
 }
 
