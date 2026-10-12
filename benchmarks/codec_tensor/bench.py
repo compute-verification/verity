@@ -173,9 +173,9 @@ def gate_codec(lib: Lib, torch, k: int, n_words: int, log) -> dict:
     key = W.key(f.name, SEED, k)
     set_key(lib, torch, key)
     rng = random.Random(7 + k + f.n)
-    top = (1 << (8 * f.payload_bytes)) - 1
+    top = f.max_payload
     payloads = [0, 1, 2, top, top - 1, 1 << (8 * f.payload_bytes - 1)]
-    payloads += [rng.getrandbits(8 * f.payload_bytes) for _ in range(n_words - len(payloads))]
+    payloads += [rng.randrange(top + 1) for _ in range(n_words - len(payloads))]
     base = (1 << 40) + 12345
     m = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in payloads))
     store = torch.zeros(n_words * f.word_bytes, dtype=torch.uint8, device="cuda")

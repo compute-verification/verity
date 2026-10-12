@@ -1,5 +1,5 @@
 // Sloth over one wide word on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field, WT_FIELD = n
-// (255, 511, 521, 767, 1023 or 1279; p = 2^n - c as in `wide.FIELDS`).
+// (255, 511, 521, 767, 1023, 1279, or the full-slot 512 and 768; p = 2^n - c as in `wide.FIELDS`).
 //
 // Two squarings mod p:
 //   CUDA cores   a thread per word, NL 32-bit limbs; the square column by column (mad.lo.cc / madc.hi.cc / addc, each
@@ -46,14 +46,22 @@ constexpr u32 CF = 361;
 #elif WT_FIELD == 1279
 constexpr int NBITS = 1279, TW = 52;
 constexpr u32 CF = 1;
+#elif WT_FIELD == 512
+constexpr int NBITS = 512, TW = 128;
+constexpr u32 CF = 569;
+#elif WT_FIELD == 768
+constexpr int NBITS = 768, TW = 86;
+constexpr u32 CF = 825;
 #else
 #error "WT_FIELD is one of wide.FIELDS"
 #endif
-constexpr int NL = (NBITS + 31) / 32, S = (NBITS + 7) / 8, PB = (NBITS - 1) / 8, U = (S + 31) / 32;
+// A full-slot field (32 | n) has no spare top bits: values are lazy below 2^n, and the payload is the whole word.
+constexpr bool FULL_SLOT = NBITS % 32 == 0;
+constexpr int NL = (NBITS + 31) / 32, S = (NBITS + 7) / 8, PB = FULL_SLOT ? S : (NBITS - 1) / 8, U = (S + 31) / 32;
 constexpr int Q = NBITS / 32, R = NBITS % 32;
 constexpr u32 TOPMASK = (1u << R) - 1;
-constexpr bool TC_OK = S == 32 * U;
-static_assert(R > 0 && Q == NL - 1, "the top limb holds bits 32Q .. n - 1");
+constexpr bool TC_OK = S == 32 * U && NBITS == 8 * S - 1;
+static_assert(FULL_SLOT ? Q == NL : (R > 0 && Q == NL - 1), "the top limb holds bits 32Q .. n - 1");
 static_assert(CF % 4 == 1 && CF < 4096, "p = 3 mod 4, c small");
 static_assert(TW * PB >= 8192 && (TW * S) % 16 == 0, "a task's words");
 constexpr int MAXK = 2;
@@ -112,25 +120,45 @@ __device__ __forceinline__ void mul_full(const u32 (&a)[NL], const u32 (&b)[NL],
   t[2 * NL - 1] = c0;
 }
 
-// x = t mod p, lazily: (t mod 2^n) + c (t >> n), twice. t < 2^(2n + 2) gives x < 2^n + 2^25.
+// x = t mod p, lazily: (t mod 2^n) + c (t >> n), twice. t < 2^(2n + 2) gives x < 2^n + 2^25; at full slot, t < 2^(2n)
+// gives x < 2^n, the second fold's carry out of 2^n (then x < c^2) added back as c.
 __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
-  u32 y[NL + 1];
-  u64 carry = 0;
+  if constexpr (FULL_SLOT) {
+    u64 carry = 0;
 #pragma unroll
-  for (int k = 0; k <= NL; ++k) {
-    const u32 nxt = Q + k + 1 < 2 * NL ? t[(Q + k + 1) % (2 * NL)] : 0u;
-    const u32 hi = __funnelshift_r(t[Q + k], nxt, R);
-    const u32 lo = k < Q ? t[k] : (k == Q ? (t[Q] & TOPMASK) : 0u);
-    const u64 v = (u64)hi * CF + lo + carry;
-    y[k] = (u32)v;
-    carry = v >> 32;
-  }
-  u64 c = (u64)__funnelshift_r(y[Q], y[Q + 1], R) * CF;
+    for (int k = 0; k < NL; ++k) {
+      const u64 v = (u64)t[NL + k] * CF + t[k] + carry;
+      x[k] = (u32)v;
+      carry = v >> 32;
+    }
+    u64 c = carry * CF;
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    c += k == Q ? (y[Q] & TOPMASK) : y[k];
-    x[k] = (u32)c;
-    c >>= 32;
+    for (int k = 0; k < NL; ++k) {
+      c += x[k];
+      x[k] = (u32)c;
+      c >>= 32;
+    }
+    x[0] += (u32)c * CF;
+  } else {
+    constexpr int QY = Q % NL;
+    u32 y[NL + 1];
+    u64 carry = 0;
+#pragma unroll
+    for (int k = 0; k <= NL; ++k) {
+      const u32 nxt = Q + k + 1 < 2 * NL ? t[(Q + k + 1) % (2 * NL)] : 0u;
+      const u32 hi = __funnelshift_r(t[(Q + k) % (2 * NL)], nxt, R);
+      const u32 lo = k < Q ? t[k] : (k == Q ? (t[QY] & TOPMASK) : 0u);
+      const u64 v = (u64)hi * CF + lo + carry;
+      y[k] = (u32)v;
+      carry = v >> 32;
+    }
+    u64 c = (u64)__funnelshift_r(y[QY], y[QY + 1], R) * CF;
+#pragma unroll
+    for (int k = 0; k < NL; ++k) {
+      c += k == Q ? (y[QY] & TOPMASK) : y[k];
+      x[k] = (u32)c;
+      c >>= 32;
+    }
   }
 }
 
@@ -161,8 +189,13 @@ __device__ __forceinline__ void canon(u32 (&x)[NL]) {
     y[k] = (u32)c;
     c >>= 32;
   }
-  const bool ge = (y[Q] >> R) != 0;
-  y[Q] &= TOPMASK;
+  bool ge;
+  if constexpr (FULL_SLOT) {
+    ge = c != 0;
+  } else {
+    ge = (y[Q % NL] >> R) != 0;
+    y[Q % NL] &= TOPMASK;
+  }
 #pragma unroll
   for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
 }
@@ -186,7 +219,7 @@ __device__ __forceinline__ void submod(const u32 (&a)[NL], const u32 (&b)[NL], u
   }
 }
 
-// x = a + b mod p, a and b canonical.
+// x = a + b mod p, a and b canonical. At full slot a + b may pass 2^n, and is then at least p.
 __device__ __forceinline__ void addmod(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
   u64 c = 0;
 #pragma unroll
@@ -195,7 +228,21 @@ __device__ __forceinline__ void addmod(const u32 (&a)[NL], const u32 (&b)[NL], u
     x[k] = (u32)c;
     c >>= 32;
   }
-  canon(x);
+  if constexpr (FULL_SLOT) {
+    u32 y[NL];
+    u64 d = CF;
+#pragma unroll
+    for (int k = 0; k < NL; ++k) {
+      d += x[k];
+      y[k] = (u32)d;
+      d >>= 32;
+    }
+    const bool ge = (c | d) != 0;
+#pragma unroll
+    for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
+  } else {
+    canon(x);
+  }
 }
 
 __device__ __forceinline__ bool is_zero(const u32 (&x)[NL]) {
@@ -239,11 +286,32 @@ __device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
   y[0] = add_cc(x[0], CF);
 #pragma unroll
   for (int k = 1; k < NL - 1; ++k) y[k] = addc_cc(x[k], 0u);
-  y[NL - 1] = addc(x[NL - 1], 0u);
-  const bool ge = (y[Q] >> R) != 0;
-  y[Q] &= TOPMASK;
+  bool ge;
+  if constexpr (FULL_SLOT) {
+    y[NL - 1] = addc_cc(x[NL - 1], 0u);
+    ge = addc(0u, 0u) != 0;
+  } else {
+    y[NL - 1] = addc(x[NL - 1], 0u);
+    ge = (y[Q % NL] >> R) != 0;
+    y[Q % NL] &= TOPMASK;
+  }
 #pragma unroll
   for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
+}
+
+// x = a + b mod p, a + b < 2p, as addmod.
+__device__ __forceinline__ void addmod_cc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  u32 s[NL], y[NL];
+  s[0] = add_cc(a[0], b[0]);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) s[k] = addc_cc(a[k], b[k]);
+  const u32 co = addc(0u, 0u);
+  y[0] = add_cc(s[0], CF);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) y[k] = addc_cc(s[k], 0u);
+  const bool ge = (co | addc(0u, 0u)) != 0;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : s[k];
 }
 
 // x = a + b, no carry out (a + b < 2^(32 NL)).
@@ -371,8 +439,12 @@ __device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) 
   sqr(y, q);
   canon_cc(q);
   neg_if(q, y[0] & 1);
-  add_nc(q, w, y);
-  canon_cc(y);
+  if constexpr (FULL_SLOT) {
+    addmod_cc(q, w, y);
+  } else {
+    add_nc(q, w, y);
+    canon_cc(y);
+  }
 }
 
 // w = -(c_0 + t) mod p.
@@ -544,7 +616,8 @@ __device__ __forceinline__ void seed_word(u64 id, u32 (&x)[NL]) {
     s ^= s >> 29; s *= 0xBF58476D1CE4E5B9ull; s ^= s >> 32;
     x[k] = (u32)s;
   }
-  x[Q] &= TOPMASK >> 1;
+  if constexpr (FULL_SLOT) x[NL - 1] &= 0x7FFFFFFFu;
+  else x[Q % NL] &= TOPMASK >> 1;
 }
 
 // what 0: `steps` squarings of ILP words a thread (lazy); 1: `steps` decodes of K rounds; 2: `steps` encodes of K rounds.
@@ -1493,8 +1566,8 @@ __host__ __device__ constexpr int fused_smem_bytes(int stages) {
 // word they are padding (TW PB + 3 <= SB, and every word of the task is loaded by now). Words shared with another warp's
 // lane go byte by byte: lane 0's head (its word's first bytes, in the word lane 31 of the warp before owns) and lane
 // 31's tail (unless its word is the task's last).
-constexpr int PAY_E = 4 * NL - PB;                      // y's bytes past the payload
-static_assert(PAY_E >= 1 && PAY_E <= 3 && TW * PB + 3 <= SB, "the payload's last limb and the stage's padding");
+constexpr int PAY_E = 4 * NL - PB;                      // y's bytes past the payload; 0 at full slot
+static_assert(PAY_E == 0 ? PB == S : (PAY_E <= 3 && TW * PB + 3 <= SB), "the payload's last limb and the stage's padding");
 __device__ __forceinline__ u32 top_byte(const u32 (&y)[NL], int b) {   // y's byte b, 4 (NL - 2) <= b < 4 NL
   return ((b >= 4 * (NL - 1) ? y[NL - 1] : y[NL - 2]) >> (8 * (b & 3))) & 0xFFu;
 }
@@ -1505,8 +1578,9 @@ __device__ __forceinline__ void put_payload_w(uint8_t *st, int w, int lane, cons
   u32 yx[NL + 1];
 #pragma unroll
   for (int k = 0; k < NL - 1; ++k) yx[k] = y[k];
-  yx[NL - 1] = (y[NL - 1] & ((1u << (8 * (4 - PAY_E))) - 1u)) | (nxt << (8 * (4 - PAY_E)));
-  yx[NL] = nxt >> (8 * PAY_E);
+  constexpr int E = PAY_E > 0 ? PAY_E : 1;               // unused at full slot
+  yx[NL - 1] = (y[NL - 1] & ((1u << (8 * (4 - E))) - 1u)) | (nxt << (8 * (4 - E)));
+  yx[NL] = nxt >> (8 * E);
   u32 *sw = reinterpret_cast<u32 *>(st) + ((o + d) >> 2);
 #pragma unroll
   for (int k = 0; k < NL; ++k)
@@ -1526,7 +1600,7 @@ __device__ __forceinline__ void put_payload_w(uint8_t *st, int w, int lane, cons
 
 // The decoder warps' loop (fused_kernel's comment). At k = 1 a lane keeps w = -(c_0 + t) in place of its tweak t and
 // steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
-// behind a proxy fence.
+// behind a proxy fence. At full slot a payload is its own word's bytes, so a lane writes it in place without `loaded`.
 template <int K>
 __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
                                              int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
@@ -1553,17 +1627,27 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     yw[0] = 0;
     if (on) {
       load_word_smem(st + w * S, yw);
-      mbar_arrive(loaded + s);
+      if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
       if constexpr (K == 1) decode_word_w(yw, t);
       else decode_word<K>(yw, t);
     }
-    const u32 nxt = __shfl_down_sync(FULL, yw[0], 1);
-    mbar_wait(loaded + lo % stages, (lo / stages) & 1);
-    if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
-    if (on) {
-      put_payload_w(st, w, lane, yw, nxt);
-      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
-      mbar_arrive(decoded + s);
+    if constexpr (PAY_E == 0) {
+      if (on) {
+        uint4 *o = reinterpret_cast<uint4 *>(st + w * S);
+#pragma unroll
+        for (int k = 0; k < NL / 4; ++k) o[k] = make_uint4(yw[4 * k], yw[4 * k + 1], yw[4 * k + 2], yw[4 * k + 3]);
+        asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
+        mbar_arrive(decoded + s);
+      }
+    } else {
+      const u32 nxt = __shfl_down_sync(FULL, yw[0], 1);
+      mbar_wait(loaded + lo % stages, (lo / stages) & 1);
+      if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
+      if (on) {
+        put_payload_w(st, w, lane, yw, nxt);
+        asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
+        mbar_arrive(decoded + s);
+      }
     }
     const bool wrap = w + rem >= TW;
     u32 step[NL], t2[NL];

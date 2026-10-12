@@ -7,7 +7,8 @@
 #     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-codec-tensor \
 #     -- taskset -c 48-95 bash benchmarks/codec_tensor/run.sh
 #
-# ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 521 767 1023 1279") names
+# ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 512 521 767 768 1023
+# 1279") names
 # the builds; BENCH_ARGS passes through to bench.py.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -16,7 +17,7 @@ PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
 CT=benchmarks/codec_tensor
-FIELDS=${FIELDS:-255 511 521 767 1023 1279}
+FIELDS=${FIELDS:-255 511 512 521 767 768 1023 1279}
 B=$(mktemp -d /tmp/codec-tensor.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 declare -A PIDS=()
