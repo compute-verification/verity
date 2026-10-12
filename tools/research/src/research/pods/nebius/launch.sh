@@ -19,6 +19,10 @@
 #                      the weight cache: formatted once, mounted at /workspace; kept by stop and by teardown's delete-vm)
 #   VM                 platform gpu-rtx6000* with preset 8gpu-192vcpu-1744gb; the service account NEBIUS_VM_SA_ID (default the
 #                      launching one; `none` for no lease) is attached so the VM's lease can stop the VM itself
+# Other shapes and regions come from the environment: NEBIUS_VM_NAME, NEBIUS_REGION, NEBIUS_PROJECT_ID, NEBIUS_PLATFORM_PREFIX (cpu-d3,
+# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_FILESYSTEM_ID attaches an
+# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible.  GPU clocks are locked only on
+# gpu-rtx6000.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -56,13 +60,15 @@ ssh_pubkey() {
 
 # render_user_data PUBKEY LEASE_EPOCH: the cloud-init document (scripts gzip+base64 so no YAML quoting can bend them)
 render_user_data() {
-  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch python3 - "$here" "$src/research/pods/sh" <<'PY'
+  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
+    VY_CLOCKS=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0) python3 - "$here" "$src/research/pods/sh" <<'PY'
 import base64, gzip, os, sys
 nebius, sh = sys.argv[1], sys.argv[2]
 def blob(path):
     return base64.b64encode(gzip.compress(open(path, "rb").read(), mtime=0)).decode()
 env = (f"VY_USER={os.environ['VY_USER']}\nVY_DATA_DEVICE_ID={os.environ['VY_DEV']}\nVY_BOOT_LEASE_S=7200\n"
-       f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\nVY_DEADLINE_EPOCH={os.environ['VY_DEADLINE']}\n")
+       f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\nVY_DEADLINE_EPOCH={os.environ['VY_DEADLINE']}\n"
+       f"VY_FS_TAG={os.environ['VY_FS']}\nVY_LOCK_CLOCKS={os.environ['VY_CLOCKS']}\n")
 files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(), mtime=0)).decode()),
          ("/usr/local/sbin/vy-setup", "0755", blob(f"{nebius}/vm_setup.sh")),
          ("/usr/local/sbin/vy-nebius-stop", "0755", blob(f"{nebius}/vm_stop.sh")),
@@ -81,7 +87,7 @@ PY
 # vm_body ... : the instance create request
 vm_body() {
   VB_NAME=$VM_NAME VB_PARENT=$1 VB_PLATFORM=$2 VB_PRESET=$PRESET VB_BOOT=$3 VB_DATA=$4 VB_DEV=$DATA_DEVICE_ID VB_SUBNET=$5 VB_SG=$6 \
-    VB_SA=$7 VB_UD=$8 python3 -c '
+    VB_SA=$7 VB_UD=$8 VB_FS=$FS_ID VB_PRE=$PREEMPTIBLE python3 -c '
 import json, os
 e = os.environ
 spec = {"resources": {"platform": e["VB_PLATFORM"], "preset": e["VB_PRESET"]},
@@ -90,6 +96,10 @@ spec = {"resources": {"platform": e["VB_PLATFORM"], "preset": e["VB_PRESET"]},
         "network_interfaces": [{"name": "eth0", "subnet_id": e["VB_SUBNET"], "ip_address": {}, "public_ip_address": {"static": True},
                                 "security_groups": [{"id": e["VB_SG"]}]}],
         "cloud_init_user_data": e["VB_UD"], "recovery_policy": "RECOVER"}
+if e["VB_FS"]:
+    spec["filesystems"] = [{"attach_mode": "READ_WRITE", "mount_tag": "vy-fs", "existing_filesystem": {"id": e["VB_FS"]}}]
+if e["VB_PRE"] == "1":
+    spec["preemptible"] = {"on_preemption": "STOP", "priority": 3}
 if e["VB_SA"] not in ("", "none"):
     spec["service_account_id"] = e["VB_SA"]
 print(json.dumps({"metadata": {"name": e["VB_NAME"], "parent_id": e["VB_PARENT"], "labels": {"machine": e["VB_NAME"], "project": "verity"}},
