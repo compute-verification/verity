@@ -531,43 +531,82 @@
    "type_hash": "8b09fdd4b0aadf8d320872ec1bd6365d9019b2ff1e5344640ca6dd86f9da4464"
   },
   "Accounting.SecurityProofs.RateChain": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateChain : Accounting.Guarantees.RateChain"],
+   "assumptions": [],
+   "type_hash": "f55c90ec8a0a5d173334fd7798d680ae7b64fb946e3a516f2206592ed4b73802"
   },
   "Accounting.SecurityProofs.RateChainPaid": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateChainPaid : Accounting.Guarantees.RateChainPaid"],
+   "assumptions": [],
+   "type_hash": "45ef9396b0e170a9194cb57c211e946a76b7b6fccb31ca5e15d815740ddd4bb3"
   },
   "Accounting.SecurityProofs.RateChainPaidRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateChainPaidRO : Accounting.Guarantees.RateChainPaidRO"],
+   "assumptions": [],
+   "type_hash": "eb289ba7497ac0c49eed2acf192f88f35e05813ff40e98d5617d3aa13482fb34"
   },
   "Accounting.SecurityProofs.RateChainPass": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateChainPass : Accounting.Guarantees.RateChainPass"],
+   "assumptions": [],
+   "type_hash": "e6d07f1570c2304e915d78b330d7c36cdfc8db77e10737a94ab1d17f260b50ab"
   },
   "Accounting.SecurityProofs.RateChainPassRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateChainPassRO : Accounting.Guarantees.RateChainPassRO"],
+   "assumptions": [],
+   "type_hash": "4efd188070ac1ecea3fa9e51a81add3fe7def4166e8c1442942e71f3229d2bfd"
   },
   "Accounting.SecurityProofs.RateChainRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateChainRO : Accounting.Guarantees.RateChainRO"],
+   "assumptions": [],
+   "type_hash": "5062073541b3f3821231f182b65d1ce4c4b850c18f85bef530cf3cfb6e00db0a"
   },
   "Accounting.SecurityProofs.RateConservation": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateConservation : Accounting.Guarantees.RateConservation"],
+   "assumptions": [],
+   "type_hash": "3f5cf963b60622ac71eb61679950c3f3ce015b3aa598827006c281e236fc97ee"
   },
   "Accounting.SecurityProofs.RateConservationCap": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateConservationCap : Accounting.Guarantees.RateConservationCap"],
+   "assumptions": [],
+   "type_hash": "f94fac17a2c414d06118e41add1538f090d481f194fcafd9e709edfcd6d714f1"
   },
   "Accounting.SecurityProofs.RateConservationCapRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateConservationCapRO : Accounting.Guarantees.RateConservationCapRO"],
+   "assumptions": [],
+   "type_hash": "0f46e2e410485ede0bfdaacf4bf491af71cabf7ea242a0f5a204da8db7140e3f"
   },
   "Accounting.SecurityProofs.RateConservationRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateConservationRO : Accounting.Guarantees.RateConservationRO"],
+   "assumptions": [],
+   "type_hash": "1ea0903fe93cf6fa27dd5d3b8ec6bfab8f4089c89e5ba9b1749c4e04e5f23471"
   },
   "Accounting.SecurityProofs.RateDisplacement": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateDisplacement : Accounting.Guarantees.RateDisplacement"],
+   "assumptions": [],
+   "type_hash": "f786d5015a1f35bdfab2903024f28e420e794ca7591a8e874b4e75921eba1100"
   },
   "Accounting.SecurityProofs.RateGrindPaid": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateGrindPaid : Accounting.Guarantees.RateGrindPaid"],
+   "assumptions": [],
+   "type_hash": "c8c280fa4e05db15ac912e2a054184d1b2cd9001e20e3a483a37b85f7b52a259"
   },
   "Accounting.SecurityProofs.RateGrindPaidRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateGrindPaidRO : Accounting.Guarantees.RateGrindPaidRO"],
+   "assumptions": [],
+   "type_hash": "3bdab97faef190a4d82548574718cab5c5707322b9339b462590644d5e1d43ba"
   },
   "Accounting.SecurityProofs.RateHonest": {
    "owner": "@memory-accounting",
@@ -594,10 +633,16 @@
    "type_hash": "557c36bf12efa927b0be10968ca6e00daddaf5dc1327cb26728585418eb5aa97"
   },
   "Accounting.SecurityProofs.RatePaid": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RatePaid : Accounting.Guarantees.RatePaid"],
+   "assumptions": [],
+   "type_hash": "c71e71a4b3f87b28ffdcd9d6acb3607d1d75a27bbe53d910faabd620a99cab29"
   },
   "Accounting.SecurityProofs.RatePaidRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RatePaidRO : Accounting.Guarantees.RatePaidRO"],
+   "assumptions": [],
+   "type_hash": "bc163df440fa43c23b650f2c7f04f79f26399e90d792a3bf515f6c9e5635448f"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -4560,10 +4605,25 @@
     "Accounting.SecurityProofs.RateAuditInteractive",
     "Accounting.SecurityProofs.RateAuditInteractiveRO",
     "Accounting.SecurityProofs.RateAuditWindows",
+    "Accounting.SecurityProofs.RateChain",
+    "Accounting.SecurityProofs.RateChainPaid",
+    "Accounting.SecurityProofs.RateChainPaidRO",
+    "Accounting.SecurityProofs.RateChainPass",
+    "Accounting.SecurityProofs.RateChainPassRO",
+    "Accounting.SecurityProofs.RateChainRO",
+    "Accounting.SecurityProofs.RateConservation",
+    "Accounting.SecurityProofs.RateConservationCap",
+    "Accounting.SecurityProofs.RateConservationCapRO",
+    "Accounting.SecurityProofs.RateConservationRO",
+    "Accounting.SecurityProofs.RateDisplacement",
+    "Accounting.SecurityProofs.RateGrindPaid",
+    "Accounting.SecurityProofs.RateGrindPaidRO",
     "Accounting.SecurityProofs.RateHonest",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
-    "Accounting.SecurityProofs.RateOfAuditInteractiveRO"
+    "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
+    "Accounting.SecurityProofs.RatePaid",
+    "Accounting.SecurityProofs.RatePaidRO"
    ]
   },
   "Definitions.Accounting.RateAuditInteractive": {
@@ -4611,8 +4671,23 @@
    "guarantees": [
     "Accounting.SecurityProofs.RateAuditInteractive",
     "Accounting.SecurityProofs.RateAuditInteractiveRO",
+    "Accounting.SecurityProofs.RateChain",
+    "Accounting.SecurityProofs.RateChainPaid",
+    "Accounting.SecurityProofs.RateChainPaidRO",
+    "Accounting.SecurityProofs.RateChainPass",
+    "Accounting.SecurityProofs.RateChainPassRO",
+    "Accounting.SecurityProofs.RateChainRO",
+    "Accounting.SecurityProofs.RateConservation",
+    "Accounting.SecurityProofs.RateConservationCap",
+    "Accounting.SecurityProofs.RateConservationCapRO",
+    "Accounting.SecurityProofs.RateConservationRO",
+    "Accounting.SecurityProofs.RateDisplacement",
+    "Accounting.SecurityProofs.RateGrindPaid",
+    "Accounting.SecurityProofs.RateGrindPaidRO",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
-    "Accounting.SecurityProofs.RateOfAuditInteractiveRO"
+    "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
+    "Accounting.SecurityProofs.RatePaid",
+    "Accounting.SecurityProofs.RatePaidRO"
    ]
   },
   "Definitions.Accounting.RateAuditJoint": {
@@ -4625,6 +4700,47 @@
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO"
+   ]
+  },
+  "Definitions.Accounting.RateAuditRemote": {
+   "digest": "414c82d70db6227d8f15a4bb370613098345d75c5dc54d2be6998f9084f02d15",
+   "definitions": {
+    "Accounting.Rate.Chain": "b8a874eb4787f9dbf85a0dcb800ff4fe2d7831a0b2f5db36392c8b3f03b2d47f",
+    "Accounting.Rate.Chain.dev": "515876fb47df64835d5c7e79cb3fad3d93656275ab35430ddb78f5d3ea3346ca",
+    "Accounting.Rate.Chain.device": "c3fc786dfa9cf12a52cae79e3b32033be086ad984738cf7fd9b5e3cde48f3710",
+    "Accounting.Rate.Chain.oracle": "e968685a2f743894af373a75f678ce22852c3bb14cfdfacec972e70061be2bdb",
+    "Accounting.Rate.Chain.root": "63541e9eeca7aab3d4a06ec048da2db71ac304ad88c1a3bf74fdee8a5f50047d",
+    "Accounting.Rate.GrindChain": "85e11cabb59b876222382c0f74cf9a6ebedccc08ad901385e5e4bafd2246429e",
+    "Accounting.Rate.GrindChain.cand": "bcc7b7222cf8ebcd4b4b4f7b07cbd917a980dc47b05ee558d92cd5d76332e63b",
+    "Accounting.Rate.GrindChain.dev": "2b6593e5899f65033e8497b9363f47f459c6a90c59d856f62f42a4360b0261bf",
+    "Accounting.Rate.GrindChain.device": "6d0dc1ab20a69a33609fc8c0184f12a5251ee739e5bb2ecf34d6d24fb1218d14",
+    "Accounting.Rate.GrindChain.kept": "88a5ea70e473cff45d89e37b581850d1178882a9a0d9137241a6b873196d5ba8",
+    "Accounting.Rate.GrindChain.oracle": "989f6491253cd1b8bb8d82a73f41fed71f07e52e720c6c68203d4384b1d4d1bb",
+    "Accounting.Rate.GrindChain.pick": "5042ef5432ad77fe05181c3b0d8eae2ea22b1b66eb21c5976f8c846259ee942d",
+    "Accounting.Rate.IChip.tierBits": "e7ffb30aa1b6472b08f1d3aa88e13b2184a08eaee477619cd75cc624a1df0b45",
+    "Accounting.Rate.InteractiveDevice.TierCapped": "805f881307461f7dbe6f9f8f08c97e96405c337a951d1ea058f46e16f615575b",
+    "Accounting.Rate.InteractiveDevice.correct": "98ea34a3a1736211e690a06152d3c5b33722fa3b82d8b54a72c13e4f5a2c5a10",
+    "Accounting.Rate.InteractiveDevice.rebuilt": "0d528c3669784140d503eadef34ad528c679b768e7eb664234b452d0dcff568c",
+    "Accounting.Rate.InteractiveDevice.tierReads": "386f7d0398e6436de4204ba5de43f6f7e557f195440040af04caa6847b5f6a83",
+    "Accounting.Rate.PassCoins": "b6a34a5ee781ca56963af6c4480085326512ae04e2df82d179ac9d2e2195853e",
+    "Accounting.Rate.instFintypePassCoins": "8a08fc29342c632c72d82e9f7bdfd822ea8c878b7d6b58c6d421ecdb8582a01c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RateChain",
+    "Accounting.SecurityProofs.RateChainPaid",
+    "Accounting.SecurityProofs.RateChainPaidRO",
+    "Accounting.SecurityProofs.RateChainPass",
+    "Accounting.SecurityProofs.RateChainPassRO",
+    "Accounting.SecurityProofs.RateChainRO",
+    "Accounting.SecurityProofs.RateConservation",
+    "Accounting.SecurityProofs.RateConservationCap",
+    "Accounting.SecurityProofs.RateConservationCapRO",
+    "Accounting.SecurityProofs.RateConservationRO",
+    "Accounting.SecurityProofs.RateDisplacement",
+    "Accounting.SecurityProofs.RateGrindPaid",
+    "Accounting.SecurityProofs.RateGrindPaidRO",
+    "Accounting.SecurityProofs.RatePaid",
+    "Accounting.SecurityProofs.RatePaidRO"
    ]
   },
   "Definitions.Accounting.RateAuditSketch": {
@@ -5193,10 +5309,25 @@
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
     "Accounting.SecurityProofs.RateAuditWindows",
+    "Accounting.SecurityProofs.RateChain",
+    "Accounting.SecurityProofs.RateChainPaid",
+    "Accounting.SecurityProofs.RateChainPaidRO",
+    "Accounting.SecurityProofs.RateChainPass",
+    "Accounting.SecurityProofs.RateChainPassRO",
+    "Accounting.SecurityProofs.RateChainRO",
+    "Accounting.SecurityProofs.RateConservation",
+    "Accounting.SecurityProofs.RateConservationCap",
+    "Accounting.SecurityProofs.RateConservationCapRO",
+    "Accounting.SecurityProofs.RateConservationRO",
+    "Accounting.SecurityProofs.RateDisplacement",
+    "Accounting.SecurityProofs.RateGrindPaid",
+    "Accounting.SecurityProofs.RateGrindPaidRO",
     "Accounting.SecurityProofs.RateHonest",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
+    "Accounting.SecurityProofs.RatePaid",
+    "Accounting.SecurityProofs.RatePaidRO",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditRO",
@@ -13163,6 +13294,43 @@
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO"
+   ]
+  },
+  "Models.Accounting.Guarantees.RateAuditRemote": {
+   "digest": "2b2691b2944f96a7d22fdab415ffdc73c1bc0514cb51c410537bb29a079d2ae0",
+   "definitions": {
+    "Accounting.Guarantees.RateChain": "accb3eac1eb22a83aa052d449003850e347b059ec22899e484964722391c9638",
+    "Accounting.Guarantees.RateChainPaid": "1e3f80d2418a7beb9c2e4c95406ade42d7c59fcaf61cce0f1aa17f6d8408348c",
+    "Accounting.Guarantees.RateChainPaidRO": "adcc9f24a8975b83eee34bbf58cf377c1d83ba99122572864c95a4bc5eec23af",
+    "Accounting.Guarantees.RateChainPass": "8e0fe5879c8d437b9ca0f4d99767088f18bad26af6ccc8c3241873b93bd23185",
+    "Accounting.Guarantees.RateChainPassRO": "c2b77b5bf2cc7642e4de4eb4af2050c2f8586b9f9e29fd73f978051a0aeff36d",
+    "Accounting.Guarantees.RateChainRO": "561db5903819b77f5e7a2b474d2ac0788dfb10a248f644543b6d797adc5e560e",
+    "Accounting.Guarantees.RateConservation": "7c5c373bb661bff7870a6a8f0d150ad0116f186f106900396d241907c8c803a2",
+    "Accounting.Guarantees.RateConservationCap": "e546047fe077b711ed8b767a9972ab6ff3e6ab3e335a78e673f4b163bc3fa696",
+    "Accounting.Guarantees.RateConservationCapRO": "a844db2b7f612b2046cf31250522111a5cde17a971abfb2282dbcfeb69e51a9a",
+    "Accounting.Guarantees.RateConservationRO": "2148612c2a33c6d638e5d8618f38d94503ff36ca682068d9170ff5eebee8e3bc",
+    "Accounting.Guarantees.RateDisplacement": "70bb7348f57ae2dd526e2384c8f90c50ec8d30bccf52325f14f9ab9906f67c48",
+    "Accounting.Guarantees.RateGrindPaid": "f7caf70a561892c265a6f24f58fb6804a5b189f6d0ecfa48bd73927d909d1103",
+    "Accounting.Guarantees.RateGrindPaidRO": "076999bf6adb1c6b4c4a870c57153078df35ce2486844cadbed7c5051e904739",
+    "Accounting.Guarantees.RatePaid": "440905c7431e93d8ec8c62568601511556c37a1539c4ba3445503c039328b8e6",
+    "Accounting.Guarantees.RatePaidRO": "5d85664e3d0f3eb3a5b5032fdb8cdd2d05691b2e6abb2251a7d944625703b9a4"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RateChain",
+    "Accounting.SecurityProofs.RateChainPaid",
+    "Accounting.SecurityProofs.RateChainPaidRO",
+    "Accounting.SecurityProofs.RateChainPass",
+    "Accounting.SecurityProofs.RateChainPassRO",
+    "Accounting.SecurityProofs.RateChainRO",
+    "Accounting.SecurityProofs.RateConservation",
+    "Accounting.SecurityProofs.RateConservationCap",
+    "Accounting.SecurityProofs.RateConservationCapRO",
+    "Accounting.SecurityProofs.RateConservationRO",
+    "Accounting.SecurityProofs.RateDisplacement",
+    "Accounting.SecurityProofs.RateGrindPaid",
+    "Accounting.SecurityProofs.RateGrindPaidRO",
+    "Accounting.SecurityProofs.RatePaid",
+    "Accounting.SecurityProofs.RatePaidRO"
    ]
   },
   "Models.Accounting.Guarantees.RateAuditSketch": {
