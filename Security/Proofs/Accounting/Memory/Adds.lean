@@ -5,13 +5,14 @@ import Models.Accounting.Guarantees.Memory
 /-!
 # Memory adds: the composition with PoUS's guarantee
 
-Fix `z`. Before challenge `j` the location's state lies in the fibre of `z` under `π j`. When each of the `c` fibres
-has at most `2^S` states, each is coded into `S` bits (`exists_code`), and the location's adversary, run through the
-codes, is an `S`-bit PoUS adversary with the same answers (`seqAnswers_code`): its program maps the old one's output
-(`progMap`), so it makes the same queries in the same rounds, and its bound is the old one's. PoUS's guarantee then
-bounds its acceptance by `δ + ε`. By the counting core, a uniform `z` has a fibre above `2^(M − q + k) ≤ 2^S` at a
-given round with probability at most `2^-k`, so at some one of the `c` rounds with probability at most `c · 2^-k`
-(`pr_heavy_le`, `adds_core`).
+Fix `z`. Before challenge `j` the location's state, `N = M + H` bits with its help, lies in the fibre of `z` under
+`π j`. When each of the `c` fibres has at most `2^S` states, each is coded into `S` bits (`exists_code`), and the
+location's adversary, run through the codes, is an `S`-bit PoUS adversary with the same answers (`seqAnswers_code`,
+along the states the audit reaches): its program maps the old one's output (`progMap`), so it makes the same queries in
+the same rounds, and its bound is the old one's. PoUS's guarantee then bounds its acceptance by `δ + ε`. By the
+counting core, a uniform `z` has a fibre above `2^(N − q + k) ≤ 2^S` at a given round with probability at most
+`2^-k`, so at some one of the `c` rounds with probability at most `c · 2^-k` (`pr_heavy_le`, `adds_core`). The
+isolation forms are the general ones at `H = 0`.
 -/
 
 namespace Accounting.MemoryProofs
@@ -92,23 +93,26 @@ theorem exists_code {α β : Type} [Nonempty α] [Fintype β] [Nonempty β] (s :
   · exact ⟨fun _ => Classical.arbitrary β, fun _ => Classical.arbitrary α, fun h => absurd h hs⟩
 
 /-- **The coded responder answers as the location does.** Run through codes `e j` that `d j` inverts on the states
-reading back as `z` before challenge `j < c`, from the code of such a state, the responder returns the same blocks. -/
-theorem seqAnswers_code {I : IdealModel} {ℓ M S q B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Bits M → Fin B → Prog I (Bits ℓ × Bits M)) (π : ℕ → Bits M → Bits q) (z : Bits q) (c : ℕ)
-    (e : ℕ → Bits M → Bits S) (d : ℕ → Bits S → Bits M)
-    (hed : ∀ j < c, ∀ σ, π j σ = z → d j (e j σ) = σ)
-    (hstep : ∀ j σ i, j + 1 < c → π j σ = z → π (j + 1) ((step j σ i).run f).2 = z) :
-    ∀ (is : List (Fin B)) (j : ℕ) (σ : Bits M), j + is.length ≤ c → (is ≠ [] → π j σ = z) →
+reading back as `z` before challenge `j < c`, from the code of a state whose run reads back as `z` before each
+challenge, the responder returns the same blocks. -/
+theorem seqAnswers_code {I : IdealModel} {ℓ N S q B : ℕ} (f : I.Qry → I.Ans)
+    (step : ℕ → Bits N → Fin B → Prog I (Bits ℓ × Bits N)) (π : ℕ → Bits N → Bits q) (z : Bits q) (c : ℕ)
+    (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N)
+    (hed : ∀ j < c, ∀ σ, π j σ = z → d j (e j σ) = σ) :
+    ∀ (is : List (Fin B)) (j : ℕ) (σ : Bits N), j + is.length ≤ c →
+      (∀ m < is.length, π (j + m) (Sampled.seqState f step j (is.take m) σ) = z) →
       seqAnswers f (fun j s i => progMap (fun r => (r.1, e (j + 1) r.2)) (step j (d j s) i)) j is (e j σ) =
         seqAnswers f step j is σ
   | [], _, _, _, _ => rfl
   | i :: is, j, σ, hlen, hz => by
-      have hσ := hz (List.cons_ne_nil _ _)
+      have hσ : π j σ = z := by simpa [Sampled.seqState] using hz 0 (by simp)
       simp only [List.length_cons] at hlen
       simp only [seqAnswers, run_progMap, hed j (by omega) σ hσ]
       congr 1
-      exact seqAnswers_code f step π z c e d hed hstep is (j + 1) _ (by omega)
-        fun hne => hstep j σ i (by have := List.length_pos_of_ne_nil hne; omega) hσ
+      refine seqAnswers_code f step π z c e d hed is (j + 1) _ (by omega) fun m hm => ?_
+      have h := hz (m + 1) (by simp only [List.length_cons]; omega)
+      rw [show j + (m + 1) = j + 1 + m by omega, List.take_succ_cons] at h
+      exact h
 
 /-! ## The audit's acceptance at any state width -/
 
@@ -135,16 +139,16 @@ def codedStep {I : IdealModel} {sch : Scheme I} {M S : ℕ}
   fun W pp j s i => progMap (fun r => (r.1, e (j + 1) r.2)) (step W pp j (d j s) i)
 
 /-- Where the codes invert on the fibres of `z`, the coded adversary is accepted exactly when the location's is. -/
-theorem accepts_coded_iff {I : IdealModel} (sch : Scheme I) {M S q : ℕ} (c : ℕ) (W : Bits sch.n)
-    (π : ℕ → Bits M → Bits q) (A₁ : Bits q → Preprocessor sch M)
-    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits M → Fin sch.B → Prog I (Bits sch.ℓ × Bits M))
-    (hdet : Determines sch c π A₁ step) (z : Bits q) (e : ℕ → Bits M → Bits S) (d : ℕ → Bits S → Bits M)
+theorem accepts_coded_iff {I : IdealModel} (sch : Scheme I) {N S q : ℕ} (c : ℕ) (W : Bits sch.n)
+    (π : ℕ → Bits N → Bits q) (A₁ : Bits q → Preprocessor sch N)
+    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
+    (hdet : Determines sch c W π A₁ step) (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N)
     (hed : ∀ j < c, ∀ σ, π j σ = z → d j (e j σ) = σ) (x : Outcome sch c) :
     accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d) x ↔ accepts sch c W (A₁ z) (step z) x := by
-  have h := seqAnswers_code (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) π z c e d hed
-    (fun j σ i hj hσ => hdet.2 z W x.1 x.2.1 j σ i hj hσ) (List.ofFn x.2.2) 0
-    (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) (by simp)
-    (fun hne => hdet.1 (by simpa using List.length_pos_of_ne_nil hne) z W x.1 x.2.1)
+  have h := seqAnswers_code (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) π z c e d hed (List.ofFn x.2.2) 0
+    (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) (by simp) fun m hm => by
+      rw [Nat.zero_add]
+      exact hdet z x m (by simpa using hm)
   exact iff_of_eq (congrArg (· = List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) h)
 
 /-! ## Markov and the union over the challenges -/
@@ -167,26 +171,26 @@ theorem pr_heavy_le {M q : ℕ} (π : Bits M → Bits q) (k : ℕ) :
 
 /-- **Memory adds, in general.** If every coded adversary is accepted with probability at most `η`, the location's
 adversary, with a uniform `z`, is accepted with probability at most `η + c · 2^-k`. -/
-theorem adds_core {I : IdealModel} (sch : Scheme I) {M q : ℕ} (S c k : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
-    (π : ℕ → Bits M → Bits q) (A₁ : Bits q → Preprocessor sch M)
-    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits M → Fin sch.B → Prog I (Bits sch.ℓ × Bits M))
-    (hdet : Determines sch c π A₁ step) (hMS : M + k ≤ S + q)
-    (hsec : ∀ (z : Bits q) (e : ℕ → Bits M → Bits S) (d : ℕ → Bits S → Bits M),
+theorem adds_core {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
+    (π : ℕ → Bits N → Bits q) (A₁ : Bits q → Preprocessor sch N)
+    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
+    (hdet : Determines sch c W π A₁ step) (hNS : N + k ≤ S + q)
+    (hsec : ∀ (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N),
       pr (accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d)) ≤ η) :
     pr (fun x : Bits q × Outcome sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k := by
   classical
-  have hbad : pr (fun z : Bits q => ∃ j ∈ Finset.range c, 2 ^ (M + k - q) < (fibre (π j) z).card) ≤
+  have hbad : pr (fun z : Bits q => ∃ j ∈ Finset.range c, 2 ^ (N + k - q) < (fibre (π j) z).card) ≤
       c * (2⁻¹ : ℝ≥0∞) ^ k := by
     refine (PousThm1.pr_exists_le _ _).trans ?_
-    calc ∑ j ∈ Finset.range c, pr (fun z : Bits q => 2 ^ (M + k - q) < (fibre (π j) z).card)
+    calc ∑ j ∈ Finset.range c, pr (fun z : Bits q => 2 ^ (N + k - q) < (fibre (π j) z).card)
         ≤ ∑ _j ∈ Finset.range c, (2⁻¹ : ℝ≥0∞) ^ k := Finset.sum_le_sum fun j _ => pr_heavy_le (π j) k
       _ = c * (2⁻¹ : ℝ≥0∞) ^ k := by rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
-  have hgood : ∀ z, ¬ (∃ j ∈ Finset.range c, 2 ^ (M + k - q) < (fibre (π j) z).card) →
+  have hgood : ∀ z, ¬ (∃ j ∈ Finset.range c, 2 ^ (N + k - q) < (fibre (π j) z).card) →
       pr (accepts sch c W (A₁ z) (step z)) ≤ η := by
     intro z hz
     have hcard : ∀ j < c, (fibre (π j) z).card ≤ Fintype.card (Bits S) := by
       intro j hj
-      calc (fibre (π j) z).card ≤ 2 ^ (M + k - q) := not_lt.1 fun h => hz ⟨j, Finset.mem_range.2 hj, h⟩
+      calc (fibre (π j) z).card ≤ 2 ^ (N + k - q) := not_lt.1 fun h => hz ⟨j, Finset.mem_range.2 hj, h⟩
         _ ≤ 2 ^ S := Nat.pow_le_pow_right (by norm_num) (by omega)
         _ = Fintype.card (Bits S) := by simp [Bits]
     choose e d hed using fun j => exists_code (β := Bits S) (fibre (π j) z)
@@ -197,7 +201,7 @@ theorem adds_core {I : IdealModel} (sch : Scheme I) {M q : ℕ} (S c k : ℕ) (�
     rw [heq]
     exact hsec z e d
   calc pr (fun x : Bits q × Outcome sch c => accepts sch c W (A₁ x.1) (step x.1) x.2)
-      ≤ pr (fun z : Bits q => ∃ j ∈ Finset.range c, 2 ^ (M + k - q) < (fibre (π j) z).card) + η :=
+      ≤ pr (fun z : Bits q => ∃ j ∈ Finset.range c, 2 ^ (N + k - q) < (fibre (π j) z).card) + η :=
         PousThm1.pr_prod_le (fun z x => accepts sch c W (A₁ z) (step z) x) _ η hgood
     _ ≤ c * (2⁻¹ : ℝ≥0∞) ^ k + η := add_le_add hbad le_rfl
     _ = η + c * (2⁻¹ : ℝ≥0∞) ^ k := add_comm _ _
@@ -215,25 +219,37 @@ theorem pr_and_not_le {α : Type} [Fintype α] (A : α → Prop) {q S M k : ℕ}
 /-! ## The statements -/
 
 theorem adds : Accounting.Guarantees.Memory.Adds := by
-  intro I sch S D Q c δ ε hsec M q k W π A₁ A₂ hdet
+  intro I sch S D Q c δ ε hsec M H q k W π A₁ A₂ hdet
   simp only [AuditSecure] at hsec
-  refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hMS => ?_
-  exact adds_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hMS fun z e d =>
+  refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
+  exact adds_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hNS fun z e d =>
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => bounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
 
 theorem addsOn : Accounting.Guarantees.Memory.AddsOn := by
-  intro B w p _ sch S D Q L c δ ε hsec M q k W π A₁ A₂ hdet
+  intro B w p _ sch S D Q L c δ ε hsec M H q k W π A₁ A₂ hdet
   simp only [AuditSecureOn] at hsec
   refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
-    fun hMS => ?_
-  exact adds_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hMS fun z e d =>
+    fun hNS => ?_
+  exact adds_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hNS fun z e d =>
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => ringBounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
 
 theorem addsP2Ring : Accounting.Guarantees.Memory.AddsP2Ring := by
-  intro D Q L h M q k W π A₁ A₂ hdet
-  have := addsOn _ _ D Q L 105 _ _ h M q k W π A₁ A₂ hdet
+  intro D Q L h M H q k W π A₁ A₂ hdet
+  have := addsOn _ _ D Q L 105 _ _ h M H q k W π A₁ A₂ hdet
   rwa [Nat.cast_ofNat] at this
+
+theorem addsIsolated : Accounting.Guarantees.Memory.AddsIsolated := by
+  intro I sch S D Q c δ ε hsec M q k W π A₁ A₂ hdet
+  exact adds sch S D Q c δ ε hsec M 0 q k W π A₁ A₂ hdet
+
+theorem addsOnIsolated : Accounting.Guarantees.Memory.AddsOnIsolated := by
+  intro B w p _ sch S D Q L c δ ε hsec M q k W π A₁ A₂ hdet
+  exact addsOn sch S D Q L c δ ε hsec M 0 q k W π A₁ A₂ hdet
+
+theorem addsP2RingIsolated : Accounting.Guarantees.Memory.AddsP2RingIsolated := by
+  intro D Q L h M q k W π A₁ A₂ hdet
+  exact addsP2Ring D Q L h M 0 q k W π A₁ A₂ hdet
 
 end Accounting.MemoryProofs
