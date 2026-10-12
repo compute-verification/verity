@@ -15,8 +15,24 @@ from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
 # `benchmarks/codec_tensor/sketch_receipt.py` (cursor/ra-device-reader-0f7a at 5b8decfc5, #1916), numpy, run on these
 # inputs: seed k is SHA512(SKETCH_PINS ‖ u8 k), "counter" n bytes of SHA512(SKETCH_PINS ‖ label ‖ u32be c) for
-# c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s.
+# c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s, a receipt
+# that binds z; each unbound case (seed, block, j, σ_j, y), of the block alone, with σ_j its `sketches` of the block
+# and y its `receipt_of`.
 SKETCH_PINS = b"verity/remote-bandwidth/sketch-pins/v0\0"
+SKETCH_UNBOUND_CASES = [
+    (0, "0x80", 0,
+     "0028000000d9ffff00d9ffff00d3ffff000a00000000000000f5ffff00230000001700000003000000ffffff00e5ffff00f0ffff0006000000230000000e0000",
+     "f596fd5b1e1e0c96eef5f72c7b3493de91630a3d42a7f425a33b9ffa93195f06b119fa811cbef77bf75131e8d91dca2fe454d25455e0f3278496605ca8f66157"),
+    (0, "0x7f", 1,
+     "50d8ffffb2260000b2260000a62c000014f6ffff00000000ea0a000046ddffff2ee9ffff06fdfffffe000000ca1a0000e00f00000cfaffff46ddffff1cf2ffff",
+     "9e87b84c847bd01b02de09afd66c5555b2ba4669df567e4d8ece2281dc565288c35fbf2b084ce8006a3d6f1780214d1d0e3d5ab4a3cacc4f0875d3125dbc9885"),
+    (0, "counter", 20,
+     "3901000005090000450e0000dffcffff33ebfffff7100000290a00004bf4ffffa5fcffff5ff9ffff690b0000f10d00002d040000391400000f0b00007ff4ffff",
+     "bd5414ec1f5250e9583c1ad977da6812607a90edad7f0342d7ef14f813f1cc44873380376f0ef331d220597f9ae7f2369f22483cc335737c4a083e708905c5c2"),
+    (1, "counter", (1 << 64) - 1,
+     "7fffffff7df8ffff0d04000029eafffff7210000fdeaffff5700000099ffffff73f3ffff1913000061fcffffd5190000bf07000061f0ffffc518000053f3ffff",
+     "a18c9d926b1d13b42737a8550d5f638e432541486e8a7678e3856d2a48de24b6b78af95837775f96e23ec4cf35ad714d2077dce9b8b9a8220a0575baa70c26c1"),
+]
 SKETCH_SIGN_BITS_SHA512 = [
     "02c8dbb7ab436a92e8cf7006a0907d635b75cadec8d7959d15c7cebd007a5bdbdf645569e2540abd3906f2c3b566674a6a3580b79177bd9b7d892d8ba3ef3108",
     "4a6c53f126bd07a216ca31b753133d080c85ad79a6ca693ad82e3bcf1e2e36169110a36a4a8365075678a8d5eee65a19da5ed96c0e87b53478cfff3ad8c2a792",
@@ -113,10 +129,13 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
     assert pinned["payload"]["root"] == root.hex() and pinned["registration"]["digest"] == reg.digest.hex()
     assert pinned["registration"]["codec"] == pinned["codec"]["name"] == reg.codec.name == "p1024/k3/masked"
-    assert pinned["registration"]["receipt"] == reg.receipt == "block-sha512"
-    sk = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, receipts.SKETCH_SHA512, nonce=rv.NONCE)
-    assert pinned["sketch"]["registration"] == {"receipt": "sketch-sha512", "codec_seed": reg.codec_seed.hex(),
-                                                "digest": sk.digest.hex()}
+    assert pinned["registration"]["receipt"] == reg.receipt == receipts.DEFAULT
+    assert pinned["registration"]["bind"] is reg.bind is False
+    assert set(pinned["variants"]) == {rv.name(kind, bind) for kind, bind in rv.VARIANTS} and len(rv.VARIANTS) == 3
+    for kind, bind in rv.VARIANTS:
+        v = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, kind, bind=bind, nonce=rv.NONCE)
+        assert pinned["variants"][rv.name(kind, bind)]["registration"] == {
+            "receipt": kind, "bind": bind, "codec_seed": reg.codec_seed.hex(), "digest": v.digest.hex()}
     k, f = reg.key, reg.codec.field
     assert pinned["codec"]["c"] == [format(c, "x") for c in k.c] and pinned["codec"]["tau"] == format(k.tau, "x")
     assert pinned["codec"]["mask"] == format(k.mask, "x") and pinned["codec"]["seed"] == reg.codec_seed.hex()
@@ -138,13 +157,19 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     assert len({p["seed"] for p in passes}) == 3
     assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
     assert pinned["openings"]["index"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
-    sketch = pinned["sketch"]["passes"]["passes"]
-    assert sketch[0]["previous"] == pinned["sketch"]["registration"]["digest"] != pinned["registration"]["digest"]
-    assert all(b["previous"] == a["root"] for a, b in itertools.pairwise(sketch))
-    assert len({p["sign_bits_sha512"] for p in sketch}) == 3                  # the signs are re-keyed every pass
-    assert [p["plan_digest"] for p in sketch] == [p["plan_digest"] for p in passes]
-    assert pinned["sketch"]["passes"]["challenge"] == pinned["passes"]["challenge"]   # the same coins, another binding
-    assert pinned["sketch"]["coins_root"] != pinned["coins"]["root"]
+    chains = {(receipts.DEFAULT, False): pinned["passes"]} | {
+        (kind, bind): pinned["variants"][rv.name(kind, bind)]["passes"] for kind, bind in rv.VARIANTS}
+    digests = {pinned["registration"]["digest"]} | {v["registration"]["digest"] for v in pinned["variants"].values()}
+    assert len(digests) == 4 and len({v["coins_root"] for v in pinned["variants"].values()} | {pinned["coins"]["root"]}) == 4
+    for (kind, bind), c in chains.items():
+        assert c["passes"][0]["previous"] in digests and all(b["previous"] == a["root"]
+                                                             for a, b in itertools.pairwise(c["passes"]))
+        assert [p["plan_digest"] for p in c["passes"]] == [p["plan_digest"] for p in passes]
+        assert c["challenge"] == pinned["passes"]["challenge"]              # the same coins, another binding
+        assert ("z_bytes" in c) == bind and all(("z_1" in p) == bind for p in c["passes"])   # z only where it is bound
+        if kind == receipts.SKETCH_SHA512:
+            assert len({p["sign_bits_sha512"] for p in c["passes"]}) == 3   # the signs are re-keyed every pass
+    assert len({c["passes"][0]["root"] for c in chains.values()}) == 4
 
 
 class Clock:
@@ -156,19 +181,20 @@ class Clock:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("kind", receipts.KINDS)
-def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind) -> None:
+@pytest.mark.parametrize("kind, bind", [(receipts.DEFAULT, False), *rv.VARIANTS])
+def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind, bind) -> None:
     """The generator computes receipts and draws on its own; the audit's `Prover` and `Session` must agree with it, at the
-    default codec, under each receipt kind.  Slow for the same store as `test_vectors_are_reproduced`, which encodes it
-    once for all three."""
-    store = rv.store() if kind == receipts.BLOCK_SHA512 else rv.sketch_store()
+    default codec, under each receipt kind, of the block alone and binding z.  Slow for the same store as
+    `test_vectors_are_reproduced`, which encodes it once for all of them."""
+    store = rv.store() if (kind, bind) == (receipts.DEFAULT, False) else rv.registered(kind, bind)
     reg = store.registration
     challenger = coins.Challenger(reg.digest, 0, rv.PARAMS.coins, entropy=rv.Entropy(rv.COIN_LABEL))
     clock = Clock()
-    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind), reg, audit.NoiseTiles(96), challenger, clock=clock)
-    prover = audit.Prover(store, audit.NoiseTiles(96), s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
+    tiles = audit.NoiseTiles(96) if bind else None
+    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind), reg, tiles, challenger, clock=clock)
+    prover = audit.Prover(store, tiles, s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
-    pinned = pinned if kind == receipts.BLOCK_SHA512 else pinned["sketch"]
+    pinned = pinned if (kind, bind) == (receipts.DEFAULT, False) else pinned["variants"][rv.name(kind, bind)]
     challenge, previous, passes = s.start(), reg.digest, []
     for i, (plan, want) in enumerate(zip(rv.PLANS, pinned["passes"]["passes"], strict=True)):
         passes.append(prover.run(challenge, i, previous, plan))
@@ -181,7 +207,7 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
     draws = s.close(0)
     assert list(draws) == [unit(u) for u in pinned["openings"]["draws"]]
     assert s.verify(0, [prover.open(passes[i], p) for i, p in draws]) == audit.Verdict(0, True)
-    assert s.record().public()["receipt"] == kind
+    assert s.record().public()["receipt"] == kind and s.record().public()["bind"] is bind
 
 
 def unit(u: int) -> tuple[int, int]:
@@ -206,8 +232,8 @@ def _counter(label: bytes, n: int) -> bytes:
 
 
 def test_sketch_sha512_is_ra_codec_tensors_reference() -> None:
-    """Byte for byte with the numpy reference the GPU reader is held to: the signs, σ_j at the int8 extremes, under a
-    one-byte, a repeated and a folded z, and y up to the last u64 index."""
+    """Byte for byte with the numpy reference the GPU reader is held to: the signs, σ_j at the int8 extremes, of the
+    block alone and under a one-byte, a repeated and a folded z, and y up to the last u64 index."""
     seeds = [hashlib.sha512(SKETCH_PINS + bytes([k])).digest() for k in range(2)]
     assert [hashlib.sha512(b"".join(receipts.sign_bits(s))).hexdigest() for s in seeds] == SKETCH_SIGN_BITS_SHA512
     blocks = {"0x80": b"\x80" * codec.BLOCK_BYTES, "0x7f": b"\x7f" * codec.BLOCK_BYTES,
@@ -218,6 +244,9 @@ def test_sketch_sha512_is_ra_codec_tensors_reference() -> None:
         assert receipters[k].sketch(blocks[b], zs[z]).hex() == sigma
         assert receipters[k](j, blocks[b], zs[z]).hex() == y
         assert receipts.receipter(receipts.SKETCH_SHA512, seeds[k])(j, blocks[b], zs[z]).hex() == y
+    for k, b, j, sigma, y in SKETCH_UNBOUND_CASES:
+        assert receipters[k].sketch(blocks[b]).hex() == sigma
+        assert receipters[k](j, blocks[b]).hex() == y == receipters[k](j, blocks[b], bytes(codec.BLOCK_BYTES)).hex()
 
 
 @pytest.mark.parametrize("c", [codec.FALLBACK, codec.DEFAULT], ids=lambda c: c.name)

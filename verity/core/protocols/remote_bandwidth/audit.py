@@ -5,16 +5,18 @@ many reads of a node's registered blocks the node made in each window, from rece
    hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier draw the codec seed from its own secret and
    a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
    names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  The registration also names the receipt
-   kind (`receipts.KINDS`: block-sha512 by default, or sketch-sha512).  `Registration.digest` binds the node, the
-   store's size, the payload root, the codec seed, the codec's name and the receipt kind.
+   kind (`receipts.KINDS`: block-sha512 by default, or sketch-sha512) and whether its receipts bind PoUW's tile
+   outputs (`bind`, off by default: PoUW's opt-in join).  `Registration.digest` binds the node, the store's size, the
+   payload root, the codec seed, the codec's name, the receipt kind and `bind`.
 2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.
 4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
-   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each bound to
-   PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree bound to the plan and sends the root and
-   the plan as soon as the pass ends (`Session.receive`).  The chain runs across the session's windows: a window's first
+   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
+   block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
+   commits them in a tree bound to the plan and sends the root and the plan as soon as the pass ends
+   (`Session.receive`).  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
@@ -24,12 +26,12 @@ many reads of a node's registered blocks the node made in each window, from rece
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
-   leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and PoUW's evidence
-   for the tile before it.
+   leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
+   registration that binds z, PoUW's evidence for the tile before it.
 7. Verification (`Session.verify`), each opening: the leaf's path under the pass's root; the block's words canonical
-   and their decoding's leaf on its path under the payload root; `z` recomputed by PoUW's tile check
-   (`Tiles.recompute`); the receipt recomputed from the block and `z` under the registration's kind (under
-   sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
+   and their decoding's leaf on its path under the payload root; under a registration that binds z, `z` recomputed by
+   PoUW's tile check (`Tiles.recompute`); the receipt recomputed from the block (and `z`) under the registration's
+   kind (under sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
    and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
@@ -81,7 +83,7 @@ FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec"
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
     deadline, the windows `W`, the openings `s` per window at `delta`, the fewest passes a window may certify, and the
-    store's codec and receipt kind, the registration's."""
+    store's codec, receipt kind and whether its receipts bind z, the registration's."""
 
     blocks: int
     deadline_ns: int
@@ -90,7 +92,8 @@ class Params:
     delta: float
     min_passes: int = 1
     codec: Codec = codec.DEFAULT
-    receipt: str = receipts.BLOCK_SHA512
+    receipt: str = receipts.DEFAULT
+    bind: bool = False
 
     def __post_init__(self) -> None:
         for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes"):
@@ -101,6 +104,7 @@ class Params:
         if type(self.codec) is not Codec:
             raise ValueError("a session's codec is a Codec")
         receipts.receipt_kind(self.receipt)
+        _bind(self.bind)
 
     @property
     def coins(self) -> int:
@@ -112,6 +116,12 @@ def _node(node: bytes) -> bytes:
     if type(node) is not bytes or not 1 <= len(node) <= NODE_BYTES:
         raise ValueError(f"a node's id is 1 to {NODE_BYTES} bytes")
     return node
+
+
+def _bind(bind: object) -> bool:
+    if type(bind) is not bool:
+        raise ValueError("bind is True or False: whether the receipts bind PoUW's tile outputs")
+    return bind
 
 
 def payload_domain(node: bytes, blocks: int) -> CommitmentDomain:
@@ -132,8 +142,8 @@ def payload_tree(node: bytes, payloads: Sequence[bytes], salts: Sequence[bytes])
 
 @dataclass(frozen=True, slots=True)
 class Registration:
-    """What the store is: the node, `N`, the payload root, the codec seed drawn after it, the codec it names, and the
-    receipt kind its sessions use."""
+    """What the store is: the node, `N`, the payload root, the codec seed drawn after it, the codec it names, the
+    receipt kind its sessions use, and whether their receipts bind PoUW's tile outputs (`bind`)."""
 
     node: bytes
     blocks: int
@@ -141,14 +151,16 @@ class Registration:
     codec_seed: bytes
     codec: Codec
     receipt: str
+    bind: bool
 
     @property
     def digest(self) -> bytes:
         """SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖ frame(codec name) ‖
-        frame(receipt kind)): what a record and a session's coin commitment cite, and `root_(0,−1)`, the root a
-        session's first pass follows."""
+        frame(receipt kind) ‖ u8 bind): what a record and a session's coin commitment cite, and `root_(0,−1)`, the
+        root a session's first pass follows."""
         return hashlib.sha512(REGISTRATION_DOMAIN + frame(self.node) + self.blocks.to_bytes(8, "big") + self.payload_root
-                              + self.codec_seed + frame(self.codec.name) + frame(self.receipt)).digest()
+                              + self.codec_seed + frame(self.codec.name) + frame(self.receipt)
+                              + bytes((self.bind,))).digest()
 
     @property
     def key(self) -> codec.Key:
@@ -156,15 +168,17 @@ class Registration:
 
 
 def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
-             receipt: str = receipts.BLOCK_SHA512, *, nonce: bytes | None = None) -> Registration:
+             receipt: str = receipts.DEFAULT, *, bind: bool = False, nonce: bytes | None = None) -> Registration:
     """The verifier's side of registration: the codec seed, drawn from its own secret `source` and a fresh nonce only
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
-    zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  The receipt
-    kind is not in the codec seed's context, since the store does not depend on it; the digest binds it."""
+    zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  Neither the
+    receipt kind nor `bind` is in the codec seed's context, since the store depends on neither; the digest binds
+    both."""
     receipts.store_blocks(blocks)
     if type(codec) is not Codec:
         raise ValueError("a registration names a Codec")
     receipts.receipt_kind(receipt)
+    _bind(bind)
     if blocks > codec.max_blocks:
         raise ValueError(f"a store under {codec.name} is at most {codec.max_blocks} blocks")
     if type(payload_root) is not bytes or len(payload_root) != DIGEST_BYTES:
@@ -174,21 +188,29 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
         raise ValueError(f"a registration's nonce is {NONCE_BYTES} bytes")
     seed = derive(source, CODEC_DOMAIN, {"node": _node(node), "blocks": blocks, "payload": payload_root,
                                          "codec": codec.name, "nonce": nonce}).stream("codec", SEED_BYTES)
-    return Registration(node, blocks, payload_root, seed, codec, receipt)
+    return Registration(node, blocks, payload_root, seed, codec, receipt, bind)
 
 
 class Tiles(Protocol):
-    """PoUW's side of a receipt.  `output(seed, j)` is `z_(i,j)`, the noised output of the tile the prover computes
-    before reading block j in the pass whose seed is `seed`; `evidence` is what PoUW's check reads to recompute it; and
-    `recompute`, the verifier's, returns `z_(i,j)` from that evidence or None if PoUW's check fails.  PoUW's noise for a
-    pass is derived from the pass's seed, so `z` differs every pass whatever the weights and activations, and a pass
-    reads each block once, with a tile of its own, so no `z` unlocks two receipts."""
+    """PoUW's side of a receipt, under a registration that binds z (`bind`; under one that does not, a receipt is of
+    its block alone, and the prover and the verifier take None for tiles).  `output(seed, j)` is `z_(i,j)`, the noised
+    output of the tile the prover computes before reading block j in the pass whose seed is `seed`; `evidence` is what
+    PoUW's check reads to recompute it; and `recompute`, the verifier's, returns `z_(i,j)` from that evidence or None
+    if PoUW's check fails.  PoUW's noise for a pass is derived from the pass's seed, so `z` differs every pass whatever
+    the weights and activations, and a pass reads each block once, with a tile of its own, so no `z` unlocks two
+    receipts."""
 
     def output(self, seed: bytes, j: int) -> bytes: ...
 
     def evidence(self, seed: bytes, j: int) -> bytes: ...
 
     def recompute(self, seed: bytes, j: int, evidence: bytes) -> bytes | None: ...
+
+
+def _tiles(tiles: Tiles | None, bind: bool) -> Tiles | None:
+    if (tiles is None) == bind:
+        raise ValueError("a registration that binds z takes PoUW's tiles, and one that does not takes None")
+    return tiles
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,7 +270,7 @@ class Pass:
 class Opening:
     """Receipt (i, p) of a window opened, position p of pass i, block j = plan_i[p]: the block, its receipt leaf's
     receipts, salt and path to pass i's root, the payload's salt and path to the payload root, and PoUW's evidence for
-    `z_(i,j)`."""
+    `z_(i,j)` (empty unless the registration binds z)."""
 
     pass_index: int
     position: int
@@ -269,11 +291,13 @@ class Opening:
 
 class Prover:
     """The honest prover: each pass reads its plan's blocks (every block by default), computes their receipts and
-    commits them, each leaf under a fresh salt from `entropy`."""
+    commits them, each leaf under a fresh salt from `entropy`.  `tiles` is PoUW's if the registration binds z, and
+    None if it does not."""
 
-    def __init__(self, store: Store, tiles: Tiles, commitment: coins.CoinCommitment, *,
+    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.CoinCommitment, *,
                  entropy: Callable[[int], bytes] = os.urandom) -> None:
-        self.store, self.tiles, self.commitment, self.entropy = store, tiles, commitment, entropy
+        self.store, self.commitment, self.entropy = store, commitment, entropy
+        self.tiles = _tiles(tiles, store.registration.bind)
 
     def run(self, challenge: coins.CoinOpening, i: int, previous: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of the window whose challenge is `challenge`, after the root `previous`: refused unless the coin is a
@@ -289,8 +313,8 @@ class Prover:
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
         plan = plan or Plan.whole(self.store.registration.blocks)
-        receipter = receipts.receipter(self.store.registration.receipt, seed)
-        ys = tuple(receipter(j, self.store.blocks[j], self.tiles.output(seed, j)) for j in plan)
+        receipter, tiles = receipts.receipter(self.store.registration.receipt, seed), self.tiles
+        ys = tuple(receipter(j, self.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
         salts = tuple(self.entropy(SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
         return Pass(window, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
 
@@ -300,7 +324,7 @@ class Prover:
         leaf = ps.tree.open(c)
         return Opening(ps.index, p, self.store.blocks[j], b"".join(ps.receipts[receipts.PER_LEAF * c:receipts.PER_LEAF * (c + 1)]),
                        ps.salts[c], leaf.path, self.store.salts[j], self.store.payload_tree.open(j).path,
-                       self.tiles.evidence(ps.seed, j))
+                       b"" if self.tiles is None else self.tiles.evidence(ps.seed, j))
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,16 +367,18 @@ class WindowRecord:
 @dataclass(frozen=True, slots=True)
 class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
-    and the receipt kind the registration names (its digest binds it; the record repeats it, since what a receipt
-    rests on depends on it).  `public` is what acceptance makes public; `profile` is the protocol's profile, each
-    window's schedule and openings law (the γ terms need the node's capacities: `ledger`)."""
+    and the receipt kind the registration names and whether its receipts bind z (its digest binds both; the record
+    repeats them, since what a receipt rests on depends on them).  `public` is what acceptance makes public; `profile`
+    is the protocol's profile, each window's schedule and openings law (the γ terms need the node's capacities:
+    `ledger`)."""
 
     registration: bytes
     coins: bytes
     blocks: int
     block_bytes: int
     windows: tuple[WindowRecord, ...]
-    receipt: str = receipts.BLOCK_SHA512
+    receipt: str = receipts.DEFAULT
+    bind: bool = False
 
     @property
     def start_ns(self) -> int:
@@ -377,7 +403,7 @@ class Record:
         return sum(w.receipts for w in self.windows)
 
     def public(self) -> dict:
-        return {"block_bytes": self.block_bytes, "blocks": self.blocks, "coins": self.coins.hex(),
+        return {"bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks, "coins": self.coins.hex(),
                 "passes": [w.passes for w in self.windows], "protocol": PROTOCOL_ID, "receipt": self.receipt,
                 "receipts": [w.receipts for w in self.windows], "registration": self.registration.hex(),
                 "span_ns": self.span_ns}
@@ -407,17 +433,19 @@ class Session:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
     `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns` is the
     earliest its first coin may leave: the previous session's `Record.end_ns` over the same store, less the trusted
-    round-trip floor if there is one, so that no read serves receipts of both sessions."""
+    round-trip floor if there is one, so that no read serves receipts of both sessions.  `tiles` is PoUW's check if
+    the registration binds z, and None if it does not."""
 
-    def __init__(self, params: Params, registration: Registration, tiles: Tiles, challenger: coins.Challenger, *,
+    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, challenger: coins.Challenger, *,
                  clock: Callable[[], int] = time.monotonic_ns, not_before_ns: int | None = None) -> None:
         if (registration.blocks != params.blocks or registration.codec != params.codec
-                or registration.receipt != params.receipt):
+                or registration.receipt != params.receipt or registration.bind != params.bind):
             raise ValueError("the parameters are not the registration's")
         c = challenger.commitment
         if c.registration != registration.digest or c.count != params.coins:
             raise ValueError(f"the challenger's coins are not this session's: {params.coins} coins for this registration")
-        self.params, self.registration, self.tiles, self.challenger = params, registration, tiles, challenger
+        self.params, self.registration, self.challenger = params, registration, challenger
+        self.tiles = _tiles(tiles, registration.bind)
         self.clock, self.not_before_ns = clock, not_before_ns
         self.windows: list[_Window] = []
         self.filling = 0
@@ -549,6 +577,7 @@ class Session:
         N = self.params.blocks
         if (type(o) is not Opening or o.pass_index != i or o.position != p or type(o.block) is not bytes
                 or len(o.block) != BLOCK_BYTES or type(o.leaf) is not bytes or type(o.tile) is not bytes
+                or (self.tiles is None and o.tile != b"")
                 or any(type(x) is not bytes or len(x) != SALT_BYTES for x in (o.leaf_salt, o.payload_salt))
                 or type(o.receipt_path) is not tuple or type(o.payload_path) is not tuple
                 or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in (*o.receipt_path, *o.payload_path))):
@@ -568,9 +597,11 @@ class Session:
         if not verify_opening(self._payload_domain, Commitment(self.registration.payload_root, N), opening, PAYLOAD_SCHEMA,
                               LIMITS):
             return "payload-path"
-        z = self.tiles.recompute(seed, j, o.tile)
-        if type(z) is not bytes or not z:
-            return "tile"
+        z = None
+        if self.tiles is not None:
+            z = self.tiles.recompute(seed, j, o.tile)
+            if type(z) is not bytes or not z:
+                return "tile"
         if i not in receipters:
             receipters[i] = receipts.receipter(self.registration.receipt, seed)
         if receipters[i](j, o.block, z) != y:
@@ -589,7 +620,7 @@ class Session:
                                        self.params.delta, drawn={"receipt": len(w.draws)})
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
-                      self.registration.receipt)
+                      self.registration.receipt, self.registration.bind)
 
 
 LEDGER_SOURCES = {
@@ -602,7 +633,7 @@ LEDGER_SOURCES = {
                 "pass",
     "rebuild": "a model: re-encoding blocks from their payload with leftover compute (WorkHardness(p, k))",
     "host": "a model: the host tier's own shortfall and host DRAM bandwidth PCIe cannot carry",
-    "link": "a model: relays meeting z and a block copy over a link",
+    "link": "a model, under a registration that binds z: relays meeting z and a block copy over a link (0 otherwise)",
 }
 
 
@@ -669,11 +700,14 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     on-chip storage: the read bytes the record certifies are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
     pass).  `rebuild`, `host` and `link` are the models' fractions, passed through: the record does not bound them.
-    `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an approximation for a large
-    store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose fiber terms are not among these
-    (`PROTOCOL.md` §4)."""
+    `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
+    its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
+    approximation for a large store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose fiber
+    terms are not among these (`PROTOCOL.md` §4)."""
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
+    if link and not record.bind:
+        raise ValueError("the link term is a registration's that binds z: this record's receipts are of blocks alone")
     whole = capacity_bytes_per_s * record.span_ns / 1e9
     b = record.block_bytes
     reads = record.receipts * b
