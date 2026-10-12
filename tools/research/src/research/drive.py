@@ -200,7 +200,12 @@ class Driver:
         ref = f"refs/remotes/origin/{self.q.branch}"
         if _git(self.repo, "rev-parse", "--verify", "-q", ref, check=False).returncode:
             return "", []
-        base = _out(self.repo, "merge-base", "origin/main", ref)
+        # not `merge-base`: a member stacked on a PR that has since landed on `main` gives a second, wrong common ancestor
+        # (12 Oct 10:53Z: #1847 on #1793, after the e2e train's merge commit, emptied the chain and cancelled a disjoint check)
+        base = next((c for c in _out(self.repo, "rev-list", "--first-parent", ref).split()
+                     if not _git(self.repo, "merge-base", "--is-ancestor", c, "origin/main", check=False).returncode), "")
+        if not base:
+            return "", []
         from .queue import TRAILER_RE
 
         out = []

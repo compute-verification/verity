@@ -237,6 +237,28 @@ def test_a_disjoint_move_of_main_keeps_next_while_its_check_runs_and_a_shared_on
     assert _git(world.origin, "rev-parse", "main^1", "main^2").split() == [other, old]
 
 
+def test_a_disjoint_landing_of_a_commit_a_member_is_stacked_on_keeps_next(world, monkeypatch):
+    """12 Oct 10:53Z: #1847, on `next` and stacked on #1793, made #1793's head a second common ancestor of `main` and `next` once
+    the e2e train's merge commit landed; `merge-base` picked it, the chain read empty, and a disjoint check was cancelled."""
+    h = Harness(world, monkeypatch)
+    h.d.max_running = 1                                             # drive's live setting: #2's train waits
+    main0 = _git(world.origin, "rev-parse", "main")
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'z.txt': 'z\n'})}:refs/heads/main")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00Z")          # newer than `main`'s: `merge-base` prefers it
+    below = world.change({"x.txt": "landed by the lander\n"}, base=main0)     # on a `main` that has moved on since
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    world.gh.put(2, world.change({"y.txt": "stacked\n"}, base=below))
+    h.tick()                                                        # #2 joins `next` above #1, whose check runs
+    old = _tip(world)
+    _git(world.dev, "fetch", "-q", "origin")
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    _git(world.dev, "merge", "-q", "--no-ff", "-m", "Merge the e2e train", below)
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    assert "stays on" in h.tick() and _tip(world) == old and h.cancelled == []
+
+
 def test_a_move_of_main_sharing_a_file_with_the_running_train_rebuilds_next(world, monkeypatch):
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
