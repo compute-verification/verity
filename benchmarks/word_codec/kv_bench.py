@@ -53,7 +53,8 @@ ATTN_CYCLE_BYTES = 1 << 30  # a cell's layers cover this much plain KV, 8x the L
 ATTN_MAX_LAYERS = 256       # and at most this many, so a pass's launches queue behind one spin
 ATTN_SPIN_CYCLES = 60_000_000
 ATTN_CTAS_PER_SM = (1, 2, 4, 8)  # a cell's split counts: batch × splits about this many CTAs an SM,
-ATTN_MIN_SPLIT_TOKENS = 32       # each split at least this many tokens (a split's partials are 33 KB)
+ATTN_SPLIT_TILES = (1, 8)        # each split at least this many tiles (a split's partials are 33 KB; fewer tiles a
+                                 # split hide more of a tile's decode latency at small batch)
 ATTN_RTOL = 1e-3
 
 
@@ -323,7 +324,7 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
     cold as in a decode step. Nothing is timed before the gate: at layers 0 and L - 1 the encoded form's output equals
     the plain form's bit for bit, and the plain form's is within ATTN_RTOL of float64 attention over the same bf16
     values, at every split count the cell tries (batch × splits about each of ATTN_CTAS_PER_SM CTAs an SM, at least
-    ATTN_MIN_SPLIT_TOKENS tokens a split); each form's time is its best split count's. torch's SDPA (GQA, bf16) over the
+    each of ATTN_SPLIT_TILES tiles a split); each form's time is its best split count's. torch's SDPA (GQA, bf16) over the
     same K and V, laid out as it takes them, is timed beside it the same way."""
     import torch.nn.functional as F
 
@@ -337,7 +338,8 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
     out = {}
     for b in batches:
         for ctx in contexts:
-            cands = sorted({max(1, min(-(-ctx // ATTN_MIN_SPLIT_TOKENS), -(-c * sms // b))) for c in ATTN_CTAS_PER_SM})
+            cands = sorted({max(1, min(-(-ctx // (t * sh["tt"])), -(-c * sms // b)))
+                            for c in ATTN_CTAS_PER_SM for t in ATTN_SPLIT_TILES})
             per_layer = b * ctx * tl
             layers = max(2, min(ATTN_MAX_LAYERS, -(-ATTN_CYCLE_BYTES // per_layer)))
             g = torch.Generator(device="cuda").manual_seed(b * 100003 + ctx)
