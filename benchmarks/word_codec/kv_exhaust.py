@@ -523,12 +523,12 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                 if not ok:
                     raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt differs from kv_receipt's")
 
-                def block_pass():
+                def block_pass(fn="kv_rc_tag16", nr=nblk):
                     for l in range(layers):
                         lib.call("kv_rc_buffers", B.ptr(sk), None, None)
                         attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
                         lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
-                        lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
+                        lib.call(fn, RECEIPT[fm], nr, st)
 
                 for l2 in (False, True):
                     persisting = 0
@@ -565,6 +565,21 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                     f"the first and last 8 equal kv_receipt's: {ok}")
                 if not ok:
                     raise SystemExit(f"{FORMS[fm]} k={k}: a half-block receipt differs from kv_receipt's")
+
+                def half_block_pass():
+                    block_pass("kv_rc_tag8", 2 * nblk)
+
+                half_block_pass()
+                tb = [B.queued(lib, torch, half_block_pass, SPIN) / layers for _ in range(reps)]
+                ok = blocks_equal(grp=8)
+                row["tag8"]["pass"] = {"s": statistics.median(tb), "times_s": tb,
+                                       "over_read": statistics.median(tb) / t_read, "receipts_equal": ok}
+                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, then two receipts a block of "
+                    f"8 vectors each, a layer {row['tag8']['pass']['s'] * 1e3:.3f} ms "
+                    f"({row['tag8']['pass']['over_read']:.3f}x the read); the first and last 8 equal kv_receipt's: {ok}")
+                if not ok:
+                    raise SystemExit(f"{FORMS[fm]} k={k}: a half-block receipt after the sketch differs from "
+                                     "kv_receipt's")
 
                 hi, lo = torch.cuda.Stream(priority=-1), torch.cuda.Stream(priority=0)
                 bufs, tgs = (sk, sk2), (tg, tg[2 * nblk:])
