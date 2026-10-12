@@ -79,9 +79,9 @@ def main() -> None:
         print()
 
     print("### Capacity term γ_cpu = whole-host tile rate / ΣR\n")
-    print(f"| scheme | m | k_s | per core, all busy (GB/s) | compute × host cores | DRAM cap | whole host | γ_cpu | "
-          f"measured, {cores} cores |")
-    print("|---|---|---|---|---|---|---|---|---|")
+    print(f"| scheme | m | k_s | per core, all busy (GB/s) | core-ns a weight byte | ops/s a core | compute × host cores | "
+          f"DRAM cap | whole host | γ_cpu | measured, {cores} cores |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for scheme, rs, ms, ks_list, mmap, per_byte in (
             ("NCP, Y stored", (stored(res), stored(strm)), MS, (128, 32, 16, 0), NCP_M, 3.0),
             ("NCP, Y formed", (formed(res), formed(strm)), MS, (128, 32), NCP_M, 2.0),
@@ -96,7 +96,9 @@ def main() -> None:
                 compute = per_core * ns.host_cores
                 cap = dram / per_byte
                 host = min(compute, cap)
-                print(f"| {scheme} | {m} | {ks} | {per_core:.2f} | {compute:.0f} | {cap:.0f} | {host:.0f} | "
+                ops = r["mac_per_s"] if "mac_per_s" in r else r["products_per_s"]
+                print(f"| {scheme} | {m} | {ks} | {per_core:.2f} | {1 / per_core:.3f} | {ops / cores:.2e} | "
+                      f"{compute:.0f} | {cap:.0f} | {host:.0f} | "
                       f"{100 * host / ns.sigma_r:.2f}% | {gbps(best(rs[1], m=mmap[m], ks=ks, threads=cores, **kw))} |")
     diag = rows(out / "pearl_diag.jsonl")
     if diag:
