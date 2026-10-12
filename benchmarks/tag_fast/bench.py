@@ -29,6 +29,7 @@ import ctypes
 import json
 import os
 import random
+import re
 import statistics
 import sys
 import time
@@ -49,6 +50,11 @@ L2_DEFEAT_BYTES = 1 << 30
 SPIN_CYCLES = 20_000_000
 TAG_FORMS = ((0, 1), (1, 1), (3, 1), (1, 2))  # (variant, load depth) of the timed tag forms
 MODE_GEMM, MODE_TAGS, MODE_SINK, MODE_TAGONLY = 0, 1, 2, 3
+FORM = re.compile(r"(?P<stage>[gtcso])(?P<span>\d+)(?:v(?P<v>\d+))?p(?P<pd>\d+)$")  # an arm of tf.cu's kernels
+
+
+def forms(arms, stage: str) -> list[str]:
+    return [a for a in arms if (m := FORM.match(a)) and m["stage"] == stage]
 
 
 class Lib:
@@ -404,17 +410,17 @@ def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> di
             arms[f"s{span}v1p1"] = arm_f(span, 1, MODE_SINK, 1)
         r = interleave(lib, torch, arms, reps, copies)
         med = r["median_s"]
-        native_arms = ["cublas", "plain"] + [a for a in med if a.startswith("g")]
+        native_arms = ["cublas", "plain"] + forms(med, "g")
         native = min(med[a] for a in native_arms)
         r.update({"cublas_m": mpad, "native_s": native, "native_arm": min(native_arms, key=lambda a: med[a]),
                   "ratio": {a: med[a] / native for a in med}})
         res["batches"][mb] = r
-        best_t = min((a for a in med if a.startswith("t")), key=lambda a: med[a])
-        best_c = min((a for a in med if a.startswith("c")), key=lambda a: med[a])
+        best_t = min(forms(med, "t"), key=lambda a: med[a])
+        best_c = min(forms(med, "c"), key=lambda a: med[a])
         log(f"{name} M={mb}: native {native * 1e6:.1f} us ({r['native_arm']}; cublas {med['cublas'] * 1e6:.1f}, plain "
             f"{med['plain'] * 1e6:.1f}, g32p1 {med.get('g32p1', 0) * 1e6:.1f}); best tag {best_t} {med[best_t] / native:.3f}x, "
             f"best commit {best_c} {med[best_c] / native:.3f}x; "
-            + ", ".join(f"{a} {med[a] / native:.3f}" for a in med if a[0] in "ts")
+            + ", ".join(f"{a} {med[a] / native:.3f}" for a in forms(med, "t") + forms(med, "s"))
             + (" HOST-BOUND" if r["host_bound"] else ""))
     del ring, wring
     torch.cuda.empty_cache()
@@ -493,7 +499,7 @@ def summarize(res: dict, batches, spans) -> dict:
     for mb in batches:
         r = lw[mb]
         for key, pre in (("y_tag", "t"), ("y_commit", "c"), ("y_sink", "s")):
-            best = min((a for a in r if a[0] == pre and a != "native_s"), key=lambda a: r[a])
+            best = min(forms(r, pre), key=lambda a: r[a])
             summary[key][mb] = {"arm": best, "y": r[best]}
         step = layout.LAYERS * r["native_s"]
         summary["tree_share"][mb] = {s: res["commit"][s]["tree_s"] / step for s in spans}
@@ -506,9 +512,9 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
     lw = res["summary"]["layer_weighted"]
     for mb in batches:
         for a, y in lw[mb].items():
-            if a[0] not in "tcs" or a == "native_s":
+            if not (m := FORM.match(a)) or m["stage"] not in "tcs":
                 continue
-            span = int(a[1:3])
+            span = int(m["span"])
             out.append({"lane": "ra-tag-fast", "tag": "ro-blake3/v1", "certified": True, "block_bytes": 16 * span,
                         "form": a, "stage": {"t": "tag", "c": "tag+leaves", "s": "tag-sink"}[a[0]], "batch": mb,
                         "y": y, "run": run})
