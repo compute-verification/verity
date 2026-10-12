@@ -5,6 +5,7 @@
 //
 //   gate:  pearl_c_cpu gate DIR [scalar]       DIR/{shape,a,b}.bin -> DIR/{atoms,totals}.bin, DIR/stats.json
 //   bench: pearl_c_cpu bench M K N W KS REPS DATA   DATA = gauss | uniform | file:PATH (codes to tile); OpenMP threads
+//          env PEARL_PREFETCH: bytes ahead to prefetch B̃ (run.sh: 4096); PEARL_FUSE=0: m <= 2 decodes into the block too
 //
 // The atom in FP64.  Let M be the atom's top exponent (the largest of the accumulator's and the nonzero products'), so the
 // alignment grid is g = 2^(M-25).  A product sa*sb*2^(ea'+eb'-20) with sa*sb < 2^8 lies on g whenever its exponent
@@ -151,6 +152,7 @@ static void init_tables(void) {
 }
 
 static long prefetch_dist;  // PEARL_PREFETCH: bytes ahead of the block being decoded (0: none)
+static int fuse = 1;        // PEARL_FUSE=0: m <= 2 decodes into the block as larger m does
 
 // One atom's B̃ block: 32 rows l of 64 codes -> FP64 (value / 256 via FP16) and the two int8 exponent forms.  The FP16
 // bits of code c are (sign-extended c << 7) with bit 14 cleared: sign at 15, the code's exponent and mantissa at 13..7.
@@ -173,9 +175,10 @@ static void decode_b(const uint8_t *blk, Bblock *B) {
   }
 }
 
-// R rows (i0 ..) of one atom t against one decoded block: local[i][64] in, out.  Returns the number of slow lanes.
-static inline __attribute__((always_inline)) int rows_atom(const int R, const Arows *A, int i0, int t, const Bblock *B,
-                                                           const uint8_t *bblk, uint32_t *local) {
+// R rows (i0 ..) of one atom t against one decoded block: local[i][64] in, out.  Returns the number of slow lanes.  Fused
+// (m <= 2): B is decoded from the codes bblk into registers as it is used, and B is unused.
+static inline __attribute__((always_inline)) int rows_atom(const int R, const int fused, const Arows *A, int i0, int t,
+                                                           const Bblock *B, const uint8_t *bblk, uint32_t *local) {
   const int k = A->k;
   __m512d acc[2][8];
   __m512i mx[2], mn[2];
@@ -188,18 +191,35 @@ static inline __attribute__((always_inline)) int rows_atom(const int R, const Ar
   const double *a0 = A->af + at, *a1 = a0 + 32;
   const uint32_t *e0 = A->ae + at, *e1 = e0 + 32;
   const uint32_t *n0 = A->an + at, *n1 = n0 + 32;
+  const __m512i keep = _mm512_set1_epi16((short)0xBFFF);
   for (int l = 0; l < 32; l++) {
     __m512d av0 = _mm512_set1_pd(a0[l]), av1 = R > 1 ? _mm512_set1_pd(a1[l]) : av0;
-    const double *bl = B->bf + 64 * l;
-    for (int v = 0; v < 8; v++) {
-      __m512d bv = _mm512_load_pd(bl + 8 * v);
-      acc[0][v] = _mm512_fmadd_pd(av0, bv, acc[0][v]);
-      if (R > 1) acc[1][v] = _mm512_fmadd_pd(av1, bv, acc[1][v]);
+    __m512d bv[8];
+    __m512i bx, bn;
+    if (fused) {
+      if (prefetch_dist) _mm_prefetch((const char *)bblk + 64 * l + prefetch_dist, _MM_HINT_T0);
+      __m512i c = _mm512_loadu_si512(bblk + 64 * l);
+      bx = _mm512_permutex2var_epi8(T_EXP0, c, T_EXP1);
+      bn = _mm512_permutex2var_epi8(T_MIN0, c, T_MIN1);
+      for (int h = 0; h < 2; h++) {
+        __m512i w = _mm512_cvtepi8_epi16(h ? _mm512_extracti64x4_epi64(c, 1) : _mm512_castsi512_si256(c));
+        __m512i f = _mm512_and_si512(_mm512_slli_epi16(w, 7), keep);
+        bv[4 * h + 0] = _mm512_cvtph_pd(_mm_castsi128_ph(_mm512_extracti32x4_epi32(f, 0)));
+        bv[4 * h + 1] = _mm512_cvtph_pd(_mm_castsi128_ph(_mm512_extracti32x4_epi32(f, 1)));
+        bv[4 * h + 2] = _mm512_cvtph_pd(_mm_castsi128_ph(_mm512_extracti32x4_epi32(f, 2)));
+        bv[4 * h + 3] = _mm512_cvtph_pd(_mm_castsi128_ph(_mm512_extracti32x4_epi32(f, 3)));
+      }
+    } else {
+      for (int v = 0; v < 8; v++) bv[v] = _mm512_load_pd(B->bf + 64 * l + 8 * v);
+      bx = _mm512_load_si512(B->be + 64 * l);
+      bn = _mm512_load_si512(B->bn + 64 * l);
     }
-    __m512i bx = _mm512_load_si512(B->be + 64 * l);
+    for (int v = 0; v < 8; v++) {
+      acc[0][v] = _mm512_fmadd_pd(av0, bv[v], acc[0][v]);
+      if (R > 1) acc[1][v] = _mm512_fmadd_pd(av1, bv[v], acc[1][v]);
+    }
     mx[0] = _mm512_max_epi8(mx[0], _mm512_adds_epi8(_mm512_set1_epi32((int)e0[l]), bx));
     if (R > 1) mx[1] = _mm512_max_epi8(mx[1], _mm512_adds_epi8(_mm512_set1_epi32((int)e1[l]), bx));
-    __m512i bn = _mm512_load_si512(B->bn + 64 * l);
     mn[0] = _mm512_min_epi8(mn[0], _mm512_adds_epi8(_mm512_set1_epi32((int)n0[l]), bn));
     if (R > 1) mn[1] = _mm512_min_epi8(mn[1], _mm512_adds_epi8(_mm512_set1_epi32((int)n1[l]), bn));
   }
@@ -258,10 +278,17 @@ static long column_block(const Arows *A, const uint8_t *blk, Bblock *B, uint32_t
   memset(total, 0, (size_t)m * 64 * 4);
   for (int t = 0; t < k / 32; t++) {
     if (t % 4 == 0) memset(local, 0, (size_t)m * 64 * 4);
-    decode_b(blk + (size_t)32 * t * 64, B);
-    int i = 0;
-    for (; i + 2 <= m; i += 2) slow += rows_atom(2, A, i, t, B, blk + (size_t)32 * t * 64, local);
-    if (i < m) slow += rows_atom(1, A, i, t, B, blk + (size_t)32 * t * 64, local);
+    const uint8_t *bt = blk + (size_t)32 * t * 64;
+    if (m == 1 && fuse)
+      slow += rows_atom(1, 1, A, 0, t, B, bt, local);
+    else if (m == 2 && fuse)
+      slow += rows_atom(2, 1, A, 0, t, B, bt, local);
+    else {
+      decode_b(bt, B);
+      int i = 0;
+      for (; i + 2 <= m; i += 2) slow += rows_atom(2, 0, A, i, t, B, bt, local);
+      if (i < m) slow += rows_atom(1, 0, A, i, t, B, bt, local);
+    }
     if (atoms_out)
       for (int r = 0; r < m; r++) memcpy(atoms_out + ((size_t)t * m + r) * ld + col, local + r * 64, 256);
     else if (ks == 32)
@@ -433,10 +460,10 @@ static int bench(int m, int k, int n, int W, int ks, int reps, const char *data)
   }
   double products = (double)m * k * n * W, wbytes = (double)k * n * W;
   printf("{\"kernel\": \"pearl_c_cpu\", \"data\": \"%s\", \"m\": %d, \"k\": %d, \"n\": %d, \"weights\": %d, \"ks\": %d, "
-         "\"prefetch\": %ld, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"products_per_s\": %.4e, "
+         "\"prefetch\": %ld, \"fused\": %d, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"products_per_s\": %.4e, "
          "\"weight_bytes_per_s\": %.4e, \"weight_bytes_per_s_mean\": %.4e, \"slow_lanes\": %ld, \"slow_fraction\": %.3e, "
          "\"fold\": %llu}\n",
-         data, m, k, n, W, ks, prefetch_dist, nthreads, reps, best, sum / reps, products / best, wbytes / best, wbytes / (sum / reps), slow,
+         data, m, k, n, W, ks, prefetch_dist, fuse && m <= 2, nthreads, reps, best, sum / reps, products / best, wbytes / best, wbytes / (sum / reps), slow,
          slow / (products / 32), (unsigned long long)fold);
   free_a(&A);
   return 0;
@@ -445,6 +472,7 @@ static int bench(int m, int k, int n, int W, int ks, int reps, const char *data)
 int main(int argc, char **argv) {
   init_tables();
   if (getenv("PEARL_PREFETCH")) prefetch_dist = atol(getenv("PEARL_PREFETCH"));
+  if (getenv("PEARL_FUSE")) fuse = atoi(getenv("PEARL_FUSE"));
   if (argc >= 3 && !strcmp(argv[1], "gate")) return gate(argv[2], argc >= 4 && !strcmp(argv[3], "scalar"));
   if (argc >= 9 && !strcmp(argv[1], "bench"))
     return bench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), argv[8]);

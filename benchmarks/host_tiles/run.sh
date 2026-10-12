@@ -112,6 +112,7 @@ if [ "$phase" = pearl ]; then
       done
       OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/pearl_c_cpu" bench $m 4096 6144 2 128 20 gauss | tee -a "$O/pearl_diag.jsonl"
     done
+    PEARL_FUSE=0 OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/pearl_c_cpu" bench 1 4096 6144 40 128 3 gauss | tee -a "$O/pearl_diag.jsonl"
   done
   for m in 16 128; do
     OMP_PLACES=cores OMP_NUM_THREADS=$C "$B/pearl_c_cpu" bench $m 4096 6144 40 128 3 "file:$B/pool.bin" | tee -a "$O/pearl_data.jsonl"

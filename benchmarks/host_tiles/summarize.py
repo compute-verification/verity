@@ -101,10 +101,10 @@ def main() -> None:
     diag = rows(out / "pearl_diag.jsonl")
     if diag:
         print("\n### Pearl-C small m: prefetch distance and B̃ resident in the LLC (2 weights) against streamed (40)\n")
-        print("| m | threads | weights | prefetch | GB/s |")
-        print("|---|---|---|---|---|")
+        print("| m | threads | weights | prefetch | fused | GB/s |")
+        print("|---|---|---|---|---|---|")
         for r in diag:
-            print(f"| {r['m']} | {r['threads']} | {r['weights']} | {r.get('prefetch', 0)} | {gbps(r)} |")
+            print(f"| {r['m']} | {r['threads']} | {r['weights']} | {r.get('prefetch', 0)} | {r.get('fused', 0)} | {gbps(r)} |")
     for r in rows(out / "shake.jsonl"):
         print(f"\nSHAKE256 (hashlib): {r['bytes_per_s'] / 1e9:.2f} GB/s" + (f" over {r['processes']} processes, "
               f"{r['per_core_min'] / 1e9:.2f} GB/s the slowest" if "processes" in r else " on one core"))

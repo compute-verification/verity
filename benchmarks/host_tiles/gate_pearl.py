@@ -123,6 +123,10 @@ if __name__ == "__main__":
         Path(sys.argv[2]).write_bytes(bytes(c for row in ga + gb for c in row))
     rows += case(binary, "uniform", *uniform("uniform", 5, 256, 64))
     rows += case(binary, "extreme", *extreme("extreme", 7, 512, 64))
+    # m <= 2 decodes B̃ in registers (the fused path)
+    rows += case(binary, "formed", fa[:1], fb) + case(binary, "gauss", ga[:2], gb)
+    rows += case(binary, "uniform", *uniform("uniform-m1", 1, 256, 64))
+    rows += case(binary, "extreme", *extreme("extreme-m2", 2, 512, 64))
     for r in rows:
         print(json.dumps(r))
     sys.exit(0 if all(r["mismatches"] == 0 for r in rows) else 1)
