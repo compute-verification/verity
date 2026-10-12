@@ -466,10 +466,10 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     return win
 
 
-def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir: str | Path, subcircuit: str) -> dict[str, Any]:
+def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir: str | Path) -> dict[str, Any]:
     """Member ``k``'s M0 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``, under the header
-    ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's block shape and class, the member's
-    global unit indices, and its ``frame_v3``.  The bodies are the window's bytes."""
+    ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's statement, subcircuit, block shape
+    and class, the member's global unit indices, and its ``frame_v3``.  The bodies are the window's bytes."""
     d, o = Path(window_dir), Path(out_dir)
     win = json.loads((d / "window.json").read_text())
     rec = json.loads((d / "registration.json").read_text())
@@ -488,8 +488,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     idx = list(range(int(mem["base"]), int(mem["base"]) + n))
     units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": idx, "blocks": [idx[b:b + G] for b in range(0, n, G)],
              "classes": [cls] * n}
-    head = {"format": M0_FORMAT, "statement": M0_STATEMENT, "scheme": SCHEME, "set": f"served/{rec['window']['run']}/m{k}",
-            "subcircuit": subcircuit, "range": [0, n], "instances": n,
+    head = {"format": M0_FORMAT, "statement": meta.get("statement", M0_STATEMENT), "scheme": SCHEME,
+            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta["subcircuit"], "range": [0, n], "instances": n,
             "circuit_sha512": hashlib.sha512(circuit_text.encode()).hexdigest(), "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]

@@ -161,9 +161,10 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     c = SR.commit(w, d, salt_key=bytes(32))
     SR.write(c, tmp_path / "w", {"row": 101}, SR.index_doc(w.members, [[], []], RUN))
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
-            "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {}}
+            "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {},
+            "statement": "verity/flock-circuit", "subcircuit": "norm/n128"}
     text = "flock-circuit v2\nMETA " + json.dumps(meta) + "\nCIRCUIT unit\n..."
-    got = SR.flock_input_files(tmp_path / "w", 1, text, tmp_path / "m0", "norm/n128")
+    got = SR.flock_input_files(tmp_path / "w", 1, text, tmp_path / "m0")
     assert got["pub"].endswith("m1-pub-3.bin") and got["inst"].endswith("m1-inst-3.bin")
     pub, inst = Path(got["pub"]).read_bytes(), Path(got["inst"]).read_bytes()
     ph, pbody = pub.split(b"\n", 1)
@@ -180,12 +181,13 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     assert ph["frame_v3"]["domain_ids"] == {p: c.domains[m.port(p)].domain_id.hex() for p in ("in0", "in1", "out.0", "out.1")}
     assert ph["units"]["indices"] == [4, 5, 6] and ph["units"]["blocks"] == [[4, 5], [6]]
     assert ph["circuit_sha512"] == hashlib.sha512(text.encode()).hexdigest()
+    assert (ph["statement"], ph["subcircuit"]) == ("verity/flock-circuit", "norm/n128")
     with pytest.raises(ValueError, match="ports"):
-        SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1", "rope-head/d64")
+        SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1")
     public_outputs = dict(meta, ports=meta["ports"][:2])
     del public_outputs["input_ports"]
     with pytest.raises(ValueError, match="ports"):
-        SR.flock_input_files(tmp_path / "w", 1, "flock-circuit v2\nMETA " + json.dumps(public_outputs) + "\n", tmp_path / "m2", "norm/n128")
+        SR.flock_input_files(tmp_path / "w", 1, "flock-circuit v2\nMETA " + json.dumps(public_outputs) + "\n", tmp_path / "m2")
 
 
 def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(tmp_path):
@@ -214,7 +216,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
         SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs + [0, 5]}])
     SR.write(c, tmp_path / "w", {"row": 101}, SR.index_doc((m,), [[]], RUN))
     meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1], ["y", 64, 1]], "input_ports": 2, "out_ports": [["y", 1]],
-            "vus_per_block": 4, "units_per_vu": 1}
-    got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0", "gemm/k64")
+            "vus_per_block": 4, "units_per_vu": 1, "subcircuit": "gemm/k64"}
+    got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0")
     head = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
     assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15

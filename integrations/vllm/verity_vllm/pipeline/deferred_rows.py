@@ -20,44 +20,60 @@ from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
 
 
-def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, out_dir: str | os.PathLike, *, checkpoint: Any = None,
-                weights: Callable | None = None, required_manifest: str | None = None, threads: int = 8,
-                workers: int | None = None) -> dict[str, Any]:
-    """The serving rows of a deferred Commit, from its sealed replay bundle: opened against the Commit's record beside it as the CPU
-    replay opens it (`cpu_replay.of_record`, decided or not), its Programs the Build's of record under ``row_dir``, the arrivals the
-    replay's, and the weights opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a
-    `weights_of_record.CheckpointIndex`; without one, only the tensors the bundle carries).  ``weights`` (tests) replaces the opened
-    weights."""
-    from verity_vllm.check.oracle_compare import OpenedReader
-
+def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | None = None) -> SimpleNamespace:
+    """A deferred Commit's sealed replay bundle opened against the Commit's record beside it as the CPU replay opens it
+    (`cpu_replay.of_record`, decided or not), with the Build's Programs of record under ``row_dir`` (`c2_replay.programs_of_record`)
+    and the replay's arrivals.  A slim bundle holds the replay's picks only: refused."""
     b = RB.open_bundle(bundle)
     ctx, bdir = b["context"], Path(b["path"])
-    out, pair = bdir.parent, int(ctx["pair"])
     if ctx.get("slim"):
         raise CPU.Refused(f"{bdir} is a slim bundle: it holds the replay's picks, not every unit of the population")
-    _rows, row, _verdict, store, run = CPU.of_record(b, out, awaiting=False)
+    _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
     o = SimpleNamespace(row_dir=row_dir, replay_workers=None, required_manifest=required_manifest)
     args = CPU.replay_args(o, ctx)
     _path, man = CPU.manifest_of(o, ctx, args)
     site = SimpleNamespace(args=args, manifest=man, reqs=ctx["requests"], sampling=ctx["sampling"], row=row)
     rl = C2.request_labels(ctx["requests"])
     loaded, digs = C2.programs_of_record(site, rl)
-    progs = {k: v["instances"] for k, v in loaded.items()}
     arrivals, _moved = C2.arrivals(site, rl)
+    return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
+                           manifest=man, loaded=loaded, digests=digs, programs={k: v["instances"] for k, v in loaded.items()},
+                           program_dirs={k: v.get("dir") for k, v in loaded.items()}, arrivals=arrivals)
+
+
+def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: str, required_manifest: str | None = None) -> Any:
+    """The verifier's own window of a deferred Commit (`serving_rows.population`: its population program, partition and law over the
+    Build's Programs of record, the run root of record), from the record alone: no committed value is read."""
+    r = of_record(bundle, row_dir, required_manifest)
+    window, _rows = SRW.population(r.programs, json.loads(Path(partition_file).read_text()), bytes(r.run.run_root).hex(), r.program_dirs)
+    return window
+
+
+def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, out_dir: str | os.PathLike, *, checkpoint: Any = None,
+                weights: Callable | None = None, required_manifest: str | None = None, threads: int = 8,
+                workers: int | None = None) -> dict[str, Any]:
+    """The serving rows of a deferred Commit, from its sealed replay bundle opened against its record (`of_record`), and the weights
+    opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
+    without one, only the tensors the bundle carries).  ``weights`` (tests) replaces the opened weights."""
+    from verity_vllm.check.oracle_compare import OpenedReader
+
+    r = of_record(bundle, row_dir, required_manifest)
     if weights is None:
-        k0 = next(iter(progs))
-        prefix = ProgramIndex(progs[k0], program_dir=loaded[k0].get("dir")).prefix
-        tree = json.loads((bdir / "weights" / "tree.json").read_text())
-        words, wc = CPU.open_weights(bdir, tree, (row["commit"].get("weight_registration") or {}).get("root"), checkpoint, threads=threads)
+        k0 = next(iter(r.programs))
+        prefix = ProgramIndex(r.programs[k0], program_dir=r.program_dirs[k0]).prefix
+        tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
+        root = (r.row["commit"].get("weight_registration") or {}).get("root")
+        words, wc = CPU.open_weights(r.bdir, tree, root, checkpoint, threads=threads)
         if not wc["equal"]:
             raise CPU.Refused(f"the bundle's weights: {wc['why']}")
         weights = CPU.provider(words, prefix, set())
-    bmap = json.loads((out / f"binding_map_p{pair}.json").read_text())
-    committer = {"from": "replay bundle", "bundle_manifest_sha256": b["manifest_sha256"], "pair": pair, "source": ctx.get("code")}
-    return SRW.after_commit(str(out_dir), partition_file=partition_file, programs=progs, bmap=bmap, committed=OpenedReader(store, run),
-                            weights=weights, manifest=man if isinstance(man, dict) else None, run_root=run.run_root,
-                            row=(ctx.get("args") or {}).get("label"), arrivals=arrivals,
-                            program_dirs={k: v.get("dir") for k, v in loaded.items()}, digests=digs, committer=committer, workers=workers)
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    committer = {"from": "replay bundle", "bundle_manifest_sha256": r.bundle["manifest_sha256"], "pair": r.pair, "source": r.ctx.get("code")}
+    return SRW.after_commit(str(out_dir), partition_file=partition_file, programs=r.programs, bmap=bmap,
+                            committed=OpenedReader(r.store, r.run), weights=weights,
+                            manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
+                            row=(r.ctx.get("args") or {}).get("label"), arrivals=r.arrivals, program_dirs=r.program_dirs,
+                            digests=r.digests, committer=committer, workers=workers)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
