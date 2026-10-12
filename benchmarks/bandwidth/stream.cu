@@ -805,6 +805,7 @@ struct Args {
   size_t dma_piece = 0;                // foldlive, foldtwo: 0 zero copy; else the copy engines carry S, this much a copy
   int dma_streams = 1;
   int mps_challenger_pct = 0, mps_prover_pct = 0;  // foldtwo: each process's CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (0: unset)
+  bool prover_first = false;                       // foldtwo: the challenger's context waits for the prover's store
 };
 
 static Device dev;
@@ -2042,7 +2043,7 @@ static int mode_fold_live(const Args& a) {
 // the window ends when both have.  Arms: 0 both, 1 the tag pass alone (the challenger idle), 2 the fold alone.
 struct Two {
   static constexpr uint32_t MAX = 1 << 14;
-  std::atomic<uint32_t> ready{0}, go{0}, launched{0}, done{0};
+  std::atomic<uint32_t> ready{0}, go{0}, launched{0}, done{0}, prover_ready{0};
   std::atomic<int> bad{0};
   double fold_end[MAX], fold_ms[MAX], landed_mb[MAX];
 };
@@ -2173,6 +2174,8 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
   OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
   cudaStream_t s_tag;
   OK(cudaStreamCreateWithPriority(&s_tag, cudaStreamNonBlocking, lo));
+  OK(cudaDeviceSynchronize());
+  sh.prover_ready.store(1, std::memory_order_release);
   uint8_t seed[32], throwaway[32] = {0}, root[64], want[64];
   fresh(seed, 32);
   if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
@@ -2184,7 +2187,7 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
                   ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) + ",\"deadline_us\":" + num(a.deadline_us) +
                   ",\"mps\":" + (mps && *mps ? "true" : "false") + ",\"mps_challenger_pct\":" +
                   std::to_string(a.mps_challenger_pct) + ",\"mps_prover_pct\":" + std::to_string(a.mps_prover_pct) +
-                  ",\"runs\":[";
+                  ",\"prover_first\":" + (a.prover_first ? "true" : "false") + ",\"runs\":[";
   uint32_t w = 0;
   int bad = 0;
   bool first = true;
@@ -2503,6 +2506,7 @@ int main(int argc, char** argv) {
     else if (k == "--mps-dir") a.mps_dir = v();
     else if (k == "--live-slot-kib") a.live_slot = std::stoull(v()) << 10;
     else if (k == "--temporal") a.temporal = true;
+    else if (k == "--prover-first") a.prover_first = true;
     else if (k == "--dma-piece-kib") a.dma_piece = std::stoull(v()) << 10;
     else if (k == "--dma-streams") a.dma_streams = std::stoi(v());
     else if (k == "--mps-challenger-pct") a.mps_challenger_pct = std::stoi(v());
@@ -2546,8 +2550,14 @@ int main(int argc, char** argv) {
     if (p == MAP_FAILED) return st::fail("mmap");
     two = new (p) st::Two();
     fflush(stdout);
+    const pid_t parent = getpid();
     child = fork();
     if (child < 0) return st::fail("fork");
+    // --prover-first: the challenger makes its context only once the prover's store is allocated, so the two processes'
+    // device allocations never interleave
+    if (child == 0 && a.prover_first)
+      while (two->prover_ready.load(std::memory_order_acquire) == 0)
+        if (getppid() != parent) return st::fail("the prover died");
     // read by each process's own MPS client at context creation, so the two can hold different shares of the SMs
     const int pct = child == 0 ? a.mps_challenger_pct : a.mps_prover_pct;
     if (pct > 0) setenv("CUDA_MPS_ACTIVE_THREAD_PERCENTAGE", std::to_string(pct).c_str(), 1);
