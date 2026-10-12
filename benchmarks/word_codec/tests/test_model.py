@@ -248,6 +248,10 @@ def test_frontier_at_the_floor():
     assert F.pipe_clocks(768) == pytest.approx(7.77, abs=0.01)
     assert [F.pipe_ops(b) for b in (512, 768, 1023, 1536, 2048)] == pytest.approx([1.45, 1.428, 1.38, 1.398, 1.356],
                                                                                    abs=0.001)
+    assert [F.rho_sq(b) for b in (768, 1536, 2048)] == pytest.approx([5.88e10, 1.915e10, 1.236e10], rel=0.002)
+    assert F.encode_bound(1536) == pytest.approx(1.387e7, rel=0.002)
+    assert F.encode_bound(1536) * 192 == pytest.approx(2.66e9, rel=0.005)
+    assert F.encode_bound(768) * 96 == pytest.approx(8.19e9, rel=0.005)
     assert F.OFF_ISSUE == pytest.approx((4.57, 7.13), abs=0.01)
     assert F.fused_y(768, 1, F.OFF_ISSUE[0]) == pytest.approx(F.FUSED_768_Y, abs=0.005)
     assert F.fused_y(768, 32, F.OFF_ISSUE[0]) == pytest.approx(F.FUSED_768_Y32)

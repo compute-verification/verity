@@ -93,6 +93,17 @@ def pipe_ops(bits: int) -> float:
     return pipe_clocks(bits) * g.ISSUE_LANES / issue_count(bits)
 
 
+def rho_sq(bits: int, clock_mhz: float = g.CLOCK_MAX_MHZ) -> float:
+    """WorkHardness's stated ρ_sq, squarings/s on the card: 5.9e10 at 768 bits, 1.9e10 at 1,536, 1.24e10 at 2,048."""
+    return g.SMS * clock_mhz * 1e6 / pipe_clocks(bits)
+
+
+def encode_bound(bits: int, k: int = 1, eta: float = 0.1) -> float:
+    """Falsifier (1)'s rate, words/s on the card: an encoder of k rounds mod a `bits`-bit p faster than this
+    falsifies WorkHardness (1.39e7 at 1,536 bits and k = 1, 2.66 GB/s of E)."""
+    return rho_sq(bits) / ((1 - eta) * k * (bits - 2))
+
+
 def sq(bits: int, ops: float | None = 1.0) -> float:
     """A squaring in passes, `ops` times the issue bound, or at the pipe floor when `ops` is None."""
     return g.sq_floor(bits, ops=(pipe_ops(bits) if ops is None else ops) * issue_count(bits))
@@ -105,8 +116,8 @@ OFF_ISSUE = (g.WIDE["p767"].eps / sq(768), (FUSED_1023_Y - FUSED_768_Y + g.WIDE[
 
 
 def apart_off(bits: int) -> tuple[float, float]:
-    """`off` for a decode that keeps a standalone squaring's registers (decode warps that don't share the GEMM's
-    register file, one block an SM) [estimate]: 768's fused decode with its squaring replaced by the measured one at
+    """`off` for a decode that keeps a standalone squaring's registers (4 decode warps at its 252 an SM, beside 4
+    GEMM warps in one CTA) [estimate]: 768's fused decode with its squaring replaced by the measured one at
     `bits` at the rate it keeps beside the read (`SHARED`), the rest of its ALU a byte held (low) or scaled with the
     squaring (high)."""
     e768 = g.WIDE["p767"].eps
