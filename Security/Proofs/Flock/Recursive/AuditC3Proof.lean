@@ -18,6 +18,9 @@ In (i), as in `PublicAudit`'s:
 * the hidden statement is R's registration (`xR` with the registrant's openings `_hreg`), a constant of the run, and the
   raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
+`_hstk` is not read here: VBridge is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
+(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`).
+
 (ii) is `RecursiveFirewallPrivate`.
 -/
 
@@ -36,8 +39,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg tr record xR hreg ish Vs zr hCust bind rows
-    hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg tr record xR hreg _hstk ish Vs zr hCust bind
+    rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
   · left

@@ -26,13 +26,11 @@ What it takes, against `PublicAudit`:
 * R's registration, which says which table the audit is about, as `RecursiveAudit`'s `p`, `path₀` and `_hreg` say which
   private circuit: the record `reg`, the verifier of record's `--rec-inner-registration`, which `st`'s META binds by
   its digest (`metaRegistration st`, as the verifier reads it off `--rec-inner-circuit`, the file `st` is set up from),
-  the registered word and cap `xR` and the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`).
-  The tie of the cap to the record's `stacked` entry is the verifier's, so it is in the event, not a hypothesis: the
-  verifier holds the inner transcript (`tr`, `record`, its own inputs) against `reg` (`innerCommitsAt`), whose binding
-  round's top must make the entry, and at a top that is `xR.cap`'s that gives `StackedTop`
-  (`FlockC3.RegLevels.stackedTop_of_innerCommits`). The word's closeness to a codeword is no hypothesis: the statement
-  holds only when some table within the unique-decoding radius of the word has a satisfiable hidden statement, so a far
-  word is a false statement that the bound covers;
+  the registered word and cap `xR`, the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`) and
+  the cap the record's `stacked` entry (`_hstk`, `StackedTop`): `xR` is the table `reg` registers, a relation between
+  public objects a user can check, so `st` fixes the cap up to a collision. The word's closeness to a codeword is no
+  hypothesis: the statement holds only when some table within the unique-decoding radius of the word has a satisfiable
+  hidden statement, so a far word is a false statement that the bound covers;
 * V*'s statements indexed by the verifier's own list (`vstarCount ish`, `RecVStar.statements`; gap 4(c)), in place of
   the formula `outerStatementsAt st`; the event adds the verifier's checks at candidate 3 of its own inputs
   (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, and check 5's sparse refusals pass, so
@@ -65,10 +63,9 @@ set_option synthInstance.maxHeartbeats 1000000
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
 parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, the
-registered word and cap `xR` with the registrant's openings `_hreg`), the verifier of record's records of the inner
-session (`tr`, `record`) and inner shape `ish`, and every prover `σ` of the recursive audit with candidate 3's compiled
-table as its inner protocol
-(`holoInnerAt`), at the law of the registration's draws (`drawLaw`): V*'s statements `Vs`, one for each of the
+registered word and cap `xR` with the registrant's openings `_hreg`, its cap the record's `stacked` entry `_hstk`), the
+verifier of record's records of the inner session (`tr`, `record`) and inner shape `ish`, and every prover `σ` of the
+recursive audit with candidate 3's compiled table as its inner protocol (`holoInnerAt`), at the law of the registration's draws (`drawLaw`): V*'s statements `Vs`, one for each of the
 verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their
 records' custody `_hCust`, the verifier of record's own inputs (V*'s bindings `bind` and the shared rows `rows`; session
 `j` runs as V*'s statement `j`), at which V*'s statements' files parse to `Vs` (`VStarParses`), every session's inputs
@@ -93,9 +90,10 @@ def RecursiveAuditC3 : Prop :=
     -- the verifier of record's own inputs: R's registration (`--rec-inner-registration`, the record `st`'s META binds),
     -- the coin server's record of V*'s inner session (`--rec-inner-transcript`) and the session's (`--rec-inner-session`)
     (reg : Lean.Json) (tr : Lean.Json) (record : String)
-    -- the registered word and cap, and the registrant's openings
+    -- the registered word and cap, the registrant's openings and the record's `stacked` entry
     (xR : HoloReg FlockLevel3.GF128 Refine.Dig)
     (_hreg : xR.Opens Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp).rsch.sch.level₀)
+    (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg xR.cap)
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
