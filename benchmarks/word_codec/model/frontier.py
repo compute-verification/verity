@@ -30,6 +30,10 @@ FUSED_1023_Y = 2.025
 # Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits ra-word-codec's 2.81e10/s,
 # 1,536 and 2,048 the red team's F22 (r20261012-102430-ee3a: 8.3e9/s, 5.05e9/s with one level of Karatsuba).
 SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 5.05e9)}
+# The 1,536-bit squaring (252 registers) beside a streaming read: at two blocks an SM it leaves the read no registers
+# and runs serially with it; at one it overlaps the read fully at 6.72e9/s, 81% of its rate alone [measured, the red
+# team's F24, r20261012-111728-cc57]. Taken at 2,048 bits too [estimate].
+SHARED = 6.72e9 / 8.28e9
 KAPPA = g.CLOCK_MAX_MHZ / g.CLOCK_LOCKED_MHZ  # Φ_cores is declared at the max clock
 
 
@@ -99,12 +103,14 @@ OFF_ISSUE = (g.WIDE["p767"].eps / sq(768), (FUSED_1023_Y - FUSED_768_Y + g.WIDE[
 
 
 def apart_off(bits: int) -> tuple[float, float]:
-    """`off` for a decode that keeps a standalone squaring's registers (several threads a word, or decode warps that
-    don't share the GEMM's register file) [estimate]: 768's fused decode with its squaring replaced by the measured
-    one at `bits`, the rest of its ALU a byte held (low) or scaled with the squaring (high)."""
+    """`off` for a decode that keeps a standalone squaring's registers (decode warps that don't share the GEMM's
+    register file, one block an SM) [estimate]: 768's fused decode with its squaring replaced by the measured one at
+    `bits` at the rate it keeps beside the read (`SHARED`), the rest of its ALU a byte held (low) or scaled with the
+    squaring (high)."""
     e768 = g.WIDE["p767"].eps
-    low = SQUARING[bits] + e768 - SQUARING[768]
-    return low / sq(bits), e768 * SQUARING[bits] / SQUARING[768] / sq(bits)
+    shared = SQUARING[bits] / SHARED
+    low = shared + e768 - SQUARING[768]
+    return low / sq(bits), e768 * shared / SQUARING[768] / sq(bits)
 
 
 def decode_eps(bits: int, off: float, clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> float:
@@ -137,6 +143,13 @@ def e_codec(bits: int, batch: int, off: float, clock_mhz: float = g.CLOCK_LOCKED
     return replace(c, y=fused_y(bits, batch, off, clock_mhz))
 
 
+def kv_attn(k: int) -> float:
+    """What a KV pass takes past the model's step with its decode in place of E's: ra-word-codec's decode inside
+    70B attention costs (1.0k − 0.32) of the plain KV read at 2^768 − 825 [measured, r20261012-110925-e561], about
+    half a pass more than the fused GEMM's 0.159 and k − 1 standalone decodes; taken at every KV prime [estimate]."""
+    return k - 0.32 - (FUSED_768_Y - 1) - (k - 1) * g.WIDE["p767"].eps
+
+
 def kv_codec(bits: int, batch: int, off: float = OFF_ISSUE[0]) -> g.Codec:
     """A KV prime decoded beside attention: p767's unfused step with ε at `off` times the issue bound."""
     p767 = g.WIDE["p767"]
@@ -154,11 +167,12 @@ def options(shape: g.Shape, batch: int, c: g.Codec, ops: float | None = None, kv
     c = replace(c, y=c.y + TAG)
     common = dict(idle=IDLE[shape.name], theta=g.WIDE_THETA["p767"], out_tokens=OUT_TOKENS, adversary=adv,
                   kappa=kappa)
-    out = {f"k{kr}": g.Point(shape, batch, 4096, True, c, kv_rounds=kr, **common).terms() for kr in (1, 2, 4)}
+    out = {f"k{kr}": g.Point(shape, batch, 4096, True, c, kv_rounds=kr, kv_extra=kv_attn(kr), **common).terms()
+           for kr in (1, 2, 4)}
     for n in kv_widths:
         kc = kv_codec(n, batch, off)
         out[f"w{n}"] = g.Point(shape, batch, 4096, True, c, kv_codec=kc, kv_adversary=g.at_floor(kc, sq(n, ops)),
-                               **common).terms()
+                               kv_extra=kv_attn(1), **common).terms()
     return out
 
 

@@ -240,9 +240,9 @@ def test_frontier_at_the_floor():
     """The design note's point and its neighbours at the squaring floor (70B batch 1, the adversary at the measured
     pipes' floor and the max clock): no squaring reaches the issue bound; the decode rule meets the measured fused
     steps at 512, 768 and 1023 bits; the measured 1023-bit kernel buys nothing over 768 for 0.8 more step; E on 1,536
-    bits brings the no-assumption γ under 1% with its decode apart (either end, and at the issue bound), thread-per-word
-    only for a further step; 2,048 bits buys little more for more step; an honest at the max clock is faster at the
-    same γ."""
+    bits brings the no-assumption γ under 1% with its decode apart at one block an SM (either end; at the issue bound
+    only the low end), thread-per-word only for a further step; 2,048 bits buys little more for more step; an honest
+    at the max clock is faster at the same γ."""
     assert F.KAPPA == pytest.approx(2430 / 2092)
     assert [F.issue_count(b) for b in (512, 768, 1023, 1536, 2048)] == [352, 696, 1120, 2184, 3488]
     assert F.pipe_clocks(768) == pytest.approx(7.77, abs=0.01)
@@ -257,24 +257,25 @@ def test_frontier_at_the_floor():
     t = F.today()
     assert t["gamma_bw"] == pytest.approx(0.0053, abs=2e-4)
     assert t["gamma_decode_free"] == pytest.approx(0.0127, abs=2e-4)
-    assert t["slowdown"] == pytest.approx(1.41, abs=0.01)
-    assert F.today(ops=1.0)["gamma_decode_free"] == pytest.approx(0.0167, abs=2e-4)
+    assert t["slowdown"] == pytest.approx(1.42, abs=0.01)
+    assert F.today(ops=1.0)["gamma_decode_free"] == pytest.approx(0.0168, abs=2e-4)
+    assert F.kv_attn(1) == pytest.approx(0.52, abs=0.005) and F.SHARED == pytest.approx(0.81, abs=0.005)
     fast = F.today(clock_mhz=G.CLOCK_MAX_MHZ)
     assert fast["slowdown"] < t["slowdown"] - 0.08 and abs(fast["gamma_bw"] - t["gamma_bw"]) < 5e-4
     _, t1023 = F.pick(F.options(G.LLAMA_70B, 1, F.e_codec(1023, 1, F.OFF_ISSUE[1]), off=F.OFF_ISSUE[1]))
     assert t["gamma_decode_free"] - t1023["gamma_decode_free"] < 0.001 and t1023["slowdown"] > t["slowdown"] + 0.75
     assert F.SQUARING[768] == pytest.approx(0.552, abs=0.001)
-    assert F.apart_off(1536) == pytest.approx((4.04, 4.91), abs=0.01)
+    assert F.apart_off(1536) == pytest.approx((4.68, 6.06), abs=0.01)
     p = F.point()
-    assert p["gamma_bw"] == pytest.approx(0.0049, abs=2e-4)
-    assert p["gamma_decode_free"] == pytest.approx(0.0071, abs=2e-4)
-    assert p["slowdown"] == pytest.approx(1.73, abs=0.01)
+    assert p["gamma_bw"] == pytest.approx(0.0042, abs=2e-4)
+    assert p["gamma_decode_free"] == pytest.approx(0.0077, abs=2e-4)
+    assert p["slowdown"] == pytest.approx(2.00, abs=0.01)
     high = F.point(off=F.apart_off(1536)[1])
-    assert high["gamma_decode_free"] < 0.0080 and high["slowdown"] < 2.1
-    assert F.point(ops=1.0)["gamma_decode_free"] < 0.0088 and F.point(ops=1.0, off=F.apart_off(1536)[1])[
-        "gamma_decode_free"] < 0.0098
+    assert high["gamma_decode_free"] < 0.0090 and high["slowdown"] < 2.45
+    assert F.point(ops=1.0)["gamma_decode_free"] < 0.0095 < 0.01 < F.point(ops=1.0, off=F.apart_off(1536)[1])[
+        "gamma_decode_free"]
     tpw = F.point(off=F.OFF_ISSUE[1])
-    assert tpw["gamma_decode_free"] < 0.0095 and tpw["slowdown"] > p["slowdown"] + 0.9
+    assert tpw["gamma_decode_free"] < 0.0095 and tpw["slowdown"] > p["slowdown"] + 0.7
     off = F.apart_off(2048)[0]
     _, wide = F.pick(F.options(G.LLAMA_70B, 1, F.e_codec(2048, 1, off), off=off))
-    assert p["gamma_decode_free"] - wide["gamma_decode_free"] < 0.0015 and wide["slowdown"] > p["slowdown"] + 0.2
+    assert p["gamma_decode_free"] - wide["gamma_decode_free"] < 0.0015 and wide["slowdown"] > p["slowdown"] + 0.15

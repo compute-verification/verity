@@ -276,6 +276,7 @@ class Point:
     s_c: float = 0.19  # FP8 weights per payload byte: measured 0.17 (8B, art:23672ef9), 0.19 (70B, art:f989de1d)
     kv_rounds: int = 1  # Sloth rounds on the KV cache's words, k for E: its payloads are free, so it may want more
     kv_codec: Codec | None = None  # the KV words' codec, at one round (E's when None); its ε, r and slot are used
+    kv_extra: float = 0.0  # passes a KV pass takes past E's fused step with the KV decode in place of E's
     out_tokens: int = 0  # tokens a sequence generates, over which its prompt's KV encode is spread (0: not counted)
     adversary: Codec | None = None  # the adversary's ε and r on E's words (`at_floor`); the honest's when None
     kv_adversary: Codec | None = None  # the same on the KV words, at one round; E's adversary's when no kv_codec
@@ -298,7 +299,7 @@ class Point:
         # d, the window in passes of the certified bytes: E's fused pass, the KV cache's (E's fused step with the KV
         # codec's decode in place of E's) or its uncertified read at the native rate, the encode of the step's new
         # KV words, and the idle time; the adversary may spend all of it.
-        y_kv = c.y + self.kv_rounds * kc.eps - c.eps if self.kv_certified else 1.0
+        y_kv = c.y + self.kv_rounds * kc.eps - c.eps + self.kv_extra if self.kv_certified else 1.0
         d = (c.y * e + y_kv * kv + enc_kv * new + self.idle * e) / cert
         # The prompts' KV words, encoded at prefill, outside the decode windows: passes of the certified bytes.
         prefill = enc_kv * (kv - new) / cert
