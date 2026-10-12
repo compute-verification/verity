@@ -141,6 +141,21 @@ def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(worl
     assert again[2].head == world.gh.prs[2].head
 
 
+def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
+    """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
+    next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
+    flag keeps the new order."""
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    world.queue().sync()
+    world.gh.put(9, world.change({"fix.txt": "fix\n"}))
+    world.gh.put(8, world.change({"other.txt": "x\n"}), ready=False)
+    members, _ = world.queue(first=(8, 9)).sync()
+    assert [m.pr for m in members] == [9, 1, 2, 3]
+    again, _ = world.queue().sync()
+    assert [m.commit for m in again] == [m.commit for m in members]
+
+
 def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched_the_file(world):
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))

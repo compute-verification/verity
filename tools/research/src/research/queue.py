@@ -12,7 +12,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`)
-    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--dry-run]
+    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
                                                    check `next` in trains with train.sh, tell the lander what it refuses
     research queue judge RUN [--on MACHINE] [--by LANE]
@@ -280,9 +280,9 @@ def _message(pr: PR) -> str:
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
-                 auth: tuple[str, ...] = ()):
+                 auth: tuple[str, ...] = (), first: tuple[int, ...] = ()):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
-        self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
+        self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
@@ -386,7 +386,8 @@ class Queue:
         return out
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
-        """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains."""
+        """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains.  The PRs
+        in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
         kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head]
         out: list[int] = []
@@ -398,7 +399,7 @@ class Queue:
                 place(a)
             out.append(n)
 
-        for n in kept + sorted(ready - set(kept)):
+        for n in [f for f in self.first if f in ready] + kept + sorted(ready - set(kept)):
             place(n)
         return out
 
@@ -985,7 +986,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (a cutoff the driver announces)")
+    ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
+                                                                    "order, ahead of members that keep their place (a fix the next "
+                                                                    "train needs)")
     a = ap.parse_args(argv)
+    if a.first and not re.fullmatch(r"\d+(,\d+)*", a.first):
+        ap.error(f"--first {a.first!r}: PR numbers separated by commas")
     if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
     if a.dry_run and a.command not in ("sync", "land", "drive"):
@@ -1021,7 +1027,7 @@ def main(argv: list[str]) -> int:
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
-                  auth=credential_args(Path.cwd(), remote))
+                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n))
         lock = _lock(a.workdir)  # noqa: F841
         if a.command == "status":
             entries = q.status()
