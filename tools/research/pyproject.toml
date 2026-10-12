@@ -42,8 +42,10 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "archive/direct", 
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge
-# gate and queue `check` drives, and the pod registry. Not the coordination tooling (Slack, notes, monitors, the steward) nor
-# pods/nebius, which verity-ops declares. A dependent's test that reads another file of it fails the guard until it is listed.
+# gate and queue `check` drives, and the pod registry; of the store and telemetry, the files a `research data fetch` and a run's
+# record import, so the store's bucket index, custody and eviction aren't inputs of every dependent. Not the coordination tooling
+# (Slack, notes, monitors, the steward) nor pods/nebius, which verity-ops declares. A dependent's test that reads another file
+# of it fails the guard until it is listed.
 exports = ["tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py", "tools/research/src/research/cli.py",
            "tools/research/src/research/clone.py", "tools/research/src/research/compare.py", "tools/research/src/research/env.py",
            "tools/research/src/research/gates.py", "tools/research/src/research/merge.py", "tools/research/src/research/pythonpath.py",
@@ -51,4 +53,15 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
            "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
            "tools/research/src/research/pods/__init__.py", "tools/research/src/research/pods/registry.py",
-           "tools/research/src/research/pods/runpod.py", "tools/research/src/research/store", "tools/research/src/research/telemetry"]
+           "tools/research/src/research/pods/runpod.py",
+           "tools/research/src/research/store/__init__.py", "tools/research/src/research/store/attempt.py",
+           "tools/research/src/research/store/canon.py", "tools/research/src/research/store/cli.py",
+           "tools/research/src/research/store/cli_prov.py", "tools/research/src/research/store/derivation.py",
+           "tools/research/src/research/store/ids.py", "tools/research/src/research/store/index.py",
+           "tools/research/src/research/store/kinds.py", "tools/research/src/research/store/local.py",
+           "tools/research/src/research/store/model.py", "tools/research/src/research/store/remote.py",
+           "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/tool.py",
+           "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
+           "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
+           "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py",
+           "tools/research/src/research/telemetry/source_identity.py"]
