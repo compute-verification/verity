@@ -3784,6 +3784,9 @@
    "signature": ["Accounting.SecurityProofs.Memory.Counting : Accounting.Guarantees.Memory.Counting"],
    "assumptions": [],
    "type_hash": "38be2c96b0dfcca031464085d1aabc4b6ccf2a4cb146f88d79611faec1ba885f"
+  },
+  "Accounting.SecurityProofs.B2Adds": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -4216,7 +4219,8 @@
    "Accounting.SecurityProofs.Memory.AddsP2Ring": "frozen (no-function): It is AddsOn at P2's deployed point (105 challenges), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
    "Accounting.SecurityProofs.Memory.AddsIsolated": "frozen (no-function): It is Adds at H = 0 (perfect isolation), about PoUS's abstract audit game and no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsOnIsolated": "frozen (no-function): It is AddsOn at H = 0 (perfect isolation), about PoUS's ring model and no function of the code.",
-   "Accounting.SecurityProofs.Memory.AddsP2RingIsolated": "frozen (no-function): It is AddsP2Ring at H = 0 (perfect isolation), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure."
+   "Accounting.SecurityProofs.Memory.AddsP2RingIsolated": "frozen (no-function): It is AddsP2Ring at H = 0 (perfect isolation), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
+   "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick, takes B2's hypotheses on them, which are not on the premises list, and composes them with PoUS's AuditSecureOn over the ring model, taken as a hypothesis, through lemma M: about no function of the code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
