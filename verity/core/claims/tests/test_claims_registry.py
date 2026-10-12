@@ -48,6 +48,14 @@ def test_bare_ids_are_kebab_case_without_a_slash() -> None:
     assert all(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", k) for k in (*PROPERTIES, *INSTANCES))
 
 
+def test_bandwidth_device_claims_are_measured_and_cited_separately() -> None:
+    device, inst = get("bandwidth-device"), get("bandwidth-instantiation")
+    assert (device.kind, device.standing) == ("model", None)
+    assert all((get(i).kind, get(i).standing) == ("assumption", "measured")
+               for i in ("bandwidth-s-chip", "bandwidth-side-cap", "bandwidth-regen-time"))
+    assert (inst.kind, inst.standing) == ("assumption", "conjectured") and "uniformly random blocks" in inst.name
+
+
 def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     device, speed, inst = get("pous-ring-device"), get("pous-ring-speed"), get("pous-ring-instantiation")
     assert (device.kind, device.standing) == ("model", None) and not any(c.isdigit() for c in device.name)
