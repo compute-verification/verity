@@ -29,6 +29,11 @@ static const char* const NAME = "ro-sketch-blake3/v0";
 #ifndef SK_L2_EF
 #define SK_L2_EF 1
 #endif
+// SK_FUSE_DEC = 1 puts the encoded store's sketch and decode in one basic block, so ptxas may interleave the sketch's MMA
+// chains with the decode's integer latency (otherwise the runtime `decode` branch separates them).
+#ifndef SK_FUSE_DEC
+#define SK_FUSE_DEC 0
+#endif
 
 __device__ __forceinline__ void bulk_load_ef(void* dst, const void* src, uint32_t bytes, uint64_t* bar, uint64_t pol) {
   asm volatile(
@@ -324,15 +329,23 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
         for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
         __syncwarp();
         if (lane == 0) mbar_arrive(empty + s);
-        if constexpr (SK) {
+        auto sketch_raw = [&]() {
+          if constexpr (SK) {
 #pragma unroll
-          for (int st8 = 0; st8 < MS; ++st8) {
-            const uint64_t w0 = xw[2 * st8], w1 = 2 * st8 + 1 < LANE_WORDS ? xw[2 * st8 + 1] : 0;
-            const uint32_t a[4] = {(uint32_t)w0, (uint32_t)(w0 >> 32), (uint32_t)w1, (uint32_t)(w1 >> 32)};
-            sketch_step<KS>(acc_s[st8 % NA], a, sw, st8);
+            for (int st8 = 0; st8 < MS; ++st8) {
+              const uint64_t w0 = xw[2 * st8], w1 = 2 * st8 + 1 < LANE_WORDS ? xw[2 * st8 + 1] : 0;
+              const uint32_t a[4] = {(uint32_t)w0, (uint32_t)(w0 >> 32), (uint32_t)w1, (uint32_t)(w1 >> 32)};
+              sketch_step<KS>(acc_s[st8 % NA], a, sw, st8);
+            }
           }
+        };
+        if (SK_FUSE_DEC && decode) {
+          sketch_raw();
+          decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
+        } else {
+          sketch_raw();
+          if (decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
         }
-        if (decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
 #pragma unroll
         for (int tt = 0; tt < TASK_TILES; ++tt) {
           const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),

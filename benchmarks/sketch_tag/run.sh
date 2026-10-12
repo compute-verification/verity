@@ -10,7 +10,8 @@
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
 # the profiles; LIBSET (default "dense_ef dense") names the builds: dense_ef / split_ef the 61-bit word codec at 60 / 56
 # payload bits with the store loaded L2 evict-first (sketch.cu's default), dense / split without; dense1, split1: one
-# sketch accumulator a sign block; dense4, dense16: four or sixteen chains.
+# sketch accumulator a sign block; dense4, dense16: four or sixteen chains; dense_ef_fd: the sketch and the decode in one
+# basic block (SK_FUSE_DEC).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -25,7 +26,8 @@ FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -
 declare -A DEFS=([dense]="-DWC_PB=60 -DSK_L2_EF=0" [split]="-DWC_PB=56 -DSK_L2_EF=0"
                  [dense1]="-DWC_PB=60 -DSK_CHAINS=1 -DSK_L2_EF=0" [split1]="-DWC_PB=56 -DSK_CHAINS=1 -DSK_L2_EF=0"
                  [dense4]="-DWC_PB=60 -DSK_CHAINS=4 -DSK_L2_EF=0" [dense16]="-DWC_PB=60 -DSK_CHAINS=16 -DSK_L2_EF=0"
-                 [dense_ef]="-DWC_PB=60 -DSK_L2_EF=1" [split_ef]="-DWC_PB=56 -DSK_L2_EF=1")
+                 [dense_ef]="-DWC_PB=60 -DSK_L2_EF=1" [split_ef]="-DWC_PB=56 -DSK_L2_EF=1"
+                 [dense_ef_fd]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_FUSE_DEC=1")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086
