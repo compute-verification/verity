@@ -12,6 +12,9 @@ the device's bounds define the class the guarantees quantify over, and the claim
 node (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for
 `c_enc`, `random-oracle` for the receipt and the chained seed).
 
+The stated instance is Sloth over a 1,024-bit prime, masked with `σ_K` between rounds, at three rounds (`k = 3`). Its
+rebuild work per word is `c_enc`, a parameter of every statement here, so the codec changes no statement.
+
 * `RateConservationRO`, `RateConservation`: the window's correct receipts, wherever they were computed, cost reads of
   the counted tiers, rebuilt words, on-chip state and the link: with side sources that ignore the oracle, and with any.
 * `RateConservationCapRO`, `RateConservationCap`: the same with each tier's reads bounded by its capacity `R_i·T` and
