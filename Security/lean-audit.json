@@ -439,7 +439,10 @@
    "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
   },
   "Bandwidth.SecurityProofs.HonestPasses": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.HonestPasses : Bandwidth.Guarantees.HonestPasses"],
+   "assumptions": [],
+   "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -3751,7 +3754,7 @@
     "Bandwidth.World.oracle": "f624d94a48e3c59ebf88fa87dd1224d0287c1d02e19270d236d424eeec1f8d56",
     "Bandwidth.World.side": "f566a8353998a8afde7363fd5ca5b98c5cb9ade02af1f79d543430fb1b1e8b99"
    },
-   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
+   "guarantees": ["Bandwidth.SecurityProofs.AuditRO", "Bandwidth.SecurityProofs.HonestPasses"]
   },
   "Definitions.Core.Circuit": {
    "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
@@ -4195,6 +4198,7 @@
    },
    "guarantees": [
     "Bandwidth.SecurityProofs.AuditRO",
+    "Bandwidth.SecurityProofs.HonestPasses",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -11593,11 +11597,12 @@
    ]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
-   "digest": "e4ca1c75ea30d2c9ed0f847a814de0fdcaf61dc5905b5b8346ec0705ef788f1c",
+   "digest": "c983853bf2be4c384df9d364a5b2c827a9e0187155e2c12dc3e2d5450cff7e00",
    "definitions": {
-    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20"
+    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20",
+    "Bandwidth.Guarantees.HonestPasses": "ea463a38fea8188b52f9b1c359364c3adc9256df140c00493c7e612ffe2f8f2d"
    },
-   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
+   "guarantees": ["Bandwidth.SecurityProofs.AuditRO", "Bandwidth.SecurityProofs.HonestPasses"]
   },
   "Models.Flock.Guarantees.Audit": {
    "digest": "e95e7804d3b91387a66349a191d56288f14663b77c7d3b58d42a3e5e3d9e05f2",
