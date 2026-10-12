@@ -57,8 +57,8 @@ TIME_FORMS = ((1, 1), (1, 2))  # of the timed ones (V0 and V3 lose to V1: runs r
 MODE_GEMM, MODE_TAGS, MODE_SINK, MODE_TAGONLY = 0, 1, 2, 3
 # an arm of tf.cu's kernels: lane spans g32p1, t32v1p2 (span, variant, load depth); chunk blocks t4kw4s3 (lanes, warps
 # a CTA, stages); u4kw4s3 is t4kw4s3 at 4 rounds (not BLAKE3: uncertified)
-FORM = re.compile(r"(?P<stage>[gtcsou])(?P<span>\d+)"
-                  r"(?:(?P<k>k)(?:w(?P<w>\d+)s(?P<st>\d+)(?P<pk>f)?|r(?P<rpd>\d+)(?P<cf>[cs])?)|(?:v(?P<v>\d+))?p(?P<pd>\d+))$")
+FORM = re.compile(r"(?P<stage>[gtcsoun])(?P<span>\d+)"
+                  r"(?:(?P<k>k)(?:w(?P<w>\d+)s(?P<st>\d+)(?P<pk>f)?|r(?P<rpd>\d+)(?P<cf>c)?)|(?:v(?P<v>\d+))?p(?P<pd>\d+))$")
 PROBE_ROUNDS = 4
 
 
@@ -74,9 +74,10 @@ class Lib:
             "tf_init": [v, v], "tf_fused": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
-            "tf_fused3d": [i, i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
+            "tf_fused3d": [i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
+            "tf_commit": [v, u64, u64, v, v],
             "tf_chain": [i, i, i, u64, v, i, i, v], "tf_b3_one": [i, v, v, v], "tf_keccak_one": [v, v],
             "tf_read": [v, u64, v, i, v], "tf_spin": [ctypes.c_longlong, v], "tf_empty": [i, v],
         }
@@ -271,9 +272,8 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                                                                 mb, n, k, jb))
             if lanes in CHUNK_REG_PACKED and n % 64 == 0:
                 for mb in (1, 16, 32):
-                    for pk, sfx in ((1, "c"), (2, "s")):
-                        check(f"t_r1{sfx}_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, 1, plain, xs[mb], y, tb,
-                                                                 mb, n, k, jb, pk=pk))
+                    check(f"t_r1c_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, 1, plain, xs[mb], y, tb, mb, n, k,
+                                                         jb, pk=1))
             if lanes == CHUNK_SINK:
                 for mb in (1, 16, 32):
                     xr.zero_()
@@ -305,6 +305,12 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
         torch.cuda.synchronize()
         e["leaves"] = leaf_bytes(nodes, nleaves) == r["leaves"]
         e["root"] = leaf_bytes(nodes[-8:], 1).hex() == r["root"]
+        serial = nodes.clone()
+        nodes.zero_()
+        lib.call("tf_commit", ptr(tb), count, r["leaf0"], ptr(nodes), stream(torch))
+        torch.cuda.synchronize()
+        e["commit_nodes"] = bool(torch.equal(nodes, serial))
+        del serial
         lv = min(ctz(nleaves) - (nleaves & (nleaves - 1) == 0), 9) if nleaves else 0
         if lv >= 1:
             nodes.zero_()
@@ -356,11 +362,11 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             xr = torch.zeros(1, dtype=torch.int32, device="cuda")
             reg = [(f"g0kr{pd}", (1, MODE_GEMM, pd, 0)) for pd in CHUNK_REG_PD]
             reg += [(f"t{lanes}kr{pd}", (lanes, MODE_TAGS, pd, 0)) for lanes in CHUNK_REG_LANES for pd in CHUNK_REG_PD]
-            reg += [(f"t{lanes}kr1{sfx}", (lanes, MODE_TAGS, 1, pk)) for lanes in CHUNK_REG_PACKED
-                    for pk, sfx in ((1, "c"), (2, "s"))]
+            reg += [(f"t{lanes}kr1c", (lanes, MODE_TAGS, 1, 1)) for lanes in CHUNK_REG_PACKED]
+            reg += [("u4kr1", (4, MODE_TAGS, 1, 2)), ("n4kr1", (4, MODE_SINK, 1, 3))]
             for label, (lanes, mode, pd, pk) in reg if n % 64 == 0 else ():
                 ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
-                fused3(lib, torch, lanes, mode, pd, plain, x, ya, tb, mb, n, k, 0, pk=pk)
+                fused3(lib, torch, lanes, mode, pd, plain, x, ya, tb, mb, n, k, 0, xr, pk=pk)
                 e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
             for label, (lanes, mode, wc, st) in forms:
                 if not fits(mb, mode, wc, st, n):
@@ -602,7 +608,9 @@ def time_shape(lib: Lib, torch, name, n, k, w8, maps, batches, reps, log) -> dic
                     arms[f"t{lanes}kr{pd}"] = arm_f3(lanes, MODE_TAGS, pd)
             if lanes in CHUNK_REG_PACKED:
                 arms[f"t{lanes}kr1c"] = arm_f3(lanes, MODE_TAGS, 1, 1)
-                arms[f"t{lanes}kr1s"] = arm_f3(lanes, MODE_TAGS, 1, 2)
+            if lanes == 4:
+                arms["u4kr1"] = arm_f3(4, MODE_TAGS, 1, 2)
+                arms["n4kr1"] = arm_f3(4, MODE_SINK, 1, 3)
             if lanes == CHUNK_SINK and fits(mb, MODE_SINK, *CHUNK_ONE):
                 arms[f"s{lanes}kw4s3"] = arm_f2(lanes, MODE_SINK, *CHUNK_ONE)
             if lanes == 4 and fits(mb, MODE_TAGS, *CHUNK_ONE):
@@ -678,8 +686,11 @@ def commit_costs(lib: Lib, torch, spans, reps: int, log) -> dict:
         tl = statistics.median(timed(torch, lambda: lib.call("tf_leaves", ptr(tb), count, 0, ptr(nodes),
                                                              stream(torch)), reps))
         tt = statistics.median(timed(torch, lambda: lib.call("tf_tree", ptr(nodes), nleaves, stream(torch)), reps))
-        out[span] = {"blocks": count, "leaves": nleaves, "leaves_s": tl, "tree_s": tt}
-        log(f"commit span {span}: one step's {count} tags -> {nleaves} leaves {tl * 1e3:.2f} ms, tree {tt * 1e3:.2f} ms")
+        tc = statistics.median(timed(torch, lambda: lib.call("tf_commit", ptr(tb), count, 0, ptr(nodes),
+                                                             stream(torch)), reps))
+        out[span] = {"blocks": count, "leaves": nleaves, "leaves_s": tl, "tree_s": tt, "commit_s": tc}
+        log(f"commit span {span}: one step's {count} tags -> {nleaves} leaves {tl * 1e3:.2f} ms, tree {tt * 1e3:.2f} ms;"
+            f" tf_commit {tc * 1e3:.2f} ms")
     return out
 
 
@@ -696,11 +707,11 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
     if arm == "plain":
         return lambda: so.tf_plain(ptr(pl), xp, yp, mb, n, k, 0, stream(torch))
     m = FORM.match(arm)
-    mode = {"g": MODE_GEMM, "t": MODE_TAGS, "s": MODE_SINK, "u": MODE_TAGS}[m["stage"]]
+    mode = {"g": MODE_GEMM, "t": MODE_TAGS, "s": MODE_SINK, "u": MODE_TAGS, "n": MODE_SINK}[m["stage"]]
     if m["rpd"]:
         lanes, pd = int(m["span"]) or 1, int(m["rpd"])
-        return lambda: so.tf_fused3(lanes, mode, pd, {None: 0, "c": 1, "s": 2}[m["cf"]], ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase,
-                                    xrp, stream(torch))
+        pk = {"u": 2, "n": 3}.get(m["stage"], 1 if m["cf"] else 0)
+        return lambda: so.tf_fused3(lanes, mode, pd, pk, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, stream(torch))
     if m["k"]:
         lanes, wc, st = int(m["span"]) or 1, int(m["w"]), int(m["st"])
         rounds = PROBE_ROUNDS if m["stage"] == "u" else 7
@@ -716,18 +727,21 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
 
     native   each shape's fastest native arm at this batch (cuBLASLt, the plain GEMM or a GEMM-only form)
     tagL     each shape's fastest chunk form of L lanes, tags to one step-wide buffer at their store offsets
-    commitL  tagL, then the leaves over the whole step's tags in one launch, then the tree
+    commitL  tagL, then tf_commit: the leaves over the whole step's tags and the levels over each 128 of them in one
+             launch, then the tree's rest; its nodes must equal commitsL's, or it is dropped
+    commitsL tagL, then the leaves in one launch and the tree a launch a level (tf_leaves, tf_tree)
     overlapL tagL with each layer's leaves and their complete subtrees on a low-priority stream behind the layer's last
              linear, then the tree's top (the levels over the layers' subtrees)
     topL     that top alone (what pipelining the commit behind the next step would leave)
     tagrL    fused3 at one quad ahead at every shape (tL kr1)
     tagkL    tagrL with the packed CTA finish (tL kr1c); its tags must equal tagrL's, or it is dropped
-    tagrsL   tagrL with the rolled absorb (tL kr1s: BLAKE3's rounds in a loop, the kernel's code a third); gated so
     tagdL    tagrL with deferred chunk ends (tf_fused3d): each launch leaves its lanes' last quads and finishes to the
              next launch's loop, the last launch finishing its own; gated like tagk
-    tagds4   tagd4 with the rolled absorb; gated so
-    commitdL tagdL, then commitL's leaves and tree
+    commitdL tagdL, then commitL's tf_commit
     probe4   u4kw4s3 at every shape: 4-round BLAKE3, uncertified
+    prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
+    noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
+             launches' chunk ends cost
     """
     names = list(layout.SHAPES)
     copies = {name: [] for name in names}
@@ -778,7 +792,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                         off += layout.chunk_block_count(n, k, g)
             return fs
 
-        def seq_deferred(g, rolled=0):
+        def seq_deferred(g):
             """tagr's launches through tf_fused3d: launch q defers its ends to cvs[q % 2] and finishes launch q - 1's."""
             fs, off, prev = [], 0, None
             order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
@@ -791,7 +805,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                 pw, pcv, pd, ptp, pn, pk = prev or (0, 0, 0, 0, 0, 0)
                 fs.append(lambda g=g, n=n, k=k, pl=pl, name=name, tp=tp, off=off, own=own, cv=cv, dd=dd, pw=pw, pcv=pcv,
                           pd=pd, ptp=ptp, pn=pn, pk=pk: lib.so.tf_fused3d(
-                              g, int(own), rolled, ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp, mb, n, k, off,
+                              g, int(own), ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp, mb, n, k, off,
                               cv, dd, pw, pcv, pd, ptp, pn, pk, stream(torch)))
                 prev = (ptr(pl), cv, dd, tp, n, k)
                 off += layout.chunk_block_count(n, k, g)
@@ -817,10 +831,14 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
             tag_fs = seq(lambda name: picks[g][name], g)
             arms[f"tag{g}"] = run(tag_fs, f"tag{g}")
 
-            def commit(tag_fs=tag_fs, g=g):
-                run(tag_fs, f"commit{g}")()
+            def commits(tag_fs=tag_fs, g=g):
+                run(tag_fs, f"commits{g}")()
                 lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
                 lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
+
+            def commit(tag_fs=tag_fs, g=g):
+                run(tag_fs, f"commit{g}")()
+                lib.call("tf_commit", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
 
             lc = per_layer[g] // 16
             lv = min(ctz(lc), 9)
@@ -840,7 +858,18 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
             def top(g=g, lv=lv):
                 lib.call("tf_tree_from", ptr(nodes[g]), nleaves[g], lv, stream(torch))
 
-            arms[f"commit{g}"] = commit
+            commits()
+            torch.cuda.synchronize()
+            serial = nodes[g].clone()
+            nodes[g].zero_()
+            commit()
+            torch.cuda.synchronize()
+            ok = bool(torch.equal(nodes[g], serial))
+            del serial
+            log(f"gate step M={mb} commit{g}: {'ok' if ok else 'FAIL'} (tf_commit's nodes, tf_leaves and tf_tree's)")
+            arms[f"commits{g}"] = commits
+            if ok:
+                arms[f"commit{g}"] = commit
             arms[f"overlap{g}"] = overlap
             arms[f"top{g}"] = top
 
@@ -851,8 +880,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
             torch.cuda.synchronize()
             want = tbs[g].clone()
             gates[g] = {}
-            steps = [("tagk", seq(lambda name: f"t{g}kr1c", g)), ("tagrs", seq(lambda name: f"t{g}kr1s", g)),
-                     ("tagd", seq_deferred(g))] + ([("tagds", seq_deferred(g, 1))] if g == 4 else [])
+            steps = [("tagk", seq(lambda name: f"t{g}kr1c", g)), ("tagd", seq_deferred(g))]
             for what, fs in steps:
                 f = run(fs, f"{what}{g}")
                 tbs[g].zero_()
@@ -867,11 +895,13 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
             if gates[g]["tagd"]:
                 def commitd(f=arms[f"tagd{g}"], g=g):
                     f()
-                    lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
-                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
+                    lib.call("tf_commit", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
                 arms[f"commitd{g}"] = commitd
         if 4 in groups and all("u4kw4s3" in timing[name]["batches"][mb]["median_s"] for name in names):
             arms["probe4"] = run(seq(lambda name: "u4kw4s3", 4), "probe4")
+        if 4 in groups:
+            arms["prober4"] = run(seq(lambda name: "u4kr1", 4), "prober4")
+            arms["noend4"] = run(seq(lambda name: "n4kr1"), "noend4")
         with torch.cuda.stream(hp):
             r = interleave(lib, torch, arms, reps, 1)
         med = r["median_s"]
@@ -938,12 +968,14 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": {"tag": "tag", "commit": "tag+commit", "overlap": "tag+commit overlapped",
                                   "top": "commit's tree top alone", "probe": "tag", "tagr": "tag", "tagk": "tag",
-                                  "tagd": "tag", "commitd": "tag+commit", "tagrs": "tag", "tagds": "tag"}[what],
-                        **({"certified": False, "rounds": PROBE_ROUNDS} if what == "probe" else {})})
+                                  "tagd": "tag", "commitd": "tag+commit", "commits": "tag+commit", "prober": "tag",
+                                  "noend": "tag without chunk ends (diagnostic)"}[what],
+                        **({"certified": False, "rounds": PROBE_ROUNDS} if what in ("probe", "prober") else {}),
+                        **({"certified": False, "diagnostic": True} if what == "noend" else {})})
     return out
 
 
-STAGE_TAG_ARMS = ("tag", "tagr", "tagk", "tagrs", "tagd", "tagds")
+STAGE_TAG_ARMS = ("tag", "tagr", "tagk", "tagd")
 
 
 def stage_points(res: dict, batches, run: str | None) -> list[dict]:
@@ -971,7 +1003,7 @@ def stage_points(res: dict, batches, run: str | None) -> list[dict]:
 
 NCU_FORMS = (("g", 0, MODE_GEMM, 1), ("t", 1, MODE_TAGS, 1), ("t", 1, MODE_TAGS, 2))
 NCU_CHUNK_FORMS = ((1, MODE_GEMM, 4, 2, False), (4, MODE_TAGS, 4, 2, False), (4, MODE_TAGS, 4, 2, True))
-NCU_REG_FORMS = ((1, MODE_GEMM, 1, 0), (4, MODE_TAGS, 1, 0), (4, MODE_TAGS, 1, 1), (4, MODE_TAGS, 1, 2))
+NCU_REG_FORMS = ((1, MODE_GEMM, 1, 0), (4, MODE_TAGS, 1, 0), (4, MODE_TAGS, 1, 1), (4, MODE_SINK, 1, 3))
 
 
 def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
@@ -981,6 +1013,7 @@ def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
         w8 = torch.randint(0, 256, (n, k), dtype=torch.uint8, device="cuda") & 0x77
         plain = R.plain_layout(w8).contiguous()
         tb = torch.empty(layout.chunk_block_count(n, k, 1) * 32, dtype=torch.uint8, device="cuda")
+        xr = torch.zeros(1, dtype=torch.int32, device="cuda")
         for mb in batches:
             x = torch.randn(mb, k, device="cuda").to(torch.float8_e4m3fn)
             y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
@@ -993,7 +1026,7 @@ def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
                 for lanes, mode, wc, st, pk in NCU_CHUNK_FORMS:
                     fused2(lib, torch, lanes, mode, wc, st, 0, plain, x, y, tb, mb, n, k, 0, packed=pk)
                 for lanes, mode, pd, pk in NCU_REG_FORMS:
-                    fused3(lib, torch, lanes, mode, pd, plain, x, y, tb, mb, n, k, 0, pk=pk)
+                    fused3(lib, torch, lanes, mode, pd, plain, x, y, tb, mb, n, k, 0, xr, pk=pk)
     torch.cuda.synchronize()
     return 0
 
