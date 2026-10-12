@@ -33,8 +33,8 @@ import sys
 MU_FIXED = 0.28 + 0.10
 X1_P512 = 175.0
 CEILINGS = (1.0, 1.2, 1.45)
-#: μ_host + μ_link + λ: none, the red team's fix (b) at 0.1% and at 0.26%, and ra-remote-driver's λ 0.195% with
-#: μ_timing's low end, 0.20%.
+#: μ_host + μ_link + λ (+ μ_timing): none, the red team's fix (b) at 0.1% and at 0.26%, and ra-remote-driver's λ
+#: 0.195% with μ_timing at 50 ms passes, 0.20% (0.04–0.12% with on-chip prefetching).
 ALLOWANCES = (0.0, 0.1, 0.26, 0.4)
 
 #: ra-codec-tensor's step at p512, in native passes (its report's table): d, W = linears' decode + receipt, A =
