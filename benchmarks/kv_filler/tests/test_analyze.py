@@ -65,6 +65,15 @@ def test_measured_sets_a_live_encode_run_against_its_policy_without_it():
     assert m["ttft_p90"] is None and m["encode_lag_ms"] == {"median": 2.0}
 
 
+def test_decode_lag_counts_each_step_that_starts_before_the_tokens_are_encoded():
+    # steps start at 0, 0.5, 1.0 and 1.5 s; 10 tokens written at 0.4 and encoded at 1.2 are read plain by the steps at
+    # 0.5 (window 0) and 1.0 (window 1); 5 tokens encoded before the next step starts are read plain by none
+    gpu = [[0.0, 0.4], [0.5, 0.9], [1.0, 1.4], [1.5, 1.9]]
+    r = analyze.decode_lag(gpu, [[0.4, 1.2, 10], [0.9, 0.95, 5]], 2.0, 1.0, token_bytes=10**8)
+    assert r["plain_GB"] == pytest.approx(2.0)
+    assert (r["gamma_lag_mean"], r["gamma_lag_max_1s"]) == (pytest.approx(0.5), pytest.approx(1.0))
+
+
 def test_phases_counts_a_requests_tokens_past_its_first_as_prefill():
     # vLLM's batch queue puts num_computed_tokens a step ahead: a record may say 0 prefill tokens for a chunk
     s = analyze.phases([step(0, 1, 8192, 8, 0, 0), step(1, 2, 9, 9, 0, 0)])

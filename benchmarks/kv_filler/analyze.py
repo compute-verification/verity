@@ -16,6 +16,7 @@ engine's run without the encode, beside the fused arm's prediction from that run
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import statistics
 import sys
@@ -134,6 +135,21 @@ def price(run: dict, a: dict, R: float) -> dict:
     return res
 
 
+def decode_lag(gpu_steps: list, records: list, seconds: float, R: float, token_bytes: int = lag.KV_TOKEN_BYTES) -> dict:
+    """γ_lag of a live run's decode tokens: a record's tokens (written at w, encoded at d, on the GPU's clock) are read
+    plain by every model step that starts in [w, d), each such read at its step's start; over R·T and per 1 s window."""
+    starts = sorted(g0 for g0, _ in gpu_steps)
+    n = max(1, int(seconds))
+    win = [0.0] * n
+    total = 0.0
+    for w, d, tokens in records:
+        for t in starts[bisect.bisect_left(starts, w):bisect.bisect_left(starts, d)]:
+            win[min(n - 1, int(t))] += tokens * token_bytes
+            total += tokens * token_bytes
+    cap = R * 1e9
+    return {"plain_GB": total / 1e9, "gamma_lag_mean": total / (cap * seconds), "gamma_lag_max_1s": max(win) / cap}
+
+
 def measured(run: dict, ref: dict) -> dict:
     """A live `+fused<k>` run against the same engine's run of its policy without the encode: the increase in busy
     time on the host's clock (the steps' durations, as `price` states the replay's) and on the GPU's, and in TPOT and
@@ -185,6 +201,11 @@ def main() -> int:
                 if ref is None or k not in by_k:
                     continue
                 m, p = measured(run, ref), price(ref, by_k[k], R)["fused"]
+                if run.get("encode_records") is not None and run.get("gpu_steps"):
+                    m["decode_lag"] = decode_lag(run["gpu_steps"], run["encode_records"], run["seconds"], R)
+                    print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} k={k}: decode tokens read plain "
+                          f"{m['decode_lag']['plain_GB']:.1f} GB, γ_lag {m['decode_lag']['gamma_lag_mean']:.3%} "
+                          f"(1 s max {m['decode_lag']['gamma_lag_max_1s']:.3%})")
                 out["runs"].append({**ident, "pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k,
                                     "shortfall": eta, "measured": m, "predicted": p})
                 print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} k={k}: measured busy {m['overhead']:+.1%} "

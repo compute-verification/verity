@@ -20,7 +20,8 @@ A policy may end in `+fused<k>` (with `--kv-lib`): the page conversion, live. `k
 over every token a step writes, from one scratch buffer into another (vLLM's pages keep their layout), as `lag.fused`
 prices it: a prompt's tokens on the step's own stream after its forward, so the step absorbs them; a decode token's on
 a least-priority side stream at `--encode-grid` CTAs once the forward has written it, so it is encoded beside the next
-step (`encode_lag_ms`: from written to encoded). The codec passes its gate against `kv.encode_word` first.
+step (`encode_lag_ms`: from written to encoded; `encode_records`: each decode encode's written and encoded seconds on
+the GPU's clock, and its tokens). The codec passes its gate against `kv.encode_word` first.
 
 Each policy runs in each receipt mode of `--modes` (read, b3, sk16: `topup.cu`'s). A window's registered bytes are
 the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM head, and each
@@ -460,6 +461,8 @@ def main() -> int:
             if ek:
                 run.update({"encode_k": ek, "encode_prefill_tokens": cur["enc_prefill_tokens"],
                             "encode_decode_tokens": sum(n for *_, n in cur["enc"]),
+                            "encode_records": [[round(base.elapsed_time(w) / 1e3, 6),
+                                                round(base.elapsed_time(d) / 1e3, 6), n] for w, d, n in cur["enc"]],
                             "encode_lag_ms": {"median": statistics.median(lag), "p90": lag[int(0.9 * (len(lag) - 1))],
                                               "max": lag[-1]} if lag else None})
             res["runs"].append(run)
