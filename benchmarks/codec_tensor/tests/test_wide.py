@@ -51,7 +51,7 @@ def test_fields():
         assert not any(_probably_prime((1 << f.n) - c) for c in range(1, f.c, 4)), f"{f.name}: c is the smallest"
         if W.tc_ok(f):
             assert f.n % 256 == 255 and (1 << (8 * f.word_bytes)) % f.p == 2 * f.c
-    full = ["p512", "p768", "p1536", "p2048"]
+    full = ["p512", "p768", "p1024", "p1536", "p2048"]
     assert [n for n, f in W.FIELDS.items() if f.full_slot] == full
     for name in full:
         f = W.field(name)
@@ -140,7 +140,7 @@ def test_word_round_trip(name, rounds):
         pytest.fail("every random word decoded")
 
 
-@pytest.mark.parametrize("name", ["p255", "m521", "m1279", "p512", "p768", "p1536", "p2048"])
+@pytest.mark.parametrize("name", ["p255", "m521", "m1279", "p512", "p768", "p1024", "p1536", "p2048"])
 def test_tasks_round_trip(name):
     k = W.key(name, SEED, 1)
     f = k.field

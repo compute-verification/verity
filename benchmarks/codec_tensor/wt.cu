@@ -1,5 +1,5 @@
 // Sloth over one wide word on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field, WT_FIELD = n
-// (255, 511, 521, 767, 1023, 1279, or the full-slot 512, 768, 1536 and 2048; p = 2^n - c as in `wide.FIELDS`).
+// (255, 511, 521, 767, 1023, 1279, or the full-slot 512, 768, 1024, 1536 and 2048; p = 2^n - c as in `wide.FIELDS`).
 //
 // Two squarings mod p:
 //   CUDA cores   a thread per word, NL 32-bit limbs; the square column by column (mad.lo.cc / madc.hi.cc / addc, each
@@ -54,6 +54,9 @@ constexpr u32 CF = 569;
 #elif WT_FIELD == 768
 constexpr int NBITS = 768, TW = 86;
 constexpr u32 CF = 825;
+#elif WT_FIELD == 1024
+constexpr int NBITS = 1024, TW = 64;
+constexpr u32 CF = 105;
 #elif WT_FIELD == 1536
 constexpr int NBITS = 1536, TW = 43;
 constexpr u32 CF = 3453;
