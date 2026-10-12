@@ -11,6 +11,9 @@ function (v1-hot, v2-hot, Pearl-C4 v1 and v2). Its key is
   reading     forming-credited, chain-only or chain-cap
   kind        unit (Gγ), tile (GγSampled) or value (the γ function's value, which both read)
   shape       8192 or 16384 (the cube it is stated at); ``sizing`` a hot start's rule (publicConst64 is the ruled one)
+  n, k        a linear's (n, k) at any batch m, for a twin stated on `pearlCDomainDevNK` (``_n6144k4096``), its shape None
+  layout      a served layout's linears, for a twin stated on `pearlCDomainDevShapes` (``_llama31_8b`` on
+              `llama31_8bLinears`), γ the max over them; its shape, n and k None
   cap         FP8 v1 and v2's debit cap ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``Cap1000``
               and ``Rev1Cap1000`` are 1/1,000); a lookup reads the statement's cap (`CAPS`), and the others are history
 
@@ -25,6 +28,7 @@ states no γ. Its statement is the body of the definition `G`, read from the Lea
 states no literal γ, fails the table (`TwinError`).
 
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
+  python price_twins.py --repository-only                     re-read only the repository's pins, keeping the store's rows
 
 Stdlib only. The table is checked in beside this file (`price_twins.json`) and regenerated when a pin lands or moves.
 """
@@ -64,7 +68,8 @@ _RAT = r"(\d+)(?: / (\d+))?"
 #: `Pouw.PearlC.`, which a signature prints and a `Guarantees` definition's source may leave to its `open`
 _NS = r"(?:Pouw\.PearlC\.)?"
 _FP8 = re.compile(r"pearlC(?P<kind>Gamma|Sampled)Sm120(?P<ver>v1|v2)(?P<loop>Loop)?(?:Cast(?P<cast>8p72|32p06|16|32|8))?"
-                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1Cap1000|Rev1|Cap1000)_(?P<shape>8192|16384)")
+                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1Cap1000|Rev1|Cap1000)"
+                  r"_(?:(?P<shape>8192|16384)|n(?P<n>\d+)k(?P<k>\d+)|(?P<layout>[a-z][a-z0-9_]*))")
 _LIFTED = re.compile(r"(\S+) : (Pouw\.Guarantees\.\S+)")
 _DEV = re.compile(_NS + r"devSm120(v1|v2) " + _NS + r"Prices\.(sm120Loop|sm120)\b")
 _CAP_ARG = re.compile(_NS + r"pearlCProtocolDev\w* \(" + _NS + r"devSm120v[12] " + _NS + r"Prices\.\w+\) "
@@ -73,6 +78,9 @@ _HOT = re.compile(r"gammaHot(?P<rev>Rev1)?(?P<read>ChainOnly)?_sm120(?P<ver>v1|v
                   r"_(?P<sizing>[A-Za-z0-9]+)_(?P<shape>8192|16384)")
 _FP4 = re.compile(r"gammaFp4(?P<hot>Hot)?(?P<read>ChainOnly)?_sm120(?P<price>Issue|Loop)_(?P<path>lut256|rcpApprox)"
                   r"_(?P<shape>8192|16384)")
+_DEV_ARG = r"\(" + _NS + r"devSm120v[12] " + _NS + r"Prices\.\w+\)"
+_DOMAIN_NK = re.compile(_NS + r"pearlCDomainDevNK " + _DEV_ARG + r" (\d+) (\d+)")
+_DOMAIN_SHAPES = re.compile(_NS + r"pearlCDomainDevShapes " + _DEV_ARG + r" " + _NS + r"(\w+)Linears\b")
 _CAST_ARG = re.compile(r"instHSub\.hSub \(?" + _RAT + r"\)?")
 _CAST_SOURCE = re.compile(r"\(" + _RAT + r" - ")
 _GAMMA_LITERAL = re.compile(r"(?:\(|↑\()" + _RAT + r"\)\)?(?:\.cast)? Pouw\.PearlC\.εPearlC\s*$")
@@ -160,7 +168,18 @@ def _row(name: str, short: str, sig: str) -> dict | None:
             raise TwinError(f"{name}: its signature's protocol isn't at its name's cap {NAME_CAPS[m['cap']]}")
         row = {"statement": f"pearl-c-sm120/{m['ver']}", "path": path, "fadd": Fraction(1047, 125) if loop else Fraction(8),
                "reading": READINGS[m["read"]], "kind": "unit" if m["kind"] == "Gamma" else "tile",
-               "shape": int(m["shape"]), "sizing": None, "cap": NAME_CAPS[m["cap"]], "gamma": _q(lit[1], lit[2])}
+               "shape": int(m["shape"]) if m["shape"] else None, "sizing": None, "cap": NAME_CAPS[m["cap"]],
+               "gamma": _q(lit[1], lit[2])}
+        if m["n"]:
+            dom = _DOMAIN_NK.search(sig)
+            if dom is None or (dom[1], dom[2]) != (m["n"], m["k"]):
+                raise TwinError(f"{name}: its signature's domain isn't the linear (n, k) = ({m['n']}, {m['k']})")
+            row |= {"n": int(m["n"]), "k": int(m["k"])}
+        elif m["layout"]:
+            dom = _DOMAIN_SHAPES.search(sig)
+            if dom is None or dom[1] != m["layout"]:
+                raise TwinError(f"{name}: its signature's domain isn't the layout {m['layout']}Linears")
+            row |= {"layout": m["layout"]}
     elif m := _HOT.fullmatch(short):
         loop = bool(m["loop"])
         prices = re.search(r"Eq d\.prices Pouw\.PearlC\.Prices\.(sm120Loop|sm120)\b", sig)
@@ -231,7 +250,29 @@ def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
             if _short(r["pin"]) not in seen:
                 seen.add(_short(r["pin"]))
                 twins.append(_jsonable(r))
-    keys = [(t["statement"], t["path"], t["fadd"], t["reading"], t["kind"], t["shape"], t["sizing"], t["cap"]) for t in twins]
+    return _table(sources, twins)
+
+
+def refresh(doc: dict, repo_audit: Path = REPO_AUDIT) -> dict:
+    """The table `doc` with the repository's twins re-read from `repo_audit` and every store file's rows kept: what
+    `build` gives when only the repository's audit has changed since `doc` was built, without the store. A kept row
+    turns pinned when the repository now holds its pin at its type hash."""
+    raw = repo_audit.read_bytes()
+    pins = guarantees(json.loads(raw))
+    kept = [t | ({"status": "pinned"} if pins.get(t["pin"], {}).get("type_hash") == t["type_hash"] else {})
+            for t in doc["twins"] if t["source"] != REPO_SOURCE]
+    pinned = {k: v.get("type_hash") for k, v in pins.items()} | {t["pin"]: t["type_hash"] for t in kept
+                                                                  if t["status"] == "pinned"}
+    seen = {_short(t["pin"]) for t in kept}
+    rows = extract(pins, REPO_SOURCE, pinned, lifted_definitions(json.loads(raw), repo_audit.parent))
+    sources = [s for s in doc["sources"] if s["path"] != REPO_SOURCE]
+    sources.append({"path": REPO_SOURCE, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
+    return _table(sources, kept + [_jsonable(r) for r in rows if _short(r["pin"]) not in seen])
+
+
+def _table(sources: list[dict], twins: list[dict]) -> dict:
+    keys = [(t["statement"], t["path"], t["fadd"], t["reading"], t["kind"], t["shape"], t.get("n"), t.get("k"), t.get("layout"),
+             t["sizing"], t["cap"]) for t in twins]
     dup = sorted({k for k in keys if keys.count(k) > 1})
     if dup:
         raise TwinError(f"two pins state the same twin: {dup[:3]}")
@@ -253,9 +294,11 @@ def statement(line: str | None, version: str | None) -> str | None:
 
 
 def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int | None, k: int | None,
-           reading: str = "forming-credited", cap: Fraction | None = None) -> dict:
-    """γ at both FP32 prices for one attempt: the twins of its statement, priced path and cube, at the statement's cap
-    (`CAPS`; ``cap`` reads another, as history), the larger published.  ``missing`` says what kept it from publishing."""
+           reading: str = "forming-credited", cap: Fraction | None = None, layout: str | None = None) -> dict:
+    """γ at both FP32 prices for one attempt: the twins of its statement, priced path and shape, at the statement's cap
+    (`CAPS`; ``cap`` reads another, as history), the larger published.  The shape is the cube n³ when n = k is 8192 or
+    16384, else the linear (n, k) at any m; ``layout`` (``llama31_8b``) reads a served layout's twin instead, whose γ
+    is the max over its linears.  ``missing`` says what kept it from publishing."""
     cap = CAPS.get(statement_ or "") if cap is None else Fraction(cap)
     out: dict = {"statement": statement_, "path": path, "reading": reading, "cap": None if cap is None else str(cap),
                  "by_price": {}, "published": None, "published_at": None, "missing": []}
@@ -263,19 +306,27 @@ def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int |
         out["missing"].append("the panel line and version (the statement γ is for)")
     if path is None:
         out["missing"].append("the priced path (GateRecord.prices, from the variant's prices)")
-    shape = n if n is not None and n == k and n in (8192, 16384) else None
-    if shape is None:
-        out["missing"].append(f"a pinned cube for (n, k) = ({n}, {k}): twins are stated at 8192³ and 16384³")
-    out["shape"] = shape
+    shape = n if layout is None and n is not None and n == k and n in (8192, 16384) else None
+    if layout is None and (n is None or k is None):
+        out["missing"].append(f"the linear's (n, k), here ({n}, {k})")
+    out["shape"], out["layout"] = shape, layout
+    where = f"layout {layout}" if layout else f"{shape}³" if shape else f"(n, k) = ({n}, {k})"
+
+    def at(t: dict) -> bool:
+        if layout is not None:
+            return t.get("layout") == layout
+        if shape is not None:
+            return t["shape"] == shape
+        return t.get("n") == n and t.get("k") == k and t.get("layout") is None
     if out["missing"]:
         return out
     for fadd in FADD_PRICES:
-        hits = [t for t in twins if t["statement"] == statement_ and t["path"] == path and t["shape"] == shape
+        hits = [t for t in twins if t["statement"] == statement_ and t["path"] == path and at(t)
                 and t["reading"] == reading and t["kind"] in ("unit", "value") and Fraction(t["fadd"]) == fadd
                 and t["sizing"] in (None, RULED_SIZING)
                 and (cap is None if t.get("cap") is None else Fraction(t["cap"]) == cap)]
         if not hits:
-            out["missing"].append(f"a {reading} twin of {statement_} on {path} at {shape}³, FADD {fadd}"
+            out["missing"].append(f"a {reading} twin of {statement_} on {path} at {where}, FADD {fadd}"
                                   + ("" if cap is None else f", cap {cap}"))
             continue
         t = hits[0]
@@ -290,11 +341,15 @@ def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int |
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("store_root", type=Path, help="the POUS Project store's root (/cursor/stores/<id>)")
+    ap.add_argument("store_root", type=Path, nargs="?", help="the POUS Project store's root (/cursor/stores/<id>)")
+    ap.add_argument("--repository-only", action="store_true",
+                    help="re-read only the repository's audit and keep the checked-in table's store rows (`refresh`)")
     ap.add_argument("--out", type=Path, default=TABLE)
     a = ap.parse_args(argv)
+    if (a.store_root is None) != a.repository_only:
+        ap.error("give the store's root, or --repository-only")
     try:
-        doc = build(a.store_root)
+        doc = refresh(json.loads(TABLE.read_text())) if a.repository_only else build(a.store_root)
     except (TwinError, OSError, KeyError, ValueError) as ex:
         print(f"price_twins: {type(ex).__name__}: {ex}", file=sys.stderr)
         return 2
