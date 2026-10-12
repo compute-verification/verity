@@ -104,9 +104,9 @@ theorem polyLe_update {n : ℕ} (v : Fin n → F) (j i : Fin n) :
     PolyLe (if i = j then 1 else 0) fun x => Function.update v j x i := by
   by_cases h : i = j
   · subst h
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact PolyLe.id.congr fun x => by rw [Function.update_self]
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     exact (PolyLe.const 0 (v i)).congr fun x => by rw [Function.update_of_ne h]
 
 theorem polyLe_eqAt {n : ℕ} (v : Fin n → F) (j : Fin n) (b : ℕ) :
@@ -114,9 +114,9 @@ theorem polyLe_eqAt {n : ℕ} (v : Fin n → F) (j : Fin n) (b : ℕ) :
   have h := PolyLe.prod (Finset.univ : Finset (Fin n)) (d := fun i => if i = j then 1 else 0)
     (f := fun i x => if b.testBit i then Function.update v j x i else 1 + Function.update v j x i) fun i _ => by
       by_cases hb : b.testBit i
-      · exact (polyLe_update v j i).congr fun x => by rw [if_pos hb]
-      · exact ((PolyLe.const _ 1).add (polyLe_update v j i)).congr fun x => by rw [if_neg hb]
-  simp only [Finset.sum_ite_eq', Finset.mem_univ, if_true] at h
+      · exact (polyLe_update v j i).congr fun x => by rw [ite_eq_left hb]
+      · exact ((PolyLe.const _ 1).add (polyLe_update v j i)).congr fun x => by rw [ite_eq_right hb]
+  simp only [Finset.sum_ite_eq', Finset.mem_univ, ite_true] at h
   exact h
 
 theorem sum_ite_le_one (s : Finset ℕ) (a : ℕ) : ∑ i ∈ s, (if i = a then 1 else 0) ≤ 1 := by
@@ -150,8 +150,8 @@ theorem cube_succ {n : ℕ} (G : (Fin (n + 1) → F) → F) :
   refine Finset.sum_congr rfl fun b _ => ?_
   have h0 := bitsOf_two_mul_add (F := F) n b 0 (by norm_num)
   have h1 := bitsOf_two_mul_add (F := F) n b 1 (by norm_num)
-  rw [add_zero, if_neg (show (0 : ℕ) ≠ 1 by norm_num)] at h0
-  rw [if_pos rfl] at h1
+  rw [add_zero, ite_eq_right (show (0 : ℕ) ≠ 1 by norm_num)] at h0
+  rw [ite_eq_left rfl] at h1
   rw [h0, h1]
 
 theorem eqAt_bitsOf [CharP F 2] {n b b₀ : ℕ} (hb : b < 2 ^ n) (hb₀ : b₀ < 2 ^ n) :
@@ -162,9 +162,9 @@ theorem eqAt_bitsOf [CharP F 2] {n b b₀ : ℕ} (hb : b < 2 ^ n) (hb₀ : b₀ 
 theorem sum_eqAt_bitsOf [CharP F 2] {n N : ℕ} (hN : N ≤ 2 ^ n) (b₀ : ℕ) (hb₀ : b₀ < N) (g : Fin N → F) :
     ∑ s : Fin N, eqAt (bitsOf n b₀ : Fin n → F) s.val * g s = g ⟨b₀, hb₀⟩ := by
   rw [Finset.sum_eq_single ⟨b₀, hb₀⟩ (fun s _ hs => ?_) (fun h => absurd (Finset.mem_univ _) h)]
-  · rw [eqAt_bitsOf (lt_of_lt_of_le hb₀ hN) (lt_of_lt_of_le hb₀ hN), if_pos rfl, one_mul]
+  · rw [eqAt_bitsOf (lt_of_lt_of_le hb₀ hN) (lt_of_lt_of_le hb₀ hN), ite_eq_left rfl, one_mul]
   · rw [eqAt_bitsOf (lt_of_lt_of_le s.isLt hN) (lt_of_lt_of_le hb₀ hN),
-      if_neg (fun h => hs (Fin.ext h)), zero_mul]
+      ite_eq_right (fun h => hs (Fin.ext h)), zero_mul]
 
 /-- **A function of degree one in each variable is its multilinear extension.** -/
 theorem sum_eqAt_mul [CharP F 2] : ∀ {n : ℕ} (G : (Fin n → F) → F), DegLe 1 G → ∀ ζ : Fin n → F,
@@ -179,8 +179,8 @@ theorem sum_eqAt_mul [CharP F 2] : ∀ {n : ℕ} (G : (Fin n → F) → F), DegL
       refine Finset.sum_congr rfl fun b _ => ?_
       have h0 := bitsOf_two_mul_add (F := F) n b 0 (by norm_num)
       have h1 := bitsOf_two_mul_add (F := F) n b 1 (by norm_num)
-      rw [add_zero, if_neg (show (0 : ℕ) ≠ 1 by norm_num)] at h0
-      rw [if_pos rfl] at h1
+      rw [add_zero, ite_eq_right (show (0 : ℕ) ≠ 1 by norm_num)] at h0
+      rw [ite_eq_left rfl] at h1
       have ha := (hG.head (bitsOf n b)).affine (ζ 0)
       beta_reduce at ha
       rw [h0, h1, eqAt_two_mul, eqAt_two_mul_add_one, ← ha]
@@ -274,7 +274,7 @@ theorem lt_two_pow_pLog (sh : SparseShape) {p : ℕ} (hp : p ≤ 2 * sh.ell + 1)
 theorem coord_eq_zero {sh : SparseShape} (c : RegClaim F sh) {j : ℕ} (hj : sh.mReg ≤ j) : c.coord j = 0 := by
   unfold SparseShape.mReg at hj
   simp only [RegClaim.coord, vget]
-  rw [if_neg (by omega), if_neg (by omega), dif_neg (by omega)]
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), dite_eq_right (by omega)]
 
 /-- Coordinates past `M` that are zero don't change `eqAt` on `{0, …, 2^M - 1}`. -/
 theorem eqAt_cut {N : ℕ} (M : ℕ) (hM : M ≤ N) (g : ℕ → F) (hg : ∀ j, M ≤ j → g j = 0) (a : ℕ)
@@ -343,7 +343,7 @@ theorem value_bind_le' {α : Type} (p : β → Prop) (g : Game α) (f : α → G
 
 theorem value_pure_eq_zero {α : Type} {p : α → Prop} {a : α} (h : ¬ p a) : value p (pure a) = 0 := by
   classical
-  rw [pure_eq, value_ret, if_neg h]
+  rw [pure_eq, value_ret, ite_eq_right h]
 
 theorem value_draw_bind_le (p : β → Prop) (C : Type) [Fintype C] [Nonempty C] (f : C → Game β) (bad : C → Prop)
     (ε ε' : ℝ≥0∞) (hbad : prCoin bad ≤ ε) (hgood : ∀ c, ¬ bad c → value p (f c) ≤ ε') :
@@ -429,7 +429,7 @@ noncomputable def degPoly {k : ℕ} (claim : F) (c : F × (Fin k → F)) : F[X] 
 omit [Fintype F] in
 theorem degNext_eq {k : ℕ} (claim : F) (c : F × (Fin k → F)) (r : F) :
     degNext claim c r = (degPoly claim c).eval r := by
-  simp only [degNext, degPoly, eval_add, eval_mul, eval_C, eval_X, eval_pow, eval_finset_sum]
+  simp only [degNext, degPoly, eval_add, eval_mul, eval_C, eval_X, eval_pow, eval_finsetSum]
 
 omit [Fintype F] in
 theorem degPoly_natDegree_le {k : ℕ} (claim : F) (c : F × (Fin k → F)) : (degPoly claim c).natDegree ≤ k + 1 := by
@@ -467,7 +467,7 @@ theorem value_degRounds_le [CharP F 2] (k : ℕ) : ∀ (n : ℕ) (G : (Fin n →
       choose P hPd hPe using fun b : ℕ => hG.head (bitsOf n b)
       have hTe : ∀ x, (∑ b ∈ Finset.range (2 ^ n), P b).eval x =
           ∑ b ∈ Finset.range (2 ^ n), G (Fin.cons x (bitsOf n b)) := fun x => by
-        rw [eval_finset_sum]; exact Finset.sum_congr rfl fun b _ => (hPe b x).symm
+        rw [eval_finsetSum]; exact Finset.sum_congr rfl fun b _ => (hPe b x).symm
       have hTd : (∑ b ∈ Finset.range (2 ^ n), P b).natDegree ≤ k + 1 :=
         natDegree_sum_le_of_forall_le _ _ fun b _ => hPd b
       have hle : ((k + 1 : ℕ) : ℝ≥0∞) / Fintype.card F + ((n * (k + 1) : ℕ) : ℝ≥0∞) / Fintype.card F =

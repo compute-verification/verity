@@ -215,7 +215,7 @@ theorem batch_split (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (rk : Fin sh.nu → F) (
     fun σ => by
       rw [Finset.sum_eq_single ⟨τ σ, hτ σ⟩ (fun t _ ht => ?_) (fun h => absurd (Finset.mem_univ _) h)]
       · simp
-      · rw [if_neg (fun h => ht (Fin.ext h.symm)), zero_mul]
+      · rw [ite_eq_right (fun h => ht (Fin.ext h.symm)), zero_mul]
   calc ∑ p : Fin (2 ^ sh.pLog), eqAt ζp p.val * slotPlanes sh τ z rk rs p.val
       = ∑ σ : Fin (2 ^ sh.sLog), eqAt rs σ.val * typeVal sh z rk ζp (τ σ) := by
         simp only [slotPlanes, typeVal, Finset.mul_sum]
@@ -237,7 +237,7 @@ theorem slotWeight_tLog_zero (h0 : sh.tLog = 0) (hτ : ∀ σ, τ σ < 2 ^ sh.tL
   have hρ : eqAt ρ t.val = 1 := Finset.prod_eq_one fun j _ => absurd j.isLt (by omega)
   have hw : slotWeight sh τ rs t.val = 1 := by
     have hs : ∀ σ, τ σ = t.val := fun σ => by have := hτ σ; omega
-    rw [slotWeight, Finset.sum_congr rfl fun σ _ => if_pos (hs σ), ← Finset.sum_range (fun σ => eqAt rs σ)]
+    rw [slotWeight, Finset.sum_congr rfl fun σ _ => ite_eq_left (hs σ), ← Finset.sum_range (fun σ => eqAt rs σ)]
     exact sum_eqAt _ rs
   rw [hρ, hw]
 
@@ -251,7 +251,7 @@ theorem toClaim_eval (c : RegClaim F sh) :
     rw [Finset.sum_range]
     unfold Claim.eval
     refine Finset.sum_congr rfl fun a _ => ?_
-    simp only [hf, RegClaim.toClaim, dif_pos a.isLt, Fin.eta]
+    simp only [hf, RegClaim.toClaim, dite_eq_left a.isLt, Fin.eta]
     rw [coord_split c a.val a.isLt]
   have h2 : 2 ^ sh.mReg = 2 ^ sh.nu * (2 ^ sh.pLog * 2 ^ sh.tLog) := by
     rw [SparseShape.mReg, pow_add, pow_add, mul_assoc]
@@ -270,6 +270,7 @@ end SparseCount
 
 namespace SparseCount
 
+omit [DecidableEq F] [DecidableEq K] in
 theorem sparseError_eq (A : Arith F K) (hA : A.Correct) (sh : SparseShape) :
     ENNReal.ofReal (sparseError sh) =
       ((6 : ℕ) : ℝ≥0∞) / Fintype.card F + (((6 * (1 + 1) : ℕ) : ℝ≥0∞) / Fintype.card F +
@@ -330,12 +331,12 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
   rw [sum_range_vget_sub rfl ζp, sub_ne_zero] at hζp
   by_cases h0 : sh.tLog = 0
   · -- no types: the planes' batch is the claim
-    rw [if_pos h0]
+    rw [ite_eq_left h0]
     refine le_trans (b := 0) ?_ zero_le
     refine value_bind_le_of_forall _ _ _ _ fun vt => ?_
     refine value_bind_le_of_forall _ _ _ 0 fun ρ => (value_pure_eq_zero ?_).le
     rintro ⟨c, hc, hhold⟩
-    simp only [sparseVerdict, if_pos h0] at hc
+    simp only [sparseVerdict, ite_eq_left h0] at hc
     split_ifs at hc with hchk
     · cases hc
       unfold Claim.Holds at hhold
@@ -347,7 +348,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
       · rw [batch_split sh τ z hτ, slotWeight_tLog_zero sh τ h0 hτ rs ρ (typeVal sh z rk ζp)] at hS
         exact hS hhold.symm
   · -- H4: the type's point
-    rw [if_neg h0]
+    rw [ite_eq_right h0]
     refine value_bind_le_of_forall _ _ _ _ fun vt => ?_
     refine value_drawFin_le_or _ ((c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u)) ∨
         ∑ q : Fin (2 ^ sh.pLog), eqAt ζp q.val * u q ≠ ∑ t : Fin (2 ^ sh.tLog), slotWeight sh τ rs t.val * vt t)
@@ -365,7 +366,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
     rw [sum_range_vget_sub rfl ρ, sub_ne_zero] at hρ
     refine (value_pure_eq_zero ?_).le
     rintro ⟨c, hc, hhold⟩
-    simp only [sparseVerdict, if_neg h0] at hc
+    simp only [sparseVerdict, ite_eq_right h0] at hc
     split_ifs at hc with hchk
     · cases hc
       unfold Claim.Holds at hhold
