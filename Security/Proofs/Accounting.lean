@@ -8,3 +8,6 @@ import Proofs.Accounting.PerRunPouw
 import Proofs.Accounting.PerRunJoint
 import Proofs.Accounting.PerRunNecessity
 import Proofs.Accounting.Sanity
+import Proofs.Accounting.Tag
+
+/-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

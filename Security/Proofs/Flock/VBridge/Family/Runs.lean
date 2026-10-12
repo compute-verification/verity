@@ -128,7 +128,7 @@ theorem oneCoin_of {r : Round} {L : List UInt8} (h : Retains r L) (hn : r.n = 1)
 theorem sq_enc (k : UInt8) (n : ℕ) : (Transcript.header 4 k n).data.toList = (Frame.sq k n).enc := by
   simp [Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
 
-/-- The bytes ring switching's first claim answers (Opening.lean:68-81): the batching label, then the claim's. -/
+/-- The bytes ring switching's first claim answers (Opening.lean:68-79): the batching label, then the claim's. -/
 theorem rsFramed_zero (s : Array F128) : (rsFramed (rsPending ByteArray.empty 0) s).data.toList =
     encs [.label "flock-pcs-open-batch-v0".toUTF8, .label "flock-ring-switch-v0".toUTF8, .vec s.toList, .sq 2 7] := by
   simp only [rsFramed, rsPending]
@@ -137,7 +137,7 @@ theorem rsFramed_zero (s : Array F128) : (rsFramed (rsPending ByteArray.empty 0)
   rw [label_enc, label_enc, sq_enc]
   simp [encs]
 
-/-- The bytes ring switching's later claims answer (Opening.lean:76-81). -/
+/-- The bytes ring switching's later claims answer (Opening.lean:74-79). -/
 theorem rsFramed_succ (s : Array F128) (k : ℕ) : (rsFramed (rsPending ByteArray.empty (k + 1)) s).data.toList =
     encs [.label "flock-ring-switch-v0".toUTF8, .vec s.toList, .sq 2 7] := by
   simp only [rsFramed, rsPending]
