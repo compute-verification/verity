@@ -172,8 +172,8 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
 }
 
 // At full slot, limb k of the lazy x takes t's columns k and k + NL at once (r and h, each pair once), so t is never
-// held: x = sum (r_k + c h_k + carry) 2^(32k), then fold's second stage. That sum is t mod 2^n + c (t >> n) < (c + 1)
-// 2^n, so its carry out of 2^n is at most c and x equals fold(t)'s.
+// held: x = sum (r_k + c h_k + carry) 2^(32k) = t mod p, then fold's second stage. The low columns' carries stay in
+// that sum, so its carry out of 2^n, (c1, c0), is below (NL + 1) 2^32 + c, not c: (c1, c0) c < 2^50 goes back in.
 __device__ __forceinline__ void fold_limb(u32 &x, u32 &c0, u32 &c1, const u32 (&r)[3], const u32 (&h)[3]) {
   u64 v = (u64)h[0] * CF + r[0] + c0;
   x = (u32)v;
@@ -181,8 +181,8 @@ __device__ __forceinline__ void fold_limb(u32 &x, u32 &c0, u32 &c1, const u32 (&
   c0 = (u32)v;
   c1 = (u32)(v >> 32) + h[2] * CF + r[2];
 }
-__device__ __forceinline__ void fold_top(u32 (&x)[NL], u32 c0) {
-  u64 c = (u64)c0 * CF;
+__device__ __forceinline__ void fold_top(u32 (&x)[NL], u32 c0, u32 c1) {
+  u64 c = (((u64)c1 << 32) | c0) * CF;
 #pragma unroll
   for (int k = 0; k < NL; ++k) {
     c += x[k];
@@ -212,7 +212,7 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
     if (((k + NL) & 1) == 0) mac(h, a[(k + NL) / 2], a[(k + NL) / 2]);
     fold_limb(x[k], c0, c1, r, h);
   }
-  fold_top(x, c0);
+  fold_top(x, c0, c1);
 }
 
 __device__ __forceinline__ void mul_fold(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
@@ -226,7 +226,7 @@ __device__ __forceinline__ void mul_fold(const u32 (&a)[NL], const u32 (&b)[NL],
     for (int i = k + 1; i < NL; ++i) mac(h, a[i], b[k + NL - i]);
     fold_limb(x[k], c0, c1, r, h);
   }
-  fold_top(x, c0);
+  fold_top(x, c0, c1);
 }
 
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
