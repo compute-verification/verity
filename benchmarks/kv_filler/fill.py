@@ -2,7 +2,8 @@
 capacity, and so what R is. Writes `fill-<cmd>.json` and `fill.log` under `--out`.
 
   read   every reader of `readers.cu` over a buffer far larger than the L2, at several grids: GB/s, best and median of
-         `--reps`, with the SM clock read through NVML around each variant. R is the best of them.
+         `--reps`, with the SM clock read through NVML around each variant. R is the best of them. Below the SM count
+         (`--grids`), each CTA's rate is what one SM can pull, which bounds how few SMs a filler can live on.
 """
 from __future__ import annotations
 
@@ -56,7 +57,7 @@ def read_cmd(a, torch) -> dict:
     buf.random_(0, 256)
     xr = torch.zeros(1, dtype=torch.int32, device="cuda")
     st = torch.cuda.current_stream().cuda_stream
-    grids = [rd.sms * m for m in (1, 2, 4, 8)] + [rd.sms * 64]
+    grids = a.grids or [rd.sms * m for m in (1, 2, 4, 8)] + [rd.sms * 64]
     rows = []
     for name, kind, u in READERS:
         for grid in grids:
@@ -90,6 +91,8 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--gib", type=int, default=16)
     ap.add_argument("--reps", type=int, default=10)
+    ap.add_argument("--grids", type=lambda v: [int(g) for g in v.split(",")], default=None,
+                    help="CTAs to read at (default: the SM count × 1, 2, 4, 8 and 64); one CTA an SM below the SM count")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     LOGF = (a.out / "fill.log").open("a")
