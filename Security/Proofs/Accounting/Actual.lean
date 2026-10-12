@@ -4,6 +4,7 @@ import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Ticks
 
 /-!
 # The actual circuit's guarantees
@@ -25,4 +26,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; the state over continuations is a function of what the location can tell
   (`stateOver_congr`), and causality's global form (`global_of_admissible`).
+* `Actual/Ticks.lean`: a counterexample, `held_tick`: causality reads the state as seen, ticks included, and memory
+  bounds its width, so a location with no memory holds a bit in the tick of a width-0 gate; memory as an alphabet
+  across runs (`MemoryAlphabet`) refuses it.
 -/
