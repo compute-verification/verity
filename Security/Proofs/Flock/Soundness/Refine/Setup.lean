@@ -17,6 +17,8 @@ import Flock.HmRow
 -/
 
 set_option Elab.async false
+set_option profiler true
+set_option profiler.threshold 2000
 
 namespace FlockSoundness.Refine
 
