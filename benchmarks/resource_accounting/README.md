@@ -25,8 +25,9 @@ certifies beside what it did.
   (f), joint v1, the honest prover pausing its chain at a call boundary for each window, at one window each 10, 100 or
   1,000 ms of chain (or none), its verifier in a process of its own: the bandwidth audit's honest overhead.
 - `probe.py`: the native chains at one point under each condition in turn (stream, device synchronization, a held
-  stream, NUMA node, a second process beside them), on the host, the device and to launch: why the chain ran faster
-  beside the harness in a process of its own.
+  stream, NUMA node, a second process beside them), on the host, the device and to launch, then their course around one
+  co-tenant at a time (a sleeping process, CPU spinners, an idle CUDA context) with the onset and offset of any change:
+  why the chain ran faster beside the harness in a process of its own.
 - `run.sh`: the recorded run on node 2: GPU 1's ship built outside the lease, `chain.py` under one `gpu-lease 1`
   (30 minutes at most), the retained pass verified after it. `POUS=1` (one shape, `--cwd clone`) adds the PoUS arm: P2's
   timed audit (`benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu`) on the same GPU, the chain running from its honest audit's
@@ -34,7 +35,7 @@ certifies beside what it did.
   `JOINT=separate,inproc,joint,joint-v1` (one shape, native arms, `--cwd clone`) instead runs `chain.py` inside the
   harness's process (`pod.sh BENCH_HOST`), one harness run a round with the chain as its honest audit's load: its
   responder in a process of its own, or a thread of the chain's (no MPS), and the joint rounds with `joint.py`'s arms.
-  `PROBE=1` adds `probe.py` once the shape's points are measured alone. A tuned arm in `ARMS` needs `TUNED=<build dir|art:id>`,
+  `PROBE=1` (either mode) adds `probe.py` once the shape's points are measured alone. A tuned arm in `ARMS` needs `TUNED=<build dir|art:id>`,
   the harness's library as its `native/build.sh` makes it (`pouw-harness-build/v1`).
 - `render.py`: the table, from a run's `art:` id (or a local `chain.json`), on demand, with the PoUS section when the run
   had that arm, the rounds' (the responder's isolation, the chain's time in each, (d), (e) and (f)) when it hosted the
@@ -54,4 +55,4 @@ python benchmarks/resource_accounting/render.py art:<id>
 
 The tests (`tests/`) run the pure parts only: the plan, the certified columns against the pinned twins, the PoUS arm's
 S_cert and capacity residual, `joint.py`'s windows and pause hook over a CPU prover (its verifier a thread, and once a
-process), the probe's summaries, the tune's finalists and the divisor rule, and the table from a synthetic run.
+process), the probe's summaries and course, the tune's finalists and the divisor rule, and the table from a synthetic run.

@@ -36,6 +36,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import certified as C
+import probe as P
 import sweep as S
 
 SCHEMA = "ra-matmul-chain/v1"
@@ -280,8 +281,12 @@ def probe(doc: dict) -> dict | None:
             for label, s in (ph.get("summary") or {}).items()]
     skipped = {name: ph.get("skipped") or ph.get("error") for name, ph in (pr.get("phases") or {}).items() if "summary" not in ph}
     clocks = {name: (ph.get("clocks_before") or {}).get("clocks.sm") for name, ph in (pr.get("phases") or {}).items()}
+    course = {name: {"count": c.get("count"), "marks": c.get("marks") or {}, "error": c.get("error"),
+                     "summary": c.get("summary") or {},
+                     "clocks": [(c.get(k) or {}).get(f) for k in ("clocks_before", "clocks_after") for f in ("clocks.sm", "clocks.mem")]}
+              for name, c in (pr.get("course") or {}).items()}
     return {"point": pr.get("point"), "error": pr.get("error"), "gpu_node": (pr.get("numa") or {}).get("gpu_node"),
-            "rows": rows, "skipped": skipped, "sm_mhz": clocks}
+            "rows": rows, "skipped": skipped, "sm_mhz": clocks, "course": course}
 
 
 def hosted(doc: dict, results: dict[str, dict]) -> list[dict] | None:
@@ -498,6 +503,31 @@ def probe_lines(p: dict) -> list[str]:
         lines.append(f"| {r['phase']} | {r['label']}{held} | {r['host_ms']:.4f} | {r['device_ms']:.4f} | "
                      f"{_f(r.get('launch_ms'), '.4f')} | {_f(r.get('cpu_mhz'), '.0f')} | {', '.join(map(str, r['nodes']))} |")
     lines += [f"Probe {k}: {v}" for k, v in p["skipped"].items()]
+    return lines + course_lines(p.get("course") or {})
+
+
+def course_lines(course: dict) -> list[str]:
+    if not course:
+        return []
+    ms = lambda v: _f(v, ".3f")
+    lines = ["", ("The probe's course: the native chains back to back on the default stream around one co-tenant at a time, "
+                  "a chain's median device ms before the co-tenant started, while it started, while it was ready, and in each "
+                  "second after it exited; the effect is ready against before, the onset (s from its start) the first chain "
+                  "nearer the ready time, the offset (s from its exit) the first chain from which all are nearer the before time "
+                  f"(both only for an effect of at least {P.COURSE_EFFECT:.0%}). SM / memory MHz before and after each: "
+                  + "; ".join(f"{k} {'/'.join(str(x or '–') for x in c['clocks'][:2])} to "
+                              f"{'/'.join(str(x or '–') for x in c['clocks'][2:])}" for k, c in course.items()) + "."),
+             "", "| co-tenant | arm | ready at s | before | starting | ready | effect | onset s | after it exited, each second | "
+                 "offset s |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for name, c in course.items():
+        who = name if (c["count"] or 1) == 1 else f"{name} ×{c['count']}"
+        for arm, s in c["summary"].items():
+            lines.append(f"| {who} | {arm} | {_f(c['marks'].get('ready'), '.2f')} | {ms(s['before_ms'])} | "
+                         f"{ms(s['starting_ms'])} | {ms(s['ready_ms'])} | {_f(s['effect'], '+.1%')} | "
+                         f"{_f(s['onset_s'], '.2f')} | {', '.join(ms(x) for x in s['after_ms']) or '–'} | "
+                         f"{_f(s['offset_s'], '.2f')} |")
+        if c["error"]:
+            lines.append(f"Course {who}: {c['error']}")
     return lines
 
 

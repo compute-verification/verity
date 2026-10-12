@@ -18,6 +18,12 @@ the host, with the CPU its thread ended on and that CPU's frequency.
   responder spin;
 * ``after``: as ``alone`` once they have exited.
 
+Run r20261012-023723-e009 found every ``beside`` phase fast and ``after`` fast for its first 3–4 reps only, at one SM and
+memory clock; the ``course`` then times the native chains back to back on the default stream around one co-tenant at a
+time (`COURSE`: a process that sleeps, `SPINNERS` that spin, one holding an idle CUDA context), `COURSE_S` seconds before it
+starts, after it is ready and after it exits, so the onset and the offset of the fast state are seen and each kind of
+co-tenant is seen alone.
+
 nvidia-smi reads the clocks before and after each phase (pynvml is not in the harness's venv).
 """
 
@@ -27,10 +33,18 @@ import os
 import statistics
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 REPS = 10
 SPINNERS = 4
+#: seconds of chains before a co-tenant starts, after all of it is ready, and after it has exited
+COURSE_S = (5.0, 6.0, 10.0)
+#: the most seconds a co-tenant may take to be ready, or to exit once its stdin closes
+COURSE_WAIT_S = 60.0
+#: an effect smaller than this share of the chain's time before the co-tenant gets no onset or offset
+COURSE_EFFECT = 0.02
 #: (stream, a device synchronization after each item, held)
 STREAMS = (("default", False, False), ("normal", False, False), ("highest", False, False), ("normal", True, False),
            ("default", False, True), ("normal", False, True))
@@ -60,6 +74,101 @@ while True:
     if n % 100_000 == 0 and select.select([sys.stdin], [], [], 0)[0]:
         break
 """
+SLEEP = r"""
+import sys
+print("ready", flush=True)
+sys.stdin.read()
+"""
+#: the course's co-tenants in turn: (name, script, its arguments, how many)
+COURSE = (("sleeper", SLEEP, [], 1), ("spinners", SPIN, [], SPINNERS), ("context", SECOND, ["idle"], 1))
+
+
+def course_summary(series: list[list], marks: dict, after_s: float = COURSE_S[2]) -> dict:
+    """A co-tenant's course (`course`), each item ``[t_s, arm, device_s]`` with ``t_s`` from its start, and `marks` the
+    seconds from its start at which all of it was ``ready``, its stdin was closed (``close``) and all of it had
+    ``exited``: per arm, the median device ms before it started, while it started, while it was ready, while it exited, and
+    in each whole second after it exited; with an effect (ready against before) of at least `COURSE_EFFECT`, the onset (the
+    first item from its start nearer the ready median than the before one) and the offset (the first item after it exited
+    from which every later item is nearer the before median)."""
+    med = lambda xs: statistics.median(xs) * 1e3 if xs else None
+    ready, close, exited = (marks.get(k) for k in ("ready", "close", "exited"))
+    out = {}
+    for arm in dict.fromkeys(a for _, a, _ in series):
+        xs = [(t, d) for t, a, d in series if a == arm]
+        span = lambda lo, hi: med([d for t, d in xs if (lo is None or t >= lo) and (hi is None or t < hi)])
+        s = {"before_ms": span(None, 0.0), "starting_ms": span(0.0, ready), "ready_ms": span(ready, close),
+             "closing_ms": span(close, exited),
+             "after_ms": [span(exited + b, exited + b + 1) for b in range(int(after_s))] if exited is not None else []}
+        slow, fast = s["before_ms"], s["ready_ms"]
+        s["effect"] = (slow - fast) / slow if slow and fast else None
+        s["onset_s"] = s["offset_s"] = None
+        if s["effect"] is not None and abs(s["effect"]) >= COURSE_EFFECT:
+            nearer_fast = lambda d: abs(d * 1e3 - fast) < abs(d * 1e3 - slow)
+            s["onset_s"] = next((t for t, d in xs if t >= 0 and nearer_fast(d)), None)
+            post = [(t, d) for t, d in xs if exited is not None and t >= exited]
+            last = max((i for i, (_, d) in enumerate(post) if nearer_fast(d)), default=-1)
+            s["offset_s"] = post[last + 1][0] - exited if last + 1 < len(post) else None
+        out[arm] = s
+    return out
+
+
+def course(natives: dict, chains: dict[str, int], script: str, args: list[str], count: int,
+           spans: tuple[float, float, float] = COURSE_S) -> dict:
+    """The native chains back to back on the default stream, arm by arm in turn, `spans[0]` seconds before `count` copies
+    of `script` start, until all are ready, `spans[1]` seconds more, until all have exited once their stdin closes, and
+    `spans[2]` seconds after: each item's time from their start and its device time, the marks and `course_summary`."""
+    import torch
+    before, during, after = spans
+    arms, raw, marks, i = list(natives), [], {}, 0
+    base = time.monotonic()
+    now = lambda: time.monotonic() - base
+
+    def one() -> None:
+        nonlocal i
+        arm = arms[i % len(arms)]
+        i += 1
+        t = now()
+        with torch.cuda.stream(torch.cuda.default_stream()):
+            raw.append([t, arm, natives[arm].item(chains[arm])["device_s"]])
+
+    def until(done, limit: float) -> bool:
+        while not done() and now() < limit:
+            one()
+        return done()
+
+    until(lambda: False, before)
+    marks["start"] = now()
+    procs = [subprocess.Popen([sys.executable, "-c", script, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+             for _ in range(count)]
+    ups: list[float] = []
+    for p in procs:
+        threading.Thread(target=lambda p=p: p.stdout.readline().strip() == "ready" and ups.append(now()), daemon=True).start()
+    error = None
+    try:
+        if until(lambda: len(ups) == count, marks["start"] + COURSE_WAIT_S):
+            marks["ready"] = max(ups)
+            until(lambda: False, marks["ready"] + during)
+        else:
+            error = f"{count - len(ups)} of {count} never got ready in {COURSE_WAIT_S:.0f} s"
+    finally:
+        marks["close"] = now()
+        for p in procs:
+            p.stdin.close()
+        downs: list[float] = []
+        threading.Thread(target=lambda: [p.wait() for p in procs] and downs.append(now()), daemon=True).start()
+        if until(lambda: bool(downs), marks["close"] + COURSE_WAIT_S):
+            marks["exited"] = downs[0]
+        else:
+            for p in procs:
+                p.kill()
+            error = error or f"still running {COURSE_WAIT_S:.0f} s after its stdin closed: killed"
+    if "exited" in marks:
+        until(lambda: False, marks["exited"] + after)
+    t0 = marks["start"]
+    series = [[round(t - t0, 4), arm, d] for t, arm, d in raw]
+    rel = {k: round(v - t0, 4) for k, v in marks.items() if k != "start"}
+    return {"count": count, "marks": rel, "rc": [p.poll() for p in procs], "error": error, "series": series,
+            "summary": course_summary(series, rel, after)}
 
 
 def smi(uuid: str | None) -> dict:
@@ -190,4 +299,12 @@ def run(natives: dict, chains: dict[str, int], uuid: str | None, reserved: set[i
     beside("beside-copies", SECOND, ["copies"])
     beside("beside-spin", SPIN, [], SPINNERS)
     phase("after", STREAMS)
+    out["course"] = {}
+    for name, script, args, count in COURSE:
+        clocks = smi(uuid)
+        try:
+            out["course"][name] = {"clocks_before": clocks, **course(natives, chains, script, args, count),
+                                   "clocks_after": smi(uuid)}
+        except Exception as ex:  # noqa: BLE001 - one co-tenant's failure is recorded and the next runs
+            out["course"][name] = {"clocks_before": clocks, "error": f"{type(ex).__name__}: {ex}"}
     return out

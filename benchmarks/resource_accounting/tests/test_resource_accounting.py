@@ -681,6 +681,40 @@ def test_the_probe_summarizes_each_condition_and_renders_its_table():
     assert "Probe near: no CPU of this mask on a node at the GPU's" in md
 
 
+def test_the_course_finds_the_onset_and_the_offset_of_a_co_tenant_s_effect():
+    P = _load("probe")
+    slow, fast = 1.318e-3, 1.209e-3
+    times = [(-2.0, slow), (-1.0, slow), (-0.5, slow), (1.0, slow), (4.0, fast), (6.0, fast), (10.9, fast), (11.2, fast),
+             (12.5, fast), (13.1, slow), (13.5, fast), (14.0, slow), (14.6, slow)]
+    series = [[t, "native-bf16", d] for t, d in times] + [[t, "native-fp8", 0.928e-3] for t in (-1.0, 5.0, 12.0)]
+    marks = {"ready": 4.8, "close": 10.8, "exited": 11.0}
+    s = P.course_summary(series, marks, after_s=4)
+    bf = s["native-bf16"]
+    assert (bf["before_ms"], bf["ready_ms"], bf["closing_ms"]) == (pytest.approx(1.318), pytest.approx(1.209),
+                                                                   pytest.approx(1.209))
+    assert bf["starting_ms"] == pytest.approx((1.318 + 1.209) / 2) and bf["effect"] == pytest.approx(0.109 / 1.318)
+    assert bf["after_ms"] == [pytest.approx(1.209), pytest.approx(1.209), pytest.approx((1.318 + 1.209) / 2),
+                              pytest.approx(1.318)]
+    assert bf["onset_s"] == 4.0 and bf["offset_s"] == pytest.approx(3.0)
+    fp = s["native-fp8"]
+    assert fp["effect"] == pytest.approx(0.0) and fp["onset_s"] is None and fp["offset_s"] is None
+    never = P.course_summary([[t, "native-bf16", fast] for t in (11.5, 12.0)] + [[-1.0, "native-bf16", slow]] +
+                             [[5.0, "native-bf16", fast]], marks, after_s=2)
+    assert never["native-bf16"]["offset_s"] is None
+    doc = _doc()
+    clocks = {"clocks.sm": "2092", "clocks.mem": "12481"}
+    doc["probe"] = {"point": "o-n4096-k4096-b1-L32", "phases": {},
+                    "course": {"context": {"count": 1, "marks": marks, "summary": s, "clocks_before": clocks,
+                                           "clocks_after": clocks},
+                               "spinners": {"count": 4, "marks": {}, "summary": {}, "error": "1 of 4 never got ready in 60 s"}}}
+    md = R.markdown(doc, {}, "fixture")
+    assert "context 2092/12481 to 2092/12481; spinners –/– to –/–." in md
+    assert ("| context | native-bf16 | 4.80 | 1.318 | 1.263 | 1.209 | +8.3% | 4.00 | 1.209, 1.209, 1.263, 1.318 | 3.00 |"
+            in md)
+    assert "| context | native-fp8 | 4.80 | 0.928 | – | 0.928 | +0.0% | – | –, 0.928, –, – | – |" in md
+    assert "Course spinners ×4: 1 of 4 never got ready in 60 s" in md
+
+
 def test_the_rounds_chain_times_carry_the_device_s_and_the_launch_s():
     turns = object.__new__(CHAIN.Turns)
     turns.plans = {"k": {"arms": {"native-fp8": {"chains": 4, "median_s": 0.002, "device_median_s": 0.0019}}}}
