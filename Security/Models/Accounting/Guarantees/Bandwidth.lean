@@ -113,9 +113,10 @@ def AuditInteractiveRO : Prop :=
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **Bandwidth adds, by counting (Mbw), in the random-oracle model.** For every `JointDevice` whose chip's view
-determines `z` (`Recovers`), over a uniform store of `N` blocks of `b` bits, `z` uniform over `n` bits and independent of
-the store, a fresh oracle and `s` sampled blocks: the probability that the verifier accepts while the device's ingress,
-plus `S + c + G·b + λ`, falls short of `k·b + n` is at most `AuditRO`'s bound
+determines `z` (`Recovers`), over a uniform store of `N` blocks of `b` bits, `z` uniform over `n` bits, a fresh oracle
+and `s` sampled blocks, all independent (`z` independent of the oracle too: the oracle's answers at points that don't
+depend on the store would be a `z` the chip's view determines with no reads): the probability that the verifier accepts
+while the device's ingress, plus `S + c + G·b + λ`, falls short of `k·b + n` is at most `AuditRO`'s bound
 
   `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
 
