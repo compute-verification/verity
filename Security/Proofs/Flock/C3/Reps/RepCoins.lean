@@ -1,14 +1,16 @@
 import Proofs.Flock.C3.Reps.RepsRead
 import Proofs.Flock.C3.Reps.Vals
+import Proofs.Flock.Soundness.Assumptions.Inner
 
 /-!
 # The reps' coins at `repsOfVals`, from the inner session's records
 
 `repCoins_repsOfVals`: `StageCoins`' two rep conjuncts at the tied source `tiedSrc (repsOfVals stp sh rep vals)`. Rep
 `i`'s coin steps are its consumed rounds' coins (`repIdx`, `UnitWoven`'s), so its `p`-th is round `repIdx p`'s
-(`unitCoins_eq`); the history's round `repStart c₀ i + p` draws it from the rep's stream (`RepsDrawn`), where custody
-(`CoinsCustody`, `Assumptions.InnerRecordCustody`'s coins half at a map's `selC` and `coin`) holds that round's coin,
-the rep's rounds are the record's (`RepRoundsHeld`), and the map's coins are the round's coordinate (`CoinsEncoded`).
+(`unitCoins_eq`); the history's round `repStart c₀ i + p` draws it from the rep's stream (`RepsDrawn`), where custody's
+coins half (`Assumptions.InnerRecordCustody` at a map `m`, round `i` drawing round `q` of `s` where `m.selC i s q`) holds
+that round's coin, the rep's rounds are the record's (`RepRoundsHeld`), and the map's coins are the round's coordinate
+(`CoinsEncoded`).
 `capRead_vals`: `CapRead` at values whose cap is one constant.
 -/
 
@@ -20,6 +22,7 @@ open FlockSoundness.Game (Msg Step)
 open FlockVBridge.Family (coinSteps)
 open FlockC3.Compose (CoinsAt)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
+open FlockSoundness.Assumptions (InnerRecordMap heldCoins)
 
 section list
 
@@ -75,21 +78,6 @@ def CoinsEncoded (selC : ℕ → String → ℕ → Prop) (coin : ((k : Fin r) �
 
 end list
 
-/-- The coins the verifier holds of round `k` of stream `s` in its hold of the inner transcript (the form of
-`Assumptions.heldCoins`). -/
-def heldCoinsOf (cs : Except String Flock.RecVStar.InnerCommits) (s : String) (k : ℕ) : Option (Array Flock.F128) :=
-  match cs with
-  | .ok cs => (cs.stream? s).bind (·.coins[k]?)
-  | .error _ => none
-
-/-- **Hypothesis: custody's coins half** (`Assumptions.InnerRecordCustody`'s, at a map's `selC` and `coin`): at every
-history `t`, round `k` of stream `s` that round `i` draws holds the coins `coin` gives of `t`'s round-`i` coin. -/
-def CoinsCustody {Cm Coin : Type} (wr : List (Cm × Coin) → Lean.Json × String)
-    (held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits) (selC : ℕ → String → ℕ → Prop)
-    (coin : Coin → String → ℕ → Array Flock.F128) : Prop :=
-  ∀ t : List (Cm × Coin), ∀ (i : ℕ) e, t[i]? = some e → ∀ s k, selC i s k →
-    heldCoinsOf (held (wr t)) s k = some (coin e.2 s k)
-
 section unit
 
 open Flock FlockSoundness FlockSoundness.Refine
@@ -118,21 +106,21 @@ custody holds. -/
 theorem coinsAt_rep {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step}
     {S : FlockSoundness.Model.Statement} {v : UnitVals} {d : RepData}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
-    {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {selC : ℕ → String → ℕ → Prop}
-    {coin : ((k : Fin r) → CT k) → String → ℕ → Array Flock.F128} {s : String} {ix : ℕ → ℕ} {j : ℕ}
+    {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
+    {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {s : String} {ix : ℕ → ℕ} {j : ℕ}
     (hts : ts.filterMap Sum.getRight? = (repIdx S v).map (coinArr fOf ∘ fun q => (v.t.rounds[q]!).coins))
-    (hcus : CoinsCustody wr held selC coin) (henc : CoinsEncoded selC coin)
-    (hd : ∀ q c, heldCoinsOf (held (wr t)) s (ix q) = some c → d.rounds[q]? = some c)
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (henc : CoinsEncoded m.selC m.coin)
+    (hd : ∀ q c, heldCoins (held (wr t)) s (ix q) = some c → d.rounds[q]? = some c)
     (hv : d.rounds = v.t.rounds.map (·.coins))
-    (hdr : j + (repIdx S v).length ≤ r ∧ ∀ p q, (repIdx S v)[p]? = some q → selC (j + p) s (ix q))
+    (hdr : j + (repIdx S v).length ≤ r ∧ ∀ p q, (repIdx S v)[p]? = some q → m.selC (j + p) s (ix q))
     (hlen : r + 1 ≤ t.length) :
     nCoins ts = (repIdx S v).length ∧ CoinsAt (t.map Prod.snd) j (nCoins ts) ts := by
   obtain ⟨hr, hsel⟩ := hdr
   refine coinsAt_of_idx hts hr (by rw [List.length_map]; omega) ?_
   intro p q i hi hc hp hip
-  have hs : selC i s (ix q) := by rw [hip]; exact hsel p q hp
+  have hs : m.selC i s (ix q) := by rw [hip]; exact hsel p q hp
   have hc' : i < t.length := by rw [List.length_map] at hc; exact hc
-  have hround := hd q _ (hcus t i t[i] (List.getElem?_eq_getElem hc') s (ix q) hs)
+  have hround := hd q _ (((hcus t).1 i t[i] (List.getElem?_eq_getElem hc')).2 s (ix q) hs)
   rw [hv] at hround
   show coinArr fOf (v.t.rounds[q]!).coins = _
   rw [getElem!_of_map hround, henc i hi s (ix q) t[i].2 hs, List.getElem_map]
@@ -154,8 +142,8 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
   {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String}
-  {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {selC : ℕ → String → ℕ → Prop}
-  {coin : (holoInnerAt T CT st hp).Coin → String → ℕ → Array Flock.F128} {s : Fin 2 → String} {ix : Fin 2 → ℕ → ℕ}
+  {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
+  {m : InnerRecordMap Cm (holoInnerAt T CT st hp).Coin} {s : Fin 2 → String} {ix : Fin 2 → ℕ → ℕ}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -167,7 +155,7 @@ def RepRoundsHeld (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → 
     (held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits) (s : Fin 2 → String)
     (ix : Fin 2 → ℕ → ℕ) : Prop :=
   AtRep zs dg N k Rw sh rep fun _ _ t Lb i => ∀ q c,
-    heldCoinsOf (held (wr t)) (s i) (ix i q) = some c → (rep Lb i).rounds[q]? = some c
+    heldCoins (held (wr t)) (s i) (ix i q) = some c → (rep Lb i).rounds[q]? = some c
 
 /-- **Hypothesis: the map draws the reps' consumed rounds** (`InnerRecordMap.selC`, `selC`): at every accepted outer proof
 whose rep `i` meets E's preconditions, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed rounds) draws
@@ -190,8 +178,9 @@ theorem repCoins_repsOfVals (hleaf : HLeafC3 zs dg N k Rw)
     (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     (hs : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
-    (hcus : CoinsCustody wr held selC coin) (hheld : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (henc : CoinsEncoded (CT := CT) selC coin) (hdr : RepsDrawn zs dg N k Rw sh rep vals selC s ix) :
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m)
+    (hheld : RepRoundsHeld zs dg N k Rw sh rep wr held s ix) (henc : CoinsEncoded (CT := CT) m.selC m.coin)
+    (hdr : RepsDrawn zs dg N k Rw sh rep vals m.selC s ix) :
     AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
       CoinsAt (CT := CT) (t.map Prod.snd) 1 (nCoins (u.ts 0)) (u.ts 0) ∧
         CoinsAt (CT := CT) (t.map Prod.snd) (1 + nCoins (u.ts 0)) (nCoins (u.ts 1)) (u.ts 1) := by
