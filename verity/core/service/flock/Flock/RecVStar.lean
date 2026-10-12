@@ -477,11 +477,13 @@ def STACKED : String := "stacked"
 round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
 level 0 the table's `root_B` from `Commit` (the record's `link.roots`; R, which has none there, its binding round's salted
 top), then each later salted top in the order the stream's rounds absorbed them. A sparse stream belongs to no table and has
-none. -/
+none. `coins`: each round's coins, in round order, as the coin server drew them (check 5's coins of the sparse phases and
+of R, which the prover's record does not hold). -/
 structure InnerStream where
   name : String
   commits : Array (Nat × ByteArray)
   tops : Array (Array ByteArray)
+  coins : Array (Array F128) := #[]
 
 /-- What the verifier holds of the inner session's transcript: the circuit table's reps' `c_k` (`reps`, rep `x` at `x`), and
 with candidate 3's streams every stream of the session (`streams`; empty for a session of one table's two reps) and, with
@@ -718,7 +720,9 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
       checkStackedShape s sh rs
     let cs := ((msgs.filter (·.1 == s)).qsort (·.2.1 < ·.2.1)).map (·.2)
     all := all ++ (tops.extract (if committed then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
-    out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[] }
+    let coins ← rs.mapM fun r => (coinsOf r).mapM fun h =>
+      (f128OfHex h).mapError (s!"rec inner transcript: {s} round {(r.getObjValAs? Nat "k").toOption.getD 0}'s coins: " ++ ·)
+    out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[], coins }
   let mut seen : Std.HashSet String := {}
   for b in all do
     let h := hexOf b
@@ -824,24 +828,49 @@ def openingIndex (value : String) : Option Nat :=
 def stackedTopLevel (value : String) : Option Nat :=
   if value.startsWith "rec-top-stacked-L" then (value.drop 17).toString.toNat? else none
 
-/-- `rec-sparse-<p>`'s `p` when `p` is one of RecSparse's message ports at some shape (`pre<j>`, `v2`, `sc<j>`, `u`, `vt`):
-not `h` (registered as its `rec-c<i>`), `claim` (`rec-claim`), nor `v`, `zero` or `tau`, which no round commits. -/
+/-- RecSparse's registered claim (`rec_outer.CLAIM_VALUE`): row `r` rep `r`'s, which RecSparse's `claim` and R's opening's
+`claim<k>` read. -/
+def CLAIM_VALUE : String := "rec-claim"
+
+/-- `rec-sparse-<p>`'s `p` when `p` is one of RecSparse's message ports at some shape (`pre<j>`, `v2`, `sc<j>`, `u`, `vt`),
+and `claim` for `rec-claim`: not `h` (registered as its `rec-c<i>`), nor `v`, `zero` or `tau`, which no round commits. -/
 def sparsePort (value : String) : Option String :=
+  if value == CLAIM_VALUE then some "claim" else
   if !value.startsWith "rec-sparse-" then none else
   let p := (value.drop 11).toString
   let idx := fun (pre : String) => p.startsWith pre && ((p.drop pre.length).toString.toNat?).isSome
   if p == "v2" || p == "u" || p == "vt" || idx "pre" || idx "sc" then some p else none
 
-/-- RecSparse's message ports at `sh` in the order its sparse phase commits them (`message_ports` without `h` and
-`claim`): `pre<j>`, `v2`, `sc<j>`, `u`, and `vt` at T > 1. -/
+/-- RecSparse's message ports at `sh` in the order its sparse phase commits them (`message_ports` without `h`): `pre<j>`,
+`v2`, `sc<j>`, `u`, `vt` at T > 1, and last `claim`, the claim round's (`rec_live.sparse_rounds`). -/
 def sparseMessages (sh : RecSparse.Shape) : List String :=
-  ((RecSparse.messagePorts sh).map (·.1)).filter fun p => p != "h" && p != "claim"
+  ((RecSparse.messagePorts sh).map (·.1)).filter fun p => p != "h"
+
+/-- Row `x` of RecSparse's message port `p` at `sh`: `sparse/rep<x>`'s `i`-th message round's `c_i`, `i` `p`'s place in
+`sparseMessages sh`, the stream holding exactly those message rounds. -/
+def sparseRow (cs : InnerCommits) (sh : RecSparse.Shape) (p : String) (x : Nat) : Except String (String × ByteArray) := do
+  let names := sparseMessages sh
+  let some i := names.idxOf? p | .error s!"{p} is not one of RecSparse's message ports {names} at {RecSparse.unitName sh}"
+  let s := s!"{SPARSE}/rep{x}"
+  let some st := cs.stream? s | .error s!"the inner transcript has no stream {s}"
+  if st.commits.size != names.length then
+    .error s!"{s} holds {st.commits.size} message rounds, not {RecSparse.unitName sh}'s {names.length} ({names})"
+  let (k, c) := st.commits[i]!
+  .ok (s!"{s}'s c_{i} ({p}, inner round {k})", c)
+
+/-- **`rec-claim`'s row `x`, the verifier's own**: rep `x`'s registered claim is its sparse phase's last message, the claim
+round (`rec_live.sparse_rounds`, after u's, and vt's at T > 1), whose `c_k` the coin server records; so row `x` of
+`rec-claim` is `sparse/rep<x>`'s claim round's `c_k` at the verifier's RecSparse shape `sh` (`rec-inner --sparse`), and a claim
+row the firewall did not commit, however consistently registered, opens no statement that reads it (RecSparse's `claim`, R's
+opening's `claim<k>`). -/
+def claimRow (cs : InnerCommits) (sh : RecSparse.Shape) (x : Nat) : Except String (String × ByteArray) :=
+  sparseRow cs sh "claim" x
 
 /-- A registered value the inner transcript fixes, and what its row `x` is there: `rec-c<i>`, rep `x`'s `i`-th message
 round's `c_i`; `rec-opening-c<i>` (R's registered opening, `rec_vstage.opening_messages`), R's one stream's `i`-th message
 round's `c_i`, at row 0; `rec-top-stacked-L<l>` (R's levels, `rec_vstage.stage_stacked`), node `x` of R's level-`l` top;
-`rec-sparse-<p>` (RecSparse's message ports, `rec_vstage.sparse_messages`), `sparse/rep<x>`'s `i`-th message round's `c_i`,
-`i` `p`'s place in `sparseMessages sparse`, `sparse` the statement's RecSparse shape.
+`rec-sparse-<p>` (RecSparse's message ports, `rec_vstage.sparse_messages`), `sparseRow`; `rec-claim`, `claimRow`; both at
+`sparse`, the verifier's RecSparse shape.
 `none` for any other value; else the row's description and its `b ‖ c`, or why the transcript has no such row. -/
 def fixedRow (cs : InnerCommits) (value : String) (x : Nat) (sparse : Option RecSparse.Shape := none) :
     Option (Except String (String × ByteArray)) :=
@@ -856,15 +885,9 @@ def fixedRow (cs : InnerCommits) (value : String) (x : Nat) (sparse : Option Rec
     | some c => .ok (s!"node {x} of R's level {l} top", c)
     | none => .error s!"the inner transcript has no node {x} of R's level {l} top"
   | _, _, _, some p => some <| do
-    let some sh := sparse | .error s!"{value} is a RecSparse message port and the statement is no rec-sparse unit"
-    let names := sparseMessages sh
-    let some i := names.idxOf? p | .error s!"{p} is not one of RecSparse's message ports {names} at {RecSparse.unitName sh}"
-    let s := s!"{SPARSE}/rep{x}"
-    let some st := cs.stream? s | .error s!"the inner transcript has no stream {s}"
-    if st.commits.size != names.length then
-      .error s!"{s} holds {st.commits.size} message rounds, not {RecSparse.unitName sh}'s {names.length} ({names})"
-    let (k, c) := st.commits[i]!
-    .ok (s!"{s}'s c_{i} ({p}, inner round {k})", c)
+    let some sh := sparse
+      | .error s!"{value} is fixed by the sparse phase, and the verifier names no RecSparse shape (rec-inner --sparse)"
+    if p == "claim" then claimRow cs sh x else sparseRow cs sh p x
   | none, none, none, none => none
 
 /-- An R opening unit (`rec-opening/m<m>-c<claims>-p<j>`, `RecOpening.params`) opens R at the shape R's stream was held to
@@ -878,13 +901,25 @@ def checkOpeningShape (unit : String) (cs : InnerCommits) : V Unit := do
 
 /-- **`pub.bin`'s rows at its reads of what the inner transcript fixes are the `b ‖ c` the verifier holds**: for each port of
 the verifier's reads file registering a value `fixedRow` names (`rec-c<i>`, and with R `rec-opening-c<i>` and
-`rec-top-stacked-L<l>`, and with a rec-sparse unit `rec-sparse-<p>`), every row of the port's table, at the registered
-position `x` it opens, is that value's row `x` in `innerCommits`: for `rec-c<i>`, rep `x`'s `i`-th message round's `c_i`.
+`rec-top-stacked-L<l>`, and with the sparse phase `rec-sparse-<p>` and `rec-claim`), every row of the port's table, at the
+registered position `x` it opens, is that value's row `x` in `innerCommits`: for `rec-c<i>`, rep `x`'s `i`-th message round's
+`c_i`; for `rec-claim`, `claimRow`. `sparse` is the verifier's RecSparse shape (`rec-inner --sparse`), a rec-sparse unit's
+own. A rec-sparse unit's `claim` port and an R opening unit's `claim<k>` ports read `rec-claim` in the verifier's reads.
 `Registered.check` puts each instance's row at the position its unit reads. An R opening unit
 (`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
-    (commits : Option InnerCommits) : V Unit := do
+    (commits : Option InnerCommits) (sparse : Option RecSparse.Shape := none) : V Unit := do
   let unit := st.c.unit.name
+  let sparse := (RecSparse.params unit).or sparse
+  let claimPorts := (st.c.ports.toList.map (·.name)).filter fun nm =>
+    ((RecSparse.params unit).isSome && nm == "claim") ||
+      ((RecOpening.params unit).isSome && nm.startsWith "claim" && ((nm.drop 5).toString.toNat?).isSome)
+  for nm in claimPorts do
+    match (registered.getD #[]).find? (·.name == nm) with
+    | some reg =>
+      if reg.value != CLAIM_VALUE then
+        throw s!"rec-pub: {unit}: port {nm} reads {reg.value}, not {CLAIM_VALUE}, the claim the sparse phase's claim round commits"
+    | none => throw s!"rec-pub: {unit}: the verifier's registered reads hold no port {nm}: its {CLAIM_VALUE} would be the prover's"
   let regs := (registered.getD #[]).filter fun reg => (fixedRow {reps := #[]} reg.value 0).isSome
   let some reg0 := regs[0]? | return
   let some cs := commits
@@ -897,7 +932,7 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
     let (positions, _) ← Registered.entry st.pub reg
     for r in [0:positions.size] do
       let x := positions[r]!
-      match fixedRow cs reg.value x (RecSparse.params unit) with
+      match fixedRow cs reg.value x sparse with
       | some (.ok (what, c)) =>
         if Registered.tableRow st.pub t p r != c then
           throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} is not {what} of the inner transcript"
