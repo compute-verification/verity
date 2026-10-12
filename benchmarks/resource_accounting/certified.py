@@ -9,16 +9,22 @@
   at the cubes 8,192³ and 16,384³ only, so every other shape's W_cert is unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
-* **Q_cert, bandwidth**: no pinned theorem yet.
+* **Q_cert, bandwidth**: pending.  The guarantee is ``Bandwidth.SecurityProofs.AuditRO``, but no certified bandwidth rate is
+  cited until the red team has re-read the bandwidth protocol's parameters at the BLAKE3 head, so only times and raw rates
+  are reported.  The device inputs it will take (`chip`, `window_params`) carry the red team's conditions already: S_chip is
+  the protocol's (L2, registers, L1 and shared memory) plus an allowance per SM for the constant and instruction caches it
+  leaves out, and a window's `T + RTT` holds the RTT at P2's cap (`RTT_ALLOWANCE_CAP_NS`) under the rebuild floor.
 * **S_cert, capacity**: the PoUS arm's storage profile (`storage`), when the harness issued one and it is certified: a
   server holding fewer than ⌊ρ·|C|⌋ bits passes the audit of record's k challenges within its limit with probability at most
   δ + 2^eps_log2, by the certificate's theorem (P2's is ``Pous.SecurityProofs.P2SlackFamilyUncond``), under its claims,
-  with P2 itself experimental (the profile says why).  S_cert is that bound in bytes; otherwise it is unproved, with why.
+  with P2 itself experimental (the profile says why) and the deployed ring's theorem held.  S_cert is that bound in bytes;
+  otherwise it is unproved, with why.
 * **The covert residual** of a resource over an arm's chain time T is what the device could have done in T less what is
   certified: compute F·T − W_cert, with F the native FP8 chain's rate at the shape (W1 per second); bandwidth BW·T − Q_cert,
   BW the native read rate; capacity M − S_cert, M the device's memory.  It splits into honest overhead, native less the
   honest reference (F·T − ΣW_ref: what the protocol's own time costs; M − |C|, the memory the store leaves), and soundness
-  slack, the reference less what is certified (ΣW_ref − W_cert; |C| − S_cert).
+  slack, the reference less what is certified (ΣW_ref − W_cert; |C| − S_cert).  It is the weak form (`RESIDUAL`):
+  ``CovertResidual`` is worst case over each audit's own coins, not a per-run bound, and the per-run form is not proved yet.
 """
 
 from __future__ import annotations
@@ -35,8 +41,30 @@ TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)
-UNPROVED_Q = "unproved: no bandwidth guarantee is pinned"
+PENDING_Q = "pending: parameters not reviewed"
+Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
+RESIDUAL = "residual, worst case over the audit's coins; per-run form pending"
+S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "
+           "#1790) is held")
 NO_POUS = "no PoUS arm in this run"
+SM_BYTES = (256 + 128) << 10
+"""The bandwidth protocol's S_chip per SM (its PROTOCOL.md §4): 256 KiB of registers and 128 KiB of L1 and shared memory."""
+SM_CACHE_ALLOWANCE = 512 << 10
+"""An allowance per SM for the constant and instruction caches (and the smaller buffers) the protocol's S_chip leaves out:
+not a measured size; the red team's number replaces it."""
+
+
+def chip(l2_bytes: int, sms: int) -> dict:
+    """S_chip on a device with `l2_bytes` of L2 and `sms` SMs: the protocol's L2 + SMs × `SM_BYTES`, and the cache allowance."""
+    protocol, allowance = l2_bytes + sms * SM_BYTES, sms * SM_CACHE_ALLOWANCE
+    return {"protocol_bytes": protocol, "allowance_bytes": allowance, "s_chip_bytes": protocol + allowance}
+
+
+def window_params(tag: str):
+    """A bandwidth window of `tag` at the proof's samples, with the RTT at P2's cap: `T + RTT` one ns under the rebuild floor."""
+    from verity.core.protocols.bandwidth import audit
+    from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
+    return audit.Params(tag, audit.SAMPLES, audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
 
 
 def price_twins():
@@ -120,9 +148,9 @@ def residual(capacity: float | None, reference: float | None, certified: float |
 
 
 def bandwidth(read_rate: float | None, seconds: float, bytes_read: float) -> dict:
-    """The bandwidth residual: BW·T against the bytes the chain read; Q_cert is unproved."""
+    """The bandwidth residual: BW·T against the bytes the chain read; Q_cert is pending."""
     capacity = None if read_rate is None else read_rate * seconds
-    return {"q_cert": None, "unproved": UNPROVED_Q, **residual(capacity, bytes_read, None)}
+    return {"q_cert": None, "pending": PENDING_Q, "theorem": Q_THEOREM, **residual(capacity, bytes_read, None)}
 
 
 def capacity(memory_bytes: int | None, s_cert: float | None = None, why: str = NO_POUS, stored: float | None = None) -> dict:
@@ -144,11 +172,12 @@ def storage(result: dict | None) -> dict:
     """S_cert from the PoUS harness's ``bench-result.json``: its storage profile's ``state_bound_bits`` as bytes when the
     harness issued a profile (every honest audit accepted) and it is certified; |C| is the profile's blocks at their bits."""
     if result is None:
-        return {"s_cert": None, "stored": None, "unproved": NO_POUS}
+        return {"s_cert": None, "stored": None, "blocks": None, "unproved": NO_POUS}
     prof = result.get("profile") or {}
     sp = prof.get("storage_profile") or {}
     cert = sp.get("certificate") or {}
-    out = {"s_cert": None, "unproved": None, "stored": sp["blocks"] * sp["block_bits"] / 8 if sp.get("blocks") else stored(result),
+    out = {"s_cert": None, "unproved": None, "blocks": sp.get("blocks") or result.get("blocks"),
+           "stored": sp["blocks"] * sp["block_bits"] / 8 if sp.get("blocks") else stored(result),
            "theorem": cert.get("theorem"), "delta": cert.get("delta"), "eps_log2": cert.get("eps_log2"),
            "k": sp.get("k"), "limit_ns": sp.get("limit_ns"), "gaps": prof.get("gaps") or [],
            "experimental": prof.get("experimental")}

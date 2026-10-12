@@ -9,14 +9,22 @@ certifies beside what it did.
   points without a GPU.
 - `certified.py`: the certified columns, pure: γ from the pinned price twins (`benchmarks/pouw/harness/price_twins.py`,
   the larger of the two prices; only at a cube, so W_cert is unproved at the Llama shapes), W_cert = (1 − γ)(1 − εs)·ΣWref
-  over the credited rows, and each resource's covert residual split into honest overhead and soundness slack. S_cert is
-  the PoUS arm's storage profile when it is certified (`storage`); Q_cert is unproved until a bandwidth guarantee is pinned.
+  over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
+  form (worst case over each audit's own coins; the per-run form is not proved yet). S_cert is the PoUS arm's storage
+  profile when it is certified (`storage`); Q_cert is pending until the red team has reviewed the bandwidth protocol's
+  parameters, and `chip` and `window_params` are the device inputs it will take (S_chip with a cache allowance, the RTT
+  at P2's cap inside the window).
+- `joint.py`: the bandwidth audit's arms inside the PoUS harness's process: (d), the tag pass over the PoUS store as
+  proof-only reads, every tag timed alone; (e), joint v0, `ro-blake3/v1`'s windows beside the chain and P2's audit.
 - `run.sh`: the recorded run on node 2: GPU 1's ship built outside the lease, `chain.py` under one `gpu-lease 1`
   (30 minutes at most), the retained pass verified after it. `POUS=1` (one shape, `--cwd clone`) adds the PoUS arm: P2's
   timed audit (`benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu`) on the same GPU, the chain running from its honest audit's
   start to its end and alone again after it; `POUS_IDLE=1` is its control, the chain idle through the same window.
+  `JOINT=separate,inproc,joint` (one shape, native arms, `--cwd clone`) instead runs `chain.py` inside the harness's
+  process (`pod.sh BENCH_HOST`), one harness run a round with the chain as its honest audit's load: its responder in a
+  process of its own, or a thread of the chain's (no MPS), and the joint round with `joint.py`'s arms.
 - `render.py`: the table, from a run's `art:` id (or a local `chain.json`), on demand, with the PoUS section when the run
-  had that arm. No table is stored.
+  had that arm and the rounds' (the responder's isolation, (d) and (e)) when it hosted the harness. No table is stored.
 
 ~~~sh
 research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd source \
@@ -24,8 +32,11 @@ research run --on vy-nebius-2 --project verity --campaign resource-accounting --
 research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone \
   --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-fp8,pearl-c --env POUS=1 \
   --env POUS_AUDITS=100 --env VERIFY_AT=o:1 -- bash benchmarks/resource_accounting/run.sh
+research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone \
+  --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-bf16,native-fp8 \
+  --env JOINT=separate,inproc,joint -- bash benchmarks/resource_accounting/run.sh
 python benchmarks/resource_accounting/render.py art:<id>
 ~~~
 
 The tests (`tests/`) run the pure parts only: the plan, the certified columns against the pinned twins, the PoUS arm's
-S_cert and capacity residual, and the table from a synthetic run.
+S_cert and capacity residual, `joint.py`'s windows over a CPU prover, and the table from a synthetic run.

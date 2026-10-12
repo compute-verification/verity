@@ -89,7 +89,8 @@ def _doc() -> dict:
                      "native-fp8-gemm": _arm(0.0019), "pearl-c": _arm(0.0030, **pc), "pearl-c-nohash": _arm(0.0025, mode="whole")}}
     o = {"key": "o-n4096-k4096-b1-L32", "shape": "o", "n": 4096, "k": 4096, "batch": 1, "length": 32, "macs": 4096 * 4096 * 32,
          "gates": [], "refused": {"pearl-c": "a gate"}, "arms": {"native-fp8": _arm(0.0004), "native-fp8-gemm": _arm(0.0003)}}
-    return {"schema": R.SCHEMA, "run": "r-test", "status": "complete", "identity": {"name": "test", "memory_bytes": 96 << 30},
+    return {"schema": R.SCHEMA, "run": "r-test", "status": "complete",
+            "identity": {"name": "test", "memory_bytes": 96 << 30, "l2_bytes": 128 << 20, "sms": 188},
             "read_rate": {"bytes_per_s": 1.6e12, "kernel": "test"}, "points": [cube, o, {"key": "x", "skipped": "budget"}]}
 
 
@@ -100,14 +101,20 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert pc["overhead"] == pytest.approx(0.0030 / 0.0020 - 1)
     assert pc["useful_tflops"] == pytest.approx(2 * 32 * 8192 * 8192 * 32 / 0.0030 / 1e12)
     assert pc["credited_share"] == pytest.approx(1 - 1 / (32 * 32))
-    assert pc["w_cert"] is not None and pc["q_unproved"] == C.UNPROVED_Q and pc["s_unproved"] == C.NO_POUS
+    assert pc["w_cert"] is not None and pc["q_pending"] == C.PENDING_Q and pc["s_unproved"] == C.NO_POUS
     assert pc["compute_residual"] == pytest.approx(pc["compute_honest_overhead"] + pc["compute_soundness_slack"])
     assert by[("cube8192-n8192-k8192-b32-L32", "native-fp8")]["overhead"] is None
     assert by[("cube8192-n8192-k8192-b32-L32", "native-fp8")]["gemm_tflops"] == pytest.approx(2 * 32 * 8192 ** 2 * 32 / 0.0019 / 1e12)
     assert by[("cube8192-n8192-k8192-b32-L32", "pearl-c-nohash")].get("w_cert") is None
     assert ("x", None) in by
     md = R.markdown(_doc(), {"pass": "ACCEPT x"}, "fixture")
-    assert "| cube8192 B=32 L=32 | pearl-c | whole |" in md and "unproved" in md and "failed or skipped" in md
+    assert "| cube8192 B=32 L=32 | pearl-c | whole |" in md and "failed or skipped" in md
+    assert f"| compute {C.RESIDUAL} (honest + slack) | Q_cert | S_cert |" in md and "| pending | none |" in md
+    assert "Q_cert: pending: parameters not reviewed (Bandwidth.SecurityProofs.AuditRO is proved" in md
+    assert ("S_chip 306.7 MB = the protocol's L2 + SMs × 384 KiB 208.1 MB + 98.6 MB for the constant and instruction "
+            "caches") in md
+    assert "T = 1,354,057 ns with the RTT at P2's cap, 354,000 ns, so T + RTT = 1,708,057 ns" in md
+    assert "not a per-run covert bound; lane ra-per-run is proving the per-run form" in md
 
 
 def test_render_reads_a_chain_json_and_refuses_another_schema(tmp_path):
@@ -115,11 +122,13 @@ def test_render_reads_a_chain_json_and_refuses_another_schema(tmp_path):
     p.write_text(json.dumps(_doc()))
     (tmp_path / "verify").mkdir()
     (tmp_path / "verify" / "pass.txt").write_text("noise\nACCEPT run r-test sha256:00\n")
-    doc, verdicts, result = R.load(str(p))
-    assert doc["run"] == "r-test" and verdicts == {"pass": "ACCEPT run r-test sha256:00"} and result is None
-    (tmp_path / "pous" / "bench").mkdir(parents=True)
+    doc, verdicts, result, rounds = R.load(str(p))
+    assert doc["run"] == "r-test" and verdicts == {"pass": "ACCEPT run r-test sha256:00"} and result is None and rounds == {}
+    (tmp_path / "pous" / "bench" / "inproc").mkdir(parents=True)
     (tmp_path / "pous" / "bench" / "bench-result.json").write_text(json.dumps(_pous_result()))
-    assert R.load(str(p))[2] == _pous_result()
+    (tmp_path / "pous" / "bench" / "inproc" / "bench-result.json").write_text(json.dumps(_pous_result(certified=False)))
+    p.write_text(json.dumps({**_doc(), "rounds": {"order": ["separate", "inproc"]}}))
+    assert R.load(str(p))[2:] == (_pous_result(), {"inproc": _pous_result(certified=False)})
     p.write_text(json.dumps({**_doc(), "schema": "other/v0"}))
     with pytest.raises(SystemExit, match="not ra-matmul-chain/v1"):
         R.load(str(p))
@@ -165,6 +174,10 @@ def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
                             "slowdown": 0.5, "after_ms": 0.5, "slowdown_after": pytest.approx(0.2)}]
     md = R.markdown(doc, {}, "fixture", _pous_result())
     assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md
+    assert ("S_cert's basis: Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem "
+            "(EndToEndRing, #1790) is held.") in md
+    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); lane ra-pous-scale" in md
+    assert f"Capacity {C.RESIDUAL}: M − S_cert = " in md
     assert "| 0.400 | 0.600 | 0.500 | +50.0% | +20.0% | 2 |" in md
     assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
     doc["beside"] = {**doc["beside"], "idle": True, "points": {}}
@@ -177,3 +190,175 @@ def test_the_plan_needs_no_gpu(capsys):
     assert plan["points"] == ["o-n4096-k4096-b1-L32", "o-n4096-k4096-b2048-L32", "gate_up-n28672-k4096-b1-L32",
                               "gate_up-n28672-k4096-b2048-L32"]
     assert plan["weight_bytes"]["gate_up-L32"] == 7 * 28672 * 4096 * 32
+
+
+def test_the_hosted_harness_s_argv_has_its_out_replaced():
+    argv = ["--impl", "p2-v3-mc-gpu", "--out", "/o/bench", "--verifier-cpu=2"]
+    assert CHAIN.flag(argv, "--out") == "/o/bench" and CHAIN.flag(argv, "--verifier-cpu") == "2"
+    assert CHAIN.flag(argv, "--responder-cpu") is None
+    assert CHAIN.with_flag(argv, "--out", "/o/bench/inproc") == ["--impl", "p2-v3-mc-gpu", "--out", "/o/bench/inproc",
+                                                                 "--verifier-cpu=2"]
+    assert CHAIN.with_flag(argv, "--verifier-cpu", "5")[-1] == "--verifier-cpu=5"
+    assert CHAIN.with_flag(["--impl", "x"], "--out", "d") == ["--impl", "x", "--out", "d"]
+
+
+def test_a_bandwidth_window_holds_the_rtt_at_p2_s_cap_under_the_floor_and_s_chip_its_cache_allowance():
+    from verity.core.protocols.bandwidth import audit
+    from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
+    p = C.window_params("ro-blake3/v1")
+    assert (p.samples, p.rtt_allowance_ns, p.limit_ns) == (audit.SAMPLES, RTT_ALLOWANCE_CAP_NS, audit.REGEN_FLOOR_NS - 1)
+    assert p.deadline_ns == audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1 == 1_354_057
+    chip = C.chip(128 << 20, 188)
+    assert chip["protocol_bytes"] == 208_142_336 and chip["s_chip_bytes"] == 208_142_336 + 188 * (512 << 10)
+    bw = C.bandwidth(1e12, 0.001, 5e8)
+    assert (bw["q_cert"], bw["pending"], bw["theorem"]) == (None, C.PENDING_Q, "Bandwidth.SecurityProofs.AuditRO")
+
+
+J = _load("joint")
+
+
+def _ticks(step: int):
+    t = [0]
+
+    def clock() -> int:
+        t[0] += step
+        return t[0]
+    return clock
+
+
+@pytest.fixture(scope="module")
+def small_store():
+    """A real P2 store of 16 blocks (the bandwidth audit's tests' geometry) and its `vk`."""
+    from verity.core.protocols.bandwidth import audit
+    from verity.core.protocols.pous import protocol, schemes
+    from verity.core.protocols.pous.schemes.p2 import P2Params
+    sch = schemes.P2(P2Params(128, 173, 8, 2))
+    w = bytes(range(256))[: sch.params.w_bytes]
+    com = protocol.commit(sch, w)
+    salt = protocol.draw_salt(b"setup secret", com)
+    encoded = protocol.encode(sch, w, salt)
+    vk = protocol.verifier_key(sch, com, salt, mode=protocol.PUBLIC, encoded=encoded)
+    return audit.Store.from_segments(sch.params, salt, encoded), vk
+
+
+class _Pass:
+    def __init__(self, c) -> None:
+        self.root, self.open, self.device_tags_ms, self.device_ms = c.root, c.open, 0.4, 0.5
+
+
+class _Prover:
+    """The honest prover on the CPU (`audit.tag_pass`), a skip control's untagged blocks zeroed."""
+
+    def __init__(self, store, fail_at: int | None = None) -> None:
+        self.store, self.blocks, self.calls, self.fail_at = store, store.params.blocks, [], fail_at
+
+    def reserve(self, tag: str, slots: int) -> None:
+        self.calls.append(("reserve", tag, slots))
+
+    def release(self, tag: str) -> None:
+        self.calls.append(("release", tag))
+
+    def scrub(self) -> None:
+        self.calls.append(("scrub",))
+
+    def raw_read(self, reps: int) -> dict:
+        return {"kernel": "none", "bytes": self.blocks * self.store.params.block_bytes, "device_ms": [0.25] * reps}
+
+    def tag_pass(self, tag: str, seed: bytes, slot: int, tagged: int | None = None) -> _Pass:
+        from verity.core.protocols.bandwidth import audit
+        self.calls.append(("pass", tag, slot, tagged))
+        if self.fail_at is not None and slot >= self.fail_at:
+            raise RuntimeError("the tagger failed")
+        c = audit.tag_pass(self.store, tag, seed)
+        if tagged is not None:
+            c = audit.TagCommitment(self.store, tag, seed, [*c.ys[:tagged], *(bytes(len(y)) for y in c.ys[tagged:])])
+        return _Pass(c)
+
+
+def test_proof_only_reads_time_every_tag_and_reject_the_skip_control(small_store, monkeypatch):
+    """(d): `vk` over the bytes of E is the store's; every tag's passes and windows run from a scrubbed L2 (a window after
+    a warm pass), its honest windows are accepted on time at T, and its skip control is rejected."""
+    store, vk = small_store
+    key, tree = J.store_key(store.params, store.salt, b"".join(store.blocks))
+    assert key.root == vk.root and tree.root == vk.root
+    monkeypatch.setattr(J, "SKIP", 0.25)
+    prover = _Prover(store)
+    d = J.alone(prover, vk, ["ro-blake3/v1", "ro-sha512/v1"], b"verifier secret", passes=3, windows=2, clock=_ticks(1_000))
+    assert d["raw_read"]["device_ms"] == [0.25] * 3
+    blake = d["tags"]["ro-blake3/v1"]
+    assert blake["certified"] and blake["deadline_ns"] == 1_354_057 and blake["limit_ns"] == 1_708_057
+    assert [p["host_ns"] for p in blake["passes"]] == [1_000] * 3 and blake["passes"][0]["device_ms"] == 0.5
+    assert [(w["accepted"], w["on_time_at_T"]) for w in blake["windows"]] == [(True, True)] * 2
+    assert blake["skip"]["accepted"] is False and blake["skip"]["failure"] == "tag-mismatch" and blake["skip"]["tagged"] == 12
+    one = prover.calls[1:prover.calls.index(("release", "ro-blake3/v1"))]
+    assert one[:3] == [("pass", "ro-blake3/v1", 0, None), ("scrub",), ("pass", "ro-blake3/v1", 0, None)]
+    assert one[-3:] == [("pass", "ro-blake3/v1", 0, None), ("scrub",), ("pass", "ro-blake3/v1", 0, 12)]
+    assert one.count(("scrub",)) == 3 + 3
+
+
+def test_joint_windows_commit_while_the_audit_runs_and_are_judged_after(small_store):
+    """(e): windows open at random gaps until the honest audit ends, each in a workspace of its own, and are judged once
+    closed; a slow one is late (no samples drawn); a window that fails stops the thread and is recorded."""
+    store, vk = small_store
+    gaps: list[float] = []
+    j = J.Joint(_Prover(store), vk, b"source", lambda: len(j.pending) >= 3, slots=5, gap_s=2.0,
+                wait=lambda s: gaps.append(s) or False, clock=_ticks(1_000))
+    j.start()
+    out = j.close()
+    assert len(out["windows"]) == 3 and all(w["accepted"] and w["on_time_at_T"] for w in out["windows"])
+    assert out["error"] is None and not out["out_of_slots"] and len(gaps) == 4 and all(1.0 <= g <= 3.0 for g in gaps)
+    assert [c for c in j.prover.calls if c[0] == "reserve"] == [("reserve", "ro-blake3/v1", 5)]
+    assert [c[2] for c in j.prover.calls if c[0] == "pass"] == [0, 1, 2]
+    late = J.Joint(_Prover(store), vk, b"source", lambda: False, slots=2, wait=lambda s: False, clock=_ticks(1_800_000))
+    late.run()
+    w = late.close()
+    assert w["out_of_slots"] and [(x["failure"], x["on_time_at_T"]) for x in w["windows"]] == [("late", False)] * 2
+    broken = J.Joint(_Prover(store, fail_at=1), vk, b"source", lambda: False, slots=3, wait=lambda s: False)
+    broken.run()
+    w = broken.close()
+    assert len(w["windows"]) == 1 and "the tagger failed" in w["error"]
+    spans = [{"start_ns": 100, "elapsed_ns": 50}, {"start_ns": 1_000, "elapsed_ns": None}]
+    o = J.overlap([[0, 2e-8], [120, 1e-9], [150, 1e-9], [-200, 2e-8]], 10, spans)
+    assert (o["with"], o["without"], o["median_with_s"], o["median_without_s"]) == (2, 2, pytest.approx(1.05e-8),
+                                                                                     pytest.approx(1.05e-8))
+
+
+def test_the_hosted_rounds_report_the_responder_s_isolation_and_the_joint_round_s_arms(small_store, monkeypatch):
+    store, vk = small_store
+    monkeypatch.setattr(J, "SKIP", 0.25)
+    d = J.alone(_Prover(store), vk, ["gf31-poly/v1", "ro-blake3/v1"], b"verifier secret", passes=2, windows=1,
+                clock=_ticks(1_000))
+    d["store"] = {"blocks": 1 << 19, "block_bytes": 2056, "bytes": (1 << 19) * 2056, "root": "00"}
+    j = J.Joint(_Prover(store), vk, b"source", lambda: len(j.pending) >= 2, slots=4, wait=lambda s: False,
+                clock=_ticks(1_000))
+    j.run()
+    w = j.close()
+    key, arm = "o-n4096-k4096-b1-L32", "native-fp8"
+    start = w["windows"][0]["start_ns"]
+    items = [[start, 0.0005], [start - 10**9, 0.0004]]
+    pts = {key: {arm: {"items": items, "chains": 4, "median_s": 0.00045, "alone_median_s": 0.0004, "slowdown": 0.125,
+                       "after": [0.0004] * 10, "after_median_s": 0.0004}}}
+    doc = _doc()
+    doc["rounds"] = {"bench": "benchmarks/pous/bench.py", "argv": [], "order": ["separate", "inproc", "joint"],
+                     "separate": {"round": "separate", "responder": "its own process", "harness_rc": 1, "points": pts},
+                     "inproc": {"round": "inproc", "error": "Traceback\nRuntimeError: no device"},
+                     "joint": {"round": "joint", "responder": "a thread of the chain's process", "harness_rc": 1,
+                               "points": pts, "alone": d, "windows": w,
+                               "overlap": {key: {arm: J.overlap(items, 4, w["windows"])}}}}
+    results = {"separate": _pous_result(certified=False), "joint": _pous_result()}
+    rounds = {r["round"]: r for r in R.hosted(doc, results)}
+    assert list(rounds) == ["separate", "inproc", "joint"] and rounds["inproc"]["audits"] is None
+    assert rounds["joint"]["proof_reads"]["raw_gb_per_s"] == pytest.approx((1 << 19) * 2056 / 0.25 / 1e6)
+    e = rounds["joint"]["joint"]
+    assert (e["windows"], e["on_time_at_T"], e["accepted"], e["alone_device_ms_p50"]) == (2, 2, 2, 0.5)
+    assert e["overlap"] == [{"key": key, "arm": arm, "with": 1, "without": 1, "median_with_ms": pytest.approx(0.5),
+                             "median_without_ms": pytest.approx(0.4)}]
+    md = R.markdown(doc, {}, "fixture", None, results)
+    assert ("| separate | its own process | 19 of 20 | 2100 | 1 | 0 | 200 / 600 / 900 | -46 | 854 | B=1 L=32 native-fp8 +12.5% "
+            "| unproved | exit 1, gates failed: timed_audit |") in md
+    assert "| inproc | – | failed: RuntimeError: no device |" in md and "| 1.021 | exit 1" in md
+    assert "S_cert (round joint) 1.021 GB" in md and "The deployed store is 2^19 blocks" in md
+    assert "| gf31-poly/v1 | no | 0.500 / 0.500 | 0.400 |" in md and "| ro-blake3/v1 | yes |" in md
+    assert "| 1 / 1 / 1 | " in md and "rejected (tag-mismatch) |" in md and "= 4312 GB/s" in md
+    assert "2 of 2 on time at T (1,354 µs, the RTT at P2's cap 354 µs inside the rebuild floor), 2 accepted" in md
+    assert f"| {key} | {arm} | 1 | 0.500 | 1 | 0.400 |" in md

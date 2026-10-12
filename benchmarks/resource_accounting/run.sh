@@ -17,6 +17,12 @@
 # off the memory challenger's and responder's CPUs.
 # The harness's outputs go to $OUT/pous. POUS_WS, POUS_AUDITS and POUS_SEGMENTS pick its weight set, audits and segments;
 # POUS_IDLE=1 is the control, the chain idle through the audit's window.
+# JOINT=<rounds> (one shape, native arms only, --cwd clone; chain.py --rounds: separate, inproc, joint) runs the chain in the
+# PoUS harness's process instead: before the lease, pod.sh PREPARE=1 and, for the joint round, the bandwidth tagger's
+# libbwtag.so (benchmarks/bandwidth/tagger.cu, refused on a register spill) into scratch; under it, pod.sh IMPL=p2-v3-mc-gpu
+# BENCH_HOST='chain.py ...', which measures the shape's points alone in the harness's venv and then runs each round with the
+# chain as the honest audit's load. POUS_AUDITS (default 100 here), POUS_WS and POUS_SEGMENTS as for POUS=1; the outputs go to
+# $OUT/pous, each round's harness under $OUT/pous/bench/<round>.
 # Scratch (the ship's check fixture, the retained passes) is a mktemp -d under /workspace/tmp, deleted on exit.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}/out}; mkdir -p "$OUT"
@@ -29,6 +35,47 @@ LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}
 stamp() { echo "ra-matmul: $* at $(date -u +%H:%M:%SZ)"; }
 export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
+
+if [ -n "${JOINT:-}" ]; then
+  [ -z "${POUS:-}" ] || { stamp "RUN_FAIL_JOINT: JOINT and POUS are two modes"; exit 2; }
+  case $SHAPES in *,*) stamp "RUN_FAIL_JOINT: JOINT takes one shape, not $SHAPES"; exit 2 ;; esac
+  case ",$ARMS," in *,pearl-c*) stamp "RUN_FAIL_JOINT: JOINT runs native arms only, not $ARMS"; exit 2 ;; esac
+  [ "$(basename "$PWD")" != "${RESEARCH_SOURCE_SHA:-}" ] || { stamp "RUN_FAIL_JOINT: JOINT builds Lean in the tree: --cwd clone"; exit 2; }
+  POUS_WORK=${POUS_WORK:-/workspace/pouw/fill-out/pous/work}; POUS_WS=${POUS_WS:-llama3.1-8b/layer0+head}
+  POUS_AUDITS=${POUS_AUDITS:-100}; POUS_SEGMENTS=${POUS_SEGMENTS:-8}
+  mkdir -p "$OUT/pous"
+  stamp "PoUS prepare"
+  RESEARCH_RUN_DIR=$OUT/pous nice bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu WORK="$POUS_WORK" \
+    > "$OUT/pous-prepare.log" 2>&1 || { stamp "RUN_FAIL_POUS_PREPARE"; tail -20 "$OUT/pous-prepare.log"; exit 13; }
+  TAGGER=
+  case ",$JOINT," in *,joint,*)
+    stamp "tagger build"
+    { "$CUDA/bin/nvcc" --version; "$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -fPIC -shared \
+        benchmarks/bandwidth/tagger.cu -o "$S/libbwtag.so"; } > "$OUT/tagger-build.log" 2>&1 \
+      || { stamp "RUN_FAIL_TAGGER_BUILD"; tail -20 "$OUT/tagger-build.log"; exit 14; }
+    if grep -E "[1-9][0-9]* bytes spill" "$OUT/tagger-build.log"; then stamp "RUN_FAIL_TAGGER_BUILD: a kernel spills"; exit 14; fi
+    sha256sum benchmarks/bandwidth/tagger.cu "$S/libbwtag.so" | tee -a "$OUT/tagger-build.log"
+    TAGGER="--tagger $S/libbwtag.so" ;;
+  esac
+  HOST="benchmarks/resource_accounting/chain.py --out $OUT/chain.json --shapes $SHAPES --batches $BATCHES --lengths $LENGTHS"
+  HOST+=" --arms $ARMS --reps $REPS --budget-min $((LEASE_MIN - 3)) --rounds $JOINT $TAGGER --host-bench"
+  stamp "the chain hosting the PoUS harness under gpu-lease 1 (at most $LEASE_MIN min)"
+  export OUT LEASE_MIN HOST POUS_WORK POUS_WS POUS_AUDITS POUS_SEGMENTS
+  set +e
+  gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" -- bash -c '
+    set -euo pipefail
+    export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
+    UUID=${GPU_LEASE_UUID%%,*}; [ -n "$UUID" ] || { echo "RUN_FAIL_IDENTITY: no GPU_LEASE_UUID" >&2; exit 3; }
+    nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
+    exec timeout $((LEASE_MIN * 60 - 30)) bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR="$OUT/pous" IMPL=p2-v3-mc-gpu \
+      WORK="$POUS_WORK" WS="$POUS_WS" AUDITS="$POUS_AUDITS" MAX_SEGMENTS="$POUS_SEGMENTS" LOAD_TOKENS=0 TOKENS=1 WORKERS=8 \
+      BENCH_HOST="$HOST"
+  ' 2>&1 | tee "$OUT/chain.log"
+  rc=${PIPESTATUS[0]}
+  set -e
+  stamp "lease ended, pod.sh exited $rc"
+  exit "$rc"
+fi
 
 PEARL=; case ",$ARMS," in *,pearl-c*) PEARL=1 ;; esac
 KERNEL=(); CHECK=
