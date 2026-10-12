@@ -92,6 +92,8 @@ def test_attention_kernel_is_not_the_lm_head_however_large():
     assert A.classify(GEMM, 460.0, 500) == "lm_head"
     fused = "triton_red_fused__to_copy_abs_clamp_cutlass_scaled_mm_div_fused_add_rms_norm_max_mul_reciprocal_unsqueeze_1"
     assert A.classify(fused, 1.0, 500) == "triton"
+    once = "triton_red_fused__to_copy_abs_clamp_cutlass_scaled_mm_div_embedding_max_mul_reciprocal_rms_norm_unsqueeze_0"
+    assert A.classify(once, 1.0, 500) == "embed"
 
 
 def test_attn_bytes_attribute(tmp_path: Path):
@@ -110,3 +112,13 @@ def test_attn_bytes_attribute(tmp_path: Path):
     assert w[0]["read"] == pytest.approx(1012) and w[0]["excess_read"] == pytest.approx(12)
     assert w[0]["combine_read"] == pytest.approx(2) and w[0]["write"] == pytest.approx(4)
     assert w[1]["excess_read"] == pytest.approx(0)
+
+
+def test_main_passes_a_timing_only_run_and_fails_a_profiled_arm_without_its_csv(tmp_path: Path, monkeypatch):
+    budget = {"linear_bytes": 1, "lm_head_bytes": 1, "kv_bytes_per_token_layer": 1, "layers": 1}
+    (tmp_path / "8b-L0-0-time.json").write_text(json.dumps({"budget": budget, "profile_steps": 0, "points": []}))
+    monkeypatch.setattr("sys.argv", ["attribute.py", str(tmp_path)])
+    assert A.main() == 0
+    (tmp_path / "8b-L8-0-node.json").write_text(json.dumps({"budget": budget, "profile_steps": 2, "points": [],
+                                                           "profiled": [{"batch": 1, "context": 64}]}))
+    assert A.main() == 1

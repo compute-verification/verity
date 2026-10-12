@@ -34,6 +34,7 @@ CLASSES = [
     ("attention", r"kernel_mha|xqa|flashinfer|BatchDecode|BatchPrefill|[Aa]ttention|flash_fwd|fmha|paged_attention|merge_state|"
                   r"VariableLength|unified_attention|kernel_paged|decode_kernel|split_kv"),
     # Inductor names a fused kernel after every op it took in, the scaled_mm whose output it rescales among them
+    ("embed", r"^triton_.*_embedding_"),
     ("triton", r"^triton_"),
     ("gemm", r"gemm|gemv|cutlass|cublas|nvjet|Kernel2|matmul|_mm_|sm90_|sm100_|sm120_|xmma|wgrad|dgrad"),
     ("norm", r"rms_norm|rmsnorm|layer_norm|RMSNorm"),
@@ -142,13 +143,14 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
 
 def main() -> int:
     out = Path(sys.argv[1])
-    result, fails = [], []
+    result, fails, profiled = [], [], 0
     for jf in sorted(out.glob("*.json")):
         if jf.name in ("ephemeral.json",) or jf.name.startswith("ready"):
             continue
         arm = json.loads(jf.read_text())
         if "budget" not in arm or not arm.get("profile_steps"):
             continue
+        profiled += 1
         tag = jf.stem
         cf = out / f"ncu-{tag}.csv"
         if not cf.exists():
@@ -176,7 +178,7 @@ def main() -> int:
     (out / "ephemeral.json").write_text(json.dumps({"points": result, "fails": fails}, indent=1))
     for x in fails:
         print("FAIL", x)
-    return 1 if fails or not result or any("fail" in r for r in result) else 0
+    return 1 if fails or (profiled and not result) or any("fail" in r for r in result) else 0
 
 
 if __name__ == "__main__":
