@@ -422,6 +422,8 @@ def main(a: Options) -> int:
         tp = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
         doc["target"] = t
         doc["engine_args_required"].update(tp.engine_args())
+        if "env_required" in doc:
+            doc["env_required"].update(tp.env())
         doc["sweep"]["execution"] = tp.execution_label
         exec_suffix = a.row_id.rsplit("__", 1)[-1]
         if exec_suffix != tp.execution_label:
