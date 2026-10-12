@@ -1104,12 +1104,13 @@ int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int partials,
   Kern2 kern = nullptr;
   if (mode == MODE_GEMM) lanes = 1;
   // GEMM only, at each CTA shape; per-span sums at 4 warps and 4 stages
-  F2(1, 0, 4, 2, false, 7) F2(1, 0, 4, 3, false, 7) F2(1, 0, 8, 2, false, 7) F2(1, 0, 4, 4, false, 7)
-  F2(1, 0, 4, 4, true, 7)
-  // + tags: L = 4 at each CTA shape and with per-span sums, L = 8 at the smaller rings, L = 1 at one
-  F2(4, 1, 4, 2, false, 7) F2(4, 1, 4, 3, false, 7) F2(4, 1, 8, 2, false, 7) F2(4, 1, 8, 3, false, 7)
-  F2(4, 1, 4, 4, false, 7) F2(4, 1, 4, 4, true, 7)
-  F2(8, 1, 4, 2, false, 7) F2(8, 1, 4, 3, false, 7) F2(8, 1, 8, 2, false, 7) F2(1, 1, 4, 3, false, 7)
+  F2(1, 0, 1, 3, false, 7) F2(1, 0, 2, 3, false, 7) F2(1, 0, 4, 2, false, 7) F2(1, 0, 4, 3, false, 7)
+  F2(1, 0, 8, 2, false, 7) F2(1, 0, 4, 4, false, 7) F2(1, 0, 4, 4, true, 7)
+  // + tags: L = 4 at each CTA shape and with per-span sums, L = 8 and L = 1 at fewer
+  F2(4, 1, 1, 3, false, 7) F2(4, 1, 1, 4, false, 7) F2(4, 1, 2, 2, false, 7) F2(4, 1, 2, 3, false, 7)
+  F2(4, 1, 4, 2, false, 7) F2(4, 1, 4, 3, false, 7) F2(4, 1, 8, 2, false, 7) F2(4, 1, 4, 4, true, 7)
+  F2(8, 1, 1, 3, false, 7) F2(8, 1, 2, 3, false, 7) F2(8, 1, 4, 2, false, 7) F2(8, 1, 4, 3, false, 7)
+  F2(1, 1, 1, 3, false, 7) F2(1, 1, 2, 3, false, 7) F2(1, 1, 4, 3, false, 7)
   // + sink; tags only; the 4-round probes
   F2(4, 2, 4, 3, false, 7) F2(1, 3, 4, 3, false, 7) F2(4, 3, 4, 3, false, 7)
   F2(4, 1, 4, 3, false, 4) F2(4, 3, 4, 3, false, 4)

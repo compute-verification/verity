@@ -152,8 +152,9 @@ def is_chunk(key) -> bool:
 
 # chunk forms: (warps a CTA, stages) of the tag forms of each L, of the GEMM-only forms; the tag-only, sink and 4-round
 # probe forms at CHUNK_ONE
-CHUNK_TAG_FORMS = {1: ((4, 3),), 4: ((4, 2), (4, 3), (8, 2), (8, 3), (4, 4)), 8: ((4, 2), (4, 3), (8, 2))}
-CHUNK_GEMM_FORMS = ((4, 2), (4, 3), (8, 2), (4, 4))
+CHUNK_TAG_FORMS = {1: ((1, 3), (2, 3), (4, 3)), 4: ((1, 3), (1, 4), (2, 2), (2, 3), (4, 2), (4, 3), (8, 2)),
+                   8: ((1, 3), (2, 3), (4, 2), (4, 3))}
+CHUNK_GEMM_FORMS = ((1, 3), (2, 3), (4, 2), (4, 3), (8, 2), (4, 4))
 CHUNK_ONE = (4, 3)
 CHUNK_ONLY = (1, 4)
 CHUNK_SINK = 4
@@ -817,8 +818,8 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
 
 
 NCU_FORMS = (("g", 0, MODE_GEMM, 1), ("t", 1, MODE_TAGS, 1), ("t", 1, MODE_TAGS, 2))
-NCU_CHUNK_FORMS = ((1, MODE_GEMM, 4, 3), (4, MODE_TAGS, 4, 2), (4, MODE_TAGS, 4, 3), (4, MODE_TAGS, 8, 2),
-                   (8, MODE_TAGS, 4, 3))
+NCU_CHUNK_FORMS = ((1, MODE_GEMM, 1, 3), (1, MODE_GEMM, 4, 3), (4, MODE_TAGS, 1, 3), (4, MODE_TAGS, 2, 3),
+                   (4, MODE_TAGS, 4, 2), (8, MODE_TAGS, 2, 3))
 
 
 def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
