@@ -12,6 +12,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`)
+    research queue drive --on MACHINE [--max-running N] [--dry-run]
+                                                   one tick of the landing automation (`research.drive`): land what passed, sync,
+                                                   check `next`'s tip with train.sh, tell the lander what it refuses
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -41,7 +44,9 @@ which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
-`next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).
+`next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).  `drive`
+(`research.drive`) is the loop's tick that needs no agent: it launches the check of `next`'s tip, lands what passed (onto a
+moved `main` too, when the two share no file) and tells the lander what it refuses.
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
 `lanes/coordinator/` for an owner known only by agent id.
@@ -945,14 +950,14 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it (default merge-queue) or says it's ready (no default: the owner's lane), "
                          "default $RESEARCH_LANE")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
-    ap.add_argument("--dry-run", action="store_true", help="sync/land: decide and report, push nothing, tell no one")
+    ap.add_argument("--dry-run", action="store_true", help="sync/land/drive: decide and report, push and launch nothing, tell no one")
     ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
     ap.add_argument("--remote", default=None, help="the repository to clone (default: this checkout's origin)")
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
@@ -964,13 +969,16 @@ def main(argv: list[str]) -> int:
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
+    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once")
     a = ap.parse_args(argv)
-    if a.dry_run and a.command not in ("sync", "land"):
-        ap.error(f"--dry-run is for sync and land only: `{a.command}` would act for real")
+    if a.dry_run and a.command not in ("sync", "land", "drive"):
+        ap.error(f"--dry-run is for sync, land and drive only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
+    if a.command == "drive" and not a.on:
+        ap.error("drive needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
     if a.command in ("ready", "judge") and not a.by:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
     a.by = a.by or "merge-queue"
@@ -1012,6 +1020,11 @@ def main(argv: list[str]) -> int:
             return 0
         if a.command == "land":
             return 0 if q.land(dry_run=a.dry_run) else 1
+        if a.command == "drive":
+            from .drive import Driver
+
+            Driver(q, on=a.on, max_running=a.max_running).tick(dry_run=a.dry_run)
+            return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
         q.eject(a.pr, a.reason, a.by)
