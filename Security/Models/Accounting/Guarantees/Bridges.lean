@@ -22,8 +22,8 @@ open Finset
 gates `resp` due at `t_d`, is sound at `(1 − ε)^K + η + ε_ks + ε_bind` against `𝓕` for the work at `π` of `F_s(A)`: the
 computed gates downstream of the seed and upstream of the response placed in `[tₛ + ℓ, t_d − ℓ)`, at least
 `(1 − γ)(1 − ε) W`. -/
-def B1 {L : Type*} (Ω : Type) [Fintype Ω] (𝓕 : Set (Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
-    (seed resp : (R : Run L) → Finset (Fin R.A.N)) (π : (R : Run L) → Fin R.A.N → ℕ) (tₛ t_d ℓ K : ℕ)
+def B1 {L : Type*} (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
+    (seed resp : (R : Actual.Run L) → Finset (Fin R.A.N)) (π : (R : Actual.Run L) → Fin R.A.N → ℕ) (tₛ t_d ℓ K : ℕ)
     (γ ε W η εks εbind : ℝ) : Prop :=
   open Classical in
   Sound Ω 𝓕 V acc (fun R => (1 - γ) * (1 - ε) * W ≤ R.A.work (π R) (R.A.computed.filter fun g =>

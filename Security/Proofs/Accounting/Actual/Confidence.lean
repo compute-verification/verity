@@ -13,7 +13,8 @@ import Mathlib.Tactic.Linarith
 same runs, so feasible, still locally causal, and its input gates off `V i` fixed. Averaging over the fixed coins
 (`card_filter_mul`: each run of coins is counted once for each value of coin `i`) gives `δ i`, and the union bound the
 sum. `global_of_local` is the global form of causality: the prover's gates before `t` depend on the coins only through
-what the prover reads from outside before `t`, when its inputs don't. `Fit` is additivity at the run that implements `P`.
+what the prover reads from outside before `t`, when its inputs don't. `Fit` is additivity at the run that implements
+`P`.
 -/
 
 namespace Accounting.SecurityProofs
@@ -24,7 +25,7 @@ namespace Actual
 
 /-- Causality's global form: when the prover's (at `P`) input gates don't depend on the coins, what it does before `t`
 depends on them only through what it reads from outside before `t`. -/
-theorem global_of_local {Ω L : Type*} {S : Ω → Run L} (h : LocallyCausal S) (P : Finset L)
+theorem global_of_local {Ω L : Type*} {S : Ω → Actual.Run L} (h : LocallyCausal S) (P : Finset L)
     (hP : ∀ r r', (S r).inputs P = (S r').inputs P) (t : ℕ) (r r' : Ω) (hr : (S r).heard P t = (S r').heard P t) :
     (S r).before P t = (S r').before P t :=
   h P t r r' (hP r r') hr
