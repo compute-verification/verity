@@ -21,7 +21,8 @@ Let \(N\) be the store's blocks, \(b = 4096\) bytes each. A session has \(W\) wi
 of \(L_{t,i}\) distinct blocks and their receipts. Every receipt was made after the root before it existed and before
 its own root left the node. So every read serves at most one receipt of the session (§5). Except with probability
 \(\delta\) per window, at most \(m^*_t\) of window \(t\)'s \(U_t = \sum_i L_{t,i}\) receipts are wrong
-(`IntegrityProfile.bound`).
+(`IntegrityProfile.bound`). Pooled over the session's windows instead, the openings bound the wrong receipts of all
+of them at once, and each window's share, except with \(\delta\) for the session (§10).
 
 `ledger` turns that into γ, given the node's measured capacity \(R\) (HBM plus host DRAM read bandwidth) and its
 on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the reads of registered
@@ -34,20 +35,21 @@ data are at least \((1 - \gamma) R \Sigma\), with
 | term | what it is | where it comes from |
 | --- | --- | --- |
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U_t b / (R\Sigma)\): the span the receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out) | the record |
-| \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) | the record's profiles, at δ |
+| \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`Ledger.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`Ledger.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: `queries_log2` bits per certified receipt and `slack_log2` per pass; 0.195% at 64 bits a 4 KiB block, more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: `queries_log2` bits per receipt (every certified one, in either reading) and `slack_log2` per pass; 0.195% at 64 bits a 4 KiB block, more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | re-encoding blocks from their payloads with leftover compute | a model, on `WorkHardness(p, k)` |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | relays that meet \(z\) and a copy of the block over a link (§4) | a model |
 
 The protocol bounds the first four and passes the last three through: the record can't bound them (a protocol carries
-no policy parameter). The failure probability is \(W\delta\) for a session of \(W\) windows, plus \(2^{-\text{slack}}\)
-per pass, plus \(s/2^{512}\) per window for guessing a receipt.
+no policy parameter). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
+\(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
+receipt.
 
-What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The
-node-level statement, that this node's bandwidth went to registered data, also needs the identity assumption: no
-undeclared tensor-class hardware takes part.
+What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
+is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
+node made, with no identity assumption about which hardware made them.
 
 No round-trip floor is assumed. The chain orders a session's passes by itself, so the round trip appears only at the
 session's two ends (§5). The live-coin design needs a trusted floor to be affordable at all (Appendix A).
@@ -331,7 +333,11 @@ node's capacities.
   V) is 458k runs, 7.3 MB a pass: 2.9 Gb/s per GPU at 20 ms passes, twice that for a plane-major cache. Deployed, a
   plan is sent as its change from the previous pass's plan. A decode step at batch 64 allocates or frees about 4
   pages a layer, 128 runs over 32 layers, about 4 KB a step, and the verifier updates its sorted copy and checks
-  distinctness in \(O(\text{changes} \cdot \log R)\).
+  distinctness in \(O(\text{changes} \cdot \log R)\). Checked whole, a plan of 245k runs takes about 300 ms as
+  `Plan` on tuples, more than a 7–120 ms pass, and about 11 ms as `Plan.from_array` on the store's (R, 2) array,
+  about 5 ms of it the digest. Its checks and encoding are numpy in `verity.ml.kernels.plans`, since a protocol
+  imports no third-party package, and the suite holds it to `Plan`'s digests and refusals on the same rows.
+  `Session.receive` takes either.
 - **What the plan shows.** v0's plans are in the clear, so the verifier sees which KV pages were live in each pass: the
   batch's shape and context lengths over time, not their contents. Hiding them goes with the zero-knowledge openings:
   the plan committed, its distinctness and each opening's \(j = \text{plan}[p]\) proved, only \(L\) public (the draws
@@ -357,11 +363,15 @@ node's capacities.
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (ra-openings puts it at 0.06–0.1%). The reference keeps every pass whole.
-- **Lean.** The statements are ra-remote-theorem's (`Accounting.Remote`: `Conservation`, `NodeLevel` on the
-  actual-circuit model), with the per-pass routes ra-remote-lean and ra-bound-lean prove. Nothing here is proved yet.
-  What this code supplies is the schedule (each window's challenge released at \(b_{t-1}\), its roots due by
-  \(D_t\)), the chain, the plan's distinctness, one tile a receipt, and the profile at δ. The chain's ordering is a
-  random-oracle argument over a prover of bounded queries, which the statements must say.
+- **Lean.** The statement is ra-remote-theorem's `Accounting.Remote.Conservation`, with the per-pass routes
+  ra-remote-lean and ra-bound-lean prove. The openings are ra-openings' (#1900, open):
+  `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
+  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
+  one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
+  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
+  size, which the Lean doesn't state yet. What this code supplies is the schedule (each window's challenge released
+  at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt, and the profile at
+  δ. The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
 
 ## 9. Why the passes are chained
 
@@ -400,13 +410,24 @@ leaf, both salts, both paths). That is 235–253 MB a window per node: 1.9–2.0
 \(T\) = 10 s. PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same tiles. A Fiat–Shamir
 draw would multiply all of this by 1.5–2.6 (§6).
 
-That is the per-window reading, each window's profile at its own δ. Read over a horizon instead, the total is what
-counts: with every window drawing \(s\) after its own roots from its live openings coin, the mean of the windows'
-wrong fractions is below \(\bar d\) except with probability \((1-\bar d)^{\sum_t s}\), however the prover adapts each
-window to the draws before it (ra-openings' causal horizon bound; a paper proof, adopted once it is in Lean). So 27,726
-openings serve a whole horizon: 47 a window over 10 minutes at \(T\) = 1 s, about 400 kB/s (3.2 Mb/s) whatever \(T\),
-and 68 kB/s over an hour. The wrong receipts are then at most \(W \bar d \max_t U_t\). The reference records each
-window's profile, which both readings start from; `ledger` takes the per-window one.
+That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
+windows' draws pool (`RateSessionDraw`, §8). Each window draws its \(s_t\) after its own roots from its own openings
+coin, so however the prover adapts each window to the draws before it, every draw passes while
+\(\sum_t s_t g_t \le (1-\bar d) \sum_t s_t\) with probability at most \((1-\bar d)^{\sum_t s_t}\), where \(g_t\) is
+window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wrong shares \(f_t = 1 - g_t\) have
+\(\sum_t s_t f_t < \bar d \sum_t s_t\), and each \(f_t \le 1 - s_t/U_t\), since \(s_t\) distinct draws found \(s_t\)
+correct receipts. The same event bounds every window's share by itself: \(f_t < \bar d \sum_u s_u / s_t\), about
+\(\ln(1/\delta)/s_t\), with no union over the windows.
+
+Daniel's claim is that hybrid (#1884): short by under 0.15% over a 10-minute horizon and by under 1% in every window,
+at \(2^{-40}\). That needs \(d \cdot n \ge 18{,}470\) openings over the horizon's \(n\) windows and \(d \ge 2{,}773\) a
+window. With 7 or more windows in 10 minutes (\(T\) up to 85 s) the window floor is what binds: 2,773 openings a
+window, about 24–25 MB, which is 0.19–0.20 Gb/s at \(T\) = 1 s and 19–20 Mb/s at \(T\) = 10 s, a tenth of the
+per-window reading at 0.1%. The horizon is then short by under \(\ln(2^{40})/(d\,n)\): 0.0017% at \(T\) = 1 s.
+
+`ledger` reports μ_sample both ways: `sample`, the per-window reading, and `horizon`, the pooled one (`pooled`: the
+most \(\sum_t f_t U_t\) the bounds above allow), with `floor`, the largest \(f_t\) they allow, and γ for each
+(`gamma`, `gamma_horizon`). Both start from each window's profile, which the record keeps.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 
