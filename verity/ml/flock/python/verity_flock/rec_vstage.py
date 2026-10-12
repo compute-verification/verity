@@ -278,13 +278,15 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
 
 def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace, chain: O.Chain, coefs: dict, claim, out: Path,
                   evaluate: bool = True) -> dict:
-    """R's levels as RecOpen statements on the chain (their tops ``rec-top-stacked-L<level>``) and its registered opening
+    """R's levels as RecOpen statements on the chain (their units `rec_outer.stacked_name`, their tops
+    ``rec-top-stacked-L<level>``) and its registered opening
     (`rec_residuals.stage_opening`): the stacked stream's messages (`opening_messages`), ``claim`` the prover's
     ``rec-claim``, which RecSparse reads too, and the chain's rows either side of R's openings."""
     levels = {}
     for lv in O.levels(sr.qs):
         tops = O.TopValue.build(program, lv["level"], {STACKED_REP: sr.tops[lv["level"]]}, f"rec-top-stacked-L{lv['level']}")
-        levels[f"L{lv['level']}"] = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops)
+        levels[f"L{lv['level']}"] = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops,
+                                            name=O.stacked_name(lv["LANES"], lv["H"]))
     regs, own = opening_messages(public, private, sr.sh, program)
     acc = (chain.reg, *chain.rep_ends(STACKED_REP))
     opening = RR.stage_opening(sr.sh, {**regs, "claim": claim}, acc, sr.v, out / "open", evaluate, own)
