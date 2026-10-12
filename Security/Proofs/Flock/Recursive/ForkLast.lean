@@ -319,6 +319,7 @@ theorem collOf_congr {D : Type} {H : List UInt8 → D} {p q : Prop} {h : p → M
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
   {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 
+omit [Fintype K] in
 /-- **`clashPickCL` ignores the last round's coin**: `outCL` reads a transcript only through `schedSteps`. -/
 theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
@@ -331,6 +332,7 @@ theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
   unfold clashPickCL
   exact collOf_congr (by rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)])
 
+omit [Fintype K] in
 /-- **`clashPickHL` ignores the last round's coin**: `outHL` reads a transcript only through `schedSteps`. -/
 theorem clashPickHL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀}) :
