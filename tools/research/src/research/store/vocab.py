@@ -177,14 +177,15 @@ REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
 FINDING = "finding"
 LEVEL = "level"
 ANCHOR = "anchor"
-#: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
+#: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`): a record of who reviewed it, which nothing waits on
+#: (no change waits on a per-head grant, Daniel 8 Oct).
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
-#: A `check.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
-#: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
+#: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
+#: as. No merge needs a statement reviewer (Daniel, 8 Oct); the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
 
 
@@ -319,12 +320,13 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
-    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
+    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on (Daniel, 8 Oct)",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again; a train member needs none (Q14)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of an `audit.py --update` report (its audit.json); a lean-audit.json "
-       "change it printed whole as the same statements (moved under --moved, printed differently, rehashed) needs no statement-reviewer grant"),
+       "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
+       "needs a statement reviewer (Daniel, 8 Oct)"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
