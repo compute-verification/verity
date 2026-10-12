@@ -3,7 +3,7 @@ import Definitions.Accounting.Actual
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2), sections 1 and 3. A physical assumption is
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1), sections 1 and 3. A physical assumption is
 a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis by what needs it, never
 a global assumption. The *feasible set* is the actual circuits that meet all of them (`Feasible`); each guarantee names
 the ones it uses. Each that fails frees a different covert resource:
@@ -14,11 +14,11 @@ the ones it uses. Each that fails frees a different covert resource:
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
 | `SequentialSpeed root t_root` | a path that computes a P2 root spans at least `t_root` ticks | rebuilding a block in time |
 | `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
-| `Links ends β link` | every wire between two leaves runs on a declared link joining them; link `e` carries at most `β_e (b − a)` bits read during `[a, b)`, and as many sent | side channels, hidden bandwidth |
-| `TrustedUnits 𝒱 cert …` | gates in `𝒱` are the protocol's; a certifier reads at most `log₂ D` bits a bucket beyond its record | forged records, timing channels |
+| `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` carries at most `β_e (b − a)` bits read during `[a, b)`, and as many sent | side channels, hidden bandwidth |
+| `TrustedUnits 𝒱 cert …` | gates in `𝒱` are the protocol's; a certifier reads at most `log₂ χ` bits a bucket beyond its record (`χ` jitter classes) | forged records, timing channels |
 
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
-leaves `ends e` with capacity `β_e` bits a tick. A link is *certified* when a certifier sits on it, at one of its ends
+leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
 (`cert`). `β_X` (`linkCapacity`) is the total capacity of the links across `X`'s boundary (`boundary`), `β°_X`
 (`uncertifiedCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
 (`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`Accounting.SecurityProofs.Actual.ingress_le`,
@@ -61,24 +61,27 @@ def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ t, A.state X t ≤ M X
 
 open Classical in
-/-- The bits link `e` carries read during `I`: the gates whose wire to a reader placed at another leaf during `I` runs on
-`e`, which `link` names for each wire. -/
-noncomputable def readOn {E : Type*} (link : Fin A.N → Fin A.N → E) (e : E) (I : Set ℕ) : Finset (Fin A.N) :=
-  univ.filter fun a => ∃ g, a ∈ A.reads g ∧ A.x a ≠ A.x g ∧ link g a = e ∧ A.t g ∈ I
+/-- The bits link `e` carries to the leaf `y`, read during `I`: the gates whose wire to a reader placed at `y` during `I`,
+from another leaf, runs on `e`, which `link` names for each wire. -/
+noncomputable def readOn {E : Type*} (link : Fin A.N → Fin A.N → E) (e : E) (y : L) (I : Set ℕ) :
+    Finset (Fin A.N) :=
+  univ.filter fun a => ∃ g, a ∈ A.reads g ∧ A.x a ≠ A.x g ∧ link g a = e ∧ A.x g = y ∧ A.t g ∈ I
 
 open Classical in
-/-- The bits link `e` carries sent during `I`: the gates placed during `I` whose wire to a reader placed at another leaf
-runs on `e`. -/
-noncomputable def sentOn {E : Type*} (link : Fin A.N → Fin A.N → E) (e : E) (I : Set ℕ) : Finset (Fin A.N) :=
-  univ.filter fun a => A.t a ∈ I ∧ ∃ g, a ∈ A.reads g ∧ A.x a ≠ A.x g ∧ link g a = e
+/-- The bits link `e` carries to the leaf `y`, sent during `I`: the gates placed during `I` whose wire to a reader placed
+at `y`, another leaf, runs on `e`. -/
+noncomputable def sentOn {E : Type*} (link : Fin A.N → Fin A.N → E) (e : E) (y : L) (I : Set ℕ) :
+    Finset (Fin A.N) :=
+  univ.filter fun a => A.t a ∈ I ∧ ∃ g, a ∈ A.reads g ∧ A.x a ≠ A.x g ∧ link g a = e ∧ A.x g = y
 
-/-- **Links**: every wire between two leaves runs on a declared link joining them (`link g a`, for `g` reading `a`, with
-ends `ends`), and each link `e` carries at most `β e` bits a tick, counted at the readers' ticks and at the senders'. -/
+/-- **Links**: every wire between two leaves has a computed source and runs on a declared link joining them (`link g a`,
+for `g` reading `a`, with ends `ends`), and each way (to each of its ends `y`) each link `e` carries at most `β e` bits a
+tick, counted at the readers' ticks and at the senders'. -/
 def Links {E : Type*} (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) : Prop :=
   (∀ g, ∀ a ∈ A.reads g, A.x a ≠ A.x g →
-    ends (link g a) = (A.x a, A.x g) ∨ ends (link g a) = (A.x g, A.x a)) ∧
-  ∀ e a b, A.width (A.readOn link e (Set.Ico a b)) ≤ β e * (b - a) ∧
-    A.width (A.sentOn link e (Set.Ico a b)) ≤ β e * (b - a)
+    A.isInput a = false ∧ (ends (link g a) = (A.x a, A.x g) ∨ ends (link g a) = (A.x g, A.x a))) ∧
+  ∀ e y a b, A.width (A.readOn link e y (Set.Ico a b)) ≤ β e * (b - a) ∧
+    A.width (A.sentOn link e y (Set.Ico a b)) ≤ β e * (b - a)
 
 /-- What a protocol says the gates of its trusted devices do: the gates each reads and how it computes its value. -/
 structure Spec where
@@ -88,7 +91,7 @@ structure Spec where
 open Classical in
 /-- **Trusted devices**: every computed gate placed in `𝒱` reads what the protocol `spec` says and computes as it says;
 the certifiers' leaves `cert` lie in `𝒱`; and in each bucket `k` of ticks (`bucket`), the gates that a certifier's gates
-read from outside the certifiers, beyond its record `record`, are at most `jitter` bits wide (`log₂ D`, W2 and J). A
+read from outside the certifiers, beyond its record `record`, are at most `jitter` bits wide (`log₂ χ`, W2 and J). A
 certifier's gates being the protocol's, what it emits is then a function of its record and of those bits. -/
 def TrustedUnits (𝒱 cert : Finset L) (spec : A.Spec) (record : Finset (Fin A.N)) (bucket : ℕ → ℕ) (jitter : ℕ) :
     Prop :=
