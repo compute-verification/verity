@@ -65,6 +65,27 @@ def test_adversary_takes_the_fastest_encode_of_each_width_and_the_cheapest_tag()
     assert o["x"] == pytest.approx(109.0 / 1.16)
 
 
+def test_the_bench_stamps_its_model_and_70b_sets_its_linears_and_layers():
+    import types
+
+    import bench
+    import wide
+    import wide_bench
+
+    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=0, b3u=0, tb=1, kw=1, name="p")
+    fq = {1: {"x": 332.0, "delta": 0.9, "tau": 0.82, "mu_rebuild": 0.0005}}
+    bd = {1: {1: {"y_total": 2.5, "y_decode": 0.5, "y_tag": 0.6, "y_commit": 0.4, "y_base": 1.0}}}
+    saved = dict(bench.SHAPES)
+    try:
+        wide_bench.use_model("llama-3.1-70b")
+        assert wide_bench.LAYERS == 80 and bench.SHAPES["gate_up"] == (57344, 8192) and len(bench.SHAPES) == 4
+        (p,) = F.check(wide_bench.points(lib, fq, bd, "r", "gpu"))
+        assert F.model_of(p) == "llama-3.1-70b" and F.model_of(point()) == "llama-3.1-8b"
+    finally:
+        wide_bench.use_model("llama-3.1-8b")
+    assert bench.SHAPES == saved and wide_bench.LAYERS == 32
+
+
 def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
     pts = F.check([point(y_total=1.7), point(y_total=1.6, arithmetic="b"), point(k=2, y_total=1.9),
                    point(lane="u", y_total=1.8), point(batch=32, y_total=2.0), point(y_total=1.0, measured=False)])

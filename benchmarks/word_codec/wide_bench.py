@@ -9,7 +9,7 @@ Nothing is timed before its gate passed, in this order:
 - `read`: R, the device read rate over `--store-gib`, the best of a few grids;
 - `rates`: compute-only throughputs, each step's input the previous step's output: the squaring (ILP 1, 2, 4), encode
   (roots/s, ILP 1, 2), decode at each k and the tag's BLAKE3 compression (ILP 1, 2, 4); x, Δ and τ follow;
-- `gemm`: at Llama-3.1-8B's linears and batch 1–32, for each library and k: the fused kernel's partial sums equal the
+- `gemm`: at the linears of `--model` (Llama-3.1-8B, the default, or 70B) and batch 1–32, for each library and k: the fused kernel's partial sums equal the
   payload store's (k = 0) bit for bit, without and with the tag; the payload store's sum is within FP32 rounding of
   torch's; every tag of the matrix was written (the tag area poisoned with 0xA5 first, and a run without the tag over
   the poison is caught); a sample of tags equals `ro-blake3/v1` over the encoded words; the commit's root equals
@@ -61,7 +61,22 @@ TAG_SEED = hashlib.sha256(b"verity/word-codec/wide/bench/tag-seed").digest()
 POINT_SCHEMA = "verity/codec-frontier-point/v0"
 POISON = 0xA5A5A5A5
 DEV = "cuda"
-LAYERS = 32  # Llama-3.1-8B
+LAYERS = 32
+# (layers, the four linears as (out, in)): `--model` sets LAYERS and bench's SHAPES from these
+MODELS = {
+    "llama-3.1-8b": (32, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}),
+    "llama-3.1-70b": (80, {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192),
+                           "down": (8192, 28672)}),
+}
+MODEL = "llama-3.1-8b"
+
+
+def use_model(name: str) -> None:
+    global LAYERS, MODEL
+    LAYERS, shapes = MODELS[name]
+    MODEL = name
+    B.SHAPES.clear()
+    B.SHAPES.update(shapes)
 
 
 class WLib:
@@ -534,7 +549,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
 
 
 def pass_blocks(lib: WLib) -> int:
-    """The tag blocks of one pass over Llama-3.1-8B's linears: LAYERS layers of the four shapes."""
+    """The tag blocks of one pass over the model's linears: LAYERS layers of the four shapes."""
     return LAYERS * sum(n * kd // W.LANE_BYTES for n, kd in B.SHAPES.values()) // lib.tb
 
 
@@ -721,7 +736,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     out = []
 
     def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str) -> dict:
-        return {"schema": POINT_SCHEMA, "lane": "ra-codec-wide", "b": f.bits, "k": k, "arithmetic": arith + suffix,
+        return {"schema": POINT_SCHEMA, "lane": "ra-codec-wide", "model": MODEL, "b": f.bits, "k": k,
+                "arithmetic": arith + suffix,
                 "packing": f.payload, "expansion": f.expansion(), "batch": mb,
                 "y_total": y["y_total"] - y["y_commit"] + y_commit, "y_decode": y["y_decode"], "y_tag": y["y_tag"],
                 "y_commit": y_commit, "y_commit_linear": y.get("y_commit_linear"), "y_base": y["y_base"],
@@ -787,11 +803,14 @@ def main() -> int:
     ap.add_argument("--store-gib", type=float, default=4.0)
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--gate-words", type=int, default=2048)
-    ap.add_argument("--shapes", default=",".join(B.SHAPES))
+    ap.add_argument("--model", choices=sorted(MODELS), default=MODEL, help="whose linears and layer count")
+    ap.add_argument("--shapes", help="a subset of the model's linears (default: all four)")
     ap.add_argument("--batches", default=",".join(map(str, B.BATCHES)))
     ap.add_argument("--ks", default="1,2", help="k values, each library taking those up to its KMAX")
     ap.add_argument("--no-gemm", action="store_true")
     a = ap.parse_args()
+    use_model(a.model)
+    a.shapes = a.shapes or ",".join(B.SHAPES)
 
     import torch
     out_dir = Path(a.out)

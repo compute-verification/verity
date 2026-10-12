@@ -17,8 +17,9 @@ and this script selects them all (`research data select --kind codec-frontier-po
   point's `x_boosted` says its x grants that already. x is the adversary's best encode at the point's width: the lowest
   x per round any point of that width reports, whichever lane's library it came from (`--own-x`: the point's own);
   `--tau-cap` bounds τ by the cheapest tag the adversary knows;
-- y, fused decode-step time over native at Llama-3.1-8B's linears, layer-weighted, as a stacked bar per point
-  (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a horizontal line at 2×;
+- y, fused decode-step time over native at `--model`'s linears (default Llama-3.1-70B; 8B's points are the reference),
+  layer-weighted, as a stacked bar per point (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a
+  horizontal line at 2×; `--idle` defaults to the model's;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
 - one bar per configuration, the lowest y_total of each (lane, b, k, batch, measured) over runs and kernel variants
   (`--all` draws every point);
@@ -30,7 +31,8 @@ Schema `verity/codec-frontier-point/v0`, one object per (configuration, batch):
 ~~~text
 schema      "verity/codec-frontier-point/v0"
 lane        the lane that produced it (ra-codec-wide, ra-word-codec, ra-codec-tensor, ...)
-b, k        word width in bits (61, 127, 255, 521, 16448 for P2) and rounds
+model       optional: whose linears y is over, "llama-3.1-70b" or "llama-3.1-8b" (the default)
+b, k        word width in bits (61, 127, 256, 512, 521, 16448 for P2) and rounds; k may be a mean over linears
 arithmetic  e.g. "cuda-int32/mersenne/sqr0", "tensor-core/...", free text naming the decode's arithmetic
 batch       the decode step's batch (1 … 32)
 y_total     (fused decode + tag + commit time) / native, layer-weighted
@@ -63,7 +65,12 @@ SCHEMA = "verity/codec-frontier-point/v0"
 KIND = "codec-frontier-points/v0"
 REQUIRED = ("b", "k", "arithmetic", "batch", "y_total", "y_decode", "y_tag", "y_commit", "x", "tau")
 IDLE_8B = 0.37  # the step outside Llama-3.1-8B's linears, in passes of E (red team, F1)
+IDLE = {"llama-3.1-8b": IDLE_8B, "llama-3.1-70b": 0.10}  # a point without `model` is 8B's
 BOOST = 1.16    # the RTX PRO 6000's boost clock over the locked 2,092 MHz (red team)
+
+
+def model_of(p: dict) -> str:
+    return p.get("model", "llama-3.1-8b")
 
 
 def research(*args: str) -> str:
@@ -173,7 +180,7 @@ def best_per_config(points: list[dict]) -> list[dict]:
 
 
 def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
-         show_all: bool = False, idle: float = IDLE_8B, boost: float = BOOST) -> None:
+         show_all: bool = False, idle: float = IDLE_8B, boost: float = BOOST, model: str = "llama-3.1-8b") -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -226,7 +233,7 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
     ax.set_ylim(0, max(3.0, max(p["y_total"] for p in pts) * 1.1))
     ax.set_xlabel(f"x: encode time of one pass's data, in native passes, at the adversary's clock (÷{boost:g} where "
                   "timed locked; log)")
-    ax.set_ylabel("y: fused decode step / native, Llama-3.1-8B linears, layer-weighted")
+    ax.set_ylabel(f"y: fused decode step / native, {model.replace('llama', 'Llama')} linears, layer-weighted")
 
     def mu(x):
         return (1 - tau_ref) * 100 / np.maximum(np.asarray(x, dtype=float), 1e-9)
@@ -251,8 +258,11 @@ def main() -> int:
     ap.add_argument("--tau", type=float, help="τ for the secondary axis (default: the points' median)")
     ap.add_argument("--d", type=float, help="the step's time in passes of E for x* (default: each point's y_total + "
                     "--idle)")
-    ap.add_argument("--idle", type=float, default=IDLE_8B,
-                    help=f"the step outside the linears, in passes of E (default {IDLE_8B}, 8B; 0.10 at 70B)")
+    ap.add_argument("--model", choices=sorted(IDLE), default="llama-3.1-70b",
+                    help="draw this model's points (a point without `model` is 8B's)")
+    ap.add_argument("--idle", type=float,
+                    help="the step outside the linears, in passes of E (default by --model: "
+                    + ", ".join(f"{m} {v}" for m, v in IDLE.items()) + ")")
     ap.add_argument("--boost", type=float, default=BOOST,
                     help=f"the adversary's clock over the points' locked clock (default {BOOST})")
     ap.add_argument("--batches", default="1,32")
@@ -280,9 +290,12 @@ def main() -> int:
         points = adversary(points, a.boost, a.tau_cap)
     elif a.tau_cap is not None:
         points = [{**p, "tau": min(p["tau"], a.tau_cap)} for p in points]
-    print(table(points, a.budget, batches, a.d, a.idle, a.boost))
+    points = [p for p in points if p.get("reference") or model_of(p) == a.model]
+    idle = IDLE[a.model] if a.idle is None else a.idle
+    print(f"{a.model}, idle {idle:g}")
+    print(table(points, a.budget, batches, a.d, idle, a.boost))
     if a.out:
-        draw(points, Path(a.out), a.budget, a.tau, batches, a.all, a.idle, a.boost)
+        draw(points, Path(a.out), a.budget, a.tau, batches, a.all, idle, a.boost, a.model)
         print(f"wrote {a.out}")
     return 0
 
