@@ -36,9 +36,13 @@ static const char* const NAME = "ro-sketch-blake3/v0";
 #endif
 // SK_SW > 0 sketches the encoded store in that many warps of their own (more warps a CTA), which read every consumer's
 // stage before the producer refills it; the decode loop is latency-bound with idle issue slots, the consumers then only decode.
-// Two is the most that leaves the decoding consumers their registers (four cap them at 146 and spill).
+// Two is the most that leaves the decoding consumers their registers (four cap them at 146 and spill), and two are too few
+// above k = SK_SW_KS (at k = 32, M = 32 they are the bottleneck), where the consumers sketch.
 #ifndef SK_SW
 #define SK_SW 2
+#endif
+#ifndef SK_SW_KS
+#define SK_SW_KS 16
 #endif
 
 __device__ __forceinline__ void bulk_load_ef(void* dst, const void* src, uint32_t bytes, uint64_t* bar, uint64_t pol) {
@@ -186,14 +190,14 @@ struct SkCommit {
 };
 
 template <int KR, int NB8, int KS, bool SK>
-__global__ void __launch_bounds__((WS_MAX_WARPS + (SK && KR > 0 ? SK_SW : 0)) * 32) sk_ws_kernel(const void* __restrict__ wstore,
+__global__ void __launch_bounds__((WS_MAX_WARPS + (SK && KR > 0 && KS <= SK_SW_KS ? SK_SW : 0)) * 32) sk_ws_kernel(const void* __restrict__ wstore,
                                                                  const uint8_t* __restrict__ x, float* __restrict__ y,
                                                                  int M, int N, int Kd, uint64_t base, int groups,
                                                                  int consumers, int per_consumer, int partials, int T,
                                                                  int RUN, const uint4* __restrict__ signs,
                                                                  int* __restrict__ sk, int decode, SkCommit cm) {
   constexpr int SB = ws_stage_bytes<KR>(), KB = KS / 8, SG = sgroups<KR, KS>(), MS = steps<KR>(), NA = chains<KS>();
-  constexpr bool SKW = SK && KR > 0 && SK_SW > 0, CSK = SK && !SKW;  // the sketch in its own warp, or the consumers'
+  constexpr bool SKW = SK && KR > 0 && KS <= SK_SW_KS && SK_SW > 0, CSK = SK && !SKW;  // the sketch in its own warp, or the consumers'
   const int stages = consumers * per_consumer;
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
@@ -585,7 +589,7 @@ int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, 
   const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / wc::TASK_COLS, nbs = N / 16;
   const int nruns = (nbs + T - 1) / T * (T / RUN);
-  const int threads = (consumers + 1 + committers + (kr > 0 && ks ? SK_SW : 0)) * 32;
+  const int threads = (consumers + 1 + committers + (kr > 0 && ks && ks <= SK_SW_KS ? SK_SW : 0)) * 32;
   int sms = 0, per_sm = 0, dev = 0;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) return 2;
   const uint4* sg = static_cast<const uint4*>(signs);
