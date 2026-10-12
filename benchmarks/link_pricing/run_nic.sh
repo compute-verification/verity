@@ -12,7 +12,7 @@
 # PART=ibgda runs only the NVSHMEM put; PART=beside (1 GPU) only small rings beside a 16 GiB reader on the GPU, its
 # loads plain or evict-first: does a ring the NIC writes stay in L2 while the GPU streams its own HBM?  PART=discard
 # (1 GPU): the NIC's inbound rings beside a reader that also drops their lines from L2 unwritten, and rings of 1, 2 and
-# 4 MiB beside the plain reader.
+# 4 MiB beside the plain reader.  PART=small (1 GPU): TX rings of 1 and 2 MiB beside the plain reader.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate.jsonl (rdma_gate), nic.jsonl (perftest rows),
 # nsys.jsonl, nic_*.log, ibgda_*.log, port_counters.txt.
 set -uo pipefail
@@ -85,6 +85,12 @@ if [ "${1:-}" = leased ]; then
       gt "host_to_gpu_write_ring_${m}_read_discard" nsys --op write --src host --dst gpu --mib $m --beside-read 16 --discard 1
     done
   fi
+  if [ -x "$G" ] && [ "$PART" = small ]; then
+    for m in 1 2; do
+      gt "gpu_to_host_write_ring_${m}_read_normal" nsys --op write --src gpu --dst host --mib $m --beside-read 16
+    done
+    gt gpu_to_host_write_ring_1_alone --op write --src gpu --dst host --mib 1
+  fi
   # perftest cross-check: pt NAME TOOL "SERVER ARGS" "CLIENT ARGS"
   port=18600
   pt() {
@@ -146,5 +152,5 @@ fi
 sha256sum run_nic.sh rdma_gate.cu nsys_metrics.py >> "$O/build.txt"
 [ -x "$S/rdma_gate" ] && sha256sum "$S/rdma_gate" >> "$O/build.txt"
 { ibv_devinfo -d $D | grep -E 'fw_ver|state|active_mtu|link_layer|max_qp_rd_atom|max_res_rd_atom'; } >> "$O/build.txt" 2>&1
-N=2; case $PART in beside | discard) N=1 ;; esac
+N=2; case $PART in beside | discard | small) N=1 ;; esac
 GPU_LEASE_WHO=ra-link-pricing gpu-lease $N --wait --on "${GPUS:-4,5,6,7}" --max-min 20 -- bash "$PWD/run_nic.sh" leased "$S"
