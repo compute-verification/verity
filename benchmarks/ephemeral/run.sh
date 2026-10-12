@@ -31,6 +31,9 @@ export NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu} PY M8 M70 ARMS=${ARMS:?}
 export BATCHES=${BATCHES:-1,4,16,64} CONTEXTS=${CONTEXTS:-2048,8192,32768}
 # shellcheck disable=SC2016
 gpu-lease "${GPUS:-1}" --wait --max-min "${MAXMIN:-28}" -- bash -c '
+  # each arm runs under timeout, which takes a process group of its own; a cancel reaches this shell through gpu-lease,
+  # and timeout passes it to its group
+  trap "kill -TERM \$(jobs -p) 2> /dev/null; exit 143" TERM
   LEASED=$CUDA_VISIBLE_DEVICES
   for u in ${GPU_LEASE_UUID//,/ }; do
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,clocks.mem,memory.used --format=csv,noheader -i "$u"
@@ -58,8 +61,8 @@ gpu-lease "${GPUS:-1}" --wait --max-min "${MAXMIN:-28}" -- bash -c '
         --out "$O/$tag.json" > "$O/$tag.rank$r.log" 2>&1 &
     done
     timeout "$((ARM_MIN * 60))" "${P[@]}" "$PY" benchmarks/ephemeral/steps.py "${A[@]}" --out "$O/$tag.json" \
-      > "$O/$tag.log" 2>&1
-    rc=$?; wait
+      > "$O/$tag.log" 2>&1 &
+    wait $!; rc=$?; wait
     echo "$tag $rc" >> "$O/arms.rc"
   done'
 for r in "$O"/ncu-*.ncu-rep; do
