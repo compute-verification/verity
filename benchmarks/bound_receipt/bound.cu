@@ -27,7 +27,7 @@ static_assert(RB_K >= 1 && RB_K <= KMAX, "RB_K");
 
 namespace rb {
 
-constexpr int UNBOUND = 0, TILE = 1;
+constexpr int UNBOUND = 0, TILE = 1, PLAIN = 2;
 
 __device__ __forceinline__ void xor4(uint4& b, const uint4& r) { b.x ^= r.x, b.y ^= r.y, b.z ^= r.z, b.w ^= r.w; }
 
@@ -45,10 +45,11 @@ struct ZCursor {
   }
 };
 
-// BIND: UNBOUND (masks are wide_sketch's ±1 sign fragments, R = 0: ro-sketch-blake3/v0 itself), TILE, or a slice width
-// 32, 64, 128. masks: `bound.mask_fragments` (T · SK_M · 512 bytes); zprev: Mb × Nz FP32 words, z4 = Mb · Nz, s4 the
-// share (`bound.share_words`); sk null or 256 int32 a tile; tags null, or the receipts (vector v = 16 blockIdx.x + r of
-// the call at index jbase + v) at tags[8 v …]. NB8 = 8 (M = 33 … 64) holds 32 accumulators: two CTAs an SM.
+// BIND: UNBOUND (masks are wide_sketch's ±1 sign fragments, R = 0: ro-sketch-blake3/v0 itself), TILE, a slice width
+// 32, 64, 128, or PLAIN (decode and GEMM, no sketch: the receipts' baseline at every batch). masks:
+// `bound.mask_fragments` (T · SK_M · 512 bytes); zprev: Mb × Nz FP32 words, z4 = Mb · Nz, s4 the share
+// (`bound.share_words`); sk null or 256 int32 a tile; tags null, or the receipts (vector v = 16 blockIdx.x + r of the
+// call at index jbase + v) at tags[8 v …]. NB8 = 8 (M = 33 … 64) holds 32 accumulators: two CTAs an SM.
 template <int KR, int NB8, bool PARTIALS, int BIND>
 __global__ void __launch_bounds__(GEMM_WARPS * 32, NB8 == 8 ? 2 : WW_OCC)
     bound_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x, float* __restrict__ y, int Mb, int Nn,
@@ -56,7 +57,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, NB8 == 8 ? 2 : WW_OCC)
                  const uint4* __restrict__ masks, int32_t* __restrict__ sk, const uint32_t* __restrict__ zprev,
                  uint32_t z4, uint32_t s4) {
   constexpr int UNITS = TASK_COLS / 16, SW = BIND >= 32 ? BIND / 32 : 0;
-  static_assert(BIND == UNBOUND || BIND == TILE || BIND == 32 || BIND == 64 || BIND == 128, "BIND");
+  static_assert(BIND == UNBOUND || BIND == TILE || BIND == PLAIN || BIND == 32 || BIND == 64 || BIND == 128, "BIND");
   __shared__ __align__(16) uint8_t xs[NB8 * 8][TASK_COLS];  // row r's 16-byte unit c at c ^ (r mod 8), as gemm_kernel
   __shared__ int32_t skp[GEMM_WARPS][16][SK_ROW];
   const int nchunks = Kd / TASK_COLS;
@@ -79,7 +80,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, NB8 == 8 ? 2 : WW_OCC)
 
   ZCursor zc{};
   uint4 rz[4];
-  if constexpr (BIND != UNBOUND) {
+  if constexpr (BIND != UNBOUND && BIND != PLAIN) {
     zc = {zprev, (uint32_t)(((uint64_t)blockIdx.x * s4) % z4), (2048u * warp + 4u * lane) % s4, 128u % s4, s4, z4};
 #pragma unroll
     for (int e = 0; e < 4; ++e) rz[e] = zc.next();
@@ -95,13 +96,15 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, NB8 == 8 ? 2 : WW_OCC)
 #pragma unroll 1
   for (int a = 0; a < L; ++a) {
     // the sketch of word a (encoded, in w[0]): steps 4a … 4a + 3
+    if constexpr (BIND != PLAIN) {
 #pragma unroll
-    for (int e = 0; e < 4; ++e) {
-      const uint32_t av[4] = {w[0][4 * e], w[0][4 * e + 1], w[0][4 * e + 2], w[0][4 * e + 3]};
-      uint4 b = __ldg(mg + 32 * (4 * a + e));
-      if constexpr (BIND != UNBOUND) xor4(b, rz[e]);
-      mma_s8(d[0], av, b.x, b.y);
-      mma_s8(d[1], av, b.z, b.w);
+      for (int e = 0; e < 4; ++e) {
+        const uint32_t av[4] = {w[0][4 * e], w[0][4 * e + 1], w[0][4 * e + 2], w[0][4 * e + 3]};
+        uint4 b = __ldg(mg + 32 * (4 * a + e));
+        if constexpr (BIND != UNBOUND) xor4(b, rz[e]);
+        mma_s8(d[0], av, b.x, b.y);
+        mma_s8(d[1], av, b.z, b.w);
+      }
     }
     if constexpr (BIND == TILE) {
       if (a + 1 < L) {
@@ -157,6 +160,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, NB8 == 8 ? 2 : WW_OCC)
       }
     }
   }
+  if constexpr (BIND == PLAIN) return;
 #pragma unroll
   for (int c8 = 0; c8 < 2; ++c8)
 #pragma unroll
@@ -221,18 +225,19 @@ int rb_constants(int* out) {
 }
 
 // The bound fused GEMM. mode: 0 unbound (masks = wide_sketch's sign fragments, receipts under ro-sketch-blake3/v0), 1
-// tile, 32 / 64 / 128 slice (masks = `bound.mask_fragments`, receipts under ro-bound-sketch-blake3/v0); k must be RB_K;
+// tile, 32 / 64 / 128 slice (masks = `bound.mask_fragments`, receipts under ro-bound-sketch-blake3/v0), 2 plain (no
+// sketch: masks, zprev, sk, seed and tags unread, sk, seed and tags null); k must be RB_K;
 // zprev Mb × Nz FP32 for a bound mode (Nz a multiple of 4); seed and tags both or neither (the receipts hashed in the
 // kernel); sk null or 256 int32 a tile; Mb ≤ 64.
 int rb_gemm(int mode, int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn, int Kd, uint64_t wbase,
             int partials, const void* masks, int32_t* sk, uint64_t jbase, const uint8_t* seed, uint32_t* tags,
             const float* zprev, int Nz, cudaStream_t s) {
-  if (!masks || (seed != nullptr) != (tags != nullptr) || k != RB_K) return 1;
-  if (Mb < 1 || Mb > 64 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || wbase % (32ull * L)) return 1;
-  if (mode != rb::UNBOUND && mode != rb::TILE && mode != 32 && mode != 64 && mode != 128) return 1;
+  if (mode != rb::UNBOUND && mode != rb::TILE && mode != rb::PLAIN && mode != 32 && mode != 64 && mode != 128) return 1;
+  if (mode == rb::PLAIN ? sk || seed || tags : !masks || (seed != nullptr) != (tags != nullptr)) return 1;
+  if (k != RB_K || Mb < 1 || Mb > 64 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || wbase % (32ull * L)) return 1;
   const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS);
   uint32_t z4 = 0, s4 = 0;
-  if (mode != rb::UNBOUND) {
+  if (mode != rb::UNBOUND && mode != rb::PLAIN) {
     if (!zprev || Nz < 1 || Nz % 4) return 1;
     z4 = (uint32_t)Mb * (uint32_t)Nz;
     s4 = 4 * ((z4 + 4u * grid - 1) / (4u * grid));
@@ -250,6 +255,7 @@ int rb_gemm(int mode, int k, const uint32_t* E, const uint8_t* x, float* y, int 
     switch (mode) {                           \
       case 0: RB_LAUNCH(NB8, P, 0); break;    \
       case 1: RB_LAUNCH(NB8, P, 1); break;    \
+      case 2: RB_LAUNCH(NB8, P, 2); break;    \
       case 32: RB_LAUNCH(NB8, P, 32); break;  \
       case 64: RB_LAUNCH(NB8, P, 64); break;  \
       default: RB_LAUNCH(NB8, P, 128); break; \
@@ -288,6 +294,7 @@ int rb_occupancy(int mode, int Mb, int partials) {
     switch (mode) {                        \
       case 0: RB_OCC(NB8, P, 0); break;    \
       case 1: RB_OCC(NB8, P, 1); break;    \
+      case 2: RB_OCC(NB8, P, 2); break;    \
       case 32: RB_OCC(NB8, P, 32); break;  \
       case 64: RB_OCC(NB8, P, 64); break;  \
       case 128: RB_OCC(NB8, P, 128); break; \

@@ -1,7 +1,7 @@
-"""The bound receipt's benchmark on one GPU: `bound.cu`'s library (ra-codec-wide's `wide.cu`, whose launchers it keeps,
-plus `rb_gemm`) gated against `bound.py`, then timed at the linears of `--model` (Llama-3.1-70B by default) and the
-batches `--batches` (1, 8, 32, 64), k = `--k` (the library's RB_K). Writes `bound.json` and `bench.log` under `--out`,
-and in a `research run` its `result.json`.
+"""The bound receipt's benchmark on one GPU: `bound.cu`'s libraries (ra-codec-wide's `wide.cu`, whose launchers they
+keep, plus `rb_gemm`), one a k (`--lib`, repeated; each library's RB_K is its k), gated against `bound.py`, then timed at
+the linears of `--model` (Llama-3.1-70B by default) and the batches `--batches` (1, 8, 32, 64). Writes `bound.json` and
+`bench.log` under `--out`, and in a `research run` its `result.json`.
 
 Nothing is timed before its gate passed. For each linear and batch, and each mode (unbound, tile, slice32, slice64,
 slice128), on the store encoded at k:
@@ -12,15 +12,18 @@ slice128), on the store encoded at k:
   and zprev (the accumulators from sm_120's E4M3 model), and sampled receipts `bound.receipts_of` over the device's
   sketches;
 - unbound, batch ≤ 32: sketches and receipts equal `ww_gemm_sketch`'s (ra-codec-wide's ro-sketch-blake3/v0);
+- plain (no sketch): the partial sums equal the payload store's;
 - on the first linear and batch: `rb_receipts` apart equals the fused hash on every vector, and `rb_commit`'s root
   `bound.root` over the device's receipts.
 
 Then interleaved reps, every call on cold weights (a ring of store copies past the L2), each arm queued behind a spin
 kernel: cuBLASLt FP8 (`torch._scaled_mm`, native), and for batch ≤ 32 `ww_gemm` decode only (`d`) and
-`ww_gemm_sketch` hashed (`h`, the unbound receipt as ra-codec-wide measured it); and `rb_gemm` hashed in every mode
-(`unbound`, `tile`, `slice32`, `slice64`, `slice128`). zprev stands in for the previous linear's output (batch × N FP32;
-its contents don't change the time). Per batch, the layer (the four linears) sums each arm: `layer.ratio_vs_native`, and
-`layer.binding_cost` = (mode − unbound) / native, the bound receipt's honest cost over the unbound one in the same kernel.
+`ww_gemm_sketch` hashed (`h`, the unbound receipt as ra-codec-wide measured it); and `rb_gemm` without a sketch
+(`plain`) and hashed in every mode (`unbound`, `tile`, `slice32`, `slice64`, `slice128`). zprev stands in for the
+previous linear's output (batch × N FP32; its contents don't change the time). Per batch, the layer (the four linears)
+sums each arm: `layer.ratio_vs_native`; `layer.receipt_cost` = (mode − plain) / native, each receipt's cost per weight
+pass (τ_W for unbound); and `layer.binding_cost` = (mode − unbound) / native, the bound receipt's honest cost over the
+unbound one in the same kernel.
 """
 from __future__ import annotations
 
@@ -49,6 +52,8 @@ stream, ptr = WB.stream, WB.ptr
 TAG_SEED = WB.TAG_SEED
 POISON = WB.POISON - (1 << 32)
 MODES = list(BR.MODES)
+PLAIN = 2
+ARMS = {"plain": PLAIN, **BR.MODES}
 
 
 class Lib(WB.WLib):
@@ -79,9 +84,8 @@ def tile_vectors(store, n: int, kd: int, t: int) -> np.ndarray:
     return WS.vectors(b"".join(parts), 16 * WS.T, f.task_cols, f)
 
 
-def case(lib: Lib, torch, name: str, n: int, kd: int, batches, k: int, reps: int, log, gate_tiles: int,
-         first: bool) -> dict:
-    f = BR.FIELD
+def case(lib: Lib, torch, name: str, n: int, kd: int, batches, reps: int, log, gate_tiles: int, first: bool) -> dict:
+    f, k = BR.FIELD, lib.rb_k
     if kd % f.task_cols or n % 64:
         raise ValueError(f"{name}: N a multiple of 64 and K of {f.task_cols}")
     w = B.fp8_weights(torch, n, kd, 100 + n + kd)
@@ -111,7 +115,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, batches, k: int, reps: int
     xs = {mb: torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn) for mb in batches}
     zs = {mb: torch.randn(mb, n, device="cuda", generator=gx) for mb in batches}
     res = {"N": n, "K": kd, "store_bytes": pay.numel() * 4, "tiles": ntiles, "gate": {}, "times": {},
-           "occupancy": {mb: {m: lib.so.rb_occupancy(BR.MODES[m], mb, 0) for m in MODES} for mb in batches}}
+           "occupancy": {mb: {m: lib.so.rb_occupancy(ARMS[m], mb, 0) for m in ARMS} for mb in batches}}
 
     def rb(mode, x, y, mb, partials, with_sk=True, hashed=True, store_t=None):
         lib.call("rb_gemm", BR.MODES[mode], k, ptr(store if store_t is None else store_t), ptr(x.view(torch.uint8)),
@@ -198,7 +202,13 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, batches, k: int, reps: int
                 ok = ok and g["apart_equal"] and g["root_vs_reference"]
             g["ok"] = bool(ok)
             entry["modes"][mode] = g
-        entry["ok"] = entry["payload_vs_torch_rel"] < 1e-5 and all(g["ok"] for g in entry["modes"].values())
+        pf = torch.full_like(pp, float("nan"))
+        lib.call("rb_gemm", PLAIN, k, ptr(store), ptr(x.view(torch.uint8)), ptr(pf), mb, n, kd, 0, 1, None, None, 0,
+                 None, None, None, 0, stream(torch))
+        torch.cuda.synchronize()
+        entry["plain_partials_equal"] = bool(torch.equal(pf, pp))
+        entry["ok"] = (entry["payload_vs_torch_rel"] < 1e-5 and entry["plain_partials_equal"]
+                       and all(g["ok"] for g in entry["modes"].values()))
         res["gate"][mb] = entry
         log(f"gate {name} M={mb}: {'ok' if entry['ok'] else 'FAIL'} (tiles {sample}, payload rel "
             f"{entry['payload_vs_torch_rel']:.1e})" + ("" if entry["ok"] else f" {entry}"))
@@ -248,12 +258,15 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, batches, k: int, reps: int
                 raise RuntimeError(f"ww_gemm_sketch k={k} M={mb}: error {rc}")
 
         def arm_rb(mode):
-            mk, md, zp = ptr(signs if mode == "unbound" else masks), BR.MODES[mode], ptr(zs[mb])
+            md = ARMS[mode]
+            mk = None if mode == "plain" else ptr(signs if mode == "unbound" else masks)
+            zp = ptr(zs[mb]) if md not in (PLAIN, 0) else None
+            sb, tp = (None, None) if mode == "plain" else (seed_buf, tags_p)
 
             def go():
                 rc = 0
                 for p in ps:
-                    rc |= so.rb_gemm(md, k, p, xp, yp, mb, n, kd, 0, 0, mk, None, 0, seed_buf, tags_p, zp, n, st)
+                    rc |= so.rb_gemm(md, k, p, xp, yp, mb, n, kd, 0, 0, mk, None, 0, sb, tp, zp, n, st)
                 if rc:
                     raise RuntimeError(f"rb_gemm {mode} M={mb}: error {rc}")
             return go
@@ -261,7 +274,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, batches, k: int, reps: int
         arms = {"native": arm_native}
         if mb <= 32:
             arms["d"], arms["h"] = arm_d, arm_h
-        for mode in MODES:
+        for mode in ARMS:
             arms[mode] = arm_rb(mode)
         for fn in arms.values():
             fn()
@@ -277,7 +290,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, batches, k: int, reps: int
         r = res["times"][mb]["ratio_vs_native"]
         log(f"time {name} M={mb}: native {med['native'] * 1e6:.1f} us; "
             + (f"d {r['d']:.3f}x h {r['h']:.3f}x; " if "d" in r else "")
-            + ", ".join(f"{m} {r[m]:.3f}x" for m in MODES)
+            + ", ".join(f"{m} {r[m]:.3f}x" for m in ARMS)
             + f" (CTAs an SM {res['occupancy'][mb]})")
     ring = wring = store = None
     torch.cuda.empty_cache()
@@ -292,6 +305,7 @@ def layer(results: dict, batches) -> dict:
         tot = {a: sum(r["times"][mb]["median_s"][a] for r in results.values()) for a in arms}
         ratio = {a: tot[a] / tot["native"] for a in tot}
         out[mb] = {"total_s": tot, "ratio_vs_native": ratio,
+                   "receipt_cost": {m: ratio[m] - ratio["plain"] for m in MODES},
                    "binding_cost": {m: ratio[m] - ratio["unbound"] for m in MODES if m != "unbound"},
                    "z_over_block": {m: statistics.mean(BR.binding_ratio(m, mb, r["K"]) for r in results.values())
                                     for m in MODES}}
@@ -303,15 +317,16 @@ def write_result(res: dict, out_dir: Path) -> None:
     if not run_dir or not run_id:
         return
     ms = []
-    for mb, lay in res.get("layer", {}).items():
-        for a, v in lay["ratio_vs_native"].items():
-            ms.append({"name": f"ratio_{a}_m{mb}", "value": v, "unit": "1"})
-        for m, v in lay["binding_cost"].items():
-            ms.append({"name": f"binding_cost_{m}_m{mb}", "value": v, "unit": "1"})
+    for k, rk in res["by_k"].items():
+        for mb, lay in rk.get("layer", {}).items():
+            for kind in ("ratio_vs_native", "receipt_cost", "binding_cost"):
+                for a, v in lay[kind].items():
+                    ms.append({"name": f"{kind}_{a}_k{k}_m{mb}", "value": v, "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/bound.json", f"{rel}/bench.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"lib": hashlib.sha256(Path(res["lib_path"]).read_bytes()).hexdigest(),
+           "workload_fingerprint": {"libs": {k: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+                                             for k, p in res["lib_paths"].items()},
                                     "seed": WB.SEED.hex(), "tag_seed": TAG_SEED.hex()},
            "validation": {"status": "passed" if res["ok"] else "failed", "checker": "bound receipt gates",
                           "detail": "partial sums = payload store's; sketches = bound.py (sm_120 E4M3 model for the "
@@ -325,12 +340,11 @@ def write_result(res: dict, out_dir: Path) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--lib", required=True, help="PATH of a bound.cu build")
+    ap.add_argument("--lib", action="append", required=True, help="PATH of a bound.cu build (repeat, one a k)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", choices=sorted(WB.MODELS), default="llama-3.1-70b")
     ap.add_argument("--shapes", help="a subset of the model's linears (default: all four)")
     ap.add_argument("--batches", default="1,8,32,64")
-    ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--reps", type=int, default=15)
     ap.add_argument("--gate-tiles", type=int, default=2, help="random tiles checked on the first linear (one on the rest)")
     args = ap.parse_args()
@@ -347,24 +361,32 @@ def main() -> int:
         logf.flush()
 
     WB.use_model(args.model)
-    lib = Lib("bound", args.lib)
-    if lib.bits != 512 or lib.rb_k != args.k:
-        raise SystemExit(f"the library is p{lib.bits}, RB_K = {lib.rb_k}; this bench is p512 at k = {args.k}")
+    libs = [Lib(f"bound-{i}", p) for i, p in enumerate(args.lib)]
+    for lib in libs:
+        if lib.bits != 512:
+            raise SystemExit(f"{lib.path} is p{lib.bits}; this bench is p512")
+    if len({lib.rb_k for lib in libs}) != len(libs):
+        raise SystemExit("one library a k")
     batches = [int(b) for b in args.batches.split(",")]
     shapes = {s: B.SHAPES[s] for s in (args.shapes.split(",") if args.shapes else B.SHAPES)}
-    res = {"lib_path": args.lib, "model": args.model, "k": args.k, "batches": batches,
-           "gpu": torch.cuda.get_device_name(0), "occ_build": lib.rb_occ, "cases": {}}
-    for i, (name, (n, kd)) in enumerate(shapes.items()):
-        res["cases"][name] = case(lib, torch, name, n, kd, batches, args.k, args.reps, log, args.gate_tiles, i == 0)
-        if not res["cases"][name]["ok"]:
-            break
-    res["ok"] = all(c["ok"] for c in res["cases"].values()) and len(res["cases"]) == len(shapes)
-    if res["ok"]:
-        res["layer"] = layer(res["cases"], batches)
-        for mb, lay in res["layer"].items():
-            r, c = lay["ratio_vs_native"], lay["binding_cost"]
-            log(f"layer M={mb}: " + ", ".join(f"{a} {r[a]:.3f}" for a in sorted(r))
-                + "; binding cost over unbound " + ", ".join(f"{m} {c[m]:+.3f}" for m in c))
+    res = {"lib_paths": {lib.rb_k: lib.path for lib in libs}, "model": args.model, "batches": batches,
+           "gpu": torch.cuda.get_device_name(0), "by_k": {}}
+    for lib in libs:
+        k = lib.rb_k
+        rk = res["by_k"][k] = {"occ_build": lib.rb_occ, "cases": {}}
+        for i, (name, (n, kd)) in enumerate(shapes.items()):
+            rk["cases"][name] = case(lib, torch, name, n, kd, batches, args.reps, log, args.gate_tiles, i == 0)
+            if not rk["cases"][name]["ok"]:
+                break
+        rk["ok"] = all(c["ok"] for c in rk["cases"].values()) and len(rk["cases"]) == len(shapes)
+        if rk["ok"]:
+            rk["layer"] = layer(rk["cases"], batches)
+            for mb, lay in rk["layer"].items():
+                r, t, c = lay["ratio_vs_native"], lay["receipt_cost"], lay["binding_cost"]
+                log(f"layer k={k} M={mb}: " + ", ".join(f"{a} {r[a]:.3f}" for a in sorted(r))
+                    + "; receipt cost over plain " + ", ".join(f"{m} {t[m]:+.3f}" for m in t)
+                    + "; binding cost over unbound " + ", ".join(f"{m} {c[m]:+.3f}" for m in c))
+    res["ok"] = all(rk["ok"] for rk in res["by_k"].values())
     (out / "bound.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, out)
     log("ok" if res["ok"] else "FAILED")
