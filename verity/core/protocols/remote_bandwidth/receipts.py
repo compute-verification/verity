@@ -1,27 +1,29 @@
-"""The receipts of one pass, the seed its live coin gives it, the plan of what it reads, and the tree that commits them.
+"""The receipts of one pass, the seed chain that orders passes, the plan of what a pass reads, and the tree that
+commits them.
 
 ~~~text
-Z(x)        x zero-padded to whole 128-byte blocks (one SHA-512 block here)
-seed_k      SHA512(SEED_DOMAIN ‖ c_k ‖ u64be k),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0", c_k pass k's live
-            coin (`coins.py`), k the pass's index in the session
-plan_k      R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, and no run starting
-            where the one before it ends (it would be the same run).  Position p is the p-th block of the runs
-            concatenated, L_k positions in all.
-            digest SHA512(PLAN_DOMAIN ‖ u32be R ‖ (u64be first ‖ u64be count) × R),  PLAN_DOMAIN = "…/plan/v0\0"
-spread(z)   z laid over b = 4096 bytes: byte u of z XORed into byte u mod b (a z of b bytes or more folds), a shorter
-            z repeated
-y_(k,p)     SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_k)) ‖ u64be j ‖ (E_j ⊕ spread(z_(k,j)))),  j = plan_k[p],
-            RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                     64 bytes
-leaf c      v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
-            hm96-sha512/row/v2 leaf: x_c = sha512/row/v2(v_c), value hm96-sha512 tree_leaf(key, commit_string(key, x_c,
-            salt_c)), salt_c 192 fresh bytes, key hm96-sha512's pinned key
-root_k      frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512(TREE_DOMAIN ‖ seed_k ‖ plan digest),
-            owner 0, positions 0 … ⌈L_k/16⌉ − 1), schema "hm96-sha512/row/v2",  TREE_DOMAIN = "…/receipt-tree/v0\0"
+Z(x)          x zero-padded to whole 128-byte blocks (one SHA-512 block here)
+seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
+              σ_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and the
+              registration's digest for its first window
+plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, and no run starting
+              where the one before it ends (it would be the same run).  Position p is the p-th block of the runs
+              concatenated, L_i positions in all.
+              digest SHA512(PLAN_DOMAIN ‖ u32be R ‖ (u64be first ‖ u64be count) × R),  PLAN_DOMAIN = "…/plan/v0\0"
+spread(z)     z laid over b = 4096 bytes: byte u of z XORed into byte u mod b (a z of b bytes or more folds), a shorter
+              z repeated
+y_(i,p)       SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j)))),  j = plan_i[p],
+              RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                     64 bytes
+leaf c        v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
+              hm96-sha512/row/v2 leaf: x_c = sha512/row/v2(v_c), value hm96-sha512 tree_leaf(key, commit_string(key,
+              x_c, salt_c)), salt_c 192 fresh bytes, key hm96-sha512's pinned key
+root_(t,i)    frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512(TREE_DOMAIN ‖ seed_i ‖ plan digest),
+              owner 0, positions 0 … ⌈L_i/16⌉ − 1), schema "hm96-sha512/row/v2",  TREE_DOMAIN = "…/receipt-tree/v0\0"
 ~~~
 
 `frame` is `verity.ml.randomness.frame`.  A receipt is seed-first: the seed fills the first SHA-512 block, so no state
-over a block's bytes exists before the seed, and the seed exists only once its coin has been released.  `z_(k,j)` is
-PoUW's noised output of the tile before block j's read in pass k; it enters elementwise, before any compression, so a
+over a block's bytes exists before the seed, and the seed exists only after the previous pass's root.  `z_(i,j)` is
+PoUW's noised output of the tile before block j's read in pass i; it enters elementwise, before any compression, so a
 relay that meets the block and z over a link carries `min(|z|, b)` bytes per block, not a digest of one side.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
@@ -50,7 +52,7 @@ PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
 RECEIPT_DOMAIN = b"verity/remote-bandwidth/receipt/v0\0"
 TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
-COIN_BYTES = 32
+CHALLENGE_BYTES = 32
 DIGEST_BYTES = 64
 PER_LEAF = 16
 OWNER = 0
@@ -66,13 +68,13 @@ def _digest(value: bytes, name: str) -> bytes:
     return value
 
 
-def seed(coin: bytes, k: int) -> bytes:
-    """`seed_k`: pass `k`'s seed under its live coin."""
-    if type(coin) is not bytes or len(coin) != COIN_BYTES:
-        raise ValueError(f"a coin is {COIN_BYTES} bytes")
-    if type(k) is not int or not 0 <= k < 1 << 64:
-        raise ValueError("a pass index is a u64")
-    return hashlib.sha512(SEED_DOMAIN + coin + k.to_bytes(8, "big")).digest()
+def seed(challenge: bytes, i: int, previous: bytes) -> bytes:
+    """`seed_(t,i)`: pass `i`'s seed under the window's challenge, after the root before it."""
+    if type(challenge) is not bytes or len(challenge) != CHALLENGE_BYTES:
+        raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
+    if type(i) is not int or not 0 <= i < 1 << 32:
+        raise ValueError("a pass index is a u32")
+    return hashlib.sha512(SEED_DOMAIN + challenge + i.to_bytes(4, "big") + _digest(previous, "a root")).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +169,7 @@ def _xor(a: bytes, b: bytes) -> bytes:
 
 
 class Receipter:
-    """Receipts under one pass's seed: `receipter(j, block, z)` is `y_(k,j)`."""
+    """Receipts under one pass's seed: `receipter(j, block, z)` is `y_(i,j)`."""
 
     def __init__(self, seed: bytes) -> None:
         self.head = hashlib.sha512(prefix(seed))

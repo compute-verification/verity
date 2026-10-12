@@ -30,15 +30,25 @@ def test_vectors_are_reproduced() -> None:
     assert rv.generate() == json.loads(rv.PATH.read_text())
 
 
-def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_distinct_coins() -> None:
+def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_chain() -> None:
     pinned = json.loads(rv.PATH.read_text())
     assert pinned["codec"]["words"][0]["payload"] == "00" * 64
     assert rv.BLOCKS % 16 == 5 and rv.PLANS[1].length % 16 == 10 and list(rv.PLANS[1])[:2] == [16, 17]
     passes = pinned["passes"]["passes"]
-    assert len({p["coin"] for p in passes} | {pinned["openings"]["coin"]}) == 4
-    assert passes[0]["coin"] == pinned["coins"]["coin_0"]["coin"]
+    assert pinned["passes"]["challenge"] == pinned["coins"]["coin_0"]["coin"] != pinned["openings"]["coin"]
+    assert passes[0]["previous"] == pinned["registration"]["digest"]
+    assert all(b["previous"] == a["root"] for a, b in itertools.pairwise(passes))
+    assert len({p["seed"] for p in passes}) == 3
     assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
-    assert pinned["openings"]["index"] == 3 and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
+    assert pinned["openings"]["index"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
 
 
 def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones() -> None:
@@ -47,14 +57,19 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones() -
     root = audit.payload_tree(rv.NODE, payloads, salts).commitment.root
     reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
     challenger = coins.Challenger(reg.digest, 0, rv.PARAMS.coins, entropy=rv.Entropy(rv.COIN_LABEL))
-    s = audit.Session(rv.PARAMS, reg, audit.NoiseTiles(96), challenger, clock=itertools.count().__next__)
+    clock = Clock()
+    s = audit.Session(rv.PARAMS, reg, audit.NoiseTiles(96), challenger, clock=clock)
     prover = audit.Prover(audit.Store(reg, payloads, salts), audit.NoiseTiles(96), s.commitment,
                           entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
-    for plan, want in zip(rv.PLANS, pinned["passes"]["passes"], strict=True):
-        ps = prover.run(s.release(), plan)
+    challenge, previous = s.start(), reg.digest
+    for i, (plan, want) in enumerate(zip(rv.PLANS, pinned["passes"]["passes"], strict=True)):
+        ps = prover.run(challenge, i, previous, plan)
         assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
-        assert s.receive(ps.index, ps.root, ps.plan.runs) is None
+        assert s.receive(0, i, ps.root, ps.plan.runs) is None
+        previous = ps.root
+    assert s.boundary() is None
+    clock.now = s.deadline(0) + 1
     assert list(s.close(0)) == [unit(u) for u in pinned["openings"]["draws"]]
 
 
