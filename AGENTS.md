@@ -172,9 +172,9 @@ something it doesn't declare, and it is fixed in the check, not by reverting any
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
 lands on its own passing check without its file owner's review, and the owner is told. infra owns check time as an
-outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Landing
-is automated, and ci owns it: from a ready mark to `main` moving, no agent acts unless the automation refuses, and the
-lander handles what it refuses.
+outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Hand
+landing is automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
+refuses, and the lander handles what it refuses.
 
 Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
 right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
@@ -182,31 +182,23 @@ A reused verdict stays in the gate, and the Lean check always runs before landin
 whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
 landing.
 
-Landing runs through the merge queue's drive (`research queue drive`, `tools/research/src/research/drive.py`), which ci
-runs on a loop every few minutes:
+PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 
-- An owner's ready mark at a PR's head means "land this": `research queue ready N --mark --by LANE`, or
+- Drive admits a PR once its owner marks it ready at its head: `research queue ready N --mark --by LANE`, or
   `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, and a new head needs a new mark. The
   owner is the lane a `Lane NAME` line in the PR's body names, else the Cursor agent id the body carries. Marks written
-  before `marked_after` in `tools/verity/check/queue.toml` are ignored on every VM's queue, and a `hold` label keeps a PR
-  out. No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel,
-  8 Oct).
-- `next` is `main` plus every admitted PR, one merge commit each; a PR whose head contains another open PR's head goes in
-  after it. Drive checks `next` in stacked trains of four with `tools/verity/check/train.sh` (with `--agreement` when a
-  train changes a `lean-audit.json`), and lands the newest commit whose check passed: a fast-forward, or, onto a `main`
-  that moved, a merge commit with `Checked:` and `Skipped-check:` trailers when the commits `main` gained share no file
-  with it and change no check tooling. Then it runs what a landing needs: the spec DM, node 1's mirror, the post-train
-  regression and the landing post.
-- The lander (old-circuits-and-proofs) handles only what drive refuses, which drive posts to it in the merge thread once
-  per commit: a failed check, a conflict, a check missing a step the gate needs, a launch that registered no run. The
-  lander ejects the PR that broke a train (`research queue eject N --reason TEXT`, which withdraws its mark in the store),
-  and the PR's owner fixes it and marks the new head. A passing train that drive missed, the lander lands with
-  `research merge`.
-- A push to a PR in `next` takes it out until the new head is marked, and a check whose commit leaves `next` is
-  cancelled, so a PR keeps its head while its train is checked unless the lander asks for a change.
+  before `marked_after` in `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out.
+  `research queue status` says what each PR waits for.
+- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
+- Drive stacks admitted PRs on `next`, checks them in trains and lands the newest train whose check passed. What it
+  refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
+  marks its fixed head ready.
+- A PR whose head is in a train being checked keeps that head until the train lands or fails: a new head takes it off
+  `next` and cancels the checks of its train and every train above it.
+- A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
-  of the queue: the lander lands it with `research merge` on its own passing check, and drive's next sync rebuilds `next`
-  on it.
+  of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
+  drive's next sync rebuilds `next` on it.
 
 ## Lean
 
@@ -244,7 +236,7 @@ runs on a loop every few minutes:
 - **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
-    waits on it, and a statement reviewer is optional.
+    waits on it.
   - A guarantee that only moved sends nothing (`--update --moved MOVES.json`).
 - **How to work on Lean**, how parallel Lean lanes avoid conflicts (two agents never share a writable `.lake`), and which
   assumptions get an `upstream` watch entry: the lean-proofs skill, `.agents/skills/lean-proofs/SKILL.md`.
@@ -269,9 +261,7 @@ Make every decision yourself except money, keys and claims (Daniel, 8 Oct). Spen
 and what a guarantee says or rests on go to Daniel through your coordinator, with your recommendation. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
-`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes. Daniel tunes two balances through those
-rulings: how much cross-agent chatter and note-taking, and how much autonomy versus asking him. On 6 Oct he set the
-second toward autonomy (be generous and cut ceremony), and on 8 Oct he cut what waits on him to money, keys and claims.
+`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
@@ -329,11 +319,11 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
   (`research notes claim`).
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
-- **Push your branch after every commit** (never `main`, never `--force`), except to a PR whose train is being checked
+- **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a train being checked
   (Checking and merging). Only drive and the lander move `main`.
-- **Landing is drive's.** Push your PR, mark it ready at its head and go back to research. Drive lands it, the lander
-  handles what drive refuses, and you hear back only if your PR fails or conflicts. A lane works on at most two open PRs; one whose head is in a queued
-  or running check, or in a train the lander holds, doesn't count until that check fails.
+- **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
+  lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
+  its check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`.

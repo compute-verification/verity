@@ -203,7 +203,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
     blocked the rest, not with landing counts;
   - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
     back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
-    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived;
+    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived. Since 12 Oct, ci's
+    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses (11 Oct);
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -238,7 +239,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   call. "Network transparency" is "network accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
-  tip that pins the old one at landing, and their checks are spent for nothing.
+  tip that pins the old one at landing, and their checks are spent for nothing. Since 12 Oct, drive leaves a conflicting
+  PR out of `next` for the lander (11 Oct), and a new head still cancels the checks of the trains above it.
 - 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
   SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
   definition.
