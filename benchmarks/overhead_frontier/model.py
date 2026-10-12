@@ -33,8 +33,9 @@ The step, per GPU (``step``):
   leaves over ΣR, μ_unreg = the step's ephemeral bus time over its capacity, μ_timing = (RTT + pass)/(nT) + gap/pass,
   μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_cpu = the host CPUs' tile work if this
   audit must count it (0: under C it buys nothing without bytes from off the node), μ_link (0 under the identity statement
-  ``C``; ``link_n`` prices memory-only helpers over the NIC). The honest read shortfall η is unmeasured: the frontier
-  holds ``eta_reserve`` back for it and reports what is left (``eta_allowance``).
+  ``C``; ``link_n`` prices memory-only helpers over the NIC). The step reads at R by construction, so the honest
+  engine's read shortfall η is what γ leaves (``eta_allowance``) when exhaustion is against a declared load; against
+  R·T (``eta_counted``) μ_eta adds ra-kv-filler's phases (decode, prefill, the engine's gaps, idle).
 - ``pass`` (the design's and the red team's): μ_chip = S_chip/(W + KV), μ_rebuild = d·s·(1+h)/(k·x₁) and
   μ_host = d·(b_host − covered)/(8R) with d = the audited step in read passes of W + KV, no μ_unreg, and the capacity
   left idle, the chaining gap's included, reported as ``residual`` = 1 − (1 − γ)/d (F9).
@@ -329,11 +330,16 @@ def gamma_cap(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -
         "mu_unreg": once["mu_unreg"] / st["cap"],
         "mu_timing": _timing(st["cap"] * st["copies"], st["gap"], v),
         "mu_cpu": v["mu_cpu"],
+        "mu_eta": eta(v) if v["eta_counted"] else 0.0,
         **_common(w, p, v),
     }
     t["gamma"] = sum(x for n, x in t.items() if n.startswith("mu_") or n == "lambda")
-    t["eta_allowance"] = GAMMA_MAX - t["gamma"]
+    t["eta_allowance"] = GAMMA_MAX - t["gamma"] + t["mu_eta"]
     return t
+
+
+def eta(v: dict[str, Any]) -> float:
+    return v["eta_decode"] + v["eta_prefill"] + v["eta_gaps"] + v["eta_idle"]
 
 
 def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -> dict[str, float]:

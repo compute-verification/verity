@@ -17,10 +17,11 @@ NO_EPHEMERAL = {name: (0.0, 0.0) for name in SHAPES}
 
 
 def _measured_step() -> dict:
-    """ra-codec-tensor's step: one GPU, bf16 KV, no KV receipt, no binding, no host tier, no ephemeral traffic."""
+    """ra-codec-tensor's step: one GPU, bf16 KV, no KV receipt, no binding, no host tier, no ephemeral traffic, no
+    prompt to encode."""
     v = I.values()
     v.update(tau_kv={2: 0.0, 3: 0.0}, tau_bind=0.0, tau_bind_kv={2: 0.0, 3: 0.0}, eph_read=NO_EPHEMERAL,
-             eph_write=NO_EPHEMERAL, t_gap=0.0)
+             eph_write=NO_EPHEMERAL, t_gap=0.0, p_over_o=0.0)
     return v
 
 
@@ -45,18 +46,27 @@ def test_plain_step_is_the_measured_passes():
     assert 1.03 <= st["plain"] * v["R"] * 1e9 / (st["W"] + st["KV"]) <= 1.10
 
 
-@pytest.mark.parametrize("name, batch, read_mb, write_mb", [
-    ("8B", 1, 15.2, 108.9),  # r20261012-181016-6cbb, full depth
-    ("8B", 64, 94.5, 469.3),
-    ("70B", 1, 48.0, 492.2),  # r20261012-181715-5045, scaled to 80 layers
-    ("70B", 64, 712.8, 2267.3),
+@pytest.mark.parametrize("name, batch, read_mb, write_share", [
+    ("8B", 1, 14.0, 0.016),  # ra-ephemeral's fused arm, r20261012-184939-520e, full depth
+    ("8B", 64, 33.0, 0.010),
+    ("70B", 1, 41.0, 0.007),
+    ("70B", 64, 164.0, 0.008),
 ])
-def test_ephemeral_traffic_is_the_measured_bytes(name, batch, read_mb, write_mb):
+def test_ephemeral_traffic_is_the_measured_bytes(name, batch, read_mb, write_share):
     v = I.values()
-    st = step(Workload(SHAPES[name], batch, 2048, tp=1), Params(3, 4096, 16, 0, 0.0), v)
-    kv_append = batch * SHAPES[name].kv_bytes_per_token
-    assert st["eph_read"] / 1e6 == pytest.approx(read_mb, rel=0.12)
-    assert (st["eph_write"] - kv_append) / 1e6 == pytest.approx(write_mb, rel=0.12)
+    s = SHAPES[name]
+    st = step(Workload(s, batch, 2048, tp=1), Params(3, 4096, 16, 0, 0.0), v)
+    kv_append = batch * s.kv_bytes_per_token
+    reads = s.weight_bytes + batch * 2048 * s.kv_bytes_per_token + read_mb * 1e6
+    assert st["eph_read"] / 1e6 == pytest.approx(read_mb, rel=0.15)
+    assert (st["eph_write"] - kv_append) / reads == pytest.approx(write_share, rel=0.15)
+
+
+def test_the_unregistered_reads_are_ra_ephemerals_mu_eph():
+    v = I.values()
+    for name, batch, mu in (("70B", 16, 0.00061), ("8B", 64, 0.00162)):  # its worst timed fused points, at 2k
+        st = step(Workload(SHAPES[name], batch, 2048, tp=1), Params(3, 4096, 16, 0, 0.0), v)
+        assert st["eph_read"] / (v["R"] * 1e9 * st["plain"]) == pytest.approx(mu, rel=0.35)
 
 
 def test_gamma_terms_match_the_red_team():
@@ -207,6 +217,21 @@ def test_the_cpus_tile_work_adds_to_gamma_when_counted():
     v["mu_cpu"] = 0.005
     assert gamma_cap(w, p, v, st)["gamma"] == pytest.approx(g + 0.005)
     assert gamma_pass(w, p, v, st)["mu_cpu"] == 0.005
+
+
+def test_eta_counts_its_phases_only_against_r_t():
+    v = I.values(I.all_improved())
+    w = Workload(SHAPES["70B"], 16, 8192)
+    p = Params(3, 65536, 12, 0, 0.0)
+    st = step(w, p, v)
+    declared = gamma_cap(w, p, v, st)
+    against = gamma_cap(w, p, {**v, "eta_counted": True}, st)
+    phases = v["eta_decode"] + v["eta_prefill"] + v["eta_gaps"] + v["eta_idle"]
+    assert declared["mu_eta"] == 0.0 and against["gamma"] == pytest.approx(declared["gamma"] + phases)
+    assert against["eta_allowance"] == pytest.approx(declared["eta_allowance"])
+    assert I.values()["eta_decode"] + I.values()["eta_idle"] > 0.25  # stock vLLM, ra-kv-filler trace 1
+    assert not F.best(w, {**v, "eta_counted": True}, "cap", "C", (3,))["feasible"]
+    assert F.best(w, {**I.values(I.at_floor()), "eta_counted": True}, "cap", "C", (3,))["feasible"]
 
 
 def test_where_nothing_is_feasible_a_lever_is_scored_by_the_least_gamma():

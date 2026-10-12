@@ -140,18 +140,20 @@ INPUTS: dict[str, Input] = {
     "e_mem": Input(((1, 1.05), (32, 1.25)), "weight reads by M", "ra-codec-tensor: the plain step 1.05–1.08 passes; "
                    "native linears at M=32 read the weights 1.25 times", "measured"),
     # The step's ephemeral DRAM traffic, in bytes per layer × hidden: (a fixed part, a part per sequence in the batch).
-    "eph_read": Input({"8B": (106.0, 9.4), "70B": (54.0, 17.9), "405B": (106.0, 17.9)}, "B per layer·hidden",
-                      "ra-ephemeral: Nsight DRAM reads beyond the linears, the lm_head and the live KV, stock vLLM, "
-                      "full depth (8B r20261012-181016-6cbb, 70B r20261012-181715-5045; fit within ~10% over B1–64 × "
-                      "2k–32k); 405B the larger of each", "measured",
-                      {"8B": (0.0, 9.4), "70B": (0.0, 17.9), "405B": (0.0, 17.9)},
-                      "the linears reduce on chip: no split-K or stream-K workspace read back"),
-    "eph_write": Input({"8B": (754.0, 47.2), "70B": (692.0, 43.8), "405B": (754.0, 47.2)}, "B per layer·hidden",
-                       "ra-ephemeral: Nsight DRAM writes (GEMM workspaces, split-KV partials, the activations' "
-                       "write-backs), the same runs, scaled to full depth; 1.3–2.8% of 8B's reads", "measured",
-                       {"8B": (0.0, 11.8), "70B": (0.0, 11.0), "405B": (0.0, 11.8)},
-                       "no workspaces at decode, and evict-first on the weight and KV streams so the activations' "
-                       "lines are overwritten in L2 instead of written back (a quarter of them still are: estimate)"),
+    "eph_read": Input({"8B": (107.0, 2.3), "70B": (60.0, 2.5), "405B": (107.0, 2.5)}, "B per layer·hidden",
+                      "ra-ephemeral's fused arm (vLLM's default Inductor compilation): Nsight DRAM reads beyond the "
+                      "linears, the lm_head and the live KV, per graph at full depth, 8B 14–33 MB and 70B 41–164 MB "
+                      "at B1–64 2k (r20261012-184939-520e, art:8c12a22f; μ_eph 0.05–0.06% at 70B and 0.06–0.16% at "
+                      "8B where timed, r20261012-184455-2823); 405B the larger of each", "measured",
+                      {"8B": (0.0, 2.3), "70B": (0.0, 2.5), "405B": (0.0, 2.5)},
+                      "the fused step's fixed reads kept on chip (GEMM inputs, Triton's and attention's partials: "
+                      "estimate)"),
+    "eph_write": Input({"8B": (900.0, 6.0), "70B": (700.0, 6.5), "405B": (900.0, 6.5)}, "B per layer·hidden",
+                       "ra-ephemeral's fused arm: DRAM writes (GEMM workspaces, split-KV partials, the activations' "
+                       "write-backs) are 0.6–0.8% of reads at 70B and 0.4–1.6% at 8B, here as bytes from those shares "
+                       "(r20261012-184939-520e)", "derived",
+                       {"8B": (0.0, 6.0), "70B": (0.0, 6.5), "405B": (0.0, 6.5)},
+                       "no workspaces at decode, so a batch-1 step writes back only its activations (estimate)"),
     "write_bus": Input(1.0, "read-times per written byte", "a DRAM write holds the bus as long as a read (turnaround "
                        "not counted)", "estimate"),
     # The verifier's sample (μ_sample) and the counting slack (λ).
@@ -165,19 +167,33 @@ INPUTS: dict[str, Input] = {
                           "(eq/k)^k (ra-openings §2; a change to audit.bound, nothing in Lean)", "derived", True,
                           "name the certified blocks in the compression (ra-openings' proposal, λ ≈ H₂(γ)/(8n); "
                           "needs a Lean statement)"),
-    "horizon": Input(1, "windows", "a claim per 1-s window", "policy", 60,
-                     "a claim averaged over a minute (ra-openings' causal horizon bound; a window keeps its ≥ 2,761 "
-                     "openings, so each is still ≤ 1% alone; needs its Lean statement and Daniel's ruling)"),
+    "horizon": Input(1, "windows", "a claim per 1-s window", "policy", 600,
+                     "a claim averaged over 10 minutes (ra-openings' causal horizon bound: 31 openings a window, "
+                     "165 KB/s; needs its Lean statement and Daniel's ruling)"),
     "log2_inv_delta": Input(40.0, "bits", "δ = 2^-40 (ra-bandwidth-lean)", "policy"),
     "log2_q": Input(64.0, "bits", "q ≤ 2^64 oracle queries (ra-bandwidth-protocol 4c3352875: λ = 64k + 41)", "policy"),
     "x_from_transcript": Input(False, "switch", "the verifier takes z_{j−1} for an opened block from PoUW's "
                                "transcript instead of with the opening", "estimate", True,
                                "read z from PoUW's transcript"),
     "receipt_bits": Input(512, "bits", "a SHA-512 receipt", "policy"),
-    "eta_reserve": Input(0.0, "of capacity", "the audited engine's read shortfall under cap, unmeasured: the frontier "
-                         "reports what γ leaves for it. Stock vLLM 8B leaves η = 0.30–0.42 of R·T on two bursty "
-                         "traces, 0.27–0.34 with idle filler (ra-kv-filler 19:20Z): decode at 0.75–0.80 R, prefill, "
-                         "host gaps; ≤ 1% needs every phase to read at R itself", "estimate"),
+    # η, the share of R·T the honest engine leaves unread, by phase: stock vLLM 8B on ra-kv-filler's bursty trace 1
+    # (trace 2, decode-heavy, in each source; r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01).
+    "eta_counted": Input(False, "switch", "exhaustion against a declared load: the frontier's step reads at R by "
+                         "construction, so η is what γ leaves (``eta_allowance``); against R·T, γ adds the phases "
+                         "(with Daniel, STEERING 19:40Z)", "policy"),
+    "eta_decode": Input(0.190, "of R·T", "ra-kv-filler §7: decode steps read at 0.75 R (trace 2: 0.80 R, 0.172), "
+                        "the step's own shortfall", "measured", 0.05,
+                        "a decode step that reads at 0.95 R throughout, as the fused sketch GEMM does (estimate; a "
+                        "side stream nets only 0.0075 R per 1% of step time, ra-kv-filler)"),
+    "eta_prefill": Input(0.092, "of R·T", "ra-kv-filler §7: prefill reads at 0.041 R (trace 2: 0.095 R, 0.033)",
+                         "measured", 0.005,
+                         "weights re-streamed and sketched beside the compute-bound prefill at 0.95 R, about +0.9% of "
+                         "busy time (ra-kv-filler, estimate)"),
+    "eta_gaps": Input(0.040, "of R·T", "ra-kv-filler §7: the engine's host time between steps, median 0.38 ms a step "
+                      "(trace 2: 0.82 ms, 0.065)", "measured", 0.0,
+                      "the next step queued on the GPU before the host's output work (the engine's job, estimate)"),
+    "eta_idle": Input(0.095, "of R·T", "ra-kv-filler §7: no request running (trace 2: 0.034)", "measured", 0.005,
+                      "the idle top-up's plain read, which fills 0.88–0.95 of it at +0.1% TPOT (ra-kv-filler)"),
     "mu_cpu": Input(0.0, "of capacity", "the host CPUs' tile work (Daniel 18:55Z: a capacity to exhaust or count). "
                     "Under C they are counted: their squarings in μ_rebuild (h), their DRAM in ΣR, their caches as "
                     "per-pass state, and tile work buys nothing without bytes from off the node, which C excludes; "
@@ -196,8 +212,9 @@ INPUTS: dict[str, Input] = {
     "rtt": Input(0.020, "s", "ra-remote-driver's verifier round trip", "policy"),
     "n_session": Input(100, "windows", "ra-remote-driver's session of chained windows", "policy", 1000,
                        "sessions of 1,000 chained windows (17 minutes), so a padded pass's tail costs a tenth"),
-    "p_over_o": Input(0.0, "prompt tokens per output token", "the frontier's KV is written by decode: a step encodes "
-                      "only the token it appends", "policy"),
+    "p_over_o": Input(0.47, "prompt tokens per output token", "ra-kv-filler's decode-heavy trace 2 (93,312 prompt and "
+                      "200,192 output tokens): each step also encodes P/O prompt tokens a sequence, k·x₁ a byte over "
+                      "the reads it gets; the prompt encode was +7.3% / +11.0% of busy time at k = 2 / 3", "measured"),
 }
 
 # The floor: each lever past its realistic improvement to the best any measurement or bound supports, so that the
@@ -218,12 +235,14 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "v_budget": (10.0, "a 10 Gb/s verifier link"),
     "x_from_transcript": (True, "z from PoUW's transcript"),
     "lambda_named": (True, "named λ"),
-    "horizon": (600, "a claim averaged over 10 minutes"),
+    "eta_decode": (0.0, "every phase reads at R, as the frontier's step does"),
+    "eta_prefill": (0.0, "every phase reads at R"),
+    "eta_idle": (0.0, "every phase reads at R"),
 }
 
 # Values an input may take that make the frontier worse, each with why it is plausible.
 RISKS: dict[str, tuple[Any, str]] = {
-    "eta_reserve": (0.0025, "the honest prover reads at 99.75% of the adversary's best stream"),
+    "eta_counted": (True, "exhaustion against R·T: γ counts the honest engine's unread share by phase"),
     "b_host": (1024.0, "ra-host-tier's four halves of a socket at 256 GB/s (above DDR5-6400 spec, so only with faster "
                        "DIMMs the adversary may provision)"),
     "s_adv": (1.61, "the column form with every add free (ra-squaring-ceiling)"),
@@ -232,8 +251,8 @@ RISKS: dict[str, tuple[Any, str]] = {
     "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
     "v_budget": (1.0, "a 1 Gb/s verifier link"),
     "t_gap": (500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)"),
-    "p_over_o": (8.0, "prompts 8× the output: each step also encodes 8 prompt tokens a sequence (ra-kv-filler: the "
-                      "prompt encode is +17% / +25% of busy time at k = 2 / 3 on a vLLM trace)"),
+    "p_over_o": (3.63, "ra-kv-filler's trace 1 (160,256 prompt and 44,160 output tokens), where the prompt encode was "
+                       "+17% / +25% of busy time at k = 2 / 3"),
 }
 
 

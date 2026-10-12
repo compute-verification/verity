@@ -10,7 +10,8 @@ the ruling's reading, and the headline), ``pass/C`` (the design's per-pass γ, f
 with this codec). Each at three rounds (``k3``, the stated guarantee), at two (``k2``, the upgrade once assumption
 7 is measured) and at two masked (``k2m``, ra-codec-mix's σ_K). The sensitivity takes one lever at a time from today
 (scored by the least γ where nothing is feasible), the greedy path of levers from today, and reverts one at a time
-from projected. ``widths`` sweeps the word width with the rounds at 8B and 70B, beside the partial-completion margins.
+from projected; ``cap/C k3 R·T`` does the same with η counted against R·T, phase by phase. ``widths`` sweeps the word
+width with the rounds at 8B and 70B, beside the partial-completion margins.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ COPIES = (1, 2, 4, 8)
 BATCHES = (1, 4, 16, 64, 256)
 CONTEXTS = (2048, 8192, 32768, 131072)
 FRONTIERS = (("cap", "C"), ("pass", "C"), ("cap", "N"))
+ETA_PHASES = ("eta_decode", "eta_prefill", "eta_gaps", "eta_idle")
 WIDTHS = (256, 320, 384, 448, 512, 576, 640)
 WIDTH_WORKLOADS = (("8B", 1, 8192), ("8B", 16, 8192), ("8B", 64, 8192), ("70B", 1, 8192), ("70B", 16, 8192),
                    ("70B", 64, 8192))
@@ -67,7 +69,7 @@ def workloads(v: dict[str, Any]) -> list[Workload]:
 def best(w: Workload, v: dict[str, Any], definition: str, statement: str, ks: tuple[int, ...] = KS) -> dict[str, Any]:
     """The fastest point with γ ≤ 1% at rounds in ``ks``, or, if there is none, the point of least γ (``feasible``
     false)."""
-    limit = GAMMA_MAX - (v["eta_reserve"] if definition == "cap" else 0.0)
+    limit = GAMMA_MAX
     win: tuple | None = None
     least: tuple | None = None
     fit = layout(w, v)
@@ -114,7 +116,7 @@ def _point(w, p, st, g, link, definition, feasible, limit) -> dict[str, Any]:
         "plain_ms": plain * 1e3,
     }
     if definition == "cap":
-        out["eta_allowance"] = GAMMA_MAX - out["gamma"]
+        out["eta_allowance"] = GAMMA_MAX - out["gamma"] + terms["mu_eta"]
     else:
         out["d"] = g["d"]
         out["residual"] = g["residual"]
@@ -276,16 +278,32 @@ def main(argv: list[str] | None = None) -> int:
     frontiers = {name: {r: frontier(codec(I.values(inp), r), ks) for r, ks in ROUNDS.items()}
                  for name, inp in scenarios.items()}
     width_sweep = {name: widths(I.values(inp)) for name, inp in scenarios.items()}
-    sens = {f"{key} {r}": sensitivity(I.INPUTS, key, r, steps)
-            for key, r, steps in (("cap/C", "k3", 8), ("cap/C", "k2", 0), ("cap/C", "k2m", 0), ("pass/C", "k3", 0))}
+    rt = {**I.INPUTS, "eta_counted": replace(I.INPUTS["eta_counted"], value=True)}
+    sens = {label: sensitivity(inp, key, r, steps)
+            for label, key, r, steps, inp in (("cap/C k3", "cap/C", "k3", 8, I.INPUTS),
+                                              ("cap/C k2", "cap/C", "k2", 0, I.INPUTS),
+                                              ("cap/C k2m", "cap/C", "k2m", 0, I.INPUTS),
+                                              ("pass/C k3", "pass/C", "k3", 0, I.INPUTS),
+                                              ("cap/C k3 R·T", "cap/C", "k3", 0, rt))}
+    phases = {name: {n: I.values(inp)[n] for n in ETA_PHASES} for name, inp in scenarios.items()}
+    allowance = {name: [r["eta_allowance"] for r in frontiers[name][STATED]["cap/C"] if r["feasible"]]
+                 for name in scenarios}
     doc = {"schema": "verity/overhead-frontier/v1", "gamma_max": GAMMA_MAX, "stated_rounds": STATED,
            "inputs": describe(I.INPUTS),
            "floor_inputs": {n: {"value": v, "why": why} for n, (v, why) in I.FLOOR.items()},
            "grid": {"rounds": ROUNDS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "host_share": HOST_SHARES,
                     "copies": COPIES, "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512], "widths": WIDTHS,
                     "width_workloads": WIDTH_WORKLOADS},
-           "frontiers": frontiers, "widths": width_sweep, "sensitivity": sens}
+           "frontiers": frontiers, "widths": width_sweep, "sensitivity": sens,
+           "eta": {"phases": phases, "allowance_cap_C_k3": allowance}}
     (args.out / "frontier.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    print(f"\n== η by phase (of R·T) beside what the {STATED} cap/C frontier leaves for it")
+    for name in scenarios:
+        a = allowance[name]
+        left = (f"allowance median {100 * statistics.median(a):.2f}%, least {100 * min(a):.2f}% over {len(a)} feasible"
+                if a else "no feasible point")
+        print(f"  {name:9} " + " ".join(f"{n[4:]} {100 * x:.1f}%" for n, x in phases[name].items())
+              + f"  Σ {100 * sum(phases[name].values()):.1f}%  {left}")
     for name, rows in width_sweep.items():
         print(f"\n== widths {name} (cap/C; 8B and 70B at B1/B16/B64 ctx 8k; margins are k = 2's, estimates; k2m "
               f"ra-codec-mix's ≥ 1.5 at the floor)")
