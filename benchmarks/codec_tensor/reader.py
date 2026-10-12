@@ -35,7 +35,7 @@ SALT_DOMAIN = b"verity/store/salt/v0\0"
 # reader.cu's LOAD_* modes: the first four compute receipts, the last two are ceilings that read other bytes or none.
 LOADS = ("ldg", "l2_256", "prefetch", "warp", "hot", "none")
 EXACT = LOADS[:4]
-SEGMENTS = 16
+SEGMENTS = (2, 4, 16)
 
 
 def store_salt(key: bytes, seed: bytes, leaf: int) -> bytes:
@@ -215,8 +215,9 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     """One pass over gib GiB as a device reader does it, against reading the same bytes: receipts (z of zero bytes,
     and over half of it each block bound to a spread z the other half holds), leaves, the whole tree."""
     n = int(gib * 2 ** 30) // BLOCK // rb.PER_LEAF * rb.PER_LEAF
-    if (n // SEGMENTS) % rb.PER_LEAF or (u := n // SEGMENTS // rb.PER_LEAF) & (u - 1) or n % SEGMENTS:
-        raise ValueError(f"{gib} GiB is no {SEGMENTS} aligned segments")
+    for S in SEGMENTS:
+        if (n // S) % rb.PER_LEAF or (u := n // S // rb.PER_LEAF) & (u - 1) or n % S:
+            raise ValueError(f"{gib} GiB is no {S} aligned segments")
     data = torch.randint(-2 ** 31, 2 ** 31 - 1, (n * BLOCK // 4,), dtype=torch.int32, device="cuda")
     ys = torch.empty((n, 8), dtype=torch.int64, device="cuda")
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -235,14 +236,14 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     # The pass as the store reads it, in aligned segments: segment s's leaves and subtree on a side stream while
     # segment s + 1 is receipted, its root what end_pass takes. With `lanes`, consecutive segments' receipts go to
     # alternate streams, so one segment's last wave runs beside the next one's first.
-    count, side, roots = n // SEGMENTS, torch.cuda.Stream(), {}
+    side, roots = torch.cuda.Stream(), {}
     pair = (torch.cuda.Stream(), torch.cuda.Stream())
 
-    def segmented(lanes: int) -> None:
-        main = torch.cuda.current_stream()
+    def segmented(segments: int, lanes: int) -> None:
+        count, main = n // segments, torch.cuda.current_stream()
         for st in (*pair, side):
             st.wait_stream(main)
-        for s in range(SEGMENTS):
+        for s in range(segments):
             lane = pair[s % lanes]
             with torch.cuda.stream(lane):
                 reader.receipts(data[s * count * BLOCK // 4:], s * count, count, ys[s * count:])
@@ -251,12 +252,13 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
             with torch.cuda.stream(side):
                 side.wait_event(done)
                 c0 = s * count // rb.PER_LEAF
-                roots[s] = reader.levels(reader.commit(ys[s * count:], c0, count // rb.PER_LEAF), c0)[-1]
+                roots[segments, s] = reader.levels(reader.commit(ys[s * count:], c0, count // rb.PER_LEAF), c0)[-1]
         for st in (*pair, side):
             main.wait_stream(st)
 
-    steps[f"segmented/{SEGMENTS}"] = lambda: segmented(1)
-    steps[f"segmented/{SEGMENTS}/2"] = lambda: segmented(2)
+    for segments in SEGMENTS:
+        for lanes in (1, 2):
+            steps[f"segmented/{segments}/{lanes}"] = lambda segments=segments, lanes=lanes: segmented(segments, lanes)
     ms = {}
     for name, fn in steps.items():
         fn()
@@ -271,8 +273,8 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
             best.append(a.elapsed_time(b))
         ms[name] = min(best)
     full = reader.levels(reader.commit(ys, 0, n // rb.PER_LEAF), 0, pad=True)
-    h = (count // rb.PER_LEAF).bit_length() - 1
-    segment_roots = [digest(roots[s][0]) for s in range(SEGMENTS)] == [digest(x) for x in full[h]]
+    segment_roots = all([digest(roots[S, s][0]) for s in range(S)] == [digest(x) for x in full[merkle_depth(n // S // rb.PER_LEAF)]]
+                        for S in SEGMENTS)
     nbytes = n * BLOCK
     by_load = {load: {"gb_s": nbytes / ms[f"receipts/{load}"] / 1e6,
                       "z_gb_s": nbytes / (ms[f"receipts_z_half/{load}"] * n / half) / 1e6,
@@ -293,9 +295,8 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
         "leaves_and_tree_share": (ms["leaves"] + ms["tree"]) / reader_ms,
         "compressions_per_block": compressions / n,
         "segments": SEGMENTS, "segment_roots_match": segment_roots,
-        "tau_segmented_per_pass": ms[f"segmented/{SEGMENTS}"] / ms["read"],
-        "tau_segmented_2_per_pass": ms[f"segmented/{SEGMENTS}/2"] / ms["read"],
-        "commit_marginal_segmented_2": (ms[f"segmented/{SEGMENTS}/2"] - ms["receipts/warp"]) / ms["read"],
+        "tau_segmented_per_pass": {k.split("/", 1)[1]: v / ms["read"] for k, v in ms.items()
+                                   if k.startswith("segmented/")},
     }
 
 
