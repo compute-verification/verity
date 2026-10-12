@@ -226,6 +226,8 @@ def main() -> int:
         stock, plain, compiled = by.get("stock" + md, []), by.get("plain" + md, []), by.get("stock-c", [])
         base = (by.get(f"w{cod['word_bits']}-0" + md) if wide else None) or plain
         base_name = "wide k = 0" if base is not plain else "plain fragments"
+        if not base and md == "-c":
+            base, base_name = by.get("plain-d", []), "plain fragments compiled without autotuning (no plain -c arm)"
         untagged = by.get(f"{a['arm'][0]}{cod['word_bits']}-{a['k']}" + md, []) if cod.get("tag") else []
         uncommitted = by.get(config(a)[:-1] + md, []) if cod.get("commit") else []
         for b, ctx in keys:
