@@ -51,9 +51,9 @@ for d in $(find $S/v-claim -name circuit.txt -printf '%h\n' | sort); do
   cmp -s $d/registered.json $S/v-session/$rel/registered.json && cmp -s $d/pub.bin $S/v-session/$rel/pub.bin && continue
   u=$(head -1 $d/circuit.txt | cut -d' ' -f2)
   $LEAN_BIN verify --zk $(files $d) $(own $d) "${IN[@]}" --rec-inner-session $H/inner/prover \
-    --rec-inner-transcript $H/inner/public.json --session $SESS > $O2/cv.log 2>&1
+    --rec-inner-transcript $H/inner/public.json --session $SESS > $O2/cv-${u//\//_}.out 2> $O2/cv-${u//\//_}.err
   rc=$?
-  echo "$u exit $rc $(grep -h '^VERDICT' $O2/cv.log)" >> $O2/claim-verify.txt
+  echo "$u exit $rc $(grep -ho '"why":"[^"]*"' $O2/cv-${u//\//_}.out)" >> $O2/claim-verify.txt
   echo "verify claim $u exit $rc (1: refused)" | tee -a $X
 done
 cat $X $O2/claim-verify.txt
