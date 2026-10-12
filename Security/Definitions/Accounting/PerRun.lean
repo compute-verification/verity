@@ -153,10 +153,10 @@ end Run
 /-- Run `r`'s compute audit is Pearl-C's audit, with `t` tickets weighted by `w`, of an adversary of Pearl-C's game at
 `CM`, `P` and `U`, one adversary for each value of the other audits' coins, whose cost the priced sum covers: the
 compute account's work at price `p` plus `pRead` per bit it read from device memory. A cost model that charges its
-arithmetic and a price per word it first fetches (Pearl-C's W1 with fetches priced, `w1Priced`, or it on the machine
-that stops a run at its budget, `W1.w1Stop`) has its cost covered when its arithmetic is within the compute charge,
-the compute account's work, and its first fetches' price within the bandwidth charge, `pRead` per bit the compute
-account read. -/
+arithmetic and a price per word it first fetches (Pearl-C's W1 with fetches priced, `w1Priced`) has its cost covered
+when its arithmetic is within the compute charge, the compute account's work, and its first fetches' price within the
+bandwidth charge, `pRead` per bit the compute account read. A run that realizes the game at `CM` realizes it at
+`CM.withStop`, the proof device that stops a run at a budget, with the same adversary choosing no budget. -/
 structure RealizesPearlCPriced {Q R S : Type} (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S)
     (U : PearlC.Workload) (w : ℕ → ℕ) {t : ℕ} {ι : Type} {d : Device ι} {α ΩQ ΩS : Type} [Fintype α]
     (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ) where
