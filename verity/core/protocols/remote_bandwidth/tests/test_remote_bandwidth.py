@@ -51,9 +51,11 @@ def nonces():
     return lambda: next(count).to_bytes(32, "big")
 
 
-def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=None):
-    """Replay `schedule` against a session, the prover's passes computed as their roots arrive.  `run(prover, t, σ, i,
-    previous)` replaces the honest pass."""
+def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=None, plan=None,
+          sent=None):
+    """Replay `schedule` against a session, the prover's passes computed as their roots arrive.  `plan(t, i)` is pass
+    (t, i)'s plan (None: the whole store); `run(prover, t, σ, i, previous, plan)` replaces the honest pass, and
+    `sent(ps)` the runs sent with its root."""
     tiles = tiles or audit.NoiseTiles(96)
     prover = audit.Prover(store, tiles)
     clock = Clock()
@@ -67,10 +69,10 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
             if nxt is not None:
                 challenges[t + 1] = nxt
             continue
-        ps = (run or (lambda pr, *a: pr.run(*a)))(prover, t, challenges[t], i, previous)
+        ps = (run or (lambda pr, *a: pr.run(*a)))(prover, t, challenges[t], i, previous, plan and plan(t, i))
         passes[t, i] = ps
         previous = ps.root
-        if s.receive(t, i, ps.root) is not None:
+        if s.receive(t, i, ps.root, (sent or (lambda q: q.plan.runs))(ps)) is not None:
             break
     return s, prover, passes, clock
 
@@ -82,7 +84,7 @@ def finish(s: Session, prover: audit.Prover, passes, clock: Clock, open_=None):
         draws = s.close(t)
         if isinstance(draws, audit.Verdict):
             return out + [draws]
-        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], j) for i, j in draws]))
+        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in draws]))
         if not out[-1].accepted:
             return out
     return out
@@ -93,12 +95,62 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
     assert r.public() == {"block_bytes": 4096, "blocks": N, "passes": [4, 3, 3], "protocol": audit.PROTOCOL_ID,
-                          "registration": store.registration.digest.hex(), "span_ns": SCHEDULE.span_ns}
+                          "receipts": [4 * N, 3 * N, 3 * N], "registration": store.registration.digest.hex(),
+                          "span_ns": SCHEDULE.span_ns}
     w0 = r.profile()["windows"][0]
-    assert w0["passes"] == 4 and w0["released_ns"] == 0 and w0["deadline_ns"] == 1000 + 50 + 310
-    assert w0["profile"]["levels"] == [{"name": "pass", "query": None, "size": 4, "draw": None},
-                                       {"name": "receipt", "query": None, "size": N, "draw": {"subset": 7}}]
+    assert w0["lengths"] == [N] * 4 and w0["released_ns"] == 0 and w0["deadline_ns"] == 1000 + 50 + 310
+    assert w0["profile"]["levels"] == [{"name": "receipt", "query": None, "size": 4 * N, "draw": {"subset": 7}}]
     assert r.windows[1].released_ns == SCHEDULE.boundaries[0]
+
+
+def partial(t: int, i: int) -> receipts.Plan:
+    """A pass that reads blocks 5 … 19, then 0 … 2 backwards, skipping 3 and 4, and one more block each later pass."""
+    return receipts.Plan.of([*range(5, N), 2, 1, 0][:15 + i], N)
+
+
+def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store) -> None:
+    s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial)
+    assert passes[0, 1].plan.runs == ((5, 15), (2, 1)) and passes[0, 3].plan.runs == ((5, 15), (2, 1), (1, 1), (0, 1))
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r = s.record()
+    assert [w.lengths for w in r.windows] == [(15, 16, 17, 18), (15, 16, 17), (15, 16, 17)]
+    assert r.public()["receipts"] == [66, 48, 48]
+    g = audit.ledger(r, capacity_bytes_per_s=N * 4096 / 300e-9, chip_bytes=0)
+    assert g.timing == pytest.approx(1 - 162 * 4096 / (N * 4096 / 300e-9 * r.span_ns / 1e9))
+
+
+def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
+    plan = receipts.Plan(((7, 3), (0, 2), (12, 1)), N)
+    assert list(plan) == [7, 8, 9, 0, 1, 12] and [plan.block(p) for p in range(6)] == list(plan)
+    assert receipts.Plan.of(list(plan), N) == plan and plan.length == 6
+    assert plan.encode() == bytes.fromhex("00000003" + "%016x%016x" * 3 % (7, 3, 0, 2, 12, 1))
+    assert plan.digest == hashlib.sha512(receipts.PLAN_DOMAIN + plan.encode()).digest()
+    assert receipts.Plan.whole(N).runs == ((0, N),)
+    with pytest.raises(IndexError):
+        plan.block(6)
+
+
+@pytest.mark.parametrize("runs", [
+    ((0, 5), (3, 4)),            # block 3 twice
+    ((10, 5), (0, 11)),          # block 10 twice, in a later run
+    ((15, 6),),                  # past the store
+    ((0, 0),),                   # an empty run
+    ((0, 3), (3, 2)),            # one run written as two
+    (),                          # no blocks
+    ([0, 5],),                   # not a run
+    ((0, True),),
+])
+def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
+    s = Session(params(), SOURCE, store.registration, audit.NoiseTiles(96), clock=Clock(), nonce=nonces())
+    s.start()
+    assert s.receive(0, 0, bytes(64), runs) == audit.Verdict(0, False, "plan")
+
+
+def test_receipts_committed_under_another_plan_reject(store) -> None:
+    """A prover whose trees commit every block but which sends a plan of the first 16 (one whole leaf, so every opened
+    leaf has the size the sent plan gives it) fails on the receipt path: the tree's binding is the plan's digest."""
+    s, prover, passes, clock = drive(store, params(), SCHEDULE, sent=lambda ps: ((0, 16),))
+    assert finish(s, prover, passes, clock)[0].failure == "receipt-path"
 
 
 def test_the_ledger_counts_every_gamma_term(store) -> None:
@@ -111,7 +163,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.timing == pytest.approx(1 - SCHEDULE.utilization)
     assert g.sample == 0                                  # every receipt opened
     assert g.chip == pytest.approx(r.passes * 4096 / whole)
-    assert g.counting == pytest.approx((64 * r.passes * N + 41 * r.passes) / 8 / whole)
+    assert g.counting == pytest.approx((64 * r.receipts + 41 * r.passes) / 8 / whole) and r.receipts == r.passes * N
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + 0.002)
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES)
     with pytest.raises(ValueError, match="understated"):
@@ -170,8 +222,8 @@ def test_seeds_chain_from_the_registration_and_across_windows(store) -> None:
 def test_unchained_passes_are_rejected(store) -> None:
     """A prover that computes every pass's receipts from the registration's digest, so one read of each block could
     serve every pass, fails on the first opening in a later pass."""
-    def unchained(pr, t, challenge, i, previous):
-        return pr.run(t, challenge, i, store.registration.digest)
+    def unchained(pr, t, challenge, i, previous, plan):
+        return pr.run(t, challenge, i, store.registration.digest, plan)
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, run=unchained)
     verdicts = finish(s, prover, passes, clock)
     assert verdicts[-1] == audit.Verdict(0, False, "receipt-path", (1, 0))
@@ -217,8 +269,8 @@ def test_draws_wait_for_final_roots(store) -> None:
 
 
 def _tampered(field_: str, value):
-    def open_(p, j, *, prover):
-        return dataclasses.replace(prover.open(p, j), **{field_: value(prover.open(p, j))})
+    def open_(ps, p, *, prover):
+        return dataclasses.replace(prover.open(ps, p), **{field_: value(prover.open(ps, p))})
     return open_
 
 
@@ -230,12 +282,12 @@ def _tampered(field_: str, value):
     ("block", lambda o: bytes([o.block[0] ^ 1]) + o.block[1:], "payload-path"),
     ("payload_path", lambda o: tuple(reversed(o.payload_path)), "payload-path"),
     ("tile", lambda o: b"not PoUW's evidence", "tile"),
-    ("block_index", lambda o: o.block_index + 1, "malformed"),
+    ("position", lambda o: o.position + 1, "malformed"),
 ])
 def test_a_bad_opening_rejects(store, field_, value, failure) -> None:
-    s, prover, passes, clock = drive(store, params(), SCHEDULE)
+    s, prover, passes, clock = drive(store, params(), SCHEDULE, plan=partial)
     open_ = _tampered(field_, value)
-    verdicts = finish(s, prover, passes, clock, open_=lambda p, j: open_(p, j, prover=prover))
+    verdicts = finish(s, prover, passes, clock, open_=lambda ps, p: open_(ps, p, prover=prover))
     assert verdicts[0].failure == failure and not verdicts[0].accepted
     with pytest.raises(SessionError):
         s.record()
@@ -244,7 +296,7 @@ def test_a_bad_opening_rejects(store, field_, value, failure) -> None:
 def test_a_receipt_without_the_tiles_output_rejects(store) -> None:
     """Receipts made with a z PoUW's check does not recompute (here, zeros) open with good paths and fail the receipt."""
     class Zeros(audit.NoiseTiles):
-        def output(self, seed, j):
+        def output(self, seed, p):
             return bytes(self.z_bytes)
     s, prover, passes, clock = drive(store, params(), SCHEDULE, tiles=Zeros(96), verifier_tiles=audit.NoiseTiles(96))
     assert finish(s, prover, passes, clock)[0].failure == "receipt"

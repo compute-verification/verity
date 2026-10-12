@@ -4,7 +4,8 @@
 Payload blocks are generated, not stored: payload `j` is 64 words, word w the first 64 bytes of
 `SHA512("verity/remote-bandwidth/test-payload/v0\\0" ‖ u64be j ‖ u32be w)` with its top byte cleared (below p), and
 payload 0 is all zeros (the weights may be).  A GPU receipter fills its store with the same payloads, encodes them
-under the pinned codec seed, and checks its blocks, receipts and roots against these.
+under the pinned codec seed, and checks its blocks, receipts and roots against these.  The chain's middle pass reads a
+partial plan out of store order, so its receipt for position p is block plan[p]'s and its tree has 10 positions.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ NODE = b"verity remote bandwidth vector node"
 NONCE = bytes(range(32))
 CHALLENGE = bytes(range(32, 64))
 BLOCKS = 21
+PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
 
 
 def payload(j: int) -> bytes:
@@ -46,13 +48,16 @@ def generate() -> dict:
     tiles = audit.NoiseTiles(96)
 
     chain, previous = [], reg.digest
-    for i in range(3):
+    for i, plan in enumerate(PLANS):
         s = receipts.seed(CHALLENGE, i, previous)
         receipter = receipts.Receipter(s)
-        ys = [receipter(j, e, tiles.output(s, j)) for j, e in enumerate(blocks)]
-        root = receipts.tree(s, ys).commitment.root
+        ys = [receipter(j, blocks[j], tiles.output(s, p)) for p, j in enumerate(plan)]
+        root = receipts.tree(s, plan, ys).commitment.root
         chain.append({"i": i, "previous": previous.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
-                      "z_1": tiles.output(s, 1).hex(), "y_0": ys[0].hex(), "y_1": ys[1].hex(), "y_20": ys[20].hex(),
+                      "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),
+                      "plan_digest": plan.digest.hex(), "binding": receipts.binding(s, plan).hex(),
+                      "z_1": tiles.output(s, 1).hex(),
+                      "y": {str(p): ys[p].hex() for p in (0, 1, plan.length - 1)},
                       "receipts_sha512": _sha(b"".join(ys)), "root": root.hex()})
         previous = root
 

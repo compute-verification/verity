@@ -1,7 +1,7 @@
 # The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`)
 
-A verifier with no hardware at the site certifies, window by window, how many full reads of a node's registered store
-the node made. The node's memory is its GPUs' HBM and its host's DRAM. The verifier's draws come from its own secret
+A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered blocks the
+node made. The node's memory is its GPUs' HBM and its host's DRAM. The verifier's draws come from its own secret
 (live coins, no Fiat–Shamir). No prover hardware is trusted: the host, its CPUs and its NICs are all part of the
 prover. The code is `audit.py` (the lifecycle), `receipts.py` (the seed chain, receipts and trees), `codec.py` (the
 store's encoding) and `timing.py` (the honest schedule). Every byte format below is pinned by `tests/vectors.json`.
@@ -10,11 +10,11 @@ This is a reference implementation: pure Python, with openings checked in the cl
 
 ## 1. What an accepted session certifies
 
-Let \(N\) be the store's blocks, \(b = 4096\) bytes each. An accepted window \(t\) certifies \(P_t\) passes. Each pass
-is a set of \(N\) receipts, one per block, made after the previous pass's root existed and before this pass's root was
-sent. All \(P_t\) roots arrived in \([r_t, D_t]\) on the verifier's clock, where \(r_t\) is when the window's challenge
-left. Except with probability \(\delta\) per window, at most \(m^*_t\) of the window's \(P_t N\) receipts are wrong
-(`IntegrityProfile.bound`).
+Let \(N\) be the store's blocks, \(b = 4096\) bytes each. An accepted window \(t\) certifies \(P_t\) passes. Pass \(i\)
+is a plan of \(L_i\) distinct blocks and their \(L_i\) receipts, made after the previous pass's root existed and before
+this pass's root was sent; a pass over the whole store has \(L_i = N\). All \(P_t\) roots arrived in \([r_t, D_t]\) on
+the verifier's clock, where \(r_t\) is when the window's challenge left. Except with probability \(\delta\) per
+window, at most \(m^*_t\) of the window's \(U_t = \sum_i L_i\) receipts are wrong (`IntegrityProfile.bound`).
 
 `ledger` turns that into γ, given the node's measured capacity \(R\) (HBM plus host DRAM read bandwidth) and on-chip
 storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{n-1} - r_0\), the reads of registered data are at
@@ -26,7 +26,7 @@ least \((1 - \gamma) R \Sigma\), with
 
 | term | what it is | where it comes from |
 | --- | --- | --- |
-| \(\mu_{\text{timing}}\) | \(1 - \sum_t P_t N b / (R\Sigma)\): the span the passes don't fill (round trip, the tail, chaining gaps) | the record |
+| \(\mu_{\text{timing}}\) | \(1 - \sum_t U_t b / (R\Sigma)\): the span the receipts don't fill (round trip, the tail, chaining gaps, blocks a plan leaves out) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
 | \(\lambda\) | AuditRO's slack: `queries_log2` bits per certified receipt and `slack_log2` per pass | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
@@ -44,8 +44,9 @@ undeclared tensor-class hardware takes part.
 
 ## 2. Roles and parameters
 
-- **The prover** is the node. It registers a store, runs passes over it (inference reads every weight block and KV page
-  once a decode step, topped up with filler reads), commits each pass's receipts, and opens what the verifier draws.
+- **The prover** is the node. It registers a store, runs passes over it (inference reads every weight block and the
+  live KV pages once a decode step, topped up with filler reads), sends each pass's plan, the blocks it read, with the
+  root of its receipts, and opens what the verifier draws.
 - **The verifier** is remote. It holds a secret `source` and a clock, draws every challenge, nonce, codec seed and
   opening from them, and checks.
 
@@ -104,31 +105,55 @@ Pass \(i\) of window \(t\) (`receipts.py`):
 ~~~text
 seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ root_(t,i−1))
             root_(t,−1) = root_(t−1,last); root_(0,−1) = Registration.digest
-y_(i,j)     SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j))))
+plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
+            the one before it ends.  Position p is the p-th block of the runs concatenated; L_i positions in all.
+            digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
+y_(i,p)     SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,p)))),
+            j = plan_(t,i)[p]
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
-leaf c      y_(16c) ‖ … ‖ y_(16c+15), the last leaf short
-root_(t,i)  frame-v3-sha512, CommitmentDomain(seed_(t,i), 0, positions 0 … ⌈N/16⌉ − 1, "sha512"),
-            schema "verity/remote-bandwidth/receipts/v0"
+leaf c      y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short
+root_(t,i)  frame-v3-sha512, CommitmentDomain(SHA512("verity/remote-bandwidth/receipt-tree/v0\0" ‖ seed_(t,i) ‖ plan
+            digest), 0, positions 0 … ⌈L_i/16⌉ − 1, "sha512"), schema "verity/remote-bandwidth/receipts/v0"
 ~~~
 
 `Z` zero-pads to 128 bytes, so the seed fills the first SHA-512 block. No state over a block's bytes exists before the
 seed, and the seed exists only after the previous pass's root.
 
-The prover sends each root as its pass ends (`Session.receive`). On a boundary message, it finishes the pass in flight,
-which is its window's last, and chains the next window's first pass from that pass's root. A root out of sequence (a
-skipped index, a root for a window whose challenge hasn't been sent, a root for a window already final) rejects with
-`order`.
+The prover sends each root with its pass's plan as the pass ends (`Session.receive`). On a boundary message, it
+finishes the pass in flight, which is its window's last, and chains the next window's first pass from that pass's
+root. A root out of sequence (a skipped index, a root for a window whose challenge hasn't been sent, a root for a
+window already final) rejects with `order`; a plan that breaks its format rejects with `plan`.
 
-**\(z_{(i,j)}\)** is PoUW's noised output of the tile the prover computes before block \(j\) in pass \(i\) (`Tiles`).
-Two choices in it are load-bearing:
+**The plan** is the prover's choice and public. A decode step reads every weight block and only the live KV pages, and
+a block being written in the pass can't be receipted as registered, so a pass need not cover the store; the record
+credits each pass with its plan's \(L_i\) blocks, no more. Three rules make that sound:
+
+- **Distinct blocks.** Two positions on one block would let one read serve two receipts. The verifier checks it on
+  receipt, in \(O(R \log R)\) for \(R\) runs, so the plan must be in the clear. (Committing the block indices in
+  increasing order beside the receipts and checking sampled neighbours doesn't enforce it: \(0, \dots, N-1, 0, \dots,
+  N-1\) credits the store twice with one descent, a neighbour pair the draws find with probability about
+  \(s/2N\).)
+- **Bound to the root.** The tree's binding is the seed and the plan's digest, and its size is \(\lceil L_i/16\rceil\)
+  leaves, so a root opens only under the plan sent with it, and the next pass's seed chains from both.
+- **Canonical.** No two consecutive runs continue each other, so a read sequence has one plan and one digest
+  (`Plan.of` builds it from block indices in read order, the prover-side registry's form).
+
+The prover may choose the plan after reading, since it is credited only with what it receipts and every receipt is
+sampled; what it can't do is credit one read twice.
+
+**\(z_{(i,p)}\)** is PoUW's noised output of the tile the prover computes before the pass's \(p\)-th read (`Tiles`).
+Three choices in it are load-bearing:
 
 - **PoUW's noise for a pass is derived from the pass's seed,** so \(z\) differs every pass even when the weights and
   activations don't (all-zero weights). Otherwise a pass's \(z\) would be known before its seed.
+- **Each position has its own tile,** so distinct receipts bind independent \(z\). If one \(z\) served \(n\)
+  receipts, shipping it across a link would unlock \(n b\) bytes of receipts, and \(\mu_{\text{link}}\)'s \(b/|z|\)
+  would not hold.
 - **\(z\) enters elementwise, before any compression.** The block and \(z\) must then meet in one place for each
   receipt, so a relay between them carries \(\min(|z|, b)\) bytes per block. Hashing a digest of \(z\) instead would let
   a 64-byte midstate cross.
 
-`NoiseTiles` is the stub: SHA-512 in counter mode over the seed and \(j\), with empty evidence. Deployed, `output` is
+`NoiseTiles` is the stub: SHA-512 in counter mode over the seed and \(p\), with empty evidence. Deployed, `output` is
 the GPU's tile output and `recompute` is PoUW's check of a sampled tile.
 
 ## 5. Deadlines
@@ -149,22 +174,24 @@ unchained windows open at once would let one read of a block serve both windows'
 ## 6. Openings and the accept rule
 
 Once window \(t\)'s roots are final (the next window's first root has arrived, or \(D_t\) has passed), the verifier
-draws \(s\) distinct receipts uniformly from the window's \(P_t N\) (`Session.close`):
-`K_t.subset(min(s, P_t·N), P_t·N, "openings")`, with unit \(u\) as (pass, block) \(= \text{divmod}(u, N)\). A window
-with fewer than `min_passes` roots is rejected (`few`).
+draws \(s\) distinct receipts uniformly from the window's \(U_t\) (`Session.close`):
+`K_t.subset(min(s, U_t), U_t, "openings")`, with unit \(u\) as (pass, position): pass \(i\) is the first whose prefix
+sum \(L_0 + \dots + L_i\) exceeds \(u\), and the position is \(u\) less the passes before it. A window with fewer than
+`min_passes` roots is rejected (`few`).
 
-The prover opens each draw (`Prover.open`, `Opening`): the block \(E_j\), its receipt leaf with the leaf's path to
-\(\text{root}_{(t,i)}\), the payload's path to the payload root, and PoUW's evidence for \(z_{(i,j)}\). Openings aren't
-timed, because the roots already bind every receipt.
+The prover opens each draw (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
+leaf with the leaf's path to \(\text{root}_{(t,i)}\), the payload's path to the payload root, and PoUW's evidence for
+\(z_{(i,p)}\). Openings aren't timed, because the roots already bind every receipt.
 
 The verifier checks each opening in order (`Session.verify`):
 
 1. the indices are the draw's and every field has its size (`malformed`);
-2. the leaf, under \(\text{seed}_{(t,i)}\), which it computes from \(\sigma_t\) and the received roots, has its path to
-   \(\text{root}_{(t,i)}\) (`receipt-path`);
-3. the block's words are canonical (`codec`), and their decoding has its path to the payload root (`payload-path`);
-4. PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
-5. \(y_{(i,j)}\), recomputed from the block and \(z\), is the leaf's receipt for \(j\) (`receipt`).
+2. the leaf, under \(\text{seed}_{(t,i)}\), which it computes from \(\sigma_t\) and the received roots, and the plan
+   received with the root, has its path to \(\text{root}_{(t,i)}\) (`receipt-path`);
+3. the block's words are canonical (`codec`), and their decoding has its path to the payload root at \(j\)
+   (`payload-path`);
+4. PoUW's check recomputes \(z_{(i,p)}\) from the evidence (`tile`);
+5. \(y_{(i,p)}\), recomputed from \(j\), the block and \(z\), is the leaf's receipt at \(p\) (`receipt`).
 
 A window is accepted only if every opening checks. A rejected window ends its session: every later call is refused,
 and nothing of the session is recorded.
@@ -172,12 +199,13 @@ and nothing of the session is recorded.
 ## 7. The record
 
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, \(N\),
-\(b\), each window's passes and the session's span. Each `WindowRecord` carries its passes, \(r_t\), \(D_t\) and an
-`IntegrityProfile`.
+\(b\), each window's passes and receipts \(U_t\), and the session's span. Each `WindowRecord` carries its passes'
+lengths \(L_i\), \(r_t\), \(D_t\) and an `IntegrityProfile`.
 
-**How `IntegrityProfile` fits.** It fits the openings exactly. The levels are `pass` (\(P_t\) members) and `receipt`
-(\(N\) inside each), with `Subset(s)` drawn at the checked level. That is valid because every pass's root is committed
-before the draw, and `bound()` is \(m^*_t\).
+**How `IntegrityProfile` fits.** It fits the openings exactly. The one level is `receipt`, \(U_t\) members, with
+`Subset(s)` drawn. That is valid because every pass's root and plan are committed before the draw, and `bound()` is
+\(m^*_t\). A level of passes above it would only group (the subset is uniform over all \(U_t\)), and a profile's
+hierarchy has one fan-out per level, which passes of different lengths don't have.
 
 It doesn't fit the rest of γ: the timing, chip, rebuild, host and link terms aren't a sampling design over units. So,
 as the core protocol interface provides for a protocol whose acceptance isn't only a sampling design, the protocol's
@@ -193,12 +221,20 @@ plus the node's capacities.
   so at small-batch decode a relay saves far more than it ships. Binding \(k\)-slice accumulators gives \(4m/k_s\),
   at least 1 for batch \(\ge k_s/4\). That needs PoUW's conjecture for partial accumulators. The reference takes
   \(z\) as bytes of any length.
-- **The schedule.** Which tile precedes block \(j\) in a pass is the prover-side registry's (ra-vllm-hooks). `Tiles`
-  takes it as given.
+- **The schedule.** Which tile precedes position \(p\) of a pass is the prover-side registry's (ra-vllm-hooks).
+  `Tiles` takes it as given.
+- **The plan on the wire.** \(4 + 16R\) bytes a pass. A decode step's plan is one run for the weights (if they are
+  registered in read order), a run or a few per KV layer's live pages, and the filler's: hundreds of bytes per pass,
+  so tens of kB/s at 20–150 ms passes, beside the openings' Gb/s. The verifier's check is \(O(R \log R)\) a pass.
+- **What the plan shows.** The plan is in the clear, so the verifier sees which KV pages were live in each pass: the
+  batch's shape and context lengths over time, not their contents. Hiding it means committing the plan and proving its
+  distinctness and each opening's \(j = \text{plan}[p]\) in zero knowledge, with only \(L_i\) public (the draws need
+  it). That is open.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so it can't be bound by
   registration order the way weights and filler are. It is bound only by integrity: sampled proofs prove it is the
   model's actual computation. The reference registers a fixed store. Appending pages needs their payload roots in the
-  chain and fresh store indices.
+  chain and fresh store indices. Until then, a block being rewritten stays out of every plan, as the prover-side
+  registry already does with blocks a write has touched.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps the chaining gap to an all-gather and a few hashes.
 - **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are a cheaper receipt. Two rules apply to them:
@@ -219,8 +255,9 @@ plus the node's capacities.
 Without the chain, one challenge serves the whole window: every pass's seed is known at once, and one read of
 \(E_j\) serves every pass's receipt. A window then forces one read of the store, whatever \(P\) is. With the chain,
 pass \(i+1\)'s receipts need \(\text{root}_i\), which needs every receipt of pass \(i\). So a window forces \(P_t\)
-reads of the store, one after another. On-chip storage carries at most \(S_{\text{chip}}\) across each pass boundary
-(\(\mu_{\text{chip}}\)), so each pass reads at least \(N b - S_{\text{chip}}\) bytes.
+passes, one after another, each over its plan's distinct blocks. On-chip storage carries at most \(S_{\text{chip}}\)
+across each pass boundary (\(\mu_{\text{chip}}\)), so pass \(i\) reads at least \(L_i b - S_{\text{chip}}\) bytes; a
+prover gains nothing from short passes, since each costs another \(S_{\text{chip}}\).
 
 The chain costs a gap \(g\) per pass: the root's reduction, an all-gather across GPUs, the next seed and its broadcast,
 about 25–100 µs. Prefetching the next pass's first blocks on chip during the gap hides up to \(S_{\text{chip}}/R\)

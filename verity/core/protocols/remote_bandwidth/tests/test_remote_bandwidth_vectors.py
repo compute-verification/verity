@@ -29,13 +29,14 @@ def test_vectors_are_reproduced() -> None:
     assert rv.generate() == json.loads(rv.PATH.read_text())
 
 
-def test_vectors_cover_zero_weights_a_short_last_leaf_and_a_chain() -> None:
+def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_a_chain() -> None:
     pinned = json.loads(rv.PATH.read_text())
     assert pinned["codec"]["words"][0]["payload"] == "00" * 64
-    assert rv.BLOCKS % 16 == 5
+    assert rv.BLOCKS % 16 == 5 and rv.PLANS[1].length % 16 == 10 and list(rv.PLANS[1])[:2] == [16, 17]
     chain = pinned["chain"]["passes"]
     assert chain[0]["previous"] == pinned["registration"]["digest"]
     assert all(b["previous"] == a["root"] for a, b in zip(chain, chain[1:]))
+    assert chain[0]["plan_digest"] == chain[2]["plan_digest"] != chain[1]["plan_digest"]
 
 
 def test_codec_is_kv_v0_at_p512() -> None:
