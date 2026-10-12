@@ -28,6 +28,10 @@ definitions land.
   PoUS's error `δ + 2^-129 + 2^-130`, so `δ + 2^-129 + 2^-130 + 105 · 2^-k`.
 * `AddsIsolated`, `AddsOnIsolated`, `AddsP2RingIsolated`: the three at `H = 0`, perfect isolation, where an accept
   gives `q < M − S + k`.
+* `CountingAdvice`, `AddsAdvice`, `AddsAdviceOn`, `AddsAdviceP2Ring`: the counting core and the three with advice,
+  `z` read from the state and `a` more bits (`DeterminesAdvice`), any function of `z` and the run's outcome with at most
+  `2^a` values, at a cost of `a` bits: an accept gives `q < M − (S − H) + k + a`. A state reads at most `2^a` values
+  under all advice, so the fibres still sum to at most `2^(M + H + a)` states.
 
 The probability is over `z`, uniform over `q` bits, and PoUS's outcome (the primitive, the encoder's coins and the
 challenges), independently: `z` is fixed before setup, as `W` is, and `W` does not depend on it. The proofs are in
@@ -128,6 +132,56 @@ def AddsP2RingIsolated : Prop :=
       Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Pous.seqAcceptsOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W (A₁ x.1) (A₂ x.1) x.2 ∧
             ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + k) ≤
+        ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
+
+/-- **The counting core with advice.** For every map `π` reading a `q`-bit value from an `M`-bit state and `a` bits of
+advice, at most `2^(q − k)` of the `2^q` values leave more than `2^(M + a − q + k)` states that read them with some
+advice (`fibreAdvice π z`). Each state reads at most `2^a` values, so the fibres hold at most `2^(M + a)` states in
+all. -/
+def CountingAdvice : Prop :=
+  ∀ (M a q k : ℕ) (π : (Fin M → Bool) → (Fin a → Bool) → Fin q → Bool),
+    2 ^ k * (Finset.univ.filter fun z => 2 ^ (M + a + k - q) < (fibreAdvice π z).card).card ≤ 2 ^ q
+
+/-- **Memory adds with advice.** `Adds` with `z` read back before every challenge from the `(M + H)`-bit state and
+`a` bits of advice (`DeterminesAdvice`): the audit accepts while `q + S ≥ M + H + a + k` with probability at most
+`δ + ε + c · 2^-k`, so an accept gives `q < M − (S − H) + k + a` when `H ≤ S`. -/
+def AddsAdvice : Prop :=
+  ∀ {I : Pous.IdealModel} (sch : Pous.Scheme I) (S D Q c : ℕ) (δ ε : ℝ≥0∞),
+    Pous.AuditSecure sch .sequential S D Q c δ ε →
+    ∀ (M H a q k : ℕ) (W : Pous.Bits sch.n) (π : ℕ → Pous.Bits (M + H) → Pous.Bits a → Pous.Bits q)
+      (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + H)) (A₂ : Pous.Bits q → Pous.SeqResponder sch (M + H) D Q),
+      DeterminesAdvice sch c W π A₁ (fun z => (A₂ z).step) →
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
+          Pous.seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + H + a + k) ≤
+        δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
+
+/-- **Memory adds with advice, in the ring model.** `AddsAdvice` with `AuditSecureOn` and `(D, Q, L)`-bounded
+responders. -/
+def AddsAdviceOn : Prop :=
+  ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (S D Q L c : ℕ) (δ ε : ℝ≥0∞),
+    Pous.AuditSecureOn sch .sequential S D Q L c δ ε →
+    ∀ (M H a q k : ℕ) (W : Pous.Bits sch.n) (π : ℕ → Pous.Bits (M + H) → Pous.Bits a → Pous.Bits q)
+      (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + H))
+      (A₂ : Pous.Bits q → Pous.SeqResponderOn sch (M + H) D Q L),
+      DeterminesAdvice sch c W π A₁ (fun z => (A₂ z).step) →
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
+          Pous.seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + H + a + k) ≤
+        δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
+
+/-- **Memory adds with advice at P2's deployed point.** `AddsP2Ring` with `a` bits of advice: an accept gives
+`q < M − (⌊ρ·|C|⌋ − H) + k + a` except with `δ + 2^-129 + 2^-130 + 105 · 2^-k`. -/
+def AddsAdviceP2Ring : Prop :=
+  ∀ D Q L, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (M H a q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
+      (π : ℕ → Pous.Bits (M + H) → Pous.Bits a → Pous.Bits q)
+      (A₁ : Pous.Bits q → Pous.Preprocessor (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) (M + H))
+      (A₂ : Pous.Bits q →
+        Pous.SeqResponderOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) (M + H) D Q L),
+      DeterminesAdvice (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W π A₁ (fun z => (A₂ z).step) →
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+          Pous.seqAcceptsOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W (A₁ x.1) (A₂ x.1) x.2 ∧
+            ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ <
+              M + H + a + k) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
 
 end Accounting.Guarantees.Memory
