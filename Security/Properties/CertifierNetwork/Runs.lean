@@ -219,7 +219,8 @@ def AcceptedObservations (cfg : Config) (key : Lms.PrivateKey) (device : DeviceI
 
 /-- The accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`, or some accepted run carries a
 break: two distinct strings it hashes with one SHA-512 digest, or a certificate that verifies under the device's key
-over its message in the run's session, which the device never signed in that run. -/
+over its message in the run's session, which the device never signed in that run (the module docstring reads it
+across the key's runs). -/
 def ObservationsBounded (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat}
     {In Ac : Type} [Fintype Ac] (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat) : Prop :=

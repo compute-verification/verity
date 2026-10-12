@@ -18,7 +18,8 @@ from typing import Literal
 __all__ = ["ENTRIES", "INSTANCES", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
 
 Kind = Literal["guarantee", "assumption", "model"]
-Standing = Literal["standard", "algebraic", "proven", "conjectured"]
+# ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement (Daniel, 8 Oct)
+Standing = Literal["standard", "algebraic", "proven", "conjectured", "measured"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +122,28 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "and the host keeps the device's persistent state (its next LMS leaf and the session ids it has started) from "
           "being rolled back", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
+    # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
+    # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
+    Entry("pous-ring-device", "model",
+          "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
+          "setup, the session and its rounds, with one session per audit and the memory challenger's coins drawn online, "
+          "after its state is fixed", "PoUS ring device"),
+    # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
+    # the timing red team's floor, note:20261004T2102Z-report-relay-p2-redteam-timing
+    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
+    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
+    # stated device falsifies it
+    Entry("pous-ring-speed", "assumption",
+          "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
+          "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
+          "sequential multiplication round (one root's depth, so D = 16,446), more than Q = 2^20 key queries or more than "
+          "L = 2^64 ring operations per answer; measured: a cooperating 8-core 16,448-bit squaring takes at least 103.6 ns, "
+          "so 16,447 rounds take 1.995× Δ + RTT, and 1.64× and 1.25× under the timing red team's sync model",
+          "PoUS ring speed", "measured"),
+    Entry("pous-ring-instantiation", "assumption",
+          "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
+          "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
+          "conjectured"),
 )}
 
 

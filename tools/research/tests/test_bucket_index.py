@@ -216,3 +216,89 @@ def test_the_cli_builds_the_index_from_a_directory(tmp_path, capsys):
     assert main(["index", "--store", str(tmp_path / "store"), "--from", str(b), "--db", str(db), "--json"]) == 0
     rep = json.loads(capsys.readouterr().out)[0]
     assert rep["added"] == {"artifact": 1, "run": 0, "label": 1} and rep["size"]["records"]["rows"] == 2
+
+
+def test_pg_env_takes_the_url_apart_and_values_and_copy_text_round_trip():
+    url = "postgresql://store_indexer:p%40ss%2Fw@ep-x.eu-central-1.aws.neon.tech/store?sslmode=require&channel_binding=require"
+    assert BI.pg_env(url) == {"PGHOST": "ep-x.eu-central-1.aws.neon.tech", "PGPORT": "5432", "PGDATABASE": "store", "PGUSER": "store_indexer",
+                              "PGPASSWORD": "p@ss/w", "PGSSLMODE": "require", "PGCHANNELBINDING": "require"}
+    assert BI.pg_env("postgresql://u@/store?host=/run/pg")["PGHOST"] == "/run/pg"
+    with pytest.raises(ValueError, match="not a postgres URL"):
+        BI.pg_env("sqlite:///x.db")
+    assert BI._values([(None, 1.5, "it's\x00")]) == "(NULL,'1.5','it''s\ufffd')"
+    assert BI._uncopy(r"\N") is None and BI._uncopy(r"a\tb\nc\\d") == "a\tb\nc\\d"
+
+
+def test_postgres_index_hands_psql_the_url_only_in_its_environment_and_names_the_schema_on_every_table(tmp_path):
+    """The SQL PostgresIndex writes, read off a stand-in `psql` that records what it is given."""
+    seen = tmp_path / "seen"
+    fake = tmp_path / "psql"
+    fake.write_text(f"#!{__import__('sys').executable}\nimport json, os, sys\n"
+                    f"open({str(seen)!r}, 'a').write(json.dumps({{'argv': sys.argv[1:], 'pg': {{k: os.environ[k] for k in os.environ if k.startswith('PG')}},"
+                    " 'sql': sys.stdin.read()}) + '\\n')\nprint('1')\n")
+    fake.chmod(0o755)
+    url = "postgresql://store_indexer:sekrit@db.example/store?sslmode=require"
+    idx = BI.PostgresIndex(url, "store_private", psql=str(fake))
+    b = tmp_path / "bucket"
+    a = artifact(b, meta={"note": "tab\there"})
+    rows, errors = BI._read(FsRemote(b), [(f"manifests/{ids.hex_of(a)}.json", None)], 1)
+    assert errors == [] and idx.add(rows) == 1
+    calls = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert all("sekrit" not in " ".join(c["argv"]) and c["pg"]["PGPASSWORD"] == "sekrit" and c["pg"]["PGHOST"] == "db.example" for c in calls)
+    ddl, insert = calls[0]["sql"], calls[1]["sql"]
+    assert "CREATE TABLE IF NOT EXISTS store_private.records" in ddl and "DROP" not in ddl and "SCHEMA" not in ddl
+    assert "INSERT INTO store_private.records" in insert and "TEMP" not in insert
+    assert f"('{a}','meta.note','tab\there')" in insert
+    with pytest.raises(ValueError, match="bad schema name"):
+        BI.PostgresIndex(url, "store_private; DROP", psql=str(fake))
+
+
+@pytest.fixture
+def postgres(tmp_path):
+    """A throwaway cluster, owned like Neon's `store`: the schemas are another role's, the indexer may only use and create in them."""
+    if not os.environ.get("VERITY_RESEARCH_POSTGRES"):
+        pytest.skip("starts a Postgres server (a few seconds; needs initdb): set VERITY_RESEARCH_POSTGRES=1")
+    import glob
+    import subprocess
+    import tempfile
+
+    bins = sorted(glob.glob("/usr/lib/postgresql/*/bin/initdb"))
+    assert bins, "VERITY_RESEARCH_POSTGRES=1 needs initdb (apt install postgresql)"
+    bindir = os.path.dirname(bins[-1])
+    sock = tempfile.mkdtemp(prefix="pg", dir=tmp_path if len(str(tmp_path)) < 80 else None)
+    data = tmp_path / "pgdata"
+    subprocess.run([f"{bindir}/initdb", "-D", str(data), "-A", "trust", "-U", "admin"], check=True, capture_output=True)
+    subprocess.run([f"{bindir}/pg_ctl", "-D", str(data), "-w", "-l", str(tmp_path / "pg.log"), "-o", f"-k {sock} -c listen_addresses=''", "start"],
+                   check=True, capture_output=True)
+    try:
+        sql = ("REVOKE TEMP ON DATABASE store FROM PUBLIC; CREATE ROLE store_indexer LOGIN; CREATE ROLE store_private_reader LOGIN; CREATE SCHEMA store_private; CREATE SCHEMA store_public;"
+               " GRANT USAGE, CREATE ON SCHEMA store_private, store_public TO store_indexer; GRANT USAGE ON SCHEMA store_private TO store_private_reader;"
+               " ALTER DEFAULT PRIVILEGES FOR ROLE store_indexer IN SCHEMA store_private GRANT SELECT ON TABLES TO store_private_reader;"
+               " ALTER ROLE store_private_reader SET search_path = store_private;"
+               " ALTER ROLE store_private_reader SET default_transaction_read_only = on;")
+        subprocess.run(["psql", "-X", "-q", "-h", sock, "-U", "admin", "-d", "postgres", "-c", "CREATE DATABASE store;"], check=True)
+        subprocess.run(["psql", "-X", "-q", "-h", sock, "-U", "admin", "-d", "store", "-c", sql], check=True)
+        yield f"postgresql://store_indexer@/store?host={sock}", f"postgresql://store_private_reader@/store?host={sock}"
+    finally:
+        subprocess.run([f"{bindir}/pg_ctl", "-D", str(data), "-w", "-m", "fast", "stop"], check=True, capture_output=True)
+
+
+def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_grants(tmp_path, postgres):
+    url, reader = postgres
+    b, pub = tmp_path / "bucket", tmp_path / "public"
+    fixture = artifact(b, kind="fixture/v1", meta={"weird": "a\tb\nc\\d", "n": [1, 2.5, None]})
+    proof = artifact(b, kind="proof/v1", refs={"inputs": [fixture]})
+    run(b, "r20261011-170000-0001", outputs={"result": fixture, "proof": proof})
+    label(b, fixture, "verified", "accepted", ref="art:" + "9" * 64)
+    label(b, "r20261011-170000-0001", "note", "words")
+    _put(pub, f"manifests/{ids.hex_of(fixture)}.json", json.loads((b / f"manifests/{ids.hex_of(fixture)}.json").read_bytes()))
+    lite, lite_pub = tmp_path / "i.sqlite", tmp_path / "p.sqlite"
+    pg, pg_pub = BI.PostgresIndex(url, "store_private"), BI.PostgresIndex(url, "store_public")
+    for _ in range(2):
+        assert BI.index(FsRemote(b), lite, now=T0)["errors"] == [] and BI.index(FsRemote(b), pg, now=T0)["errors"] == []
+        BI.index(FsRemote(pub), lite_pub, policy=BI.PUBLIC, private=lite, now=T0)
+        BI.index(FsRemote(pub), pg_pub, policy=BI.PUBLIC, private=pg, now=T0)
+    assert BI.dump(pg) == BI.dump(lite) and BI.dump(pg_pub) == BI.dump(lite_pub)
+    assert pg.listed_at(BI.MANIFESTS) == "2026-10-11T18:00:00Z" and pg.newest_run() == "r20261011-170000-0001"
+    assert pg.size()["records"]["rows"] == 5
+    assert BI.PostgresIndex(reader, "store_private", create=False).run("SELECT count(*) FROM records;") == [["5"]]
