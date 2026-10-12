@@ -55,6 +55,11 @@ constexpr bool STREAM = NL > 24;
 #define KV_KARATSUBA 0
 #endif
 constexpr bool KARATSUBA = KV_KARATSUBA;
+#ifndef KV_FOLD6
+#define KV_FOLD6 0
+#endif
+constexpr bool FOLD6 = KV_FOLD6;
+static_assert(!FOLD6 || (NL % 2 == 0 && !KARATSUBA), "FOLD 6 halves the limbs, and is its own Karatsuba level");
 // KV_MASK=1: `kv.py`'s masked word, σ_K (kMask) between consecutive rounds.
 #ifndef KV_MASK
 #define KV_MASK 0
@@ -253,8 +258,89 @@ __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
   copy(x, y);
 }
 
+// KV_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`), the adversary's best squaring at 768 and
+// 1,024 bits. sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
+// starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
+template <int N>
+__device__ __forceinline__ void sqr_dbl_n(const u32 (&a)[N], u32 (&y)[2 * N]) {
+  u32 s[2 * N];
+  u32 c0 = 0, c1 = 0;
+  s[0] = 0;
+#pragma unroll
+  for (int m = 1; m < 2 * N - 2; ++m) {
+    u32 r[3] = {c0, c1, 0};
+#pragma unroll
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    s[m] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  s[2 * N - 2] = c0;
+  s[2 * N - 1] = c1;
+  u32 d[2 * N];
+  d[0] = 0;
+#pragma unroll
+  for (int k = 1; k < 2 * N; ++k) d[k] = __funnelshift_l(s[k - 1], s[k], 1);
+  y[0] = madlo_cc(a[0], a[0], d[0]);
+  y[1] = madchi_cc(a[0], a[0], d[1]);
+#pragma unroll
+  for (int i = 1; i < N; ++i) {
+    y[2 * i] = madclo_cc(a[i], a[i], d[2 * i]);
+    y[2 * i + 1] = madchi_cc(a[i], a[i], d[2 * i + 1]);
+  }
+}
+
+// FOLD 6's square: one Karatsuba level, a = a1 B + a0, a^2 = C B^2 + (A + C - D) B + A with A = a0^2, C = a1^2,
+// D = |a0 - a1|^2, each a FOLD 5 square; then `fold`, which is FOLD 1's.
+__device__ __forceinline__ void sqr_fold6(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+  constexpr int H = NL / 2;
+  u32 x0[H], x1[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) {
+    x0[k] = a[k];
+    x1[k] = a[H + k];
+  }
+  d[0] = sub_cc(x0[0], x1[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(x0[k], x1[k]);
+  const u32 mask = subc(0u, 0u);
+  e[0] = sub_cc(x1[0], x0[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(x1[k], x0[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H];
+  sqr_dbl_n<H>(x0, A);
+  sqr_dbl_n<H>(x1, C);
+  sqr_dbl_n<H>(d, D);
+  M[0] = add_cc(A[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) M[k] = addc_cc(A[k], C[k]);
+  u32 m = addc(0u, 0u);
+  M[0] = sub_cc(M[0], D[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) M[k] = subc_cc(M[k], D[k]);
+  m = subc(m, 0u);
+#pragma unroll
+  for (int k = 0; k < 2 * H; ++k) {
+    t[k] = A[k];
+    t[2 * H + k] = C[k];
+  }
+  t[H] = add_cc(t[H], M[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(t[H + k], M[k]);
+  t[3 * H] = addc_cc(t[3 * H], m);
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H - 1; ++k) t[k] = addc_cc(t[k], 0u);
+  t[4 * H - 1] = addc(t[4 * H - 1], 0u);
+}
+
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
-  if constexpr (KARATSUBA) {
+  if constexpr (FOLD6) {
+    u32 t[2 * NL];
+    sqr_fold6(a, t);
+    fold(t, x);
+  } else if constexpr (KARATSUBA) {
     sqr_k1(a, x);
   } else if constexpr (STREAM) {
     u32 y[NL];
