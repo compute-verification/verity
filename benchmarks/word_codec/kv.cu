@@ -586,15 +586,19 @@ __global__ void spin_kernel(long long cycles) {
 // CTAs fit an SM. Past 768 bits (STREAM) the decode's registers allow one, and the encoded form copies and decodes DT = 2
 // tiles at a time (1,536 bits' 22 words a token-layer would leave most of a tile's threads idle), each tile then
 // folded in turn as in the plain form.
-constexpr int HEADS = 64, KV_HEADS = 8, GROUP = HEADS / KV_HEADS, HEAD_DIM = 128;
+#ifndef KV_QHEADS
+#define KV_QHEADS 64
+#endif
+constexpr int HEADS = KV_QHEADS, KV_HEADS = 8, GROUP = HEADS / KV_HEADS, HEAD_DIM = 128;
 constexpr int TL_BYTES = 2 * KV_HEADS * HEAD_DIM * 2;
 constexpr int WB = NBITS / 8;
 constexpr int TLW = (TL_BYTES + WB - 1) / WB;
 constexpr int TLE = TLW * WB;
-constexpr int TT = 4;
+constexpr int TT = 32 / GROUP;
 constexpr int AT = 32 * KV_HEADS;
 constexpr int PART = HEADS * (HEAD_DIM + 2);
-static_assert(GROUP * TT == 32 && TLE % 16 == 0 && WB % 16 == 0, "a warp's scores, one a lane; 16-byte copies");
+static_assert(GROUP * TT == 32 && GROUP <= 8 && TLE % 16 == 0 && WB % 16 == 0,
+              "a warp's scores, one a lane; 16-byte copies");
 
 template <bool ENC>
 __host__ __device__ constexpr int attn_dt() { return ENC && STREAM ? 2 : 1; }
@@ -602,7 +606,9 @@ template <bool ENC>
 constexpr int attn_smem() {
   return 2 * attn_dt<ENC>() * TT * (ENC ? TLE : TL_BYTES) + HEADS * HEAD_DIM * 2;
 }
-static_assert(attn_smem<true>() + 1024 <= (STREAM ? 99 : 50) * 1024, "two CTAs an SM, or one past 768 bits");
+// Two CTAs an SM where their tiles fit (70B's 64 query heads, to 768 bits), else one (8B's 32 take tiles of 8 tokens).
+constexpr int ATTN_MINB = !STREAM && attn_smem<true>() + 1024 <= 50 * 1024 ? 2 : 1;
+static_assert(attn_smem<true>() + 1024 <= 99 * 1024, "a CTA's tiles fit an SM");
 
 __device__ __forceinline__ void bf16x4(const uint8_t *p, float (&v)[4]) {
   const uint2 x = *reinterpret_cast<const uint2 *>(p);
@@ -646,12 +652,14 @@ __device__ __forceinline__ void attn_tile(const uint8_t *src, const uint8_t *qs,
     }
   }
   const float sc = lane % TT < nt ? s[0] : -INFINITY;
-  float gm = fmaxf(sc, __shfl_xor_sync(0xffffffffu, sc, 1));
-  gm = fmaxf(gm, __shfl_xor_sync(0xffffffffu, gm, 2));
+  float gm = sc;
+#pragma unroll
+  for (int o = 1; o < TT; o <<= 1) gm = fmaxf(gm, __shfl_xor_sync(0xffffffffu, gm, o));
   const float m_new = fmaxf(m_own, gm);
   const float scale = exp2f(m_own - m_new), p = exp2f(sc - m_new);
-  float ps = p + __shfl_xor_sync(0xffffffffu, p, 1);
-  ps += __shfl_xor_sync(0xffffffffu, ps, 2);
+  float ps = p;
+#pragma unroll
+  for (int o = 1; o < TT; o <<= 1) ps += __shfl_xor_sync(0xffffffffu, ps, o);
   l_own = __fmaf_rn(l_own, scale, ps);
   m_own = m_new;
 #pragma unroll
@@ -687,7 +695,7 @@ __device__ __forceinline__ void attn_out(float *o, int g, int lane, const float 
 }
 
 template <bool ENC>
-__global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
+__global__ void __launch_bounds__(AT, ATTN_MINB) attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
                                                      float *__restrict__ part, int ctx, int layers, int layer,
                                                      int per_split, int splits, int k) {
   constexpr int RAW = ENC ? TLE : TL_BYTES, ST = attn_dt<ENC>() * TT;
@@ -743,7 +751,7 @@ __global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t 
 // into a ring of NBUF buffers PRE tiles ahead (cp.async, each thread its own words' chunks), decode their words in place
 // and hand the buffer over (full); the attention warps hand it back (empty). The decode of later tiles runs while the
 // attention warps work, and p768's 172 words a tile fill 6 warps.
-constexpr int NBUF = 4, PRE = 2;
+constexpr int NBUF = 4 * TT * TLE + HEADS * HEAD_DIM * 2 + 64 <= 99 * 1024 ? 4 : 2, PRE = NBUF / 2;
 constexpr int DW = (TT * TLW + 31) / 32;
 constexpr int WT = AT + 32 * DW;
 constexpr int ws_smem() { return NBUF * TT * TLE + HEADS * HEAD_DIM * 2 + 2 * NBUF * 8; }
@@ -832,6 +840,257 @@ __global__ void __launch_bounds__(WT, 1) attn_ws_kernel(const uint8_t *__restric
     mbar_arrive(empty + b);
   }
   attn_out(part + ((size_t)seq * splits + split) * PART, g, lane, acc, m_own, l_own);
+}
+
+// The tensor-core form, for fields whose words tile a KV head's 256 bytes of K, and of V (p512, p1024): a CTA is one
+// split of one sequence's tokens at one KV head g, in tiles of MT tokens, token t's 512 bytes of head g (K, then V) at
+// t * MTS in shared memory (16 bytes past 512, so ldmatrix's 8 rows land in distinct banks). Each of MW warps takes 16
+// tokens of a tile on the tensor cores: S = Q K^T (bf16 mma, fp32 accumulate; rows the group's heads, zero past GROUP),
+// the online softmax by head, and O^T += V^T P^T with P rounded to bf16 (P^T's fragment is S's) and its sum taken over
+// the rounded P, so the output is a weighted mean. Each warp leaves its partials as a split of its own. The encoded form
+// decodes a tile's words in place before the warps fold it, a thread a word, so plain and encoded agree bit for bit; the
+// CUDA cores do the decode and little else.
+#ifndef KV_MT
+#define KV_MT 32
+#endif
+constexpr int HB = HEAD_DIM * 2;
+constexpr bool MMA_OK = HB % WB == 0;
+constexpr int MT = KV_MT, MW = MT / 16, MTS = 2 * HB + 16;
+constexpr int HW = MMA_OK ? 2 * HB / WB : 1;
+constexpr int MTH = MT * HW > 32 * MW ? MT * HW : 32 * MW;
+constexpr int mma_smem() { return 2 * MT * MTS; }
+static_assert(MT % 16 == 0 && MTS % 16 == 0 && MTH % 32 == 0 && mma_smem() <= 99 * 1024, "whole mma tiles");
+
+__device__ __forceinline__ void ldsm4(unsigned a, u32 &r0, u32 &r1, u32 &r2, u32 &r3) {
+  asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];"
+               : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(a) : "memory");
+}
+
+__device__ __forceinline__ void ldsm4t(unsigned a, u32 &r0, u32 &r1, u32 &r2, u32 &r3) {
+  asm volatile("ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%0, %1, %2, %3}, [%4];"
+               : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(a) : "memory");
+}
+
+__device__ __forceinline__ void mma16816(float (&d)[4], u32 a0, u32 a1, u32 a2, u32 a3, u32 b0, u32 b1) {
+  asm("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, "
+      "{%0, %1, %2, %3};"
+      : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
+      : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+
+// {lo, hi} rounded to bf16 and packed (lo in the low half), and the rounded values.
+__device__ __forceinline__ u32 bf16x2_rn(float lo, float hi, float &rlo, float &rhi) {
+  u32 r;
+  asm("cvt.rn.bf16x2.f32 %0, %1, %2;" : "=r"(r) : "f"(hi), "f"(lo));
+  rlo = __uint_as_float(r << 16);
+  rhi = __uint_as_float(r & 0xffff0000u);
+  return r;
+}
+
+// Q's A fragments (rows the group's heads, k the dims), zero past GROUP.
+__device__ __forceinline__ void mma_load_q(const uint16_t *q, int seq, int g, int lane, u32 (&qa)[8][2]) {
+  const int gid = lane >> 2, t4 = lane & 3;
+  const u32 *qp = reinterpret_cast<const u32 *>(q + ((size_t)seq * HEADS + g * GROUP + (gid < GROUP ? gid : 0)) * HEAD_DIM);
+#pragma unroll
+  for (int ks = 0; ks < 8; ++ks) {
+    qa[ks][0] = gid < GROUP ? qp[8 * ks + t4] : 0u;
+    qa[ks][1] = gid < GROUP ? qp[8 * ks + 4 + t4] : 0u;
+  }
+}
+
+// A warp's 16 tokens at shared address src, nt of them valid (the rest zero, so P V stays finite).
+__device__ __forceinline__ void mma_chunk(unsigned src, const u32 (&qa)[8][2], int lane, int nt, float (&o)[8][4],
+                                          float &m_own, float &l_own) {
+  const int t4 = lane & 3, mi = lane >> 3, r8 = lane & 7;
+  const unsigned row = src + (8 * (mi >> 1) + r8) * MTS + 16 * (mi & 1);
+  float s[2][4] = {};
+#pragma unroll
+  for (int ks = 0; ks < 8; ++ks) {
+    u32 b00, b01, b10, b11;
+    ldsm4(row + 32 * ks, b00, b01, b10, b11);
+    mma16816(s[0], qa[ks][0], 0u, qa[ks][1], 0u, b00, b01);
+    mma16816(s[1], qa[ks][0], 0u, qa[ks][1], 0u, b10, b11);
+  }
+  float mx = -INFINITY;
+#pragma unroll
+  for (int j = 0; j < 2; ++j)
+#pragma unroll
+    for (int e = 0; e < 2; ++e) {
+      if (8 * j + 2 * t4 + e >= nt) s[j][e] = -INFINITY;
+      mx = fmaxf(mx, s[j][e]);
+    }
+  mx = fmaxf(mx, __shfl_xor_sync(0xffffffffu, mx, 1));
+  mx = fmaxf(mx, __shfl_xor_sync(0xffffffffu, mx, 2));
+  const float m_new = fmaxf(m_own, mx), sc = exp2f(m_own - m_new);
+  float pl[2][2];
+  u32 pb[2];
+#pragma unroll
+  for (int j = 0; j < 2; ++j) pb[j] = bf16x2_rn(exp2f(s[j][0] - m_new), exp2f(s[j][1] - m_new), pl[j][0], pl[j][1]);
+  l_own = __fmaf_rn(l_own, sc, (pl[0][0] + pl[0][1]) + (pl[1][0] + pl[1][1]));
+  m_own = m_new;
+  const float s0 = __shfl_sync(0xffffffffu, sc, 8 * t4), s1 = __shfl_sync(0xffffffffu, sc, 8 * t4 + 4);
+#pragma unroll
+  for (int mt = 0; mt < 8; ++mt) {
+    u32 a0, a1, a2, a3;
+    ldsm4t(row + HB + 32 * mt, a0, a1, a2, a3);
+    o[mt][0] = __fmul_rn(o[mt][0], s0);
+    o[mt][1] = __fmul_rn(o[mt][1], s1);
+    o[mt][2] = __fmul_rn(o[mt][2], s0);
+    o[mt][3] = __fmul_rn(o[mt][3], s1);
+    mma16816(o[mt], a0, a1, a2, a3, pb[0], pb[1]);
+  }
+}
+
+// A warp's partials: o[h][d] for the group's heads, then their max (finite, -1e30 for no tokens) and sum.
+__device__ __forceinline__ void mma_out(float *op, int g, int lane, const float (&o)[8][4], float m_own, float l_own) {
+  const int gid = lane >> 2, t4 = lane & 3;
+  l_own += __shfl_xor_sync(0xffffffffu, l_own, 1);
+  l_own += __shfl_xor_sync(0xffffffffu, l_own, 2);
+#pragma unroll
+  for (int mt = 0; mt < 8; ++mt)
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      const int h = 2 * t4 + (e & 1), d = 16 * mt + gid + 8 * (e >> 1);
+      if (h < GROUP) op[(g * GROUP + h) * HEAD_DIM + d] = o[mt][e];
+    }
+  if (t4 == 0 && gid < GROUP) {
+    op[HEADS * HEAD_DIM + g * GROUP + gid] = l_own > 0.f ? m_own : -1e30f;
+    op[HEADS * HEAD_DIM + HEADS + g * GROUP + gid] = l_own;
+  }
+}
+
+// Head g's K and V of a tile's nt tokens into dst (cp.async), the rows past nt zeroed.
+__device__ __forceinline__ void mma_issue(uint8_t *dst, const uint8_t *kv, int raw, size_t slot0, int layers, int layer,
+                                          int g, int nt, int tid, int nthreads) {
+  for (int c = tid; c < nt * 32; c += nthreads) {
+    const int t = c >> 5, x = c & 31;
+    copy16(dst + t * MTS + 16 * x,
+           kv + ((slot0 + t) * layers + layer) * raw + (x < 16 ? 0 : TL_BYTES / 2 - HB) + g * HB + 16 * x);
+  }
+  for (int c = nt * 32 + tid; c < MT * 32; c += nthreads)
+    *reinterpret_cast<uint4 *>(dst + (c >> 5) * MTS + 16 * (c & 31)) = make_uint4(0u, 0u, 0u, 0u);
+}
+
+template <bool ENC>
+__global__ void __launch_bounds__(MTH, 2) attn_mma_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
+                                                         float *__restrict__ part, int ctx, int layers, int layer,
+                                                         int per_split, int splits, int k) {
+  if constexpr (MMA_OK) {
+    constexpr int RAW = ENC ? TLE : TL_BYTES;
+    extern __shared__ __align__(16) uint8_t sm[];
+    const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
+    const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
+    const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
+    const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    u32 qa[8][2];
+    float o[8][4] = {};
+    float m_own = -INFINITY, l_own = 0.f;
+    if (w < MW) mma_load_q(q, seq, g, lane, qa);
+    const auto issue = [&](int tile) {
+      const int bt = t0 + tile * MT;
+      mma_issue(sm + (tile & 1) * MT * MTS, kv, RAW, (size_t)seq * ctx + bt, layers, layer, g, min(MT, t1 - bt),
+                threadIdx.x, MTH);
+      asm volatile("cp.async.commit_group;");
+    };
+    if (ntiles) issue(0);
+    for (int tile = 0; tile < ntiles; ++tile) {
+      if (tile + 1 < ntiles) issue(tile + 1);
+      else asm volatile("cp.async.commit_group;");
+      asm volatile("cp.async.wait_group 1;");
+      __syncthreads();
+      const int bt = t0 + tile * MT, nt = min(MT, t1 - bt);
+      uint8_t *src = sm + (tile & 1) * MT * MTS;
+      if (ENC) {
+        const int t = threadIdx.x % MT, j = threadIdx.x / MT;
+        if (t < nt && j < HW) {
+          u32 x[NL];
+          u32 *wp = reinterpret_cast<u32 *>(src + t * MTS + j * WB);
+          load(wp, x);
+          const int wi = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
+          decode_word(x, (((u64)seq * ctx + bt + t) * layers + layer) * TLW + wi, k);
+          store(wp, x);
+        }
+        __syncthreads();
+      }
+      if (w < MW && nt > 16 * w)
+        mma_chunk(smem_u32(src + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
+      __syncthreads();
+    }
+    if (w < MW) mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
+  }
+}
+
+// The warp-specialized tensor-core form: MDW decoder warps, each lane a word of every tile (8 lanes a token's 8 words),
+// load it from global memory a tile ahead into registers, decode it and store its payload into a ring of MNB tiles
+// (full); the MW MMA warps fold each tile as in attn_mma_kernel and hand it back (empty). Shared memory holds only
+// decoded tiles, so two CTAs fit an SM, and the decode never waits on the tensor cores' barrier.
+constexpr int MNB = 2, MDW = MMA_OK ? MT * HW / 32 : 1, MWT = 32 * (MDW + MW);
+constexpr int mws_smem() { return MNB * MT * MTS + 2 * MNB * 8; }
+static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's words in one warp");
+
+__device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
+  const uint4 *q = reinterpret_cast<const uint4 *>(p);
+#pragma unroll
+  for (int k = 0; k < NL / 4; ++k) {
+    const uint4 v = __ldcs(q + k);
+    x[4 * k] = v.x;
+    x[4 * k + 1] = v.y;
+    x[4 * k + 2] = v.z;
+    x[4 * k + 3] = v.w;
+  }
+}
+
+__global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__restrict__ kv,
+                                                            const uint16_t *__restrict__ q, float *__restrict__ part,
+                                                            int ctx, int layers, int layer, int per_split, int splits,
+                                                            int k) {
+  if constexpr (MMA_OK) {
+    extern __shared__ __align__(16) uint8_t sm[];
+    uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
+    const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
+    const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
+    const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
+    const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    if (threadIdx.x == 0) {
+      for (int b = 0; b < MNB; ++b) {
+        mbar_init(full + b, 32 * MDW);
+        mbar_init(empty + b, 32 * MW);
+      }
+    }
+    __syncthreads();
+    if (w >= MW) {
+      const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
+      const int wi = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
+      const auto word = [&](int tile) { return (((u64)seq * ctx + t0 + tile * MT + t) * layers + layer) * TLW + wi; };
+      u32 nx[NL];
+      if (ntiles && t < min(MT, t1 - t0)) ldg_word(reinterpret_cast<const u32 *>(kv) + word(0) * NL, nx);
+      for (int tile = 0; tile < ntiles; ++tile) {
+        const int nt = min(MT, t1 - t0 - tile * MT);
+        u32 x[NL];
+        copy(x, nx);
+        if (tile + 1 < ntiles && t < min(MT, t1 - t0 - (tile + 1) * MT))
+          ldg_word(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL, nx);
+        if (t < nt) decode_word(x, word(tile), k);
+        else for (int l = 0; l < NL; ++l) x[l] = 0u;
+        if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
+        store(reinterpret_cast<u32 *>(sm + (tile % MNB) * MT * MTS + t * MTS + j * WB), x);
+        mbar_arrive(full + tile % MNB);
+      }
+      return;
+    }
+    u32 qa[8][2];
+    float o[8][4] = {};
+    float m_own = -INFINITY, l_own = 0.f;
+    mma_load_q(q, seq, g, lane, qa);
+    for (int tile = 0; tile < ntiles; ++tile) {
+      const int b = tile % MNB, nt = min(MT, t1 - t0 - tile * MT);
+      mbar_wait(full + b, (tile / MNB) & 1);
+      if (nt > 16 * w)
+        mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
+      mbar_arrive(empty + b);
+    }
+    mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
+  }
 }
 
 // A block a sequence's head: warp w folds splits w, w + CW, ... online, a lane 4 dims, and the warps' folds merge in
@@ -933,24 +1192,47 @@ int kv_spin(long long cycles, cudaStream_t s) {
   return launched();
 }
 
-// heads, KV heads, head dim, words a token-layer, its stored bytes, tokens a tile, floats a split's partials.
+// heads, KV heads, head dim, words a token-layer, its stored bytes, tokens a tile, floats a split's partials; the
+// tensor-core form's warps a CTA (each its own split's partials), whether this field has it, and its tokens a tile.
 void kv_attn_shape(int *out) {
   out[0] = kv::HEADS; out[1] = kv::KV_HEADS; out[2] = kv::HEAD_DIM; out[3] = kv::TLW; out[4] = kv::TLE; out[5] = kv::TT;
-  out[6] = kv::PART;
+  out[6] = kv::PART; out[7] = kv::MW; out[8] = kv::MMA_OK; out[9] = kv::MT;
 }
 
 // One layer's decode attention for `batch` sequences of `ctx` tokens (attn_kernel's layout): kv plain (encoded = 0) or
-// its words (encoded = 1, k rounds; encoded = 2 the warp-specialized form, the same output), q bf16 [batch][64][128]
-// pre-scaled by log2(e)/sqrt(128), out fp32 [batch][64][128], part at least batch * splits * kv_attn_shape's out[6]
-// floats. The tokens are split into at most `splits` ranges of whole tiles.
+// its words (encoded = 1, k rounds; encoded = 2 the warp-specialized form, the same output); on the tensor cores,
+// encoded = 3 plain, 4 its words and 5 its words in the warp-specialized form (4 and 5 the same output as 3, not as 0).
+// q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
+// splits * kv_attn_shape's out[6] floats (times out[7] from 3 on). The tokens are split into at most `splits` ranges of
+// whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
-  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 2 ||
-      (encoded && (k < 1 || k > kv::KMAX)))
+  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 5 ||
+      (encoded != 0 && encoded != 3 && (k < 1 || k > kv::KMAX)))
     return -1;
-  const int per = (ctx + splits - 1) / splits, per_split = (per + kv::TT - 1) / kv::TT * kv::TT;
+  const int tile = encoded >= 3 ? kv::MT : kv::TT;
+  const int per = (ctx + splits - 1) / splits, per_split = (per + tile - 1) / tile * tile;
   const int sp = (ctx + per_split - 1) / per_split;
   const auto *p = static_cast<const uint8_t *>(kv_);
+  if (encoded >= 3) {
+    if (!kv::MMA_OK) return -2;
+    static bool set = false;
+    if (!set) {
+      cudaFuncSetAttribute(kv::attn_mma_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mma_smem());
+      cudaFuncSetAttribute(kv::attn_mma_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mma_smem());
+      cudaFuncSetAttribute(kv::attn_mma_ws_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mws_smem());
+      set = true;
+    }
+    const int grid = batch * sp * kv::KV_HEADS;
+    if (encoded == 5)
+      kv::attn_mma_ws_kernel<<<grid, kv::MWT, kv::mws_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
+    else if (encoded == 4)
+      kv::attn_mma_kernel<true><<<grid, kv::MTH, kv::mma_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
+    else
+      kv::attn_mma_kernel<false><<<grid, kv::MTH, kv::mma_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
+    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
+    return launched();
+  }
   if (encoded == 2) {
     static bool set = false;
     if (!set) {
