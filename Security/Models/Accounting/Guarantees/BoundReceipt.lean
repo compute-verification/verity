@@ -93,7 +93,10 @@ random oracle on the whole of `E_j` and `z_j`, so a location makes a receipt onl
 hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which lane ra-bound-receipt proves
 `½·min(|z|, |E|)` bits per relayed block, by Lindsey's lemma: the deployed bound is up to `2×` weaker than this game's.
 The rest's tile work stands for every way it gets a tile output without the link, the activations' route among them:
-its information is free here and only its work counts.
+its information is free here and only its work counts. The node is fixed before the mix is drawn: its state and memory
+are functions of the store and the tile outputs, never of the mix. Over a window's passes that is a mix derived afresh
+each pass from the chained seed; a mix (or a sketch matrix) fixed for the window lets a location keep, from one pass,
+a digest of each block that makes the next pass's receipts without it (red team F29), which this game doesn't cover.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptLink`, from `RateAudit`'s compression on each location (the GPU's view at
 each tile output and mix, the rest's at each store and mix), with the GPU's mix at the tile outputs and the rest's at
