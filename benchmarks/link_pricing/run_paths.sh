@@ -2,11 +2,12 @@
 # Node 2's GPU I/O paths (`paths.cu`): throughput and where the bytes land, as one Attempt on verity's CPUs:
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
-#     --declared-output 'out/*' --env PHASE=one -- taskset -c 48-95 bash benchmarks/link_pricing/run_paths.sh
+#     --declared-output 'out/*' -- env PHASE=one taskset -c 48-95 bash benchmarks/link_pricing/run_paths.sh
 #
 # PHASE=one (1 GPU): copy engines, zero copy, landing in the GPU and in the host, and nsys's DRAM / PCIe sampling of
 #   DMA loops into small and large buffers.
-# PHASE=two (2 GPUs): peer-to-peer, landing in a GPU written by its peer, nsys sampling of peer writes.
+# PHASE=two (2 GPUs): peer-to-peer, landing in a GPU written by its peer, nsys sampling of peer writes, and small
+#   inbound rings (H2D, peer, SM stores) beside a reader standing in for the receiving GPU's own HBM traffic.
 # GPUS: the indices gpu-lease may take (default 2,3: NUMA node 0's, beside verity's CPUs).
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, smi.csv, <mode>.jsonl, nsys.jsonl.
 set -euo pipefail
@@ -45,6 +46,11 @@ if [ "${1:-}" = leased ]; then
       "$P" peer --gpu 0 --peer 1 | tee "$O/peer.jsonl"
       "$P" landg --gpu 1 --peer 0 | tee "$O/landg_peer.jsonl"
       for w in p2pw p2pce; do for m in 8 4096; do ns "${w}_${m}" --gpu 0 --peer 1 --what $w --mib $m --seconds 1.5; done; done
+      # small inbound rings beside a 16 GiB reader on the receiving GPU (its own HBM traffic): do they stay in L2?
+      ns read_alone --gpu 0 --what none --mib 8 --seconds 1.5 --beside-read 16
+      for m in 2 8 32; do ns "h2d_${m}_read" --gpu 0 --what h2d --mib $m --seconds 1.5 --beside-read 16; done
+      ns smw_8_read --gpu 0 --what smw --mib 8 --seconds 1.5 --beside-read 16
+      for w in p2pw p2pce; do ns "${w}_8_read" --gpu 0 --peer 1 --what $w --mib 8 --seconds 1.5 --beside-read 16; done
       ;;
     *) echo "unknown PHASE $PHASE"; exit 2 ;;
   esac
