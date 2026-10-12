@@ -7,6 +7,7 @@ import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
 import Proofs.Flock.C3.Sparse.SrcTie
+import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -35,7 +36,8 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3), and its read fact on
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source
-  tied to V*'s accepted RecSparse units gives (`SrcSparseTie`, `srcSparseOK_of_tie`).
+  tied to V*'s accepted RecSparse units gives (`SrcSparseTie`, `srcSparseOK_of_tie`), and the tie from the unit's copy
+  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`).
 * (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from
   its read fact (`OpeningRead`, `hOpening_of_read`), and that fact from the `rec-opening` unit's residuals
   (`residuals_eq_runO`, `openingRead_of_rows`), and from V*'s sessions and the verifier's coins but the claim tie and
