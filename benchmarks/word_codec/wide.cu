@@ -653,11 +653,21 @@ __device__ __forceinline__ void decode_tw(uint32_t (&y)[N], const uint32_t (&v)[
   }
 }
 
+// The root chain's squarings and multiplies: at p1536 called rather than inlined, so its ~40 of them compile in
+// minutes (the encode builds the store; the GEMM's decode inlines its own).
+#if WW_BITS == 1536 && !defined(WW_HOST)
+__device__ __noinline__ void sqr_r(uint32_t (&r)[N], const uint32_t (&a)[N]) { sqr(r, a); }
+__device__ __noinline__ void mul_r(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) { mul(r, a, b); }
+#else
+__device__ __forceinline__ void sqr_r(uint32_t (&r)[N], const uint32_t (&a)[N]) { sqr(r, a); }
+__device__ __forceinline__ void mul_r(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) { mul(r, a, b); }
+#endif
+
 // a^(2^n) for lazy a, n squarings.
 template <int NSQ>
 __device__ __forceinline__ void sqr_n(uint32_t (&a)[N]) {
 #pragma unroll 1
-  for (int n = 0; n < NSQ; ++n) sqr(a, a);
+  for (int n = 0; n < NSQ; ++n) sqr_r(a, a);
 }
 
 // r = a^(2^n − 1), a lazy: x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a (`wide._pow2m1_chain`).
@@ -668,14 +678,14 @@ __device__ __forceinline__ void pow2m1(uint32_t (&r)[N], const uint32_t (&a)[N])
     copy_k<N>(r, a);
   } else if constexpr (NN % 2) {
     pow2m1<NN - 1>(r, a);
-    sqr(r, r);
-    mul(r, r, a);
+    sqr_r(r, r);
+    mul_r(r, r, a);
   } else {
     uint32_t h[N];
     pow2m1<NN / 2>(h, a);
     copy_k<N>(r, h);
     sqr_n<NN / 2>(r);
-    mul(r, r, h);
+    mul_r(r, r, h);
   }
 }
 
@@ -687,10 +697,10 @@ __device__ __forceinline__ void pow_small(uint32_t (&r)[N], const uint32_t (&a)[
     copy_k<N>(r, a);
   } else if constexpr (E % 2) {
     pow_small<E - 1>(r, a);
-    mul(r, r, a);
+    mul_r(r, r, a);
   } else {
     pow_small<E / 2>(r, a);
-    sqr(r, r);
+    sqr_r(r, r);
   }
 }
 
@@ -709,7 +719,7 @@ __device__ __forceinline__ void root(uint32_t (&r)[N], const uint32_t (&a)[N]) {
       pow2m1<RN>(s, a);
       sqr_n<RS>(s);
       pow_small<RE>(e, a);
-      mul(s, s, e);
+      mul_r(s, s, e);
     }
     canon(s);
     sqr(q, s);
