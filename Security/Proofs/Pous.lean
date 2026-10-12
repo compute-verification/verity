@@ -30,6 +30,7 @@ import Proofs.Pous.P2.RingBasic
 import Proofs.Pous.P2.RingTight
 import Proofs.Pous.P2.RingTrunc
 import Proofs.Pous.P2.Rounds
+import Proofs.Pous.P2.RoundTests
 import Proofs.Pous.P2.Rows
 import Proofs.Pous.P3.Column.BandComb
 import Proofs.Pous.P3.Column.BandTwoWay
