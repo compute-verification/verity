@@ -1902,7 +1902,8 @@ static std::string transport(const Args& a) {
 // frontier writes, the pieces themselves and the fold beside them apart.  Arms: 0 carry as in a window, 1 the same
 // pieces without the frontier writes, 2 one copy of the whole size, 3 carry beside fold_live reading what it lands,
 // 4 as a window does it (a publisher thread issues the pieces while this one waits in cudaStreamSynchronize on the
-// fold), 5 the same with this thread polling an event instead.
+// fold), 5 the same with this thread polling an event instead; then carry after each step of a window's preparation:
+// 6 S generated afresh, 7 S flushed from the caches and generated afresh, 8 the read scrub.
 static int mode_carry(const Args& a) {
   if (!a.dma_piece || !slots_ok(a) || !carry_ok(a)) return fail("carry takes --dma-piece-kib, a multiple of the slot");
   int lo, hi;
@@ -1925,11 +1926,19 @@ static int mode_carry(const Args& a) {
   Spinner publisher(cpus[1]);
   cudaEvent_t folded;
   OK(cudaEventCreateWithFlags(&folded, cudaEventDisableTiming));
-  std::vector<double> gbs[6];
+  std::vector<double> gbs[9];
   uint32_t epoch = 0;
   for (int r = 0; r < a.reps; ++r)
-    for (int arm = 0; arm < 6; ++arm) {
+    for (int arm = 0; arm < 9; ++arm) {
       ++epoch;
+      if (arm == 7) {
+        const size_t per = (n / a.gen_threads + 63) / 64 * 64;
+        parallel(a.gen_threads, cpus, [&](int t) {
+          if (t * per < n) sg_flush(hm + t * per, std::min(per, n - t * per));
+        });
+      }
+      if (arm == 6 || arm == 7) generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+      if (arm == 8) bw_read_scrub(dev.scrub, SCRUB);
       for (size_t k = 0; k < slots; ++k) done[k].store(epoch, std::memory_order_release);
       OK(cudaDeviceSynchronize());
       const double t0 = now_s();
@@ -1959,7 +1968,8 @@ static int mode_carry(const Args& a) {
         "{\"bytes\":" + std::to_string(n) + ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) +
             ",\"carry_gbs\":" + stats(gbs[0]) + ",\"pieces_gbs\":" + stats(gbs[1]) + ",\"one_copy_gbs\":" +
             stats(gbs[2]) + ",\"beside_fold_gbs\":" + stats(gbs[3]) + ",\"as_window_gbs\":" + stats(gbs[4]) +
-            ",\"polled_gbs\":" + stats(gbs[5]) + "}");
+            ",\"polled_gbs\":" + stats(gbs[5]) + ",\"fresh_gbs\":" + stats(gbs[6]) + ",\"flushed_fresh_gbs\":" +
+            stats(gbs[7]) + ",\"after_scrub_gbs\":" + stats(gbs[8]) + "}");
   return 0;
 }
 
