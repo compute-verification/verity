@@ -42,6 +42,19 @@ sec() { printf '\n===== %s\n' "$1"; }
   ls /usr/include/infiniband 2>&1 | head; ls /usr/lib/x86_64-linux-gnu/ | grep -E 'libibverbs|libmlx5|libnvidia-peer' 2>&1
   sec "profiling permission"; grep -i -E 'RmProfilingAdminOnly' /proc/driver/nvidia/params 2>&1
   cat /proc/sys/kernel/perf_event_paranoid
+  sec "where inbound bytes can land: caches, uncore counters, kernel DMA features"
+  lscpu -C 2>&1; lscpu | grep -E 'Vendor|Model:|Stepping|Hypervisor|Virtualization'
+  ls /sys/bus/event_source/devices 2>&1 | tr '\n' ' '; echo
+  ls /sys/fs/resctrl 2>&1 | head; mount | grep -i resctrl
+  grep -E 'CONFIG_(PCI_P2PDMA|DMABUF_MOVE_NOTIFY|DMA_SHARED_BUFFER|INFINIBAND_USER_MEM|HSA_AMD_P2P)=' /boot/config-$(uname -r) 2>&1
+  command -v perf; sudo -n true 2>&1 && echo "sudo -n: yes" || echo "sudo -n: no"
+  nvidia-smi -q 2>&1 | grep -i -E 'Addressing Mode|ATS|GPU Direct|P2P|Virtualization Mode|Host VGPU|Bus Id|Max Payload' | sort | uniq -c
+  nvidia-smi topo -p2p n 2>&1 | head -12; nvidia-smi topo -p2p a 2>&1 | head -12
+  sec "rdma device caps (full)"; command -v ibv_devinfo && ibv_devinfo -v 2>&1 | head -120
+  command -v ibv_devices && ibv_devices 2>&1
+  for d in /sys/class/infiniband/*; do [ -e "$d" ] || continue; echo "$d -> $(readlink -f $d/device)"; ls "$d"/device/net 2>&1
+    for g in "$d"/ports/1/gids/0 "$d"/ports/1/gid_attrs/types/0; do echo "$g: $(cat $g 2>&1 | sed -E 's/[0-9a-f]{4}:[0-9a-f]{4}$/xxxx:xxxx/')"; done; done
+  ip -br link 2>&1 | awk '{print $1, $2}'; for n in /sys/class/net/*; do echo "$(basename $n): driver=$(basename $(readlink -f $n/device/driver) 2>/dev/null) dev=$(basename $(readlink -f $n/device) 2>/dev/null)"; done
   sec "gpu-lease"; command -v gpu-lease; gpu-lease --help 2>&1 | head -40
 } > "$O/inventory.txt" 2>&1
 cat "$O/inventory.txt"
