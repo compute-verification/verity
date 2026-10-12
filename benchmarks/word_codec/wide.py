@@ -1,24 +1,30 @@
-"""The wide word codecs, byte-exact: Sloth over p = 2^127 − 1, 2^255 − 19 and 2^521 − 1, in the fused GEMM's layout,
-with the encoded words tagged by the bandwidth audit's `ro-blake3/v1` (`verity.core.protocols.bandwidth.tags`).
+"""The wide word codecs, byte-exact: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 and 2^512 − 569, in
+the fused GEMM's layout, with the encoded words tagged by the bandwidth audit's `ro-blake3/v1`
+(`verity.core.protocols.bandwidth.tags`).
 
 ~~~text
-field      p127 = 2^127 − 1, p521 = 2^521 − 1 (3 mod 4); p255 = 2^255 − 19 (5 mod 8)
+field      p127 = 2^127 − 1, p521 = 2^521 − 1, p256 = 2^256 − 189, p512 = 2^512 − 569 (3 mod 4); p255 = 2^255 − 19
+           (5 mod 8). p256 and p512 are full width: a word is all of its 32·limbs bits, and a payload is any m < p, which
+           every m whose top byte is not 0xFF is (C < 2^(b − 8)): FP8 E4M3 weights always are, 0xFF being its NaN
 ρ⁻¹(y)     3 mod 4: y² if y is even, p − y² if y is odd; p255: y² if y is even, 2·y² if y is odd (2 is a non-residue)
-ρ(a)       the y with ρ⁻¹(y) = a: 3 mod 4: s = a^((p+1)/4) (p − 2 squarings), the even one of {s, p − s} if s² = a, else
-           the odd one; p255: if a is a square, the even root of a, else the odd root of a/2, from β = a^((p+3)/8)
-           (251 squarings and 11 multiplications) times 1, √−1, √(1/(2√−1)) or √−1·√(1/(2√−1))
+ρ(a)       the y with ρ⁻¹(y) = a: 3 mod 4: s = a^((p+1)/4), the even one of {s, p − s} if s² = a, else the odd one, the
+           power p − 2 squarings for a Mersenne p, and for p = 2^b − C the chain (a^(2^n − 1))^(2^s) · a^(2^s − D),
+           D = (C − 1)/4 < 2^s, n = b − 2 − s (`root_chain`); p255: if a is a square, the even root of a, else the odd
+           root of a/2, from β = a^((p+3)/8) (251 squarings and 11 multiplications) times 1, √−1, √(1/(2√−1)) or
+           √−1·√(1/(2√−1))
 c_j, τ     SHA512(DOMAIN ‖ name ‖ 0 ‖ seed ‖ u32be j ‖ u8 h) for h = 0, 1, the 128 bytes little-endian, mod p; j = 0 … k − 1
            for the rounds, j = 2^32 − 1 for the tweak key τ (1 in place of 0)
 t(i)       τ · i mod p, i the word's index in the store
-encode     m (`payload` bits, m < 2^payload) through rounds x ↦ ρ(x + c_j + t(i)), j = 0 … k − 1
+encode     m (`payload` bits, m < min(2^payload, p)) through rounds x ↦ ρ(x + c_j + t(i)), j = 0 … k − 1
 decode     x ↦ ρ⁻¹(x) − c_j − t(i), j = k − 1 … 0; a word decodes to a payload only if the result is < 2^payload
-word       y < p as `limbs` little-endian u32 limbs (4, 8, 17: 16, 32, 68 bytes)
+word       y < p as `limbs` little-endian u32 limbs (4, 8, 17, 8, 16: 16, 32, 68, 32, 64 bytes)
 ~~~
 
 The fused GEMM's layout is the word codec's (`codec.fragment_stream`): tasks of one 16-row block and 512 columns, in
 order (row block, column chunk); in each task lane l's 256 bytes of its mma.m16n8k32 A fragments are the little-endian
 integer S, and its word w carries bits w·b … w·b + b − 1 of S (b = `payload`), L = ⌈2048 / b⌉ words a lane
-(17, 9 and 4 at the default payloads 126, 254 and 520). Word w of lane l of task q has index i = 32·L·q + 32·w + l.
+(17, 9, 4, 8 and 4 at the default payloads 126, 254, 520, 256 and 512). Word w of lane l of task q has index
+i = 32·L·q + 32·w + l.
 
 The store E is the tasks' records in order. Record q is, for w in 0 … L − 1, for limb e, for lane l, u32le(limb e of
 word (q, l, w)): a warp's load of one limb reads 128 contiguous bytes. Block j = 32·q + l of the bandwidth audit is
@@ -64,11 +70,19 @@ class Field:
     def lane_words(self, payload: int | None = None) -> int:
         return -(-8 * LANE_BYTES // self.check_payload(payload))
 
+    def full_width(self, b: int) -> bool:
+        """A payload of all the word's bits, p = 2^b − C with C < 2^(b − 8): every m whose top byte is not 0xFF is < p."""
+        return b == 32 * self.limbs and (1 << b) - self.p < 1 << (b - 8)
+
     def check_payload(self, payload: int | None) -> int:
         b = self.payload if payload is None else payload
-        if not 8 <= b or (1 << b) > self.p:
-            raise ValueError(f"{self.name}: a payload is under {self.p.bit_length() - 1} bits")
+        if not 8 <= b or ((1 << b) > self.p and not self.full_width(b)):
+            raise ValueError(f"{self.name}: a payload is under {self.p.bit_length() - 1} bits, or the word's full width")
         return b
+
+    def payload_bound(self, payload: int | None = None) -> int:
+        """The payloads are the m below this: 2^payload, or p at full width."""
+        return min(1 << self.check_payload(payload), self.p)
 
     def record_bytes(self, payload: int | None = None) -> int:
         return LANES * self.lane_words(payload) * self.word_bytes
@@ -82,6 +96,8 @@ FIELDS = {
     127: Field("p127", 127, (1 << 127) - 1, 4, 126),
     255: Field("p255", 255, (1 << 255) - 19, 8, 254),
     521: Field("p521", 521, (1 << 521) - 1, 17, 520),
+    256: Field("p256", 256, (1 << 256) - 189, 8, 256),
+    512: Field("p512", 512, (1 << 512) - 569, 16, 512),
 }
 
 
@@ -209,8 +225,8 @@ def key(f: Field, seed: bytes, rounds: int) -> Key:
 
 def encode_word(m: int, i: int, k: Key, payload: int | None = None) -> int:
     f = k.field
-    if not 0 <= m < 1 << f.check_payload(payload):
-        raise ValueError("a payload is under 2^payload")
+    if not 0 <= m < f.payload_bound(payload):
+        raise ValueError("a payload is under 2^payload, and under p")
     t, x = k.tweak(i), m
     for c in k.c:
         x = rho((x + c + t) % f.p, f)
@@ -288,18 +304,21 @@ def store_bytes(words: list[list[int]], f: Field) -> bytes:
     return bytes(out)
 
 
-def block(words: list[list[int]], j: int, f: Field) -> bytes:
-    """E_j: lane j mod 32's words of task j div 32."""
-    return b"".join(word_bytes(y, f) for y in words[j])
+def block(words: list[list[int]], j: int, f: Field, tb: int = 1) -> bytes:
+    """E_j: lane j mod 32's words of tasks tb·(j div 32) … tb·(j div 32) + tb − 1 (tb adjacent K-chunks of the same
+    rows, one warp of the fused GEMM each)."""
+    q, lane = divmod(j, LANES)
+    return b"".join(word_bytes(y, f) for t in range(tb) for y in words[LANES * (tb * q + t) + lane])
 
 
 # --- the bandwidth audit's tags over the encoded words ---------------------------------------------------------------
 
-def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0) -> list[bytes]:
+def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0, tb: int = 1) -> list[bytes]:
     from verity.core.protocols.bandwidth import tags
 
+    assert len(words) % (LANES * tb) == 0
     keyed = tags.get("ro-blake3/v1").keyed(seed)
-    return [keyed(base + j, block(words, j, f)) for j in range(len(words))]
+    return [keyed(base + j, block(words, j, f, tb)) for j in range(len(words) // tb)]
 
 
 def leaves_of(ys: list[bytes], seed: bytes) -> list[bytes]:
@@ -321,6 +340,34 @@ def random_weights(n: int, kdim: int, seed: int) -> bytes:
 
 # --- the frontier's quantities ---------------------------------------------------------------------------------------
 
+def root_split(f: Field) -> tuple[int, int, int]:
+    """(n, s, e) with (p + 1)/4 = (2^n − 1)·2^s + e for p = 2^b − C = 3 mod 4: D = (C − 1)/4, s the least with
+    2^s > D, e = 2^s − D, n = b − 2 − s."""
+    d = ((1 << f.bits) - f.p - 1) // 4
+    s = d.bit_length()
+    n, e = f.bits - 2 - s, (1 << s) - d
+    assert (((1 << n) - 1) << s) + e == (f.p + 1) // 4
+    return n, s, e
+
+
+def _pow2m1_chain(n: int) -> tuple[int, int]:
+    """Squarings and multiplications of a^(2^n − 1) by x_2j = x_j^(2^j)·x_j and x_(j+1) = x_j²·a (`wide.cu`'s `pow2m1`)."""
+    if n == 1:
+        return 0, 0
+    s, m = _pow2m1_chain(n - 1 if n % 2 else n // 2)
+    return s + (1 if n % 2 else n // 2), m + 1
+
+
+def root_chain(f: Field) -> tuple[int, int]:
+    """Squarings and multiplications in one ρ the kernel computes (the square check's squaring not counted)."""
+    if not f.three_mod_four:
+        return 251, 11
+    if f.p == (1 << f.bits) - 1:
+        return f.bits - 2, 0
+    n, s, e = root_split(f)
+    sq, mu = _pow2m1_chain(n)
+    return sq + s + e.bit_length() - 1, mu + e.bit_count() - 1 + 1
+
+
 def root_squarings(f: Field) -> int:
-    """Squarings in one ρ the kernel computes (p255's 11 multiplications not counted)."""
-    return f.bits - 2 if f.three_mod_four else 251
+    return root_chain(f)[0]
