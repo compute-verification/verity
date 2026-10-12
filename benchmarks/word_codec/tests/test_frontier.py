@@ -42,3 +42,11 @@ def test_frontier_takes_the_lowest_y_at_x_at_least_x_star():
     assert best[1]["y_total"] == 1.6 and best[32]["y_total"] == 2.0
     assert F.frontier(pts, budget, d=1.0)[1]["y_total"] == 1.5
     assert "| 1 | 521 | 1 |" in F.table(pts, budget) and "none at x ≥ x*" in F.table(pts, budget, batches=(8,))
+
+
+def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
+    pts = F.check([point(y_total=1.7), point(y_total=1.6, arithmetic="b"), point(k=2, y_total=1.9),
+                   point(lane="u", y_total=1.8), point(batch=32, y_total=2.0), point(y_total=1.0, measured=False)])
+    best = {(p["lane"], p["k"], p["batch"], p["measured"]): p["y_total"] for p in F.best_per_config(pts)}
+    assert best == {("t", 1, 1, True): 1.6, ("t", 2, 1, True): 1.9, ("u", 1, 1, True): 1.8, ("t", 1, 32, True): 2.0,
+                    ("t", 1, 1, False): 1.0}

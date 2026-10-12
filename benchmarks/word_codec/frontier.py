@@ -15,6 +15,8 @@ and this script selects them all (`research data select --kind codec-frontier-po
 - y, fused decode-step time over native at Llama-3.1-8B's linears, layer-weighted, as a stacked bar per point
   (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a horizontal line at 2×;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
+- one bar per configuration, the lowest y_total of each (lane, b, k, batch, measured) over runs and kernel variants
+  (`--all` draws every point);
 and prints the frontier, the lowest y_total at x ≥ x* at each batch (d = the point's y_total unless `--d` fixes it).
 Never commit the image or the table.
 
@@ -124,7 +126,19 @@ def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = 
     return "\n".join(lines)
 
 
-def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32)) -> None:
+def best_per_config(points: list[dict]) -> list[dict]:
+    """The lowest y_total of each (lane, b, k, batch, measured, reference): one bar per configuration, whichever run,
+    arithmetic or kernel variant gave it."""
+    best = {}
+    for p in points:
+        key = (p.get("lane"), p["b"], p["k"], p["batch"], bool(p["measured"]), bool(p.get("reference")))
+        if key not in best or p["y_total"] < best[key]["y_total"]:
+            best[key] = p
+    return list(best.values())
+
+
+def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
+         show_all: bool = False) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -132,6 +146,9 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
     import numpy as np
 
     pts = [p for p in points if p["batch"] in batches]
+    if not show_all:
+        pts = best_per_config(pts)
+    lanes = {p.get("lane") for p in pts if not p.get("reference")}
     if not pts:
         raise SystemExit("no points at the plotted batches")
     tau_ref = statistics.median(p["tau"] for p in pts) if tau_ref is None else tau_ref
@@ -151,8 +168,12 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
         if p.get("reference"):
             ax.scatter([xc], [p["y_total"]], marker="*", s=160, color="k" if p["measured"] else "none", edgecolors="k",
                        zorder=5)
-        ax.annotate(f"b={p['b']} k={p['k']}\nM={p['batch']}", (xc, bottom), textcoords="offset points", xytext=(0, 3),
-                    ha="center", fontsize=6)
+        if p["batch"] == batches[0] or show_all:
+            name = p.get("label") if p.get("reference") else f"b={p['b']} k={p['k']}"
+            if len(lanes) > 1 and not p.get("reference"):
+                name += f"\n{p.get('lane')}"
+            ax.annotate(name + (f" M={p['batch']}" if show_all else ""), (xc, bottom), textcoords="offset points",
+                        xytext=(0, 3), ha="center", fontsize=6)
     ax.set_xscale("log")
     ax.axhline(2.0, color="r", linestyle="--", linewidth=1)
     ax.text(ax.get_xlim()[0], 2.02, " 2× native", color="r", fontsize=8, va="bottom")
@@ -195,6 +216,7 @@ def main() -> int:
     ap.add_argument("--d", type=float, help="the step's time in passes of E for x* (default: each point's y_total)")
     ap.add_argument("--batches", default="1,32")
     ap.add_argument("--p2", help="X,Y,TAU: P2 as a modelled reference point")
+    ap.add_argument("--all", action="store_true", help="draw every point, not the best of each configuration")
     a = ap.parse_args()
     points = []
     arts = a.art or ([] if a.file else store_arts())
@@ -212,7 +234,7 @@ def main() -> int:
     points = check(points)
     print(table(points, a.budget, batches, a.d))
     if a.out:
-        draw(points, Path(a.out), a.budget, a.tau, batches)
+        draw(points, Path(a.out), a.budget, a.tau, batches, a.all)
         print(f"wrote {a.out}")
     return 0
 
