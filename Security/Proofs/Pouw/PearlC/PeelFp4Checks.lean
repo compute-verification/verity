@@ -6,11 +6,15 @@ import Proofs.Pouw.PearlC.PeelFp4Checks.T16mChains
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16mFactors
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram0
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram1
+import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram2
+import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram3
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16mWords
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nChains
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nFactors
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram0
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram1
+import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram2
+import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram3
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nWords
 
 /-!
