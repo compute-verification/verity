@@ -391,7 +391,7 @@ def fused_cfgs(lib: Lib, spec: str) -> list[tuple[int, int, int]]:
     warp tags once its own work is done), each checked against wt_fused's bounds. `auto`: untagged, the most decoder
     warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1); tagged,
     0, 2, 4 and 6 of those warps tagging from the start, at 4 fewer stages."""
-    smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (lib.sb + 32)
+    smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (lib.sb + 40)
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":

@@ -987,6 +987,24 @@ __device__ __forceinline__ void mbar_wait(u64 *bar, u32 parity) {
       "r"(parity)
       : "memory");
 }
+__device__ __forceinline__ bool mbar_test(u64 *bar, u32 parity) {
+  u32 r;
+  asm volatile(
+      "{\n .reg .pred p;\n mbarrier.test_wait.parity.shared::cta.b64 p, [%1], %2;\n selp.u32 %0, 1, 0, p;\n}\n"
+      : "=r"(r)
+      : "r"(smem_u32(bar)), "r"(parity)
+      : "memory");
+  return r != 0;
+}
+__device__ __forceinline__ bool mbar_try(u64 *bar, u32 parity, u32 ns) {   // waits at most about ns
+  u32 r;
+  asm volatile(
+      "{\n .reg .pred p;\n mbarrier.try_wait.parity.shared::cta.b64 p, [%1], %2, %3;\n selp.u32 %0, 1, 0, p;\n}\n"
+      : "=r"(r)
+      : "r"(smem_u32(bar)), "r"(parity), "r"(ns)
+      : "memory");
+  return r != 0;
+}
 __device__ __forceinline__ void bulk_load(void *dst, const void *src, u32 bytes, u64 *bar) {
   asm volatile("cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes [%0], [%1], %2, [%3];\n" ::"r"(
                    smem_u32(dst)),
@@ -1450,12 +1468,15 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // The CTA's tasks are one sequence of words (task i's word w is word TW i + w), cut into units of 32: decoder warp d
 // takes units d, d + D, ..., lane l a unit's word l. A lane loads its word, decodes it, and writes its payload (stage
 // bytes PB w ..) only once every word of the task is loaded, since a payload overwrites the stored bytes of the words
-// before it. Barriers a stage: full (the copy), loaded (TW lanes), decoded (TW lanes), empty (the MMA warp's lanes).
+// before it. Barriers a stage: full (the copy), ready (full relayed in task order), loaded (TW lanes), decoded (TW
+// lanes), empty (the MMA warp's lanes).
 //
-// A parity wait is right only while its barrier is at most one phase behind, which the host's bounds give: D at least
-// the units a task spans (no warp holds two units of one task, which would deadlock on `loaded`), and at least
-// ceil(32 D / TW) stages (a decoder's tasks advance by at most that from one unit to its next, whose stage it then
-// finds refilled or being refilled). One MMA warp keeps `decoded` and `empty` in task order.
+// A parity wait is right only while its barrier is at most one phase behind. Bulk copies may complete out of order, so
+// a decoder that skipped task i - stages cannot read that copy's completion off `full`; the copy lane, which observes
+// every copy in order, relays each onto `ready`, and the decoders wait on that. The host's bounds do the rest: D at
+// least the units a task spans (no warp holds two units of one task, which would deadlock on `loaded`), and at least
+// ceil(32 D / TW) stages (a decoder's tasks advance by at most that from one unit to its next, so the stage's previous
+// task is one it held, or an earlier one, whose relay came first). One MMA warp keeps `decoded` and `empty` in order.
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
 // 128 registers, three at 168, two at 255).
@@ -1464,7 +1485,7 @@ constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a ta
 
 template <int NB8>
 __host__ __device__ constexpr int fused_smem_bytes(int stages) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 4 * stages * 8 + 8;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 5 * stages * 8 + 8;
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -1507,7 +1528,7 @@ __device__ __forceinline__ void put_payload_w(uint8_t *st, int w, int lane, cons
 // steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
 // behind a proxy fence.
 template <int K>
-__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *full, u64 *loaded, u64 *decoded, int stages,
+__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
                                              int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
                                              const u32 *__restrict__ tsteps) {
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
@@ -1526,8 +1547,8 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *full, u64 *load
     const bool on = i < ntasks;
     const int s = i % stages;
     uint8_t *st = smem + s * SB;
-    mbar_wait(full + lo % stages, (lo / stages) & 1);
-    if (hi != lo) mbar_wait(full + hi % stages, (hi / stages) & 1);
+    mbar_wait(ready + lo % stages, (lo / stages) & 1);
+    if (hi != lo) mbar_wait(ready + hi % stages, (hi / stages) & 1);
     u32 yw[NL];
     yw[0] = 0;
     if (on) {
@@ -1567,8 +1588,8 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
-  u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages;
-  u32 *tagq = reinterpret_cast<u32 *>(empty + stages);
+  u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages, *ready = empty + stages;
+  u32 *tagq = reinterpret_cast<u32 *>(ready + stages);
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
@@ -1579,6 +1600,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       mbar_init(loaded + s, TW);
       mbar_init(decoded + s, TW);
       mbar_init(empty + s, LANES);
+      mbar_init(ready + s, 1);
     }
     *tagq = 0;
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
@@ -1589,11 +1611,18 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
 
   if (warp == decoders + 1) {
     if (lane == 0) {
+      int r = 0;   // the next copy to relay
       for (int i = 0; i < ntasks; ++i) {
         const int s = i % stages;
-        if (i >= stages) mbar_wait(empty + s, (i / stages - 1) & 1);
+        if (i >= stages)
+          while (!mbar_try(empty + s, (i / stages - 1) & 1, 128))
+            while (r < i && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
         mbar_expect_tx(full + s, SB);
         bulk_load(smem + s * SB, wstore + (q0 + i * gq) * SB, SB, full + s);
+      }
+      for (; r < ntasks; ++r) {
+        mbar_wait(full + r % stages, (r / stages) & 1);
+        mbar_arrive(ready + r % stages);
       }
     }
     __syncwarp();
@@ -1618,7 +1647,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
     }
   } else if (warp < decoders) {
-    decode_tasks<K>(smem, full, loaded, decoded, stages, ntasks, q0, gq, base, decoders, warp, lane, tsteps);
+    decode_tasks<K>(smem, ready, loaded, decoded, stages, ntasks, q0, gq, base, decoders, warp, lane, tsteps);
   }
   if (tags) tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, tagq, tags);
 }
