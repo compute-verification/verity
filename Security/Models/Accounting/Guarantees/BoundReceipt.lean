@@ -132,7 +132,9 @@ accepts, the GPU's compute is within `F`, the rest's tile work within `F_z`, and
 its point: off the node's queries the mix doesn't reach either location, so `2s/2^h` covers the receipts made nowhere.
 The compressions run at each value of the mix, where what each location is sent is a function of the other's input,
 paid for in `L` or `L_z` bits as at `e = 0`. A receipt one location made and the other committed is the maker's, so the
-receipts the rest relays to the GPU are among the at most `m` blocks the rest can make.
+receipts the rest relays to the GPU are among the at most `m` blocks the rest can make. `RateAuditInteractive`'s side
+sources see the oracle without querying it, which costs that bound `m·b` and `C(N, m)·2^L/2^(h·m)`; here the only
+other location is the rest, whose mix queries `q_z` counts.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptLinkInteractive`, as `BoundReceiptLink`'s, with the guess taken over the
 node's queries.
