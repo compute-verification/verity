@@ -2,8 +2,9 @@
 against `kv.py`, then timed. Writes `kv-codec.json` and `kv.log` under `--out`, and in a `research run` its `result.json`.
 
 Nothing is timed before its gate passed, in this order:
-- `gate`: at every k of `--ks`, device encode equals `kv.encode_word` on edge and random payloads at indices past 2^32
-  (the tweak's high limb), device decode of the reference's words equals their payloads, and `--gate-words` random words
+- `gate`: at every k of `--ks`, device encode equals `kv.encode_word` on edge and random payloads at indices from each of
+  `GATE_BASES` (below 2^32, across it within a warp, and past it: the tweak's high word or none), device decode of the
+  reference's words equals their payloads, and `--gate-words` random words
   go through the device's encode and decode unchanged, the decode's checksum mode giving the payloads' XOR;
 - `read`: the read rate R over a store of `--store-gib`, the best of a few grids;
 - `rates`: compute-only squarings (ILP 1 and 2 words a thread), decodes and encodes of k rounds, words/s;
@@ -43,6 +44,7 @@ L2_DEFEAT_BYTES = 1 << 30
 SHAPES_70B = {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)}
 E_70B = K.LAYERS * sum(n * kd for n, kd in SHAPES_70B.values())
 CONTEXTS = (512, 2048, 8192)
+GATE_BASES = (77, (1 << 32) - 20, (1 << 33) + 77)
 
 
 class Lib:
@@ -143,7 +145,6 @@ def gate(lib: Lib, torch, ks, n_ref: int, n_words: int, log) -> dict:
     rng = random.Random(f.n)
     edges = [0, 1, 2, 3, f.p - 1, f.p - 2, (f.p - 1) // 2, (f.p + 1) // 2, 1 << (f.n - 1), (1 << 32) - 1, f.c, f.p - f.c]
     payloads = edges + [rng.randrange(f.p) for _ in range(n_ref - len(edges))]
-    base = (1 << 33) + 77
     m = to_device(torch, payloads, f)
     y = torch.empty_like(m)
     back = torch.empty_like(m)
@@ -156,24 +157,28 @@ def gate(lib: Lib, torch, ks, n_ref: int, n_words: int, log) -> dict:
     for k in ks:
         key = K.key(f.name, SEED, k)
         set_key(lib, key)
-        lib.call("kv_encode", ptr(m), ptr(y), len(payloads), base, k, 0, st)
-        ref = [K.encode_word(v, base + i, key) for i, v in enumerate(payloads)]
-        ref_d = to_device(torch, ref, f)
-        lib.call("kv_decode", ptr(ref_d), ptr(back), len(payloads), base, k, 0, 0, st)
+        bad_enc, bad_dec = [], []
+        for base in GATE_BASES:
+            lib.call("kv_encode", ptr(m), ptr(y), len(payloads), base, k, 0, st)
+            ref = [K.encode_word(v, base + i, key) for i, v in enumerate(payloads)]
+            ref_d = to_device(torch, ref, f)
+            lib.call("kv_decode", ptr(ref_d), ptr(back), len(payloads), base, k, 0, 0, st)
+            torch.cuda.synchronize()
+            bad_enc += [base + i for i, (a, b) in enumerate(zip(from_device(y, f), ref)) if a != b]
+            bad_dec += [base + i for i, (a, b) in enumerate(zip(from_device(back, f), payloads)) if a != b]
         lib.call("kv_encode", ptr(big), ptr(big_y), n_words, 0, k, 0, st)
         lib.call("kv_decode", ptr(big_y), ptr(big_back), n_words, 0, k, 0, 0, st)
         xr.zero_()
         lib.call("kv_decode", ptr(big_y), 0, n_words, 0, k, 0, ptr(xr), st)
         torch.cuda.synchronize()
-        got = from_device(y, f)
-        bad_enc = [i for i, (a, b) in enumerate(zip(got, ref)) if a != b]
-        bad_dec = [i for i, (a, b) in enumerate(zip(from_device(back, f), payloads)) if a != b]
         round_trip = bool(torch.equal(big_back, big))
         checksum = (int(xr.item()) & 0xFFFFFFFF) == want_xor
         ok = not bad_enc and not bad_dec and round_trip and checksum
-        out[k] = {"checked_against_reference": len(payloads), "round_trip_words": n_words, "encode_mismatch": bad_enc[:8],
-                  "decode_mismatch": bad_dec[:8], "round_trip": round_trip, "checksum": checksum, "ok": ok}
-        log(f"gate {lib.name} k={k}: {'ok' if ok else 'FAIL'} ({len(payloads)} words against kv.py, {n_words} round trip)")
+        out[k] = {"checked_against_reference": len(payloads) * len(GATE_BASES), "bases": list(GATE_BASES),
+                  "round_trip_words": n_words, "encode_mismatch": bad_enc[:8], "decode_mismatch": bad_dec[:8],
+                  "round_trip": round_trip, "checksum": checksum, "ok": ok}
+        log(f"gate {lib.name} k={k}: {'ok' if ok else 'FAIL'} ({len(payloads)} words against kv.py at each of indices "
+            f"{', '.join(map(str, GATE_BASES))} on; {n_words} round trip)")
     return out
 
 
