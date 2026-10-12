@@ -134,7 +134,6 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
     if tags.plainLeaves then checkDescription st registered else checkRegistered st registered
-    Registered.checkFull registered draw
     checkIdentifier st identifier
     return st
   else do
