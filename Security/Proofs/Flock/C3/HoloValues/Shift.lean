@@ -16,7 +16,7 @@ open Flock Flock.RecAlgebra
 
 /-- `B` draws at round `k + 1` what `A` draws at `k`. Only draws that succeed: `Coins.ofRounds`' errors name the
 round. -/
-def Later (A B : Coins) : Prop := ∀ k n r, A.round k n = .ok r → B.round (k + 1) n = .ok r
+def Later (A B : RecAlgebra.Coins) : Prop := ∀ k n r, A.round k n = .ok r → B.round (k + 1) n = .ok r
 
 /-- `m` returns on `B` from round `k + 1` what it returns on `A` from `k`, one round later, when `B` is `Later`. -/
 def CShift {β : Type} (m : CM β) : Prop :=
@@ -41,7 +41,8 @@ theorem CShift.bind' {β γ : Type} {m : CM β} {f : β → CM γ} (hm : CShift 
 
 theorem CShift.coinVec' (n : ℕ) : CShift (coinVec n) := by
   intro A B hAB k k' b h
-  have hr : ∀ (j : ℕ) (C : Coins), (StateT.run (read : CM Coins) j).run C = pure (C, j) := fun _ _ => rfl
+  have hr : ∀ (j : ℕ) (C : RecAlgebra.Coins), (StateT.run (read : CM RecAlgebra.Coins) j).run C = pure (C, j) :=
+    fun _ _ => rfl
   unfold coinVec at h ⊢
   by_cases hn : n = 0
   · rw [ite_eq_left hn] at h ⊢
@@ -184,7 +185,7 @@ theorem later_ofRounds {c : Array (Array F128)} {x : Array F128} (hx : x.size �
     Later (Coins.ofRounds c) (Coins.ofRounds (#[x] ++ c)) := by
   intro k n r h
   have hx' : x ≠ #[] := fun e => hx (by rw [e]; rfl)
-  have h1 : (#[x].filter (·.size ≠ 0)).size = 1 := by simp [hx']
+  have h1 : (#[x].filter (·.size ≠ 0)).size = 1 := by first | simp [hx'] | simp [hx]
   have e : ((#[x] ++ c).filter (·.size ≠ 0))[k + 1]? = (c.filter (·.size ≠ 0))[k]? := by
     rw [Array.filter_append, Array.getElem?_append_right (by omega), h1, Nat.add_sub_cancel]
     exact Array.size_append ..
