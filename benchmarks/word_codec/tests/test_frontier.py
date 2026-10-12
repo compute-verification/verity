@@ -152,6 +152,28 @@ def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the
     assert wide_bench.points(lib, fq, bd, "r", "gpu")[0]["arithmetic"].endswith("/b3u2/kw2")
 
 
+def test_a_pass_committing_as_it_goes_is_priced_at_its_whole_time_and_commits_its_excess():
+    import types
+
+    import wide
+    import wide_bench
+
+    lib = types.SimpleNamespace(field=wide.field(512), sqr=1, roll=1, occ=1, cc=1, b3u=1, tb=1, kw=1, name="p512s1rcu")
+    fq = {1: {"x": 325.0, "delta": 0.7, "tau": 0.82, "mu_rebuild": 0.0005, "tau_sketch": 0.04}}
+    sk = {"y_total": 1.24, "y_decode": 0.08, "y_tag": 0.10, "y_commit": 0.05, "y_base": 1.01, "y_total_apart": 1.22,
+          "y_tag_apart": 0.08}
+    bd = {1: {1: {"y_total": 2.17, "y_decode": 0.08, "y_tag": 0.71, "y_commit": 0.38, "y_base": 1.0, "sketch": sk}}}
+    po_sk = {1: {"per_batch": {1: {"y_commit_overlap": 0.04,
+                                   "y_mode": {"alone": 1.17, "leaves": 1.20, "alone_s": 1.12, "apart": 1.16}}}}}
+    pts = {p["arithmetic"].split("/cc/b3u2")[1]: p for p in F.check(wide_bench.points(lib, fq, bd, "r", "g", None, None,
+                                                                                         po_sk))}
+    lv, ap = pts["/sketch/leaves-per-linear"], pts["/sketch-apart/leaves-per-linear"]
+    assert lv["y_total"] == pytest.approx(1.20) and lv["y_commit"] == pytest.approx(0.03)
+    assert lv["y_tag"] == pytest.approx(1.17 - 1.01 - 0.08) and lv["tau"] == 0.04
+    assert ap["y_total"] == pytest.approx(1.16) and ap["y_commit"] == pytest.approx(0.04)
+    assert ap["y_base"] + ap["y_decode"] + ap["y_tag"] + ap["y_commit"] == pytest.approx(1.16)
+
+
 def test_tau_counts_a_batched_tags_compressions_over_its_records():
     import wide
     import wide_bench

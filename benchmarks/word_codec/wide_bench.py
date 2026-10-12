@@ -766,6 +766,7 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
     seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
     sgn = sign_tensor(torch, f) if sketch else None
     ring = [torch.empty(32 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
+    ring_sk = [torch.empty(64 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
     commit_fn = "ww_sketch_commit" if sketch else "ww_commit"
     sa, sb = torch.cuda.Stream(), torch.cuda.Stream()
     ev_g, ev_l = [torch.cuda.Event() for _ in range(2)], [torch.cuda.Event() for _ in range(2)]
@@ -777,28 +778,35 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
         torch.cuda.synchronize()
         native = layers * sum(c["times"][mb]["native_s"] for c in cases.values()) if not profile else None
 
-        def gemm(name: str, tags, j: int) -> int:
+        def gemm(name: str, tags, j: int, sk=None) -> int:
             n, kd = B.SHAPES[name]
             if sketch:
                 return so.ww_gemm_sketch(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n,
-                                         kd, 0, 0, ptr(sgn), None, j, seed_buf, tags, 0, sa.cuda_stream)
+                                         kd, 0, 0, ptr(sgn), sk, j, seed_buf, None if sk else tags, 0, sa.cuda_stream)
             return so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n, kd, 0, 0,
                               seed_buf, tags, 0, sa.cuda_stream)
 
-        def committing(root) -> int:
+        def committing(root, apart: bool = False, hash_: bool = True) -> int:
+            """The pass committing as it goes; apart: the GEMMs write sketches to a ring (`ww_gemm_sketch` without
+            tags) and the second stream hashes them (`ww_sketch_tags`) before the leaves; hash_ False: only the GEMMs
+            (apart's own base)."""
             rc, j, i = 0, 0, 0
             for _ in range(layers):
                 for name in cases:
                     r = i % 2
-                    if i >= 2:
+                    if i >= 2 and hash_:
                         sa.wait_event(ev_l[r])
-                    rc |= gemm(name, ptr(ring[r]), j)
-                    ev_g[r].record(sa)
-                    sb.wait_event(ev_g[r])
-                    rc |= so.ww_sketch_leaves(ptr(pws), pblocks, ptr(ring[r]), j, nv[name], seed_buf, sb.cuda_stream)
-                    ev_l[r].record(sb)
+                    rc |= gemm(name, ptr(ring[r]), j, ptr(ring_sk[r]) if apart else None)
+                    if hash_:
+                        ev_g[r].record(sa)
+                        sb.wait_event(ev_g[r])
+                        if apart:
+                            rc |= so.ww_sketch_tags(ptr(ring_sk[r]), nv[name], j, seed_buf, ptr(ring[r]), sb.cuda_stream)
+                        rc |= so.ww_sketch_leaves(ptr(pws), pblocks, ptr(ring[r]), j, nv[name], seed_buf,
+                                                  sb.cuda_stream)
+                        ev_l[r].record(sb)
                     j, i = j + nv[name], i + 1
-            return rc | so.ww_sketch_tree(ptr(pws), pblocks, root, sb.cuda_stream)
+            return rc | (so.ww_sketch_tree(ptr(pws), pblocks, root, sb.cuda_stream) if hash_ else 0)
 
         if sketch and "root_equal" not in out:
             tags0, rc, j = so.ww_workspace_tags(ptr(pws), pblocks), 0, 0
@@ -806,22 +814,27 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
                 for name in cases:
                     rc |= gemm(name, tags0 + 32 * j, j)
                     j += nv[name]
-            ref, got = ctypes.create_string_buffer(64), ctypes.create_string_buffer(64)
+            ref = ctypes.create_string_buffer(64)
             rc |= so.ww_sketch_commit(ptr(pws), pblocks, seed_buf, ref, sa.cuda_stream)
             torch.cuda.synchronize()
-            pws.zero_()
-            torch.cuda.synchronize()
-            rc |= committing(got)
-            torch.cuda.synchronize()
-            out["root_equal"] = not rc and ref.raw == got.raw and ref.raw != bytes(64)
-            log(f"pass leaves {lib.name} k={k} M={mb} ({layers} layers): root "
-                f"{'equals' if out['root_equal'] else 'DIFFERS from'} the pass commit's (rc {rc})")
+            for apart in (False, True):
+                got = ctypes.create_string_buffer(64)
+                pws.zero_()
+                torch.cuda.synchronize()
+                rc_a = rc | committing(got, apart)
+                torch.cuda.synchronize()
+                key = "root_equal_apart" if apart else "root_equal"
+                out[key] = not rc_a and ref.raw == got.raw and ref.raw != bytes(64)
+                log(f"pass leaves{' apart' if apart else ''} {lib.name} k={k} M={mb} ({layers} layers): root "
+                    f"{'equals' if out[key] else 'DIFFERS from'} the pass commit's (rc {rc_a})")
         if profile:
             torch.cuda.profiler.start()
             rc = committing(None)
             torch.cuda.synchronize()
+            rc |= committing(None, apart=True)
+            torch.cuda.synchronize()
             torch.cuda.profiler.stop()
-            out["profiled"] = {"batch": mb, "layers": layers, "rc": rc}
+            out["profiled"] = {"batch": mb, "layers": layers, "rc": rc, "order": ["leaves", "apart"]}
             break
 
         def one(mode: str) -> float:
@@ -835,9 +848,10 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
                     raise RuntimeError(f"{commit_fn}: error")
                 c_end.record(sb)
             rc, j = 0, 0
-            if mode == "leaves":
-                rc = committing(None)
-                c_end.record(sb)
+            if mode in ("leaves", "apart", "alone_s"):
+                rc = committing(None, mode != "leaves", mode != "alone_s")
+                if mode != "alone_s":
+                    c_end.record(sb)
             else:
                 for _ in range(layers):
                     for name in cases:
@@ -845,13 +859,17 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
                         j += nv[name]
             if rc:
                 raise RuntimeError(f"pass {mode} k={k} M={mb}: error {rc}")
-            if mode != "alone":
+            if mode not in ("alone", "alone_s"):
                 sa.wait_event(c_end)
             b.record(sa)
             b.synchronize()
             return a.elapsed_time(b) / 1e3
 
-        modes = ("alone", "commit", "leaves") if sketch and out["root_equal"] else ("alone", "commit")
+        modes = ["alone", "commit"]
+        if sketch and out["root_equal"]:
+            modes.append("leaves")
+        if sketch and out["root_equal_apart"]:
+            modes += ["alone_s", "apart"]
         for m in modes:
             one(m)
         t = {m: [] for m in modes}
@@ -861,16 +879,21 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
         med = {m: statistics.median(v) for m, v in t.items()}
         ta = med["alone"]
         out["per_batch"][mb] = {"alone_s": t["alone"], "with_commit_s": t["commit"], "native_pass_s": native,
-                                "y_pass": ta / native, "y_commit_overlap": (med["commit"] - ta) / native}
+                                "y_pass": ta / native, "y_commit_overlap": (med["commit"] - ta) / native,
+                                "times_s": t, "y_mode": {m: v / native for m, v in med.items()}}
         line = (f"pass overlap {lib.name}{' sketch' if sketch else ''} k={k} M={mb}: a pass of fused GEMMs "
                 f"{ta * 1e3:.2f} ms ({ta / native:.2f}x native), with the commit beside it {med['commit'] * 1e3:.2f} ms: "
                 f"commit +{(med['commit'] - ta) / native:.3f}")
         if "leaves" in med:
-            out["per_batch"][mb].update(with_leaves_s=t["leaves"], y_leaves=(med["leaves"] - ta) / native)
-            line += f"; committing as it goes {med['leaves'] * 1e3:.2f} ms: +{(med['leaves'] - ta) / native:.3f}"
+            out["per_batch"][mb].update(y_leaves=(med["leaves"] - ta) / native)
+            line += f"; committing as it goes {med['leaves'] / native:.3f}x (+{(med['leaves'] - ta) / native:.3f})"
+        if "apart" in med:
+            out["per_batch"][mb].update(y_apart=(med["apart"] - med["alone_s"]) / native)
+            line += (f"; hashed apart from the sketch ring {med['apart'] / native:.3f}x (sketch GEMMs alone "
+                     f"{med['alone_s'] / native:.3f}x, +{(med['apart'] - med['alone_s']) / native:.3f})")
         log(line)
         del xs, ys
-    del stores, wss, pws, ring
+    del stores, wss, pws, ring, ring_sk
     torch.cuda.empty_cache()
     return out
 
@@ -938,7 +961,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     """One point per batch and k with the commit serial after the pass, and, where `pass_overlap` measured it, one
     with the commit beside the next pass (arithmetic ".../commit-overlapped"). The sketch's rows give the same under
     ".../sketch" (hashed in the kernel, τ the sketch's), and ".../sketch-apart" (hashed by a kernel after each
-    call)."""
+    call); and the passes that commit as they go, at their whole pass's time over native (".../leaves-per-linear",
+    the commit their excess over the same GEMMs alone, which for ".../sketch-apart/..." includes the hash)."""
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
@@ -976,8 +1000,13 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
             o = (po_sk or {}).get(k, {}).get("per_batch", {}).get(mb)
             if o is not None:
                 out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped"))
-                if "y_leaves" in o:
-                    out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_leaves"]), "/sketch/leaves-per-linear"))
+                ym = o.get("y_mode", {})
+                for mode, base, suffix in (("leaves", "alone", "/sketch/leaves-per-linear"),
+                                           ("apart", "alone_s", "/sketch-apart/leaves-per-linear")):
+                    if mode in ym:
+                        yc = max(0.0, ym[mode] - ym[base])
+                        yp = dict(y, y_total=ym[mode], y_commit=yc, y_tag=ym[mode] - yc - y["y_base"] - y["y_decode"])
+                        out.append(point(k, mb, sketch_q(q), yp, yc, suffix))
     return out
 
 
