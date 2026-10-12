@@ -1,4 +1,5 @@
 import Proofs.Accounting.Device
+import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.Pouw
