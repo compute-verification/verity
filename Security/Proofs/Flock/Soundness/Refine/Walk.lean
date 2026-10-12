@@ -160,7 +160,8 @@ open Lean Elab Tactic Meta in
 /-- `ret_walk [c, …]` walks the goal `Ret m Q` to every return of `m`, leaving the goal `Q a` at each `pure a`; a bind of
 a computation headed by one of the constants keeps its equation as a hypothesis (see `retStep`). -/
 elab "ret_walk" "[" cs:ident,* "]" : tactic => do
-  let keep ← cs.getElems.mapM realizeGlobalConstNoOverloadWithInfo
+  let mut keep := #[]
+  for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
   let mut todo := (← getGoals)
   let mut left := #[]
   while true do
@@ -171,5 +172,15 @@ elab "ret_walk" "[" cs:ident,* "]" : tactic => do
       | some new => todo := new ++ rest
       | none => left := left.push g; todo := rest
   setGoals left.toList
+
+open Lean Elab Tactic Meta in
+/-- `kernel_rfl` closes `a = b` with `Eq.refl a` and leaves `a ≡ b` to the kernel, which checks it when the declaration
+is added (a false one fails there). The elaborator's `rfl` unfolds an executable function's join points into both arms;
+the kernel compares two calls of it whose arguments differ only in fields it never reads in milliseconds. -/
+elab "kernel_rfl" : tactic => do
+  let g ← getMainGoal
+  let some (_, a, _) := (← instantiateMVars (← g.getType)).eq? | throwError "kernel_rfl: the goal is not an equation"
+  g.assign (← mkEqRefl a)
+  replaceMainGoal []
 
 end FlockSoundness.Refine
