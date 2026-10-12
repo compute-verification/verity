@@ -1,9 +1,10 @@
 // The wide word codecs on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field (WW_BITS = 127,
-// 255 or 521); WW_SQR picks the squaring (0: operand scanning on 64-bit products, 1: PTX carry chains, lo and hi passes).
+// 255, 521, 256 or 512); WW_SQR picks the squaring (0: operand scanning on 64-bit products, 1: PTX carry chains, lo and
+// hi passes).
 //
-// A field element is N little-endian u32 limbs. p = 2^M − C (C = 1 for the Mersenne fields, 19 for p255). Lazy values:
-// `sqr` and `mul` take inputs below 2^M + 2^8 (Mersenne) or 2^256 (p255) and return values in the same range; `canon`
-// takes such a value to [0, p).
+// A field element is N little-endian u32 limbs. p = 2^M − C (C = 1 for the Mersenne fields, 19 for p255, 189 and 569
+// for the full-width p256 and p512, M = 32N). Lazy values: `sqr` and `mul` take inputs below 2^M + 2^8 (Mersenne) or
+// 2^(32N) (the others) and return values in the same range; `canon` takes such a value to [0, p).
 //
 // The store E holds word i's limb e at u32 index 32·N·⌊i/32⌋ + 32·e + (i mod 32): a warp's load of one limb of 32
 // consecutive words reads 128 contiguous bytes, and a task's record (L words a lane) is the 32·L·N u32 from 32·L·N·q.
@@ -108,12 +109,28 @@ struct Fd<521> {
   static constexpr int N = 17, M = 521, PB = 520;
   static constexpr uint32_t C = 1;
 };
+template <>
+struct Fd<256> {
+  static constexpr int N = 8, M = 256, PB = 256;
+  static constexpr uint32_t C = 189;
+};
+template <>
+struct Fd<512> {
+  static constexpr int N = 16, M = 512, PB = 512;
+  static constexpr uint32_t C = 569;
+};
 
 using F = Fd<WW_BITS>;
 constexpr int N = F::N, M = F::M, PB = F::PB;
 constexpr uint32_t C = F::C;
 constexpr bool MERS = C == 1;
+constexpr bool FULL = M == 32 * N;      // a word is all its limbs' bits, p = 3 mod 4
 constexpr int MB = M / 32, MS = M % 32;  // bit M is bit MS of limb MB
+constexpr uint32_t FOLD = C << (32 * N - M);  // 2^(32N) mod p, not Mersenne
+// the full-width root: (p + 1)/4 = (2^RN − 1)·2^RS + RE, RE = 2^RS − (C − 1)/4 (`wide.root_split`)
+constexpr int RD = (int)(C - 1) / 4;
+constexpr int rs_of(int d) { return d == 0 ? 0 : 1 + rs_of(d / 2); }
+constexpr int RS = rs_of(RD), RN = M - 2 - RS, RE = (1 << RS) - RD;
 constexpr int KMAX = WW_KMAX;
 constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES, TASK_COLS = 32 * TASK_TILES;
 constexpr int L = (8 * LANE_BYTES + PB - 1) / PB;  // words a lane a task
@@ -126,8 +143,10 @@ constexpr int SPLIT = MSG / 16;                    // TB = 2: compressions 0 …
 constexpr int TAIL = MSG - 16 * SPLIT;             // and compression SPLIT the first record's last TAIL words
 static_assert(TAIL > 0, "a record's message ends inside a compression");
 static_assert(GEMM_WARPS % KW == 0 && (TB == 1 || TB == KW), "a CTA holds whole pairs");
-static_assert(32 * N > M, "a spare bit above p");
+static_assert(32 * N > M || FULL, "a spare bit above p, or a full-width word");
 static_assert(C != 1 || (MB == N - 1 && MS > 0), "a Mersenne p's top bit is inside the last limb");
+static_assert(!FULL || (C % 4 == 1 && PB == M), "a full-width p is 3 mod 4, its payload the whole word");
+static_assert(MERS || FOLD < 65536, "`reduce`'s last carry fits limb 0");
 
 __host__ __device__ constexpr uint32_t plimb(int e) {
   return e < MB ? (e == 0 ? 0xFFFFFFFFu - (C - 1) : 0xFFFFFFFFu) : e == MB ? (MS ? (1u << MS) - 1 : 0) : 0;
@@ -371,24 +390,25 @@ __device__ __forceinline__ void reduce(uint32_t (&r)[N], const uint32_t (&t)[T])
     r[MB] &= (1u << MS) - 1;
     add_k<N>(r, r, topl);
   } else {
-    // p255: 2^256 ≡ 2C = 38. t = lo + 2^256 hi ≡ lo + 38 hi, then the ninth limb once more, then a carry once more.
-    static_assert(T <= 2 * N, "p255 reduces at most 2N limbs");
+    // 2^(32N) ≡ FOLD (38 for p255, C at full width). t = lo + 2^(32N) hi ≡ lo + FOLD hi, then the carry limb (≤ FOLD)
+    // once more, then a carry once more.
+    static_assert(T <= 2 * N, "reduce takes at most 2N limbs");
     uint64_t c = 0;
 #pragma unroll
     for (int e = 0; e < N; ++e) {
       const uint32_t h = N + e < T ? t[N + e] : 0;
-      c += (uint64_t)h * (2 * C) + t[e];
+      c += (uint64_t)h * FOLD + t[e];
       r[e] = (uint32_t)c;
       c >>= 32;
     }
-    uint64_t d = (uint64_t)(uint32_t)c * (2 * C);
+    uint64_t d = (uint64_t)(uint32_t)c * FOLD;
 #pragma unroll
     for (int e = 0; e < N; ++e) {
       d += r[e];
       r[e] = (uint32_t)d;
       d >>= 32;
     }
-    r[0] += (uint32_t)d * (2 * C);  // a carry leaves r[0] below 38·39, so this one does not carry
+    r[0] += (uint32_t)d * FOLD;  // a carry leaves r below FOLD², in limb 0, so this one does not carry
   }
 }
 
@@ -418,9 +438,9 @@ __device__ __forceinline__ void canon(uint32_t (&r)[N]) {
     s[MB] &= (1u << MS) - 1;
     select_k<N>(r, ge, s, r);
   } else {
-    // r < 2^256 < 3p: subtract p while r ≥ p, twice
+    // r < 2^(32N), below 3p for p255 and 2p at full width: subtract p while r ≥ p, twice or once
 #pragma unroll
-    for (int pass = 0; pass < 2; ++pass) {
+    for (int pass = 0; pass < (FULL ? 1 : 2); ++pass) {
       const uint32_t borrow = sub_k<N>(s, r, p);
       select_k<N>(r, !borrow, s, r);
     }
@@ -428,12 +448,12 @@ __device__ __forceinline__ void canon(uint32_t (&r)[N]) {
 }
 
 __device__ __forceinline__ void addmod(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
-  // a, b canonical: a + b < 2p fits N limbs
-  add_k<N>(r, a, b);
+  // a, b canonical: a + b < 2p, at full width with a carry out of the N limbs
+  const uint32_t cy = add_k<N>(r, a, b);
   uint32_t p[N], s[N];
   pconst(p);
   const uint32_t borrow = sub_k<N>(s, r, p);
-  select_k<N>(r, !borrow, s, r);
+  select_k<N>(r, cy || !borrow, s, r);
 }
 
 __device__ __forceinline__ void submod(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
@@ -481,7 +501,7 @@ __device__ __forceinline__ void dec_round(uint32_t (&y)[N], const uint32_t (&u)[
   sqr(v, y);
   canon(v);
   uint32_t w[N];
-  if constexpr (MERS) {
+  if constexpr (MERS || FULL) {
     uint32_t p[N];
     pconst(p);
     sub_k<N>(w, p, v);  // odd y has y² ≠ 0, so p − y² is canonical
@@ -505,8 +525,11 @@ __device__ __forceinline__ void decode_word(uint32_t (&y)[N], const uint32_t (&t
   }
 }
 
-// r = a + b folded once mod a Mersenne p: a ≤ p + 1 and b ≤ p give r ≤ p + 1.
+// r = a + b folded once mod a Mersenne p: a ≤ p + 1 and b ≤ p give r ≤ p + 1. (A template, as `dec_round_mers`, so
+// that the full-width builds, whose MB is N, never instantiate it.)
+template <int B = MB>
 __device__ __forceinline__ void add_fold(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+  static_assert(MERS && B == MB, "Mersenne only");
   add_k<N>(r, a, b);
 #if WW_CC
   uint32_t top[N];
@@ -529,8 +552,9 @@ __device__ __forceinline__ void add_fold(uint32_t (&r)[N], const uint32_t (&a)[N
 // y ← ρ⁻¹(y) − u for a Mersenne p, given nu ≡ −u below 2^(M+1). y² = lo + 2^M·hi ≡ lo + hi with lo, hi < 2^M, and
 // −x ≡ x ⊕ p for x < 2^M, so ρ⁻¹(y) − u ≡ (lo ⊕ m) + (hi ⊕ m) + nu, m = p for odd y and 0 for even: a sum below
 // 2^(M+2), folded once and made canonical.
+template <int B = MB>
 __device__ __forceinline__ void dec_round_mers(uint32_t (&y)[N], const uint32_t (&nu)[N]) {
-  static_assert(MB == N - 1, "the top limb holds bit M − 1");
+  static_assert(MERS && B == N - 1, "the top limb holds bit M − 1");
   const uint32_t m = 0u - (y[0] & 1);
   uint32_t t[2 * N];
   sqr_full(t, y);
@@ -610,14 +634,57 @@ __device__ __forceinline__ void sqr_n(uint32_t (&a)[N]) {
   for (int n = 0; n < NSQ; ++n) sqr(a, a);
 }
 
+// r = a^(2^n − 1), a lazy: x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a (`wide._pow2m1_chain`).
+template <int NN>
+__device__ __forceinline__ void pow2m1(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  static_assert(NN >= 1, "n ≥ 1");
+  if constexpr (NN == 1) {
+    copy_k<N>(r, a);
+  } else if constexpr (NN % 2) {
+    pow2m1<NN - 1>(r, a);
+    sqr(r, r);
+    mul(r, r, a);
+  } else {
+    uint32_t h[N];
+    pow2m1<NN / 2>(h, a);
+    copy_k<N>(r, h);
+    sqr_n<NN / 2>(r);
+    mul(r, r, h);
+  }
+}
+
+// r = a^E for a small E ≥ 1, left to right.
+template <int E>
+__device__ __forceinline__ void pow_small(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  static_assert(E >= 1, "E ≥ 1");
+  if constexpr (E == 1) {
+    copy_k<N>(r, a);
+  } else if constexpr (E % 2) {
+    pow_small<E - 1>(r, a);
+    mul(r, r, a);
+  } else {
+    pow_small<E / 2>(r, a);
+    sqr(r, r);
+  }
+}
+
 // ρ(a), a canonical.
 __device__ __forceinline__ void root(uint32_t (&r)[N], const uint32_t (&a)[N]) {
   uint32_t p[N];
   pconst(p);
-  if constexpr (MERS) {
+  if constexpr (MERS || FULL) {
+    // s = a^((p+1)/4): 2^(M − 2) for a Mersenne p, (2^RN − 1)·2^RS + RE at full width
     uint32_t s[N], q[N], ns[N];
-    copy_k<N>(s, a);
-    sqr_n<M - 2>(s);
+    if constexpr (MERS) {
+      copy_k<N>(s, a);
+      sqr_n<M - 2>(s);
+    } else {
+      uint32_t e[N];
+      pow2m1<RN>(s, a);
+      sqr_n<RS>(s);
+      pow_small<RE>(e, a);
+      mul(s, s, e);
+    }
     canon(s);
     sqr(q, s);
     canon(q);

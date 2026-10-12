@@ -25,12 +25,29 @@ VECTORS = HERE / "wide_vectors.json"
 def test_fields():
     for bits, f in W.FIELDS.items():
         assert f.p.bit_length() == bits and pow(3, f.p - 1, f.p) == 1
-        assert 32 * f.limbs > bits >= 32 * (f.limbs - 1) and f.payload == bits - 1
-    assert [f.p % 8 for f in W.FIELDS.values()] == [7, 5, 7]
-    assert [f.lane_words() for f in W.FIELDS.values()] == [17, 9, 4]
-    assert [f.expansion() for f in W.FIELDS.values()] == [1.0625, 1.125, 1.0625]
+        if f.full_width(f.payload):
+            assert 32 * f.limbs == bits == f.payload and f.payload_bound() == f.p
+        else:
+            assert 32 * f.limbs > bits >= 32 * (f.limbs - 1) and f.payload == bits - 1
+            assert f.payload_bound() == 1 << f.payload
+    assert [f.p % 8 for f in W.FIELDS.values()] == [7, 5, 7, 3, 7]
+    assert [f.lane_words() for f in W.FIELDS.values()] == [17, 9, 4, 8, 4]
+    assert [f.expansion() for f in W.FIELDS.values()] == [1.0625, 1.125, 1.0625, 1.0, 1.0]
     with pytest.raises(ValueError, match="payload"):
         W.FIELDS[127].check_payload(127)
+    with pytest.raises(ValueError, match="payload"):
+        W.FIELDS[127].check_payload(128)
+
+
+@pytest.mark.parametrize("bits", [256, 512])
+def test_a_full_width_word_holds_any_bytes_but_a_top_0xff(bits):
+    f = W.FIELDS[bits]
+    assert ((0xFE << (bits - 8)) | ((1 << (bits - 8)) - 1)) < f.p < 1 << bits
+    assert W.root_split(f) == {256: (248, 6, 17), 512: (502, 8, 114)}[bits]
+    k = W.key(f, SEED, 1)
+    assert W.decode_word(W.encode_word(f.p - 1, 5, k), 5, k) == f.p - 1
+    with pytest.raises(ValueError, match="under p"):
+        W.encode_word(f.p, 5, k)
 
 
 def small(p: int) -> W.Field:
@@ -59,8 +76,8 @@ def test_p255_constants_and_the_kernel_root():
         assert W.rho_fast_5mod8(a) == y and W.rho_inv(y, f) == a
 
 
-@pytest.mark.parametrize("bits", [127, 521])
-def test_rho_mersenne(bits):
+@pytest.mark.parametrize("bits", [127, 521, 256, 512])
+def test_rho_three_mod_four(bits):
     f, rng = W.FIELDS[bits], random.Random(bits)
     for a in [0, 1, 2, f.p - 1, f.p - 2] + [rng.randrange(f.p) for _ in range(12)]:
         y = W.rho(a, f)
@@ -72,12 +89,12 @@ def test_rho_mersenne(bits):
 def test_round_trip(bits, rounds):
     f = W.FIELDS[bits]
     k, rng = W.key(f, SEED, rounds), random.Random(bits * 10 + rounds)
-    for m in [0, (1 << f.payload) - 1] + [rng.getrandbits(f.payload) for _ in range(3)]:
+    for m in [0, f.payload_bound() - 1] + [rng.getrandbits(f.payload) % f.payload_bound() for _ in range(3)]:
         i = rng.getrandbits(48)
         y = W.encode_word(m, i, k)
         assert 0 <= y < f.p and W.decode_word(y, i, k) == m == W.decode_raw(y, i, k)
     with pytest.raises(ValueError, match="payload"):
-        W.encode_word(1 << f.payload, 0, k)
+        W.encode_word(f.payload_bound(), 0, k)
 
 
 def test_keys_and_tweaks():
@@ -167,6 +184,7 @@ def test_kernel_constants_match():
         assert m and tuple(map(int, m.groups())) == (f.limbs, bits, f.payload, (1 << bits) - f.p)
     assert "constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES" in src
     assert W.root_squarings(W.FIELDS[255]) == 251 and W.root_squarings(W.FIELDS[521]) == 519
+    assert W.root_chain(W.FIELDS[256]) == (257, 13) and W.root_chain(W.FIELDS[512]) == (515, 18)
 
 
 def make_vectors() -> dict:
@@ -177,7 +195,7 @@ def make_vectors() -> dict:
         words = []
         for k in (1, 2):
             key = W.key(f, SEED, k)
-            for m in (0, (1 << f.payload) - 1, rng.getrandbits(f.payload)):
+            for m in (0, f.payload_bound() - 1, rng.getrandbits(f.payload) % f.payload_bound()):
                 i = rng.getrandbits(40)
                 words.append({"k": k, "i": i, "m": hex(m), "y": hex(W.encode_word(m, i, key))})
         n, kd = 16, 512

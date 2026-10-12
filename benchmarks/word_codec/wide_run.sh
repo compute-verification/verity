@@ -12,7 +12,7 @@
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
 # r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3, and
 # trailing c, u, t and w WW_CC=1, WW_B3U=1, WW_TB=2 and WW_KW=2, as in p521s1rcut) names
-# the builds, KMAX_<bits> (defaults 4, 2, 2) the largest k each
+# the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3) the largest k each
 # holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
 # `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
 # out/profile-details.txt.
@@ -25,7 +25,7 @@ export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bi
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}  # verity's bandwidth tags and PoUS's tree, for the gates
 WC=benchmarks/word_codec
 LIBSET=${LIBSET:-p127s1 p255s1 p521s1}
-declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-2} [521]=${KMAX_521:-2})
+declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-2} [521]=${KMAX_521:-2} [256]=${KMAX_256:-2} [512]=${KMAX_512:-3})
 B=$(mktemp -d /tmp/wide-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -I benchmarks/bandwidth)
 declare -A PIDS=()

@@ -231,8 +231,8 @@ def gate_layouts(torch, libs: list[WLib], log) -> dict:
 def gate_codec(lib: WLib, torch, n_words: int, ks: list[int], log) -> dict:
     f = lib.field
     rng = random.Random(7 + lib.bits)
-    edges = [0, 1, 2, (1 << f.payload) - 1, 1 << (f.payload - 1), (1 << 32) - 1, 1 << 32, (1 << 64) + 5]
-    ms = edges + [rng.getrandbits(f.payload) for _ in range(n_words - len(edges))]
+    edges = [0, 1, 2, f.payload_bound() - 1, 1 << (f.payload - 1), (1 << 32) - 1, 1 << 32, (1 << 64) + 5]
+    ms = edges + [rng.getrandbits(f.payload) % f.payload_bound() for _ in range(n_words - len(edges))]
     ys_raw = [0, 1, f.p - 1, f.p - 2, (f.p - 1) // 2] + [rng.randrange(f.p) for _ in range(n_words - 5)]
     base = (1 << 40) + 96
     m = flat_store(torch, ms, f)

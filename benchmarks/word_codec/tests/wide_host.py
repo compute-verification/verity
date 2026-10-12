@@ -1,7 +1,7 @@
 """`wide.cu`'s field arithmetic and codec built for the host (WW_HOST, g++) against `wide.py`: encode and the raw decode
 of random and edge words at each field and k. Not a suite test (it needs a C++ compiler); run it before a GPU run:
 
-    uv run python benchmarks/word_codec/tests/wide_host.py [--words 300] [--fields 127,255,521] [--ks 1,2,3]
+    uv run python benchmarks/word_codec/tests/wide_host.py [--words 300] [--fields 127,255,521,256,512] [--ks 1,2,3]
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def build(bits: int, kmax: int, out: Path) -> Path:
 
 def edges(f: W.Field) -> list[int]:
     p = f.p
-    return [0, 1, 2, 3, p - 1, p - 2, (p - 1) // 2, (p + 1) // 2, (1 << f.payload) - 1, 1 << (f.payload - 1),
+    return [0, 1, 2, 3, p - 1, p - 2, (p - 1) // 2, (p + 1) // 2, f.payload_bound() - 1, 1 << (f.payload - 1),
             (1 << 32) - 1, 1 << 32, (1 << (f.bits - 1)) - 1, 1 << (f.bits - 1)]
 
 
@@ -48,7 +48,8 @@ def check(exe: Path, f: W.Field, k: int, n: int, rng: random.Random) -> list[str
              hexlimbs(c1i, f)]
     cases = []
     for j in range(n):
-        m = edges(f)[j] if j < len(edges(f)) and edges(f)[j] < 1 << f.payload else rng.getrandbits(f.payload)
+        bound = f.payload_bound()
+        m = edges(f)[j] if j < len(edges(f)) and edges(f)[j] < bound else rng.getrandbits(f.payload) % bound
         y = edges(f)[j] if j < len(edges(f)) else rng.randrange(f.p)
         i = rng.choice([0, 1, (1 << 40) + j, rng.getrandbits(48), (1 << 64) - 1 - j])
         cases.append((i, m, y))
@@ -69,7 +70,7 @@ def check(exe: Path, f: W.Field, k: int, n: int, rng: random.Random) -> list[str
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--words", type=int, default=300)
-    ap.add_argument("--fields", default="127,255,521")
+    ap.add_argument("--fields", default="127,255,521,256,512")
     ap.add_argument("--ks", default="1,2,3,4")
     a = ap.parse_args()
     ks = [int(k) for k in a.ks.split(",")]
