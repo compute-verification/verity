@@ -1,6 +1,7 @@
 import Definitions.Accounting.BoundReceipt
 import Models.Pouw.Assumptions.Game
 import Models.Pouw.Assumptions.NCP.RouteUAssumptions
+import Definitions.Pouw.PearlC.Game
 
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
@@ -22,6 +23,8 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 * `BoundReceiptShare`: the link's share. At `m = covered`, the link bits each way stand in for at most
   `|E|/min(|z|, |E|)` times their number of the store's bits, so `μ_link ≤ (link capacity/ΣR)·|E|/min(|z|, |E|)`.
 * `TileUnpredictableOfTT` and `TileUnpredictableOfNCPU`: PoUW's `TT` and `TT_NCP_U` each give `TileUnpredictable`.
+* `TileUnpredictableMono`: `TileUnpredictable` carries to more compared entries and less credit, so one for the bound
+  partial accumulators (`boundEntries`) gives it for every set that contains them.
 -/
 
 namespace Accounting.Guarantees
@@ -152,8 +155,15 @@ workload, every adversary within compute `T` and `q` oracle calls, and every uni
 It is the work half of the ideal tile `BoundReceipt`'s game reads: a location that didn't do tile `u`'s work, within a
 budget below its credit, doesn't have its noised output. The game's tile outputs are uniform and the rest gets one only
 over the link or by tile work at `w`; this reads `w` as a unit's credit, `(1 − γ₀)` of it, and a uniform `z_j` as one
-whose checked values an adversary below the credit gets right with probability `ε`. It is not a new assumption:
-`TileUnpredictableOfTT` and `TileUnpredictableOfNCPU` derive it from PoUW's named assumptions. -/
+whose checked values an adversary below the credit gets right with probability `ε`. For the full checked set it is
+not a new assumption: `TileUnpredictableOfTT` and `TileUnpredictableOfNCPU` derive it from PoUW's named assumptions.
+
+**Partial accumulators.** The receipt binds the bytes `R` of the tile's partial accumulators, so the hypothesis it takes
+is `TileUnpredictable CM (boundEntries P keep) credit D γ₀ ε`: the entries `keep` it binds, at the work to the deepest of
+them. Fewer compared entries are easier to get right, so the full set's assumptions don't imply it; a named assumption
+for those entries discharges it, compute accounting's to state (NCP's checkpoints on route U, `boundEntries`; for
+Pearl-C's k-slice accumulators the same hypothesis in Pearl-C's game is `TileUnpredictablePearlC`).
+`TileUnpredictableMono` carries it to the full set and to every set containing `keep`. -/
 def TileUnpredictable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P : Pouw.Protocol Q R S) (credit : Pouw.Shape → ℝ) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Pouw.Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Pouw.Adversary CM,
@@ -185,5 +195,43 @@ def TileUnpredictableOfNCPU : Prop :=
     (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
     Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε →
       TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D γ₀ ε
+
+/-- The protocol `P` comparing only those of its entries in `keep`: the partial accumulators a receipt binds. NCP's
+checked values are its running sums at the block ends `min((t + 1)·d, 3k)` (`Pouw.NCP.Params.YU` on route U), so at
+`d = k_s` the checkpoints at depths `k_s·t`, `1 ≤ t ≤ t_s`, are
+`boundEntries (P.toProtocolU β) (fun sh => range t_s ×ˢ (range sh.m ×ˢ range sh.n))`, whose work is `m·n·k_s·t_s`. -/
+def boundEntries {Q R S : Type} (P : Pouw.Protocol Q R S) (keep : Pouw.Shape → Finset (ℕ × ℕ × ℕ)) :
+    Pouw.Protocol Q R S :=
+  { P with checkIdx := fun sh => P.checkIdx sh ∩ keep sh }
+
+/-- **`TileUnpredictable` in Pearl-C's game**, for a Pearl-C protocol `P` whose ticket words are what the receipt binds
+(the k-slice accumulators, inside Pearl-C's domain `D`): for every in-domain workload, every adversary within compute
+`T` and `q` oracle calls, and every unit `u` whose credit is more than `T/(1 − γ₀)`, the probability over the oracle and
+the salt that `u` is correct (`Pouw.PearlC.correctSet`) is at most `ε(q, N)`. It is the hypothesis `TileUnpredictable`
+is, for a named assumption on those accumulators to discharge; no Pearl-C assumption stated so far implies it. -/
+def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : Pouw.PearlC.CostModel Q R S) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
+    (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+  ∀ U : Pouw.PearlC.Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
+    ∀ A : Pouw.PearlC.Adversary CM, A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
+      Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤
+        ε q U.layout.N
+
+/-- **`TileUnpredictable` carries to more compared entries and less credit.** For every cost model, protocols `P` and
+`P'` with the same checked values, `P'` comparing at every shape every entry `P` compares, and credits
+`credit' ≤ credit`: `TileUnpredictable CM P credit D γ₀ ε` implies `TileUnpredictable CM P' credit' D γ₀ ε`. So one for
+the bound entries, `boundEntries P keep`, gives it for the full set `P` and for every `boundEntries P keep'` with
+`keep ⊆ keep'`, at its credit or below.
+
+Proof: `Accounting.SecurityProofs.TileUnpredictableMono`.
+
+Frozen (no-function): an implication between hypotheses over PoUW's game, about no Lean function of the protocol's
+code. -/
+def TileUnpredictableMono : Prop :=
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
+    (P P' : Pouw.Protocol Q R S) (credit credit' : Pouw.Shape → ℝ) (D : Pouw.Layout → Prop) (γ₀ : ℝ)
+    (ε : ℕ → ℕ → ℝ),
+    P'.Y = P.Y → (∀ sh, P.checkIdx sh ⊆ P'.checkIdx sh) → (∀ sh, credit' sh ≤ credit sh) →
+      TileUnpredictable CM P credit D γ₀ ε → TileUnpredictable CM P' credit' D γ₀ ε
 
 end Accounting.Guarantees

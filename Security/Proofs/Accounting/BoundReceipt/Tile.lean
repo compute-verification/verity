@@ -37,4 +37,14 @@ theorem TileUnpredictableOfNCPU : Accounting.Guarantees.TileUnpredictableOfNCPU 
   fun β _ _ _ _ _ _ _ CM P D γ₀ ε hTT =>
     tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε hTT.2
 
+/-- **More compared entries and less credit keep `TileUnpredictable`** (`Accounting.Guarantees.TileUnpredictableMono`):
+a unit whose checked values are right on `P'`'s entries is right on `P`'s. -/
+theorem TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono := by
+  classical
+  intro Q R S _ _ _ _ CM P P' credit credit' D γ₀ ε hY hidx hcr h U hU T hT q hq A hA u hu
+  refine (Pouw.pr_mono (fun x hx => ?_)).trans (h U hU T hT q hq A hA u (hu.trans_le (hcr _)))
+  rw [Pouw.checkedSet, Finset.mem_filter] at hx ⊢
+  obtain ⟨hr, c, hc, hact, hck⟩ := hx
+  exact ⟨hr, c, hc, hact, fun y hy => by rw [← hY]; exact hck y (hidx _ hy)⟩
+
 end Accounting.SecurityProofs
