@@ -237,6 +237,19 @@ def test_chip_state_is_paid_per_pass_and_padding_spends_gamma_exactly():
     assert padded["pad"] > 0 and gamma_cap(short, p, v, padded)["gamma"] == pytest.approx(0.01, abs=1e-9)
 
 
+def test_copies_spread_the_carried_state_over_their_steps_where_they_fit():
+    v = I.values(I.all_improved())
+    w = Workload(SHAPES["8B"], 1, 2048)
+    one, four = Params(3, 65536, 12, 0, 0.0), Params(3, 65536, 12, 0, 0.0, 4)
+    a, b = step(w, one, v), step(w, four, v)
+    ga, gb = gamma_cap(w, one, v, a), gamma_cap(w, four, v, b)
+    assert gb["mu_chip"] * b["cap"] == pytest.approx(ga["mu_chip"] * a["cap"] / 4)
+    assert gb["mu_unreg"] * b["cap"] == pytest.approx(ga["mu_unreg"] * a["cap"])
+    with_copies, without = F.best(w, v, "cap", "C", (3,)), F.best(w, {**v, "copies": 1}, "cap", "C", (3,))
+    assert with_copies["params"]["copies"] > 1 and with_copies["overhead"] < without["overhead"]
+    assert F.best(Workload(SHAPES["405B"], 1, 2048), v, "cap", "C", (3,))["params"]["copies"] == 1
+
+
 def test_frontier_points_respect_gamma():
     v = I.values(I.all_improved())
     ws = [Workload(SHAPES["8B"], 16, 8192), Workload(SHAPES["70B"], 4, 2048)]

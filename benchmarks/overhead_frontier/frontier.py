@@ -40,6 +40,7 @@ BLOCKS = (2048, 4096, 8192, 16384, 32768, 65536)
 K_S = (8, 12, 16, 32)
 BINDINGS = (0, 32, 64, 128, 256)
 HOST_SHARES = (0.0, 0.5, 0.8, 0.9, 0.95, 1.0)
+COPIES = (1, 2, 4, 8)
 BATCHES = (1, 4, 16, 64, 256)
 CONTEXTS = (2048, 8192, 32768, 131072)
 FRONTIERS = (("cap", "C"), ("pass", "C"), ("cap", "N"))
@@ -69,10 +70,13 @@ def best(w: Workload, v: dict[str, Any], definition: str, statement: str, ks: tu
     limit = GAMMA_MAX - (v["eta_reserve"] if definition == "cap" else 0.0)
     win: tuple | None = None
     least: tuple | None = None
-    for k, block, k_s, share in itertools.product(ks, BLOCKS, K_S, HOST_SHARES):
-        st0 = step(w, Params(k, block, k_s, 0, share), v)
+    fit = layout(w, v)
+    need = (w.shape.weight_bytes + w.batch * w.ctx * w.shape.kv_bytes_per_token) / fit
+    copies = [c for c in COPIES if c <= v["copies"] and c * need <= v["H"]]
+    for k, block, k_s, share, c in itertools.product(ks, BLOCKS, K_S, HOST_SHARES, copies):
+        st0 = step(w, Params(k, block, k_s, 0, share, c), v)
         for binding in BINDINGS:
-            p = Params(k, block, k_s, binding, share)
+            p = Params(k, block, k_s, binding, share, c)
             st = st0
             if definition == "cap":
                 st = pad(w, p, v, st, limit)
@@ -103,7 +107,7 @@ def _point(w, p, st, g, link, definition, feasible, limit) -> dict[str, Any]:
         "f_kv_hbm": st["f_kv_hbm"], "f_kv_reads": st["f_kv_reads"], "feasible": feasible,
         "overhead": st[definition] / plain - 1, "gamma": g["gamma"] + link, "terms": terms,
         "params": {"k": p.k, "width_bits": st["bits"], "block": p.block, "k_s": p.k_s, "binding": p.binding_label,
-                   "host_share": p.host_share, "openings": g["openings"]},
+                   "host_share": p.host_share, "copies": p.copies, "openings": g["openings"]},
         "parts": {n: st[n] / plain for n in ("t_rd", "t_tc", "t_kv", "t_act", "t_ar", "lin", "enc", "attn", "topup",
                                              "pad")},
         "gamma_limit": limit,
@@ -253,6 +257,8 @@ def summary(points: list[dict[str, Any]]) -> str:
             note = f"η allowance {100 * r['eta_allowance']:.2f}%"
         if r["parts"]["pad"] > 0:
             note += f" padded {100 * r['parts']['pad']:.0f}%"
+        if p["copies"] > 1:
+            note += f" {p['copies']} copies"
         if "residual" in r:
             note += f" d {r['d']:.2f} residual {100 * r['residual']:.1f}%"
         lines.append(f"{r['workload']:22} {r['tp']:>2} {r['f_kv_hbm']:5.2f} {100 * r['overhead']:6.1f}% "
@@ -276,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
            "inputs": describe(I.INPUTS),
            "floor_inputs": {n: {"value": v, "why": why} for n, (v, why) in I.FLOOR.items()},
            "grid": {"rounds": ROUNDS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "host_share": HOST_SHARES,
-                    "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512], "widths": WIDTHS,
+                    "copies": COPIES, "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512], "widths": WIDTHS,
                     "width_workloads": WIDTH_WORKLOADS},
            "frontiers": frontiers, "widths": width_sweep, "sensitivity": sens}
     (args.out / "frontier.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")

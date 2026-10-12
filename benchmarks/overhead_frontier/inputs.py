@@ -188,6 +188,11 @@ INPUTS: dict[str, Input] = {
     "prefetch": Input(False, "switch", "the GPUs wait for the seed", "estimate", True,
                       "prefetch the next pass's first blocks on chip across the gap (ra-remote-driver: 0.52% → "
                       "0.04% at 20 ms passes), hiding up to S_chip/R"),
+    "copies": Input(1, "copies of the weights and KV, at most", "a pass is one step's plan, which reads a block at most "
+                    "once (ra-remote-driver)", "policy", 8,
+                    "c differently keyed copies of the weights and KV where they fit, one read a step, so a pass spans "
+                    "c steps and pays its carried state once (design: the append encodes c times; needs the driver's "
+                    "plan format and the red team)"),
     "rtt": Input(0.020, "s", "ra-remote-driver's verifier round trip", "policy"),
     "n_session": Input(100, "windows", "ra-remote-driver's session of chained windows", "policy", 1000,
                        "sessions of 1,000 chained windows (17 minutes), so a padded pass's tail costs a tenth"),
