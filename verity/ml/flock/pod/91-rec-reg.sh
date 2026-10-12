@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Scratch job (cursor/rec-reg-integration-b8d8, never a PR): main + #1798 (R's top registered) + #1793 + #1786.
-# 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 with the relay that keeps the prover's Hello and registers R's salted top
-# before the session (the entry stacked of the private circuit's verity/registration/v2 record, inner/circuit-registration.json;
-# the proxy holds stacked/rep0's binding round to it), then over its inner session:
-# the registration against the record, the two records' Hellos, rec-transcript (innerCommits) on each record, rec-coins
+# Scratch job (cursor/rec-reg-integration-b8d8, never a PR): main + #1798 (R's top registered at staging) + #1793 + #1786.
+# 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1, R's salted top registered at staging (the entry stacked of the staged
+# statement's circuit registration, stage/circuit-registration.json, whose digest META binds; the proxy holds stacked/rep0's
+# binding round to it and to the circuit reps' statement digest), then over its inner session:
+# the registration against META and the session (and no salt of R's top in a verifier's file), the two records' Hellos, rec-transcript (innerCommits) on each record, rec-coins
 # (check 5) on the relay's record and on the prover's, L3 staged (c3_e2e.py stage level3), proved by C-Flock --zk under the
 # verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify under --rec-inner (plain) with check 5's
 # inputs, with and without the inner transcript, on each record. Outputs under out/: honest/ (88's), e2e/, exits.txt.
@@ -40,26 +40,41 @@ print(json.dumps({"same_bytes": v["hello"] == p["hello"], "canonical": p["hello"
 EOF
 echo "hello exit $?" | tee -a $X
 
-python3 - $H/inner $O/honest/out/stage.json $O/honest/out/registration-base.json > $E/registration.json <<'EOF2'
+python3 - $H/inner $O/honest/out/stage.json $ST > $E/registration.json <<'EOF2'
 import json, sys
 from pathlib import Path
-from verity_flock import rec_live as RL, rec_vstar as V
-d = Path(sys.argv[1])
-stage, base = (json.loads(Path(f).read_text()) for f in sys.argv[2:4])
-reg, pub = (json.loads((d / f).read_text()) for f in (RL.REGISTRATION, "public.json"))
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity_flock import inner_registered as IR, rec_live as RL, rec_vstar as V
+d, st = Path(sys.argv[1]), Path(sys.argv[3])
+stage = json.loads(Path(sys.argv[2]).read_text())
+meta = IR.meta(st)
+reg, copy, pub, sess = (json.loads(f.read_text()) for f in (st / IR.REGISTRATION, d / RL.REGISTRATION, d / "public.json",
+                                                             d / "session" / "session.json"))
 first = next(r for r in pub["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)
-V.registered(pub, reg)
+V.registered(pub, reg, meta[IR.REGISTRATION_KEY])
 entry = RL.registered_entry(reg, RL.STACKED)
 cap = json.loads((d / "stacked" / "ROOT.json").read_text())["cap"]
 priv = json.loads((d / "private.json").read_text())
 opening = next(p for p in priv["rounds"] if p["stream"] == "stacked/rep0" and p["k"] == 0)["tops"][0]
+digests = {s["stream"]: RL.split_round(bytes.fromhex(s["rounds"][0]["msg"]), True).digest.hex() for s in sess["streams"]
+           if s["stream"].split("/")[0] in ("circuit", RL.STACKED)}
+salts = IR.private(st, RL.STACKED)["salts"]
+visible = [st / "circuit.txt", st / f"pub-{stage['n']}.bin", st / IR.REGISTRATION, st / "partition.json",
+           st / "program.json", d / "public.json", d / RL.REGISTRATION, d / "schedule.json", *sorted((d / "session").iterdir())]
+leaks = [str(f) for f in visible if f.exists() and any(x.encode() in (b := f.read_bytes()) or bytes.fromhex(x) in b for x in salts)]
 print(json.dumps({"format": reg["format"], "values": [e["value"] for e in reg["registered"]], "stacked": entry,
+                  "meta_registration": meta[IR.REGISTRATION_KEY], "record_is_metas": R.digest(reg) == meta[IR.REGISTRATION_KEY],
+                  "session_copy_is_the_staged_record": copy == reg, "stage_json_registration": stage.get("registration"),
+                  "law": reg["law"], "scheme": reg["scheme"], "roots": reg["roots"], "window": reg["window"],
                   "binding_round_rebuilds_entry": RL.top_entry(reg["program"], RL.STACKED, [bytes.fromhex(b) for b in first["tops"][0]]) == entry,
                   "binding_round_top_nodes": len(first["tops"][0]), "opening_is_root_json_cap": "".join(opening["nodes"]) == cap,
-                  "program_is_staged_statements": reg["program"] == stage.get("program_sha512") == base["program"],
-                  "partition_is_staged_statements": reg["partition"] == stage.get("partition_digest") == base["partition"],
-                  "end": pub["end"],
-                  "mtime_ns": {f: (d / f).stat().st_mtime_ns for f in ("schedule.json", RL.REGISTRATION, "public.json")}}))
+                  "statement_digests": digests, "one_statement_digest": len(set(digests.values())) == 1,
+                  "program_is_metas": reg["program"] == meta["program_sha512"] == stage.get("program_sha512"),
+                  "partition_is_metas": reg["partition"] == meta["partition"]["digest"] == stage.get("partition_digest"),
+                  "salts": len(salts), "salt_leaks": leaks, "visible_checked": [str(f) for f in visible if f.exists()],
+                  "end": pub["end"]}))
+ok = R.digest(reg) == meta[IR.REGISTRATION_KEY] and copy == reg and len(set(digests.values())) == 1 and not leaks
+sys.exit(0 if ok else 1)
 EOF2
 echo "registration exit $?" | tee -a $X
 

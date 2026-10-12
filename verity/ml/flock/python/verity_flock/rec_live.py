@@ -25,12 +25,15 @@ registered value the verifier builds from them (`verity_flock.rec_outer`). The n
 absorb): it is committed once, at ``Commit``, and the firewall refuses a binding round whose cap is not ``root_B``; a later
 copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (candidate 3's
 stacked table R) has its level-0 top committed as a salted top of its stream's binding round instead, and its later copies
-counted the same way. That top is registered with the private circuit (`register_top`): its nodes are registered rows
-under salts drawn once, before the session and any coin, and the private circuit's ``verity/registration/v2`` record
-(``REGISTRATION``) names them as one more ``registered`` entry, named for the table (`with_registered`). The firewall
-refuses a binding round whose cap is not the registered top's, or a table that has neither a root at ``Commit`` nor a
-registered top; the round's salted top is the registered one, ``b || c`` for ``b || c``, so the verifier rebuilds the
-entry from that round's top alone (`top_entry`). The inner trees' leaves need no salt of their own (the statement's
+counted the same way. That top is registered with the private circuit at staging (`register_top`,
+`verity_flock.rec_session.stage_stacked`): its nodes are registered rows under salts drawn once, and the staged statement's
+circuit registration (``verity/registration/v2``, `verity_flock.inner_registered.bind`; this directory's copy
+``REGISTRATION``), whose digest META binds (``bound``), names them as one more ``registered`` entry, named for the table.
+The firewall refuses a registration whose digest is not META's, a table that has neither a root at ``Commit`` nor a
+registered top, and a binding round whose cap is not the registered top's or whose statement digest is not the one the
+circuit reps' binding rounds absorbed (so META, and the registration it binds, precede the stream's first coin); the
+round's salted top is the registered one, ``b || c`` for ``b || c``, so the verifier rebuilds the entry from that round's
+top alone (`top_entry`). The inner trees' leaves need no salt of their own (the statement's
 ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`): nothing about a tree but its salted top leaves the
 firewall.
 
@@ -87,8 +90,9 @@ from .rec_algebra import fast100
 
 KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
-#: the private circuit's registration (one-stage ``registration.record``, ``verity/registration/v2``), public, fixed before
-#: the session: its ``registered`` entries include the top of each table with no root at ``Commit`` (`with_registered`)
+#: the circuit registration the session was held to (``verity/registration/v2``, written at staging and bound by META:
+#: `verity_flock.inner_registered.REGISTRATION`), copied into the session directory: its ``registered`` entries include
+#: the top of each table with no root at ``Commit``
 REGISTRATION = "circuit-registration.json"
 #: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
 #: (`commit_top`)
@@ -659,10 +663,11 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
 
 
 def register_top(program: str, table: str, cap: bytes, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict:
-    """A table's level-0 top registered with the private circuit (``program``, the registration's) before its session: the
+    """A table's level-0 top registered with the private circuit (``program``, the registration's) at staging: the
     registered value ``table`` whose rows are the top's nodes (`top_rows`), each under its own salt, drawn here, once
     (one-stage ``registered.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
-    ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the registration names (`with_registered`)."""
+    ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the circuit registration names
+    (`verity_flock.inner_registered.bind`)."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
     rows = top_rows(cap)
@@ -677,18 +682,6 @@ def top_entry(program: str, table: str, top: list[bytes]) -> dict:
     from .rec_residuals import commits_entry
 
     return commits_entry(program, table, ROW_WORDS, top)
-
-
-def with_registered(registration: dict, entries: list[dict]) -> dict:
-    """The private circuit's registration with ``entries`` (`register_top`'s ``entry``) among its registered values, as
-    one-stage ``registration.record`` writes them: a ``verity/registration/v2`` record. A value is registered once."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
-
-    old = list(registration.get("registered") or ())
-    names = [e["value"] for e in old + list(entries)]
-    if len(set(names)) != len(names):
-        raise ValueError(f"a value is registered once, and the registration would name {sorted(names)}")
-    return {**registration, "format": R.FORMAT_V2, "registered": old + [dict(e) for e in entries]}
 
 
 def registered_entry(registration: dict | None, table: str) -> dict | None:
@@ -707,14 +700,14 @@ class Proxy:
     and V*'s witness need. ``commitments``, when the challenger committed to its coins before the session
     (`CoinServer.commit_coins`), are those commitments: every coin answer must then come with the salt that opens its
     round's commitment. Without them the coins are live, and a coin answer that comes with an opening stops the session
-    (`Flock.Firewall.Contract`'s rule). ``registration``: the private circuit's ``verity/registration/v2`` record;
-    ``registered``: by table, the prover's opening of the registered top (`register_top`) of each table the schedule gives
+    (`Flock.Firewall.Contract`'s rule). ``registration``: the circuit registration (``verity/registration/v2``) and
+    ``bound`` the digest the statement's META binds, which it must have; ``registered``: by table, the prover's opening of the registered top (`register_top`) of each table the schedule gives
     no root at ``Commit``, which the registration names by the table's name and its stream's binding round must bind
     (`register`)."""
 
     def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
                  commitments: dict[str, list[str]] | None = None, registration: dict | None = None,
-                 registered: dict[str, dict] | None = None):
+                 registered: dict[str, dict] | None = None, bound: str | None = None):
         self.coins = coins
         self.fresh_salt = fresh_salt
         self.schedule = check_schedule(schedule)
@@ -730,20 +723,27 @@ class Proxy:
         self.private: list[dict] = []
         self.stopped: str | None = None
         self.verdict: dict | None = None
-        #: the private circuit's registration, and by table the opening of its registered top (`register_top`)
-        self.registration = registration
+        #: the statement digest the circuit reps' binding rounds absorbed, which every other binding round must absorb too
+        self.statement_digest: bytes | None = None
+        #: the private circuit's registration, the digest META binds (``bound``), and by table the opening of its
+        #: registered top (`register_top`)
+        self.registration, self.bound = registration, bound
         self.registered: dict[str, dict] = {}
         for t, reg in (registered or {}).items():
             self.register(t, reg)
 
     def register(self, table: str, reg: dict) -> None:
         """``table``'s registered top (`register_top`'s opening), before Hello and any coin: a table the schedule gives no
-        root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the registration's entry
-        named ``table`` (`top_entry`)."""
+        root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the entry named
+        ``table`` of the registration whose digest META binds (``bound``, `top_entry`)."""
+        from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
         if self.hello is not None or self.coins.hello is not None or self.coins.committed is not None:
             raise ValueError(f"{table}: a top is registered before the session, never after Hello or a coin")
         if table in self.schedule["roots"] or table in self.registered:
             raise ValueError(f"{table}: registered twice, or a table whose root is committed at Commit")
+        if not isinstance(self.registration, dict) or self.bound is None or R.digest(self.registration) != self.bound:
+            raise ValueError(f"{table}: the registration is not the one the statement's META binds ({self.bound})")
         entry = registered_entry(self.registration, table)
         if entry is None:
             raise ValueError(f"{table}: the private circuit's registration (verity/registration/v2) names no {table}")
@@ -880,10 +880,15 @@ class Proxy:
                 if table in self.schedule["roots"]:
                     if root_b is None or s.caps[0].hex() != "".join(root_b["nodes"]):
                         raise ValueError(f"{stream}: the binding round's cap is not the committed root_B")
+                    if self.statement_digest is not None and s.digest != self.statement_digest:
+                        raise ValueError(refused(f"{stream}: the binding round's statement digest is not the other reps'"))
+                    self.statement_digest = s.digest
                 else:
                     reg = self.registered.get(table)
                     if reg is None:
                         raise ValueError(refused(f"{stream}: {table} has no root at Commit and no registered top"))
+                    if self.statement_digest is None or s.digest != self.statement_digest:
+                        raise ValueError(refused(f"{stream}: the binding round's statement digest is not the circuit reps'"))
                     if not s.caps or s.caps[0].hex() != "".join(reg["nodes"]) or s.caps[0] in level0:
                         raise ValueError(refused(f"{stream}: the binding round's cap is not {table}'s registered top"))
                 st["cap"] = s.caps[0]
