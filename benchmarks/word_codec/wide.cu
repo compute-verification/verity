@@ -19,9 +19,28 @@
 //                     each lane's encoded words (its block) with ro-blake3/v1 into `tags`
 //   commit            the tags' leaves (16 a leaf) and their RFC 6962 tree: benchmarks/bandwidth/tagger.cu's kernels
 #include <cstdint>
+
+#ifdef WW_HOST
+// The field arithmetic and the codec built for the host (`tests/wide_host.sh`): the same source, CUDA's qualifiers
+// emptied and its integer intrinsics written out.
+#define __device__
+#define __host__
+#define __forceinline__ inline
+#define __constant__ static
+static inline uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
+  s &= 31;
+  return s ? (hi << s) | (lo >> (32 - s)) : hi;
+}
+static inline uint32_t __funnelshift_r(uint32_t lo, uint32_t hi, uint32_t s) {
+  s &= 31;
+  return s ? (lo >> s) | (hi << (32 - s)) : lo;
+}
+static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((uint64_t)a * b) >> 32); }
+#else
 #include <cuda_runtime.h>
 
 #include "tagger.cu"
+#endif
 
 #ifndef WW_BITS
 #define WW_BITS 521
@@ -64,9 +83,9 @@ constexpr int L = (8 * LANE_BYTES + PB - 1) / PB;  // words a lane a task
 constexpr int GEMM_WARPS = 4;
 constexpr int XS_STRIDE = TASK_COLS + 16;
 constexpr int MSG = 2 + L * N;                     // a block's message in u32: u64be j, then the words
-constexpr int MSG_STRIDE = MSG | 1;
 constexpr int MSG_BLOCKS = (4 * MSG + 63) / 64;
 static_assert(32 * N > M, "a spare bit above p");
+static_assert(C != 1 || (MB == N - 1 && MS > 0), "a Mersenne p's top bit is inside the last limb");
 
 __host__ __device__ constexpr uint32_t plimb(int e) {
   return e < MB ? (e == 0 ? 0xFFFFFFFFu - (C - 1) : 0xFFFFFFFFu) : e == MB ? (MS ? (1u << MS) - 1 : 0) : 0;
@@ -258,14 +277,11 @@ __device__ __forceinline__ void reduce(uint32_t (&r)[N], const uint32_t (&t)[T])
       hi[e] = MS ? __funnelshift_r(h0, h1, MS) : h0;
     }
     const uint32_t cy = add_k<N>(r, lo, hi);
-    // r + 2^(32N) cy, below 2^(M + 3): fold bit M and above once more
-    const uint32_t top = (MS ? (r[MB] >> MS) : 0) | (MB + 1 < N ? 0 : 0) | (cy << (32 * N - M));
+    // r + 2^(32N) cy, below 2^(M + 2): fold bit M and above once more
+    const uint32_t top = (r[MB] >> MS) | (cy << (32 * N - M));
     uint32_t topl[N];
 #pragma unroll
     for (int e = 0; e < N; ++e) topl[e] = e == 0 ? top : 0;
-    if (MB + 1 < N) {
-      // bits of limbs above MB (P127 has none; P521 has none) are zero here
-    }
     r[MB] &= (1u << MS) - 1;
     add_k<N>(r, r, topl);
   } else {
@@ -423,9 +439,7 @@ __device__ __forceinline__ void root(uint32_t (&r)[N], const uint32_t (&a)[N]) {
     canon(q);
     const bool square = eq_k<N>(q, a), odd = is_odd(s);
     sub_k<N>(ns, p, s);
-    const bool zero = eq_k<N>(s, ns) || s[0] == 0 && eq_k<N>(ns, p);
-    if (zero) copy_k<N>(ns, s);
-    select_k<N>(r, odd != square, s, ns);
+    select_k<N>(r, odd != square, s, ns);  // a = 0: s = 0 is even and a square, so r = s
   } else {
     // β = a^(2^252 − 2) = (a^(2^250 − 1)² · a)², the ed25519 chain
     uint32_t z2[N], z9[N], z11[N], x5[N], x10[N], x20[N], x40[N], x50[N], x100[N], t[N];
@@ -459,13 +473,12 @@ __device__ __forceinline__ void root(uint32_t (&r)[N], const uint32_t (&a)[N]) {
     sqr(t, t);
     mul(t, t, a);               // 2^251 − 1
     sqr(t, t);                  // β = a^(2^252 − 2)
-    uint32_t q[N], na[N], ia[N], nia[N], sel[N], s[N], ns[N];
+    uint32_t q[N], na[N], ia[N], sel[N], s[N], ns[N];
     sqr(q, t);
     canon(q);
     sub_k<N>(na, p, a);
     mul(ia, kI, a);
     canon(ia);
-    sub_k<N>(nia, p, ia);
     const bool e_a = eq_k<N>(q, a), e_na = eq_k<N>(q, na), e_ia = eq_k<N>(q, ia);
     uint32_t one[N];
 #pragma unroll
@@ -478,9 +491,7 @@ __device__ __forceinline__ void root(uint32_t (&r)[N], const uint32_t (&a)[N]) {
     canon(s);
     const bool want_odd = !(e_a || e_na), odd = is_odd(s);
     sub_k<N>(ns, p, s);
-    if (s[0] == 0 && eq_k<N>(ns, p)) copy_k<N>(ns, s);
-    select_k<N>(r, odd == want_odd, s, ns);
-    (void)nia;
+    select_k<N>(r, odd == want_odd, s, ns);  // a = 0: β = 0 and e_a, so r = s = 0
   }
 }
 
@@ -495,6 +506,7 @@ __device__ __forceinline__ void encode_word(uint32_t (&x)[N], const uint32_t (&t
   }
 }
 
+#ifndef WW_HOST
 // --- the store ----------------------------------------------------------------------------------------------------------
 
 __device__ __forceinline__ uint64_t limb_index(uint64_t i, int e) { return 32ull * N * (i >> 5) + 32ull * e + (i & 31); }
@@ -678,15 +690,39 @@ __device__ __forceinline__ uint32_t take4(const uint32_t (&x)[L][N], int bit) {
   return v;
 }
 
-// One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk. TAG: lane l's block (its L encoded
-// words) is hashed from shared memory before it is decoded, and its tag written to tags[8 (j − jbase) …].
+// Word i of block j's message (u64be j ‖ the L words), as BLAKE3 reads it: little-endian u32; i a constant.
+__device__ __forceinline__ uint32_t msg_word(const uint32_t (&w)[L][N], uint64_t j, int i) {
+  if (i == 0) return bw::bswap32((uint32_t)(j >> 32));
+  if (i == 1) return bw::bswap32((uint32_t)j);
+  if (i < MSG) return w[(i - 2) / N][(i - 2) % N];
+  return 0;
+}
+
+// ro-blake3/v1 of block j (one chunk: the message is under 1,024 bytes), from the lane's registers.
+__device__ __forceinline__ void tag_block(uint32_t (&cv)[8], const uint32_t (&w)[L][N], uint64_t j, const bw::Key3& key) {
+  static_assert(4 * MSG <= 1024, "a block is one BLAKE3 chunk");
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+  for (int b = 0; b < MSG_BLOCKS; ++b) {
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = msg_word(w, j, 16 * b + i);
+    const uint32_t len = b + 1 < MSG_BLOCKS ? 64 : 4 * MSG - 64 * (MSG_BLOCKS - 1);
+    const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
+                           (b + 1 == MSG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+    bw::b3_compress(cv, m, 0, len, flags, cv);
+  }
+}
+
+// One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk. TAG: lane l's block j = jbase + 32q + l
+// (its L encoded words) is hashed before it is decoded, and its tag written to tags[8 (32q + l) …].
 template <int KR, int NB8, bool PARTIALS, bool TAG>
 __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
                                                                uint32_t* __restrict__ tags) {
   __shared__ __align__(16) uint8_t xs[NB8 * 8][XS_STRIDE];
-  __shared__ uint32_t msg[TAG ? GEMM_WARPS * 32 * MSG_STRIDE : 1];
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks;
   const int nb = (blockIdx.x / nchunks) * GEMM_WARPS + threadIdx.x / 32;
@@ -708,27 +744,8 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* _
     for (int e = 0; e < N; ++e) w[i][e] = __ldcs(rec + 32 * (i * N + e));
 
   if constexpr (TAG) {
-    uint32_t* my = msg + (threadIdx.x) * MSG_STRIDE;
-    const uint64_t j = jbase + q * 32 + lane;
-    my[0] = bw::bswap32((uint32_t)(j >> 32));
-    my[1] = bw::bswap32((uint32_t)j);
-#pragma unroll
-    for (int i = 0; i < L; ++i)
-#pragma unroll
-      for (int e = 0; e < N; ++e) my[2 + i * N + e] = w[i][e];
     uint32_t cv[8];
-#pragma unroll
-    for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
-#pragma unroll 1
-    for (int b = 0; b < MSG_BLOCKS; ++b) {
-      uint32_t m[16];
-      const int len = b + 1 < MSG_BLOCKS ? 64 : 4 * MSG - 64 * (MSG_BLOCKS - 1);
-#pragma unroll
-      for (int i = 0; i < 16; ++i) m[i] = 16 * b + i < MSG ? my[16 * b + i] : 0;
-      const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
-                             (b + 1 == MSG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-      bw::b3_compress(cv, m, 0, len, flags, cv);
-    }
+    tag_block(cv, w, jbase + q * 32 + lane, key);
     uint4* o = reinterpret_cast<uint4*>(tags + 8 * (q * 32 + lane));
     o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
     o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
@@ -775,10 +792,12 @@ __global__ void spin_kernel(long long cycles) {
   while (clock64() - t0 < cycles) {
   }
 }
+#endif  // WW_HOST
 
 }  // namespace ww
 
 using namespace ww;
+
 
 static_assert(WW_KMAX >= 1 && WW_KMAX <= 8, "WW_KMAX");
 #define WW_CASE(n, F) \
@@ -798,6 +817,47 @@ static_assert(WW_KMAX >= 1 && WW_KMAX <= 8, "WW_KMAX");
     default:              \
       return 1;           \
   }
+
+#ifdef WW_HOST
+#include <cstdio>
+
+// stdin: k, then the k c_j, τ, √−1, c1, c1·√−1 (each N hex limbs, least significant first), then lines "i m y": stdout
+// gets, a line each, encode(m) at index i and the k inverse rounds of y at index i (`wide.decode_raw`), as N hex limbs.
+static bool read_el(uint32_t (&a)[N]) {
+  for (int e = 0; e < N; ++e)
+    if (scanf("%x", &a[e]) != 1) return false;
+  return true;
+}
+static void write_el(const uint32_t (&a)[N]) {
+  for (int e = 0; e < N; ++e) printf(e ? " %08x" : "%08x", a[e]);
+}
+
+int main() {
+  int k;
+  if (scanf("%d", &k) != 1 || k < 1 || k > KMAX) return 1;
+  for (int j = 0; j < k; ++j)
+    if (!read_el(kC[j])) return 1;
+  if (!read_el(kTau) || !read_el(kI) || !read_el(kC1) || !read_el(kC1I)) return 1;
+  unsigned long long i;
+  while (scanf("%llu", &i) == 1) {
+    uint32_t m[N], y[N], t[N];
+    if (!read_el(m) || !read_el(y)) return 1;
+    mul_u64(t, kTau, i);
+#define F(K)                 \
+  do {                       \
+    encode_word<K>(m, t);    \
+    decode_word<K>(y, t);    \
+  } while (0)
+    WW_K_SWITCH(k, F)
+#undef F
+    write_el(m);
+    printf(" ");
+    write_el(y);
+    printf("\n");
+  }
+  return 0;
+}
+#else
 
 static bw::Key3 key_of(const uint8_t* seed) { return bw::b3_key(seed); }
 
@@ -880,14 +940,18 @@ int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn
             const uint8_t* tag_seed, uint32_t* tags, cudaStream_t s) {
   if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || k < 0 || k > KMAX) return 1;
   if (tag_seed && !tags) return 1;
+  if (wbase % (32ull * L)) return 1;
+  const uint64_t jbase = wbase / L;
   const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
   const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS);
   bw::Key3 key = {};
   if (tag_seed) key = key_of(tag_seed);
-#define G(KR, NB, T)                                                                                                 \
-  do {                                                                                                               \
-    if (partials) gemm_kernel<KR, NB, true, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, 0, key, tags); \
-    else gemm_kernel<KR, NB, false, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, 0, key, tags);        \
+#define G(KR, NB, T)                                                                                       \
+  do {                                                                                                     \
+    if (partials)                                                                                          \
+      gemm_kernel<KR, NB, true, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags); \
+    else                                                                                                   \
+      gemm_kernel<KR, NB, false, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags); \
   } while (0)
 #define GT(KR, NB) do { if (tag_seed) G(KR, NB, true); else G(KR, NB, false); } while (0)
 #define GK(KR) do { if (nb8 == 1) GT(KR, 1); else if (nb8 == 2) GT(KR, 2); else GT(KR, 4); } while (0)
@@ -922,3 +986,4 @@ int ww_commit(void* workspace, uint64_t blocks, const uint8_t* seed, uint8_t* ro
 const uint64_t* ww_workspace_leaves(void* workspace, uint64_t blocks) { return bw::make_pass(bw::TAG_B3, blocks, workspace).nodes; }
 
 }  // extern "C"
+#endif  // WW_HOST

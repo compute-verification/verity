@@ -31,16 +31,18 @@ from __future__ import annotations
 import hashlib
 import random
 import struct
+import sys
 from dataclasses import dataclass
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import codec  # noqa: E402
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 SEED_BYTES = 32
 TWEAK_INDEX = (1 << 32) - 1
-LANES = 32
-TASK_TILES = 16
-TASK_COLS = 32 * TASK_TILES
-LANE_BYTES = 16 * TASK_TILES
-TILE_ROWS = 16
+LANES, TASK_TILES, TASK_COLS, LANE_BYTES = codec.LANES, codec.TASK_TILES, codec.TASK_COLS, codec.LANE_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,28 +92,38 @@ def field(bits: int) -> Field:
         raise ValueError(f"no wide field of {bits} bits; known: {sorted(FIELDS)}") from None
 
 
-# --- p255's constants: √−1 and the non-residue branch's multipliers ----------------------------------------------------
+# --- p = 5 mod 8: √−1 and the non-residue branch's multipliers --------------------------------------------------------
 
-P255 = FIELDS[255].p
-SQRT_M1 = pow(2, (P255 - 1) // 4, P255)
-assert SQRT_M1 * SQRT_M1 % P255 == P255 - 1
+def _check_5mod8(p: int) -> None:
+    if p % 8 != 5:
+        raise ValueError("the second rule takes p = 5 mod 8")
 
 
-def _sqrt_p255(a: int) -> int:
-    """A square root of the square a mod p255 (Atkin's candidate a^((p+3)/8), times √−1 if it squares to −a)."""
-    b = pow(a, (P255 + 3) // 8, P255)
-    if b * b % P255 == a:
+def sqrt_m1(p: int) -> int:
+    _check_5mod8(p)
+    return pow(2, (p - 1) // 4, p)
+
+
+def _sqrt_5mod8(a: int, p: int) -> int:
+    """A square root of the square a mod p (Atkin's candidate a^((p+3)/8), times √−1 if it squares to −a)."""
+    b = pow(a, (p + 3) // 8, p)
+    if b * b % p == a:
         return b
-    b = b * SQRT_M1 % P255
-    if b * b % P255 != a:
+    b = b * sqrt_m1(p) % p
+    if b * b % p != a:
         raise ValueError("not a square")
     return b
 
 
-# c1² = 1/(2·√−1): β·c1 is a root of a/2 when β² = √−1·a, and β·c1·√−1 when β² = −√−1·a.
-C1 = _sqrt_p255(pow(2 * SQRT_M1, P255 - 2, P255))
+def c1(p: int) -> int:
+    """c1 with c1² = 1/(2·√−1): β·c1 is a root of a/2 when β² = √−1·a, and β·c1·√−1 when β² = −√−1·a."""
+    return _sqrt_5mod8(pow(2 * sqrt_m1(p), p - 2, p), p)
+
+
+P255 = FIELDS[255].p
+SQRT_M1 = sqrt_m1(P255)
+C1 = c1(P255)
 C1_SQRT_M1 = C1 * SQRT_M1 % P255
-assert pow(2, (P255 - 1) // 2, P255) == P255 - 1          # 2 is a non-residue (p = 5 mod 8)
 
 
 def legendre(a: int, p: int) -> int:
@@ -130,27 +142,28 @@ def rho(a: int, f: Field) -> int:
         want_odd = s * s % p != a
         return s if (s & 1) == want_odd else p - s
     if legendre(a, p) == 1:
-        s, want_odd = _sqrt_p255(a), False
+        s, want_odd = _sqrt_5mod8(a, p), False
     else:
-        s, want_odd = _sqrt_p255(a * pow(2, p - 2, p) % p), True
+        s, want_odd = _sqrt_5mod8(a * pow(2, p - 2, p) % p, p), True
     return s if (s & 1) == want_odd else p - s
 
 
-def rho_fast_p255(a: int) -> int:
-    """`rho` for p255 the way the kernel computes it: one exponentiation β = a^((p+3)/8), then β² against ±a and ±√−1·a."""
-    p = P255
+def rho_fast_5mod8(a: int, p: int = P255) -> int:
+    """`rho` for p = 5 mod 8 the way the kernel computes it: one exponentiation β = a^((p+3)/8), then β² against ±a and
+    ±√−1·a."""
     if a == 0:
         return 0
+    i, c = sqrt_m1(p), c1(p)
     b = pow(a, (p + 3) // 8, p)
     q = b * b % p
     if q == a:
         s, odd = b, False
     elif q == p - a:
-        s, odd = b * SQRT_M1 % p, False
-    elif q == SQRT_M1 * a % p:
-        s, odd = b * C1 % p, True
-    elif q == p - SQRT_M1 * a % p:
-        s, odd = b * C1_SQRT_M1 % p, True
+        s, odd = b * i % p, False
+    elif q == i * a % p:
+        s, odd = b * c % p, True
+    elif q == p - i * a % p:
+        s, odd = b * c * i % p, True
     else:
         raise AssertionError("β² is ±a or ±√−1·a")
     return s if (s & 1) == odd else p - s
@@ -204,15 +217,21 @@ def encode_word(m: int, i: int, k: Key, payload: int | None = None) -> int:
     return x
 
 
-def decode_word(y: int, i: int, k: Key, payload: int | None = None) -> int:
-    """The payload of word `y` at index `i`; `ValueError` if `y` is not the encoding of one."""
+def decode_raw(y: int, i: int, k: Key) -> int:
+    """The k inverse rounds of any canonical `y` at index `i`, the payload check left out (the kernel's output)."""
     f = k.field
     if not 0 <= y < f.p:
         raise ValueError("a word is a canonical element")
     t, x = k.tweak(i), y
     for c in reversed(k.c):
         x = (rho_inv(x, f) - c - t) % f.p
-    if x >> f.check_payload(payload):
+    return x
+
+
+def decode_word(y: int, i: int, k: Key, payload: int | None = None) -> int:
+    """The payload of word `y` at index `i`; `ValueError` if `y` is not the encoding of one."""
+    x = decode_raw(y, i, k)
+    if x >> k.field.check_payload(payload):
         raise ValueError(f"word {i} decodes to no payload")
     return x
 
@@ -225,37 +244,7 @@ def word_bytes(y: int, f: Field) -> bytes:
     return y.to_bytes(f.word_bytes, "little")
 
 
-# --- the fused GEMM's layout -----------------------------------------------------------------------------------------
-
-def fragment_offset(lane: int, r: int, b: int) -> tuple[int, int]:
-    """(row, column) in a 16 × 32 tile of byte `b` of register `r` of `lane`'s mma.m16n8k32 A fragment (8-bit types)."""
-    g, q = lane >> 2, lane & 3
-    return g + 8 * (r & 1), 4 * q + 16 * (r >> 1) + b
-
-
-def check_shape(n: int, kdim: int) -> None:
-    if n <= 0 or kdim <= 0 or n % TILE_ROWS or kdim % TASK_COLS:
-        raise ValueError(f"the layout takes N a multiple of {TILE_ROWS} and K of {TASK_COLS}")
-
-
-def lane_streams(w: bytes, n: int, kdim: int) -> list[bytes]:
-    """W (n × kdim bytes, row-major) as each (task, lane)'s 256-byte stream, tasks in order (row block, column chunk)."""
-    check_shape(n, kdim)
-    if len(w) != n * kdim:
-        raise ValueError("W is n × kdim bytes")
-    out = []
-    for nb in range(n // TILE_ROWS):
-        for kc in range(kdim // TASK_COLS):
-            for lane in range(LANES):
-                s = bytearray(LANE_BYTES)
-                for tt in range(TASK_TILES):
-                    for r in range(4):
-                        for b in range(4):
-                            row, col = fragment_offset(lane, r, b)
-                            s[16 * tt + 4 * r + b] = w[(TILE_ROWS * nb + row) * kdim + kc * TASK_COLS + 32 * tt + col]
-                out.append(bytes(s))
-    return out
-
+# --- the fused GEMM's layout: codec.fragment_stream's lane streams, packed into wide words -----------------------------
 
 def pack(stream: bytes, payload: int) -> list[int]:
     s, mask = int.from_bytes(stream, "little"), (1 << payload) - 1
@@ -274,7 +263,7 @@ def word_index(q: int, lane: int, w: int, lw: int) -> int:
 def fragment_payloads(w: bytes, n: int, kdim: int, f: Field, payload: int | None = None) -> list[list[int]]:
     """Each (task, lane)'s L payloads, (task, lane) in order."""
     b = f.check_payload(payload)
-    return [pack(s, b) for s in lane_streams(w, n, kdim)]
+    return [pack(s, b) for s in codec.fragment_stream(w, n, kdim)]
 
 
 def encode_store(lanes: list[list[int]], k: Key, payload: int | None = None, base: int = 0) -> list[list[int]]:
