@@ -1,4 +1,5 @@
-import Definitions.Nci
+import Definitions.Nci.Support
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI's named assumptions
@@ -45,6 +46,23 @@ def ActivationsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_
   ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (novelReads D R : ℝ) ≤ K →
     b_w * (c.weightsUsed R).card +
         b_a * ((c.inputsUsed R).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
+
+/-- **Incompressibility of weights and activations, in support form**: `ActivationsIncompressible` restated over what
+values determine rather than over wiring. For every IU `R` and every set `T` of its gates whose charge (`Chain.charge`,
+`b_w` per weight entry and `b_a` per input entry of which `T` holds a product, other than one linked to an entry whole in
+`R`) is at most `K`, the gates of `T` take at least `2^charge` distinct values over the runs of `D` with the baseline at
+its committed values `θv`.
+
+Wiring cannot falsify it: a weight held in a constant gate, or rebuilt from a narrower wire, has the support it has.
+It fails when the chain's values are determined by less than they are charged for, that is, when the chain is not
+updated. `b_w` and `b_a` are rates, in bits of support per entry, and are below an entry's width when products repeat
+values (at FP4, a product's sign and scale symmetries), so they are measured, not read from the format.
+
+Every value of `R` is a function of the values on `in(R)`, so `support(T) ≤ 2^novelReads(R)`; at cap `K + b_w + b_a`
+this assumption gives `ActivationsIncompressible` at cap `K` (`activationsIncompressible_of_support`). It needs no
+bound on `R`'s size: the support form says what the values are, not what an IU can compute. -/
+def ActivationsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (K b_w b_a : ℝ) : Prop :=
+  ∀ R ⊆ D.D.computed, ∀ T ⊆ R, c.charge R b_w b_a T ≤ K → (2 : ℝ) ^ c.charge R b_w b_a T ≤ support D θv T
 
 /-- **Incompressibility of partial sums** (the draft's partial-sum incompressibility, applied jointly with weight
 incompressibility, and the count of partial sums in the proof of its theorem). A partial sum is a sum of some of the

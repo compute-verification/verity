@@ -30,6 +30,9 @@
    "owner": "@lean",
    "digest": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
   },
+  "Nci.Assumptions.ActivationsSupport": {
+   "owner": "@lean"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -4064,6 +4067,11 @@
    "Nci.Assumptions.ActivationsIncompressible": {
     "status": "falsified",
     "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
+   },
+   "Nci.Assumptions.ActivationsSupport": {
+    "status": "open",
+    "test": "Security/Proofs/Nci/Support.lean (Nci.SecurityProofs.rates_le_width_of_support), built by check",
+    "why": "ActivationsIncompressible restated over value supports: the gates of an IU's subset charged at most K take at least 2^charge distinct values over the runs with the baseline committed, which wiring cannot falsify and which gives ActivationsIncompressible at cap K - b_w - b_a; open, and false at rates b_w + b_a above a first-multiplication product's width, which its test proves."
    },
    "Nci.Assumptions.PartialSumsIncompressible": {
     "status": "falsified",
