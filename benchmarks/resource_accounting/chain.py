@@ -4,7 +4,7 @@
       [--arms native-bf16,native-fp8,pearl-c,...] [--tuned-lib BUILD/libpouw_harness.so]
       [--kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin]
       [--retain DIR --verify-at o:32] [--reps 5] [--budget-min 25] [--beside DIR --beside-cmd CMD [--beside-log F] [--beside-cpus V,R] [--beside-idle]]
-      [--probe] [--rounds separate,inproc,joint,joint-v1 [--tagger libbwtag.so] [--pause-every none,10,100,1000,10-noprep]
+      [--probe] [--rounds separate,inproc,joint,joint-v1 [--tagger libbwtag.so] [--pause-every none,10,100,1000]
        --host-bench benchmarks/pous/bench.py ARGS...]
   python chain.py --plan ...      the points and their weights' bytes, without a GPU
 
@@ -851,16 +851,18 @@ def inside(a, name: str, bench: Path, argv: list[str], out: Path, group: list[S.
         return {**rec, "error": "no arm of the shape was measured alone"}
     done = lambda: (out / f"audit-{HONEST}.json").exists()
     state: dict = {}
+    # every round sets the same store up, so its challenger keeps one state for them all, beside the rounds
+    store = {"gpu_id": (os.environ.get("GPU_LEASE_UUID") or "").split(",")[0], "state_dir": out.parent / "bandwidth-challenger"}
 
     def hook(c, fr):
         try:
             if name == "joint":
-                rec["alone"], state["joint"] = J.setup(a.tagger, c, fr, done, gap_s=a.window_gap_s)
+                rec["alone"], state["joint"] = J.setup(a.tagger, c, fr, done, gap_s=a.window_gap_s, **store)
             elif name == "joint-v1":
                 chains = {key: Issued(nat, stream) for key, nat in turns.natives.items()}
                 rec["pause_setup"], state["pause"] = J.setup_pause(a.tagger, c, fr, chains,
                                                                    every=[J.Every.parse(x) for x in a.pause_every],
-                                                                   seconds=a.pause_segment_s)
+                                                                   seconds=a.pause_segment_s, **store)
         except Exception:  # noqa: BLE001 - recorded; the round runs as inproc
             rec["alone_error" if name == "joint" else "pause_error"] = traceback.format_exc(limit=8)
         torch.cuda.synchronize()
@@ -994,8 +996,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rounds", default="separate,inproc", help=f"--host-bench's rounds in order, of {', '.join(ROUNDS)}")
     ap.add_argument("--tagger", help="the bandwidth tagger's libbwtag.so (benchmarks/bandwidth/tagger.cu), for the joint round")
     ap.add_argument("--window-gap-s", type=float, default=3.0, help="the joint round's mean gap between bandwidth windows")
-    ap.add_argument("--pause-every", default="none,10,100,1000,10-noprep",
-                    help="the joint-v1 round's window cadences in turn: none, <ms> of chain, or <ms>-noprep (no preparation)")
+    ap.add_argument("--pause-every", default="none,10,100,1000",
+                    help="the joint-v1 round's window cadences in turn: none, or one window each <ms> of chain")
     ap.add_argument("--pause-segment-s", type=float, default=2.5, help="the joint-v1 round's seconds a segment")
     ap.add_argument("--tuned-lib", default=os.environ.get("POUW_HARNESS_LIB"),
                     help="the PoUW harness's libpouw_harness.so (its build.json beside it), for the tuned arms (tuned.py)")

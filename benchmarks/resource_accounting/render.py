@@ -9,15 +9,16 @@ arm of its precision the point measured, a tuned one among them), useful TFLOP/s
 rows only), the native GEMM rate at the shape (the native arms' GEMMs alone), and the device-memory rate the chain achieved,
 estimated as its weights' and activations' bytes read once over its time (a lower bound: the weights are at least twice the
 L2).  The tuned arms' picks follow the table.  For the Pearl-C arms, `certified`'s columns: W_cert (as TFLOP/s-equivalent,
-2·W_cert over the time) and the compute residual's split as shares of F·T, with F the fastest native FP8 chain's rate; Q_cert is
-pending (times and raw rates only) and S_cert says why it is unproved.  Every residual is the weak form (`certified.RESIDUAL`).
+2·W_cert over the time) and the compute residual's split as shares of F·T, with F the fastest native FP8 chain's rate; Q_cert,
+none for a chain without windows (`certified.q_cert` is an accepted window's, at the red team's grant), and S_cert, or why it
+is unproved.  Every residual is the weak form (`certified.RESIDUAL`).
 The retained pass's verdicts, when the run kept one, head the table.  A run with a PoUS arm (`chain.beside`) adds its section:
 the honest audit's answers against the limit while the chain ran, S_cert from the harness's storage profile with the
 capacity residual (`certified.storage`), and each chain's time beside the audit.  A run that hosted the harness
 (`chain.hosted`, ``run.sh JOINT=``) adds the responder's isolation, one row a round, the chain's time in each round (host,
 device, launch), the joint round's arms (d), the tag pass over the PoUS store alone, and (e), its windows beside the chain
 and the audit, and the joint-v1 round's (f), the bandwidth audit's honest overhead: the useful TFLOP/s each window cadence
-costs against the bytes it certifies a wall second (raw).  A run with ``--probe`` adds its conditions' chain times.
+costs against the bytes its windows certify a wall second (Q_cert).  A run with ``--probe`` adds its conditions' chain times.
 """
 
 from __future__ import annotations
@@ -120,7 +121,7 @@ def rows(doc: dict) -> list[dict]:
                     for part in ("residual", "honest_overhead", "soundness_slack"):
                         row[f"compute_{part}"] = None if w[part] is None or not w["capacity"] else w[part] / w["capacity"]
                 bw = C.bandwidth(read_rate, T, bytes_read(p, arm))
-                row["q_pending"] = bw["pending"]
+                row["q_cert"] = bw["q_cert"]
                 row["bandwidth_honest_overhead"] = (None if bw["honest_overhead"] is None or not bw["capacity"]
                                                     else bw["honest_overhead"] / bw["capacity"])
                 cap = C.capacity(memory)
@@ -183,14 +184,29 @@ def _pct(xs: list[float], q: float) -> float | None:
     return xs[min(len(xs) - 1, max(0, math.ceil(q * len(xs)) - 1))] if xs else None
 
 
-def proof_reads(d: dict | None, error: str | None = None) -> dict:
+def chip_bytes(ident: dict) -> int | None:
+    """S_chip of the run's device (`certified.chip`), None when it recorded no registers a SM."""
+    return C.chip(ident)["s_chip_bytes"] if all(ident.get(k) for k in ("l2_bytes", "sms", "regs_per_sm")) else None
+
+
+def window_q(tag: str, store: dict | None, chip: int | None) -> dict | None:
+    """Q_cert of one accepted window of `tag` over the round's store (`certified.q_cert`); None for an uncertified tag or
+    without S_chip."""
+    from verity.core.protocols.bandwidth import tags
+    if not store or chip is None or not tags.get(tag).certified:
+        return None
+    return C.q_cert(tag, store["blocks"], store["block_bytes"], chip)
+
+
+def proof_reads(d: dict | None, error: str | None = None, chip: int | None = None) -> dict:
     """(d) (`joint.alone`): E's raw read, and each tag's passes (device and host time, the rate over E and its share of the
-    raw read's), its windows on time at T and accepted, and whether its skip control was rejected; `error` when it failed."""
+    raw read's), its windows on time at T and accepted, Q_cert of an accepted window, and whether its skip control was
+    rejected; `error` when it failed."""
     if d is None:
         return {"error": error}
     E, raw = d["store"]["bytes"], statistics.median(d["raw_read"]["device_ms"])
     out = {"store_bytes": E, "blocks": d["store"]["blocks"], "raw_ms": raw, "raw_gb_per_s": E / raw / 1e6,
-           "vk_s": d.get("vk_s"), "setup_s": d.get("setup_s"), "tags": []}
+           "vk_s": d.get("vk_s"), "setup_s": d.get("setup_s"), "device": d.get("device"), "tags": []}
     for name, t in sorted(d["tags"].items()):
         dev = [p["device_ms"] for p in t["passes"]]
         host = [p["host_ns"] / 1e6 for p in t["passes"]]
@@ -201,19 +217,24 @@ def proof_reads(d: dict | None, error: str | None = None) -> dict:
                             "gb_per_s": None if not p50 else E / p50 / 1e6, "of_raw": None if not p50 else raw / p50,
                             "windows": len(w), "on_time_at_T": sum(x["on_time_at_T"] for x in w),
                             "accepted": sum(x["accepted"] for x in w), "deadline_ns": t["deadline_ns"], "limit_ns": t["limit_ns"],
+                            "T_ns": t.get("T_ns"), "q": window_q(name, d["store"], chip),
                             "window_ms_max": _pct([x["elapsed_ns"] / 1e6 for x in w if x["elapsed_ns"] is not None], 1.0),
                             "skip_fraction": skip["fraction"], "skip_rejected": not skip["accepted"],
                             "skip_failure": skip["failure"]})
     return out
 
 
-def joint_windows(w: dict, alone: dict | None, overlap: dict | None) -> dict:
-    """(e) (`joint.Joint`): the windows beside the chain and the audit, on time at T and accepted, their passes' device time
-    against the same tag's alone, and the chain's items that overlapped a window against those that did not."""
+def joint_windows(w: dict, alone: dict | None, overlap: dict | None, chip: int | None = None) -> dict:
+    """(e) (`joint.Joint`): the windows beside the chain and the audit, on time at T and accepted, the bytes the accepted
+    ones certify, their passes' device time against the same tag's alone, and the chain's items that overlapped a window
+    against those that did not."""
     ws = w.get("windows") or []
     passes = (((alone or {}).get("tags") or {}).get(w.get("tag")) or {}).get("passes") or []
+    q = window_q(w.get("tag") or JOINT_TAG, (alone or {}).get("store"), chip)
+    accepted = sum(x["accepted"] for x in ws)
     return {"tag": w.get("tag"), "windows": len(ws), "on_time_at_T": sum(x["on_time_at_T"] for x in ws),
-            "accepted": sum(x["accepted"] for x in ws), "failures": dict(Counter(x["failure"] for x in ws if x["failure"])),
+            "accepted": accepted, "q": q, "q_cert_bytes": None if q is None else accepted * q["q_cert"],
+            "T_ns": w.get("T_ns"), "failures": dict(Counter(x["failure"] for x in ws if x["failure"])),
             "device_ms_p50": _pct([x["device_ms"] for x in ws], 0.5), "device_ms_max": _pct([x["device_ms"] for x in ws], 1.0),
             "alone_device_ms_p50": _pct([p["device_ms"] for p in passes], 0.5),
             "window_ms_p50": _pct([x["elapsed_ns"] / 1e6 for x in ws if x["elapsed_ns"] is not None], 0.5),
@@ -226,12 +247,13 @@ def joint_windows(w: dict, alone: dict | None, overlap: dict | None) -> dict:
                         for key, by_arm in (overlap or {}).items() for arm, o in by_arm.items()]}
 
 
-def pause_rows(p: dict, macs: dict[str, int], store_bytes: int | None) -> list[dict]:
+def pause_rows(p: dict, macs: dict[str, int], q_bytes: int | None) -> list[dict]:
     """(f) (`joint.Pause`), one row a point, arm and window cadence over its segments: chains a wall second and useful
     TFLOP/s, against the same point and arm's segments without windows (the throughput lost); windows a wall second, on
-    time at T, their elapsed time, and the gap each left in the chain's stream (`bubble`), whose mean times the windows a
-    second is the loss it predicts; the pause's parts on the host (median ns); and E's bytes a wall second in windows on time
-    at T, raw (Q_cert pending)."""
+    time at T and within the granted limit (they drew their samples), their elapsed time, and the gap each left in the
+    chain's stream (`bubble`), whose mean times the windows a second is the loss it predicts; the pause's parts on the host
+    (median ns); and Q_cert a wall second, `q_bytes` (one accepted window's) for each window within the limit, the
+    judged windows' verdicts standing for the rest's (their openings are not kept)."""
     groups: dict[tuple[str, str, str], list[dict]] = {}
     for s in p.get("segments") or []:
         groups.setdefault((s["key"], s["arm"], s["every"]), []).append(s)
@@ -243,18 +265,18 @@ def pause_rows(p: dict, macs: dict[str, int], store_bytes: int | None) -> list[d
         ws = [w for s in segs for w in s["windows"] if w.get("window") is not None]
         none, r = rate.get((key, arm, "none")), rate[(key, arm, every)]
         flop = 2 * macs[key] if key in macs else None
-        on_time = sum(bool(w.get("on_time_at_T")) for w in ws)
+        on_time, within = sum(bool(w.get("on_time_at_T")) for w in ws), sum(bool(w.get("drawn")) for w in ws)
         bubbles = [w["bubble_ms"] for w in ws if w.get("bubble_ms") is not None]
         row = {"key": key, "arm": arm, "every": every, "segments": len(segs), "wall_s": wall, "chains_per_s": r,
                "useful_tflops": None if flop is None else flop * r / 1e12, "windows": len(ws), "windows_per_s": len(ws) / wall,
-               "on_time_at_T": on_time, "within_limit": sum(bool(w.get("drawn")) for w in ws),
+               "on_time_at_T": on_time, "within_limit": within,
                "window_ms_p50": _pct([w["elapsed_ns"] / 1e6 for w in ws if w.get("elapsed_ns") is not None], 0.5),
                "window_ms_max": _pct([w["elapsed_ns"] / 1e6 for w in ws if w.get("elapsed_ns") is not None], 1.0),
                "bubble_ms_p50": _pct(bubbles, 0.5), "bubble_ms_mean": statistics.fmean(bubbles) if bubbles else None,
                "loss": None if not none or every == "none" else 1 - r / none,
                "tflops_lost": None if flop is None or not none or every == "none" else flop * (none - r) / 1e12,
                "model_loss": None if not bubbles else len(ws) / wall * statistics.fmean(bubbles) / 1e3,
-               "certified_bytes_per_s": None if store_bytes is None or not ws else on_time * store_bytes / wall}
+               "q_cert_bytes_per_s": None if q_bytes is None or not ws else within * q_bytes / wall}
         for part in ("drain_ns", "prep_ns", "seed_ns", "pass_ns", "commit_ns", "pause_ns"):
             row[part] = _pct([w[part] for w in ws if w.get(part) is not None], 0.5)
         for part in ("device_tags_ms", "device_ms"):
@@ -272,13 +294,15 @@ def alone_passes(passes: dict) -> dict:
                 "device_ms": _pct([x["device_ms"] for x in v], 0.5)} for k, v in groups.items()}
 
 
-def pause(r: dict) -> dict:
-    """(f)'s round: its rows (`pause_rows`), the verifier's pipe, the judged windows and the skip control."""
+def pause(r: dict, chip: int | None = None) -> dict:
+    """(f)'s round: its rows (`pause_rows`), Q_cert of an accepted window, the judged windows and the skip control."""
     p, setup = r["pause"], r.get("pause_setup") or {}
-    store = (setup.get("store") or {}).get("bytes")
+    store = setup.get("store") or {}
+    q = window_q(p.get("tag") or JOINT_TAG, store, chip)
     judged = p.get("judged") or []
-    return {"rows": pause_rows(p, r.get("macs") or {}, store), "store_bytes": store, "rtt": p.get("rtt") or {},
-            "deadline_ns": p.get("deadline_ns"), "limit_ns": p.get("limit_ns"), "seconds": p.get("seconds"),
+    return {"rows": pause_rows(p, r.get("macs") or {}, None if q is None else q["q_cert"]), "store_bytes": store.get("bytes"),
+            "q": q, "device": setup.get("device"), "cover_ms": p.get("cover_ms"), "burst": p.get("burst") or {},
+            "deadline_ns": p.get("deadline_ns"), "limit_ns": p.get("limit_ns"), "T_ns": p.get("T_ns"), "seconds": p.get("seconds"),
             "lookahead": p.get("lookahead"), "windows_started": p.get("windows_started"), "judged": len(judged),
             "judged_accepted": sum(bool(j.get("accepted")) for j in judged),
             "elapsed_agrees": all(j.get("elapsed_agrees") for j in judged), "skip": p.get("skip"), "error": p.get("error"),
@@ -308,18 +332,18 @@ def hosted(doc: dict, results: dict[str, dict]) -> list[dict] | None:
     rs = doc.get("rounds")
     if not rs:
         return None
-    out = []
+    out, chip = [], chip_bytes(doc.get("identity") or {})
     for name in rs.get("order") or []:
         r = rs.get(name) or {}
         row = {"round": name, "responder": r.get("responder"), "skipped": r.get("skipped"), "error": r.get("error"),
                "harness_rc": r.get("harness_rc"), "window_s": window_s(r), **harness(results.get(name)),
                "storage": C.storage(results.get(name)), "beside": beside_rows(r.get("points") or {})}
         if "alone" in r or "alone_error" in r:
-            row["proof_reads"] = proof_reads(r.get("alone"), r.get("alone_error"))
+            row["proof_reads"] = proof_reads(r.get("alone"), r.get("alone_error"), chip)
         if "windows" in r:
-            row["joint"] = joint_windows(r["windows"], r.get("alone"), r.get("overlap"))
+            row["joint"] = joint_windows(r["windows"], r.get("alone"), r.get("overlap"), chip)
         if "pause" in r:
-            row["pause"] = pause(r)
+            row["pause"] = pause(r, chip)
         elif "pause_error" in r:
             row["pause"] = {"error": r["pause_error"], "rows": []}
         out.append(row)
@@ -465,32 +489,43 @@ def gamma_lines(rs: list[dict]) -> list[str]:
              f"{at}; {C.LAYOUT}'s layout, the max over its linears, {layout}.")]
 
 
+def _q(q: dict | None, store_bytes: int | None) -> str:
+    """One accepted window's Q_cert, with its share of E, its limit, error and basis."""
+    if q is None:
+        return "Q_cert – (no S_chip recorded, or an uncertified tag)"
+    share = "" if not store_bytes else f" ({q['q_cert'] / store_bytes:.1%} of E)"
+    return (f"Q_cert {q['q_cert']:,} bytes{share} within {q['limit_ns']:,} ns, error 2^{q['error_log2']:.2f} "
+            f"({q['theorem']}, {q['basis']}, S_chip {q['chip_bytes']:,} bytes)")
+
+
 def pause_lines(name: str, f: dict) -> list[str]:
     if not f["rows"] and f.get("error"):
         return ["", f"(f) Joint v1, round {name}: failed: {_last(f['error'])}"]
     skip = f.get("skip") or {}
-    rtt = f.get("rtt") or {}
     lines = ["", (f"(f) Joint v1, round {name}: the bandwidth audit's honest overhead. The chain issued one graph a chain, at "
                   f"most {f['lookahead']} in flight, inside P2's honest audit (its responder a thread here); for each "
-                  f"{JOINT_TAG} window the prover paused it at a call boundary (a chain's last call), drained its stream, "
-                  "prepared as (d) does (an untimed pass, then the scrub; -noprep: neither), took σ, ran the tag pass, sent "
-                  "its root and resumed. The verifier is a process of its own, so a window's elapsed time holds the pipe's "
-                  f"round trip (p50 / p99 {_f(rtt.get('p50_ns') and rtt['p50_ns'] / 1e3, '.0f')} / "
-                  f"{_f(rtt.get('p99_ns') and rtt['p99_ns'] / 1e3, '.0f')} µs). Segments of {_f(f['seconds'], '.1f')} s, one "
-                  f"cadence each, in turn; {f['windows_started']} windows; {f['judged_accepted']} of {f['judged']} judged "
-                  f"accepted (their elapsed time the timing record's: {f['elapsed_agrees']}); the skip control "
+                  f"{JOINT_TAG} window the prover opened it while the chain ran, paused the chain at a call boundary (a "
+                  "chain's last call), drained its stream, and committed through the store's one prover (gpu.Prover: an "
+                  "untimed pass, the scrub, σ, the tag pass on stream 0, the root), then resumed the chain with "
+                  f"{_f(f.get('cover_ms'), '.0f')} ms of chains queued before the verifier drew its samples. The verifier "
+                  f"is in this process at the granted point, so no RTT, its clock stopped at the root. Segments of "
+                  f"{_f(f['seconds'], '.1f')} s, one cadence each, in turn; {f['windows_started']} windows; "
+                  f"{f['judged_accepted']} of {f['judged']} judged accepted (their elapsed time the timing record's: "
+                  f"{f['elapsed_agrees']}); the skip control "
                   + ("–" if not skip else f"({skip.get('fraction', 0):.0%} untagged) "
-                     + ("ACCEPTED" if skip.get("accepted") else f"rejected ({skip.get('failure')})")) + "."),
+                     + ("ACCEPTED" if skip.get("accepted") else f"rejected ({skip.get('failure')})"))
+                  + f". An accepted window: {_q(f.get('q'), f.get('store_bytes'))}."),
              "", ("| point | arm | a window each | chains/s | useful TFLOP/s | lost | TFLOP/s lost | windows/s | on time at T | "
-                  "window ms p50 / max | gap ms p50 / mean | windows/s × gap | GB/s certified per wall s (raw) |"),
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "within 1.2 ms | window ms p50 / max | gap ms p50 / mean | windows/s × gap | Q_cert GB per wall s |"),
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in f["rows"]:
         on = "–" if not r["windows"] else f"{r['on_time_at_T']} / {r['windows']}"
+        within = "–" if not r["windows"] else f"{r['within_limit']} / {r['windows']}"
         lines.append(f"| {_point(r['key'])} | {r['arm']} | {r['every']} | {r['chains_per_s']:.1f} | "
                      f"{_f(r['useful_tflops'], '.2f')} | {_f(r['loss'], '+.2%')} | {_f(r['tflops_lost'], '.3f')} | "
-                     f"{r['windows_per_s']:.2f} | {on} | {_f(r['window_ms_p50'], '.3f')} / {_f(r['window_ms_max'], '.3f')} | "
-                     f"{_f(r['bubble_ms_p50'], '.3f')} / {_f(r['bubble_ms_mean'], '.3f')} | {_f(r['model_loss'], '.2%')} | "
-                     f"{_f(r['certified_bytes_per_s'] and r['certified_bytes_per_s'] / 1e9, '.1f')} |")
+                     f"{r['windows_per_s']:.2f} | {on} | {within} | {_f(r['window_ms_p50'], '.3f')} / "
+                     f"{_f(r['window_ms_max'], '.3f')} | {_f(r['bubble_ms_p50'], '.3f')} / {_f(r['bubble_ms_mean'], '.3f')} | "
+                     f"{_f(r['model_loss'], '.2%')} | {_f(r['q_cert_bytes_per_s'] and r['q_cert_bytes_per_s'] / 1e9, '.1f')} |")
     parts: dict[str, list[dict]] = {}
     for r in f["rows"]:
         if r["windows"]:
@@ -511,9 +546,11 @@ def pause_lines(name: str, f: dict) -> list[str]:
                                           ("after each segment without windows", f["alone"]["segments"]),
                                           ("at its end", f["alone"]["end"]))) + ".")
     lines.append(f"Lost is the throughput against the same point and arm's segments without windows; the gap is the chain "
-                 f"stream's idle time a window, by its events; on time at T is within {_f(f['deadline_ns'], ',')} ns. "
-                 f"Certified per wall second is E's {_gb(f['store_bytes'])} GB in each window on time at T, raw: Q_cert is "
-                 f"pending.")
+                 f"stream's idle time a window, by its events; on time at T is within T = {_f(f.get('T_ns'), ',')} ns (the "
+                 f"RTT at P2's cap inside the rebuild floor), and within 1.2 ms the granted limit, {_f(f['limit_ns'], ',')} "
+                 "ns, where the window drew its samples. Q_cert per wall second counts one accepted window's Q_cert for each "
+                 "window within the limit, the judged windows' verdicts standing for the rest's (their openings are not "
+                 "kept: Python's BLAKE3 takes 3 s a window).")
     if f.get("error"):
         lines.append(f"(f) stopped: {_last(f['error'])}")
     return lines
@@ -571,33 +608,40 @@ def proof_read_lines(name: str, d: dict) -> list[str]:
         return ["", f"(d) proof-only reads, round {name}: failed: {_last(d['error'])}"]
     lines = ["", (f"(d) Proof-only reads, round {name}, at the harness's hook (the PoUS store E on the device, before the limit "
                   f"is calibrated, nothing else running): the bandwidth audit's tag pass over E ({_blocks(d['blocks'])} blocks, "
-                  f"{_gb(d['store_bytes'])} GB), each pass from a clean L2 (a 512 MiB read of another buffer first) on a stream "
-                  f"of the highest priority; E's raw read (torch.sum as int64) {d['raw_ms']:.3f} ms = {d['raw_gb_per_s']:.0f} GB/s. "
-                  "Times and raw rates only (Q_cert pending)."),
+                  f"{_gb(d['store_bytes'])} GB, under the bandwidth audit's salt for {d.get('device') or '–'}), each pass from "
+                  "a clean L2 (a 512 MiB read of another buffer first) on stream 0, and each window through the store's one "
+                  "prover (gpu.Prover) and a verifier in this process at the granted point; E's raw read (torch.sum as "
+                  f"int64) {d['raw_ms']:.3f} ms = {d['raw_gb_per_s']:.0f} GB/s."),
              "", ("| tag | certified | device ms p50 / p99 | tags ms p50 | host ms p50 / p99 | GB/s over E | of the raw read | "
-                  "windows on time at T / accepted / run | window max ms | skip control |"), "|---|---|---|---|---|---|---|---|---|---|"]
+                  "windows on time at T / accepted / run | window max ms | Q_cert of an accepted window | skip control |"),
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for t in d["tags"]:
+        q = t.get("q")
         lines.append(f"| {t['tag']} | {'yes' if t['certified'] else 'no'} | {_f(t['device_ms_p50'], '.3f')} / "
                      f"{_f(t['device_ms_p99'], '.3f')} | {_f(t['tags_ms_p50'], '.3f')} | {_f(t['host_ms_p50'], '.3f')} / "
                      f"{_f(t['host_ms_p99'], '.3f')} | {_f(t['gb_per_s'], '.0f')} | {_f(t['of_raw'], '.0%')} | "
                      f"{t['on_time_at_T']} / {t['accepted']} / {t['windows']} | {_f(t['window_ms_max'], '.3f')} | "
+                     f"{'–' if q is None else _gb(q['q_cert']) + ' GB'} | "
                      f"{'rejected (' + str(t['skip_failure']) + ')' if t['skip_rejected'] else 'ACCEPTED'} |")
     if d["tags"]:
-        t = d["tags"][0]
-        lines.append(f"A window is on time at T when it committed within T = {t['deadline_ns']:,} ns; its verifier is in this "
-                     f"process (no network), and accepts to T + RTT = {t['limit_ns']:,} ns. The skip control leaves "
-                     f"{t['skip_fraction']:.0%} of the blocks untagged and must be rejected.")
+        t = next((x for x in d["tags"] if x["tag"] == JOINT_TAG), d["tags"][0])
+        lines.append(f"A window is on time at T when it committed within T = {_f(t.get('T_ns'), ',')} ns (the RTT at P2's "
+                     f"cap inside the rebuild floor), and accepted when it committed within the granted "
+                     f"{t['limit_ns']:,} ns with its openings. {t['tag']}'s accepted window: "
+                     f"{_q(t.get('q'), d['store_bytes'])}. The skip control leaves {t['skip_fraction']:.0%} of the blocks "
+                     "untagged and must be rejected.")
     return lines
 
 
 def joint_lines(name: str, e: dict) -> list[str]:
     fails = ", ".join(f"{k} {v}" for k, v in sorted(e["failures"].items())) or "none"
+    accepted = "" if e.get("q_cert_bytes") is None else f", together Q_cert {_gb(e['q_cert_bytes'])} GB"
     lines = ["", (f"(e) Joint v0, round {name}: the chain on plain W, P2's honest audit and {e['tag']}'s windows at once, one "
-                  f"window at a time at random gaps (mean {_f(e['gap_s'], '.1f')} s) on a stream of the highest priority, "
-                  "committed at once and judged after the harness returned: "
-                  f"{e['on_time_at_T']} of {e['windows']} on time at T ({_f(e['deadline_ns'] and e['deadline_ns'] / 1e3, ',.0f')} µs, "
-                  f"the RTT at P2's cap {_f(e['rtt_allowance_ns'] and e['rtt_allowance_ns'] / 1e3, '.0f')} µs inside the "
-                  f"rebuild floor), {e['accepted']} accepted, failures {fails}; window p50 / max {_f(e['window_ms_p50'], '.3f')} / "
+                  f"window at a time at random gaps (mean {_f(e['gap_s'], '.1f')} s) through the store's one prover "
+                  "(gpu.Prover, stream 0), committed at once and judged after the harness returned: "
+                  f"{e['on_time_at_T']} of {e['windows']} on time at T ({_f(e.get('T_ns') and e['T_ns'] / 1e3, ',.0f')} µs), "
+                  f"{e['accepted']} accepted within the granted {_f(e['limit_ns'] and e['limit_ns'] / 1e3, ',.0f')} µs"
+                  f"{accepted}, failures {fails}; window p50 / max {_f(e['window_ms_p50'], '.3f')} / "
                   f"{_f(e['window_ms_max'], '.3f')} ms; device pass p50 / max {_f(e['device_ms_p50'], '.3f')} / "
                   f"{_f(e['device_ms_max'], '.3f')} ms under load against {_f(e['alone_device_ms_p50'], '.3f')} ms alone (d)"
                   + ("; it ran out of workspaces before the audit ended" if e["out_of_slots"] else "") + ".")]
@@ -611,20 +655,19 @@ def joint_lines(name: str, e: dict) -> list[str]:
 
 
 def q_cert_lines(ident: dict) -> list[str]:
-    """Q_cert pending, and the device inputs it will take with the red team's conditions applied."""
-    p = C.window_params(JOINT_TAG)
-    known = all(ident.get(k) for k in ("l2_bytes", "sms", "regs_per_sm"))
-    chip = C.chip(ident) if known else None
-    return [(f"Q_cert: {C.PENDING_Q} ({C.Q_THEOREM} is proved and the red team granted the protocol at {C.Q_GRANT} with "
-             "conditions, but these windows ran the verifier from before it over the PoUS store under PoUS's own salt, which "
-             "the granted verifier refuses; the store must be set up under `bandwidth.audit.draw_salt`'s device-bound salt): "
-             "times and raw rates only. Its device inputs "
-             "hold the red team's conditions: S_chip "
-             + ("– (this run recorded no registers a SM)" if chip is None else
+    """Q_cert at the red team's grant: what an accepted window certifies, from the run's S_chip, and what the T at P2's cap
+    is."""
+    g, p = C.granted_params(JOINT_TAG), C.window_params(JOINT_TAG)
+    chip = C.chip(ident) if chip_bytes(ident) is not None else None
+    return [(f"Q_cert ({C.Q_GRANT}, {C.Q_THEOREM}): an accepted {JOINT_TAG} window at s = {g.samples:,} and T = "
+             f"{g.deadline_ns / 1e6:.1f} ms, no RTT (the verifier in the prover's process), over a store set up under the "
+             "bandwidth audit's device-bound salt, certifies audit.bound's ingress of it; the table's chains ran without "
+             "windows and certify none, and (d) to (f) give their windows'. S_chip "
+             + ("– (this run recorded no registers a SM, so no Q_cert)" if chip is None else
                 f"{chip['s_chip_bytes']:,} bytes = {chip['formula']}, the bandwidth harness's count with the constant and "
                 "instruction caches")
-             + f"; a window's T = {p.deadline_ns:,} ns with the RTT at P2's cap, {p.rtt_allowance_ns:,} ns, so T + RTT = "
-             f"{p.limit_ns:,} ns stays under the rebuild floor of {p.regen_floor_ns:,} ns.")]
+             + f"; the side link at PCIe Gen 5 x16's raw rate. On time at T is also reported at T = {p.deadline_ns:,} ns, "
+             f"the RTT at P2's cap ({p.rtt_allowance_ns:,} ns) inside the rebuild floor of {p.regen_floor_ns:,} ns.")]
 
 
 def _verdict(line: str | None) -> str:
@@ -696,7 +739,7 @@ def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None,
             res = (f"{r['compute_residual']:.1%} ({r['compute_honest_overhead']:.1%} + {r['compute_soundness_slack']:.2%})")
         elif r.get("compute_honest_overhead") is not None:
             res = f"unproved ({r['compute_honest_overhead']:.1%} + ?)"
-        q = "pending" if r["arm"] in S.POUW else "–"
+        q = "0 (no windows)" if r["arm"] in S.POUW else "–"
         s = "none" if r["arm"] in S.POUW else "–"
         over = ("the divisor" if r["arm"] == r["divisor"] else "–" if r["overhead"] is None
                 else f"{r['overhead']:+.1%} ÷ {r['divisor']}")
@@ -714,8 +757,8 @@ def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None,
                             "the table's chains ran alone; the PoUS sections' ran beside or inside its audit") + ".",
               (f"Compute {C.RESIDUAL}: F·T − W_cert as a share of F·T (F the fastest native FP8 chain's rate at the point, T the arm's "
                "chain time), split into honest overhead (F·T − ΣW_ref) and soundness slack (ΣW_ref − W_cert). Every residual "
-               "here is CovertResidual's weak form, worst case over each audit's own coins, not a per-run covert bound; lane "
-               "ra-per-run is proving the per-run form.")]
+               f"here is CovertResidual's weak form, worst case over each audit's own coins, not a per-run covert bound: {C.PER_RUN}. "
+               f"Note: {C.FIRST_FETCH}.")]
     lines += tuned_lines(doc)
     if p is not None:
         lines += pous_lines(p)

@@ -10,13 +10,14 @@
   every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
-* **Q_cert, bandwidth**: pending.  The guarantee is ``Bandwidth.SecurityProofs.AuditRO``, and the red team granted the
-  bandwidth protocol at #1805's 5761861fd with conditions (`Q_GRANT`), but this tree's windows run the verifier from before
-  the grant over the PoUS store under PoUS's own salt, which the granted verifier refuses: the store must be set up under
-  `bandwidth.audit.draw_salt`'s device-bound salt (the PoUS harness's setup), so only times and raw rates are reported.
-  The device inputs it will take (`chip`, `window_params`) carry the red team's conditions already: S_chip is
-  the bandwidth harness's count, which holds the constant and instruction caches beside L2, registers, L1 and shared
-  memory, and a window's `T + RTT` holds the RTT at P2's cap (`RTT_ALLOWANCE_CAP_NS`) under the rebuild floor.
+* **Q_cert, bandwidth**: ``Bandwidth.SecurityProofs.AuditRO`` at the point the red team granted at 5761861fd (`Q_GRANT`,
+  `granted_params`: `ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`, the verifier in the prover's process, so no RTT): an
+  accepted window read at least `audit.bound`'s ingress of the store (`q_cert`), with S_chip the bandwidth harness's count
+  of the device (`chip`: L2, registers, L1 and shared memory, and the constant and instruction caches beside them) and the
+  side link at the harness's cap.  It holds for a store set up under `bandwidth.audit.draw_salt`'s device-bound salt (the PoUS
+  harness's ``--bandwidth-salt``), which the granted verifier checks.  A chain run without windows certifies none.  A
+  window is also reported on time at `window_params`' T, the RTT at P2's cap (`RTT_ALLOWANCE_CAP_NS`) under the rebuild
+  floor, the T a verifier on another machine would grant.
 * **S_cert, capacity**: the PoUS arm's storage profile (`storage`), when the harness issued one and it is certified: a
   server holding fewer than ⌊ρ·|C|⌋ bits passes the audit of record's k challenges within its limit with probability at most
   δ + 2^eps_log2, by the certificate's theorem (P2's is ``Pous.SecurityProofs.P2SlackFamilyUncond``), under its claims,
@@ -27,12 +28,15 @@
   BW the native read rate; capacity M − S_cert, M the device's memory.  It splits into honest overhead, native less the
   honest reference (F·T − ΣW_ref: what the protocol's own time costs; M − |C|, the memory the store leaves), and soundness
   slack, the reference less what is certified (ΣW_ref − W_cert; |C| − S_cert).  It is the weak form (`RESIDUAL`):
-  ``CovertResidual`` is worst case over each audit's own coins, not a per-run bound, and the per-run form is not proved yet.
+  ``CovertResidual`` is worst case over each audit's own coins, not a per-run bound.  A per-run compute residual holds only
+  conditional on ``BudgetAbort`` for the deployed cost model (`PER_RUN`), so none is shown.  First fetches are charged to
+  the bandwidth account, not compute (`FIRST_FETCH`).
 """
 
 from __future__ import annotations
 
 import importlib.util
+import math
 import re
 import sys
 from fractions import Fraction
@@ -48,26 +52,37 @@ DELTA = Fraction(1, 2 ** 40)
 GAMMA_PIN = "#1809"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
-PENDING_Q = "pending: not the granted protocol"
-#: the bandwidth protocol's red-team grant (pr:1805's label, with conditions), whose verifier refuses a store under PoUS's salt
-Q_GRANT = "#1805's 5761861fd"
+#: the bandwidth protocol's red-team grant (#1805, with conditions), whose point `granted_params` is
+Q_GRANT = "red-team grant at 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
-RESIDUAL = "residual, worst case over the audit's coins; per-run form pending"
+GRANTED_T_NS = 1_200_000
+RESIDUAL = "residual, worst case over the audit's coins (CovertResidual's weak form)"
+PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model (Daniel's "
+           "decision 9; #1821's CovertResidualPerRun, and #1827: BudgetAbort holds for constant-cost models and W1's "
+           "operand refund breaks it), so none is shown")
+FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute (Daniel's ruling); a priced-sum column, "
+               "compute + p·reads at p the device's DRAM rate in MAC units, waits for compute-accounting's priced lemma "
+               "(w1Priced)")
 S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "
            "#1790) is held")
 NO_POUS = "no PoUS arm in this run"
 SUMMARIZE = ROOT / "benchmarks" / "bandwidth" / "summarize.py"
 
 
-def chip(device: dict) -> dict:
-    """S_chip of a device (its `l2_bytes`, `sms` and `regs_per_sm`), the bandwidth harness's count (`summarize.s_chip_bytes`:
-    L2, registers, L1 and shared memory, and the red team's allowance for the caches and buffers beside them)."""
+def summarize():
+    """The bandwidth harness's `summarize`, loaded by path: S_chip's count and the side link's cap."""
     if "bandwidth_summarize" not in sys.modules:
         spec = importlib.util.spec_from_file_location("bandwidth_summarize", SUMMARIZE)
         mod = importlib.util.module_from_spec(spec)
         sys.modules["bandwidth_summarize"] = mod
         spec.loader.exec_module(mod)
-    s = sys.modules["bandwidth_summarize"]
+    return sys.modules["bandwidth_summarize"]
+
+
+def chip(device: dict) -> dict:
+    """S_chip of a device (its `l2_bytes`, `sms` and `regs_per_sm`), the bandwidth harness's count (`summarize.s_chip_bytes`:
+    L2, registers, L1 and shared memory, and the red team's allowance for the caches and buffers beside them)."""
+    s = summarize()
     return {"s_chip_bytes": s.s_chip_bytes(device), "formula": s.S_CHIP_FORMULA}
 
 
@@ -77,6 +92,22 @@ def window_params(tag: str):
     from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
     return audit.Params(tag, audit.SAMPLES, audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
 
+
+def granted_params(tag: str):
+    """A window of `tag` at the granted point: `s = 1,849`, `T = 1.2 ms`, and no RTT, the verifier in the prover's process."""
+    from verity.core.protocols.bandwidth import audit
+    return audit.Params(tag, audit.SAMPLES, GRANTED_T_NS)
+
+
+def q_cert(tag: str, blocks: int, block_bytes: int, chip_bytes: int) -> dict:
+    """Q_cert of one accepted window of `tag` at the granted point over a store of `blocks` blocks: `audit.bound`'s ingress
+    with S_chip `chip_bytes` and the side link at the bandwidth harness's cap (`summarize.PCIE_GEN5_X16`, PCIe Gen 5 x16
+    at its raw rate), and its error."""
+    from verity.core.protocols.bandwidth import audit
+    p = granted_params(tag)
+    b = audit.bound(p, blocks, block_bytes, chip_bytes=chip_bytes, side_bytes_per_s=summarize().PCIE_GEN5_X16)
+    return {"q_cert": b.ingress_bytes, "error": b.error, "error_log2": math.log2(b.error), "side_bytes": b.side_bytes,
+            "chip_bytes": chip_bytes, "samples": p.samples, "limit_ns": p.limit_ns, "basis": Q_GRANT, "theorem": Q_THEOREM}
 
 def price_twins():
     """The harness's `price_twins` module, loaded by path (benchmarks/pouw/harness is not a package)."""
@@ -159,10 +190,11 @@ def residual(capacity: float | None, reference: float | None, certified: float |
             "soundness_slack": sub(reference, certified)}
 
 
-def bandwidth(read_rate: float | None, seconds: float, bytes_read: float) -> dict:
-    """The bandwidth residual: BW·T against the bytes the chain read; Q_cert is pending."""
+def bandwidth(read_rate: float | None, seconds: float, bytes_read: float, certified: float = 0.0) -> dict:
+    """The bandwidth residual: BW·T against the bytes the chain read and Q_cert, the bytes its accepted windows certified
+    (none for a chain run without windows)."""
     capacity = None if read_rate is None else read_rate * seconds
-    return {"q_cert": None, "pending": PENDING_Q, "theorem": Q_THEOREM, **residual(capacity, bytes_read, None)}
+    return {"q_cert": certified, "basis": Q_GRANT, "theorem": Q_THEOREM, **residual(capacity, bytes_read, certified)}
 
 
 def capacity(memory_bytes: int | None, s_cert: float | None = None, why: str = NO_POUS, stored: float | None = None) -> dict:

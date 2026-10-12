@@ -9,9 +9,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # certified.py looks γ up from the PoUW harness's price twins (price_twins.py, loaded by path, and its table) and prices the
 # credited cells with verity.core.protocols.pouw, reads |C| from verity.core.protocols.pous's registered schemes and S_chip from
 # the bandwidth harness's summarize.py (loaded by path); joint.py runs the bandwidth audit's windows
-# (verity.core.protocols.bandwidth); the rest of `verity` listed is what those packages import.
+# (verity.core.protocols.bandwidth) through the bandwidth harness's prover (gpu.py, which imports reference.py beside it);
+# the rest of `verity` listed is what those packages import.
 inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/price_twins.json",
-          "benchmarks/bandwidth/summarize.py",
+          "benchmarks/bandwidth/summarize.py", "benchmarks/bandwidth/gpu.py", "benchmarks/bandwidth/reference.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pouw",
           "verity/core/protocols/pous", "verity/core/claims",
