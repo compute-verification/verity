@@ -315,7 +315,8 @@ class Store:
         self._challenge: bytes | None = None
         self._last_root: bytes | None = None
         self._passes: list[PassCommitment] = []
-        self._retained: dict[int, _Pass] = {}
+        self._window = -1
+        self._retained: dict[tuple[int, int], _Pass] = {}
         self._open_pass: _Pass | None = None
         self.filler_plan = filler_plan
         self.chaining = chaining
@@ -529,14 +530,16 @@ class Store:
             self._last_root = self._log_root if registration is None else registration
         elif registration is not None:
             raise ValueError("only a session's first window chains from the registration")
-        self._challenge, self._passes, self._retained = challenge, [], {}
+        self._window += 1
+        self._retained = {k: ps for k, ps in self._retained.items() if k[0] == self._window - 1}
+        self._challenge, self._passes = challenge, []
 
     def end_window(self) -> WindowRecord:
         if self._challenge is None:
             raise RuntimeError("no window is open")
         if self._open_pass is not None:
             raise RuntimeError("a window ends between passes")
-        rec = WindowRecord(self._challenge, tuple(self._passes))
+        rec = WindowRecord(self._challenge, tuple(self._passes), self._window)
         self._challenge = None
         return rec
 
@@ -657,14 +660,14 @@ class Store:
             pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root)
         self._passes.append(pc)
         self._last_root = root
-        self._retained[ps.index] = ps
+        self._retained[(self._window, ps.index)] = ps
         self.counters.add("end_pass", time.perf_counter() - t)
         return pc
 
     # --- plans and openings -----------------------------------------------------------------------------------------
 
-    def plan(self, pass_index: int) -> np.ndarray:
-        ps = self._retained[pass_index]
+    def plan(self, pass_index: int, window: int | None = None) -> np.ndarray:
+        ps = self._retained[(self._window if window is None else window, pass_index)]
         parts = [self._by_name[s.region].info.first + ps.segment_blocks(i) for i, s in enumerate(ps.segments)]
         return np.concatenate(parts) if parts else np.zeros(0, np.int64)
 
@@ -684,14 +687,16 @@ class Store:
             return r.info.kind
         return "kv" if r.pool.allocated[r.pool.page_of[block]] else "filler"
 
-    def open(self, sample: Sequence[tuple[int, int]]) -> list[Opening]:
-        """Each sampled (pass, position) as that pass read it.  A KV block re-registered since (its epoch moved) or
-        dirty now raises `Stale`: the binder keeps freed pages out of reuse within a window."""
+    def open(self, sample: Sequence[tuple[int, int]], window: int | None = None) -> list[Opening]:
+        """Each sampled (pass, position) of ``window`` (None: the latest) as that pass read it.  A KV block
+        re-registered since (its epoch moved) or dirty now raises `Stale`: the binder reuses freed pages as late as
+        the pool allows."""
         out, inner = [], {}
+        t = self._window if window is None else window
         for j, position in sample:
-            ps = self._retained.get(j)
+            ps = self._retained.get((t, j))
             if ps is None:
-                raise KeyError(f"pass {j} is not retained")
+                raise KeyError(f"pass {j} of window {t} is not retained")
             if ps.top is None:
                 raise RuntimeError(f"pass {j}'s tree is its reader's, which opens it")
             k = ps.at(position)

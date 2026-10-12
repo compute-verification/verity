@@ -283,6 +283,25 @@ def test_an_opening_of_a_rewritten_block_is_stale():
     assert s.open([(0, 1)])[0].block == 1
 
 
+def test_a_windows_openings_outlast_the_next_windows_start():
+    """The driver's openings coin for window t comes once window t + 1's first root is in, so window t's passes stay
+    open through window t + 1 and go when window t + 2 begins."""
+    s = Store()
+    _, payload = weights(s)
+    _, w0 = _window(s, SIGMA, [((), None), ((), None)])
+    _, w1 = _window(s, SIGMA2, [((), None)])
+    assert (w0.index, w1.index) == (0, 1)
+    o = s.open([(1, 2)], window=0)[0]
+    assert o.pass_index == 1 and o.receipt != s.open([(0, 2)])[0].receipt
+    want = payload[2 * BLOCK:3 * BLOCK]
+    assert verify_opening(s.region("w"), w0.passes[1], s.plan(1, window=0), o, RECEIPT, CODEC.decode, want)
+    assert not verify_opening(s.region("w"), w1.passes[0], s.plan(0), o, RECEIPT, CODEC.decode, want)
+    s.begin_window(bytes(32))
+    with pytest.raises(KeyError, match="window 0"):
+        s.open([(1, 2)], window=0)
+    assert s.plan(0, window=1).tolist() == list(range(6))
+
+
 def _aligned_store() -> tuple[Store, dict[str, ArrayBacking]]:
     """Weights of 40 and 20 blocks and two KV layers of 4 pages of 4 blocks: whole subtrees of 2, 1, 1 and 1 leaves,
     then a tail of 8 and 4 blocks."""

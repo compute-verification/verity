@@ -189,10 +189,11 @@ class PassCommitment:
 
 @dataclass(frozen=True)
 class WindowRecord:
-    """A window: its challenge and its passes' commitments in order."""
+    """Window ``index`` of the session: its challenge and its passes' commitments in order."""
 
     challenge: bytes
     passes: tuple[PassCommitment, ...]
+    index: int
 
 
 @dataclass(frozen=True)
@@ -230,7 +231,9 @@ class StoreView(Protocol):
     before it, the first by the previous window's last, the session's first by the registration digest, or the
     store's registration root without one); `plan` is a pass's blocks in read order
     (store indices, each once; their runs' digest is in the commitment); `open` answers the
-    verifier's sample with each block as that pass read it, or raises `Stale`."""
+    verifier's sample with each block as that pass read it, or raises `Stale`.  Both take the window's index (None:
+    the latest); a window's passes are kept until the window after the next begins, since its openings coin comes
+    only once the next window's first root is in."""
 
     def layout(self) -> Layout: ...
 
@@ -240,9 +243,9 @@ class StoreView(Protocol):
 
     def end_window(self) -> WindowRecord: ...
 
-    def plan(self, pass_index: int) -> Sequence[int]: ...
+    def plan(self, pass_index: int, window: int | None = None) -> Sequence[int]: ...
 
-    def open(self, sample: Sequence[tuple[int, int]]) -> list[Opening]: ...
+    def open(self, sample: Sequence[tuple[int, int]], window: int | None = None) -> list[Opening]: ...
 
 
 @dataclass(frozen=True)
