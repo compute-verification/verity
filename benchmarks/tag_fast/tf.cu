@@ -965,8 +965,8 @@ __device__ __forceinline__ void f3_finish(uint32_t* sh, const ChunkTag<V, L>& ct
 // fused2's chunk-block map in fused_kernel's shape: FW warps a CTA on one span s of consecutive row blocks (spans fastest
 // in the grid), each lane's chunk loaded into registers PD quads ahead (no ring, no cp.async), x's M rows of the span in
 // shared memory. Tags and modes as fused2_kernel's; bid is the CTA's index in the GEMM's grid. PK: f3_finish (MODE_TAGS,
-// L >= 2) in the shared memory of x's rows, which the CTA no longer reads.
-template <int V, int L, int NB8, int MODE, int PD, bool PK = false, int R = 7, bool NE = false>
+// L >= 2) in the shared memory of x's rows, which the CTA no longer reads. SY: the CTA's warps in step, a barrier a quad.
+template <int V, int L, int NB8, int MODE, int PD, bool PK = false, int R = 7, bool NE = false, bool SY = false>
 __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                             float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N, int Kd,
                                             uint64_t jbase, unsigned int* __restrict__ xr,
@@ -1044,6 +1044,7 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
       if (NQ % DEPTH == 0 || qd < NQ) {
         if (qd + PD < NQ) load(buf[(v + PD) % DEPTH], qd + PD);
         step(buf[v], qd);
+        if constexpr (SY) __syncthreads();
       }
     }
   }
@@ -1119,13 +1120,13 @@ __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restric
 }
 
 // fused3p_kernel's variants, a kernel of their own so fused3p_kernel's code stays as timed: V the BLAKE3 variant, R
-// rounds, or NE no chunk ends (a sink, its xor into tags[0]), as fused3_kernel's; L 4, one quad ahead.
-template <int NB8, int MODE, int R, bool NE, int V = 1>
+// rounds, NE no chunk ends (a sink, its xor into tags[0]) or SY, as fused3_body's; L 4, one quad ahead.
+template <int NB8, int MODE, int R, bool NE, int V = 1, bool SY = false>
 __global__ void __launch_bounds__(FW * 32) fused3q_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
                                                           int* done_ctr, unsigned long long* trace) {
-  fused3_body<V, 4, NB8, MODE, 1, false, R, NE>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
+  fused3_body<V, 4, NB8, MODE, 1, false, R, NE, SY>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
                                                  reinterpret_cast<unsigned int*>(tags), wait_ctr, wait_n, done_ctr, trace);
   asm volatile("griddepcontrol.wait;" ::: "memory");
   if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
@@ -1593,8 +1594,8 @@ int tf_fused3(int lanes, int mode, int pd, int pk, const void* w, const uint8_t*
 // SM (dynamic shared memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd
 // some SMs; leave > 0: of the SM's shared memory less a leave-th, so one CTA of a launch capped at leave fits beside.
 // pd: quads of register prefetch, 1 or 2. probe (pd 1, lanes 4): 1 four-round BLAKE3 (tags, uncertified), 2 no chunk
-// ends (mode sink, its xor into tags[0]), 3 and 4 BLAKE3 variants 5 and 6 (the certified tag); 0 fused3p_kernel. trace:
-// null, or this launch's TR_WORDS words.
+// ends (mode sink, its xor into tags[0]), 3 the CTA's warps in step (SY; the certified tag), 4 the tags without the
+// GEMM (mode tags; a diagnostic); 0 fused3p_kernel. trace: null, or this launch's TR_WORDS words.
 int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
                uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ, int leave, int probe,
                unsigned long long* trace, cudaStream_t st) {
@@ -1623,13 +1624,11 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
            : nb8 == 2 ? fused3q_kernel<2, MODE_SINK, 7, true>
                       : fused3q_kernel<4, MODE_SINK, 7, true>;
   } else if (probe == 3) {
-    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, 5>
-           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, 5>
-                      : fused3q_kernel<4, MODE_TAGS, 7, false, 5>;
+    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, 1, true>
+           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, 1, true>
+                      : fused3q_kernel<4, MODE_TAGS, 7, false, 1, true>;
   } else {
-    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, 6>
-           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, 6>
-                      : fused3q_kernel<4, MODE_TAGS, 7, false, 6>;
+    kern = fused3q_kernel<1, MODE_TAGONLY, 7, false>;
   }
 #undef F3P
 #undef F3PD

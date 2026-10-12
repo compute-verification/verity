@@ -752,10 +752,12 @@ PIPE_PLANS = ("px",)
 # vs 1.064; 78 registers). So do BLAKE3 variants 5 and 6 in it (p5, p6: probes 3 and 4; r20261012-125041-a9be: 1.216
 # and 1.186 vs 1.064, their chains 2.45 and 2.85 TB/s vs V1's 3.11: the wide multiply costs the FMA pipe more than the
 # ALU instruction it saves).
-CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}}
+PX = {"qkv": 0, "o": 0, "gate_up": 0}
+CAP_PLANS = {"p": {}, "px": PX, "psy": PX}
 # Per plan, shapes whose padding leaves room for one CTA of the named next shape (its CTAs then start beside them).
 LEAVE_PLANS: dict[str, dict[str, str]] = {}
-PROBE_PLANS: dict[str, int] = {}  # tf_fused3p's probe for the plan's tag chain (4 KiB only)
+# tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 a CTA's warps in step (a barrier a quad)
+PROBE_PLANS = {"psy": 3}
 TRACE_BATCHES = (1, 8)
 
 
@@ -782,6 +784,7 @@ At TRACE_BATCHES, nativepx and tagpx4 once more with tf.cu's trace (globaltimer 
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
     proberpx4, noendpx4  the same two in tagpx4's chain
+    tagonlypx4  tagpx4's chain without the GEMM (tags only; a diagnostic)
     """
     names = list(layout.SHAPES)
     copies = {name: [] for name in names}
@@ -963,6 +966,7 @@ At TRACE_BATCHES, nativepx and tagpx4 once more with tf.cu's trace (globaltimer 
             arms["noend4"] = run(seq(lambda name: "n4kr1"), "noend4")
             arms["proberpx4"] = run(seq_pdl(4, None, "px", probe=1), "proberpx4")
             arms["noendpx4"] = run(seq_pdl(4, None, "px", probe=2), "noendpx4")
+            arms["tagonlypx4"] = run(seq_pdl(4, None, "px", probe=4), "tagonlypx4")
         with torch.cuda.stream(hp):
             r = interleave(lib, torch, arms, reps, 1)
         med = r["median_s"]
@@ -1065,12 +1069,14 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
             if what.startswith("native"):
                 continue
             stage = ("tag without chunk ends (diagnostic)" if what.startswith("noend") else
+                     "tags without the GEMM (diagnostic)" if what.startswith("tagonly") else
                      "tag+commit" if what.startswith("commit") else
                      "tag+commit (the step before's, pipelined)" if what.startswith("pipe") else "tag")
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": stage,
                         **({"certified": False, "rounds": PROBE_ROUNDS} if what.startswith("prober") else {}),
-                        **({"certified": False, "diagnostic": True} if what.startswith("noend") else {})})
+                        **({"certified": False, "diagnostic": True}
+                           if what.startswith("noend") or what.startswith("tagonly") else {})})
     return out
 
 
