@@ -231,3 +231,11 @@ def test_an_untagged_point_is_never_on_the_frontier():
     committed = dict(base, arithmetic="cuda-int32/p768/wt.cu/sketch16/commit", y_total=1.5)
     pts = F.check([untagged, committed])
     assert F.frontier(pts, 0.005, idle=0.1)[1]["y_total"] == 1.5
+
+
+def test_the_frontier_ranks_by_the_step_d_so_a_measured_end_to_end_d_counts():
+    base = {"schema": F.SCHEMA, "lane": "x", "b": 1536, "k": 1, "batch": 32, "y_decode": 1.0, "y_tag": 0.1,
+            "y_commit": 0.05, "x": 1e6, "tau": 0.0, "arithmetic": "cuda-int32/p1536/sketch/commit"}
+    e2e = dict(base, y_total=2.31, d=2.89)
+    kernel = dict(base, y_total=2.36)
+    assert F.frontier(F.check([e2e, kernel]), 0.005, idle=0.1)[32]["y_total"] == 2.36

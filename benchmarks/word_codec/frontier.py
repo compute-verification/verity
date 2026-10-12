@@ -277,7 +277,7 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
         if not admissible(p, budget, d, idle, boost):
             continue
         b = best.get(p["batch"])
-        if b is None or p["y_total"] < b["y_total"]:
+        if b is None or step(p, d, idle) < step(b, d, idle):
             best[p["batch"]] = p
     return best
 
