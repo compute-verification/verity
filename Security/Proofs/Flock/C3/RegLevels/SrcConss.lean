@@ -85,7 +85,7 @@ theorem ligeritoRun_starts [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} 
   have hc01 := hcols 0 (by omega)
   have hq : ∀ i ≤ sch.levels.size - 1, LevelSeam (sch.levels.getD i default) := fun i hi => hlv i (by omega)
   have hp : ∀ cs, (positions (sch.levels[0]!) cs).size = (sch.levels[0]!).q := fun cs => by
-    rw [← Family.Conss.getD_default]
+    rw [← FlockVBridge.Family.Conss.getD_default]
     exact positions_size _ (hlv 0 (by omega)) cs
   rw [StateT.run] at hrun
   unfold RecAlgebra.ligeritoRun at hrun
@@ -113,9 +113,9 @@ theorem ligeritoRun_starts [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} 
   obtain ⟨-, -, -, -, mq, -, -, -, -, hc₄, -⟩ := RecAlgebra.vqueryFold (hlv 0 (by omega)).q_ne_zero h₄
   have hA0 : stA.conss = #[] := by rw [eA]
   rw [levelsLoop_starts hq _ _ _ _ _ st₄ _ _ _ _ (by omega) h₅, hc₄, Array.toList_push, hc₃, hc₂, hc₁, hA0,
-    Family.Conss.range_eq_cons (n := sch.levels.size) (by omega)]
+    FlockVBridge.Family.Conss.range_eq_cons (n := sch.levels.size) (by omega)]
   simp only [Array.toList_empty, List.nil_append, List.map_cons, List.map_nil, List.cons_append, hp, Nat.zero_add,
-    Family.Conss.getD_default]
+    FlockVBridge.Family.Conss.getD_default]
 
 /-- **(n7's levels) R's run's contexts are its levels** (`ConssAt`): where V*'s Ligerito over F returns zero residuals
 at a `fast100` schedule on rounds with no empty round, it records level `ℓ`'s context `ℓ`-th with the level's `q`
