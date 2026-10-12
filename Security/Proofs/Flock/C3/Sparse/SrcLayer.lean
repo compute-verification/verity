@@ -59,18 +59,14 @@ theorem nw_le_msum (sh : Flock.RecSparse.Shape) : nw (shOf sh) ≤ ((messagePort
 /-- The verifier row's elements are at most `v`'s port's. -/
 theorem nv_le (sh : Flock.RecSparse.Shape) : FlockVBridge.Sparse.nv (shOf sh) ≤ Flock.RecSparse.nv sh := by
   rw [nv_eq sh, sum_degs sh]
-  simp only [FlockVBridge.Sparse.nv, vEqp, vUr, vAy, vAx, vAlpha, pLog_shOf, shOf_ell, shOf_sLog, shOf_tLog,
-    Flock.RecSparse.Shape.PP, Flock.RecSparse.Shape.S, Flock.RecSparse.Shape.T]
-  by_cases ht : sh.tLog = 0
-  · have hst : sh.stacked = false := by simp [Flock.RecSparse.Shape.stacked, ht]
-    rw [ite_eq_left ht]
-    simp only [hst, Bool.false_eq_true, ↓reduceIte]
+  unfold FlockVBridge.Sparse.nv
+  by_cases hst : sh.stacked = true
+  · rw [ite_eq_right (tLog_ne sh hst), ite_eq_left hst]
+    simp only [vEqp, vUr, vAy, vAx, vAlpha, pLog_shOf, shOf_ell, shOf_sLog, shOf_tLog, Flock.RecSparse.Shape.PP,
+      Flock.RecSparse.Shape.S, Flock.RecSparse.Shape.T]
     omega
-  · have hst : sh.stacked = true := by
-      simp only [Flock.RecSparse.Shape.stacked, decide_eq_true_eq]
-      omega
-    rw [ite_eq_right ht]
-    simp only [hst, ↓reduceIte]
+  · rw [ite_eq_left (tLog_eq sh (by simpa using hst)), ite_eq_right hst]
+    simp only [vEqp, vUr, vAy, vAx, vAlpha, pLog_shOf, shOf_ell, Flock.RecSparse.Shape.PP]
     omega
 
 /-- **The message ports' columns are input columns** of the verifier's `rec-sparse` unit. -/
