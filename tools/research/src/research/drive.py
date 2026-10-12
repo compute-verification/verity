@@ -20,6 +20,7 @@ and passed but lacks a step the gate needs, a launch that registered no run.  Th
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -60,10 +61,23 @@ def needs_agreement(repo: Path, base: str, commit: str) -> bool:
     return any(p == "lean-audit.json" or p.endswith("/lean-audit.json") for p in changed(repo, base, commit))
 
 
-def train_launch(repo: Path, commit: str, machine: str, agreement: bool) -> tuple[list[str], str]:
-    """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail)."""
+def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
+    """The queue's `git -c` options (`credential_args`) as GIT_CONFIG_* variables, after any the caller carries, so every git a
+    child runs in the queue's clone authenticates as the queue's own does."""
+    pairs = [o.split("=", 1) for flag, o in zip(auth[::2], auth[1::2]) if flag == "-c"]
+    n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    env = {"GIT_CONFIG_COUNT": str(n + len(pairs))}
+    for i, (k, v) in enumerate(pairs, n):
+        env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
+    return env if pairs else {}
+
+
+def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = ()) -> tuple[list[str], str]:
+    """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail).  Git never
+    prompts (12 Oct: train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else [])]
-    r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, env={**os.environ, "TRAIN_AS": "ci"})
+    r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env={**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"})
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
@@ -108,6 +122,8 @@ class Driver:
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        if launch is train_launch:
+            launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now = launch, states, post, now
         self.repo = q.workdir
 

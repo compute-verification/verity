@@ -184,3 +184,20 @@ def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):
     h.tick()
     assert not h.launched and not h.posts and _git(world.origin, "rev-parse", "main") == before
     assert any("would tell the lander" in s for s in world.logs)
+
+
+def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_path, monkeypatch):
+    """12 Oct, drive's first live tick: train.sh's `git fetch` in the queue's clone, which has no credential helper of its own,
+    waited on a password at the tty, and drive with it."""
+    from research.drive import train_launch
+
+    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text(
+        'echo "prompt=$GIT_TERMINAL_PROMPT n=$GIT_CONFIG_COUNT $GIT_CONFIG_KEY_1=$GIT_CONFIG_VALUE_1 $GIT_CONFIG_KEY_2=$GIT_CONFIG_VALUE_2"\n'
+        'read -r line && echo "stdin: $line"\necho "RUN r20261012-060000-aaaa"\n')
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "safe.directory")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "*")
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, auth=("-c", "credential.helper=", "-c", "credential.helper=!h get"))
+    assert ids == ["r20261012-060000-aaaa"]
+    assert "prompt=0 n=3 credential.helper= credential.helper=!h get" in tail and "stdin:" not in tail
