@@ -106,7 +106,12 @@ words `J`, one per certifier, each one of `χ = 2^jitter` classes a bucket of ti
 certifier `y` sends outside itself from the gates it places during `[a, b)`, values and ticks (`sent`), is a function of
 its own record placed before `b` (its gates in its record cells `record y`, `Actual.Run.record`, as seen, so whatever
 timing it logs is counted there; a send during `[a, b)` can't read a later record) and of its own jitter word on the
-buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained. -/
+buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained.
+
+Each trusted device, every certifier among them, is the auditor's hardware and runs on a machine the prover doesn't
+control: the auditor's own VM or box, under the auditor's account, never a process on the prover's node. A device on a
+node the prover controls, such as the bandwidth audit's challenger on the GPU's own node, is the prover's hardware,
+and its leaves aren't in `𝒱`. -/
 def TrustedUnits {Ω L : Type*} (S : Ω → Actual.Run L) (𝒱 cert : Finset L) (spec : ∀ r, (S r).A.Spec)
     (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter : ℕ) : Prop :=
   cert ⊆ 𝒱 ∧
