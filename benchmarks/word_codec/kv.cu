@@ -1866,9 +1866,10 @@ int kv_rc_tag(int rc, uint64_t n, cudaStream_t s) {
 }
 
 // rc_tag16_kernel's receipts of the n blocks of 16 vectors of kv_rc_buffers' sketches, into the first n receipt slots.
+// 64 threads a CTA, so one CTA fits on an SM beside mma-ws's two (61,440 of its 65,536 registers).
 int kv_rc_tag16(int rc, uint64_t n, cudaStream_t s) {
   if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
-  kv::rc_tag16_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
+  kv::rc_tag16_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
   return launched();
 }
 

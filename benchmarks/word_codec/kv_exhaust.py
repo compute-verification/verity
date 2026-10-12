@@ -139,7 +139,8 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
     """Forms 10 and 11 at each gate cell, k of ks and split count of SPLITS, at layer L - 1: the attention output equals
     form 5's bit for bit at every split count where the two split the tokens alike; every sketch equals kv_receipt's
     from the raw words (form 11's from the z it dumped); the z after each CTA's last tile equals its partials bit for
-    bit; and the first and last 64 receipts equal kv_receipt's."""
+    bit; the first and last 64 receipts equal kv_receipt's; and so do the first and last 32 block receipts
+    (kv_rc_tag16 over the same sketches)."""
     sh, rs, f = shape(lib), rc_shape(lib), lib.field
     if not sh["mma"] or sh["kv_heads"] != K.KV_HEADS or rs["mdw"] * R.LANES != rs["mt"] * 8:
         return {}
@@ -167,7 +168,8 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
         tg = torch.zeros(nvec, 8, dtype=torch.int32, device="cuda")
         part = part_buffer(torch, sh, b)
         o5, orc = (torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda") for _ in range(2))
-        cell = {"batch": b, "context": ctx, "layer": layer, "equal": {}, "sketch": {}, "z": {}, "receipts": {}}
+        cell = {"batch": b, "context": ctx, "layer": layer, "equal": {}, "sketch": {}, "z": {}, "receipts": {},
+                "block_receipts": {}}
         for k in ks:
             B.set_key(lib, K.key(f.name, B.SEED, k))
             lib.call("kv_encode", B.ptr(pad), B.ptr(enc), pad.numel() // f.word_bytes, 0, k, 0, st)
@@ -218,12 +220,19 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
                     rc_ok = all(R.receipt(RC_SEED, rc, v, skn[v]) == tgn[v].astype("<i4").tobytes()
                                 for v in list(range(64)) + list(range(nvec - 64, nvec)))
                     cell["receipts"][key] = cell["receipts"].get(key, True) and rc_ok
+                    nblk = nvec // 16
+                    lib.call("kv_rc_tag16", rc, nblk, st)
+                    torch.cuda.synchronize()
+                    tbn = tg[:nblk].cpu().numpy()
+                    blk_ok = all(R.receipt(RC_SEED, rc, u, skn[16 * u: 16 * u + 16]) == tbn[u].astype("<i4").tobytes()
+                                 for u in sorted(set(range(min(32, nblk))) | set(range(max(0, nblk - 32), nblk))))
+                    cell["block_receipts"][key] = cell["block_receipts"].get(key, True) and blk_ok
                     del zd
-        cell["ok"] = all(all(cell[n].values()) and cell[n] for n in ("equal", "sketch", "receipts")) and all(
+        names = ("equal", "sketch", "receipts", "block_receipts")
+        cell["ok"] = all(all(cell[n].values()) and cell[n] for n in names) and all(
             cell["z"].values()) and bool(cell["z"])
         log(f"receipt gate {lib.name} B={b} ctx={ctx} L={layers} layer {layer}: {'ok' if cell['ok'] else 'FAIL'}; "
-            + "; ".join(f"{n} " + ", ".join(f"{a} {v}" for a, v in cell[n].items())
-                        for n in ("equal", "sketch", "z", "receipts")))
+            + "; ".join(f"{n} " + ", ".join(f"{a} {v}" for a, v in cell[n].items()) for n in names + ("z",)))
         out[f"b{b}_ctx{ctx}"] = cell
         del plain, pad, enc, q, sk, tg, part, o5, orc
         torch.cuda.empty_cache()
@@ -428,6 +437,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
         rc_setup(lib, RC_SEED)
         nvec = receipt_vectors(sh, rc_shape(lib), b, ctx)
         sk = torch.empty(nvec, 16, dtype=torch.int32, device="cuda")
+        sk2 = torch.empty_like(sk)
         tg = torch.empty(nvec, 8, dtype=torch.int32, device="cuda")
     for fm in forms_of(sh, only):
         for k in ([1] if fm in RTOL else ks):
@@ -489,8 +499,8 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                     for _ in range(layers):
                         lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
 
-                def blocks_equal() -> bool:
-                    skn, tgn = sk.cpu().numpy(), tg[:nblk].cpu().numpy()
+                def blocks_equal(skb=sk, tgb=tg) -> bool:
+                    skn, tgn = skb.cpu().numpy(), tgb[:nblk].cpu().numpy()
                     return all(R.receipt(RC_SEED, RECEIPT[fm], u, skn[16 * u: 16 * u + 16])
                                == tgn[u].astype("<i4").tobytes() for u in list(range(8)) + list(range(nblk - 8, nblk)))
 
@@ -531,6 +541,41 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                         + f"; the first and last 8 equal kv_receipt's: {ok}")
                     if not ok:
                         raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt after the sketch differs from kv_receipt's")
+
+                hi, lo = torch.cuda.Stream(priority=-1), torch.cuda.Stream(priority=0)
+                bufs, tgs = (sk, sk2), (tg, tg[nblk:])
+
+                def overlap_pass():
+                    hashed = [None, None]
+                    for l in range(layers):
+                        if hashed[l % 2] is not None:
+                            hi.wait_event(hashed[l % 2])
+                        lib.call("kv_rc_buffers", B.ptr(bufs[l % 2]), None, None)
+                        attn_call(lib, hi.cuda_stream, store, fm, q, o, part, b, ctx, layers, l, sp, k)
+                        read = torch.cuda.Event()
+                        read.record(hi)
+                        lo.wait_event(read)
+                        lib.call("kv_rc_buffers", B.ptr(bufs[l % 2]), B.ptr(tgs[l % 2]), None)
+                        lib.call("kv_rc_tag16", RECEIPT[fm], nblk, lo.cuda_stream)
+                        hashed[l % 2] = torch.cuda.Event()
+                        hashed[l % 2].record(lo)
+                    for e in hashed:
+                        hi.wait_event(e)
+
+                with torch.cuda.stream(hi):
+                    overlap_pass()
+                    to = [B.queued(lib, torch, overlap_pass, SPIN) / layers for _ in range(reps)]
+                torch.cuda.synchronize()
+                last = (layers - 1) % 2
+                ok = blocks_equal(bufs[last], tgs[last])
+                row["tag16"]["overlap"] = {"s": statistics.median(to), "times_s": to,
+                                           "over_read": statistics.median(to) / t_read, "receipts_equal": ok}
+                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, with layer l's block receipts "
+                    f"on a second stream of lower priority beside layer l + 1's attention, a layer "
+                    f"{row['tag16']['overlap']['s'] * 1e3:.3f} ms ({row['tag16']['overlap']['over_read']:.3f}x the read)"
+                    f"; the last layer's first and last 8 equal kv_receipt's: {ok}")
+                if not ok:
+                    raise SystemExit(f"{FORMS[fm]} k={k}: an overlapped block receipt differs from kv_receipt's")
             cell["forms"].setdefault(FORMS[fm], {})[k] = row
             log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]}" + ("" if fm in RTOL else f" k={k}")
                 + f": a layer {row['s'] * 1e3:.3f} ms at {sp} splits, {row['gbps']:.0f} GB/s, {row['over_read']:.3f}x"
