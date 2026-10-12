@@ -5,8 +5,8 @@
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
 #     --declared-output 'out/*' -- env NGPU=1 taskset -c 48-95 bash benchmarks/host_tier/run_loop.sh
 #
-# Outside the lease: build loop.cu (+ receipt.cpp), pcie.cu and dram.c. Under `gpu-lease $NGPU --wait --on GPU_ON
-# --max-min 20` (GPU_ON: the GPUs of NUMA node GPU_NODE): the loop's gates against reference.py for KS 16, 4, 1, the
+# Outside the lease: build loop.cu (+ receipt.cpp), pcie.cu and dram.c. Under `gpu-lease $NGPU --wait [--on GPU_ON]
+# --max-min 20`: the loop's gates against reference.py for KS 16, 4, 1, the
 # copy-engine path and the 1 MiB chunk path (a failed gate times nothing, exit 3); then, REPS times, the CPUs' receipts
 # alone on every worker CPU (KS 1 by groups; KS 1 and 4 by chunks; KS 1 by chunks prefetching twice as far), the
 # adversary's CPU read alone and beside the GPUs' copy engines (loop.cu), the full loop (copy engine: KS 4 by groups,
@@ -85,5 +85,6 @@ NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
     && "$NVCC" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -pthread -o "$B/loop" loop.cu "$B/receipt.o" \
     && "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/pcie" pcie.cu && gcc -O3 -march=native -pthread -Wall -o "$B/dram" dram.c; } \
   > "$O/build.txt" 2>&1 || { cat "$O/build.txt"; exit 4; }
-[ "${GPU_NODE:-0}" = 0 ] && on=0,1,2,3 || on=4,5,6,7
-GPU_LEASE_WHO=ra-host-tier gpu-lease "${NGPU:-1}" --wait --on "${GPU_ON:-$on}" --max-min 20 -- bash "$PWD/run_loop.sh" leased "$B"
+# GPU_ON (e.g. 0,1,2,3, GPU_NODE 0's GPUs) only when those are free: a waiting --on request holds every later waiter
+# back, even from GPUs outside its list
+GPU_LEASE_WHO=ra-host-tier gpu-lease "${NGPU:-1}" --wait ${GPU_ON:+--on "$GPU_ON"} --max-min 20 -- bash "$PWD/run_loop.sh" leased "$B"
