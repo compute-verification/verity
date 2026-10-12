@@ -579,6 +579,8 @@ def model_terms(res: dict) -> dict:
         }
         row["attention_per_kv_pass"] = row["attention"] / fkv
         row["weights_per_w_pass"] = row["weights"] / fw
+        row["o_w_per_w_pass"] = row["weights_decode"] / fw
+        row["tau_w_per_w_pass"] = row["weights_tag"] / fw
         out["k"][k] = row
     ks = res["ks"]
     if len(ks) >= 2:
@@ -589,8 +591,31 @@ def model_terms(res: dict) -> dict:
     return out
 
 
+POINTS_SCHEMA = "verity/hbm-step-points/v0"
+
+
+def step_points(res: dict, run_id: str | None) -> dict:
+    """The step's points for ra-overhead-frontier's model, one a k: d and the step over plain, and the weights' decode
+    o_W and receipt τ_W per weight pass (its `o_w`, `tau_w` at the linears' M), attention per KV pass, the append."""
+    pts = []
+    for k, r in res["model"]["k"].items():
+        pts.append({"model": res["model_name"], "batch": res["batch"], "gemm_m": res["gemm_m"], "ctx": res["ctx"],
+                    "k": int(k), "word_bits": 512, "k_s": 16, "receipt": "ro-sketch-blake3/v0, re-keyed every pass",
+                    "f_kv": res["f_kv"], "f_w": res["f_w"], "stored_bytes": res["stored_bytes"],
+                    "step_over_plain": r["step_over_plain"], "d": r["d"], "plain_over_pass": res["model"]["plain_over_pass"],
+                    "o_w_per_w_pass": r["o_w_per_w_pass"], "tau_w_per_w_pass": r["tau_w_per_w_pass"],
+                    "attention_per_kv_pass": r["attention_per_kv_pass"], "append_async": r["append_async"],
+                    "mu_rebuild_pooled": r["mu_rebuild_pooled"],
+                    "sketch_configs": {n: p["k"].get(k, p["k"].get(str(k)))["sketch"]
+                                       for n, p in res["picks"].items()}})
+    return {"schema": POINTS_SCHEMA, "run": run_id, "device": res["device"], "clock_hz": res.get("clock_hz"),
+            "points": pts}
+
+
 def write_result(res: dict, out_dir: Path, libs) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if "model" in res:
+        (out_dir / "step-points.json").write_text(json.dumps(step_points(res, run_id), indent=1))
     if not run_dir or not run_id:
         return
     ms = []
@@ -600,7 +625,7 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
         for name in ("step_over_plain", "d", "weights", "weights_tag", "attention", "append_async"):
             ms.append({"name": f"k{k}_{name}", "value": row[name], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
-    files = [f"{rel}/step.json", f"{rel}/step.log"]
+    files = [f"{rel}/step.json", f"{rel}/step.log"] + ([f"{rel}/step-points.json"] if "model" in res else [])
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"libs": {Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest()
                                              for p in libs},
