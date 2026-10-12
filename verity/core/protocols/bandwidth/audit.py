@@ -11,7 +11,8 @@
    Openings are not timed: the commitment already binds every tag.
 
 A window is used once: a second start or commitment, or a window number used before, is refused, and nothing is redrawn.
-The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
+One window over a store is open at a time, from its seed to its commitment or until `T + RTT` has passed without one:
+the verifier refuses to start another before then, so no read serves two windows' ingress.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
 (SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it, for a certified tag
 only (`tags.Tag.certified`).
@@ -159,13 +160,20 @@ class Verdict:
 
 
 class Verifier:
-    """The verifier of one store `vk`: it opens each window once, from its own secret `source`."""
+    """The verifier of one store `vk`: it opens each window once, from its own secret `source`, and one at a time."""
 
     def __init__(self, vk: VerifierKey, params: Params, source: bytes,
                  clock: Callable[[], int] = time.perf_counter_ns) -> None:
         tags.get(params.tag).check_block(vk.params.block_bytes)
         self.vk, self.params, self.source, self.clock = vk, params, source, clock
         self._used: set[int] = set()
+        self._open: Window | None = None
+
+    def _claim(self, w: Window) -> None:
+        o = self._open
+        if o is not None and o._elapsed is None and self.clock() - o._started <= self.params.limit_ns:
+            raise RuntimeError("another window over this store is open: it closes at its commitment or at T + RTT")
+        self._open = w
 
     def window(self, n: int) -> Window:
         if type(n) is not int or n < 0:
@@ -189,8 +197,10 @@ class Window:
         self._verdict: Verdict | None = None
 
     def start(self) -> bytes:
+        """`σ`, and the clock starts; refused, and the window left unstarted, while another over the store is open."""
         if self._started is not None:
             raise RuntimeError("the window has started")
+        self._v._claim(self)
         s = seed(self._key)
         self._started = self._v.clock()
         return s

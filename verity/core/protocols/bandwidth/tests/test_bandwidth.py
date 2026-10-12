@@ -27,6 +27,16 @@ def _ticks(step: int):
     return lambda: next(counter)
 
 
+class _Clock:
+    """A clock the test sets: every reading is `now`."""
+
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
 def _params(tag: str, samples: int = 8, deadline_ns: int = 1_000_000) -> audit.Params:
     return audit.Params(tag, samples, deadline_ns, rtt_allowance_ns=100_000)
 
@@ -299,6 +309,46 @@ def test_a_window_runs_once(big_store) -> None:
         w.commit(c.root)
     first = w.verdict([c.open(i) for i in drawn])
     assert first.accepted and w.verdict([]) is first
+
+
+def test_one_window_over_a_store_is_open_at_a_time(big_store) -> None:
+    """While one window over a store is open the verifier refuses to start another, which stays unstarted and starts
+    once the first has its commitment: one read of each block never answers two windows."""
+    store, vk = big_store
+    params = _params("ro-blake3/v1")
+    clock = _Clock()
+    verifier = audit.Verifier(vk, params, b"s", clock=clock)
+    first, second = verifier.window(0), verifier.window(1)
+    c1 = audit.tag_pass(store, params.tag, first.start())
+    with pytest.raises(RuntimeError, match="open"):
+        second.start()
+    clock.now = params.limit_ns
+    with pytest.raises(RuntimeError, match="open"):
+        second.start()
+    drawn = first.commit(c1.root)
+    assert first.verdict([c1.open(i) for i in drawn]).accepted
+    c2 = audit.tag_pass(store, params.tag, second.start())
+    clock.now += params.limit_ns
+    assert second.verdict([c2.open(i) for i in second.commit(c2.root)]).accepted
+    third = verifier.window(2)
+    third.start()
+    third.commit(b"short")
+    verifier.window(3).start()
+
+
+def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store) -> None:
+    store, vk = big_store
+    params = _params("ro-blake3/v1")
+    clock = _Clock()
+    verifier = audit.Verifier(vk, params, b"s", clock=clock)
+    first, second = verifier.window(0), verifier.window(1)
+    s1 = first.start()
+    clock.now = params.limit_ns + 1
+    s2 = second.start()
+    c1 = audit.tag_pass(store, params.tag, s1)
+    assert first.commit(c1.root) == () and first.verdict().failure == "late"
+    c2 = audit.tag_pass(store, params.tag, s2)
+    assert second.verdict([c2.open(i) for i in second.commit(c2.root)]).accepted
 
 
 def test_params_refuse_a_window_that_fits_a_root() -> None:

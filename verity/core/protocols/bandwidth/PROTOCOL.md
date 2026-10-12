@@ -71,7 +71,12 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
    recomputes `y_i` from `σ`, `i` and `E_i` (`Window.verdict`). Openings are not timed: the root binds every tag.
 
 The verifier accepts iff the root is on time and every opening checks. It refuses a second start, a second root, or a
-window number used before, and never redraws. The verdict publishes one bit (`Verdict.public`); which check failed,
+window number used before, and never redraws. One window over a store is open at a time: from `σ` until its root
+arrives, or until `T + RTT` has passed without one, the verifier refuses to start another window over the same store,
+which stays unstarted and may start once the first has closed. Two windows open at once could both be answered from
+one read of each block, so their ingress would not add; with one open at a time, each window's ingress is read within
+its own interval. A deployment keeps one `Verifier` per store, which enforces this
+(`test_one_window_over_a_store_is_open_at_a_time`). The verdict publishes one bit (`Verdict.public`); which check failed,
 which sample and the elapsed time stay with the verifier. Openings reveal blocks of `C*` to the verifier, so the
 verifier that runs this is PoUS's memory challenger, which already holds `vk` and publishes only verdicts.
 
