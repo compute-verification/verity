@@ -5,6 +5,7 @@ import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Markov
+import Proofs.Accounting.Actual.Timing
 
 /-!
 # The actual circuit's guarantees
@@ -26,4 +27,6 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Markov.lean`: `not_markov`, a locally causal strategy of feasible runs in which a location carries nothing
   across a tick and reads nothing in a window, yet what it runs there depends on the coin: `mem_X` bounds what `X`
   knows at a challenge only under causality's Markov form.
+* `Actual/Timing.lean`: `zero_link`, a link of capacity 0 that carries a bit in a width-0 wire's tick: under `Links`
+  widths bound information only when cross-leaf wires have width at least 1 and timing is counted.
 -/
