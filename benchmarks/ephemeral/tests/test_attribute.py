@@ -50,7 +50,7 @@ def arm(layers: int, hidden: int = 4096, lin: int = 1000, lm: int = 500, kv_tl: 
 def node_step(layers: int, kv_layer: float, act: float = 3.0) -> list[tuple[str, float, float]]:
     rows = []
     for _ in range(layers):
-        rows += [(GEMM, 1000 / layers + act, 1.0), (MHA, kv_layer + 1.0, 0.5), (NORM, act, 0.0)]
+        rows += [(GEMM, 1000 / layers + act, 1.0), (MHA, kv_layer + 1.0, 2.0), (NORM, act, 0.0)]
     return rows + [(LM, 500.0, 2.0), (SAMPLE, 4.0, 0.0)]
 
 
@@ -70,6 +70,7 @@ def test_node_split_scales_layers_and_keeps_per_step_kernels_once():
     assert f["layers"] == 32
     assert f["ephemeral_ex_lm"] == pytest.approx(32 * (3 + 1 + 3) + 4)
     assert f["linear"] == pytest.approx(8000)
+    assert f["write"] == pytest.approx(32 * 3 + 2)
 
 
 def test_graph_split_counts_steps_by_lm_head_and_refuses_a_mismatch():

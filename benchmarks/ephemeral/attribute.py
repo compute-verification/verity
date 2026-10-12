@@ -114,6 +114,7 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
          "unreg_plain_lm": rd - lin - kv, "unreg_encoded_lm": rd - lin - kv - lm}
     o["share_plain_lm"] = o["unreg_plain_lm"] / rd
     o["share_encoded_lm"] = o["unreg_encoded_lm"] / rd
+    o["write_over_read"] = wr / rd
     cls = {k: {"read": v[0] / steps, "write": v[1] / steps, "kernels": v[2] / steps} for k, v in by.items()}
     o["classes"] = cls
     if node:
@@ -129,11 +130,12 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
     if L != Lf:
         layered = sum(cls.get(k, {}).get("read", 0.0) for k in LAYERED)
         full = rd + layered * (Lf / L - 1)
+        full_wr = wr + sum(cls.get(k, {}).get("write", 0.0) for k in LAYERED) * (Lf / L - 1)
         lin_f, kv_f = lin * Lf / L, kv * Lf / L
         o["full_depth"] = {"layers": Lf, "read": full, "linear": lin_f, "kv_read": kv_f,
                            "share_plain_lm": (full - lin_f - kv_f) / full,
                            "share_encoded_lm": (full - lin_f - kv_f - lm) / full,
-                           "ephemeral_ex_lm": full - lin_f - kv_f - lm}
+                           "ephemeral_ex_lm": full - lin_f - kv_f - lm, "write": full_wr, "write_over_read": full_wr / full}
     return o
 
 
