@@ -131,7 +131,8 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
-        "benchmarks/bandwidth/"
+        "benchmarks/bandwidth/",
+        "benchmarks/overhead_frontier/"
       ]
     },
     {
