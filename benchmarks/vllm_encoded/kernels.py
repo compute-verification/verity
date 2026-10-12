@@ -11,7 +11,9 @@ Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a
 codec) is another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs ra-codec-wide's fused GEMM instead
 (`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19 or 2^521 − 1, and with a tag
 seed set the bandwidth audit's ro-blake3/v1 tag of every block of encoded words it reads); its chunk sums have the same
-layout, so `ve_reduce` turns them into the same BF16.
+layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs ra-codec-tensor's
+(`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead of one MMA warp, and
+tag warps hashing the store's 4,088-byte blocks), with the same chunk sums.
 """
 from __future__ import annotations
 
@@ -26,13 +28,15 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 WORD_CODEC = HERE.parent / "word_codec"
+CODEC_TENSOR = HERE.parent / "codec_tensor"
 MAX_ROWS = 32
-FORMS = ("simple", "pipe", "ws", "wide")
+FORMS = ("simple", "pipe", "ws", "wide", "tensor")
+SMEM_PER_BLOCK = 101376  # sm_120's opt-in dynamic shared memory a CTA
 
 
-def _load(name: str, file: str):
+def _load(name: str, file: str, where: Path = WORD_CODEC):
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, WORD_CODEC / file)
+        spec = importlib.util.spec_from_file_location(name, where / file)
         mod = sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
     return sys.modules[name]
@@ -44,6 +48,10 @@ def _codec():
 
 def _wide():
     return _load("wc_wide", "wide.py")
+
+
+def _ct():
+    return _load("ct_wide", "wide.py", CODEC_TENSOR)
 
 
 def stream() -> int:
@@ -152,6 +160,102 @@ class WideLib:
         return self.tags
 
 
+class TensorLib:
+    """One build of ra-codec-tensor's `wt.cu` (one field, `WT_FIELD`): its key, its tag key and the tag buffer its fused
+    GEMMs write, and each launch's tweak steps."""
+
+    def __init__(self, path: str | Path) -> None:
+        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+        self.path = str(path)
+        so = self.so = ctypes.CDLL(self.path)
+        so.wt_constants.argtypes = [v]
+        so.wt_set_key.argtypes = [v, i, v, v]
+        so.wt_encode.argtypes = [v, v, q, q, i, i, v]
+        so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
+        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
+        so.wt_set_tag.argtypes = [v, v]
+        cs = (ctypes.c_int * 15)()
+        so.wt_constants(cs)
+        self.constants = list(cs)
+        (self.bits, self.limbs, self.word_bytes, self.payload_bytes, self.task_words, self.kmax, self.sb,
+         self.fused_warps, self.fused_span, self.tag_block) = (cs[0], cs[1], cs[2], cs[3], cs[4], cs[10], cs[11], cs[12],
+                                                                cs[13], cs[14])
+        ct = _ct()
+        self.field = next(f for f in ct.FIELDS.values() if f.n == self.bits)
+        f = self.field
+        if ((self.word_bytes, self.payload_bytes, self.task_words, cs[6], self.sb) !=
+                (f.word_bytes, f.payload_bytes, ct.TASK_WORDS[f.name], f.c, ct.TASK_WORDS[f.name] * f.word_bytes)):
+            raise RuntimeError(f"{path}: constants {self.constants} are not codec_tensor/wide.py's {f}")
+        self.sms = torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
+        self.key = None
+        self.tag_seed: bytes | None = None
+        self.tags: torch.Tensor | None = None
+        self._steps: dict[tuple, tuple[int, torch.Tensor]] = {}
+
+    def call(self, fn: str, *args) -> None:
+        rc = getattr(self.so, fn)(*args)
+        if rc:
+            raise RuntimeError(f"{Path(self.path).name}: {fn} error {rc}")
+
+    def _limbs(self, x: int) -> bytes:
+        return x.to_bytes(4 * self.limbs, "little")
+
+    def set_key(self, seed: bytes, k: int):
+        ct = _ct()
+        key = ct.key(self.field.name, seed, k)
+        c = ctypes.create_string_buffer(b"".join(self._limbs(x) for x in key.c))
+        tau, p = ctypes.create_string_buffer(self._limbs(key.tau)), ctypes.create_string_buffer(self._limbs(self.field.p))
+        self.call("wt_set_key", c, k, tau, p)
+        self.key, self._steps = key, {}
+        return key
+
+    def set_tag(self, seed: bytes | None) -> None:
+        """Tag every block of E under ro-blake3/v1 with this window seed (None: no tag)."""
+        if seed is not None:
+            from verity.core.protocols.bandwidth import tags
+            if len(seed) != 32:
+                raise ValueError("a tag seed is 32 bytes")
+            key = ctypes.create_string_buffer(tags.Blake3Tag().key(seed))
+            pre = ctypes.create_string_buffer(tags.prefix(tags.LEAF_DOMAIN, "ro-blake3/v1", seed))
+            self.call("wt_set_tag", key, pre)
+        self.tag_seed = seed
+
+    def tag_buffer(self, blocks: int) -> torch.Tensor:
+        if self.tags is None or self.tags.numel() < 8 * blocks:
+            self.tags = torch.empty(8 * blocks, dtype=torch.int32, device="cuda")
+        return self.tags
+
+    def configs(self, tagged: bool) -> list[tuple[int, int, int]]:
+        """(decoders, stages, taggers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: the most decoder warps the
+        field's registers allow at 4 and 6 stages fewer than fit at M = 32, or 2, 4 or 6 of them tagging instead."""
+        smax = (SMEM_PER_BLOCK - 4 * 8 * 528) // (self.sb + 32)
+        dmax = self.fused_warps - 2
+        def need(d: int) -> int:
+            return -(-32 * d // self.task_words)
+
+        if not tagged:
+            return list(dict.fromkeys([(dmax, max(need(dmax), smax - 4), 0), (dmax, max(need(dmax), smax - 6), 0)]))
+        return [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (2, 4, 6) if dmax - t >= self.fused_span]
+
+    def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
+        """The launch's CTA groups (as many as fill the device) and its tweak steps on the device (`bench.tsteps`): a
+        lane's next unit is 32·D words on, its task A or A + 1 on, consecutive tasks groups·nchunks apart."""
+        nb8 = 1 if m <= 8 else 2 if m <= 16 else 4
+        at = (nb8, n, kd, cfg)
+        if at not in self._steps:
+            launched = ctypes.c_int(0)
+            self.call("wt_fused", self.key.rounds, None, None, None, m, n, kd, 0, 0, cfg.consumers, cfg.stages, 0,
+                      cfg.taggers, None, None, 0, ctypes.byref(launched), stream())
+            nch = kd // layout.TASK_COLS
+            groups = launched.value // nch
+            adv, rem = divmod(32 * cfg.consumers, self.task_words)
+            gq = groups * nch
+            d = (adv * gq * self.task_words + rem, (adv + 1) * gq * self.task_words + rem - self.task_words)
+            st = b"".join(self._limbs(self.key.tau * x % self.field.p) for x in d)
+            self._steps[at] = (groups, torch.frombuffer(bytearray(st), dtype=torch.uint8).cuda())
+        return self._steps[at]
+
+
 @dataclass(frozen=True)
 class Config:
     """One GEMM form and its launch: `groups` CTA groups a chunk for the persistent forms (0: as many as fit), the
@@ -162,11 +266,14 @@ class Config:
     consumers: int = 0
     stages: int = 0
     ahead: int = 0
+    taggers: int = 0
 
     @property
     def name(self) -> str:
         if self.form == 3:
             return "wide" + (f"-ahead{self.ahead}" if self.ahead else "")
+        if self.form == 4:
+            return f"tensor-d{self.consumers}s{self.stages}t{self.taggers}"
         return FORMS[self.form] + (f"-{self.consumers}x{self.stages}" if self.form == 2 else "")
 
 
@@ -353,6 +460,59 @@ class WideLinear(Linear):
         self.payloads = None
 
 
+class TensorLinear(Linear):
+    """Only `wt.cu`'s words (ra-codec-tensor's fused decode GEMM): `store` (uint8, S bytes a word) holds W's payloads
+    (`layout.tensor_limbs`) encoded k >= 1 rounds under the tensor lib's key at word indices base, base + 1, ...  With
+    the lib's tag seed set, its tag warps write the ro-blake3/v1 tag of each 4,088-byte block jl of the store at index
+    tag_base + jl to the lib's tag buffer.  `lib` (a `ve.cu` build) only reduces the chunk sums."""
+
+    def __init__(self, lib: Lib, tlib: TensorLib, w: torch.Tensor, weight_scale: torch.Tensor, k: int, base: int,
+                 tag_base: int, grid: int = 0) -> None:
+        super().__init__(lib, *w.shape, weight_scale)
+        if tlib.key is None or tlib.key.rounds != k or not 1 <= k <= tlib.kmax:
+            raise ValueError(f"the tensor lib's key is not set for k = {k}")
+        self.tlib, self.k, self.base, self.tag_base, self.bits = tlib, k, base, tag_base, 8 * tlib.payload_bytes
+        payloads = layout.tensor_limbs(w, tlib.task_words, tlib.payload_bytes, tlib.limbs)
+        self.words = payloads.numel() // tlib.limbs
+        self.store = torch.empty(self.words * tlib.word_bytes, dtype=torch.uint8, device=w.device)
+        tlib.call("wt_encode", payloads.data_ptr(), self.store.data_ptr(), self.words, base, k, grid or 4 * tlib.sms,
+                  stream())
+        self.blocks = -(-self.store.numel() // tlib.tag_block)
+        self.payloads = payloads
+
+    def default(self) -> Config:
+        return self.candidates(1)[0]
+
+    def candidates(self, m: int) -> list[Config]:
+        return [Config(4, consumers=d, stages=s, taggers=t) for d, s, t in self.tlib.configs(self.tlib.tag_seed is not None)]
+
+    def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
+        if cfg.form != 4:
+            raise ValueError(f"the tensor GEMM has one form, not {cfg.name}")
+        t = self.tlib
+        groups, steps = t.steps(x8.shape[0], self.n, self.kd, cfg)
+        tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers else None
+        t.call("wt_fused", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd,
+               self.base, int(partials), cfg.consumers, cfg.stages, groups, cfg.taggers, steps.data_ptr(), tags,
+               self.tag_base, None, stream())
+
+    def decoded(self) -> torch.Tensor:
+        t = self.tlib
+        out = torch.empty(self.words * t.limbs, dtype=torch.int32, device=self.store.device)
+        xr = torch.zeros(1, dtype=torch.int64, device=self.store.device)
+        t.call("wt_decode", self.store.data_ptr(), out.data_ptr(), self.words, self.base, self.k, xr.data_ptr(),
+               4 * t.sms, stream())
+        return out
+
+    def dense(self) -> torch.Tensor:
+        t = self.tlib
+        return layout.tensor_unlimbs(self.decoded(), self.n, self.kd, t.task_words, t.payload_bytes, t.limbs).view(
+            torch.float8_e4m3fn)
+
+    def drop_payloads(self) -> None:
+        self.payloads = None
+
+
 #: the linears ``ve_enc::linear`` dispatches to, by index
 LINEARS: list[Linear] = []
 
@@ -367,5 +527,5 @@ def _(x8: torch.Tensor, xs: torch.Tensor, idx: int) -> torch.Tensor:
     return x8.new_empty((x8.shape[0], LINEARS[idx].n), dtype=torch.bfloat16)
 
 
-__all__ = ["FORMS", "LINEARS", "MAX_ROWS", "Config", "EncodedLinear", "Lib", "Linear", "PlainLinear", "WideLib",
-           "WideLinear", "candidates", "linear_op", "stream"]
+__all__ = ["FORMS", "LINEARS", "MAX_ROWS", "Config", "EncodedLinear", "Lib", "Linear", "PlainLinear", "TensorLib",
+           "TensorLinear", "WideLib", "WideLinear", "candidates", "linear_op", "stream"]

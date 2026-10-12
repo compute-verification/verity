@@ -7,9 +7,12 @@ fragment stream   W (N × K, row-major bytes) as each (task, lane)'s 256 bytes: 
 plain fragments   per task its 16 k-tiles, each tile's 32 lanes × 16 bytes (the plain kernel's operand, KR = 0)
 payloads          a lane's 256 bytes as L words of b payload bits (b = 56: L = 37, seven bytes a word; b = 60: L = 35,
                   fifteen bytes in two words), stored at L·32·task + 32·w + l
+tensor payloads   a task's 8,192 plain-fragment bytes, zero-padded, as T payloads of P bytes (`wt.cu`'s field: T words a
+                  task, word w of task q at T·q + w), each in its word's limbs
 ~~~
 
-`codec.fragment_stream`, `codec.plain_fragments` and `codec.fragment_payloads` are the references (`tests/test_layout.py`).
+`codec.fragment_stream`, `codec.plain_fragments` and `codec.fragment_payloads` are the references (`tests/test_layout.py`),
+and `benchmarks/codec_tensor/wide.py`'s `task_payloads` the tensor payloads'.
 Every function takes and returns uint8 or int64 tensors on any device; int64 holds a payload or codec word (< 2^61) as is.
 """
 from __future__ import annotations
@@ -208,7 +211,37 @@ def wide_block(store: torch.Tensor, j: int, lane_words: int, limbs: int) -> byte
     return rec[:, lane].contiguous().cpu().numpy().tobytes()
 
 
-__all__ = ["LANES", "LANE_BYTES", "PACKINGS", "TASK_COLS", "TASK_TILES", "TILE_ROWS", "check_shape", "fragment_stream",
-           "lane_words", "pack", "payloads", "plain_fragments", "store_words", "tasks", "unfragment", "unpack", "unpayload",
-           "unplain", "wide_block", "wide_lane_words", "wide_pack", "wide_payloads", "wide_store_words", "wide_unpack",
-           "wide_unpayload", "wide_word"]
+TASK_BYTES = TILE_ROWS * TASK_COLS
+
+
+def tensor_limbs(w: torch.Tensor, words: int, payload_bytes: int, limbs: int) -> torch.Tensor:
+    """W's payloads in `wt.cu`'s order as its encoder takes them, flat int32, ``limbs`` a word: each task's plain fragments
+    (8,192 bytes), zero-padded, cut into ``words`` payloads of ``payload_bytes`` little-endian bytes, word w of task q at
+    index words·q + w (`codec_tensor/wide.py`'s `encode_tasks` before encoding)."""
+    f = plain_fragments(w).view(-1, TASK_BYTES)
+    out = torch.zeros(f.shape[0], words, 4 * limbs, dtype=torch.uint8, device=f.device)
+    pad = torch.zeros(f.shape[0], words * payload_bytes - TASK_BYTES, dtype=torch.uint8, device=f.device)
+    out[..., :payload_bytes] = torch.cat([f, pad], 1).view(f.shape[0], words, payload_bytes)
+    return out.view(torch.int32).view(-1)
+
+
+def tensor_unlimbs(p: torch.Tensor, n: int, k: int, words: int, payload_bytes: int, limbs: int) -> torch.Tensor:
+    """W (n × k uint8) from its payloads as ``tensor_limbs`` lays them out (or as `wt.cu`'s decoder writes them)."""
+    b = p.view(torch.uint8).view(tasks(n, k), words, 4 * limbs)[..., :payload_bytes]
+    return unplain(b.reshape(-1, words * payload_bytes)[:, :TASK_BYTES].reshape(-1), n, k)
+
+
+def tensor_word(store: torch.Tensor, i: int, word_bytes: int) -> int:
+    """Word i of a flat `wt.cu` store (uint8, ``word_bytes`` a word, little-endian), as an integer."""
+    return int.from_bytes(store[word_bytes * i:word_bytes * (i + 1)].cpu().numpy().tobytes(), "little")
+
+
+def tensor_limb_word(p: torch.Tensor, i: int, limbs: int) -> int:
+    """Payload i of a ``tensor_limbs`` tensor, as an integer."""
+    return int.from_bytes(p[limbs * i:limbs * (i + 1)].cpu().numpy().tobytes(), "little")
+
+
+__all__ = ["LANES", "LANE_BYTES", "PACKINGS", "TASK_BYTES", "TASK_COLS", "TASK_TILES", "TILE_ROWS", "check_shape",
+           "fragment_stream", "lane_words", "pack", "payloads", "plain_fragments", "store_words", "tasks", "tensor_limb_word",
+           "tensor_limbs", "tensor_unlimbs", "tensor_word", "unfragment", "unpack", "unpayload", "unplain", "wide_block",
+           "wide_lane_words", "wide_pack", "wide_payloads", "wide_store_words", "wide_unpack", "wide_unpayload", "wide_word"]

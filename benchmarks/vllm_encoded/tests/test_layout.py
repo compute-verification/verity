@@ -139,3 +139,44 @@ def test_wide_limb_index_reads_the_store(bits):
         i = wide.word_index(q, lane, wi, lw)
         assert layout.wide_word(store, i, f.limbs) == lanes[32 * q + lane][wi]
     assert layout.wide_block(store, 33, lw, f.limbs) == b"".join(y.to_bytes(4 * f.limbs, "little") for y in lanes[33])
+
+
+_tspec = importlib.util.spec_from_file_location("ct_wide", HERE.parents[1] / "codec_tensor" / "wide.py")
+ct = sys.modules["ct_wide"] = importlib.util.module_from_spec(_tspec)
+_tspec.loader.exec_module(ct)
+
+
+def ct_params(name: str) -> tuple:
+    f = ct.field(name)
+    return f, ct.TASK_WORDS[name], -(-f.n // 32)
+
+
+@pytest.mark.parametrize("name", sorted(ct.FIELDS))
+@pytest.mark.parametrize("n,k", SHAPES[:2])
+def test_tensor_limbs_are_codec_tensors(n, k, name):
+    """`layout.tensor_limbs` holds each task's `task_payloads` of `codec.plain_fragments`, word w of task q at L·q + w."""
+    f, tw, nl = ct_params(name)
+    w = matrix(n, k, 17 * n + f.n)
+    plain = codec.plain_fragments(bytes(w.flatten().tolist()), n, k)
+    ref = [m for q in range(len(plain) // ct.TASK_BYTES)
+           for m in ct.task_payloads(plain[ct.TASK_BYTES * q:ct.TASK_BYTES * (q + 1)], f)]
+    got = layout.tensor_limbs(w, tw, f.payload_bytes, nl)
+    assert got.dtype == torch.int32 and got.numel() == len(ref) * nl
+    assert [layout.tensor_limb_word(got, i, nl) for i in range(len(ref))] == ref
+    assert torch.equal(layout.tensor_unlimbs(got, n, k, tw, f.payload_bytes, nl), w)
+
+
+@pytest.mark.parametrize("name", ["m521", "p767"])
+def test_tensor_words_decode_to_limbs(name):
+    """`encode_tasks`' store, read by `layout.tensor_word`, decodes to `layout.tensor_limbs`' payloads at index base + i
+    (the device gate's check)."""
+    f, tw, nl = ct_params(name)
+    w = matrix(16, 512, f.n)
+    key = ct.key(name, bytes(range(32)), 1)
+    store = torch.frombuffer(bytearray(ct.encode_tasks(codec.plain_fragments(bytes(w.flatten().tolist()), 16, 512), key, 3)),
+                             dtype=torch.uint8)
+    limbs = layout.tensor_limbs(w, tw, f.payload_bytes, nl)
+    assert store.numel() == tw * f.word_bytes
+    for i in random.Random(f.n).sample(range(tw), 8):
+        y = layout.tensor_word(store, i, f.word_bytes)
+        assert ct.decode_word(y, 3 * tw + i, key) == layout.tensor_limb_word(limbs, i, nl)
