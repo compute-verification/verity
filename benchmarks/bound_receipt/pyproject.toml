@@ -1,0 +1,15 @@
+# The read receipt bound to the matmul (ro-bound-sketch-blake3/v0) and its tests. Not a package: `bound.cu` and its bench
+# run on a GPU node (`run.sh`); the byte-exact reference (`bound.py`) runs here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/bound_receipt`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# bound.py builds on the wide store's sketch (benchmarks/word_codec: wide.py, wide_sketch.py, codec.py), hashes with the
+# bandwidth audit's tags under PoUS's tree, and takes the accumulators from sm_120's E4M3 MMA model
+# (verity.ml.circuits.silicon, whose package __init__ imports the rest of verity.ml.circuits).
+inputs = ["benchmarks/word_codec", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
+          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/ml/randomness"]
