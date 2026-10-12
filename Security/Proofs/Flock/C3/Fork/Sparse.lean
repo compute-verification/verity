@@ -381,6 +381,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
 
 end SparseCount
 
+omit [DecidableEq K] in
 /-- **The sparse phase is sound**: at slots' types in range, a hidden fold `h` other than the registered table's
 (`sparseFold`) yields a registered claim that holds on the table with probability at most `sparseError`. -/
 theorem sparse_sound (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : SparsePub F sh)
