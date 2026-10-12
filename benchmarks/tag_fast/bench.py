@@ -74,6 +74,7 @@ class Lib:
             "tf_init": [v, v], "tf_fused": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
+            "tf_fused3d": [i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_chain": [i, i, i, u64, v, i, i, v], "tf_b3_one": [i, v, v, v], "tf_keccak_one": [v, v],
@@ -718,6 +719,9 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     topL     that top alone (what pipelining the commit behind the next step would leave)
     tagrL    fused3 at one quad ahead at every shape (tL kr1)
     tagkL    tagrL with the packed CTA finish (tL kr1c); its tags must equal tagrL's, or it is dropped
+    tagdL    tagrL with deferred chunk ends (tf_fused3d): each launch leaves its lanes' last quads and finishes to the
+             next launch's loop, the last launch finishing its own; gated like tagk
+    commitdL tagdL, then commitL's leaves and tree
     probe4   u4kw4s3 at every shape: 4-round BLAKE3, uncertified
     """
     names = list(layout.SHAPES)
@@ -737,6 +741,10 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     nodes = {g: torch.zeros(int(lib.so.tf_tree_nodes(nleaves[g])) * 8, dtype=torch.int64, device="cuda")
              for g in groups}
     events = [torch.cuda.Event() for _ in range(layout.LAYERS)]
+    warps = {name: (n // 16 // 4) * (k // (layout.TILE_COLS * layout.CHUNK_TILES)) * 4
+             for name, (n, k) in layout.SHAPES.items()}
+    cvs = [torch.empty(max(warps.values()) * 1024, dtype=torch.uint8, device="cuda") for _ in range(2)]
+    dds = [torch.empty(max(warps.values()) * 8 * 8, dtype=torch.uint8, device="cuda") for _ in range(2)]
     out = {}
     gx = torch.Generator(device="cuda").manual_seed(6)
     for mb in batches:
@@ -763,6 +771,25 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                                        wf, xs[name], xcs[name], ys[name], tp, off, xr))
                     if g:
                         off += layout.chunk_block_count(n, k, g)
+            return fs
+
+        def seq_deferred(g):
+            """tagr's launches through tf_fused3d: launch q defers its ends to cvs[q % 2] and finishes launch q - 1's."""
+            fs, off, prev = [], 0, None
+            order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
+            for q, (layer, name) in enumerate(order):
+                n, k, _ = weights[name]
+                pl = copies[name][layer][0]
+                tp = ptr(tbs[g]) + 32 * off
+                own = q + 1 < len(order)
+                cv, dd = (ptr(cvs[q % 2]), ptr(dds[q % 2])) if own else (0, 0)
+                pw, pcv, pd, ptp, pn, pk = prev or (0, 0, 0, 0, 0, 0)
+                fs.append(lambda g=g, n=n, k=k, pl=pl, name=name, tp=tp, off=off, own=own, cv=cv, dd=dd, pw=pw, pcv=pcv,
+                          pd=pd, ptp=ptp, pn=pn, pk=pk: lib.so.tf_fused3d(
+                              g, int(own), ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp, mb, n, k, off,
+                              cv, dd, pw, pcv, pd, ptp, pn, pk, stream(torch)))
+                prev = (ptr(pl), cv, dd, tp, n, k)
+                off += layout.chunk_block_count(n, k, g)
             return fs
 
         def best(name, prefix):
@@ -818,15 +845,24 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
             tagr()
             torch.cuda.synchronize()
             want = tbs[g].clone()
-            tagk = run(seq(lambda name: f"t{g}kr1c", g), f"tagk{g}")
-            tbs[g].zero_()
-            tagk()
-            torch.cuda.synchronize()
-            ok = bool(torch.equal(tbs[g], want))
-            gates[g] = {"tagk": ok}
-            log(f"gate step M={mb} tagk{g}: {'ok' if ok else 'FAIL'} (tags)")
-            if ok:
-                arms[f"tagk{g}"] = tagk
+            gates[g] = {}
+            for what, fs in (("tagk", seq(lambda name: f"t{g}kr1c", g)), ("tagd", seq_deferred(g))):
+                f = run(fs, f"{what}{g}")
+                tbs[g].zero_()
+                f()
+                torch.cuda.synchronize()
+                ok = bool(torch.equal(tbs[g], want))
+                gates[g][what] = ok
+                log(f"gate step M={mb} {what}{g}: {'ok' if ok else 'FAIL'} (tags"
+                    + ("" if ok else f", {int((tbs[g].view(-1, 32) != want.view(-1, 32)).any(1).sum())} differ") + ")")
+                if ok:
+                    arms[f"{what}{g}"] = f
+            if gates[g]["tagd"]:
+                def commitd(f=arms[f"tagd{g}"], g=g):
+                    f()
+                    lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
+                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
+                arms[f"commitd{g}"] = commitd
         if 4 in groups and all("u4kw4s3" in timing[name]["batches"][mb]["median_s"] for name in names):
             arms["probe4"] = run(seq(lambda name: "u4kw4s3", 4), "probe4")
         with torch.cuda.stream(hp):
@@ -894,7 +930,8 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
                 continue
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": {"tag": "tag", "commit": "tag+commit", "overlap": "tag+commit overlapped",
-                                  "top": "commit's tree top alone", "probe": "tag", "tagr": "tag", "tagk": "tag"}[what],
+                                  "top": "commit's tree top alone", "probe": "tag", "tagr": "tag", "tagk": "tag",
+                                  "tagd": "tag", "commitd": "tag+commit"}[what],
                         **({"certified": False, "rounds": PROBE_ROUNDS} if what == "probe" else {})})
     return out
 
