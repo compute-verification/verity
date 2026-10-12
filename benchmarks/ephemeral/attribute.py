@@ -102,8 +102,10 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
         return {"fail": f"{by['graph'][2]} decode graphs for {steps} lm_head kernels"}
     rd = sum(r["read"] for r in w) / steps
     wr = sum(r["write"] for r in w) / steps
-    tokens = pt["context"] + 4 + (arm["profile_steps"] + 1) / 2
-    kv = kv_read(bud, pt["batch"], tokens)
+    if "tokens_open" in pt:
+        kv = (pt["tokens_open"] + pt["tokens_close"]) / 2 * bud["layers"] * bud["kv_bytes_per_token_layer"]
+    else:
+        kv = kv_read(bud, pt["batch"], pt["context"] + 4 + (arm["profile_steps"] + 1) / 2)
     o = {"steps": steps, "read": rd, "write": wr, "linear": lin, "lm_head": lm, "kv_read": kv,
          "unreg_plain_lm": rd - lin - kv, "unreg_encoded_lm": rd - lin - kv - lm}
     o["share_plain_lm"] = o["unreg_plain_lm"] / rd

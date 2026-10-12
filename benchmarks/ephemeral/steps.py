@@ -37,8 +37,12 @@ def unwrap(m):
 
 
 class Window:
-    def __init__(self, steps: int) -> None:
+    """Opens after four pure-decode steps of the point's batch and closes `steps` steps later, recording the live tokens
+    (the scheduler's computed tokens over its running requests) at both ends."""
+
+    def __init__(self, steps: int, live_tokens) -> None:
         self.steps, self.point, self.run, self.opened, self.on = steps, None, 0, False, False
+        self.live_tokens = live_tokens
         self.windows: list[dict] = []
 
     def begin(self, b: int, ctx: int) -> None:
@@ -51,6 +55,7 @@ class Window:
         self.run = self.run + 1 if n == r == b else 0
         if not self.opened and self.run == 4:
             torch.cuda.synchronize()
+            self.point["tokens_open"] = self.live_tokens()
             torch.cuda.profiler.start()
             torch.cuda._sleep(1000)
             self.opened = self.on = True
@@ -61,6 +66,7 @@ class Window:
         if self.on:
             torch.cuda.synchronize()
             torch.cuda.profiler.stop()
+            self.point["tokens_close"] = self.live_tokens()
             self.on = False
             self.windows.append(self.point)
         self.point = None
@@ -128,9 +134,10 @@ def main() -> None:
     ap.add_argument("--contexts", default="2048,8192,32768")
     ap.add_argument("--steps", type=int, default=24, help="decode steps a point")
     ap.add_argument("--profile-steps", type=int, default=0)
-    ap.add_argument("--mem", type=float, default=0.93)
+    ap.add_argument("--mem", type=float, default=0.90)
     ap.add_argument("--kv-cache-dtype", default="fp8")
-    ap.add_argument("--max-batched-tokens", type=int, default=32768)
+    ap.add_argument("--max-batched-tokens", type=int, default=16384,
+                    help="the prefill chunk (70B's MLP activation over 32k tokens is 3.5 GiB, past what 0.93 leaves)")
     ap.add_argument("--read-rate", action="store_true", help="measure HBM read bandwidth after the points")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -149,7 +156,13 @@ def main() -> None:
         cc.update({"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY"})
     # the warmup's dummy batch (max_num_batched_tokens) must fit max_num_seqs x max_model_len, or FlashInfer's autotune
     # reads past its buffers
-    seqs, max_len = max(64, *capture), max(contexts) + args.steps + 64
+    def decode_tokens(b: int, ctx: int) -> int:
+        """Tokens a sequence generates: the steps, plus the chunked prefill's steps (the batch's prompts enter a chunk at
+        a time, and the first ones decode meanwhile), so the point reaches `steps` pure-decode steps of its batch."""
+        return args.steps + -(-b * ctx // args.max_batched_tokens) + 4
+
+    seqs = max(64, *capture)
+    max_len = max(c + decode_tokens(max(batches), c) for c in contexts) + 16
     kw = {"model": args.model, "load_format": "dummy", "quantization": "fp8", "max_num_seqs": seqs,
           "enable_prefix_caching": False, "seed": 0, "max_model_len": max_len,
           "max_num_batched_tokens": min(args.max_batched_tokens, seqs * max_len), "gpu_memory_utilization": args.mem,
@@ -167,7 +180,8 @@ def main() -> None:
     attn = sorted({type(getattr(m, "attn_backend", None)).__name__ for _, m in model.named_modules()
                    if getattr(m, "attn_backend", None) is not None})
     rec: list = []
-    window = Window(args.profile_steps)
+    sched = get_scheduler(llm)
+    window = Window(args.profile_steps, lambda: sum(int(r.num_computed_tokens) for r in sched.running))
     hooks = Hooks(tag="ra-ephemeral")
 
     def make(orig):
@@ -176,7 +190,7 @@ def main() -> None:
             window(so.total_num_scheduled_tokens, len(so.num_scheduled_tokens))
             return orig(so, mro)
         return update_from_output
-    hooks.wrap(get_scheduler(llm), "update_from_output", make)
+    hooks.wrap(sched, "update_from_output", make)
 
     props = torch.cuda.get_device_properties(0)
     pc = getattr(vc.compilation_config, "pass_config", None)
@@ -204,7 +218,7 @@ def main() -> None:
     llm.generate(warm, SamplingParams(temperature=0.0, max_tokens=16, ignore_eos=True, detokenize=False), use_tqdm=False)
     for ctx in contexts:
         for b in batches:
-            mt = args.steps
+            mt = decode_tokens(b, ctx)
             need = b * (ctx + mt + 16)
             point = {"batch": b, "context": ctx, "kv_needed": need}
             if need > kv_tokens:
