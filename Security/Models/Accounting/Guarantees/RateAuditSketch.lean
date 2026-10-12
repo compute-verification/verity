@@ -4,13 +4,14 @@ import Definitions.Accounting.RateAuditSketch
 # The rate audit with a sketch-then-hash tag (trusted)
 
 The game is `Security/Definitions/Accounting/RateAuditSketch.lean`; proofs are in
-`Security/Proofs/Accounting/RateAudit/Sketch.lean`. No named assumption: the device's bounds (on-chip state `S`, side
-link `L`, oracle queries `q`, the compute budget `F` at `c_tag` per tag and `c_enc` per rebuilt sector) and its class,
-a device that obtains sectors only whole and verbatim, define what the guarantees quantify over; the claims registry
-carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
+`Security/Proofs/Accounting/RateAudit/Sketch.lean` and `SketchHonest.lean`. No named assumption: the device's bounds
+(on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at `c_tag` per tag and `c_enc` per rebuilt
+sector) and its class, a device that obtains sectors only whole and verbatim, define what the guarantees quantify over;
+the claims registry carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
 
 * `RateAuditSketch`: in one window, for any digest, an accepted device's footprint reaches the floor except with
   probability `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.
+* `RateSketchHonest`: an honest device that reads every sector once is accepted on every coin, with footprint `N·m·w`.
 * `SketchBinds`: signs that bind sectors make the tensor-core sketch's fiber `1`.
 * `RateAuditTensorSketch`: the two at the deployed tag, 32-byte sectors and INT8 sketches into INT32 accumulators.
 -/
@@ -62,13 +63,29 @@ def RateAuditSketch : Prop :=
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : Sig => g < fib dig σ) +
         ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
 
+/-- **Completeness of `RateAuditSketch`: an honest device that reads every sector once is accepted on every coin.**
+For every digest and every `N`, `m`, `ρ`, `h` and `w` there is a device that holds nothing on chip, whose link carries
+exactly the certified stream's `ρ` sectors (`L = ρ·w`) and which makes `N` oracle queries (a
+`Device N m ρ h 0 (ρ·w) N w`), that is accepted at every signs, oracle, data and sample, so with probability 1; its
+footprint is the store, `N·m·w` bits, and its compute is `N·c_tag`, with nothing rebuilt. It takes in the stream, reads
+every sector once and queries the oracle at each tile's digest under the stream. Against `RateAuditSketch` at `S = 0`,
+`L = ρ·w`, `q = N` and `F = N·c_tag`, the honest `N·m·w` sits above the floor `k·m·w − (N − k)·c_tag·w/c_enc` by the
+sample's slack `(N − k)·m·w` and the tagging it leaves unspent. Proof: `Accounting.SecurityProofs.RateSketchHonest`.
+
+Frozen (completeness): the honest device's acceptance, which shows that `RateAuditSketch`'s event is not vacuous. -/
+def RateSketchHonest : Prop :=
+  ∀ (N m ρ h w : ℕ) (X Sig Dg : Type) [Inhabited X] (dig : Sig → (Fin m → X) → Dg),
+    ∃ A : RateSketch.Device N m ρ h 0 (ρ * w) N w X Sig Dg,
+      ∀ (cTag cEnc : ℕ) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (s : ℕ) (I : Fin s → Fin N),
+        A.Accepts dig σ O D I ∧ A.footprint σ O D = N * m * w ∧ A.compute cTag cEnc σ O D = N * cTag
+
 /-- **Binding signs make the tensor-core sketch's fiber `1`.** For signs whose block on every sector is injective on
 INT8 sectors (`SectorsBind`), two contents of one sector that give one sketch, with the rest of the tile fixed, are
 equal: their difference changes each coordinate by at most `2·32·128 < 2^32`, so the INT32 accumulators see it
 exactly. Proof: `Accounting.SecurityProofs.SketchBinds`.
 
-Frozen (no-function, hash): a property of the sketch's definition at signs that bind, which the deployed tag's code
-evaluates on hardware, not in Lean. -/
+Frozen (premise): a property of the sketch's definition under a hypothesis on the window's signs, which
+`RateAuditTensorSketch` prices as `Pr_σ[¬ SectorsBind σ]`. -/
 def SketchBinds : Prop :=
   ∀ (k m : ℕ) (σ : SketchSigns k m), SectorsBind σ → fib (sketch (k := k) (m := m)) σ ≤ 1
 
