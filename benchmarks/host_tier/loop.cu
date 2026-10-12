@@ -5,10 +5,13 @@
 // meanwhile: what they get is bandwidth the loop left over.
 //
 //   loop --seconds 5 --gpu-mib 4096 --grid 16 --cpus 52-95 --cpu-mib 512 --ks 16 [--adv-cpus L --adv-mib M]
-//        [--gpus N] [--gpu-node local|N] [--host-cpus L] [--sha c|ni] [--pf BYTES] [--go-file F] [--gate DIR] [--label S]
+//        [--gpus N] [--gpu-node local|N] [--gpu-mode zc|dma] [--host-cpus L] [--sha c|ni] [--pf BYTES] [--go-file F]
+//        [--gate DIR] [--label S]
 //
 // --gpus N streams from the first N visible GPUs only (0: the CPUs alone); GPU d's driver thread runs on the d-th CPU
 // of --host-cpus if given. CPU lists take lo-hi:step. --go-file F is created when the timed phase starts.
+// --gpu-mode dma: the copy engine stages each 64 MiB chunk in one of two HBM buffers and the receipts read it there,
+// instead of reading host memory directly (zc); the stage holds at most two chunks of the host tier at a time.
 //
 // Receipts (measurement constructions, not certified ones; reference.py recomputes both). Both XOR the block with a
 // 4 KiB mask M expanded from all of z (receipt.h's cpu_mask), so that no precomputation smaller than the block answers
@@ -203,6 +206,7 @@ int main(int argc, char** argv) {
   double seconds = 5;
   size_t gpu_bytes = 4096ull << 20, cpu_bytes = 512ull << 20, adv_bytes = 256ull << 20;
   int grid = 16, ks = 16, use_gpus = -1;
+  bool dma = false;
   std::string cpus, adv_cpus, host_cpus, gate_dir, go_file, label, gpu_node = "local";
   for (int i = 1; i + 1 < argc; i += 2) {
     std::string a = argv[i], v = argv[i + 1];
@@ -222,12 +226,13 @@ int main(int argc, char** argv) {
     else if (a == "--go-file") go_file = v;
     else if (a == "--sha") sha_ni = v == "ni";
     else if (a == "--pf") pf_bytes = atoi(v.c_str());
+    else if (a == "--gpu-mode") dma = v == "dma";
     else {
       fprintf(stderr, "unknown flag %s\n", a.c_str());
       return 2;
     }
   }
-  if (ks != 4 && ks != 16) return 2;
+  if (ks != 1 && ks != 2 && ks != 4 && ks != 16) return 2;
   const bool gating = !gate_dir.empty();
   if (gating) gpu_bytes = 64ull << 20, cpu_bytes = 2ull << 20;
   int ngpu = 0;
@@ -295,11 +300,20 @@ int main(int argc, char** argv) {
       CK(cudaMalloc(&rec, nb * 8));
       CK(cudaMemcpy(keys, gk, sizeof gk, cudaMemcpyHostToDevice));
       CK(cudaMemcpy(zdev, zinit, 64, cudaMemcpyHostToDevice));
-      cudaStream_t s;
+      cudaStream_t s, sc;
       CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+      CK(cudaStreamCreateWithFlags(&sc, cudaStreamNonBlocking));
+      uint4* stage[2] = {nullptr, nullptr};
+      if (dma)
+        for (auto& p : stage) CK(cudaMalloc(&p, chunk_blocks * 4096));
       if (gating) {
         if (d == 0) {
-          stream_receipts<<<grid, 512, 0, s>>>(hdev, 16, keys, zdev, seed64(), rec);
+          const uint4* src = hdev;
+          if (dma) {
+            CK(cudaMemcpy(stage[0], host, 16 * 4096, cudaMemcpyHostToDevice));
+            src = stage[0];
+          }
+          stream_receipts<<<grid, 512, 0, s>>>(src, 16, keys, zdev, seed64(), rec);
           CK(cudaGetLastError());
           CK(cudaStreamSynchronize(s));
           CK(cudaMemcpy(gate_gpu.data(), rec, 16 * 8, cudaMemcpyDeviceToHost));
@@ -312,9 +326,8 @@ int main(int argc, char** argv) {
       stream_receipts<<<grid, 512, 0, s>>>(hdev, chunk_blocks, keys, zdev, seed64(), rec);
       CK(cudaGetLastError());
       CK(cudaStreamSynchronize(s));
-      cudaEvent_t ev[2];
-      CK(cudaEventCreateWithFlags(&ev[0], cudaEventDisableTiming));
-      CK(cudaEventCreateWithFlags(&ev[1], cudaEventDisableTiming));
+      cudaEvent_t ev[2], copied[2];
+      for (auto* e : {ev, ev + 1, copied, copied + 1}) CK(cudaEventCreateWithFlags(e, cudaEventDisableTiming));
       pthread_barrier_wait(&ready);
       pthread_barrier_wait(&go);
       double t0 = now(), bytes = 0;
@@ -322,7 +335,15 @@ int main(int argc, char** argv) {
       size_t b0 = 0;
       for (int r = 0;; ++r) {
         size_t n = b0 + chunk_blocks <= nb ? chunk_blocks : nb - b0;
-        stream_receipts<<<grid, 512, 0, s>>>(hdev + b0 * 256, n, keys, zdev, seed64(), rec + b0);
+        const uint4* src = hdev + b0 * 256;
+        if (dma) {  // stage r & 1 is free once chunk r - 2's receipts (ev[r & 1]) are done
+          if (r >= 2) CK(cudaStreamWaitEvent(sc, ev[r & 1], 0));
+          CK(cudaMemcpyAsync(stage[r & 1], host + b0 * 256, n * 4096, cudaMemcpyHostToDevice, sc));
+          CK(cudaEventRecord(copied[r & 1], sc));
+          CK(cudaStreamWaitEvent(s, copied[r & 1], 0));
+          src = stage[r & 1];
+        }
+        stream_receipts<<<grid, 512, 0, s>>>(src, n, keys, zdev, seed64(), rec + b0);
         publish_z<<<1, 16, 0, s>>>(rec + b0, n, zdev, sdev, ++seq);
         CK(cudaGetLastError());
         CK(cudaEventRecord(ev[r & 1], s));
@@ -459,10 +480,10 @@ int main(int argc, char** argv) {
     zmin = z_distinct[t] < zmin ? z_distinct[t] : zmin;
   }
   for (size_t t = 0; t < ac.size(); ++t) a += adv_bytes_done[t] / el / 1e9;
-  printf("{\"label\": \"%s\", \"seconds\": %.2f, \"gpus\": %d, \"grid\": %d, \"gpu_gb_per_s\": %.2f, \"cpu_threads\": %zu, "
+  printf("{\"label\": \"%s\", \"seconds\": %.2f, \"gpus\": %d, \"gpu_mode\": \"%s\", \"grid\": %d, \"gpu_gb_per_s\": %.2f, \"cpu_threads\": %zu, "
          "\"ks\": %d, \"sha_ni\": %d, \"pf\": %d, \"cpu_gb_per_s\": %.2f, \"cpu_thread_min\": %.2f, \"cpu_thread_max\": %.2f, \"cpu_z_distinct_min\": %llu, "
          "\"adv_threads\": %zu, \"adv_gb_per_s\": %.2f, \"honest_gb_per_s\": %.2f, \"per_gpu\": %s}\n",
-         label.c_str(), el, ngpu, grid, g, cc.size(), ks, sha_ni, pf_bytes, c, cc.empty() ? 0 : cmin, cmax,
+         label.c_str(), el, ngpu, dma ? "dma" : "zc", grid, g, cc.size(), ks, sha_ni, pf_bytes, c, cc.empty() ? 0 : cmin, cmax,
          (unsigned long long)(cc.empty() ? 0 : zmin), ac.size(), a, g + c, per.c_str());
   return 0;
 }

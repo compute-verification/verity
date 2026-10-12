@@ -12,8 +12,8 @@ void cpu_keys(int8_t* K, int ks);  // K[l * 256 + j], l < ks
 // the 4 KiB mask a receipt XORs into every block, expanded from all of z: M = the 512 words
 // splitmix64(h ^ (0x6d00000000 + i)), little-endian, with h = seed64 folded with z[0..15] by h = splitmix64(h ^ z[t])
 void cpu_mask(const uint32_t* z, uint8_t* M);
-// 16 blocks of 4 KiB at x (64-byte aligned) under mask M (64-byte aligned): sketches sk[16 * ks] (block-major) and the
-// group's leaf
+// 16 blocks of 4 KiB at x (64-byte aligned) under mask M (64-byte aligned), ks in {1, 2, 4, 16}: sketches sk[16 * ks]
+// (block-major) and the group's leaf
 void cpu_group(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group, const int8_t* K, int ks,
                uint8_t leaf[32], int32_t* sk);
 uint64_t adv_chunk(const void* p, size_t lines);  // sum of `lines` 64-byte lines read as four streams

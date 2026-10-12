@@ -128,14 +128,20 @@ static void sketch(const uint8_t* const* xb, const uint8_t* M, const int8_t* K, 
     for (int l = 0; l < KS; ++l) s[b][l] = _mm512_reduce_add_epi32(acc[b][l]);
 }
 
+template <int KS>
+static void four_streams(const uint8_t* x, const uint8_t* M, const int8_t* K, int32_t* sk) {
+  for (int i = 0; i < 4; ++i) {  // blocks i, i + 4, i + 8, i + 12 together: four 16 KiB streams
+    const uint8_t* xb[4] = {x + 4096 * i, x + 4096 * (i + 4), x + 4096 * (i + 8), x + 4096 * (i + 12)};
+    int32_t* s[4] = {sk + KS * i, sk + KS * (i + 4), sk + KS * (i + 8), sk + KS * (i + 12)};
+    sketch<KS, 4>(xb, M, K, s);
+  }
+}
+
 void cpu_group(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group, const int8_t* K, int ks,
                uint8_t leaf[32], int32_t* sk) {
-  if (ks == 4)
-    for (int i = 0; i < 4; ++i) {  // blocks i, i + 4, i + 8, i + 12 together: four 16 KiB streams
-      const uint8_t* xb[4] = {x + 4096 * i, x + 4096 * (i + 4), x + 4096 * (i + 8), x + 4096 * (i + 12)};
-      int32_t* s[4] = {sk + 4 * i, sk + 4 * (i + 4), sk + 4 * (i + 8), sk + 4 * (i + 12)};
-      sketch<4, 4>(xb, M, K, s);
-    }
+  if (ks == 1) four_streams<1>(x, M, K, sk);
+  else if (ks == 2) four_streams<2>(x, M, K, sk);
+  else if (ks == 4) four_streams<4>(x, M, K, sk);
   else
     for (int b = 0; b < 16; ++b) {
       const uint8_t* xb[1] = {x + 4096 * b};

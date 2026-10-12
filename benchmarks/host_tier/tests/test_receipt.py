@@ -36,7 +36,7 @@ def gate_cpu(tmp_path_factory):
     return exe
 
 
-@pytest.mark.parametrize("ks", [4, 16])
+@pytest.mark.parametrize("ks", [1, 2, 4, 16])
 @pytest.mark.parametrize("sha_ni", [0, 1])
 def test_cpu_receipts_match_the_reference(gate_cpu, tmp_path, ks, sha_ni):
     gate = tmp_path / "gate.json"
