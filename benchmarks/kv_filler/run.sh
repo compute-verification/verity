@@ -16,6 +16,7 @@ export POOLS=${POOLS:-large sized}
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
+[ -x "$PY" ] || PY=${WORK:-/workspace/pouw/mvp-e2e}/venv312/bin/python
 SCRIPT=${SCRIPT:-bench.py}
 if [ "$SCRIPT" = serve.py ] || [ "$SCRIPT" = step_profile.py ]; then
   WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -41,9 +42,12 @@ sha256sum $KF/topup.cu benchmarks/bandwidth/tagger.cu benchmarks/word_codec/kv.c
 if [ -d $KF/tests ] && "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $KF/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
+# Under `research run --queue --gpus 1` the queue leases the GPU around the whole job: QUEUED=1 skips gpu-lease.
+LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
+[ "${QUEUED:-0}" = 1 ] && LEASE=()
 if [ "$SCRIPT" = serve.py ]; then
   # shellcheck disable=SC2086,SC2016
-  gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
+  "${LEASE[@]}" bash -c '
     rc=0
     for pool in $POOLS; do "$@" --pool "$pool" || rc=$?; done
     exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}
@@ -51,9 +55,8 @@ if [ "$SCRIPT" = serve.py ]; then
 fi
 if [ "$SCRIPT" = step_profile.py ]; then
   # shellcheck disable=SC2086
-  gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- "$PY" $KF/step_profile.py --out "$O" ${ARGS:-}
+  "${LEASE[@]}" "$PY" $KF/step_profile.py --out "$O" ${ARGS:-}
   exit $?
 fi
 # shellcheck disable=SC2086
-gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
-  "$PY" $KF/$SCRIPT --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}
+"${LEASE[@]}" "$PY" $KF/$SCRIPT --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}

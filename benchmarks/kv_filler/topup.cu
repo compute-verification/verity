@@ -9,6 +9,11 @@
 //            each block's 2,056 bytes as int8 against 16 rows of ±1 signs (dp4a), the 16 int32 sums hashed by one keyed
 //            BLAKE3 compression under the block's index, then ro-blake3/v1's leaves and tree over those 32-byte digests;
 //            the signs are drawn once a run from its seed (a deployment draws them a pass, F29: the cost is the same)
+//   mode  4  fill-sk16/v0 (`fill.cu`): 4,096-byte blocks sketched on the tensor cores against 16 rows of ±1 signs, each
+//            block's sums hashed by one keyed BLAKE3 compression and each 32 blocks' leaves into a unit root; a chunk is
+//            whole units, read by a fixed grid (`ctas`, default one CTA an SM) of 4 warps a CTA, a unit a warp at a time,
+//            the chunk's check word the XOR of its units' first root words. Chunks alternate between two streams so that
+//            one chunk's tail overlaps the next one's start. Signs drawn once a run, as sk16's
 //
 // The receipts are the bandwidth audit's own kernels (`../bandwidth/tagger.cu`, included here): a chunk is one tag pass
 // over `chunk_bytes / 2056` blocks of a region under the chunk's seed (the run's seed with its first 8 bytes XORed with
@@ -23,6 +28,7 @@
 // Built as libtopup.so (run.sh).  C ABI at the end.
 
 #include "../bandwidth/tagger.cu"
+#include "fill.cu"
 
 #include <atomic>
 #include <mutex>
@@ -30,7 +36,7 @@
 
 namespace tu {
 
-constexpr int MODE_READ = -1, MODE_SK = 3;
+constexpr int MODE_READ = -1, MODE_SK = 3, MODE_FILL = 4;
 constexpr int SK_ROWS = 16, SK_WORDS = (int)(bw::BLOCK_BYTES / 4), SK_G = 2, SK_WARPS = 8, SK_KS = 17;
 constexpr size_t SK_SMEM = sizeof(uint32_t) * (SK_WORDS * SK_ROWS + SK_WARPS * 32 * SK_KS);
 static const char SK_NAME[] = "verity/kv-filler/sk16-proxy/v0";
@@ -194,14 +200,68 @@ static void sk_host(const uint8_t* Ej, uint64_t j, const uint32_t* signs, const 
   bw::b3_compress(key.k, m, (uint32_t)j, 64, bw::B3_KEYED | bw::B3_CHUNK_START | bw::B3_CHUNK_END | bw::B3_ROOT, y);
 }
 
+// fill-sk16/v0's signs: SHA-512(seed ‖ "verity/kv-filler/fill-sk16/v0/signs" ‖ u32le i) for i = 0..127, 8 KiB.
+static void fill_signs(const uint8_t seed[32], uint32_t* out) {
+  static const char name[] = "verity/kv-filler/fill-sk16/v0/signs";
+  std::vector<uint8_t> msg(seed, seed + 32);
+  msg.insert(msg.end(), name, name + sizeof(name) - 1);
+  msg.resize(msg.size() + 4);
+  uint8_t* bytes = (uint8_t*)out;
+  for (uint32_t i = 0; i < 128; ++i) {
+    for (int k = 0; k < 4; ++k) msg[msg.size() - 4 + k] = (uint8_t)(i >> (8 * k));
+    uint64_t d[8];
+    bw::sha512_host(msg.data(), msg.size(), d);
+    bw::digest_bytes(d, bytes + 64 * i);
+  }
+}
+
+static fl::Key fill_key(const uint8_t seed[32]) {
+  fl::Key k;
+  memcpy(k.k, seed, 32);
+  return k;
+}
+
+// The plan over `regions`: each region's whole units, in order.
+static fl::Regions fill_regions(const std::vector<Region>& regions) {
+  fl::Regions R{};
+  R.n = (int)regions.size();
+  R.first_unit[0] = 0;
+  for (int i = 0; i < R.n; ++i) {
+    R.base[i] = regions[i].p;
+    R.first_unit[i + 1] = R.first_unit[i] + regions[i].bytes / fl::UNIT_BYTES;
+  }
+  return R;
+}
+
+// One fill chunk: units [unit0, unit0 + units) of the plan, roots into ws, the check word into ws's tail.
+static int fill_launch(const fl::Regions& R, uint64_t unit0, uint64_t units, const uint32_t* signs,
+                       const uint8_t seed[32], void* ws, int ctas, cudaStream_t st) {
+  uint32_t* roots = (uint32_t*)ws;
+  auto* ctr = (unsigned long long*)(roots + 8 * units);
+  uint32_t* xr = (uint32_t*)(ctr + 1);
+  cudaMemsetAsync(ctr, 0, 16, st);
+  int grid = ctas;
+  if (grid <= 0) {
+    int d = 0;
+    cudaGetDevice(&d);
+    cudaDeviceGetAttribute(&grid, cudaDevAttrMultiProcessorCount, d);
+  }
+  fl::fill_kernel<<<grid, fl::WARPS * 32, 0, st>>>(R, unit0, units, signs, fill_key(seed), roots, ctr, xr);
+  return (int)cudaGetLastError();
+}
+
+static size_t fill_ws_bytes(uint64_t units) { return 32 * units + 16; }
+
 struct State {
   int device = 0, mode = MODE_READ, depth = 2, priority = 0;
   std::atomic<int> ctas{0};
   uint64_t chunk_bytes = 1ull << 28, tile_bytes = 1ull << 16;
   std::vector<Region> regions;
   uint8_t seed[32];
-  cudaStream_t s = nullptr;
+  cudaStream_t s = nullptr, s2 = nullptr;
   cudaEvent_t start = nullptr;
+  fl::Regions plan{};
+  uint64_t plan_units = 0, fill_unit = 0;
   std::vector<cudaEvent_t> e0, e1;
   std::vector<void*> ws;
   std::vector<uint64_t> slot_bytes, slot_chunk;
@@ -229,7 +289,9 @@ static int finish(State& st, int i) {
   cudaEventElapsedTime(&a, st.start, st.e0[i]);
   cudaEventElapsedTime(&b, st.start, st.e1[i]);
   uint32_t root4 = 0;
-  if (st.mode >= 0) {
+  if (st.mode == MODE_FILL) {
+    memcpy(&root4, st.roots_h + 64 * i, 4);
+  } else if (st.mode >= 0) {
     uint8_t root[64];
     bw::digest_bytes((const uint64_t*)(st.roots_h + 64 * i), root);
     root4 = (uint32_t)root[0] << 24 | (uint32_t)root[1] << 16 | (uint32_t)root[2] << 8 | root[3];
@@ -266,7 +328,31 @@ static void next_chunk(State& st, size_t& region, const uint8_t*& p, uint64_t& b
   }
 }
 
+static int launch_fill(State& st, int i) {
+  cudaStream_t s = (st.chunk & 1) ? st.s2 : st.s;
+  const uint64_t units = std::min<uint64_t>(st.chunk_bytes / fl::UNIT_BYTES, st.plan_units - st.fill_unit);
+  const uint64_t unit0 = st.fill_unit;
+  st.fill_unit = (st.fill_unit + units) % st.plan_units;
+  uint8_t seed[32];
+  memcpy(seed, st.seed, 32);
+  for (int k = 0; k < 8; ++k) seed[k] ^= (uint8_t)(st.chunk >> (8 * k));
+  cudaError_t e = cudaEventRecord(st.e0[i], s);
+  if (e != cudaSuccess) return (int)e;
+  int rc = fill_launch(st.plan, unit0, units, st.signs, seed, st.ws[i], st.ctas.load(), s);
+  if (rc) return rc;
+  e = cudaMemcpyAsync(st.roots_h + 64 * i, (uint8_t*)st.ws[i] + 32 * units + 8, 4, cudaMemcpyDeviceToHost, s);
+  if (e != cudaSuccess) return (int)e;
+  e = cudaEventRecord(st.e1[i], s);
+  if (e != cudaSuccess) return (int)e;
+  st.slot_bytes[i] = units * fl::UNIT_BYTES;
+  st.slot_region[i] = (uint32_t)unit0;
+  st.slot_chunk[i] = st.chunk++;
+  st.busy[i] = 1;
+  return (int)cudaGetLastError();
+}
+
 static int launch(State& st, int i) {
+  if (st.mode == MODE_FILL) return launch_fill(st, i);
   size_t region;
   const uint8_t* p;
   uint64_t bytes;
@@ -338,7 +424,8 @@ extern "C" {
 int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int mode, uint64_t chunk_bytes,
              uint64_t tile_bytes, int depth, int priority, const uint8_t* seed, int ctas) {
   if (tu::S || n <= 0 || depth <= 0 ||
-      (mode != tu::MODE_READ && mode != bw::TAG_GF31 && mode != bw::TAG_B3 && mode != tu::MODE_SK))
+      (mode != tu::MODE_READ && mode != bw::TAG_GF31 && mode != bw::TAG_B3 && mode != tu::MODE_SK &&
+       mode != tu::MODE_FILL))
     return -1;
   tu::last_log.clear();
   auto* st = new tu::State();
@@ -353,6 +440,12 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   for (int k = 0; k < n; ++k) st->regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
   CK(cudaSetDevice(device));
   CK(cudaStreamCreateWithPriority(&st->s, cudaStreamNonBlocking, priority));
+  CK(cudaStreamCreateWithPriority(&st->s2, cudaStreamNonBlocking, priority));
+  if (mode == tu::MODE_FILL) {
+    st->plan = tu::fill_regions(st->regions);
+    st->plan_units = st->plan.first_unit[st->plan.n];
+    if (st->plan_units == 0 || n > fl::Regions::MAX) return -1;
+  }
   CK(cudaEventCreate(&st->start));
   st->e0.resize(depth);
   st->e1.resize(depth);
@@ -364,7 +457,9 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   for (int i = 0; i < depth; ++i) {
     CK(cudaEventCreate(&st->e0[i]));
     CK(cudaEventCreateWithFlags(&st->e1[i], cudaEventBlockingSync));
-    if (mode >= 0)
+    if (mode == tu::MODE_FILL)
+      CK(cudaMalloc(&st->ws[i], tu::fill_ws_bytes(chunk_bytes / fl::UNIT_BYTES)));
+    else if (mode >= 0)
       CK(cudaMalloc(&st->ws[i], bw::workspace_bytes(mode == tu::MODE_SK ? bw::TAG_B3 : mode, chunk_bytes / bw::BLOCK_BYTES)));
   }
   if (mode == tu::MODE_SK) {
@@ -373,6 +468,12 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
     CK(cudaMalloc(&st->signs, sg.size() * 4));
     CK(cudaMemcpy(st->signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
     CK(cudaFuncSetAttribute(tu::sk_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)tu::SK_SMEM));
+  }
+  if (mode == tu::MODE_FILL) {
+    std::vector<uint32_t> sg(fl::SIGN_WORDS);
+    tu::fill_signs(seed, sg.data());
+    CK(cudaMalloc(&st->signs, sg.size() * 4));
+    CK(cudaMemcpy(st->signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
   }
   CK(cudaMallocHost(&st->roots_h, 64 * depth));
   CK(cudaMalloc(&st->xr, 4));
@@ -456,6 +557,7 @@ int tu_stop() {
   cudaFree(st->xr);
   if (st->signs) cudaFree(st->signs);
   cudaStreamDestroy(st->s);
+  cudaStreamDestroy(st->s2);
   tu::last_log = std::move(st->log);
   delete st;
   tu::S = nullptr;
@@ -531,5 +633,33 @@ int tu_read(const void* p, uint64_t bytes, uint64_t tile_bytes, void* stream, ui
                                                                                          (uint32_t)tile16, xr);
   return (int)cudaGetLastError();
 }
+
+// fill-sk16/v0's gate: units [unit0, unit0 + units) of the plan over `n` regions under the chunk `seed` (key) and
+// `sign_seed` (signs), computed as the thread computes a chunk, with `ctas` CTAs; the units' roots (32 bytes each) and
+// the check word copied to host memory `roots` (32 · units + 4 bytes).
+int tu_fill_units(const uint64_t* ptrs, const uint64_t* bytes, int n, uint64_t unit0, uint64_t units,
+                  const uint8_t* seed, const uint8_t* sign_seed, int ctas, uint8_t* roots) {
+  if (n <= 0 || n > fl::Regions::MAX) return -1;
+  std::vector<tu::Region> regions;
+  for (int k = 0; k < n; ++k) regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
+  const fl::Regions R = tu::fill_regions(regions);
+  std::vector<uint32_t> sg(fl::SIGN_WORDS);
+  tu::fill_signs(sign_seed, sg.data());
+  uint32_t* signs = nullptr;
+  void* ws = nullptr;
+  CK(cudaMalloc(&signs, sg.size() * 4));
+  CK(cudaMalloc(&ws, tu::fill_ws_bytes(units)));
+  CK(cudaMemcpy(signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
+  int rc = tu::fill_launch(R, unit0, units, signs, seed, ws, ctas, 0);
+  if (!rc) rc = (int)cudaDeviceSynchronize();
+  if (!rc) rc = (int)cudaMemcpy(roots, ws, 32 * units, cudaMemcpyDeviceToHost);
+  if (!rc) rc = (int)cudaMemcpy(roots + 32 * units, (uint8_t*)ws + 32 * units + 8, 4, cudaMemcpyDeviceToHost);
+  cudaFree(ws);
+  cudaFree(signs);
+  return rc;
+}
+
+// The 8 KiB of fill-sk16/v0 signs from `seed`, for the reference to check against.
+void tu_fill_signs(const uint8_t* seed, uint8_t* out) { tu::fill_signs(seed, (uint32_t*)out); }
 
 }  // extern "C"

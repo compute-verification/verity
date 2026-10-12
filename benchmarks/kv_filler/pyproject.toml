@@ -4,4 +4,4 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-inputs = []
+inputs = ["verity/ml/crypto/blake3.py"]

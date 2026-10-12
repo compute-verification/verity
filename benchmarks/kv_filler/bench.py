@@ -40,7 +40,7 @@ VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
 GATE_SEED = bytes(range(32))
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
 BLOCK = 2056
-MODES = {"read": -1, "gf31": 0, "b3": 2, "sk16": 3}
+MODES = {"read": -1, "gf31": 0, "b3": 2, "sk16": 3, "fill": 4}
 TAG_NAMES = {0: "gf31-poly/v1", 2: "ro-blake3/v1"}
 # Llama-3.1-8B: 32 layers, hidden 4,096, 32 query heads on 8 KV heads of 128, MLP 14,336.
 LAYERS, HIDDEN, HEADS, KV_HEADS, HEAD_DIM, MLP = 32, 4096, 32, 8, 128, 14336
@@ -67,6 +67,18 @@ class Topup:
         so.tu_sk_gate.argtypes = [v, q, v, v]
         so.tu_sk_root.argtypes = [v, q, v, v, v]
         so.bw_fill_test_store.argtypes = [v, q]
+        so.tu_fill_units.argtypes = [v, v, i, q, q, v, v, i, v]
+        so.tu_fill_signs.argtypes = [v, v]
+
+    def fill_units(self, regions, unit0: int, units: int, seed: bytes, sign_seed: bytes, ctas: int):
+        ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
+        sizes = (ctypes.c_uint64 * len(regions))(*[n for _, n in regions])
+        out = ctypes.create_string_buffer(32 * units + 4)
+        rc = self.so.tu_fill_units(ptrs, sizes, len(regions), unit0, units, seed, sign_seed, ctas, out)
+        if rc:
+            raise RuntimeError(f"tu_fill_units error {rc}")
+        raw = out.raw
+        return [raw[32 * k:32 * k + 32] for k in range(units)], int.from_bytes(raw[32 * units:32 * units + 4], "little")
 
     def start(self, regions, mode: int, chunk: int, depth: int, priority: int, seed: bytes, tile: int = 1 << 16,
               ctas: int = 0, device: int = 0) -> None:
@@ -198,9 +210,53 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
         if int(n) != 1024 * BLOCK or region != (c // 2) % 2 or root4 != int.from_bytes(want[:4], "big"):
             bad.append(c)
     out["sk16_thread_receipts"] = not bad and out["sk16_digests_mismatch"] == 0
+    out.update(fill_gate(tu, torch))
     out.update(codec_gate(codec, torch, ENCODE_K))
     out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch"))
     log(f"gate: {out}")
+    return out
+
+
+def fill_gate(tu: Topup, torch) -> dict:
+    """fill-sk16/v0 against `fill_ref`: the signs; every unit root and the check word of a chunk over three regions of
+    random bytes (one ending mid-unit), at 3 CTAs and at the default grid; and the top-up thread's check words, chunk
+    after chunk, the plan wrapping."""
+    import fill_ref as F
+    out = {}
+    sb = ctypes.create_string_buffer(8192)
+    tu.so.tu_fill_signs(RUN_SEED, sb)
+    out["fill_signs"] = sb.raw == F.signs(RUN_SEED)
+    sizes = [5 * F.UNIT_BYTES + 4096 * 3 + 77, 7 * F.UNIT_BYTES, 3 * F.UNIT_BYTES]
+    g = torch.Generator(device="cuda").manual_seed(4)
+    store = torch.randint(0, 256, (sum(sizes) + 256,), dtype=torch.uint8, device="cuda", generator=g)
+    offs = [0, sizes[0] + 51 * 16, sizes[0] + 51 * 16 + sizes[1]]
+    regions = [(store.data_ptr() + o, n) for o, n in zip(offs, sizes)]
+    host = store.cpu().numpy().tobytes()
+    blobs = [host[o:o + n] for o, n in zip(offs, sizes)]
+    seed = hashlib.sha256(b"verity/kv-filler/fill-gate").digest()
+    want, wx = F.chunk(blobs, 2, 11, seed, RUN_SEED)
+    ok = True
+    for ctas in (3, 0):
+        got, gx = tu.fill_units(regions, 2, 11, seed, RUN_SEED, ctas)
+        ok &= got == want and gx == wx
+    out["fill_units"] = ok
+    # the thread: chunks of 4 units over the 15-unit plan
+    tu.start(regions, 4, 4 * F.UNIT_BYTES, 2, 0, RUN_SEED, ctas=2)
+    while True:
+        prog = (ctypes.c_uint64 * 2)()
+        tu.so.tu_progress(prog)
+        if prog[1] >= 12:
+            break
+        time.sleep(0.01)
+    tu.stop()
+    recs, bad, cursor = tu.log()[:12], [], 0
+    for _, _, n, unit0, root4, c in recs:
+        units = min(4, 15 - cursor)
+        _, x = F.chunk(blobs, unit0, units, F.chunk_seed(RUN_SEED, c), RUN_SEED)
+        if unit0 != cursor or int(n) != units * F.UNIT_BYTES or root4 != x:
+            bad.append(c)
+        cursor = (cursor + units) % 15
+    out["fill_thread_receipts"] = not bad and len(recs) == 12
     return out
 
 
@@ -248,10 +304,13 @@ def read_rate(tu: Topup, torch, filler, reps: int) -> dict:
     return out
 
 
-def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, least: int) -> dict:
+def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, least: int, fill_chunk: int = 1 << 30,
+          fill_ctas=()) -> dict:
     out = {}
-    for name, mode in MODES.items():
-        tu.start([(filler.data_ptr(), filler.numel())], mode, chunk, depth, least, RUN_SEED)
+    runs = [(name, mode, 0) for name, mode in MODES.items()] + [(f"fill@{c}", MODES["fill"], c) for c in fill_ctas]
+    for name, mode, ctas in runs:
+        tu.start([(filler.data_ptr(), filler.numel())], mode, fill_chunk if mode == MODES["fill"] else chunk, depth,
+                 least, RUN_SEED, ctas=ctas)
         time.sleep(seconds)
         tu.stop()
         recs = tu.log()[1:]  # the first chunk's start includes the thread's start
@@ -432,8 +491,8 @@ def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int,
         rows.append({"phase": kind, "size": size, "ctx": ctx, "topup": None, "ctas": 0, **base, "slowdown": 0.0})
         for mode in args.throttle_modes:
             for ctas in args.throttle_ctas:
-                tp = {"mode": MODES[mode], "chunk": 64 << 20, "depth": 2 if mode == "read" else 3, "priority": least,
-                      "ctas": ctas}
+                tp = {"mode": MODES[mode], "chunk": (args.fill_chunk_mib if mode == "fill" else 64) << 20,
+                      "depth": 2 if mode == "read" else 3, "priority": least, "ctas": ctas}
                 r = cell(tu, torch, fn, high, n, tp, filler, registered, R)
                 row = {"phase": kind, "size": size, "ctx": ctx, "topup": mode, "ctas": ctas, **r,
                        "slowdown": r["step_ms_median"] / base["step_ms_median"] - 1}
@@ -589,6 +648,7 @@ def main() -> int:
     ap.add_argument("--throttle-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
     ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
     ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
+    ap.add_argument("--fill-chunk-mib", type=int, default=1024)
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -620,7 +680,8 @@ def main() -> int:
     res["read"] = read_rate(tu, torch, filler, 4)
     R = res["read"]["R_GBps"]
     log(f"R = {R:.0f} GB/s ({res['read']})")
-    res["alone"] = alone(tu, torch, filler, a.alone_s, a.chunk_mib << 20, a.depth, least)
+    res["alone"] = alone(tu, torch, filler, a.alone_s, a.chunk_mib << 20, a.depth, least, a.fill_chunk_mib << 20,
+                         a.throttle_ctas if "fill" in a.throttle_modes else ())
     log(f"top-up alone: {res['alone']}")
 
     def save() -> None:
