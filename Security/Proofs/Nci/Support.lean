@@ -1,5 +1,4 @@
-import Models.Nci.Assumptions
-import Proofs.Core.Circuit
+import Proofs.Nci.Chain
 
 /-!
 # Incompressibility in support form gives the draft's
@@ -9,7 +8,8 @@ baseline at its committed values, the values on `in(R) ∩ θ` are fixed, so the
 `2^novelReads(R)` distinct values (`support_le`). Adding one gate to a set adds at most one weight entry and one input
 entry to its charge (`charge_insert_le`), so a set of `R`'s gates charged more than `R` reads has a subset charged
 between `novelReads(R)` and `novelReads(R) + b_w + b_a` (`exists_charge_window`). Support form at that cap bounds the
-subset's charge by `novelReads(R)`, a contradiction: `activationsIncompressible_of_support`.
+subset's charge by `novelReads(R)`, a contradiction: `activationsIncompressible_of_support`. With it, the reads Lemmas
+1 and 2 give (`iu_reads`) rest on support form (`IuReads`).
 -/
 
 namespace Nci.SecurityProofs
@@ -199,3 +199,8 @@ theorem activationsIncompressible_of_support {D : Declaration} {θv : D.D.Transc
     linarith
 
 end Nci.SecurityProofs
+
+theorem Nci.SecurityProofs.IuReads : Nci.Guarantees.IuReads :=
+  fun D c Γ K b_w b_a d hd hb_a hb_w _ h R hR hΓ hK =>
+    Nci.SecurityProofs.iu_reads D c Γ K b_w b_a d hd hb_a
+      (Nci.SecurityProofs.activationsIncompressible_of_support hb_w hb_a h) R hR hΓ hK

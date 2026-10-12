@@ -3823,7 +3823,7 @@
    "FlockVBridge.unit_recOpen": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.FullPositions": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.Inference": "completeness: Move to Proofs as Training's completeness pair (an inference partition complies); no concrete instance exists yet.",
-   "Nci.SecurityProofs.IuReads": "falsified (conjecture,no-function): It rests on ActivationsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
+   "Nci.SecurityProofs.IuReads": "frozen (conjecture,no-function): It rests on the named open conjecture Nci.Assumptions.ActivationsSupport, about the values a declaration's gates take over its runs, not over a Lean function.",
    "Nci.SecurityProofs.LoomisWhitney": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.OtherPositions": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.ReadBound": "lemma: leaves the list under the 5:11 PM ruling",
@@ -20810,7 +20810,7 @@
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "a6d8a20d22b4bb1b26e538dd2ecdeb61c6bd65122c64cf013539ac3673a858a8",
+  "mathlib": "1d926eeec05a5c8f595aa7462ab1241e17765a14d656c47b4f6066becc802613",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
   "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"

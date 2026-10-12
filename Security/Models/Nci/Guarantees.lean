@@ -83,11 +83,12 @@ open Verity Finset
 open Classical in
 /-- **What an IU reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
 and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an IU `R` of at most `Γ` computed
-gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsIncompressible`. `p_R` is the
-number of weight entries `R` uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at
-positions that are not full, and `d` the smallest inner dimension. -/
+gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsSupport` at cap `K + b_w + b_a`
+for some committed values `θv` of the baseline. `p_R` is the number of weight entries `R` uses, `τ_R` its number of full
+positions, `Q_R` the number of input entries it uses at positions that are not full, and `d` the smallest inner
+dimension. -/
 def _root_.Nci.Guarantees.IuReads : Prop :=
-  ∀ (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (h : Assumptions.ActivationsIncompressible D c Γ K b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K),
+  ∀ (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv c (K + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K),
     b_w * (c.weightsUsed R).card +
       b_a * (d * (univ.filter (c.Full R)).card + ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card) ≤
     novelReads D R
