@@ -8,16 +8,16 @@
 #     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-kv-filler \
 #     -- taskset -c 48-95 bash benchmarks/kv_filler/run.sh
 #
-# ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). SCRIPT=serve.py runs serve.py in the e2e's
-# vLLM venv (WORK, default /workspace/pouw/mvp-e2e) once for each pool sizing of POOLS (default "large sized"), each its
-# own process, under the one lease.
+# ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). SCRIPT=serve.py and SCRIPT=step_profile.py run
+# in the e2e's vLLM venv (WORK, default /workspace/pouw/mvp-e2e); serve.py once for each pool sizing of POOLS (default
+# "large sized"), each its own process, under the one lease.
 set -uxo pipefail
 export POOLS=${POOLS:-large sized}
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 SCRIPT=${SCRIPT:-bench.py}
-if [ "$SCRIPT" = serve.py ]; then
+if [ "$SCRIPT" = serve.py ] || [ "$SCRIPT" = step_profile.py ]; then
   WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
   export PYTHONPATH=$PWD:$PWD/integrations/vllm FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf} \
     CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
@@ -47,6 +47,11 @@ if [ "$SCRIPT" = serve.py ]; then
     rc=0
     for pool in $POOLS; do "$@" --pool "$pool" || rc=$?; done
     exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}
+  exit $?
+fi
+if [ "$SCRIPT" = step_profile.py ]; then
+  # shellcheck disable=SC2086
+  gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- "$PY" $KF/step_profile.py --out "$O" ${ARGS:-}
   exit $?
 fi
 # shellcheck disable=SC2086

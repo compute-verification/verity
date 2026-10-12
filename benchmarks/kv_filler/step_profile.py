@@ -1,0 +1,150 @@
+"""vLLM's decode step of Llama-3.1-8B (the engine `serve.py` serves: FP8 online, full CUDA graphs for decode) at each
+batch × context of `--shapes`, its kernels timed by torch's profiler, and the step's own fraction of R split by kernel
+class: the GEMMs (the four linears in FP8 and the LM head) against the weights' bytes, attention against the KV it
+reads (each request's context, 128 KiB a token), and the rest (norms, rotary, activation quantization, sampling,
+copies) against nothing registered. `native` re-times the step with the GEMMs at `--native-R` of R (ra-tag-fast's
+native linears: 6.98 GB in 4.71 ms at M = 1, 0.96 R) and the rest as measured; `native_all` puts attention at that
+rate too. Writes `step_profile.json` and `step_profile.log` under `--out`.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+import re
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from serve import CAPTURE, KV_TOKEN_BYTES  # noqa: E402
+
+CLASSES = (("gemm", re.compile(r"gemm|gemv|cutlass|xmma|cublas|nvjet|matmul|scaled_mm|splitk", re.I)),
+           ("attention", re.compile(r"flash|attn|attention|fmha|batchdecode|batchprefill|mergestate|merge_state", re.I)))
+
+
+def classify(name: str) -> str:
+    return next((c for c, rx in CLASSES if rx.search(name)), "other")
+
+
+def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R: float, native: float) -> dict:
+    """Each class's ms a step from the profiler's kernel events (`name`, `ts`, `dur` in µs) over `steps` model steps,
+    and the step's fraction of R measured and with the GEMMs (`native`) or every registered read (`native_all`) at
+    `native` of R."""
+    ms = {c: sum(e["dur"] for e in kernels if classify(e["name"]) == c) / 1e3 / steps for c in ("gemm", "attention",
+                                                                                               "other")}
+    kern = sum(ms.values())
+    span = (max(e["ts"] + e["dur"] for e in kernels) - min(e["ts"] for e in kernels)) / 1e3 / steps
+    rate = R * 1e6  # bytes a millisecond
+    gemm_native = weight_bytes / (native * rate)
+    native_ms = gemm_native + ms["attention"] + ms["other"]
+    native_all_ms = (weight_bytes + kv_bytes) / (native * rate) + ms["other"]
+    by = {}
+    for e in kernels:
+        by.setdefault(e["name"], 0.0)
+        by[e["name"]] += e["dur"] / 1e3 / steps
+    return {"ms": ms, "kernel_ms": kern, "span_ms": span, "kernels_a_step": len(kernels) / steps,
+            "of_R": (weight_bytes + kv_bytes) / (rate * kern), "of_R_span": (weight_bytes + kv_bytes) / (rate * span),
+            "gemm_of_R": weight_bytes / (rate * ms["gemm"]) if ms["gemm"] else None,
+            "attention_of_R": kv_bytes / (rate * ms["attention"]) if ms["attention"] else None,
+            "other_share": ms["other"] / kern, "native_ms": native_ms,
+            "native_of_R": (weight_bytes + kv_bytes) / (rate * native_ms), "native_all_ms": native_all_ms,
+            "native_all_of_R": (weight_bytes + kv_bytes) / (rate * native_all_ms),
+            "top": [{"name": n[:120], "class": classify(n), "ms": round(t, 4)}
+                    for n, t in sorted(by.items(), key=lambda kv: -kv[1])[:15]]}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--model", default="/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct")
+    ap.add_argument("--mem", type=float, default=0.85)
+    ap.add_argument("--shapes", type=lambda s: [tuple(int(v) for v in x.split("x")) for x in s.split(",")],
+                    default=[(1, 2048), (8, 4096), (64, 2048), (128, 1024)])
+    ap.add_argument("--steps", type=int, default=40)
+    ap.add_argument("--R", type=float, default=1540.0)
+    ap.add_argument("--native-R", type=float, default=0.96)
+    a = ap.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
+    logf = (a.out / "step_profile.log").open("a")
+
+    def log(msg: str) -> None:
+        line = f"{time.strftime('%H:%M:%S')} {msg}"
+        print(line, flush=True)
+        logf.write(line + "\n")
+        logf.flush()
+
+    import torch
+    import vllm
+    from torch.profiler import ProfilerActivity, profile
+    from verity_vllm.engine.engine_profile import get_model_runner
+    from vllm import LLM, SamplingParams
+    from vllm.inputs import TokensPrompt
+
+    llm = LLM(model=a.model, quantization="fp8", max_num_seqs=max(CAPTURE), enable_prefix_caching=False, seed=0,
+              max_model_len=max(c for _, c in a.shapes) + a.steps + 128, max_num_batched_tokens=8192,
+              enforce_eager=False, gpu_memory_utilization=a.mem,
+              compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": CAPTURE})
+    eng = llm.llm_engine
+    runner = get_model_runner(llm)
+    weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
+                       if "embed_tokens" not in n)
+    vocab = eng.vllm_config.model_config.hf_config.vocab_size
+    count = [0]
+    ex_orig = runner.execute_model
+
+    def execute_model(*args, **kwargs):
+        count[0] += 1
+        return ex_orig(*args, **kwargs)
+
+    runner.execute_model = execute_model
+    res = {"format": "verity-kv-filler/step-profile/v0", "args": {k: v for k, v in vars(a).items() if k != "out"},
+           "vllm": vllm.__version__, "torch": torch.__version__, "gpu": torch.cuda.get_device_name(),
+           "weight_bytes_per_step": weight_bytes,
+           "async_scheduling": getattr(eng.vllm_config.scheduler_config, "async_scheduling", None), "shapes": []}
+    log(f"weights read a step {weight_bytes / 1e9:.2f} GB; async scheduling {res['async_scheduling']}")
+    rng = random.Random(3)
+    for batch, ctx in a.shapes:
+        ids = [f"p{batch}x{ctx}-{i}" for i in range(batch)]
+        for rid in ids:
+            eng.add_request(rid, TokensPrompt(prompt_token_ids=[rng.randrange(1000, vocab - 1000) for _ in range(ctx)]),
+                            SamplingParams(max_tokens=a.steps + 64, ignore_eos=True, temperature=0.0))
+        made: dict[str, int] = {}
+        while len(made) < batch or min(made.values()) < 4:
+            for o in eng.step():
+                made[o.request_id] = len(o.outputs[0].token_ids)
+        torch.cuda.synchronize()
+        count[0] = 0
+        with profile(activities=[ProfilerActivity.CUDA]) as prof:
+            for _ in range(a.steps):
+                eng.step()
+            torch.cuda.synchronize()
+        steps = count[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "trace.json"
+            prof.export_chrome_trace(str(path))
+            kernels = [e for e in json.loads(path.read_text())["traceEvents"]
+                       if e.get("cat") == "kernel" and e.get("ph") == "X"]
+        eng.abort_request(ids)
+        while eng.has_unfinished_requests():
+            eng.step()
+        kv_bytes = batch * (ctx + 4 + a.steps / 2) * KV_TOKEN_BYTES
+        s = {"batch": batch, "ctx": ctx, "steps": steps, "kv_bytes_per_step": kv_bytes,
+             **split(kernels, steps, weight_bytes, kv_bytes, a.R, a.native_R)}
+        res["shapes"].append(s)
+        log(f"{batch}x{ctx}: {steps} steps, {s['kernels_a_step']:.0f} kernels a step, kernels {s['kernel_ms']:.3f} ms "
+            f"(span {s['span_ms']:.3f}) a step at {s['of_R']:.3f} R ({s['of_R_span']:.3f} on the span): GEMM "
+            f"{s['ms']['gemm']:.3f} ms at {s['gemm_of_R'] or 0:.3f} R, attention {s['ms']['attention']:.3f} ms at "
+            f"{s['attention_of_R'] or 0:.3f} R, other {s['ms']['other']:.3f} ms ({s['other_share']:.1%}); native GEMMs "
+            f"{s['native_of_R']:.3f} R, every read native {s['native_all_of_R']:.3f} R")
+        (a.out / "step_profile.json").write_text(json.dumps(res, indent=1) + "\n")
+    log("done")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
