@@ -958,7 +958,8 @@ def main() -> int:
     ap.add_argument("--kr", type=int, default=2, help="the word codec's rounds on the encoded store (0: plain only)")
     ap.add_argument("--ks", default="8,16,32")
     ap.add_argument("--ns", default="1024,4096,16384")
-    ap.add_argument("--seq-ks", default="16", help="the layer sequence's k (the first is the report's), n ~ 4096, each swept over --cfgs")
+    ap.add_argument("--seq-ks", default="16",
+                    help="the layer sequence's k (the first is the report's), n ~ 4096, each swept over --cfgs")
     ap.add_argument("--cfgs", default="6x1,4x2,8x1",
                     help="consumer warps x stages each: every arm at the first, base, decode, sketch and fused also at "
                          "the rest for k=16, n=4096 (each arm's fastest is the frontier's)")
