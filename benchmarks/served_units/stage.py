@@ -26,8 +26,9 @@ FP8 blocks of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
 
     fp8-coord   ScaledMmFp8BlockCoordinate_v2{K,G}: one output coordinate of a block-scaled FP8 linear (CUTLASS blockwise,
                 `ScaledMmFp8Block_v1{K,N,128}`'s Q_word unit), x = Fp8GroupQuant of a seeded N(0, 1) bf16 row, w = a seeded
-                N(0, 0.02) bf16 weight row quantized per 128 the same way.  K = 6144 is fused_qkv_a and every gate_up
-                (dense, shared and routed experts); 2048 is q_b and o_proj (one TP8 rank).
+                N(0, 0.02) bf16 weight row quantized per 128 the same way.  K = 6144 is fused_qkv_a and the dense and
+                shared experts' gate_up; 2048 is q_b, the indexer's wq_b and o_proj (one TP8 rank); 256 is the shared
+                expert's down_proj on one rank.  The routed experts run Triton's fused MoE (`moe-w13`, `moe-w2`).
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
