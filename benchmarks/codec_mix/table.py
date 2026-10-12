@@ -14,7 +14,8 @@ and W and A are read off p512's curves at κ (the slope from 2 to 3 past 3). E s
 k·x₁. Wherever a codec's attention was measured (`--exhaust`, 8B's shape, the best encoded form), its κ projects
 attention from plain p512's best form at k = 2 and 3, and A at both points is scaled by measured over projected (`check`
 lists each); such a row is built. The rest (p640, a tensor-core layout at 768, the permutation, the crossed halves) are
-projections, and the frontier is given over built rows and over all.
+projections, and the frontier is given over built rows and over all. A tensor-core layout at 640 or 768 bits pads each
+256-byte head to whole words, charged as pad·(f_KV + A), f_KV the KV's share of the plain step.
 
 γ_codec = μ_chip 0.28 + μ_sample 0.10 + μ_rebuild + risk, before μ_host, μ_link and λ (`room` is what 1% leaves them):
 μ_rebuild = 100·d/(k·x₁,adv), x₁,adv = 175 at p512 (the red team's) scaled by root bytes a second, at the measured
@@ -37,12 +38,12 @@ CEILINGS = (1.0, 1.2, 1.45)
 ALLOWANCES = (0.0, 0.1, 0.26, 0.4)
 
 #: ra-codec-tensor's step at p512, in native passes (its report's table): d, W = linears' decode + receipt, A =
-#: attention, E = the append, at k = 1, 2, 3.
+#: attention, E = the append, at k = 1, 2, 3; f_KV, the KV's share of the plain step's bytes.
 STEP = {
     "8B B80 ctx 8,256": {"run": "r20261012-175906-b479", "d": (1.207, 1.360, 1.875), "W": (0.086, 0.114, 0.137),
-                         "A": (0.022, 0.127, 0.594), "E": (0.026, 0.052, 0.077)},
+                         "A": (0.022, 0.127, 0.594), "E": (0.026, 0.052, 0.077), "f_kv": 0.92},
     "70B B8 ctx 9,280": {"run": "r20261012-175923-0080", "d": (1.506, 1.813, 2.191), "W": (0.390, 0.640, 0.881),
-                         "A": (0.011, 0.065, 0.197), "E": (0.007, 0.015, 0.022)},
+                         "A": (0.011, 0.065, 0.197), "E": (0.007, 0.015, 0.022), "f_kv": 0.26},
 }
 
 #: The red team's GPU-floor margins for the plain word at k = 2 (centre, low, high; r20261012-170958-f49a), and k = 1's.
@@ -91,7 +92,7 @@ def attack_margins(lines: list[dict]) -> dict:
     return out
 
 
-def row(name, b, k, *, fr, lib=None, kappa=None, x1=None, margin, note, attn=None, built=None):
+def row(name, b, k, *, fr, lib=None, kappa=None, x1=None, margin, note, attn=None, built=None, pad=0.0):
     kappa = kappa if kappa is not None else kappa_of(fr, lib, k)
     x1 = x1 if x1 is not None else x1_of(fr, b)
     out = {"codec": name, "b": b, "k": k, "kappa": kappa, "x1_adv": x1, "margin": margin, "note": note, "points": {},
@@ -108,7 +109,8 @@ def row(name, b, k, *, fr, lib=None, kappa=None, x1=None, margin, note, attn=Non
     for p, s in STEP.items():
         base = s["d"][1] - s["W"][1] - s["A"][1] - s["E"][1]
         e = s["E"][0] * k * x1 / X1_P512
-        d = base + interp(s["W"], kappa) + scale * interp(s["A"], kappa) + e
+        a = scale * interp(s["A"], kappa)
+        d = base + interp(s["W"], kappa) + a + e + pad * (s["f_kv"] + a)
         g = {}
         for c in CEILINGS:
             mu = 100 * d / (k * x1 / c)
@@ -172,8 +174,15 @@ def build(attack: list[dict], rates: dict, exhausts: list[dict]) -> dict:
              "assumes a layout not yet built"
     as_built = "; kv.cu's tensor-core attention needs a 256-byte head to hold whole words (512, 1024 bits), so d " \
                "takes attention as built, on the CUDA cores"
-    rows.append(row("p640 k=2 masked (σ_K), interpolated", 640, 2, fr=fr, kappa=k640, x1=x640, margin=m,
-                    note=n + "; not built: κ and x₁ midway (x₁ geometric) between masked 512 and 768" + no_mma))
+    def padded(wb):
+        n = -(-256 // wb)
+        return n * wb / 256 - 1, (f"; a tensor-core layout pads each 256-byte head to {n} words of {wb} bytes, "
+                                  f"{100 * (n * wb / 256 - 1):.1f}% more KV read and decoded, charged as pad·(f_KV + A)")
+
+    pad, pn = padded(80)
+    rows.append(row("p640 k=2 masked (σ_K), interpolated, tensor-core layout", 640, 2, fr=fr, kappa=k640, x1=x640,
+                    margin=m, pad=pad, note=n + "; not built: κ and x₁ midway (x₁ geometric) between masked 512 and "
+                    "768, attention at its κ projection" + pn))
     for b in (768, 1024):
         wide = "" if b % 1024 == 0 else as_built if attn(f"p{b}", 2) else no_mma
         rows.append(row(f"p{b} k=2 plain", b, 2, fr=fr, lib=f"p{b}", margin=PLAIN_K2[b],
@@ -186,8 +195,9 @@ def build(attack: list[dict], rates: dict, exhausts: list[dict]) -> dict:
                         + wide, attn=attn(f"p{b}-m", 3)))
     if attn("p768-m", 2):
         m, n = masked(768)
+        pad, pn = padded(96)
         rows.append(row("p768 k=2 masked (σ_K), tensor-core layout (projected)", 768, 2, fr=fr, lib="p768-m",
-                        margin=m, note=n + "; d with attention at its κ projection" + no_mma))
+                        margin=m, pad=pad, note=n + "; not built: attention at its κ projection" + pn))
     kb = kappa_of(fr, "p512", 2)
     rows.append(row("p512 k=2, bit permutation between rounds", 512, 2, fr=fr, kappa=kb + 1.0, x1=X1_P512,
                     margin=rows[2]["margin"], note="σ_K's margin; a Beneš network ≈ a squaring a boundary (κ + 1)"))
