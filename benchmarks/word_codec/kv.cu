@@ -1514,15 +1514,18 @@ __global__ void __launch_bounds__(MWT, 2) attn_dyn_kernel(const uint8_t *__restr
     if (w >= MW) {
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
       const int wj = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + j;
-      const auto word = [&](int item, int tile) {
+      const u64 stride = (u64)MT * layers * TLW;
+      const auto word = [&](int item) {
         const int sq = item / KV_HEADS;
-        return (((u64)(sq / splits) * ctx + sq % splits * per_split + tile * MT + t) * layers + layer) * TLW + wj +
+        return (((u64)(sq / splits) * ctx + sq % splits * per_split + t) * layers + layer) * TLW + wj +
                item % KV_HEADS * (HB / WB);
       };
+      const u32 *kw = reinterpret_cast<const u32 *>(kv);
       int cur = it[0], gt = 0;
       unsigned long long pend = 0;
       u32 nx[NL], tw[NL];
-      if (cur < nitems && t < min(MT, tokens(cur))) ldg_word(reinterpret_cast<const u32 *>(kv) + word(cur, 0) * NL, nx);
+      u64 w0 = cur < nitems ? word(cur) : 0;
+      if (cur < nitems && t < min(MT, tokens(cur))) ldg_word(kw + w0 * NL, nx);
 #pragma unroll 1
       for (int n = 0; cur < nitems; ++n) {
         if (d == 0) {
@@ -1530,18 +1533,17 @@ __global__ void __launch_bounds__(MWT, 2) attn_dyn_kernel(const uint8_t *__restr
           pend = atomicAdd(ctr, 1ULL);
         }
         asm volatile("bar.sync 1, %0;" ::"n"(32 * MDW) : "memory");
-        const int nxt = it[(n + 1) & 3], rem = tokens(cur);
-        tweak(word(cur, 0), tw);
-#pragma unroll 1
+        const int nxt = it[(n + 1) & 3], rem = tokens(cur), nrem = nxt < nitems ? tokens(nxt) : 0;
+        const u64 nw0 = nxt < nitems ? word(nxt) : 0;
+        tweak(w0, tw);
         for (int tile = 0; tile * MT < rem; ++tile, ++gt) {
           const int nt = min(MT, rem - tile * MT);
           u32 x[NL];
           copy(x, nx);
           if ((tile + 1) * MT < rem) {
-            if (t < min(MT, rem - (tile + 1) * MT))
-              ldg_word(reinterpret_cast<const u32 *>(kv) + word(cur, tile + 1) * NL, nx);
-          } else if (nxt < nitems && t < min(MT, tokens(nxt))) {
-            ldg_word(reinterpret_cast<const u32 *>(kv) + word(nxt, 0) * NL, nx);
+            if (t < min(MT, rem - (tile + 1) * MT)) ldg_word(kw + (w0 + (tile + 1) * stride) * NL, nx);
+          } else if (t < min(MT, nrem)) {
+            ldg_word(kw + nw0 * NL, nx);
           }
           if (tile) tweak_step(tw, td);
           if (t < nt) decode_word_t(x, tw, k);
@@ -1552,7 +1554,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_dyn_kernel(const uint8_t *__restr
           store(reinterpret_cast<u32 *>(sm + (gt % MNB) * MT * MTS + t * MTS + j * WB), x);
           mbar_arrive(full + gt % MNB);
         }
-        cur = nxt;
+        cur = nxt, w0 = nw0;
       }
       return;
     }
