@@ -165,7 +165,10 @@ $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at ca
 is at most the checked sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and candidate 3's error.
 
-(ii) `RecursiveFirewallPrivate`, as in `PublicAudit`. -/
+(ii) `RecursiveFirewallPrivate`, as in `PublicAudit`.
+
+At a private inner shape (`ish.holo`), `RecVStar.statements` refuses (`statements_holo`), so no run the verifier accepts
+has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896). -/
 def RecursiveAuditC3 : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws
