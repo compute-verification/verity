@@ -883,7 +883,7 @@ __global__ void __launch_bounds__(32) tc_square_gate(const u32 *__restrict__ in,
 // written, and a round's payloads end before the next round's words begin), then the plain kernel's 16 tiles.
 
 constexpr int LANES = 32, TASK_TILES = 16, TASK_COLS = 512, XS_STRIDE = TASK_COLS + 16;
-constexpr int WS_MAX_CONSUMERS = 8;
+constexpr int WS_MAX_CONSUMERS = 8, WS_FUSED_CONSUMERS = 7;
 constexpr int ROUNDS = (TW + 31) / 32;
 
 __device__ __forceinline__ void mma_e4m3(float (&d)[4], const u32 (&a)[4], u32 b0, u32 b1) {
@@ -945,8 +945,9 @@ __device__ __forceinline__ void put_payload(uint8_t *st, int o, const u32 (&y)[N
   }
 }
 
-// ptxas's own choice caps a CTA of WS_MAX_CONSUMERS + 1 warps at 168 registers; the fused decode needs more (a word,
-// its tweaks and the double-width square live at once), and spills less with them.
+// An SM's registers are four sub-partitions of 16K, a warp on one: WS_MAX_CONSUMERS + 1 = 9 warps put three on one, so
+// 168 registers a thread. The fused decode (a word, its tweaks and the double-width square live at once) takes up to
+// 224, so its CTA is at most 8 warps (WS_FUSED_CONSUMERS).
 template <int MODE, int K, int NB8, bool PARTIALS>
 __global__ void __maxnreg__(MODE == 3 ? 224 : 168) gemm_ws_kernel(
     const void *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
@@ -1194,7 +1195,8 @@ int wt_mix(u64 sc, u64 stc, int cw, unsigned long long *xr, int grid, cudaStream
 int wt_gemm(int mode, int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
             int consumers, int stages, int groups, int knob, const u32 *tsteps, unsigned long long *xr, int *launched,
             cudaStream_t s) {
-  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || consumers < 1 || consumers > WS_MAX_CONSUMERS || stages < 1)
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || consumers < 1 || stages < 1 ||
+      consumers > (mode == 3 ? WS_FUSED_CONSUMERS : WS_MAX_CONSUMERS))
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
   const int nchunks = Kd / TASK_COLS, nbs = N / 16;
@@ -1205,6 +1207,7 @@ int wt_gemm(int mode, int k, const void *w, const uint8_t *x, float *y, int M, i
     if (gr <= 0) {
       int per_sm = 0, dev = 0, sms = 0;
       if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, (consumers + 1) * 32, smem)) return 2;
+      if (per_sm < 1) return 6;
       cudaGetDevice(&dev);
       cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
       gr = (per_sm * sms) / nchunks;

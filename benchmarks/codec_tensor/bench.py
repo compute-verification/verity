@@ -567,7 +567,7 @@ def main() -> int:
     ap.add_argument("--gemm-libs", default="", help="field names the GEMM runs with (default: all)")
     ap.add_argument("--gemm-ks", default="1")
     ap.add_argument("--plain", default="4x4,8x8", help="plain kernel CONSUMERSxSTAGES")
-    ap.add_argument("--fused", default="4x8,8x9", help="fused kernel CONSUMERSxSTAGES")
+    ap.add_argument("--fused", default="4x8,6x9,7x9", help="fused kernel CONSUMERSxSTAGES (at most 7 consumers)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
     a = ap.parse_args()
