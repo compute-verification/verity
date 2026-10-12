@@ -181,7 +181,7 @@ theorem markov_mem (held : Bool → Bool → ℕ → Finset (Fin 4)) (h : ∀ b,
     fin_cases g <;> fin_cases a <;> simp_all
   have key := congrArg Prod.fst
     (hc {false} 2 4 false true (by simp only [Actual.Run.content, hs, image_empty, sort_empty]) (by simp only [hx]))
-  have : ((3 : ℕ), false, 3, 1, 1) ∈ ((markovRun true (held true) (h true)).acts ↑({false} : Finset Bool)
+  have : ((3 : ℕ), false, 3, 1, 1) ∈ ((markovRun true (held true) (h true)).acts ({false} : Finset Bool)
       (Set.Ico 2 4)).1 := ⟨3, by simp, by simp, rfl⟩
   rw [← key] at this
   obtain ⟨g, hg, ht, he⟩ := this
@@ -248,22 +248,27 @@ every tick. Without cells, the content order put them by value, alike at those c
 theorem and_causal : CausalFrom andRun := by
   intro X t u r r' hc _
   rcases X.eq_empty_or_nonempty with rfl | ⟨⟨⟩, hx⟩
-  · simp [Actual.Run.acts, Actual.Run.sent]
+  · simp [Actual.Run.acts, Actual.Run.sent, Actual.Run.state]
   · obtain rfl : X = univ := eq_univ_iff_forall.2 fun _ => hx
     by_cases ht : t ≤ 1
     · rw [and_content r ht, and_content r' ht] at hc
       simp only [List.cons.injEq, and_true] at hc
       rw [Prod.ext hc.1 hc.2]
-    · have h0 : ∀ c, (andRun c).acts ↑(univ : Finset Unit) (Set.Ico t u) = (∅, ∅, ∅) := fun c => by
+    · have h0 : ∀ c, (andRun c).acts (univ : Finset Unit) (Set.Ico t u) = (∅, ∅, ∅) := fun c => by
         simp only [Actual.Run.acts, Actual.Run.sent, Prod.mk.injEq]
         refine ⟨?_, ?_, ?_⟩ <;> ext p <;> simp only [Set.mem_ofPred_eq, Set.mem_empty_iff_false, iff_false]
         · rintro ⟨g, -, hg, -⟩
           fin_cases g <;> simp_all [Set.mem_Ico]; omega
         · rintro ⟨g, a, -, -, hg, -⟩
           exact hg (mem_univ _)
-        · rintro ⟨y, v, a, -, hv, ha, -⟩
+        · rintro ⟨v, a, hv, ha, -⟩
           simp only [Set.mem_Ico] at hv
-          simp [show ¬v + 1 ≤ 1 by omega] at ha
+          simp only [Actual.Run.state, Placed.region, Verity.Circuit.into, Verity.Circuit.computed, mem_filter,
+            mem_univ, true_and, Set.mem_Ici, show ¬v + 1 ≤ 1 by omega, ite_false, notMem_empty, exists_false,
+            false_or] at ha
+          obtain ⟨-, g, ⟨-, hg⟩, -⟩ := ha.1
+          fin_cases g <;> simp at hg
+          omega
       rw [h0 r, h0 r']
 
 /-- The actual circuit of memory accounting's `zero_link` at coin `b`, over leaves `true` (the verifier) and `false`
@@ -331,15 +336,15 @@ theorem Localization : Guarantees.Localization := by
   have hpre : ∀ r r', (S r).crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) = (S r').crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) :=
     fun r r' => congrArg (fun p => p.2.2) (hh r r')
   have key : ∀ u ≤ t₁, ∀ r r', (S r).crossing ↑X ↑Y (Set.Ico t₀ u) = (S r').crossing ↑X ↑Y (Set.Ico t₀ u) →
-      (S r).acts ↑Y (Set.Iio u) = (S r').acts ↑Y (Set.Iio u) := by
+      (S r).acts Y (Set.Iio u) = (S r').acts Y (Set.Iio u) := by
     intro u hu r r' hx
     refine Actual.global_of_causal hc Y hin u r r' ?_
     rw [Actual.crossing_split (S r) hXY hu, Actual.crossing_split (S r') hXY hu, hpre r r', hx, hv r r']
   have table : ∀ u ≤ t₁, ∃ T : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) →
       Set (ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ × ℕ),
-      ∀ r, (S r).acts ↑Y (Set.Iio u) = T ((S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := by
+      ∀ r, (S r).acts Y (Set.Iio u) = T ((S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := by
     intro u hu
-    have hf : Function.FactorsThrough (fun r => (S r).acts ↑Y (Set.Iio u))
+    have hf : Function.FactorsThrough (fun r => (S r).acts Y (Set.Iio u))
         (fun r => (S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := fun r r' h => key u hu r r' h
     exact ⟨Function.extend _ _ fun _ => (∅, ∅, ∅), fun r => (hf.extend_apply _ r).symm⟩
   refine ⟨table, fun e he => ?_⟩
@@ -350,7 +355,7 @@ theorem Localization : Guarantees.Localization := by
 
 theorem Recall : Guarantees.Recall := by
   intro L Ω _ S X t u hc hx
-  have hf : Function.FactorsThrough (fun r => (S r).acts ↑X (Set.Ico t u)) (fun r => (S r).content X t) :=
+  have hf : Function.FactorsThrough (fun r => (S r).acts X (Set.Ico t u)) (fun r => (S r).content X t) :=
     fun r r' h => hc X t u r r' h (hx r r')
   exact ⟨Function.extend _ _ fun _ => (∅, ∅, ∅), fun r =>
     ⟨(hf.extend_apply _ r).symm, Actual.content_length_le _ _ _⟩⟩

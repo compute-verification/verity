@@ -6,7 +6,7 @@ import Mathlib.Data.Finset.Sort
 /-!
 # Runs, strategies and the confidence set (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.5), sections 2 ("Runs"), 4, 5 and 6. A *run*
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.6), sections 2 ("Runs"), 4, 5 and 6. A *run*
 (`Actual.Run`) is an actual circuit with its gates' values, each computed gate's value its operation on the values it
 reads (faithfulness), and what each leaf holds at the start of each tick (`held`, constrained by `Placed.Holding`). A
 gate is seen as its tick, leaf, cell, width and value (`Actual.Run.seen`), so runs of different circuits compare. The
@@ -18,11 +18,12 @@ A *strategy* maps coins `r : Ω` to a run.
 
 What crosses from one set of leaves to another, read during `I`, is `crossing` (arrival tick, reader's leaf, source as
 seen). What a location `X` does during `I` (`acts`) is its gates placed during `I`, what it sends from them (`sent`,
-keyed by the source's tick: the sender chooses what crosses, to whom and when) and what its leaves hold at the end of
-each tick of `I`. A strategy is *causal from every tick* (`CausalFrom`) when what `X` does during `[t, u)` is a function
-of its state's content at `t` and of what it reads from outside during `[t, u)`; the state is the run's own, so fixing
-coins keeps it. What `X` can tell at `t` (`history`: its inputs, its gates before `t` and what it read from outside
-before `t`) and links as alphabets (`Alphabet`, by `signal`) are further hypotheses on a strategy.
+keyed by the source's tick: the sender chooses what crosses, to whom and when) and its state at the end of each tick of
+`I` (v2.6: what its leaves hold and what is in flight between them). A strategy is *causal from every tick*
+(`CausalFrom`) when what `X` does during `[t, u)` is a function of its state's content at `t` and of what it reads from
+outside during `[t, u)`; the state is the run's own, so fixing coins keeps it. What `X` can tell at `t` (`history`:
+its inputs, its gates before `t` and what it read from outside before `t`) and links as alphabets (`Alphabet`, by
+`signal`) are further hypotheses on a strategy.
 
 A guarantee `E` reads a strategy and a coin (a property of the run, or of how the strategy varies with the coins). It
 is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every strategy causal from every tick with runs in `𝓕`
@@ -112,12 +113,13 @@ that arrives after `t` is not something `X` does from `t`. -/
 def sent (X : Set L) (I : Set ℕ) : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :=
   {p | ∃ g a, a ∈ R.A.reads g ∧ R.A.x a ∈ X ∧ R.A.x g ∉ X ∧ R.A.t a ∈ I ∧ p = (R.A.t g, R.A.x g, R.seen a)}
 
-/-- What the location `X` does during `I`: its gates placed during `I`, what it sends from them, and what its leaves
-hold at the end of each tick `v` of `I` (at the start of `v + 1`). -/
-def acts (X : Set L) (I : Set ℕ) :
+/-- What the location `X` does during `I`: its gates placed during `I`, what it sends from them, and its state at the
+end of each tick `v` of `I` (at the start of `v + 1`; v2.6), what its leaves hold and what is in flight between them. A
+value in flight is in the state only while a later read of `X` awaits it, so keeping it is something `X` does. -/
+def acts (X : Finset L) (I : Set ℕ) :
     Set (ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ × ℕ) :=
-  ({p | ∃ g, R.A.x g ∈ X ∧ R.A.t g ∈ I ∧ p = R.seen g}, R.sent X I,
-    {p | ∃ y v a, y ∈ X ∧ v ∈ I ∧ a ∈ R.held y (v + 1) ∧ p = (v, R.seen a)})
+  ({p | ∃ g, R.A.x g ∈ X ∧ R.A.t g ∈ I ∧ p = R.seen g}, R.sent ↑X I,
+    {p | ∃ v a, v ∈ I ∧ a ∈ R.state X (v + 1) ∧ p = (v, R.seen a)})
 
 /-- What the location `X` can tell at `t`: its input gates, its gates placed before `t`, and what it read from outside
 before `t`, with arrival ticks. -/
@@ -139,7 +141,7 @@ strategy causal from every tick is too. -/
 def CausalFrom {Ω L : Type*} [LinearOrder L] (S : Ω → Actual.Run L) : Prop :=
   ∀ (X : Finset L) t u r r', (S r).content X t = (S r').content X t →
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico t u) = (S r').crossing (↑X)ᶜ ↑X (Set.Ico t u) →
-    (S r).acts ↑X (Set.Ico t u) = (S r').acts ↑X (Set.Ico t u)
+    (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)
 
 /-- **A link is an alphabet** (v2.2), across the runs of `S`: each way, at each tick, link `e` delivers one of at most
 `2^{β e}` signals (delivering nothing is one of them). -/

@@ -79,7 +79,7 @@ def B4 : Prop :=
       (S r).seen '' ↑((record r).filter fun g => (S r).A.t g < a) =
         (S r').seen '' ↑((record r').filter fun g => (S r').A.t g < a)) →
     (∀ r, (S r).A.Causal ℓ ∧ (S r).A.Links ends β (link r)) →
-    (Set.range fun r => (S r).acts ↑((X ∪ cert)ᶜ) (Set.Ico a b)).encard ≤
+    (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       (Set.range fun r => (S r).seen '' ↑((record r).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card + uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 

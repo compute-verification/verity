@@ -44,7 +44,7 @@ theorem encard_range_le {Ω α β : Type*} {f : Ω → α} {g : Ω → β} (h : 
     exact ⟨g r, ⟨r, rfl⟩, hf.extend_apply _ r⟩
 
 /-- What a location does during `J ⊆ I` is what it does during `I`, cut to `J`. -/
-theorem acts_restrict {L : Type*} (R : Actual.Run L) {X : Set L} {I J : Set ℕ} (hJ : J ⊆ I) :
+theorem acts_restrict {L : Type*} (R : Actual.Run L) {X : Finset L} {I J : Set ℕ} (hJ : J ⊆ I) :
     R.acts X J = ((R.acts X I).1 ∩ {p | p.1 ∈ J}, (R.acts X I).2.1 ∩ {p | p.2.2.1 ∈ J},
       (R.acts X I).2.2 ∩ {p | p.1 ∈ J}) := by
   simp only [Actual.Run.acts, Actual.Run.sent, Prod.mk.injEq]
@@ -57,10 +57,10 @@ theorem acts_restrict {L : Type*} (R : Actual.Run L) {X : Set L} {I J : Set ℕ}
     exact ⟨⟨g, a, hr, ha, hg, hJ ht, rfl⟩, ht⟩
   · rintro ⟨⟨g, a, hr, ha, hg, -, rfl⟩, ht⟩
     exact ⟨g, a, hr, ha, hg, ht, rfl⟩
-  · rintro ⟨y, v, a, hy, hv, ha, rfl⟩
-    exact ⟨⟨y, v, a, hy, hJ hv, ha, rfl⟩, hv⟩
-  · rintro ⟨⟨y, v, a, hy, -, ha, rfl⟩, hv⟩
-    exact ⟨y, v, a, hy, hv, ha, rfl⟩
+  · rintro ⟨v, a, hv, ha, rfl⟩
+    exact ⟨⟨v, a, hJ hv, ha, rfl⟩, hv⟩
+  · rintro ⟨⟨v, a, -, ha, rfl⟩, hv⟩
+    exact ⟨v, a, hv, ha, rfl⟩
 
 /-- Under causality, what crosses from `X` to `Y` during `[a, b)` is what `X` sent before `b` that arrives in `Y`
 then. -/
@@ -251,7 +251,7 @@ theorem B4 : Guarantees.B4 := by
     (S r).seen '' ↑((record r).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)
   have hfac : ∀ r r', (rec_ r, (fun k : ↥K => J r k), fun i => sig i r) =
       (rec_ r', (fun k : ↥K => J r' k), fun i => sig i r') →
-      (S r).acts ↑O (Set.Ico a b) = (S r').acts ↑O (Set.Ico a b) := by
+      (S r).acts O (Set.Ico a b) = (S r').acts O (Set.Ico a b) := by
     intro r r' hΦ
     simp only [Prod.mk.injEq] at hΦ
     obtain ⟨hrec, hj, hsig⟩ := hΦ
@@ -276,7 +276,7 @@ theorem B4 : Guarantees.B4 := by
     have hOin : ∀ r r', (S r).inputs ↑O = (S r').inputs ↑O := fun r r' => congrArg Prod.fst (hh r r').2.1
     have hOpre : (S r).crossing (↑O)ᶜ ↑O (Set.Iio a) = (S r').crossing (↑O)ᶜ ↑O (Set.Iio a) :=
       congrArg (fun p => p.2.2) (hh r r').2.1
-    have hall : (S r).acts ↑O (Set.Iio b) = (S r').acts ↑O (Set.Iio b) := by
+    have hall : (S r).acts O (Set.Iio b) = (S r').acts O (Set.Iio b) := by
       refine Actual.global_of_causal hc O hOin b r r' ?_
       rw [Actual.crossing_split (S r) hXO (t₀ := a) (le_refl b),
         Actual.crossing_split (S r') hXO (t₀ := a) (le_refl b), hrest, hOpre, hX, hcert]
