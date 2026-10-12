@@ -1,8 +1,8 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
 a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold different stores.
 
-1. The verifier derives the window's key from its own secret, bound to `vk` and the window's number, and sends the
-   seed `σ` (`Window.start`, which starts its clock).
+1. The verifier draws a fresh nonce from its own randomness, derives the window's key from its own secret, bound to
+   `vk`, the tag and the nonce, and sends the seed `σ` (`Window.start`, which starts its clock).
 2. Before `T = deadline_ns` (plus `rtt_allowance_ns`) the prover computes `y_j = Tag(σ, j, E_j)` for every block and
    returns the root of the tags' tree (`tag_pass`, then `Window.commit`, which stops the clock).
 3. Only then does the verifier draw `s = samples` indices, uniform with replacement, from the same key.  A late
@@ -11,7 +11,7 @@ a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold
    committed root (`TagCommitment.open`).  The verifier checks both paths and recomputes the tag (`Window.verdict`).
    Openings are not timed: the commitment already binds every tag.
 
-A window is used once: a second start or commitment, or a window number used before, is refused, and nothing is redrawn.
+A window is used once: a second start or commitment is refused, a nonce is never drawn twice, and nothing is redrawn.
 One window over a store is open at a time, from its seed to its commitment or until `T + RTT` has passed without one:
 the verifier refuses to start another before then, so no read serves two windows' ingress.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
@@ -22,6 +22,7 @@ only (`tags.Tag.certified`).
 from __future__ import annotations
 
 import math
+import secrets
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -36,8 +37,9 @@ from verity.ml.randomness import Key, derive
 from . import tags
 from .tags import SEED_BYTES
 
-WINDOW_DOMAIN = "verity/bandwidth/window/v1"
+WINDOW_DOMAIN = "verity/bandwidth/window/v2"
 SALT_DOMAIN = "verity/bandwidth/salt/v1"
+NONCE_BYTES = 32
 
 REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
@@ -83,10 +85,15 @@ def draw_salt(source: bytes, commitment: bytes, device: str) -> bytes:
     return derive(source, SALT_DOMAIN, {"w": commitment, "device": device}).stream("salt", SALT_BITS // 8)
 
 
-def window_key(source: bytes, vk: VerifierKey, window: int) -> Key:
-    """Window `window`'s key.  `source` is the verifier's own secret: from a public one the samples are known before
-    the commitment, and a prover tags only the blocks they name."""
-    return derive(source, WINDOW_DOMAIN, {"root": vk.root, "salt": vk.salt, "window": window})
+def window_key(source: bytes, vk: VerifierKey, tag: str, nonce: bytes) -> Key:
+    """The key of a window of `tag` over `vk`'s store.  `source` is the verifier's own secret: from a public one the
+    samples are known before the commitment, and a prover tags only the blocks they name.  `nonce` is drawn fresh for
+    the window from the verifier's own randomness, never counted: a key that a window number fixes repeats in every
+    verifier, tag or restart that counts from the same place, and a window whose samples are known is passed by tagging
+    only them."""
+    if type(nonce) is not bytes or len(nonce) != NONCE_BYTES:
+        raise ValueError(f"a window's nonce is {NONCE_BYTES} bytes")
+    return derive(source, WINDOW_DOMAIN, {"root": vk.root, "salt": vk.salt, "tag": tags.get(tag).name, "nonce": nonce})
 
 
 def seed(key: Key) -> bytes:
@@ -172,47 +179,56 @@ class Verdict:
 
 
 class Verifier:
-    """The verifier of one store `vk`: it opens each window once, from its own secret `source`, and one at a time."""
+    """The verifier of one store `vk`: it opens each window once, under a fresh nonce from `nonces` (its own
+    randomness) and its own secret `source`, and one at a time."""
 
     def __init__(self, vk: VerifierKey, params: Params, source: bytes,
-                 clock: Callable[[], int] = time.perf_counter_ns) -> None:
+                 clock: Callable[[], int] = time.perf_counter_ns,
+                 nonces: Callable[[int], bytes] = secrets.token_bytes) -> None:
         tags.get(params.tag).check_block(vk.params.block_bytes)
-        self.vk, self.params, self.source, self.clock = vk, params, source, clock
-        self._used: set[int] = set()
+        self.vk, self.params, self.source, self.clock, self._nonces = vk, params, source, clock, nonces
+        self._used: set[bytes] = set()
         self._open: Window | None = None
 
-    def _claim(self, w: Window) -> None:
+    def _claim(self, w: Window) -> bytes:
         o = self._open
-        if o is not None and o._elapsed is None and self.clock() - o._started <= self.params.limit_ns:
+        if o is not None and o._live():
             raise RuntimeError("another window over this store is open: it closes at its commitment or at T + RTT")
+        nonce = self._nonces(NONCE_BYTES)
+        if nonce in self._used:
+            raise RuntimeError("the verifier drew a nonce it has used: a window's key is never reused")
+        self._used.add(nonce)
         self._open = w
+        return nonce
 
-    def window(self, n: int) -> Window:
-        if type(n) is not int or n < 0:
-            raise ValueError("a window number is a nonnegative int")
-        if n in self._used:
-            raise RuntimeError(f"window {n} was used: a window is never reopened")
-        self._used.add(n)
-        return Window(self, window_key(self.source, self.vk, n))
+    def window(self) -> Window:
+        return Window(self)
 
 
 class Window:
     """One window: `start()` sends `σ`, `commit(root)` takes the prover's root and returns the samples, and
     `verdict(openings)` checks them, each once and in that order."""
 
-    def __init__(self, verifier: Verifier, key: Key) -> None:
-        self._v, self._key = verifier, key
+    def __init__(self, verifier: Verifier) -> None:
+        self._v = verifier
+        self._key: Key | None = None
         self._started: int | None = None
         self._root: bytes | None = None
         self._elapsed: int | None = None
         self._samples: tuple[int, ...] | None = None
         self._verdict: Verdict | None = None
 
+    def _live(self) -> bool:
+        """Whether the window holds its store: started, without a commitment, and within `T + RTT` on its clock."""
+        return (self._started is not None and self._elapsed is None
+                and self._v.clock() - self._started <= self._v.params.limit_ns)
+
     def start(self) -> bytes:
         """`σ`, and the clock starts; refused, and the window left unstarted, while another over the store is open."""
-        if self._started is not None:
+        if self._key is not None:
             raise RuntimeError("the window has started")
-        self._v._claim(self)
+        nonce = self._v._claim(self)
+        self._key = window_key(self._v.source, self._v.vk, self._v.params.tag, nonce)
         s = seed(self._key)
         self._started = self._v.clock()
         return s

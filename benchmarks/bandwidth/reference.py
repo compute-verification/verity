@@ -3,8 +3,8 @@
     python reference.py --blocks 524288 --seed HEX --out expect.json [--leaves store_leaves.bin] [--workers 32]
 
 The store is the generated test store of `bandwidth_vectors.py` (`block`), which `tagger.cu`'s `fill_store` writes on the
-device.  `expect.json` holds every tag's roots over `--blocks` blocks under `--seed`, and the same over 37 blocks under the
-pinned vectors' window-0 seed, recomputed here and checked against `vectors.json` before anything is written.  `--leaves`
+device.  `expect.json` holds every tag's roots over `--blocks` blocks under `--seed`, and the same over 37 blocks under
+`SEED`, recomputed here and checked against `vectors.json`'s roots before anything is written.  `--leaves`
 also writes the store's PoUS leaf digests (64 bytes each, block order) under `geometry(blocks)` and `SALT`, from which
 `gpu.py windows` builds `vk` and the store's audit paths.
 """
@@ -81,15 +81,14 @@ def roots(blocks: int, seed: bytes, workers: int, leaves_out: Path | None = None
 
 
 def small() -> dict:
-    """The 37-block case under the vectors' window-0 seed, recomputed and held to `vectors.json`."""
+    """The 37-block case under `SEED`, recomputed and held to `vectors.json`'s roots."""
     vectors = json.loads(VECTORS.read_text())
-    seed = bytes.fromhex(vectors["windows"][0]["seed"])
-    pinned = {a["tag"]: a["tag_root"] for a in vectors["audits"] if a["blocks"] == SMALL and a["window"] == 0}
+    pinned = {r["tag"]: r["tag_root"] for r in vectors["roots"] if r["blocks"] == SMALL and r["seed"] == SEED.hex()}
     blocks = [block(j) for j in range(SMALL)]
-    got = {name: audit.tag_pass(audit.Store(geometry(SMALL), SALT, blocks), name, seed).root.hex() for name in tags.TAGS}
+    got = {name: audit.tag_pass(audit.Store(geometry(SMALL), SALT, blocks), name, SEED).root.hex() for name in tags.TAGS}
     if got != pinned:
         raise SystemExit(f"the reference disagrees with vectors.json over {SMALL} blocks: {got} != {pinned}")
-    return {"blocks": SMALL, "seed": seed.hex(), "roots": got}
+    return {"blocks": SMALL, "seed": SEED.hex(), "roots": got}
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -237,7 +237,7 @@ def _windows(a: argparse.Namespace) -> dict:
         p = audit.Params(name, a.samples, a.deadline_ns)
         verifier = audit.Verifier(vk, p, source)
         for n, f in enumerate([0.0] * a.windows + a.skip):
-            w = verifier.window(n)
+            w = verifier.window()
             tagged = a.blocks - round(f * a.blocks)
             commitment, drawn, call_ms = prover.commit(w, tagged)
             tags_ms, pass_ms = t.last_pass_ms()
@@ -254,7 +254,7 @@ def _windows(a: argparse.Namespace) -> dict:
         # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
         # honest pass is late still has its openings checked by the verifier.
         loose = audit.Params(name, a.samples, LOOSE_NS, regen_floor_ns=LOOSE_NS + 1)
-        w = audit.Verifier(vk, loose, source + b"/openings-check").window(0)
+        w = audit.Verifier(vk, loose, source + b"/openings-check").window()
         commitment, drawn, _ = prover.commit(w)
         v = w.verdict([commitment.open(j, store_tree) for j in drawn])
         out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
