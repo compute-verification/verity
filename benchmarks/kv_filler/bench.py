@@ -55,7 +55,7 @@ class Topup:
     def __init__(self, path: str) -> None:
         v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
         so = self.so = ctypes.CDLL(str(Path(path).resolve()))
-        so.tu_start.argtypes = [i, v, v, i, i, q, q, i, i, v]
+        so.tu_start.argtypes = [i, v, v, i, i, q, q, i, i, v, i]
         so.tu_pause.argtypes = [i]
         so.tu_now_ms.argtypes = [v]
         so.tu_now_ms.restype = d
@@ -66,10 +66,10 @@ class Topup:
         so.bw_fill_test_store.argtypes = [v, q]
 
     def start(self, regions, mode: int, chunk: int, depth: int, priority: int, seed: bytes, tile: int = 1 << 16,
-              device: int = 0) -> None:
+              ctas: int = 0, device: int = 0) -> None:
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
         sizes = (ctypes.c_uint64 * len(regions))(*[n for _, n in regions])
-        rc = self.so.tu_start(device, ptrs, sizes, len(regions), mode, chunk, tile, depth, priority, seed)
+        rc = self.so.tu_start(device, ptrs, sizes, len(regions), mode, chunk, tile, depth, priority, seed, ctas)
         if rc:
             raise RuntimeError(f"tu_start error {rc}")
 
@@ -300,7 +300,7 @@ def cell(tu: Topup, torch, fn, stream, n: int, topup: dict | None, filler, regis
     torch.cuda.synchronize()
     if topup:
         tu.start([(filler.data_ptr(), filler.numel())], topup["mode"], topup["chunk"], topup["depth"],
-                 topup["priority"], RUN_SEED)
+                 topup["priority"], RUN_SEED, ctas=topup.get("ctas", 0))
         time.sleep(0.05)
     t0 = tu.now(stream.cuda_stream) if topup else 0.0
     ts = step_times(torch, fn, stream, n)
@@ -363,6 +363,54 @@ def phases(tu: Topup, torch, model: Model, filler, R: float, args, least: int, g
                         f"{r['step_ms_median']:.3f} ms ({row['slowdown']:+.2%}), filler "
                         f"{r.get('filler_GBps', 0):.0f} GB/s, registered {r['registered_fraction']:.3f} of R")
         if kind == "decode" and args.graphs:
+            del g
+    model.kv = None
+    torch.cuda.empty_cache()
+    return rows
+
+
+def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int, greatest: int, log) -> list[dict]:
+    """The top-up held to a few CTAs (read: `ctas` long-lived CTAs; ro-blake3/v1: chunks of `ctas` × 64 blocks, a CTA
+    each) beside a decode step as a CUDA graph and a prefill, both on the greatest-priority stream: harvest against
+    slowdown."""
+    rows = []
+    high = torch.cuda.Stream(priority=greatest)
+    for kind, size, ctx in [("decode", b, c) for b, c in args.throttle_decode] + [("prefill", m, 0)
+                                                                                  for m in args.throttle_prefill]:
+        if kind == "decode":
+            model.cache(size, ctx)
+            x = torch.randn(max(16, -(-size // 16) * 16), HIDDEN, device="cuda", dtype=torch.bfloat16)
+            registered = WEIGHT_BYTES + size * ctx * KV_TOKEN_BYTES
+            g, s = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+            with torch.cuda.stream(s):
+                model.decode(x, size)
+            torch.cuda.synchronize()
+            with torch.cuda.graph(g, stream=s):
+                model.decode(x, size)
+            fn, n = g.replay, args.steps
+        else:
+            model.kv = None
+            torch.cuda.empty_cache()
+            x = torch.randn(size, HIDDEN, device="cuda", dtype=torch.bfloat16)
+            registered = WEIGHT_BYTES
+            fn, n = (lambda x=x: model.prefill(x)), max(4, args.steps // 4)
+        base = cell(tu, torch, fn, high, n, None, filler, registered, R)
+        rows.append({"phase": kind, "size": size, "ctx": ctx, "topup": None, "ctas": 0, **base, "slowdown": 0.0})
+        for mode in args.throttle_modes:
+            for ctas in args.throttle_ctas:
+                if mode == "read":
+                    tp = {"mode": -1, "chunk": 64 << 20, "depth": 2, "priority": least, "ctas": ctas}
+                else:
+                    tp = {"mode": MODES[mode], "chunk": ctas * (64 if mode == "b3" else 256) * BLOCK, "depth": 3,
+                          "priority": least, "ctas": 0}
+                r = cell(tu, torch, fn, high, n, tp, filler, registered, R)
+                row = {"phase": kind, "size": size, "ctx": ctx, "topup": mode, "ctas": ctas, **r,
+                       "slowdown": r["step_ms_median"] / base["step_ms_median"] - 1}
+                rows.append(row)
+                log(f"throttle {kind} {size}x{ctx} {mode} ctas={ctas}: step {r['step_ms_median']:.3f} ms "
+                    f"({row['slowdown']:+.2%}), filler {r['filler_GBps']:.0f} GB/s, registered "
+                    f"{r['registered_fraction']:.3f} of R (alone {base['registered_fraction']:.3f})")
+        if kind == "decode":
             del g
     model.kv = None
     torch.cuda.empty_cache()
@@ -440,6 +488,10 @@ def main() -> int:
     ap.add_argument("--topup-modes", type=lambda s: s.split(","), default=["read", "b3"])
     ap.add_argument("--graphs", type=int, default=1)
     ap.add_argument("--encode-mib", type=int, default=512)
+    ap.add_argument("--throttle-decode", type=pairs, default=pairs("64x2048"))
+    ap.add_argument("--throttle-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
+    ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3"])
+    ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -481,6 +533,9 @@ def main() -> int:
     model = Model(torch)
     if "phases" not in a.skip:
         res["phases"] = phases(tu, torch, model, filler, R, a, least, greatest, log)
+        save()
+    if "throttle" not in a.skip:
+        res["throttle"] = throttle(tu, torch, model, filler, R, a, least, greatest, log)
         save()
     if "encode" not in a.skip:
         res["encode"] = encode_cells(codec, torch, model, a, least, greatest, log)

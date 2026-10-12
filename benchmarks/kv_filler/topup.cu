@@ -40,14 +40,17 @@ struct Rec {
   uint64_t chunk;
 };
 
+// Tiles of tile16 16-byte words, CTA b taking tiles b, b + gridDim.x, ...: one CTA a tile at full grid, or a few
+// long-lived CTAs (the throttled top-up).
 __global__ void __launch_bounds__(256) tile_read(const uint4* __restrict__ p, uint64_t n16, uint32_t tile16,
                                                  uint32_t* out) {
-  const uint64_t base = (uint64_t)blockIdx.x * tile16;
-  const uint64_t end = base + tile16 < n16 ? base + tile16 : n16;
   uint32_t acc = 0;
-  for (uint64_t i = base + threadIdx.x; i < end; i += 256) {
-    uint4 v = __ldcs(p + i);
-    acc ^= v.x ^ v.y ^ v.z ^ v.w;
+  for (uint64_t base = (uint64_t)blockIdx.x * tile16; base < n16; base += (uint64_t)gridDim.x * tile16) {
+    const uint64_t end = base + tile16 < n16 ? base + tile16 : n16;
+    for (uint64_t i = base + threadIdx.x; i < end; i += 256) {
+      uint4 v = __ldcs(p + i);
+      acc ^= v.x ^ v.y ^ v.z ^ v.w;
+    }
   }
 #pragma unroll
   for (int d = 16; d; d >>= 1) acc ^= __shfl_xor_sync(0xffffffffu, acc, d);
@@ -55,7 +58,7 @@ __global__ void __launch_bounds__(256) tile_read(const uint4* __restrict__ p, ui
 }
 
 struct State {
-  int device = 0, mode = MODE_READ, depth = 2, priority = 0;
+  int device = 0, mode = MODE_READ, depth = 2, priority = 0, ctas = 0;
   uint64_t chunk_bytes = 1ull << 28, tile_bytes = 1ull << 16;
   std::vector<Region> regions;
   uint8_t seed[32];
@@ -128,8 +131,9 @@ static int launch(State& st, int i) {
   cudaError_t e = cudaEventRecord(st.e0[i], st.s);
   if (e != cudaSuccess) return (int)e;
   if (st.mode == MODE_READ) {
-    const uint64_t n16 = bytes / 16, tile16 = st.tile_bytes / 16;
-    tile_read<<<(unsigned)((n16 + tile16 - 1) / tile16), 256, 0, st.s>>>((const uint4*)p, n16, (uint32_t)tile16, st.xr);
+    const uint64_t n16 = bytes / 16, tile16 = st.tile_bytes / 16, tiles = (n16 + tile16 - 1) / tile16;
+    const uint64_t grid = st.ctas > 0 && (uint64_t)st.ctas < tiles ? (uint64_t)st.ctas : tiles;
+    tile_read<<<(unsigned)grid, 256, 0, st.s>>>((const uint4*)p, n16, (uint32_t)tile16, st.xr);
   } else {
     const uint64_t blocks = bytes / bw::BLOCK_BYTES;
     bw::Pass pass = bw::make_pass(st.mode, blocks, st.ws[i]);
@@ -181,9 +185,11 @@ static void loop(State* sp) {
 extern "C" {
 
 // Starts the top-up on `device` over `n` regions (device pointers and byte counts).  `priority` is the stream's
-// (cudaDeviceGetStreamPriorityRange: 0 the least, negative greater).  Returns 0 or a CUDA error.
+// (cudaDeviceGetStreamPriorityRange: 0 the least, negative greater).  `ctas` > 0 caps the read mode's grid (a receipt
+// mode's grid follows its chunk: ro-blake3/v1 runs a CTA per 64 blocks, gf31-poly/v1 one per 256).  Returns 0 or a
+// CUDA error.
 int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int mode, uint64_t chunk_bytes,
-             uint64_t tile_bytes, int depth, int priority, const uint8_t* seed) {
+             uint64_t tile_bytes, int depth, int priority, const uint8_t* seed, int ctas) {
   if (tu::S || n <= 0 || depth <= 0 || (mode != tu::MODE_READ && mode != bw::TAG_GF31 && mode != bw::TAG_B3)) return -1;
   tu::last_log.clear();
   auto* st = new tu::State();
@@ -191,6 +197,7 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   st->mode = mode;
   st->depth = depth;
   st->priority = priority;
+  st->ctas = ctas;
   st->chunk_bytes = chunk_bytes;
   st->tile_bytes = tile_bytes ? tile_bytes : (1ull << 16);
   memcpy(st->seed, seed, 32);
