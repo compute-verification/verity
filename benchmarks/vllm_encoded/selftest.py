@@ -92,7 +92,7 @@ def time_linears(lib: K.Lib, ks: list[int], batches: list[int], shapes: dict, re
         for m in batches:
             x = torch.randn((m, kd), generator=gen, device="cuda").to(torch.bfloat16)
 
-            def stock():
+            def stock(x=x, ws_=ws_, scale=scale):
                 for w in ws_:
                     x8, xs = ops.scaled_fp8_quant(x, None, use_per_token_if_dynamic=True)
                     ops.cutlass_scaled_mm(x8, w.t(), xs, scale, torch.bfloat16)
@@ -103,7 +103,7 @@ def time_linears(lib: K.Lib, ks: list[int], batches: list[int], shapes: dict, re
                     lib.set_key(SEED, k)
                 best = None
                 for cfg in K.candidates(lib, k, m, nch):
-                    def fused(cfg=cfg, lins=lins):
+                    def fused(cfg=cfg, lins=lins, x=x):
                         for lin in lins:
                             x8, xs = ops.scaled_fp8_quant(x, None, use_per_token_if_dynamic=True)
                             lin.reduce(lin.gemm(x8, cfg), xs.reshape(-1))
