@@ -172,11 +172,43 @@ def test_fields_are_one_line_and_evidence_tokens_have_a_known_form(env):
     with pytest.raises(A.Refused, match="evidence 'see the doc' is of no known form"):
         A.claim(st, NAME, "pous-mvp", cites=["see the doc"], **NEW)
     good = ["r20260928-014051-da08", "art:1a2b3c4d", "drv:" + "e" * 64, "note:pous/x", "notes-asset:campaigns/pous/a.json",
-            "approach:pous/dense", "store:pous/docs/pouw/new-crypto.md", "verity#166", "verity@6746f408", "https://arxiv.org/abs/1"]
+            "approach:pous/dense", "verity#166", "verity@6746f408", "https://arxiv.org/abs/1"]
     assert all(A.EVIDENCE_RE.match(t) for t in good)
-    assert not any(A.EVIDENCE_RE.match(t) for t in ("art:xyz", "#12", "http://x", "store:x", "r2026-1"))
+    assert not any(A.EVIDENCE_RE.match(t) for t in ("art:xyz", "#12", "http://x", "store:pous/docs/pouw/new-crypto.md", "r2026-1"))
+    with pytest.raises(A.Refused, match="private agent store's path: copy it into the notes"):
+        A.claim(st, NAME, "pous-mvp", cites=["store:pous/docs/pouw/new-crypto.md"], **NEW)
     with pytest.raises(A.Refused, match="not one of live"):
         A.set_status(st, NAME, "dead", "pous-mvp", **NEW)
+
+
+def test_a_change_of_evidence_alone_retracts_a_cite_and_leaves_status_reason_and_history(env):
+    st = store(env)
+    A.claim(st, NAME, "pous-mvp", cites=["verity#166"], **NEW)
+    A.set_status(st, NAME, "killed", "pous-mvp", reason="a window attack regenerates it")
+    old = "store:pous/docs/p3-scheme.md"                    # written before `store:` left EVIDENCE_RE
+    st.add_label(A.record_id(NAME), vocab.CITES, old, "pous-mvp", ts="2026-09-30T00:00:00Z")
+    before = A.fold(NAME, A.current_labels(st, A.record_id(NAME)))
+    assert any("private agent store" in p for p in A.problems(before))
+    with pytest.raises(A.Refused, match="private agent store"):
+        A.set_status(st, NAME, None, "verity-root", cites=["note:x"])
+    with pytest.raises(A.Refused, match="does not cite 'note:y'"):
+        A.set_status(st, NAME, None, "verity-root", cites=["note:x"], uncites=[old, "note:y"])
+    with pytest.raises(A.Refused, match="both cited and uncited"):
+        A.set_status(st, NAME, None, "verity-root", cites=[old], uncites=[old])
+    with pytest.raises(A.Refused, match="only --cite and --uncite"):
+        A.set_status(st, NAME, None, "verity-root", reason="x", cites=["note:x"])
+    with pytest.raises(A.Refused, match="nothing to change"):
+        A.set_status(st, NAME, None, "verity-root")
+    with pytest.raises(A.Refused, match="not recorded"):
+        A.set_status(st, OTHER, None, "verity-root", cites=["note:x"])
+    after = A.set_status(st, NAME, None, "verity-root", cites=["note:x"], uncites=[old])
+    elsewhere = A.fold(NAME, A.current_labels(store(env, "store2"), A.record_id(NAME)))
+    for a in (after, elsewhere):
+        assert a.cites == ["verity#166", "note:x"] and not A.problems(a)
+        assert (a.status, a.reason, a.owner, a.updated, a.history) == \
+            (before.status, before.reason, before.owner, before.updated, before.history)
+    assert A.main(["approach", NAME, "--by", "verity-root", "--uncite", "note:x"], env / "notes") == 0
+    assert A.fold(NAME, A.current_labels(st, A.record_id(NAME))).cites == ["verity#166"]
 
 
 def test_backfill_records_past_work_at_its_time_and_history_is_append_only(env):
