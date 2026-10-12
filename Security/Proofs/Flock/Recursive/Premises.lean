@@ -13,6 +13,8 @@ abbreviates, unchanged.
 
 * `VBridge` (`Flock.Assumptions.VBridge`): V*'s circuits compute C-Flock's inner verifier. On the list until VBridge G
   (`FlockVBridge.Compiled.vbridge_compiled`'s open hypotheses) is proved.
+* `VBridgeC` (`Flock.Assumptions.VBridgeC`): `VBridge` at the committed rounds, for an inner protocol whose last round
+  is not committed; `VBridge` gives it (`Flock.Assumptions.vbridgeC_of_vbridge`).
 * `CompiledForkSound` (the compile lemma in fork form): C-Flock's compiled table at the executable's arithmetic and the
   inner statement's Merkle scheme is sound in fork form at `tableError`, `Recursion.flock_inner_sound_compiled`'s
   conclusion. That lemma is proved, and discharges this premise at a class whose schedule is `fast100`'s and whose
@@ -44,6 +46,16 @@ abbrev VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : �
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
   Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg
+
+/-- **VBridge at the committed rounds**: `Flock.Assumptions.VBridgeC`. -/
+abbrev VBridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
+  Flock.Assumptions.VBridgeC zs dg N k Rw x wmsg Sk cmt msg
 
 /-- **The compile lemma, in fork form**: `Recursion.flock_inner_sound_compiled`'s conclusion at the executable's
 arithmetic (`execArith`) and the inner statement's Merkle scheme, SHA-512 with plain leaves (`Refine.enc512`,

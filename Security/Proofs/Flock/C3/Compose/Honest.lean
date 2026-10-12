@@ -1,12 +1,14 @@
 import Proofs.Flock.C3.Compose.Family
 import Proofs.Flock.VBridge.Family.Commits
+import Proofs.Flock.C3.Compose.Leaf
 
 /-!
 # n0: candidate 3's honest family
 
 `C3Family.honest` is the family the guarantee's `_hbr` is discharged at, at its sessions (`C3Family.checked`: V*'s
 checked sessions, `checkedC3`). Its commit strings, digests and messages are G's forms at the session's reads (`skOf`,
-`cmtOf`, `wmsgOf` and `msgOf` at a decoder `dec`), and:
+`cmtOf`, `wmsgOf` and `msgOf` at a decoder `dec`), the decoder reading the last round, which no round commitment holds,
+from the layers in full (`skLeaf`), and:
 
 * `run`: the inner transcript's steps (V*'s layers' messages zipped with the rounds' coins) decoded stage by stage, in
   the chain's order (`decodeRun`): the level-0 cap and the link points, the two reps on the prefix both play
@@ -124,12 +126,12 @@ noncomputable def C3Family.honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt}
   Vs := Vs
   hob := hob
   zs := zs
-  wmsg := wmsgOf Vs (skOf Vs own sel) (holoInnerAt T CT st hp).r dec
+  wmsg := wmsgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) (holoInnerAt T CT st hp).r dec
   Sk := skOf Vs own sel
   cmt := cmtOf Vs bc
-  msg := msgOf Vs (skOf Vs own sel) dec
-  run := fun _ _ t Lb => decodeRun (holoAt st hp)
-    (schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (holoInnerAt T CT st hp).r dec Lb).zip (t.map Prod.snd)))
+  msg := msgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) dec
+  run := fun _ _ t Lb => decodeRun (holoAt st hp) (schedSteps T CT 0
+    ((wmsgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) (holoInnerAt T CT st hp).r dec Lb).zip (t.map Prod.snd)))
   row := fun v x _ => heldRow (innerCommitsAt tr record st reg) ish.sparse v x
 
 /-- **(n0) The checked family**: the honest family at the guarantee's sessions, V*'s checked sessions (`checkedC3`) of

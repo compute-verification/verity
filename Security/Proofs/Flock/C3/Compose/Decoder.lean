@@ -12,7 +12,8 @@ import Proofs.Flock.VBridge.Family.Transcript
 round `i` of the messages the source's run holds (`c3Msgs`: its steps' messages cut at their coins, as G's `tableMsgs`
 is), at any accepted outer proof whose layers read those wires there. The source `src` is the run V*'s layers hold,
 stage by stage, a parameter as G's `cap` and `lig` are. Where round `i`'s messages are read from stage `i`'s commit
-strings (`MsgsReadC3`, G's `MsgsRead`) and typed by `T` (`MsgTysC3`), the decoder reads them (`c3DecOf_spec`).
+strings (`MsgsReadC3`, G's `MsgsRead`) and typed by `T` (`MsgTysC3`), the decoder reads them (`c3DecOf_spec`). The
+last round has no commit strings: its messages are read from every read wire of the layers, σ's leaf (`skLeaf`).
 
 At the honest family at that decoder (`𝓓`) the inner transcript is the source's steps (`tape_c3DecOf`), where the
 source's obligations hold (`SrcOK`): the history is whole (`HLeafC3`), the source's coins are the history's, its
@@ -103,16 +104,16 @@ theorem hLeafC3_checked {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.Inner
     (fun _ _ _ hp => hlt hp.1) _ (hacc.1 ⟨0, hS⟩).1
 
 /-- **The table's round-`i` messages are read from stage `i`'s commit strings** (G's `MsgsRead`): two accepted outer
-proofs whose layers agree on the read wires of stage `i`'s commit strings (`maskOf` at `skOf own sel`) have the same
-round-`i` messages (`c3Msgs`). -/
+proofs whose layers agree on the read wires of stage `i`'s commit strings (`maskOf` at `skLeaf`, which is `skOf`'s mask
+before the last round, `maskOf_skLeaf`, and every read wire at the last) have the same round-`i` messages (`c3Msgs`). -/
 def MsgsReadC3 (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   ∀ i R ω t R₂ τ o R' ω' t' R₂' τ' o', FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
     FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' →
-    maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ) =
-      maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R' ω' t' R₂' τ') →
+    maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R ω t R₂ τ) =
+      maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R' ω' t' R₂' τ') →
     (c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ))[i]? =
       (c3Msgs src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))[i]?
 
@@ -133,7 +134,7 @@ def c3DecOf (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : F
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (i : ℕ) (Xs : (j : Fin S) → (Vs j).Bits) : (ℐ).Msg :=
   if h : ∃ g : List Game.Msg, ∃ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o ∧
-      maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ) = Xs ∧
+      maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R ω t R₂ τ) = Xs ∧
       (c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ))[i]?.getD [] = g
   then toSs T (Classical.choose h) else []
 
@@ -146,16 +147,18 @@ theorem c3DecOf_spec {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     (hread : MsgsReadC3 zs dg N k Rw src own sel) (htys : MsgTysC3 zs dg N k Rw src)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (i : ℕ) :
-    roundMsgs T (c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ))) =
+    roundMsgs T
+        (c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R ω t R₂ τ))) =
       (c3Msgs src R ω t (layers zs dg N k Rw R ω t R₂ τ))[i]?.getD [] := by
   have hex : ∃ g : List Game.Msg, ∃ R' ω' t' R₂' τ' o',
       FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' ∧
-      maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R' ω' t' R₂' τ') =
-        maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ) ∧
+      maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R' ω' t' R₂' τ') =
+        maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R ω t R₂ τ) ∧
       (c3Msgs src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))[i]?.getD [] = g :=
     ⟨_, R, ω, t, R₂, τ, o, h, rfl, rfl⟩
-  have hd : c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ)) =
-      toSs T (Classical.choose hex) :=
+  have hd :
+      c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R ω t R₂ τ)) =
+        toSs T (Classical.choose hex) :=
     dif_pos hex
   rw [hd]
   obtain ⟨R', ω', t', R₂', τ', o', h', hX', hg'⟩ := Classical.choose_spec hex
@@ -193,7 +196,7 @@ theorem tape_c3DecOf {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
     (hs : SrcOK zs dg N k Rw src own sel) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) :
-    schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (ℐ).r (c3DecOf zs dg N k Rw src own sel)
+    schedSteps T CT 0 ((wmsgOf Vs (skLeaf Vs own sel (ℐ).r) (ℐ).r (c3DecOf zs dg N k Rw src own sel)
       (layers zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) =
       runSteps (src R ω t (layers zs dg N k Rw R ω t R₂ τ)) := by
   obtain ⟨hleaf, hcoin, hread, htys, -⟩ := hs
@@ -212,7 +215,8 @@ theorem tape_c3DecOf {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     refine List.ext_getElem (by rw [List.length_map, List.length_map, List.length_range, hlen]) fun i _ hi => ?_
     rw [List.getElem_map, List.getElem_map, List.getElem_range, hm i, List.getElem?_eq_getElem hi, Option.getD_some]
   exact key (runSteps (src R ω t (layers zs dg N k Rw R ω t R₂ τ)))
-    (fun i => c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ)))
+    (fun i =>
+      c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skLeaf Vs own sel (ℐ).r) i (layers zs dg N k Rw R ω t R₂ τ)))
     (t.map Prod.snd) (Nat.le_trans hr (Nat.le_of_eq (List.length_map _).symm))
     (fun i => c3DecOf_spec hread htys h i) hc.symm
 
@@ -255,9 +259,9 @@ theorem at_c3DecOf {P : List Step → C3Run (holoAt st hp) → Prop} (hs : SrcOK
   obtain ⟨-, -, -, -, hdec⟩ := hs
   have hd : decodeRun (holoAt st hp) (runSteps (src R ω t (layers 𝒵 dg N k Rw R ω t R₂ τ))) =
       src R ω t (layers 𝒵 dg N k Rw R ω t R₂ τ) := hdec R ω t R₂ τ o hacc
-  show P (schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (ℐ).r (c3DecOf 𝒵 dg N k Rw src own sel)
+  show P (schedSteps T CT 0 ((wmsgOf Vs (skLeaf Vs own sel (ℐ).r) (ℐ).r (c3DecOf 𝒵 dg N k Rw src own sel)
       (layers 𝒵 dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)))
-    (decodeRun (holoAt st hp) (schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (ℐ).r
+    (decodeRun (holoAt st hp) (schedSteps T CT 0 ((wmsgOf Vs (skLeaf Vs own sel (ℐ).r) (ℐ).r
       (c3DecOf 𝒵 dg N k Rw src own sel) (layers 𝒵 dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd))))
   rw [e, hd]
   exact hP R ω t R₂ τ o hacc

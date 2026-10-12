@@ -1,6 +1,7 @@
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit at public units: its proof
@@ -24,8 +25,10 @@ In (i), from the statement and the premises, as in `RecursiveAudit`'s:
 
 The inner model is the executable's (`Recursion.innerAt_leaf`): `innerAt` runs the compiled table at `Refine.leafPlain`,
 and an accepted statement commits its rows with the scheme `RecVStar.innerTags` names, whose leaf that is.
-`Recursion.vbridge_innerAt` gives the VBridge premise at `innerAt` from VBridge at the class and `fast100`'s schedule,
-the model VBridge G is about (`FlockVBridge.Family.vbridge_of_family`).
+`Recursion.vbridge_innerAt` gives VBridge at `innerAt` from VBridge at the class and `fast100`'s schedule, the model
+VBridge G is about (`FlockVBridge.Family.vbridge_of_family`), and `Recursion.vbridgeC_innerAt` the premise, VBridgeC,
+the same way. The compiled table ignores the last round's coin, as its pick does (`schedInner_lastFree`,
+`clashPickCL_lastFree`), so gap 2 is read at VBridgeC (`zk_sessions_recursive_fork_innerC`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -63,6 +66,26 @@ theorem vbridge_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
       (execClassAt st).cls (execClassAt st).regs (Refine.schedOf s₀)) zs dg N k Rw x wmsg Sk cmt msg) :
     Flock.Premises.VBridge (I := Flock.Guarantees.innerAt T CT st) zs dg N k Rw x wmsg Sk cmt msg := by
   show Flock.Assumptions.VBridge (I := flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain
+    (execClassAt st).cls (execClassAt st).regs (execClassAt st).sch) zs dg N k Rw x wmsg Sk cmt msg
+  rw [execClassAt_sch_of_fast100 h hs]
+  exact hb
+
+/-- **VBridgeC at the inner statement's model, from VBridgeC at its class and `fast100`'s schedule**, as
+`vbridge_innerAt`. -/
+theorem vbridgeC_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
+    [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
+    (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type}
+    {zs : Reg → L.Ω → List (Cm × ((k : Fin r) → CT k)) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → Hidden (execClassAt st).cls}
+    {wmsg : ((j : Fin S) → (Vs j).Bits) → List (List (SMsg T))}
+    {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg}
+    {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → List (SMsg T)}
+    (hb : Flock.Assumptions.VBridgeC (I := flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain
+      (execClassAt st).cls (execClassAt st).regs (Refine.schedOf s₀)) zs dg N k Rw x wmsg Sk cmt msg) :
+    Flock.Premises.VBridgeC (I := Flock.Guarantees.innerAt T CT st) zs dg N k Rw x wmsg Sk cmt msg := by
+  show Flock.Assumptions.VBridgeC (I := flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain
     (execClassAt st).cls (execClassAt st).regs (execClassAt st).sch) zs dg N k Rw x wmsg Sk cmt msg
   rw [execClassAt_sch_of_fast100 h hs]
   exact hb
@@ -112,10 +135,12 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
+  rcases zk_sessions_recursive_fork_innerC hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (fun _ _ => Flock.Guarantees.publicHidden st) wmsg Sk cmt msg
     (hbr hT) Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
-      (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hf | hb
+      (execClassAt st).regs (execClassAt st).sch) hin (Nat.succ_pos r) (schedInner_lastFree T CT _ _ _ _)
+    (fun M => clashPickCL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
+      (execClassAt st).regs (execClassAt st).sch M) with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))

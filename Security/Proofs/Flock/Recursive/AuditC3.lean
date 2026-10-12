@@ -52,7 +52,7 @@ What it takes, against `PublicAudit`:
   `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
 Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from piece (a)
-(`FlockC3.Fork.holoForkSound_holoAt`). Its non-vacuity needs VBridge at candidate 3 (piece (b), `FlockC3.Compose`) and
+(`FlockC3.Fork.holoForkSound_holoAt`). Its non-vacuity needs VBridgeC at candidate 3 (piece (b), `FlockC3.Compose`) and
 V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
 `rec-open`, `rec-residuals`, `rec-sparse`, R's levels (`rec-open-stacked`) and `rec-opening` at META's `stacked`.
 -/
@@ -156,7 +156,8 @@ acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inp
 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
 V*'s circuits compute candidate 3's inner verifier at the checked sessions (`checkedC3`: the typed sessions at a whole
-history where the verifier's checks at candidate 3 pass) and R's registration (VBridge): the event below is empty;
+history where the verifier's checks at candidate 3 pass) and R's registration, at the rounds before the last (VBridge
+at the committed rounds, `Flock.Premises.VBridgeC`): the event below is empty;
 or the sessions type and there is a registrant fork, a round fork, a session fork, or an inner fork of the transported
 prover's own runs at the checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
@@ -215,11 +216,11 @@ def RecursiveAuditC3 : Prop :=
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
-    -- VBridge, a premise: V*'s circuits compute candidate 3's inner verifier, at the checked sessions and R's
-    -- registration
+    -- VBridge at the committed rounds, a premise: V*'s circuits compute candidate 3's inner verifier at the rounds
+    -- before the last, which it does not commit, at the checked sessions and R's registration
     (_hbr : ∀ h : Typed zr,
-      Flock.Premises.VBridge (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h) dg N
-        k Rw (fun _ _ => Subtype.mk xR _hreg) wmsg Sk cmt msg),
+      Flock.Premises.VBridgeC (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h) dg
+        N k Rw (fun _ _ => Subtype.mk xR _hreg) wmsg Sk cmt msg),
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st tr record reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ChecksVR ish (innerCommitsAt tr record st reg).toOption coins bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
