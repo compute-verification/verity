@@ -12,6 +12,7 @@ import Proofs.Flock.C3.Sparse.Src
 import Proofs.Flock.C3.Sparse.SrcTie
 import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
+import Proofs.Flock.C3.Sparse.SrcEnd
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -24,6 +25,7 @@ import Proofs.Flock.C3.HoloValues.Read
 import Proofs.Flock.C3.Reps.Tie
 import Proofs.Flock.C3.Reps.Vals
 import Proofs.Flock.C3.Reps.Steps
+import Proofs.Flock.C3.Reps.StepsTie
 import Proofs.Flock.C3.HoloValues.Frames
 import Proofs.Flock.C3.HoloValues.Runs
 import Proofs.Flock.C3.HoloValues.Shift
@@ -41,6 +43,8 @@ import Proofs.Flock.C3.RegLevels.SrcOpened
 import Proofs.Flock.C3.RegLevels.SrcConss
 import Proofs.Flock.C3.RegLevels.SrcUnits
 import Proofs.Flock.C3.RegLevels.SrcOpenRel
+import Proofs.Flock.C3.RegLevels.RsT
+import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.Maps
 
 /-!

@@ -9,10 +9,11 @@ import Proofs.Flock.C3.PubRows.Shape
 /-!
 # The guarantee's `_hbr` at the honest family
 
-`hbr_honest`: the guarantee's `_hbr` at G's commit strings, digests and messages (`skOf`, `cmtOf`, `wmsgOf`, `msgOf`):
-VBridge at V*'s checked sessions (`checkedC3`), by `vbridge_c3` at `C3Family.checked`, from n1 (`hPubRows_of_checked`
-at the checks the checked sessions keep, `checksAccepted_checked`; `hTape_of_frame`), the stages at the honest family,
-`hCommits_honest`, `vDecodesR_wmsgOf` and `vFullR_of_read`. Its `Vs` and `hob` are the guarantee's: at the verifier's
+`hbr_honest`: the guarantee's `_hbr` at G's commit strings, digests and messages (`skOf`, `cmtOf`, `wmsgOf`, `msgOf`,
+the decoder at `skLeaf`): `VBridgeC` at V*'s checked sessions (`checkedC3`), by `vbridgeC_c3` at `C3Family.checked`,
+from n1 (`hPubRows_of_checked` at the checks the checked sessions keep, `checksAccepted_checked`; `hTape_of_frame`),
+the stages at the honest family, `hCommits_honest` at the committed rounds (`vCommits_masked`) and
+`vDecodesR_wmsgLeaf`. Its `Vs` and `hob` are the guarantee's: at the verifier's
 list they are `vstarParsesScoped_of_list`'s (`VStarList/Statements.lean`), which is `_hob`. The decoder `dec` is free,
 and a stage's messages are `dec`'s, so no stage follows from the public rows alone: each stage is its read fact
 (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`) and the tape its frame (`HFrame`), obligations on `dec` that
@@ -49,9 +50,10 @@ theorem vDecodesR_wmsgOf {S : ℕ} {Vs : Fin S → VStmt} {I : Recursion.Inner}
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(step 7) The guarantee's `_hbr` at the honest family**: VBridge at V*'s checked sessions (`checkedC3`, the
-guarantee's), at G's commit strings, digests and messages, from the stages' read facts, the tape's frame and the
-verifier's facts at the checked family (`C3Family.checked`). A checked session keeps only what the verifier checks
+/-- **(step 7) The guarantee's `_hbr` at the honest family**: VBridge at the committed rounds (`VBridgeC`) at V*'s
+checked sessions (`checkedC3`, the guarantee's), at G's commit strings and digests and the messages the decoder reads
+(the last round's from the layers in full, `skLeaf`), from the stages' read facts, the tape's frame and the verifier's
+facts at the checked family (`C3Family.checked`). A checked session keeps only what the verifier checks
 (`checksAccepted_checked`), so the public rows are `hPubRows_of_checked`'s, at the shape every checked rec-sparse unit
 has (`sparseAtShapeChecked`). The decoder `dec` is free, so the read facts are hypotheses: each says `dec`'s messages on
 its stage's rounds are its prover's for a witness its verifier row accepts, which n6 states at a fixed decoder. R's top
@@ -87,18 +89,21 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg) own sel bc) :
-    ∀ h : Typed zr, Flock.Premises.VBridge
-      (Flock.Guarantees.checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust h) dg N k Rw
-      (fun _ _ => Subtype.mk xR hreg) (wmsgOf Vs (skOf Vs own sel) (holoInnerAt T CT st hp).r dec) (skOf Vs own sel)
-      (cmtOf Vs bc) (msgOf Vs (skOf Vs own sel) dec) := by
+    ∀ h : Typed zr, Flock.Premises.VBridgeC
+      (Flock.Guarantees.checkedC3 ish (fun _ => (innerCommitsAt tr record st reg).toOption) (fun _ => coins) bind rows
+        zr hCust h) dg N k Rw
+      (fun _ _ => Subtype.mk xR hreg)
+      (wmsgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) (holoInnerAt T CT st hp).r dec) (skOf Vs own sel)
+      (cmtOf Vs bc) (msgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) dec) := by
   intro h
   have hrows : HPubRows
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg) :=
     hPubRows_of_checked (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
       (hdrawn h) (hnames h) (sparseAtShapeChecked _)
-  exact vbridge_c3 (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg)
+  exact vbridgeC_c3 (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg)
     dg N k Rw hreg (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h)) (hSparse_honest_of_read (hsread h))
-    (hOpening_of_read (horead h)) (hRegLevels_honest_of_read (hlread h)) (hCommits_honest hrows (hown h) (hheld h))
-    (vDecodesR_wmsgOf (I := holoInnerAt T CT st hp) (skOf Vs own sel) dec) (vFullR_of_read _ _)
+    (hOpening_of_read (horead h)) (hRegLevels_honest_of_read (hlread h))
+    (Flock.Assumptions.vCommits_masked (holoInnerAt T CT st hp).r (hCommits_honest hrows (hown h) (hheld h)))
+    (vDecodesR_wmsgLeaf (I := holoInnerAt T CT st hp) (own := own) (sel := sel) dec)
 
 end FlockC3.Compose
