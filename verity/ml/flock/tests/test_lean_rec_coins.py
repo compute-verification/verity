@@ -45,10 +45,10 @@ CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479
                   "459a42e2dda3e07463")
 #: the recorded outer session's refusal as `verity/flock-circuit`, after setup
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
-#: a staging's key (`once`): the inner session and V*'s fold, points and salts it reads, this module, which holds the code
-#: each staging runs besides `rec_vstage`, and `rec_vstage`'s import closure
+#: a staging's key (`once`): the inner session and V*'s fold, points and salts it reads, and the import closure of this
+#: module, which holds the code each staging runs
 _KEY = functools.partial(keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json",
-                         SET / "acc-salts.bin", Path(__file__).resolve(), code=[S.__name__])
+                         SET / "acc-salts.bin", code=[__name__])
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 

@@ -116,7 +116,7 @@ def level(inner, once) -> list[str]:
         SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
         pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin"), functools.partial(
         keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json", SET / "acc-salts.bin",
-        Path(__file__).resolve(), code=[S.__name__]))
+        code=[__name__]))
     level = d / f"L{LEVEL}"
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
