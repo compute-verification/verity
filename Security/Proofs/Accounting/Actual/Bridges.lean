@@ -1,9 +1,16 @@
 import Models.Accounting.Guarantees.Bridges
 import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Localization
+import Models.Pouw.Assumptions.Deadline
 
 /-!
-# B4, proved
+# B4, proved, and the honest clock at `CM_A`
+
+`CM_A`'s programs carry their oracle tree (`costModel_queries`), and the honest clock holds at it with the adversary
+itself as the program, at every deadline from `t_d` on (`honestClock`): its cost, the work in `[tₛ + ℓ, t_d − ℓ)`,
+is part of what the run spends, the work placed in `[tₛ, td)` (`workIn_add_le`). Causality is what puts the work that
+matters in that window: a gate off `V` that depends on the salt and that `V` reads before `t_d` lies in it
+(`cost_window`, `prover_cost_window`).
 
 What the outside `O = (X ∪ cert)ᶜ` does during `[a, b)` is part of what it does before `b` (`acts_restrict`), which
 causality's global form makes a function of what it reads from outside before `b`, its inputs being fixed. That is
@@ -121,6 +128,77 @@ theorem crossing_signal {L E : Type*} [Fintype E] {R R' : Actual.Run L} {ends : 
   · rw [ht']
     exact ht
   · rw [ht', hy', ho, hp]
+
+/-- Work over disjoint windows adds up to at most the work over one that holds both. -/
+theorem workIn_add_le {L : Type*} (ρ : Actual.Run L) (π : Fin ρ.A.N → ℕ) (V : Finset L) {I J K : Set ℕ}
+    (hIJ : ∀ u ∈ I, u ∉ J) (hK : ∀ u, u ∈ I ∨ u ∈ J → u ∈ K) :
+    ρ.workIn π V I + ρ.workIn π V J ≤ ρ.workIn π V K := by
+  classical
+  unfold Actual.Run.workIn Placed.work
+  simp only [Finset.sum_filter, ← Finset.sum_add_distrib]
+  refine Finset.sum_le_sum fun g _ => ?_
+  split_ifs with h₁ h₂ h₃ h₃ h₂ h₃ <;> first
+    | omega
+    | exact absurd h₂.2 (hIJ _ h₁.2)
+    | exact absurd (hK _ (Or.inl h₁.2)) fun h => h₃ ⟨h₁.1, h⟩
+    | exact absurd (hK _ (Or.inr h₂.2)) fun h => h₃ ⟨h₂.1, h⟩
+
+/-- `CM_A`'s programs reach the oracle only through counted queries, the hash's gates: a prover carries it. -/
+theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
+    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Pouw.Transcript)
+    (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ) :
+    (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
+  fun P U act σ s => P.queries U act σ s
+
+/-- **The cost window** (v2.4, B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
+latencies into `V` are at least `ℓ`, a gate off `V` that no gate of `ρ'` looks like (it depends on what tells the two
+apart) and that `V` reads before `t_d` lies in `[tₛ + ℓ, t_d − ℓ)`. -/
+theorem cost_window {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run L} {V : Finset L} {tₛ t_d ℓ : ℕ}
+    (ℓ' : L → L → ℕ) (hfresh : ρ.history Vᶜ (tₛ + ℓ) = ρ'.history Vᶜ (tₛ + ℓ)) (hc : ρ.A.Causal ℓ')
+    (hℓ : ∀ y v, y ∉ V → v ∈ V → ℓ ≤ ℓ' y v) {g v : Fin ρ.A.N} (hg : ρ.A.x g ∉ V)
+    (hdep : ∀ h, ρ'.seen h ≠ ρ.seen g) (hv : g ∈ ρ.A.reads v) (hvV : ρ.A.x v ∈ V) (hvt : ρ.A.t v < t_d) :
+    ρ.A.t g ∈ Set.Ico (tₛ + ℓ) (t_d - ℓ) := by
+  refine ⟨not_lt.1 fun ht => ?_, ?_⟩
+  · have hb : ρ.before Vᶜ (tₛ + ℓ) = ρ'.before Vᶜ (tₛ + ℓ) := congrArg (fun p => p.2.1) hfresh
+    have hm : ρ.seen g ∈ ρ.before Vᶜ (tₛ + ℓ) := ⟨g, Finset.mem_compl.2 hg, ht, rfl⟩
+    rw [hb] at hm
+    obtain ⟨h, -, -, hh⟩ := hm
+    exact hdep h hh.symm
+  · have h₁ := hc v g hv
+    have h₂ := hℓ _ _ hg hvV
+    omega
+
+/-- At `CM_A`: in a prover's run, a gate off `V` that depends on the salt and that `V` reads before `t_d` lies in the
+cost window, the prover's history at `tₛ + ℓ` not depending on the salt (`fresh`). -/
+theorem prover_cost_window {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
+    {V : Finset L} {tₛ t_d ℓ : ℕ} {read hash} (P : Actual.Prover Q R S 𝓕 V tₛ t_d ℓ read hash) (H U act σ)
+    (s s' : S) (ℓ' : L → L → ℕ) (hc : (P.strategy (H, U, act, σ, s)).A.Causal ℓ')
+    (hℓ : ∀ y v, y ∉ V → v ∈ V → ℓ ≤ ℓ' y v) {g v : Fin (P.strategy (H, U, act, σ, s)).A.N}
+    (hg : (P.strategy (H, U, act, σ, s)).A.x g ∉ V)
+    (hdep : ∀ h, (P.strategy (H, U, act, σ, s')).seen h ≠ (P.strategy (H, U, act, σ, s)).seen g)
+    (hv : g ∈ (P.strategy (H, U, act, σ, s)).A.reads v) (hvV : (P.strategy (H, U, act, σ, s)).A.x v ∈ V)
+    (hvt : (P.strategy (H, U, act, σ, s)).A.t v < t_d) :
+    (P.strategy (H, U, act, σ, s)).A.t g ∈ Set.Ico (tₛ + ℓ) (t_d - ℓ) :=
+  cost_window ℓ' (P.fresh H U act σ s s') hc hℓ hg hdep hv hvV hvt
+
+/-- **The honest clock at `CM_A`**: for an adversary's timed run, at a deadline `td` at or after `t_d`, the adversary
+itself is the program `HonestClock` asks for. Its cost, the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is at most what
+the run spends in `(tₛ, td]`, the prover's work placed in `[tₛ, td)`. -/
+theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)} {V : Finset L}
+    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Pouw.Transcript}
+    {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ} (hst : tₛ ≤ t_d)
+    (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
+    (htd : (t_d : ℝ) ≤ td) :
+    Pouw.Assumptions.HonestClock (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) U A (Actual.timedRun A U) td := by
+  refine ⟨A, rfl, fun H s => ⟨fun _ => rfl, ?_, le_rfl⟩⟩
+  simp only [Actual.costModel, Actual.timedRun, Pouw.TimedRun.spentIn]
+  rw [le_sub_iff_add_le, ← Nat.cast_add, Nat.cast_le]
+  refine workIn_add_le _ _ _ (fun u hu h => ?_) fun u hu => ?_
+  · exact absurd (Nat.cast_lt.1 (show (u : ℝ) < tₛ from h)) (not_lt.2 ((Nat.le_add_right _ _).trans hu.1))
+  · show (u : ℝ) < td
+    rcases hu with hu | hu
+    · exact lt_of_lt_of_le (Nat.cast_lt.2 (hu.2.trans_le (Nat.sub_le _ _))) htd
+    · exact lt_of_lt_of_le (lt_of_lt_of_le (show (u : ℝ) < tₛ from hu) (Nat.cast_le.2 hst)) htd
 
 end Actual
 

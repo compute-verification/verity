@@ -411,12 +411,12 @@
   "Definitions.Accounting": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Definitions.Accounting"],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), and they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game), and they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "Models.Nci.Assumptions", "Definitions.Accounting", "Models.Accounting.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "Models.Nci.Assumptions", "Definitions.Accounting", "Models.Accounting.Guarantees", "Models.Pouw.Assumptions"],
    "except": [],
-   "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses"
+   "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is PoUW's named assumption TT (Models.Pouw.Assumptions) at the cost model of the actual circuit's provers"
   }
  },
  "reads_exempt": {

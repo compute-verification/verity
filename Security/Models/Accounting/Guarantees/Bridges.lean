@@ -1,15 +1,18 @@
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.Physical
+import Definitions.Accounting.CostModel
+import Models.Pouw.Assumptions.Game
 
 /-!
 # Obligations B1 and B4, stated (trusted)
 
 Section 8 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4). Neither is proved here.
 
-* `B1` (conjecture, TT_OUT on arbitrary circuits): PoUW's audit is sound for a lower bound on the work of the prover's
-  computed gates placed between the seed's release and the response's deadline. It is a property of an audit (`acc`,
-  read on the verifier's view), and the conjecture is `B1` at PoUW's. It counts the window's work, not dependence on
-  the seed: a prover that branches on the seed carries that dependence by control flow, not by wires.
+* `B1` (conjecture, TT on arbitrary circuits): PoUW's named assumption `Pouw.Assumptions.TT` at the cost model of `A`'s
+  provers, `CM_A`, whose cost is the prover's work between the salt's arrival and the last tick from which a value
+  reaches the verifier by the deadline. It counts the window's work, not dependence on the salt: a prover that branches
+  on the salt carries that dependence by control flow, not by wires. Nothing else about PoUW is conjectured: the
+  deadline theorem holds at every cost model, and the honest clock holds at `CM_A`.
 * `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: over strategies that vary only them,
   under causality, links as alphabets and the trusted devices across the strategy (v2.4: the certifiers' sends a
   function of their record and a jitter word), what the outside does during `I` takes at most (the number of records) ×
@@ -21,15 +24,17 @@ namespace Accounting.Guarantees
 
 open Finset
 
-/-- **B1** at an audit: the verifier at `V`, accepting on `acc`, with the seed released at `tₛ` and the response due at
-`t_d`, is sound at `(1 − ε)^K + η + ε_ks + ε_bind` against `𝓕` for the work at `π` of the prover's (off `V`) computed
-gates placed in `[tₛ + ℓ, t_d − ℓ)`, at least `(1 − γ)(1 − ε) W`. -/
-def B1 {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
-    (π : (R : Actual.Run L) → Fin R.A.N → ℕ) (tₛ t_d ℓ K : ℕ) (γ ε W η εks εbind : ℝ) : Prop :=
-  open Classical in
-  Sound Ω 𝓕 V acc (fun S r => (1 - γ) * (1 - ε) * W ≤ (S r).A.work (π (S r)) ((S r).A.computed.filter fun g =>
-      (S r).A.x g ∉ V ∧ (S r).A.t g ∈ Set.Ico (tₛ + ℓ) (t_d - ℓ)))
-    ((1 - ε) ^ K + η + εks + εbind)
+/-- **B1** (v2.4): PoUW's assumption TT(γ₀) at `CM_A`, the cost model of `A`'s provers (`Actual.costModel`: the
+verifier at `V` releases the salt at `tₛ` and decodes the transcript with `read` from what it receives before `t_d`;
+a program is a prover, a strategy with runs in `𝓕` causal from every tick whose oracle calls are the hash's gates
+`hash`; its cost is the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`). With `HonestClock` at `CM_A`
+(`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the
+work between the salt and the deadline. -/
+def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
+    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Pouw.Transcript)
+    (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
+    (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+  Pouw.Assumptions.TT (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) P D γ₀ ε
 
 /-- **B4.** For a strategy `S` causal from every tick that varies only the secret inputs of a location `X` apart
 from the certifiers `cert` (what the certifiers and the outside `O = (X ∪ cert)ᶜ` can tell at `a` doesn't depend on

@@ -31,5 +31,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   (`content_length_le`).
 * `Actual/Bridges.lean`: `B4`, egress factoring: across `X`'s secret inputs, what the outside does takes at most (the
   number of records) × `2^{res_out}` values, from causality, links as alphabets and the trusted devices across the
-  strategy.
+  strategy; `CM_A`'s programs carry their oracle tree (`costModel_queries`), the honest clock holds at `CM_A` from
+  `t_d` on (`honestClock`), so B1 is all that is conjectured of PoUW's deadline row, and a salt-dependent gate that
+  the verifier reads before `t_d` lies in the cost window (`cost_window`, `prover_cost_window`).
 -/
