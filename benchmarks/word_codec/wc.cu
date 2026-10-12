@@ -12,18 +12,25 @@
 //                        GF(2^31 - 1) Horner step of the bandwidth audit's tag
 //   read, tag            the same flat store read and XORed, or Horner-hashed (two 32-bit steps a word)
 //   gemm                 y[b][n] = sum_k x[b][k] W[n][k], FP8 E4M3 mma.m16n8k32 with W the A operand in fragment order
-//                        (`codec.fragment_payloads` / `codec.plain_fragments`), split over 512-column chunks
+//                        (`codec.fragment_payloads` / `codec.plain_fragments`), split over 512-column chunks; a word
+//                        carries WC_PB payload bits (56 or 60)
 #include <cstdint>
 #include <cuda_runtime.h>
+
+#ifndef WC_PB
+#define WC_PB 56
+#endif
 
 namespace wc {
 
 constexpr uint64_t P = (1ull << 61) - 1;
+constexpr int PB = WC_PB;
+static_assert(PB == 56 || PB == 60, "codec.PACKINGS");
 constexpr int MAXK = 8;
 constexpr int LANES = 32;
 constexpr int TASK_TILES = 16;
 constexpr int LANE_BYTES = 16 * TASK_TILES;
-constexpr int LANE_WORDS = (LANE_BYTES + 6) / 7;
+constexpr int LANE_WORDS = (8 * LANE_BYTES + PB - 1) / PB;
 constexpr int TASK_WORDS = LANE_WORDS * LANES;
 constexpr int TASK_COLS = 32 * TASK_TILES;
 constexpr int GEMM_WARPS = 4;
@@ -258,10 +265,10 @@ __device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], 
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
 }
 
-__device__ __forceinline__ uint32_t take4(const uint64_t* x, int o) {   // stream bytes o .. o + 3 of the decoded payloads
-  int w = o / 7, sh = o % 7;
-  uint32_t v = (uint32_t)(x[w] >> (8 * sh));
-  if (sh > 3) v |= (uint32_t)(x[w + 1] << (8 * (7 - sh)));
+__device__ __forceinline__ uint32_t take4(const uint64_t* x, int bit) {   // stream bits bit .. bit + 31 of the payloads
+  int w = bit / PB, sh = bit % PB;
+  uint32_t v = (uint32_t)(x[w] >> sh);
+  if (sh + 32 > PB) v |= (uint32_t)(x[w + 1] << (PB - sh));
   return v;
 }
 
@@ -321,7 +328,8 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const void* __res
     }
 #pragma unroll
     for (int tt = 0; tt < TASK_TILES; ++tt) {
-      const uint32_t a[4] = {take4(xw, 16 * tt), take4(xw, 16 * tt + 4), take4(xw, 16 * tt + 8), take4(xw, 16 * tt + 12)};
+      const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),
+                             take4(xw, 128 * tt + 96)};
       tile(tt, a);
     }
   }
@@ -340,13 +348,14 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const void* __res
 }
 
 // The persistent form: a CTA keeps one 512-column chunk of x in shared memory and its warps walk the 16-row blocks
-// nb = g0 * GEMM_WARPS + warp + i * groups * GEMM_WARPS. A task is taken in two halves, tiles 0-7 from words 0-18 and
-// tiles 8-15 from word 18 and words 19-36, and each half's loads are in flight while the other half is decoded and
-// multiplied: the task's second half while its first is, the next task's first half while its second is. KR = 0 reads
-// plain fragments, eight tiles (16 words) a half.
-constexpr int H0 = (16 * TASK_TILES / 2 + 6) / 7;   // words 0..18 hold bytes 0..132
-constexpr int H1 = LANE_WORDS - H0;                 // words 19..36
-static_assert(H0 >= 16 && H1 >= 16 && 7 * (H0 - 1) <= 16 * TASK_TILES / 2, "a half's words");
+// nb = g0 * GEMM_WARPS + warp + i * groups * GEMM_WARPS. A task is taken in two halves, tiles 0-7 from words 0 .. H0 - 1
+// and tiles 8-15 from word H0 - 1 and words H0 .. LANE_WORDS - 1, and each half's loads are in flight while the other
+// half is decoded and multiplied: the task's second half while its first is, the next task's first half while its
+// second is. KR = 0 reads plain fragments, eight tiles (16 words) a half.
+constexpr int HALF_BITS = 8 * LANE_BYTES / 2;
+constexpr int H0 = (HALF_BITS + PB - 1) / PB;
+constexpr int H1 = LANE_WORDS - H0;
+static_assert(H0 >= 16 && H1 >= 16 && PB * (H0 - 1) <= HALF_BITS, "a half's words");
 
 template <int KR>
 __device__ __forceinline__ void load_half(uint64_t* xw, const void* __restrict__ wstore, uint64_t q, int lane, int half) {
@@ -371,7 +380,7 @@ __device__ __forceinline__ void load_half(uint64_t* xw, const void* __restrict__
   }
 }
 
-// Tiles t0 .. t0 + 7; xw[0] holds stream byte `off` (KR > 0) or tile t0's first 8 bytes (KR = 0).
+// Tiles t0 .. t0 + 7; xw[0] starts at stream bit `off` (KR > 0) or holds tile t0's first 8 bytes (KR = 0).
 template <int KR, int NB8>
 __device__ __forceinline__ void half_tiles(float (&acc)[NB8][4], const uint64_t* xw, int t0, int off,
                                            const uint8_t (*xs)[XS_STRIDE], int g, int tq) {
@@ -383,8 +392,8 @@ __device__ __forceinline__ void half_tiles(float (&acc)[NB8][4], const uint64_t*
       a[0] = (uint32_t)xw[2 * i]; a[1] = (uint32_t)(xw[2 * i] >> 32);
       a[2] = (uint32_t)xw[2 * i + 1]; a[3] = (uint32_t)(xw[2 * i + 1] >> 32);
     } else {
-      const int o = 16 * tt - off;
-      a[0] = take4(xw, o); a[1] = take4(xw, o + 4); a[2] = take4(xw, o + 8); a[3] = take4(xw, o + 12);
+      const int o = 128 * tt - off;
+      a[0] = take4(xw, o); a[1] = take4(xw, o + 32); a[2] = take4(xw, o + 64); a[3] = take4(xw, o + 96);
     }
 #pragma unroll
     for (int j = 0; j < NB8; ++j) {
@@ -440,7 +449,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_pipe_kernel(const void* 
         h[w + 1] = decode_word<KR>(B[w], ~t);
         t = addmod(t, t32);
       }
-      half_tiles<KR, NB8>(acc, h, TASK_TILES / 2, 7 * (H0 - 1), xs, g, tq);
+      half_tiles<KR, NB8>(acc, h, TASK_TILES / 2, PB * (H0 - 1), xs, g, tq);
     } else {
       half_tiles<KR, NB8>(acc, B, TASK_TILES / 2, 0, xs, g, tq);
     }
@@ -555,6 +564,7 @@ int wc_empty(int grid, cudaStream_t s) {
 
 int wc_gemm_constants(int* out) {
   out[0] = LANES; out[1] = TASK_TILES; out[2] = LANE_WORDS; out[3] = TASK_WORDS; out[4] = TASK_COLS; out[5] = GEMM_WARPS;
+  out[6] = PB;
   return 0;
 }
 

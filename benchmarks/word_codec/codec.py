@@ -9,19 +9,23 @@ c_j        round j's constant: u64le(SHA512(DOMAIN ‖ seed ‖ u32be j)[0:8]) m
 τ          the tweak key: the same with j = 2^32 − 1, and 1 in place of 0
 t(i)       τ · i mod p, i the word's index in the store
 round j    x ↦ ρ(x + c_j + t(i))
-encode     m (seven payload bytes, little-endian, m < 2^56) through rounds 0 … k − 1; the word is y < p, stored u64le
-decode     rounds k − 1 … 0 inverted: x ↦ ρ⁻¹(x) − c_j − t(i); a word decodes to a payload only if the result is < 2^56
+encode     m (b payload bits, m < 2^b) through rounds 0 … k − 1; the word is y < p, stored u64le
+decode     rounds k − 1 … 0 inverted: x ↦ ρ⁻¹(x) − c_j − t(i); a word decodes to a payload only if the result is < 2^b
 ~~~
+
+b is 56 (seven bytes a word, the draft's packing) or 60 (fifteen bytes in two words): a byte stream is the
+little-endian integer S, and word i's payload is bits b·i … b·i + b − 1 of S.
 
 The seed is drawn after the weights are registered. Encoding a word costs k roots (59k squarings and a square test
 each) and decoding it k squarings, whatever k is, and there is no keystream: the honest prover decodes at about
 one squaring per round and word, and a prover missing the word rebuilds it at about 59.
 
-Two layouts carry a byte stream into words, seven payload bytes each:
+Two layouts carry a byte stream into words:
 - `flat`: word i holds bytes 7i … 7i + 6 of the stream (the standalone decode's store);
 - `fragment`: an FP8 weight matrix W (N × K, K contiguous) in the operand order of the fused GEMM (`fragment_stream`):
   tasks of one 16-row block and 512 columns, in each task lane l's 256 bytes (16 k-tiles of its mma.m16n8k32 A
-  fragment) packed into 37 words, word w of lane l at index 37·32·task + 32·w + l.
+  fragment) packed into L = ⌈2048 / b⌉ words (37 at b = 56, 35 at b = 60), word w of lane l at index
+  L·32·task + 32·w + l.
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ P = (1 << 61) - 1
 ROOT_EXP = (P + 1) // 4
 assert ROOT_EXP == 1 << 59
 PAYLOAD_BYTES = 7
+PAYLOAD_BITS = 8 * PAYLOAD_BYTES
+PACKINGS = (PAYLOAD_BITS, 60)
 WORD_BYTES = 8
 DOMAIN = b"verity/word-codec/v0\0"
 SEED_BYTES = 32
@@ -46,7 +52,19 @@ TASK_TILES = 16
 TASK_COLS = TILE_COLS * TASK_TILES
 LANES = 32
 LANE_BYTES = 16 * TASK_TILES
-LANE_WORDS = -(-LANE_BYTES // PAYLOAD_BYTES)
+
+
+def _packing(bits: int) -> int:
+    if bits not in PACKINGS:
+        raise ValueError(f"a word carries one of {PACKINGS} payload bits")
+    return bits
+
+
+def lane_words(bits: int = PAYLOAD_BITS) -> int:
+    return -(-8 * LANE_BYTES // _packing(bits))
+
+
+LANE_WORDS = lane_words()
 TASK_WORDS = LANE_WORDS * LANES
 
 
@@ -95,9 +113,9 @@ def rho_inv(y: int, p: int = P) -> int:
     return q if y & 1 == 0 else (p - q) % p
 
 
-def encode_word(m: int, i: int, k: Key) -> int:
-    if not 0 <= m < 1 << (8 * PAYLOAD_BYTES):
-        raise ValueError("a payload is seven bytes")
+def encode_word(m: int, i: int, k: Key, bits: int = PAYLOAD_BITS) -> int:
+    if not 0 <= m < 1 << _packing(bits):
+        raise ValueError(f"a payload is {bits} bits")
     t = k.tweak(i)
     x = m
     for c in k.c:
@@ -105,7 +123,7 @@ def encode_word(m: int, i: int, k: Key) -> int:
     return x
 
 
-def decode_word(y: int, i: int, k: Key) -> int:
+def decode_word(y: int, i: int, k: Key, bits: int = PAYLOAD_BITS) -> int:
     """The payload of word `y` at index `i`; `ValueError` if `y` is not the encoding of one."""
     if not 0 <= y < P:
         raise ValueError("a word is a canonical element")
@@ -113,19 +131,22 @@ def decode_word(y: int, i: int, k: Key) -> int:
     x = y
     for c in reversed(k.c):
         x = (rho_inv(x) - c - t) % P
-    if x >> (8 * PAYLOAD_BYTES):
+    if x >> _packing(bits):
         raise ValueError(f"word {i} decodes to no payload")
     return x
 
 
-def pack(stream: bytes) -> list[int]:
-    """The payloads of a byte stream, seven bytes a word, the last one zero-padded."""
-    stream = bytes(stream) + bytes(-len(stream) % PAYLOAD_BYTES)
-    return [int.from_bytes(stream[o:o + PAYLOAD_BYTES], "little") for o in range(0, len(stream), PAYLOAD_BYTES)]
+def pack(stream: bytes, bits: int = PAYLOAD_BITS) -> list[int]:
+    """The payloads of a byte stream, `bits` a word, the last one zero-padded."""
+    s, mask = int.from_bytes(bytes(stream), "little"), (1 << _packing(bits)) - 1
+    return [s >> (bits * i) & mask for i in range(-(-8 * len(stream) // bits))]
 
 
-def unpack(payloads: list[int], length: int) -> bytes:
-    return b"".join(m.to_bytes(PAYLOAD_BYTES, "little") for m in payloads)[:length]
+def unpack(payloads: list[int], length: int, bits: int = PAYLOAD_BITS) -> bytes:
+    if any(not 0 <= m < 1 << _packing(bits) for m in payloads):
+        raise ValueError(f"a payload is {bits} bits")
+    s = sum(m << (bits * i) for i, m in enumerate(payloads))
+    return s.to_bytes(-(-bits * len(payloads) // 8), "little")[:length]
 
 
 def words_bytes(words: list[int]) -> bytes:
@@ -184,14 +205,14 @@ def fragment_stream(w: bytes, n: int, kdim: int) -> list[bytes]:
     return out
 
 
-def fragment_payloads(w: bytes, n: int, kdim: int) -> list[int]:
-    """The payloads of the fragment layout, in store order (word w of lane l of a task at 37·32·task + 32·w + l)."""
-    lanes = fragment_stream(w, n, kdim)
-    out = [0] * (len(lanes) * LANE_WORDS)
+def fragment_payloads(w: bytes, n: int, kdim: int, bits: int = PAYLOAD_BITS) -> list[int]:
+    """The payloads of the fragment layout, in store order (word w of lane l of a task at L·32·task + 32·w + l)."""
+    lanes, lw = fragment_stream(w, n, kdim), lane_words(bits)
+    out = [0] * (len(lanes) * lw)
     for idx, s in enumerate(lanes):
         task, lane = divmod(idx, LANES)
-        for wi, m in enumerate(pack(s)):
-            out[task * TASK_WORDS + wi * LANES + lane] = m
+        for wi, m in enumerate(pack(s, bits)):
+            out[task * lw * LANES + wi * LANES + lane] = m
     return out
 
 

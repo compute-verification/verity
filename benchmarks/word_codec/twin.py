@@ -97,15 +97,16 @@ def horner31(acc: int, g: int, w: int) -> int:
     return out
 
 
-def take4(payloads: list[int], o: int) -> int:
-    w, sh = divmod(o, 7)
-    v = payloads[w] >> 8 * sh & U32
-    if sh > 3:
-        v |= payloads[w + 1] << 8 * (7 - sh) & U32
+def take4(payloads: list[int], bit: int, pb: int = 56) -> int:
+    """Stream bits `bit` … `bit` + 31 of `pb`-bit payloads."""
+    w, sh = divmod(bit, pb)
+    v = payloads[w] >> sh & U32
+    if sh + 32 > pb:
+        v |= payloads[w + 1] << (pb - sh) & U32
     return v
 
 
-def lane_registers(payloads: list[int]) -> list[int]:
-    """One lane's 64 A-fragment registers (16 tiles × 4) from its 37 decoded payloads, as the fused kernel forms them."""
-    return [take4(payloads, 16 * tt + 4 * r) for tt in range(16) for r in range(4)]
+def lane_registers(payloads: list[int], pb: int = 56) -> list[int]:
+    """One lane's 64 A-fragment registers (16 tiles × 4) from its decoded payloads, as the fused kernel forms them."""
+    return [take4(payloads, 128 * tt + 32 * r, pb) for tt in range(16) for r in range(4)]
 

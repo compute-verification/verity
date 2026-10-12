@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# The word codec's benchmark on one GPU (cwd = the source tree): builds both squaring forms of wc.cu outside the lease,
-# then, under one gpu-lease 1 --wait --max-min MAXMIN (default 25), bench.py's gates and timings and Nsight Compute on the
-# standalone decode and the fused GEMM. Results go to $RESEARCH_RUN_DIR/out.
+# The word codec's benchmark on one GPU (cwd = the source tree): builds wc.cu outside the lease in both squaring forms
+# (split, wide) and with 60 payload bits a word (dense), then, under one gpu-lease 1 --wait --max-min MAXMIN (default
+# 25), bench.py's gates and timings and Nsight Compute on the standalone decode and the fused GEMM. Results go to
+# $RESEARCH_RUN_DIR/out.
 #
-#   research run --queue --gpu-host --on vy-nebius-2 --project verity --source . --cwd source --cpus 8 --mem-gb 48 \
-#     --max-min 40 --campaign resource-accounting --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=ra-word-codec -- bash benchmarks/word_codec/run.sh
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 48 \
+#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-word-codec \
+#     -- taskset -c 48-95 bash benchmarks/word_codec/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
 # the profiles.
@@ -21,10 +22,12 @@ B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 nvcc "${FLAGS[@]}" -DWC_SQR=0 -o "$B/wc-split.so" $WC/wc.cu > "$O/wc-split.ptxas" 2>&1 & P0=$!
 nvcc "${FLAGS[@]}" -DWC_SQR=1 -o "$B/wc-wide.so" $WC/wc.cu > "$O/wc-wide.ptxas" 2>&1 & P1=$!
+nvcc "${FLAGS[@]}" -DWC_SQR=0 -DWC_PB=60 -o "$B/wc-dense.so" $WC/wc.cu > "$O/wc-dense.ptxas" 2>&1 & P2=$!
 wait $P0 || { tail -30 "$O/wc-split.ptxas"; exit 4; }
 wait $P1 || { tail -30 "$O/wc-wide.ptxas"; exit 4; }
+wait $P2 || { tail -30 "$O/wc-dense.ptxas"; exit 4; }
 SASS_KEEP='chain_squareILi1E|chain_encodeILi1E|decode_kernelILi[12]ELi0E|gemm_pipe_kernelILi[02]ELi1ELb0E'
-for lib in split wide; do
+for lib in split wide dense; do
   cuobjdump -sass "$B/wc-$lib.so" | awk -v keep="$SASS_KEEP" '/Function : /{p = ($0 ~ keep)} p' > "$O/wc-$lib.sass" 2>&1
 done
 sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -39,7 +42,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu --format=csv,noheader \
           -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
-  LIBS=(--lib split="$B/wc-split.so" --lib wide="$B/wc-wide.so")
+  LIBS=(--lib split="$B/wc-split.so" --lib wide="$B/wc-wide.so" --lib dense="$B/wc-dense.so")
   # shellcheck disable=SC2086
   "$PY" $WC/bench.py "${LIBS[@]}" --out "$O" $BENCH_ARGS; rc=$?
   q
@@ -56,6 +59,10 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
       "$PY" $WC/bench.py "${LIBS[@]:0:2}" --out "$O/ncu-gemm" --mode ncu-gemm --shapes qkv,gate_up --batches 1,32 --ks 1,4,8 \
       > "$O/ncu-gemm.log" 2>&1
     "$NCU_BIN" --import "$O/ncu-gemm.ncu-rep" --csv --page raw > "$O/ncu-gemm.csv" 2>&1
+    "$NCU_BIN" "${S[@]}" -k "regex:gemm_kernel|gemm_pipe_kernel" -f -o "$O/ncu-gemm-dense" \
+      "$PY" $WC/bench.py "${LIBS[@]:4:2}" --out "$O/ncu-gemm-dense" --mode ncu-gemm --shapes gate_up --batches 1 --ks 2,3 \
+      > "$O/ncu-gemm-dense.log" 2>&1
+    "$NCU_BIN" --import "$O/ncu-gemm-dense.ncu-rep" --csv --page raw > "$O/ncu-gemm-dense.csv" 2>&1
     q
   fi
   exit $rc'

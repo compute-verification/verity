@@ -25,6 +25,9 @@ def test_constants():
     assert C.P == (1 << 61) - 1 and C.P % 4 == 3
     assert pow(2, C.P - 1, C.P) == 1 and C.ROOT_EXP == 1 << 59
     assert (C.LANE_BYTES, C.LANE_WORDS, C.TASK_WORDS, C.TASK_COLS) == (256, 37, 1184, 512)
+    assert C.lane_words(60) == 35
+    with pytest.raises(ValueError, match="payload bits"):
+        C.lane_words(61)
 
 
 def test_kernel_constants_match():
@@ -61,13 +64,27 @@ def test_key_derivation():
 
 
 @pytest.mark.parametrize("rounds", range(1, 9))
-def test_round_trip(rounds):
+@pytest.mark.parametrize("bits", C.PACKINGS)
+def test_round_trip(rounds, bits):
     k = C.key(SEED, rounds)
     rng = random.Random(rounds)
     for _ in range(40):
-        m, i = rng.getrandbits(56), rng.getrandbits(40)
-        y = C.encode_word(m, i, k)
-        assert 0 <= y < C.P and C.decode_word(y, i, k) == m
+        m, i = rng.getrandbits(bits), rng.getrandbits(40)
+        y = C.encode_word(m, i, k, bits)
+        assert 0 <= y < C.P and C.decode_word(y, i, k, bits) == m
+    with pytest.raises(ValueError, match="payload"):
+        C.encode_word(1 << bits, 0, k, bits)
+
+
+def test_pack_is_the_little_endian_bit_stream():
+    rng = random.Random(9)
+    for length in (0, 1, 7, 14, 15, 16, 100, 256):
+        data = bytes(rng.getrandbits(8) for _ in range(length))
+        for bits in C.PACKINGS:
+            words = C.pack(data, bits)
+            assert len(words) == -(-8 * length // bits) and C.unpack(words, length, bits) == data
+            assert sum(m << (bits * i) for i, m in enumerate(words)) == int.from_bytes(data, "little")
+        assert C.pack(data) == [int.from_bytes(data[o:o + 7].ljust(7, b"\0"), "little") for o in range(0, length, 7)]
 
 
 def test_tweak_separates_indices():
@@ -115,7 +132,8 @@ def test_fragment_offsets_follow_the_isa():
             assert C.fragment_offset(lane, r, b) == (row, col)
 
 
-def test_fragment_layout_is_a_bijection():
+@pytest.mark.parametrize("bits", C.PACKINGS)
+def test_fragment_layout_is_a_bijection(bits):
     n, kdim = 32, 1024
     rng = random.Random(4)
     w = bytes(rng.getrandbits(8) for _ in range(n * kdim))
@@ -125,13 +143,14 @@ def test_fragment_layout_is_a_bijection():
     assert seen == sorted(w)
     plain = C.plain_fragments(w, n, kdim)
     assert sorted(plain) == sorted(w)
-    payloads = C.fragment_payloads(w, n, kdim)
-    assert len(payloads) == len(lanes) // 32 * C.TASK_WORDS
-    # each lane's 37 payloads re-form its 64 registers, and the registers are its 16 tiles' fragments in plain order
+    payloads = C.fragment_payloads(w, n, kdim, bits)
+    lw = C.lane_words(bits)
+    assert len(payloads) == len(lanes) * lw
+    # each lane's payloads re-form its 64 registers, and the registers are its 16 tiles' fragments in plain order
     for idx in (0, 5, 37, len(lanes) - 1):
         task, lane = divmod(idx, 32)
-        mine = [payloads[task * C.TASK_WORDS + 32 * wi + lane] for wi in range(C.LANE_WORDS)]
-        regs = T.lane_registers(mine)
+        mine = [payloads[(task * lw + wi) * 32 + lane] for wi in range(lw)]
+        regs = T.lane_registers(mine, bits)
         assert b"".join(r.to_bytes(4, "little") for r in regs) == lanes[idx]
         for tt in range(16):
             o = (task * 16 + tt) * 512 + 16 * lane

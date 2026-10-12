@@ -15,7 +15,8 @@ Nothing is timed before its gate passed, in this order:
   plain FP8 kernel and the fused kernel at each k, each in two forms (one task a warp, `wc_gemm`; persistent with the
   next half-task's loads in flight, `wc_gemm_pipe`), every call on cold weights (a ring of copies past the L2), each
   arm queued behind a spin kernel so the device runs it back to back, beside an empty kernel at the GEMM's grid.
-  Native is the fastest of cuBLASLt and the two plain kernels.
+  Native is the fastest of cuBLASLt and the two plain kernels. The fused GEMM runs with the fastest-decoding library
+  of 56 payload bits a word (`gemm`) and with each library of another packing (`gemm_<name>`, e.g. `-DWC_PB=60`).
 `--mode ncu-decode` / `ncu-gemm` run one call of each kernel for Nsight Compute and time nothing.
 """
 from __future__ import annotations
@@ -59,10 +60,12 @@ class Lib:
         so.wc_gemm_pipe.argtypes = [i, v, v, v, i, i, i, q, i, i, v, v]
         so.wc_spin.argtypes = [ctypes.c_longlong, v]
         so.wc_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 6)()
+        cs = (ctypes.c_int * 7)()
         so.wc_gemm_constants(cs)
         self.constants = list(cs)
-        if self.constants[:5] != [C.LANES, C.TASK_TILES, C.LANE_WORDS, C.TASK_WORDS, C.TASK_COLS]:
+        self.bits = self.constants[6]
+        lw = C.lane_words(self.bits)
+        if self.constants[:5] != [C.LANES, C.TASK_TILES, lw, lw * C.LANES, C.TASK_COLS]:
             raise RuntimeError(f"{name}: layout constants {self.constants} are not codec.py's")
 
     def call(self, fn: str, *args) -> None:
@@ -134,16 +137,21 @@ def plain_layout(w):
     return w8.permute(0, 3, 4, 2, 6, 5, 1, 7).contiguous().view(-1)              # nb, kc, tt, (g, tq), (hc, h), b
 
 
-def fragment_payloads(torch, w):
+def fragment_payloads(torch, w, bits: int = C.PAYLOAD_BITS):
     n, kd = w.shape
+    lw = C.lane_words(bits)
     w8 = w.view(n // 16, 2, 8, kd // C.TASK_COLS, C.TASK_TILES, 2, 4, 4)
     s = w8.permute(0, 3, 2, 6, 4, 5, 1, 7).contiguous().view(-1, C.LANES, C.LANE_BYTES)   # task, lane, stream
-    pad = torch.zeros(s.shape[0], C.LANES, C.LANE_WORDS * C.PAYLOAD_BYTES, dtype=torch.uint8, device=w.device)
+    start = [bits * i for i in range(lw)]
+    assert all(b % 8 + bits <= 64 for b in start)
+    pad = torch.zeros(s.shape[0], C.LANES, start[-1] // 8 + 8, dtype=torch.uint8, device=w.device)
     pad[:, :, :C.LANE_BYTES] = s
-    b = pad.view(s.shape[0], C.LANES, C.LANE_WORDS, C.PAYLOAD_BYTES).to(torch.int64)
-    m = torch.zeros(b.shape[:3], dtype=torch.int64, device=w.device)
-    for j in range(C.PAYLOAD_BYTES):
-        m |= b[..., j] << (8 * j)
+    at = torch.tensor([b // 8 for b in start], device=w.device)[:, None] + torch.arange(8, device=w.device)
+    g = pad[:, :, at].to(torch.int64)                                            # task, lane, word, its 8 bytes
+    m = torch.zeros(g.shape[:3], dtype=torch.int64, device=w.device)
+    for j in range(8):
+        m |= g[..., j] << (8 * j)
+    m = m >> torch.tensor([b % 8 for b in start], device=w.device) & ((1 << bits) - 1)
     return m.transpose(1, 2).contiguous().view(-1)                               # task, word, lane
 
 
@@ -151,8 +159,9 @@ def fragment_payloads(torch, w):
 
 def gate_codec(lib: Lib, torch, n_random: int, log) -> dict:
     rng = random.Random(7)
-    edges = [0, 1, 2, (1 << 56) - 1, (1 << 55), 0x0123456789ABCD, (1 << 56) - 2]
-    payloads = edges + [rng.getrandbits(56) for _ in range(n_random - len(edges))]
+    pb = lib.bits
+    edges = [0, 1, 2, (1 << pb) - 1, (1 << (pb - 1)), 0x0123456789ABCD, (1 << pb) - 2]
+    payloads = edges + [rng.getrandbits(pb) for _ in range(n_random - len(edges))]
     base = (1 << 40) + 12345
     m = torch.tensor(payloads, dtype=torch.int64, device="cuda")
     y = torch.empty_like(m)
@@ -167,8 +176,8 @@ def gate_codec(lib: Lib, torch, n_random: int, log) -> dict:
         lib.call("wc_decode", ptr(y), ptr(back), m.numel(), base, k, ptr(xr), 64, stream(torch))
         torch.cuda.synchronize()
         yh = y.cpu().tolist()
-        bad_enc = [i for i in sample if yh[i] != C.encode_word(payloads[i], base + i, key)]
-        bad_dec = [i for i in sample if C.decode_word(yh[i], base + i, key) != payloads[i]]
+        bad_enc = [i for i in sample if yh[i] != C.encode_word(payloads[i], base + i, key, pb)]
+        bad_dec = [i for i in sample if C.decode_word(yh[i], base + i, key, pb) != payloads[i]]
         round_trip = bool(torch.equal(back, m))
         ok = not bad_enc and not bad_dec and round_trip
         out[k] = {"checked_against_reference": len(sample), "round_trip_words": n_random, "encode_mismatch": bad_enc[:8],
@@ -183,9 +192,9 @@ def gate_layouts(torch, log) -> dict:
     w = bytes(rng.getrandbits(8) for _ in range(n * kd))
     wt = torch.tensor(list(w), dtype=torch.uint8, device="cuda").view(n, kd)
     plain_ok = bytes(plain_layout(wt).cpu().tolist()) == C.plain_fragments(w, n, kd)
-    frag_ok = fragment_payloads(torch, wt).cpu().tolist() == C.fragment_payloads(w, n, kd)
+    frag_ok = {b: fragment_payloads(torch, wt, b).cpu().tolist() == C.fragment_payloads(w, n, kd, b) for b in C.PACKINGS}
     log(f"gate layouts: plain {plain_ok} fragment {frag_ok}")
-    return {"plain": plain_ok, "fragment": frag_ok, "ok": plain_ok and frag_ok}
+    return {"plain": plain_ok, "fragment": frag_ok, "ok": plain_ok and all(frag_ok.values())}
 
 
 # --- read, standalone decode, compute-only rates ---------------------------------------------------------------------
@@ -294,7 +303,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     w = fp8_weights(torch, n, kd, 100 + n + kd)
     wb = w.view(torch.uint8)
     plain = plain_layout(wb)
-    payloads = fragment_payloads(torch, wb)
+    payloads = fragment_payloads(torch, wb, lib.bits)
     nwords = payloads.numel()
     stores = {}
     for k in ks:
@@ -547,7 +556,7 @@ def main() -> int:
             n, kd = SHAPES[name]
             w = fp8_weights(torch, n, kd, 1).view(torch.uint8)
             plain = plain_layout(w)
-            pay = fragment_payloads(torch, w)
+            pay = fragment_payloads(torch, w, lib.bits)
             for mb in batches:
                 x = torch.randn(mb, kd, device="cuda").to(torch.float8_e4m3fn)
                 y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
@@ -602,16 +611,21 @@ def main() -> int:
             f" free-floor {row['free_floor']['rebuild']:.4f}")
     (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
 
-    gemm_lib = max(libs, key=lambda l: res["libs"][l.name]["rates"]["decode"][KMAX]["per_s"])
+    narrow = [l for l in libs if l.bits == C.PAYLOAD_BITS]
+    gemm_lib = max(narrow, key=lambda l: res["libs"][l.name]["rates"]["decode"][KMAX]["per_s"])
     res["gemm_lib"] = gemm_lib.name
-    res["gemm"] = {}
-    for name in a.shapes.split(","):
-        n, kd = SHAPES[name]
-        g = gemm_case(gemm_lib, torch, name, n, kd, batches, ks, a.reps, log)
-        g["zeroing_s"] = {mb: gemm_zeroing(torch, n, mb, a.reps) for mb in batches}
-        res["gemm"][name] = g
-        res["ok"] &= g.get("ok", False)
-        (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
+    for lib in [gemm_lib, *(l for l in libs if l.bits != C.PAYLOAD_BITS)]:
+        key = "gemm" if lib is gemm_lib else f"gemm_{lib.name}"
+        res[key] = {}
+        log(f"gemm with {lib.name} ({lib.bits} payload bits a word)")
+        for name in a.shapes.split(","):
+            n, kd = SHAPES[name]
+            g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log)
+            g["zeroing_s"] = {mb: gemm_zeroing(torch, n, mb, a.reps) for mb in batches}
+            g["payload_bits"] = lib.bits
+            res[key][name] = g
+            res["ok"] &= g.get("ok", False)
+            (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
     (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
     write_result(res, libs, out_dir)
     log("done" if res["ok"] else "done with a failed gate")
@@ -632,11 +646,12 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
         if "rebuild" in row:
             ms.append({"name": f"rebuild_k{k}", "value": row["rebuild"], "unit": "1"})
         ms.append({"name": f"rebuild_free_k{k}", "value": row["free"]["rebuild"], "unit": "1"})
-    for name, g in res.get("gemm", {}).items():
-        for mb, t in g.get("times", {}).items():
-            for arm, ratio in t["ratio_vs_native"].items():
-                if arm != "empty":
-                    ms.append({"name": f"gemm_{name}_m{mb}_{arm}_vs_native", "value": ratio, "unit": "1"})
+    for key in [k for k in res if k == "gemm" or k.startswith("gemm_") and isinstance(res[k], dict)]:
+        for name, g in res[key].items():
+            for mb, t in g.get("times", {}).items():
+                for arm, ratio in t["ratio_vs_native"].items():
+                    if arm != "empty":
+                        ms.append({"name": f"{key}_{name}_m{mb}_{arm}_vs_native", "value": ratio, "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/word-codec.json", f"{rel}/bench.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
