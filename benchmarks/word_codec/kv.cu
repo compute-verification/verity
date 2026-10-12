@@ -569,20 +569,45 @@ __global__ void __launch_bounds__(AT, 2) attn_kernel(const uint8_t *__restrict__
   }
 }
 
-__global__ void __launch_bounds__(HEAD_DIM) attn_combine(const float *__restrict__ part, float *__restrict__ out,
-                                                         int splits) {
-  const int seq = blockIdx.x / HEADS, h = blockIdx.x % HEADS, d = threadIdx.x;
+// A block a sequence's head: warp w folds splits w, w + CW, ... online, a lane 4 dims, and the warps' folds merge in
+// shared memory. Every split holds at least one token, so warp 0's max is finite.
+constexpr int CW = 8;
+
+__global__ void __launch_bounds__(32 * CW) attn_combine(const float *__restrict__ part, float *__restrict__ out,
+                                                        int splits) {
+  __shared__ float4 sacc[CW][32];
+  __shared__ float sm_[CW], sl[CW];
+  const int seq = blockIdx.x / HEADS, h = blockIdx.x % HEADS, w = threadIdx.x / 32, lane = threadIdx.x % 32;
   const float *P = part + (size_t)seq * splits * PART;
-  float m = -INFINITY;
-  for (int s = 0; s < splits; ++s) m = fmaxf(m, P[s * PART + HEADS * HEAD_DIM + h]);
-  float l = 0.f, acc = 0.f;
-  for (int s = 0; s < splits; ++s) {
+  float m = -INFINITY, l = 0.f;
+  float4 a = make_float4(0.f, 0.f, 0.f, 0.f);
+  for (int s = w; s < splits; s += CW) {
     const float *ps = P + (size_t)s * PART;
-    const float w = exp2f(ps[HEADS * HEAD_DIM + h] - m);
-    l += ps[HEADS * HEAD_DIM + HEADS + h] * w;
-    acc += ps[h * HEAD_DIM + d] * w;
+    const float ms = ps[HEADS * HEAD_DIM + h], ls = ps[HEADS * HEAD_DIM + HEADS + h];
+    const float4 o = reinterpret_cast<const float4 *>(ps + h * HEAD_DIM)[lane];
+    const float mn = fmaxf(m, ms), x = exp2f(m - mn), y = exp2f(ms - mn);
+    l = l * x + ls * y;
+    a = make_float4(a.x * x + o.x * y, a.y * x + o.y * y, a.z * x + o.z * y, a.w * x + o.w * y);
+    m = mn;
   }
-  out[((size_t)seq * HEADS + h) * HEAD_DIM + d] = acc / l;
+  sacc[w][lane] = a;
+  if (lane == 0) { sm_[w] = m; sl[w] = l; }
+  __syncthreads();
+  if (w) return;
+  float M = sm_[0];
+#pragma unroll
+  for (int v = 1; v < CW; ++v) M = fmaxf(M, sm_[v]);
+  float L = 0.f;
+  float4 A = make_float4(0.f, 0.f, 0.f, 0.f);
+#pragma unroll
+  for (int v = 0; v < CW; ++v) {
+    const float x = exp2f(sm_[v] - M);
+    const float4 o = sacc[v][lane];
+    L += sl[v] * x;
+    A = make_float4(A.x + o.x * x, A.y + o.y * x, A.z + o.z * x, A.w + o.w * x);
+  }
+  reinterpret_cast<float4 *>(out + ((size_t)seq * HEADS + h) * HEAD_DIM)[lane] =
+      make_float4(A.x / L, A.y / L, A.z / L, A.w / L);
 }
 
 }  // namespace kv
@@ -673,7 +698,7 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
     kv::attn_kernel<false><<<batch * sp, kv::AT, kv::attn_smem<false>(), s>>>(p, q, part, ctx, layers, layer,
                                                                              per_split, sp, k);
   }
-  kv::attn_combine<<<batch * kv::HEADS, kv::HEAD_DIM, 0, s>>>(part, out, sp);
+  kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp);
   return launched();
 }
 }
