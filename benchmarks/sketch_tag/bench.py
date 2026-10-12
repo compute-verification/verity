@@ -835,8 +835,8 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
             points.append({
                 "schema": "verity/codec-frontier-point/v0", "lane": "ra-sketch-tag", "b": 61 if enc else 8,
                 "k": a.kr if enc else 0, "batch": int(mb),
-                "arithmetic": f"cuda-int8-mma/sketch-k{seq['k']}-n{seq['n_target']}/" +
-                              (f"{lib.name}/pb{lib.bits}" if enc else "plain") + "/layer-sequence",
+                "arithmetic": f"cuda-int8-mma/sketch-k{seq['k']}-n{seq['n_target']}/{lib.name}/" +
+                              (f"pb{lib.bits}" if enc else "plain") + "/layer-sequence",
                 "y_total": r[mode] - 1,
                 "commit_mode": f"deferred, {mode} (gate_up tags the previous qkv, o, down; down its gate_up{how}",
                 "y_total_vs_linears_native": t["ratio_vs_native"][mode] - 1,
@@ -897,8 +897,8 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                     sk0 = next(iter(cases.values()))["sketches"][f"{lay}_{ks}_{nt}"]
                     pt = {"schema": "verity/codec-frontier-point/v0", "lane": "ra-sketch-tag",
                           "b": 61 if lay == "enc" else 8, "k": a.kr if lay == "enc" else 0,
-                          "arithmetic": f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/{lib.name}/pb{lib.bits}"
-                                        if lay == "enc" else f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/plain",
+                          "arithmetic": f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/{lib.name}/"
+                                        + (f"pb{lib.bits}" if lay == "enc" else "plain"),
                           "batch": int(mb), "y_total": tot["best"] / nat - 1, "commit_mode": modes,
                           "y_total_separate": tot["stack"] / nat - 1, "y_total_fused": tot["fused"] / nat - 1,
                           "y_total_split": tot["split"] / nat - 1, "y_total_side": tot["side"] / nat - 1,
