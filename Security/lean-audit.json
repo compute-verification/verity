@@ -426,7 +426,12 @@
    "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses"
   },
   "Definitions.Accounting.Bandwidth": {
-   "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Confidence", "Definitions.Accounting.Bandwidth"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Accounting.Confidence",
+    "Definitions.Accounting.Bandwidth"
+   ],
    "except": [],
    "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
   },
@@ -604,16 +609,28 @@
    "type_hash": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e"
   },
   "Bandwidth.SecurityProofs.B3": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3.{u_1, u_2} : Bandwidth.Guarantees.B3"],
+   "assumptions": [],
+   "type_hash": "9988a227d2f3af4fb80d344254a7d385a32bc782f3b15912046dc67dc6e51b46"
   },
   "Bandwidth.SecurityProofs.B3Capacity": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3Capacity.{u_1, u_2} : Bandwidth.Guarantees.B3Capacity"],
+   "assumptions": [],
+   "type_hash": "3216e3384698719316692f6cc6db3bcf06152b0090c10c811f58c9aeb789ed9e"
   },
   "Bandwidth.SecurityProofs.B3CapacityRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3CapacityRO.{u_1, u_2} : Bandwidth.Guarantees.B3CapacityRO"],
+   "assumptions": [],
+   "type_hash": "0ba456e91cf351c91a52beadb346191e0dcbd9f8c5d3183f4209db1cf224204e"
   },
   "Bandwidth.SecurityProofs.B3RO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3RO.{u_1, u_2} : Bandwidth.Guarantees.B3RO"],
+   "assumptions": [],
+   "type_hash": "b2dd32b10ed99fff97ec8690ab651b337b9e2cdfd7efa3981e29ad5665e6f3f2"
   },
   "Bandwidth.SecurityProofs.HonestPasses": {
    "owner": "@memory-accounting",
@@ -622,10 +639,16 @@
    "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9"
   },
   "Bandwidth.SecurityProofs.Mbw": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.Mbw.{u_1, u_2} : Bandwidth.Guarantees.Mbw"],
+   "assumptions": [],
+   "type_hash": "a043d64046e92484d432d2c5c7dd267be7cd7917c32ba60d166d5dbd87438d54"
   },
   "Bandwidth.SecurityProofs.MbwCapacity": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.MbwCapacity.{u_1, u_2} : Bandwidth.Guarantees.MbwCapacity"],
+   "assumptions": [],
+   "type_hash": "14543c855bb73081fb225a17c7df7478387af02155c806d46e19367db0d5f2f6"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -4214,7 +4237,31 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
-    "Accounting.SecurityProofs.Recall"
+    "Accounting.SecurityProofs.Recall",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
+   ]
+  },
+  "Definitions.Accounting.Bandwidth.Causal": {
+   "digest": "44ca9320bacb2e2990c7878d8724c0e1b04f6ceded8ee6d9e23e5c44e37a63b0",
+   "definitions": {
+    "Bandwidth.Causal.Acts": "bf84a8bebc9a52be06c19a2937ae5e1416b1c39f8b8b7eadf1db58c02007f3e1",
+    "Bandwidth.Causal.Cross": "42319d887d9ef6f5e1c271749102eedef501ccc72733792a140a79b39ba48655",
+    "Bandwidth.Causal.HearsChip": "d7da9b45fb66d32748061aa0aeac9157d24fb6723e6dd297bfae145999623f4d",
+    "Bandwidth.Causal.OracleLocation": "45d775975250439a0f1874cf29490a8dd032753e9d33613125caac33446f501b",
+    "Bandwidth.Causal.PassiveMemory": "23e5648136afb6b8503d55f741d67bcfdd8c8b401fcd8b70be5f50f891051c70"
+   },
+   "guarantees": [
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Definitions.Accounting.Bandwidth.Game": {
@@ -4259,7 +4306,13 @@
     "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
-    "Bandwidth.SecurityProofs.HonestPasses"
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.HonestPasses",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Definitions.Accounting.Bandwidth.Interactive": {
@@ -4331,7 +4384,7 @@
    "guarantees": ["Bandwidth.SecurityProofs.AuditRelay"]
   },
   "Definitions.Accounting.Confidence": {
-   "digest": "7658b13f007da1657fc337e4935031e04074c4abdb565d080bc9f3b4a814ff0c",
+   "digest": "a431f91ebb1016a8e3ff46b1412adee4a3a414cd62644116fcb44d8417e15f20",
    "definitions": {
     "Accounting.Actual.Run": "59b9a32712cd5c6f246f1b7e6a3ee435e2d35f3e1882d7a7cf003a7a1be22974",
     "Accounting.Actual.Run.A": "1ccbd66f55cb59225749e02b0e16da0880011e930bebe5a1d2ecb38e007f4ceb",
@@ -4345,6 +4398,7 @@
     "Accounting.Actual.Run.mem": "dd69202e6cc6e2aaf253558dc167cdd6da57895c4fe8ff381268c22bb57f42fa",
     "Accounting.Actual.Run.seen": "ccf533bb585fd55cab3025ea2a576fd87ca01d48dc379e443b701688daacca38",
     "Accounting.Actual.Run.sent": "d607714e826836599346e8d28e69b929849d88157e0b95ae8ce4e2f5eeaa256d",
+    "Accounting.Actual.Run.signal": "8f3e12c2807eb5ac47fe36b43cff1d627351a78c04066634d158d020f4e1f588",
     "Accounting.Actual.Run.state": "a89f70b57086a6087671decec76a36d9e00a0116ebe45ad2abd29b9bed1832aa",
     "Accounting.Actual.Run.val": "5cc9838473d175b8749ea80c18d2c0f15af104127f05ec1f80551375a542991e",
     "Accounting.Actual.Run.view": "9360da653d2ce4b3f292283232d1ecfb6fbbf8c07d57349f6040d6a87831f156",
@@ -4352,16 +4406,24 @@
     "Accounting.Actual.chunk": "9a0bf0fbf19ea78d9aaca3737b653edc56327c22062841be87efaf44dac4c6af",
     "Accounting.Actual.position": "986a096cd75755b938ae3698193668c217ff947451b6fe25cea40ca5caa6285f",
     "Accounting.Additive": "c8c0489d83df1eb0207905c97bfb01051056206f391a6e0ec8ce423dcc7de39e",
+    "Accounting.Alphabet": "5f14f775d728c5e2b90b471ce45276926f98a8000ad8ebf05a5a0c5067f96a62",
     "Accounting.CausalFrom": "d01ead77fe53f1d17da6facca3f2f41d0e0d2d7258ebd5ef4d5f4b67226701a6",
     "Accounting.Placed.Holding": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab",
     "Accounting.Sound": "769827b129e3c4665ae2b98017f833787ce5805652a0a10ac256e105c18f467d",
+    "Accounting.portSignals": "0a82918f35da0c0533cc5269285f6b05154d897823f6d6e984c33b20c90ee333",
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
-    "Accounting.SecurityProofs.Recall"
+    "Accounting.SecurityProofs.Recall",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Definitions.Accounting.Physical": {
@@ -4476,6 +4538,12 @@
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.Recall",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -4915,7 +4983,13 @@
     "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.HonestPasses",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -12824,6 +12898,25 @@
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses"
+   ]
+  },
+  "Models.Accounting.Guarantees.Bandwidth.Causal": {
+   "digest": "906b60b49664317e9ccb494a48c0fcfe4a31e6e430b6ca235a184b8242f1b401",
+   "definitions": {
+    "Bandwidth.Guarantees.B3": "2fa33538e78f3a712bf67f9c6f22d4cfe63bd47049d697beac712091e1f58396",
+    "Bandwidth.Guarantees.B3Capacity": "f3dfafaa86dcc42b12dac913543ca96e413c0b2c0ae690e0b3eb7bcf35e2fa84",
+    "Bandwidth.Guarantees.B3CapacityRO": "d9dc59bd66551a59b524b08c9dd8cb065065f9c3dcc74e07ffbbcedfaa83d089",
+    "Bandwidth.Guarantees.B3RO": "a5b3be43df38802256fcd8a65f52d9daa13d534ca43f73616c6b45b9f7af1da5",
+    "Bandwidth.Guarantees.Mbw": "5c87ceecc02181154fae40fb7595b491368cbce92a03b01be270ae2f87ccad3d",
+    "Bandwidth.Guarantees.MbwCapacity": "9d1a81fcdca474f8686c0a3f5f31d43e3efb76011b3a8eece3f6316bc3daa42b"
+   },
+   "guarantees": [
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Models.Accounting.Guarantees.Confidence": {
