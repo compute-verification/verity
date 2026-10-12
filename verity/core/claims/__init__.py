@@ -147,14 +147,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("rate-device", "model",
           "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
           "its side link in every window, after the layout and before the deadline, and every tag absorbing all of them, so "
-          "the link carries them and at most L - rho bits of anything else; a word the device neither holds nor reads it "
-          "rebuilds with the codec's inverse, whose ops are charged to accounts other than the compute account", "Rate device"),
-    # falsified by a faster rebuild on the stated device: k words of E, rebuilt from setup and the weights they encode, in
-    # less than k * c_enc of the compute account's units, by any schedule (one word alone, or many at once)
+          "the link carries them and at most L - rho bits of anything else; its side sources are non-adaptive, each "
+          "answering a read at an address the chip picks as a function of E fixed before the window, never of what the chip "
+          "sent, the stream or the oracle; a word the device neither holds nor reads it rebuilds with the codec's inverse, "
+          "whose ops are charged to accounts other than the compute account", "Rate device"),
+    # falsified by a faster rebuild on the stated device: x bits of E, rebuilt from setup and the weights they encode, in
+    # less than x * c_enc / b of the compute account's units, by any schedule (one word alone, or many at once)
     Entry("rate-codec-work", "assumption",
-          "Rate codec work: on the stated device, rebuilding k words of E that it neither holds nor reads, from setup and "
-          "the weights they encode, costs at least k * c_enc units of compute, with no amortization across words",
-          "Rate codec work", "measured"),
+          "Rate codec work: on the stated device, rebuilding x bits of E that it neither holds nor reads, from setup and "
+          "the weights they encode, costs at least x * c_enc / b units of compute (b the word's bits), with no amortization "
+          "across words", "Rate codec work", "measured"),
     # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
     # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
     # reading or sending something other than E's sectors as they are

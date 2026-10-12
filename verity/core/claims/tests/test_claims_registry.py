@@ -58,8 +58,8 @@ def test_bandwidth_device_claims_are_measured_and_cited_separately() -> None:
 
 def test_rate_audit_claims_are_cited_separately() -> None:
     device, work = get("rate-device"), get("rate-codec-work")
-    assert (device.kind, device.standing) == ("model", None) and "L - rho" in device.name
-    assert (work.kind, work.standing) == ("assumption", "measured") and "k * c_enc" in work.name
+    assert (device.kind, device.standing) == ("model", None) and "L - rho" in device.name and "non-adaptive" in device.name
+    assert (work.kind, work.standing) == ("assumption", "measured") and "x * c_enc / b" in work.name
     verbatim = get("rate-sketch-verbatim")
     assert (verbatim.kind, verbatim.standing) == ("model", None) and "whole sectors" in verbatim.name
 

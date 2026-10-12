@@ -142,8 +142,9 @@ is `(1 − τ)/x` with `τ = (W + tagging)/(F·T)` and `x = N·c_enc/(F·T)`. Th
 hold: a per-run compute guarantee bounding the probability that the compute audit accepts with the compute account's
 work below `W` by `ε_W` (lane `ra-per-run`'s `ComputeSoundPerRun`) gives, by a union bound, the probability that both
 audits accept and the bandwidth account read short of the floor at most `ε + ε_W`. Unlike `BandwidthOfAudit`, this is
-a per-run reading: the event is about the reads at the coins drawn. Proof: `Accounting.SecurityProofs.RateOfAudit`,
-from `RateAudit`.
+a per-run reading: the event is about the reads at the coins drawn. A `RealizesRate` for a deployed run must put the
+deadline and a round trip, `T + RTT`, inside `T_bw`, and every rebuild in the bandwidth window must fall in the compute
+window's work of the other accounts (`compute_le`). Proof: `Accounting.SecurityProofs.RateOfAudit`, from `RateAudit`.
 
 Frozen (no-function, hash): it carries `RateAudit`, a bound in the random-oracle model over an abstract chip program, to
 the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run, not to a Lean
