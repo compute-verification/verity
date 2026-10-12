@@ -353,8 +353,8 @@ static cudaKernel_t load_kernel(const std::string& path, const char* name, cudaL
 static int run_icachef(std::string& j, const std::string& dir) {
   uint32_t* out;
   unsigned long long* cyc;
-  OK(cudaMalloc(&out, 128 * 32));
-  OK(cudaMalloc(&cyc, 128 * 8));
+  OK(cudaMalloc(&out, 256 * 32));
+  OK(cudaMalloc(&cyc, 256 * 8));
   j += "\"icachef\":{\"bytes_per_step\":128,\"instructions_per_step\":8,\"runs\":[";
   bool first = true;
   for (int n : ICACHEF_STEPS) {
