@@ -448,13 +448,22 @@
    "type_hash": "544acaaebe8c1a3245a82532f76264ca9a2788539b712c3c394bdc9f1d67c5ea"
   },
   "Accounting.SecurityProofs.Memory.AddsAdvice": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsAdvice : Accounting.Guarantees.Memory.AddsAdvice"],
+   "assumptions": [],
+   "type_hash": "134add09b968feac6240a65346d5c814dd7a9afe1bfcc6ff8d8eebd89c8ff93c"
   },
   "Accounting.SecurityProofs.Memory.AddsAdviceOn": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn"],
+   "assumptions": [],
+   "type_hash": "9f8641e2f3a11d725cb3d10500bd3cf177f5bfc9699fa1d474e777c2e2a43f47"
   },
   "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsAdviceP2Ring : Accounting.Guarantees.Memory.AddsAdviceP2Ring"],
+   "assumptions": [],
+   "type_hash": "d3266a0560d33ecc3acaa0ca37239838dd9920acbca2e81a226589007a3c7247"
   },
   "Accounting.SecurityProofs.Memory.AddsIsolated": {
    "owner": "@memory-accounting",
@@ -493,7 +502,10 @@
    "type_hash": "38be2c96b0dfcca031464085d1aabc4b6ccf2a4cb146f88d79611faec1ba885f"
   },
   "Accounting.SecurityProofs.Memory.CountingAdvice": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.CountingAdvice : Accounting.Guarantees.Memory.CountingAdvice"],
+   "assumptions": [],
+   "type_hash": "ce044d7f61c49917c656e0fef2aa65fc8cf9359727b975c2ee1adb3aec56f5e1"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -4134,19 +4146,25 @@
  },
  "reads": {
   "Definitions.Accounting.Memory": {
-   "digest": "a0c146c5c50c7edf7fb8e3f0600d2d36b7b64fdd2e1d5591e2163683676c262a",
+   "digest": "6611399160c026f613e5e66208c6725847cddb1f299db2addf06baedfcf3efef",
    "definitions": {
     "Accounting.Memory.Determines": "e2afa785f178f523c375b0a748f71d37365b481c4b17e1a26767a90d63886626",
-    "Accounting.Memory.fibre": "30b5e82f80befddfca5880b5ab4508c3c5501261e7bca1f8e3e7f88b4d1ff103"
+    "Accounting.Memory.DeterminesAdvice": "044d87c4d62cdc247e32c17d11254755d63f8de976c1b199ecd87fcc35637f35",
+    "Accounting.Memory.fibre": "30b5e82f80befddfca5880b5ab4508c3c5501261e7bca1f8e3e7f88b4d1ff103",
+    "Accounting.Memory.fibreAdvice": "b0670f5885042b0f321ae5a95ceff76840f309e43f55b14798657de50a3f0fa1"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
-    "Accounting.SecurityProofs.Memory.Counting"
+    "Accounting.SecurityProofs.Memory.Counting",
+    "Accounting.SecurityProofs.Memory.CountingAdvice"
    ]
   },
   "Definitions.Accounting.Tag.PolyHash": {
@@ -4597,6 +4615,7 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -4638,6 +4657,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
@@ -4666,6 +4688,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
@@ -4707,6 +4732,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
@@ -4797,6 +4825,7 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -4825,6 +4854,8 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
@@ -4866,6 +4897,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
@@ -4892,6 +4926,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
@@ -4960,6 +4997,8 @@
     "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
@@ -12593,24 +12632,32 @@
    ]
   },
   "Models.Accounting.Guarantees.Memory": {
-   "digest": "5b13038a76890f8205f6a69cff58dbcdee024cbe14627a8a6b3bf231d4a8e465",
+   "digest": "5cb49813c4c96062a1ec8420803d7ca524eb76fb792feb22c2a8960e63c10f68",
    "definitions": {
     "Accounting.Guarantees.Memory.Adds": "f071694fc39e660a8cdd1fa117526838628d1efdba08f031549b9d0c58109453",
+    "Accounting.Guarantees.Memory.AddsAdvice": "89901f5814347debaad3f4b3cfe52941a24e49734525449c050db0a48234ec1d",
+    "Accounting.Guarantees.Memory.AddsAdviceOn": "5628e97965c332c4a83cd3acba36998398a32a01610228c0d3ac9e7e841a5692",
+    "Accounting.Guarantees.Memory.AddsAdviceP2Ring": "6b357a2c56451fc026e15b16ac226aad975f0e897929e87532a5e0bb40a5e9d3",
     "Accounting.Guarantees.Memory.AddsIsolated": "66659b648efc6cdf99234eba9337637543439b46672bf18c355d2b764b03b6cf",
     "Accounting.Guarantees.Memory.AddsOn": "dfa4a0452231370ff1360ec341db32254f073e05c4684ca18daced487dfb519b",
     "Accounting.Guarantees.Memory.AddsOnIsolated": "16722addf042722e8ac9ac2c6ae6bddd7bc762a2b192b9fdb4fe77efa3abb783",
     "Accounting.Guarantees.Memory.AddsP2Ring": "20556d9fce4cfc39d55dca01a08c87b9eee06b9af1aef993c795f6b517a2c6eb",
     "Accounting.Guarantees.Memory.AddsP2RingIsolated": "d346a90f41442631f4806ce931fd5384167531471876be9a299b8bbf5ac6c210",
-    "Accounting.Guarantees.Memory.Counting": "545adad226ac07276a309a699aa2b49a6b21b924e0fb994a4275723a3b649b2e"
+    "Accounting.Guarantees.Memory.Counting": "545adad226ac07276a309a699aa2b49a6b21b924e0fb994a4275723a3b649b2e",
+    "Accounting.Guarantees.Memory.CountingAdvice": "52978a71b5a470e251d2140cf84f5fe9893c434a36e1c84389bf00b28c632117"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsIsolated",
     "Accounting.SecurityProofs.Memory.AddsOn",
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
-    "Accounting.SecurityProofs.Memory.Counting"
+    "Accounting.SecurityProofs.Memory.Counting",
+    "Accounting.SecurityProofs.Memory.CountingAdvice"
    ]
   },
   "Models.Accounting.Guarantees.Sketch": {
@@ -12776,6 +12823,7 @@
     "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces"
