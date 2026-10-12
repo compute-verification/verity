@@ -34,6 +34,6 @@ LEASE=(gpu-lease 1 --wait --max-min "${MAXMIN:-15}" --)
   [ $rc = 0 ] || { echo "gate failed"; exit $rc; }
   for sq in 0 1; do for k in 1 2 3; do
     echo "== sqr $sq k $k" >> "$O/sweep.log"
-    "$B/rd-$sq" sweep $k "$B/key$k.txt" "$O/rd-sq$sq-k$k.json" 4096 >> "$O/sweep.log" 2>&1 || rc=3
+    "$B/rd-$sq" sweep $k "$B/key$k.txt" "$O/rd-sq$sq-k$k.json" 16384 >> "$O/sweep.log" 2>&1 || rc=3
   done; q; done
   exit $rc'

@@ -24,7 +24,14 @@ constexpr int UE = 4;  // codec chains a thread, as co.cu
 constexpr int VL = 8;  // 16-byte loads in flight a read thread
 constexpr int THREADS = 256;
 
-__host__ __device__ inline uint32_t fill(uint64_t i) { return (uint32_t)(i * 2654435761ull) ^ (uint32_t)(i >> 7); }
+// SplitMix64's finalizer: the first fill (an arithmetic progression XOR a slow counter) read back at 2.5× the
+// GDDR7 peak in the mixed splits, so the memory system compressed it.
+__host__ __device__ inline uint32_t fill(uint64_t i) {
+  uint64_t z = i * 0x9E3779B97F4A7C15ull + 0x632BE59BD9B4E019ull;
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+  return (uint32_t)(z ^ (z >> 31));
+}
 
 __global__ void fill_kernel(uint4* buf, size_t n16) {
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n16; i += (size_t)gridDim.x * blockDim.x)
