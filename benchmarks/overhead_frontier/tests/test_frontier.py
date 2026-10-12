@@ -12,10 +12,13 @@ import inputs as I  # noqa: E402
 from model import SHAPES, Params, Shape, Workload, evaluate, gamma_cap, gamma_pass, step  # noqa: E402
 
 
+NO_EPHEMERAL = {name: (0.0, 0.0) for name in SHAPES}
+
+
 def _measured_step() -> dict:
-    """ra-codec-tensor's step: one GPU, bf16 KV, no KV receipt, no binding, no host tier, no activation traffic."""
+    """ra-codec-tensor's step: one GPU, bf16 KV, no KV receipt, no binding, no host tier, no ephemeral traffic."""
     v = I.values()
-    v.update(tau_kv={2: 0.0, 3: 0.0}, tau_bind=0.0, rho_l2=1.0)
+    v.update(tau_kv={2: 0.0, 3: 0.0}, tau_bind=0.0, eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL)
     return v
 
 
@@ -35,9 +38,23 @@ def test_reproduces_the_measured_step(name, batch, ctx, k, measured):
 
 def test_plain_step_is_the_measured_passes():
     v = I.values()
-    v["rho_l2"] = 1.0
+    v.update(eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL)
     st = step(Workload(SHAPES["70B"], 8, 9280, tp=1), Params(2, 4096, 16, 0, 0.0), v)
     assert 1.03 <= st["plain"] * v["R"] * 1e9 / (st["W"] + st["KV"]) <= 1.10
+
+
+@pytest.mark.parametrize("name, batch, read_mb, write_mb", [
+    ("8B", 1, 15.2, 108.9),  # r20261012-181016-6cbb, full depth
+    ("8B", 64, 94.5, 469.3),
+    ("70B", 1, 48.0, 492.2),  # r20261012-181715-5045, scaled to 80 layers
+    ("70B", 64, 712.8, 2267.3),
+])
+def test_ephemeral_traffic_is_the_measured_bytes(name, batch, read_mb, write_mb):
+    v = I.values()
+    st = step(Workload(SHAPES[name], batch, 2048, tp=1), Params(3, 4096, 16, 0, 0.0), v)
+    kv_append = batch * SHAPES[name].kv_bytes_per_token
+    assert st["eph_read"] / 1e6 == pytest.approx(read_mb, rel=0.12)
+    assert (st["eph_write"] - kv_append) / 1e6 == pytest.approx(write_mb, rel=0.12)
 
 
 def test_gamma_terms_match_the_red_team():

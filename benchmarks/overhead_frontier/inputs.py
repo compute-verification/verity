@@ -92,9 +92,21 @@ INPUTS: dict[str, Input] = {
     "e_attn": Input(1540.0 / 1495.0, "reads", "ra-codec-tensor: plain attention at 1,495 of 1,540 GB/s", "measured"),
     "e_mem": Input(((1, 1.05), (32, 1.25)), "weight reads by M", "ra-codec-tensor: the plain step 1.05–1.08 passes; "
                    "native linears at M=32 read the weights 1.25 times", "measured"),
-    "rho_l2": Input(0.45, "of activation traffic", "calibrated to stock 70B's uncertified share (ra-vllm-encoded "
-                    "r20261012-104353-3dc6, art:6dd5489e)", "estimate", 0.9,
-                    "evict-first hints on the weight and KV streams, so activations stay in L2"),
+    # The step's ephemeral DRAM traffic, in bytes per layer × hidden: (a fixed part, a part per sequence in the batch).
+    "eph_read": Input({"8B": (106.0, 9.4), "70B": (54.0, 17.9), "405B": (106.0, 17.9)}, "B per layer·hidden",
+                      "ra-ephemeral: Nsight DRAM reads beyond the linears, the lm_head and the live KV, stock vLLM, "
+                      "full depth (8B r20261012-181016-6cbb, 70B r20261012-181715-5045; fit within ~10% over B1–64 × "
+                      "2k–32k); 405B the larger of each", "measured",
+                      {"8B": (0.0, 9.4), "70B": (0.0, 17.9), "405B": (0.0, 17.9)},
+                      "the linears reduce on chip: no split-K or stream-K workspace read back"),
+    "eph_write": Input({"8B": (754.0, 47.2), "70B": (692.0, 43.8), "405B": (754.0, 47.2)}, "B per layer·hidden",
+                       "ra-ephemeral: Nsight DRAM writes (GEMM workspaces, split-KV partials, the activations' "
+                       "write-backs), the same runs, scaled to full depth; 1.3–2.8% of 8B's reads", "measured",
+                       {"8B": (0.0, 11.8), "70B": (0.0, 11.0), "405B": (0.0, 11.8)},
+                       "no workspaces at decode, and evict-first on the weight and KV streams so the activations' "
+                       "lines are overwritten in L2 instead of written back (a quarter of them still are: estimate)"),
+    "write_bus": Input(1.0, "read-times per written byte", "a DRAM write holds the bus as long as a read (turnaround "
+                       "not counted)", "estimate"),
     # The verifier's sample (μ_sample) and the counting slack (λ).
     "v_budget": Input(2.0, "Gb/s per node", "the verifier's download for openings; s ≈ 3 × 10^4 a window at 4 KiB "
                       "(the design's μ_sample ≈ 0.1%)", "policy", 10.0, "a 10 Gb/s verifier link"),
@@ -120,7 +132,8 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "tau_kv": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))}, "the same on the KV"),
     "tau_bind": (0.0, "binding folded into the sign matrix for free"),
     "tau_host": (0.0, "the host tier's stream costs the HBM stream nothing"),
-    "rho_l2": (1.0, "no activation byte reaches HBM"),
+    "eph_read": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte read from DRAM"),
+    "eph_write": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte written to DRAM"),
     "mu_partial": ({2: 0.0, 3: 0.0}, "partial completion costs its share of an encode"),
     "s_adv": (1.0, "the adversary squares no faster than the best measured"),
     "v_budget": (10.0, "a 10 Gb/s verifier link"),
@@ -132,7 +145,7 @@ RISKS: dict[str, tuple[Any, str]] = {
     "eta_reserve": (0.0025, "the honest prover reads at 99.75% of the adversary's best stream"),
     "b_host": (819.0, "the host DRAM at DDR5-6400 spec (no trusted hardware: the adversary may provision it)"),
     "s_adv": (1.45, "the adversary's squaring at the issue bound"),
-    "rho_l2": (0.0, "every activation byte goes to HBM"),
+    "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
     "v_budget": (1.0, "a 1 Gb/s verifier link"),
 }
 

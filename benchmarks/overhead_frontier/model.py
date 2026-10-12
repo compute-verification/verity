@@ -1,24 +1,25 @@
 """The audited decode step on node 2, and its γ, for one workload and one choice of parameters.
 
-A workload is a Llama-class shape in FP8 (KV in FP8, lm_head in BF16) at a decode batch and a context, laid out at the
-smallest tensor-parallel degree in {1, 2, 4, 8} whose weights and KV fit the 93.9 GB stored per GPU; the node runs
-8/tp replicas. Times are per GPU per decode step.
+A workload is a Llama-class shape in FP8 (KV in FP8, lm_head in BF16 and encoded like every linear) at a decode batch
+and a context, laid out at the smallest tensor-parallel degree in {1, 2, 4, 8} whose weights and KV fit the 93.9 GB
+stored per GPU; the node runs 8/tp replicas. Times are per GPU per decode step.
 
 The step, per GPU (``step``):
-- plain: the linears take max(W·e_mem(m)/R, FLOPs/Φ), attention KV·e_attn/R, activations their HBM traffic/R, and a
-  tensor-parallel step 2L all-reduces over PCIe;
+- plain: the linears take max(W·e_mem(m)/R, FLOPs/Φ), attention KV·e_attn/R, the ephemeral traffic (reads, and
+  writes at ``write_bus`` read-times a byte, measured by ra-ephemeral) its bytes/R, and a tensor-parallel step 2L
+  all-reduces over PCIe;
 - audited: the linears' CUDA-core work (decode o_w, receipt τ_w, binding τ_bind, per weight pass) is exposed except
   for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h read-times a byte) hides
   in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind a KV pass; the host tier slows the step by
   τ_host per b_zero_copy of host stream per GPU, and the all-reduce gets what the host stream leaves of each GPU's
   PCIe receive side, min(b_p2p, b_pcie − stream).
 - under ``cap``, memory left idle is filled with receipt-only reads of the store (τ_fill a pass, no decode: top-up),
-  and the step may be padded with more of them (``pad``) when its activation traffic is too large a share of it;
+  and the step may be padded with more of them (``pad``) when its ephemeral traffic is too large a share of it;
   under ``pass`` neither: the pass is the step's own reads, W + KV.
 
 γ (``gamma_cap``, ``gamma_pass``), as fractions of the node's read capacity ΣR = 8·R + b_host:
 - ``cap`` (the ruling: 99% of read bandwidth goes to registered data): μ_chip = S_chip/H, μ_rebuild = s·(1+h)/(k·x₁),
-  μ_partial, μ_host = (1 − host share)·b_host/ΣR, μ_unreg = the step's activation traffic over its capacity,
+  μ_partial, μ_host = (1 − host share)·b_host/ΣR, μ_unreg = the step's ephemeral bus time over its capacity,
   μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_link (0 under the identity
   statement ``C``; ``link_n`` prices memory-only helpers over the NIC). The honest read shortfall η is unmeasured:
   the frontier holds ``eta_reserve`` back for it and reports what is left (``eta_allowance``).
@@ -63,9 +64,9 @@ class Shape:
     def flops_per_token(self) -> float:
         return 2.0 * (self.linear_params + self.hidden * self.vocab)
 
-    def act_bytes_per_token(self, tp: int) -> float:
-        kv = self.kv_heads * self.head_dim
-        return 2.0 * self.layers * (12 * self.hidden + (4 * (self.hidden + 2 * kv) + 6 * self.inter) / tp)
+    def ephemeral(self, table: dict[str, tuple[float, float]], batch: int, tp: int) -> float:
+        fixed, per_seq = table[self.name]
+        return self.layers * self.hidden * (fixed + per_seq * batch) / tp
 
 
 SHAPES = {
@@ -138,12 +139,13 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     R = v["R"] * 1e9
     W = s.weight_bytes / tp
     KV = m * w.ctx * s.kv_bytes_per_token / tp
-    act = m * s.act_bytes_per_token(tp) * (1.0 - v["rho_l2"])
+    act = s.ephemeral(v["eph_read"], m, tp)
+    wr = (s.ephemeral(v["eph_write"], m, tp) + m * s.kv_bytes_per_token / tp) * v["write_bus"]
     e_mem = interp(v["e_mem"], m)
     t_rd = W * e_mem / R
     t_tc = s.flops_per_token * m / tp / v["phi"]
     t_kv = KV * v["e_attn"] / R
-    t_act = act / R
+    t_act = (act + wr) / R
     plain = max(t_rd, t_tc) + t_kv + t_act + _allreduce(w, tp, v["b_p2p"], v)
 
     blk = 0.75 + 0.25 * 4096 / p.block
@@ -176,14 +178,15 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     return {
         "tp": tp, "plain": plain, "cap": cap, "pass": core * (1.0 + host), "t_rd": t_rd, "t_tc": t_tc,
         "t_kv": t_kv, "t_act": t_act, "t_ar": t_ar, "lin": lin, "enc": enc, "attn": attn, "idle": idle,
-        "topup": topup, "pad": 0.0, "host": host, "host_stream": v["gpus"] * r_h, "W": W, "KV": KV, "act": act,
+        "topup": topup, "pad": 0.0, "host": host, "host_stream": v["gpus"] * r_h, "W": W, "KV": KV,
+        "act": act + wr, "eph_read": act, "eph_write": wr,
         "f_kv_hbm": KV / v["H"],
         "f_kv_reads": t_kv / plain,
     }
 
 
 def pad(st: dict[str, float], unreg_budget: float, v: dict[str, Any]) -> dict[str, float]:
-    """The step padded with receipt-only reads until its activation traffic is ``unreg_budget`` of its capacity
+    """The step padded with receipt-only reads until its ephemeral traffic is ``unreg_budget`` of its capacity
     (μ_unreg under ``cap`` falls as the step grows); unchanged if it already is."""
     sigma = v["gpus"] * v["R"] + v["b_host"]
     hbm = v["gpus"] * v["R"] / sigma
