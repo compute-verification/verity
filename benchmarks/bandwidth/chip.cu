@@ -12,7 +12,7 @@
 //   unified   whether code evicts constants: the constant bank chased, N steps of code, the bank chased again.
 //   clevel    where the evicted constants come back from: unified's second chase with and without the other SMs
 //             thrashing L2 in between; glevel the same through L2 (its control), and cpollute with other modules'
-//             constants chased in between instead, 64 KiB to 4 MiB of them.
+//             constants chased in between instead, 64 KiB to 256 MiB of them (twice L2).
 //   --ur      whether uniform register URn holds a value: urt rewritten (chip_ur.py) into chosen URs.
 //   const     a pointer chase through __constant__ memory (64 KiB, the bank's size), one thread: cycles per load against
 //             the footprint, at strides of 64 and 256 bytes (the line size from the ratio of the knees).
@@ -517,7 +517,7 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool
 // its own module and 64 KiB bank, one block an SM) chase their banks.  A constant level beside L2 that holds C bytes
 // loses clevel's bank once K·64 KiB passes C; L2 keeps it until K·64 KiB nears L2's size.
 static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
-  constexpr int KMAX = 64;
+  constexpr int KMAX = 4096;
   const int count = 65536 / 64, sw = 16, blocks = d.sms;
   std::vector<uint32_t> img(16384, 0);
   for (int k = 0; k < count; ++k) img[k * sw] = ((k + 1) % count) * sw;
@@ -572,7 +572,7 @@ static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
        ",\"bank_bytes\":65536,\"stride\":64,\"blocks_per_module\":" + std::to_string(blocks) + ",\"runs\":[";
   bool first = true;
   for (int rep = 0; rep < 2; ++rep)
-    for (int K : {0, 1, 2, 4, 8, 16, 32, 64}) {
+    for (int K : {0, 1, 16, 64, 512, 1024, 1536, 2048, 2560, 3072, 4096}) {
       int warm = 2 * count, loads = 2 * count, pn = 2 * count + 1;
       uint32_t yy = y, mask = 0, th = K ? 2u : 0u, expect = (uint32_t)(K * blocks), pm = 0;
       uint64_t words = 0;
