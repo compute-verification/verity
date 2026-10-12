@@ -6,7 +6,9 @@
 # rec-statements (the 11); rec-transcript --rec-inner on both records (checkCovers); L3 and RecSparse + R staged
 # (c3_e2e.py stage level3 / session); Lean `statement` on each under candidate 3's inner shape with the inner transcript;
 # L3 and R's L2 proved by C-Flock --zk under serve --draw subset:N, replayed by upstream, and Lean's verify under
-# --rec-inner (plain, --sparse) with --rec-inner-transcript and --rec-inner-registration on each record.
+# --rec-inner (plain, --sparse) with --rec-inner-transcript and --rec-inner-registration on each record. Gap 4 and check 5:
+# c3_e2e.py's forgeries (claim, claim-own, sparse-v, stacked-coef, opening-v), each refused by `statement` by name, the
+# claim forgery by `verify` too; R's opening part 0 proved; the fixture rec-c3-inner (out/fixture) and rec-coins' record.
 #   research run --on vy-cpu-1 --mem-gb 40 --source . --cwd source --declared-output 'out/**' -- \
 #     python3 tools/verity/check/slot.py --by gap2 -- bash $0
 set -uxo pipefail
@@ -115,9 +117,55 @@ prove() {  # prove TAG DIR: serve --zk under the draw, prove, replay, and Lean's
   grep -h "^VERDICT" $D/lean-*.log | cut -c1-800 >> $E/verdicts.txt
   for f in $D/lean-*.log; do echo "== $f"; grep -v "^VERDICT" $f | tail -3; done >> $E/verdicts.txt
 }
+# the inner session as the fixture rec-c3-inner holds it, with check 5's record of the inner statement (rec-coins)
+FX=$O/fixture/rec-c3-inner; mkdir -p $FX/prover $FX/session
+cp $H/inner/public.json $H/inner/private.json $H/fold.json $H/points.json $E/circuit-meta.txt $REG $FX/
+cp $H/inner/prover/session.json $FX/prover/; cp $H/inner/session/session.json $FX/session/
+$LEAN_BIN rec-coins --rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/prover \
+  > $FX/rec-coins.json 2> $E/rec-coins.err
+echo "rec-coins exit $?" | tee -a $X
+
+# the controls: each forgery staged, and `statement` on each statement it changed (prover record, inner transcript)
+: > $E/controls.tsv
+for k in claim claim-own sparse-v stacked-coef opening-v; do
+  python3 verity/ml/flock/pod/c3_e2e.py stage $k --inner $H/inner --fold $H/fold.json --points $H/points.json --circuit $IC \
+    --salts $S/acc-salts-c3.bin --out $S/v-$k > $E/stage-$k.json 2> $E/stage-$k.err
+  echo "stage $k exit $?" | tee -a $X
+  for d in $(find $S/v-$k -name circuit.txt -printf '%h\n' | sort); do
+    rel=${d#$S/v-$k/}
+    cmp -s $d/registered.json $S/v-c3/$rel/registered.json && cmp -s $d/pub.bin $S/v-c3/$rel/pub.bin && continue
+    u=$(head -1 $d/circuit.txt | cut -d' ' -f2)
+    flags=$(own $d) || { echo "own $d failed" | tee -a $X; continue; }
+    $LEAN_BIN statement $(files $d) $flags "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json \
+      > $E/st.out 2> $E/st.err
+    rc=$?
+    printf '%s\t%s\t%s\t%s\t%s\n' "$k" "$u" "$rc" "$(head -1 $E/st.out | cut -c1-500)" "$(tail -1 $E/st.err | cut -c1-300)" >> $E/controls.tsv
+    echo "control $k $u exit $rc (1: refused)" | tee -a $X
+    echo "$k $d" >> $E/control-dirs.txt
+  done
+done
+
 prove l3 $S/v-l3/L3
 for d in $(find $S/v-c3 -name circuit.txt -printf '%h\n'); do
-  [ "$(head -1 $d/circuit.txt | cut -d' ' -f2)" = rec-open-stacked/l16-h1 ] && RL2=$d
+  case "$(head -1 $d/circuit.txt | cut -d' ' -f2)" in
+    rec-open-stacked/l16-h1) RL2=$d ;;
+    rec-opening/*-p0) OP0=$d ;;
+  esac
 done
 prove r-l2 ${RL2:?no staged rec-open-stacked/l16-h1}
+[ -n "${OP0:-}" ] && prove opening-p0 $OP0
+
+# gap 4 at verify: the consistently registered wrong claim, set up against a proved session (R's opening part 0's), is
+# refused at setup in RecSparse and R's opening alike
+SESS=$(find $E/prove-opening-p0/sessions -name session.json -printf '%h\n' 2>/dev/null | sort | head -1)
+: > $E/claim-verify.txt
+for d in $(grep '^claim ' $E/control-dirs.txt | cut -d' ' -f2); do
+  [ -n "$SESS" ] || break
+  u=$(head -1 $d/circuit.txt | cut -d' ' -f2)
+  $LEAN_BIN verify --zk $(files $d) $(own $d) "${IN[@]}" --rec-inner-session $H/inner/prover \
+    --rec-inner-transcript $H/inner/public.json --session $SESS > $E/cv.log 2>&1
+  rc=$?
+  echo "$u exit $rc $(grep -h '^VERDICT' $E/cv.log | cut -c1-600)" >> $E/claim-verify.txt
+  echo "verify claim $u exit $rc (1: refused)" | tee -a $X
+done
 cat $X

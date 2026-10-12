@@ -3,8 +3,12 @@ staged by `rec_vstage.stage` and each checked by the live Lean verifier's `flock
 
     python c3_e2e.py stage KIND --inner I --fold F --points P --circuit C --salts S --out DIR > stage.json
         KIND: honest (every level, the holo algebra, RecSparse, R's levels and opening)
-              claim       rep 0's rec-claim row one bit off, registered consistently (no verifier-own entry of rec-claim)
-              claim-own   the same, read against the honest rec-claim root as the verifier's own entry
+              claim       rep 0's rec-claim row one bit off, registered consistently: the reads name the forged root as the
+                          verifier's own entry, in RecSparse and R's opening (gap 4: refused by the claim round's c_k)
+              claim-own   the same, read against the honest rec-claim root (the claim round's c_k) as the verifier's own entry
+              sparse-v    RecSparse's v of rep 0, element 0 one bit off (check 5: rec-sparse-v)
+              stacked-coef  R's level 2 opening 0's coef word 0 one bit off (check 5: rec-coef at stacked/rep0's coins)
+              opening-v   R's opening's v element 0 one bit off (check 5: rec-v at stacked/rep0's coins and the claim points)
               h           rep 0's h row one bit off, read against the verifier's own entry from h's c_k
               session     a forged session (88's FORGE=cell|point): RecSparse and R alone, as 88 stages it
     python c3_e2e.py lean --bin B --dir DIR --inner-circuit C --inner-public P --out F.jsonl [--label L]
@@ -58,23 +62,60 @@ def stage(kind: str, a) -> dict:
         S.stacked_reads = lambda *x, **k: None
         levels = []
     elif kind in ("claim", "claim-own"):
-        orig = SP.registrations
+        orig = S.sparse_messages
 
-        def registrations(sh, program, inst, salts=None):
-            out = orig(sh, program, inst, salts)
-            if "claim" in out and out["claim"].value == CLAIM_VALUE:
-                honest = out["claim"]
-                out["claim"] = _flip0(honest)
-                info["forged"] = {"value": CLAIM_VALUE, "rep": 0, "word": 0, "bit": 0, "honest_root": honest.root.hex(),
-                                  "forged_root": out["claim"].root.hex()}
-                if kind == "claim-own":
-                    e = honest.entry()
-                    so, oo = S.sparse_messages, S.opening_messages
-                    S.sparse_messages = lambda *x, **k: (lambda r: (r[0], {**r[1], "claim": e}))(so(*x, **k))
-                    S.opening_messages = lambda *x, **k: (lambda r: (r[0], {**r[1], "claim0": e, "claim1": e}))(oo(*x, **k))
+        def sparse_messages(*x, **k):
+            regs, own = orig(*x, **k)
+            honest = regs["claim"]
+            assert honest.value == CLAIM_VALUE and own["claim"]["root"] == honest.entry()["root"]
+            regs = {**regs, "claim": _flip0(honest)}
+            info["forged"] = {"value": CLAIM_VALUE, "rep": 0, "word": 0, "bit": 0, "honest_root": honest.root.hex(),
+                              "forged_root": regs["claim"].root.hex()}
+            if kind == "claim":
+                own = {**own, "claim": regs["claim"].entry()}
+            return regs, own
+
+        S.sparse_messages = sparse_messages
+        levels, algebra = [], False
+    elif kind == "sparse-v":
+        orig = SP.verifier_row
+        seen = []
+
+        def verifier_row(sh, c):
+            v = list(orig(sh, c))
+            if not seen:
+                v[0] ^= 1
+                info["forged"] = {"value": SP.V_VALUE, "rep": 0, "element": 0, "bit": 0}
+            seen.append(1)
+            return v
+
+        S.SP.verifier_row = verifier_row
+        S.stacked_reads = lambda *x, **k: None
+        levels, algebra = [], False
+    elif kind == "stacked-coef":
+        orig = S.coefficients
+
+        def coefficients(vf, qs):
+            out = orig(vf, qs)
+            ks = sorted(k for k in out if k[0] == S.STACKED_REP and k[1] == 2)
+            if ks:
+                k = ks[0]
+                out[k] = [[out[k][0][0] ^ 1, *out[k][0][1:]], *out[k][1:]] if isinstance(out[k][0], list) else [out[k][0] ^ 1, *out[k][1:]]
+                info["forged"] = {"value": "rec-coef", "rep": k[0], "level": k[1], "j": k[2], "word": 0, "bit": 0}
             return out
 
-        SP.registrations = registrations
+        S.coefficients = coefficients
+        levels, algebra = [], False
+    elif kind == "opening-v":
+        orig = S.stacked_reads
+
+        def stacked_reads(*x, **k):
+            sr = orig(*x, **k)
+            sr.v = [sr.v[0] ^ 1, *sr.v[1:]]
+            info["forged"] = {"value": "rec-v", "element": 0, "bit": 0}
+            return sr
+
+        S.stacked_reads = stacked_reads
         levels, algebra = [], False
     elif kind == "session":
         levels, algebra = [], False
