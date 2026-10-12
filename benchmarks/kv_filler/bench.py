@@ -1,0 +1,493 @@
+"""The filler top-up beside serving phases on one GPU: how much of R a window's registered reads reach, and what the
+top-up costs inference. Writes `bench.json` and `bench.log` under `--out`.
+
+Nothing is timed before every gate passed:
+- `gate`: `tu_root` over the bandwidth audit's 37-block test store under `SEED` equals `vectors.json`'s gf31-poly/v1 and
+  ro-blake3/v1 roots; the top-up thread's ro-blake3/v1 receipts over a 4,096-block test store, chunk after chunk (the
+  regions wrapping), equal `tu_root` over the same blocks under each chunk's seed; and `kv.cu`'s p512 encode at k = 2
+  equals `kv.encode_word` on edge and random payloads.
+- `read`: R, a plain read of the filler by one CTA a tile, the best of a few tile sizes.
+- `alone`: the top-up thread alone over the filler in each mode (read, gf31, b3): its bytes a second on the GPU's clock,
+  the idle phase's harvest.
+- `phases`: a synthetic Llama-3.1-8B step (32 layers of FP8 linears, `torch._scaled_mm` on cold weights, and bf16
+  attention over a cache of its own) at decode batches × contexts and prefill lengths, alone and with the top-up running,
+  over each arrangement of streams (the step on the default stream at priority 0 beside a top-up at 0, or on a stream
+  at the greatest priority beside a top-up at the least) and, for decode, eager and as a CUDA graph. Each cell gives the
+  step's time against alone (the interference), the filler bytes the top-up read inside the cell's span on the GPU's
+  clock, and the span's registered reads (the step's weights and KV, which are registered, plus the filler) over R·T.
+- `encode`: the KV codec's encode at p512, k = 2 (the page conversion's cost: a page allocated from filler is encoded on
+  write), alone and on a low-priority stream beside a decode step, its rate and the step's slowdown.
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import hashlib
+import json
+import random
+import statistics
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / "benchmarks/word_codec"))
+
+import kv as K  # noqa: E402
+
+VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
+GATE_SEED = bytes(range(32))
+RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
+BLOCK = 2056
+MODES = {"read": -1, "gf31": 0, "b3": 2}
+TAG_NAMES = {0: "gf31-poly/v1", 2: "ro-blake3/v1"}
+# Llama-3.1-8B: 32 layers, hidden 4,096, 32 query heads on 8 KV heads of 128, MLP 14,336.
+LAYERS, HIDDEN, HEADS, KV_HEADS, HEAD_DIM, MLP = 32, 4096, 32, 8, 128, 14336
+SHAPES = {"qkv": (HIDDEN + 2 * KV_HEADS * HEAD_DIM, HIDDEN), "o": (HIDDEN, HIDDEN), "gate_up": (2 * MLP, HIDDEN),
+          "down": (HIDDEN, MLP)}
+WEIGHT_BYTES = LAYERS * sum(n * k for n, k in SHAPES.values())
+KV_TOKEN_BYTES = LAYERS * 2 * KV_HEADS * HEAD_DIM * 2  # 131,072: K and V, bf16, every layer
+KV_GATE_BASES = (77, (1 << 32) - 20)
+
+
+class Topup:
+    def __init__(self, path: str) -> None:
+        v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
+        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
+        so.tu_start.argtypes = [i, v, v, i, i, q, q, i, i, v]
+        so.tu_pause.argtypes = [i]
+        so.tu_now_ms.argtypes = [v]
+        so.tu_now_ms.restype = d
+        so.tu_progress.argtypes = [v]
+        so.tu_log.argtypes = [q, v, i]
+        so.tu_root.argtypes = [i, v, q, v, v]
+        so.tu_read.argtypes = [v, q, q, v, v]
+        so.bw_fill_test_store.argtypes = [v, q]
+
+    def start(self, regions, mode: int, chunk: int, depth: int, priority: int, seed: bytes, tile: int = 1 << 16,
+              device: int = 0) -> None:
+        ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
+        sizes = (ctypes.c_uint64 * len(regions))(*[n for _, n in regions])
+        rc = self.so.tu_start(device, ptrs, sizes, len(regions), mode, chunk, tile, depth, priority, seed)
+        if rc:
+            raise RuntimeError(f"tu_start error {rc}")
+
+    def stop(self) -> None:
+        rc = self.so.tu_stop()
+        if rc:
+            raise RuntimeError(f"tu_stop error {rc}")
+
+    def now(self, stream: int) -> float:
+        return self.so.tu_now_ms(stream)
+
+    def log(self) -> list[tuple[float, float, float, int, int, int]]:
+        """Every chunk finished: its start and end (ms on the GPU's clock since the start event), bytes, region, the first
+        4 bytes of its root as a big-endian integer, and its number."""
+        out, first = [], 0
+        buf = (ctypes.c_double * (6 * 65536))()
+        while True:
+            n = self.so.tu_log(first, buf, 65536)
+            out += [(buf[6 * j], buf[6 * j + 1], buf[6 * j + 2], int(buf[6 * j + 3]), int(buf[6 * j + 4]),
+                     int(buf[6 * j + 5])) for j in range(n)]
+            first += n
+            if n < 65536:
+                return out
+
+    def root(self, mode: int, store: int, blocks: int, seed: bytes) -> bytes:
+        r = ctypes.create_string_buffer(64)
+        rc = self.so.tu_root(mode, store, blocks, seed, r)
+        if rc:
+            raise RuntimeError(f"tu_root error {rc}")
+        return r.raw
+
+
+class Codec:
+    def __init__(self, path: str) -> None:
+        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
+        so.kv_set_key.argtypes = [v, i, v]
+        so.kv_encode.argtypes = [v, v, q, q, i, i, v]
+        so.kv_encode_carveout.argtypes = [i]
+        if so.kv_bits() != 512:
+            raise RuntimeError("the codec library is not p512")
+        self.field = K.field("p512")
+
+    def set_key(self, key: K.Key) -> None:
+        s = key.field.word_bytes
+        c = ctypes.create_string_buffer(b"".join(v.to_bytes(s, "little") for v in key.c), s * key.rounds)
+        t = ctypes.create_string_buffer(key.tau.to_bytes(s, "little"), s)
+        if self.so.kv_set_key(c, key.rounds, t):
+            raise RuntimeError("kv_set_key")
+
+    def encode(self, src: int, dst: int, words: int, base: int, k: int, stream: int, grid: int = 0) -> None:
+        rc = self.so.kv_encode(src, dst, words, base, k, grid, stream)
+        if rc:
+            raise RuntimeError(f"kv_encode error {rc}")
+
+
+def overlap_bytes(records, t0: float, t1: float) -> float:
+    """The filler bytes the top-up read inside [t0, t1] on the GPU's clock, a chunk's bytes taken pro rata."""
+    total = 0.0
+    for a, b, n, *_ in records:
+        if b <= t0 or a >= t1 or b <= a:
+            continue
+        total += n * (min(b, t1) - max(a, t0)) / (b - a)
+    return total
+
+
+# --- gates -------------------------------------------------------------------------------------------------------------
+
+def gate(tu: Topup, codec: Codec, torch, log) -> dict:
+    out = {}
+    pinned = {r["tag"]: r["tag_root"] for r in json.loads(VECTORS.read_text())["roots"]
+              if r["blocks"] == 37 and r["seed"] == GATE_SEED.hex()}
+    store = torch.empty(4096 * BLOCK, dtype=torch.uint8, device="cuda")
+    if tu.so.bw_fill_test_store(store.data_ptr(), 4096):
+        raise RuntimeError("bw_fill_test_store")
+    for mode, name in TAG_NAMES.items():
+        got = tu.root(mode, store.data_ptr(), 37, GATE_SEED).hex()
+        out[f"vectors_{name}"] = got == pinned[name]
+    # the thread's receipts: 2 regions of 2,048 blocks, chunks of 1,024 blocks, so chunk c covers region (c // 2) % 2
+    # at block offset (c % 2) · 1,024, under the run seed with its first 8 bytes XORed with c
+    half = 2048 * BLOCK
+    regions = [(store.data_ptr(), half), (store.data_ptr() + half, half)]
+    tu.start(regions, 2, 1024 * BLOCK, 2, 0, RUN_SEED)
+    while True:
+        prog = (ctypes.c_uint64 * 2)()
+        tu.so.tu_progress(prog)
+        if prog[1] >= 10:
+            break
+        time.sleep(0.01)
+    tu.stop()
+    recs = tu.log()
+    bad = []
+    for _, _, n, region, root4, c in recs:
+        seed = bytearray(RUN_SEED)
+        for j in range(8):
+            seed[j] ^= (c >> (8 * j)) & 0xFF
+        lo = ((c // 2) % 2) * half + (c % 2) * 1024 * BLOCK
+        want = tu.root(2, store.data_ptr() + lo, 1024, bytes(seed))
+        if int(n) != 1024 * BLOCK or region != (c // 2) % 2 or root4 != int.from_bytes(want[:4], "big"):
+            bad.append(c)
+    out["thread_chunks"] = len(recs)
+    out["thread_receipts"] = not bad and len(recs) >= 10
+    # the codec
+    f = codec.field
+    key = K.key("p512", RUN_SEED, 2)
+    codec.set_key(key)
+    rng = random.Random(512)
+    edges = [0, 1, 2, f.p - 1, f.p - 2, (f.p - 1) // 2, 1 << (f.n - 1), f.c]
+    payloads = edges + [rng.randrange(f.p) for _ in range(120)]
+    m = torch.frombuffer(bytearray(b"".join(w.to_bytes(64, "little") for w in payloads)), dtype=torch.uint8).cuda()
+    y = torch.empty_like(m)
+    enc_bad = []
+    for base in KV_GATE_BASES:
+        codec.encode(m.data_ptr(), y.data_ptr(), len(payloads), base, 2, torch.cuda.current_stream().cuda_stream)
+        torch.cuda.synchronize()
+        raw = y.cpu().numpy().tobytes()
+        enc_bad += [base + i for i, v in enumerate(payloads)
+                    if int.from_bytes(raw[64 * i:64 * i + 64], "little") != K.encode_word(v, base + i, key)]
+    out["kv_encode_p512_k2"] = not enc_bad
+    out["ok"] = all(v for k, v in out.items() if k != "thread_chunks")
+    log(f"gate: {out}")
+    return out
+
+
+# --- R and the top-up alone --------------------------------------------------------------------------------------------
+
+def read_rate(tu: Topup, torch, filler, reps: int) -> dict:
+    xr = torch.zeros(1, dtype=torch.int32, device="cuda")
+    st = torch.cuda.current_stream().cuda_stream
+    out = {}
+    for tile in (1 << 16, 1 << 18, 1 << 20):
+        ts = []
+        for _ in range(reps + 1):
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            tu.so.tu_read(filler.data_ptr(), filler.numel(), tile, st, xr.data_ptr())
+            b.record()
+            b.synchronize()
+            ts.append(a.elapsed_time(b) / 1e3)
+        out[str(tile)] = filler.numel() / min(ts[1:]) / 1e9
+    out["R_GBps"] = max(out.values())
+    return out
+
+
+def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, least: int) -> dict:
+    out = {}
+    for name, mode in MODES.items():
+        tu.start([(filler.data_ptr(), filler.numel())], mode, chunk, depth, least, RUN_SEED)
+        time.sleep(seconds)
+        tu.stop()
+        recs = tu.log()[1:]  # the first chunk's start includes the thread's start
+        span = (recs[-1][1] - recs[0][0]) / 1e3
+        out[name] = {"GBps": sum(r[2] for r in recs) / span / 1e9, "chunks": len(recs),
+                     "chunk_ms_median": statistics.median(r[1] - r[0] for r in recs)}
+    return out
+
+
+# --- the synthetic 8B step ---------------------------------------------------------------------------------------------
+
+class Model:
+    """Llama-3.1-8B's step: FP8 linears on cold weights (32 layers' own), bf16 attention over a KV cache of its own."""
+
+    def __init__(self, torch) -> None:
+        self.torch = torch
+        g = torch.Generator(device="cuda").manual_seed(8)
+        self.w = [{n: (torch.randn(r, c, device="cuda", generator=g) * 0.02).to(torch.float8_e4m3fn)
+                   for n, (r, c) in SHAPES.items()} for _ in range(LAYERS)]
+        self.one = torch.ones((), device="cuda", dtype=torch.float32)
+        self.kv = None
+
+    def lin(self, x, w):
+        t = self.torch
+        return t._scaled_mm(x.to(t.float8_e4m3fn), w.t(), scale_a=self.one, scale_b=self.one, out_dtype=t.bfloat16)
+
+    def cache(self, batch: int, ctx: int) -> None:
+        t = self.torch
+        self.kv = None
+        t.cuda.empty_cache()
+        self.kv = t.zeros(LAYERS, 2, batch * KV_HEADS, ctx, HEAD_DIM, device="cuda", dtype=t.bfloat16)
+        self.kv.normal_(0, 1)
+
+    def mlp(self, x, w):
+        t = self.torch
+        gu = self.lin(x, w["gate_up"])
+        return self.lin(t.nn.functional.silu(gu[:, :MLP]) * gu[:, MLP:], w["down"])
+
+    def decode(self, x, batch: int) -> None:
+        t = self.torch
+        q_rows = HEADS // KV_HEADS
+        for layer, w in enumerate(self.w):
+            qkv = self.lin(x, w["qkv"])
+            q = qkv[:batch, :HIDDEN].reshape(batch * KV_HEADS, q_rows, HEAD_DIM)
+            s = t.bmm(q, self.kv[layer, 0].transpose(1, 2)).float().mul_(HEAD_DIM ** -0.5).softmax(-1)
+            a = t.bmm(s.to(t.bfloat16), self.kv[layer, 1]).reshape(batch, HIDDEN)
+            ao = t.zeros_like(x)
+            ao[:batch] = a
+            x = x + self.lin(ao, w["o"])
+            x = x + self.mlp(x, w)
+
+    def prefill(self, x) -> None:
+        t = self.torch
+        m = x.shape[0]
+        for w in self.w:
+            qkv = self.lin(x, w["qkv"])
+            q = qkv[:, :HIDDEN].view(1, m, HEADS, HEAD_DIM).transpose(1, 2)
+            k = qkv[:, HIDDEN:HIDDEN + KV_HEADS * HEAD_DIM].view(1, m, KV_HEADS, HEAD_DIM).transpose(1, 2)
+            v = qkv[:, HIDDEN + KV_HEADS * HEAD_DIM:].view(1, m, KV_HEADS, HEAD_DIM).transpose(1, 2)
+            a = t.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True, enable_gqa=True)
+            x = x + self.lin(a.transpose(1, 2).reshape(m, HIDDEN), w["o"])
+            x = x + self.mlp(x, w)
+
+
+def step_times(torch, fn, stream, n: int) -> list[float]:
+    evs = [torch.cuda.Event(enable_timing=True) for _ in range(n + 1)]
+    with torch.cuda.stream(stream):
+        evs[0].record()
+        for i in range(n):
+            fn()
+            evs[i + 1].record()
+    evs[-1].synchronize()
+    return [evs[i].elapsed_time(evs[i + 1]) for i in range(n)]
+
+
+def cell(tu: Topup, torch, fn, stream, n: int, topup: dict | None, filler, registered: float, R: float) -> dict:
+    with torch.cuda.stream(stream):
+        for _ in range(2):
+            fn()
+    torch.cuda.synchronize()
+    if topup:
+        tu.start([(filler.data_ptr(), filler.numel())], topup["mode"], topup["chunk"], topup["depth"],
+                 topup["priority"], RUN_SEED)
+        time.sleep(0.05)
+    t0 = tu.now(stream.cuda_stream) if topup else 0.0
+    ts = step_times(torch, fn, stream, n)
+    out = {"step_ms_median": statistics.median(ts), "step_ms": [round(v, 4) for v in ts]}
+    if topup:
+        t1 = tu.now(stream.cuda_stream)
+        tu.stop()
+        recs = tu.log()
+        span_s = (t1 - t0) / 1e3
+        filler_bytes = overlap_bytes(recs, t0, t1)
+        out.update(span_s=span_s, filler_GBps=filler_bytes / span_s / 1e9,
+                   registered_fraction=(registered * n + filler_bytes) / (R * 1e9 * span_s))
+    else:
+        out["registered_fraction"] = registered / (R * 1e9 * statistics.median(ts) / 1e3)
+    return out
+
+
+def phases(tu: Topup, torch, model: Model, filler, R: float, args, least: int, greatest: int, log) -> list[dict]:
+    rows = []
+    default = torch.cuda.default_stream()
+    high = torch.cuda.Stream(priority=greatest)
+    topups = [None] + [{"mode": MODES[m], "name": m, "chunk": args.chunk_mib << 20, "depth": args.depth,
+                        "priority": least} for m in args.topup_modes]
+    work = [("decode", b, c) for b, c in args.decode] + [("prefill", m, 0) for m in args.prefill]
+    for kind, size, ctx in work:
+        if kind == "decode":
+            model.cache(size, ctx)
+            x = torch.randn(max(16, -(-size // 16) * 16), HIDDEN, device="cuda", dtype=torch.bfloat16)
+            registered = WEIGHT_BYTES + size * ctx * KV_TOKEN_BYTES
+            eager = lambda x=x, b=size: model.decode(x, b)  # noqa: E731
+            forms = [("eager", eager)]
+            if args.graphs:
+                g = torch.cuda.CUDAGraph()
+                s = torch.cuda.Stream()
+                with torch.cuda.stream(s):
+                    eager()
+                torch.cuda.synchronize()
+                with torch.cuda.graph(g, stream=s):
+                    eager()
+                forms.append(("graph", g.replay))
+        else:
+            model.kv = None
+            torch.cuda.empty_cache()
+            x = torch.randn(size, HIDDEN, device="cuda", dtype=torch.bfloat16)
+            registered = WEIGHT_BYTES
+            forms = [("eager", lambda x=x: model.prefill(x))]
+        n = args.steps if kind == "decode" else max(4, args.steps // 4)
+        for form, fn in forms:
+            for arrangement, stream in (("p0", default), ("hi", high)):
+                base = None
+                for tp in topups:
+                    r = cell(tu, torch, fn, stream, n, tp, filler, registered, R)
+                    if tp is None:
+                        base = r["step_ms_median"]
+                    row = {"phase": kind, "size": size, "ctx": ctx, "form": form, "streams": arrangement,
+                           "topup": tp["name"] if tp else None, "registered_GB_step": registered / 1e9, **r,
+                           "slowdown": r["step_ms_median"] / base - 1}
+                    rows.append(row)
+                    log(f"{kind} {size}x{ctx} {form} {arrangement} topup={row['topup']}: step "
+                        f"{r['step_ms_median']:.3f} ms ({row['slowdown']:+.2%}), filler "
+                        f"{r.get('filler_GBps', 0):.0f} GB/s, registered {r['registered_fraction']:.3f} of R")
+        if kind == "decode" and args.graphs:
+            del g
+    model.kv = None
+    torch.cuda.empty_cache()
+    return rows
+
+
+def encode_cells(codec: Codec, torch, model: Model, args, least: int, greatest: int, log) -> dict:
+    """The conversion's cost: p512 k = 2 encode alone, then on a least-priority stream beside a decode step."""
+    words = (args.encode_mib << 20) // 64
+    src = torch.zeros(words * 64, dtype=torch.uint8, device="cuda")
+    dst = torch.empty_like(src)
+    codec.set_key(K.key("p512", RUN_SEED, 2))
+    codec.so.kv_encode_carveout(100)
+    low = torch.cuda.Stream(priority=least)
+    high = torch.cuda.Stream(priority=greatest)
+    out = {}
+    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    with torch.cuda.stream(low):
+        codec.encode(src.data_ptr(), dst.data_ptr(), words, 0, 2, low.cuda_stream)
+        a.record()
+        codec.encode(src.data_ptr(), dst.data_ptr(), words, 0, 2, low.cuda_stream)
+        b.record()
+    b.synchronize()
+    out["alone_GBps"] = words * 64 / (a.elapsed_time(b) / 1e3) / 1e9
+    log(f"encode p512 k=2 alone: {out['alone_GBps']:.2f} GB/s")
+    beside = []
+    for batch, ctx in args.decode:
+        model.cache(batch, ctx)
+        x = torch.randn(max(16, -(-batch // 16) * 16), HIDDEN, device="cuda", dtype=torch.bfloat16)
+        fn = lambda x=x, b=batch: model.decode(x, b)  # noqa: E731
+        with torch.cuda.stream(high):
+            fn()
+        torch.cuda.synchronize()
+        base = statistics.median(step_times(torch, fn, high, args.steps))
+        # encode chunks of 8 MiB queued on the low stream, enough to outlast the steps
+        per = (8 << 20) // 64
+        launches = max(1, int(base / 1e3 * args.steps * out["alone_GBps"] * 1e9 * 1.5 / (per * 64)))
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        with torch.cuda.stream(low):
+            e0.record()
+            for i in range(launches):
+                off = (i * per) % max(per, words - per)
+                codec.encode(src.data_ptr() + off * 64, dst.data_ptr() + off * 64, per, off, 2, low.cuda_stream)
+            e1.record()
+        ts = step_times(torch, fn, high, args.steps)
+        e1.synchronize()
+        enc_s = e0.elapsed_time(e1) / 1e3
+        r = {"batch": batch, "ctx": ctx, "step_ms_alone": base, "step_ms_beside": statistics.median(ts),
+             "slowdown": statistics.median(ts) / base - 1, "encode_GBps_overall": launches * per * 64 / enc_s / 1e9}
+        beside.append(r)
+        log(f"encode beside decode {batch}x{ctx}: step {base:.3f} -> {r['step_ms_beside']:.3f} ms "
+            f"({r['slowdown']:+.2%}), encode overall {r['encode_GBps_overall']:.2f} GB/s")
+    out["beside_decode"] = beside
+    model.kv = None
+    torch.cuda.empty_cache()
+    return out
+
+
+def pairs(text: str) -> list[tuple[int, int]]:
+    return [tuple(int(v) for v in p.split("x")) for p in text.split(",") if p]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--topup-lib", required=True)
+    ap.add_argument("--kv-lib", required=True)
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--filler-gib", type=int, default=16)
+    ap.add_argument("--chunk-mib", type=int, default=256)
+    ap.add_argument("--depth", type=int, default=3)
+    ap.add_argument("--alone-s", type=float, default=2.0)
+    ap.add_argument("--decode", type=pairs, default=pairs("8x4096,64x2048"))
+    ap.add_argument("--prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[1024, 4096])
+    ap.add_argument("--steps", type=int, default=24)
+    ap.add_argument("--topup-modes", type=lambda s: s.split(","), default=["read", "b3"])
+    ap.add_argument("--graphs", type=int, default=1)
+    ap.add_argument("--encode-mib", type=int, default=512)
+    ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
+    a = ap.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
+    logf = (a.out / "bench.log").open("a")
+
+    def log(msg: str) -> None:
+        line = f"{time.strftime('%H:%M:%S')} {msg}"
+        print(line, flush=True)
+        logf.write(line + "\n")
+        logf.flush()
+
+    import torch
+
+    least, greatest = torch.cuda.Stream.priority_range()
+    if least < greatest:
+        least, greatest = greatest, least
+    tu, codec = Topup(a.topup_lib), Codec(a.kv_lib)
+    res: dict = {"format": "verity-kv-filler/bench/v0", "args": {k: (sorted(v) if isinstance(v, set) else v)
+                                                                  for k, v in vars(a).items() if k != "out"},
+                 "device": torch.cuda.get_device_name(), "torch": torch.__version__,
+                 "stream_priorities": {"least": least, "greatest": greatest}, "weight_bytes": WEIGHT_BYTES}
+    res["out"] = str(a.out)
+    res["gate"] = gate(tu, codec, torch, log)
+    if not res["gate"]["ok"]:
+        (a.out / "bench.json").write_text(json.dumps(res, indent=1) + "\n")
+        log("gate failed; nothing timed")
+        return 2
+    filler = torch.zeros(a.filler_gib << 30, dtype=torch.uint8, device="cuda")
+    res["read"] = read_rate(tu, torch, filler, 4)
+    R = res["read"]["R_GBps"]
+    log(f"R = {R:.0f} GB/s ({res['read']})")
+    res["alone"] = alone(tu, torch, filler, a.alone_s, a.chunk_mib << 20, a.depth, least)
+    log(f"top-up alone: {res['alone']}")
+
+    def save() -> None:
+        (a.out / "bench.json").write_text(json.dumps(res, indent=1) + "\n")
+
+    save()
+    model = Model(torch)
+    if "phases" not in a.skip:
+        res["phases"] = phases(tu, torch, model, filler, R, a, least, greatest, log)
+        save()
+    if "encode" not in a.skip:
+        res["encode"] = encode_cells(codec, torch, model, a, least, greatest, log)
+        save()
+    log("done")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
