@@ -29,6 +29,8 @@ relay that meets the block and z over a link carries `min(|z|, b)` bytes per blo
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
 the tree's, not necessarily the reads': listed in store order, a plan is one run per contiguous range it reads.
+`Plan.from_array` takes the runs as an (R, 2) numpy array, as a store holds them, and checks and encodes them in numpy
+(`verity.ml.kernels.plans`: a protocol imports no third-party package); the suite holds it to `Plan` on the same rows.
 """
 
 from __future__ import annotations
@@ -37,8 +39,9 @@ import bisect
 import hashlib
 import itertools
 import math
+import struct
+from array import array
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass, field
 
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
 from verity.ml.commitments import hm96, verify_opening
@@ -77,33 +80,74 @@ def seed(challenge: bytes, i: int, previous: bytes) -> bytes:
     return hashlib.sha512(SEED_DOMAIN + challenge + i.to_bytes(4, "big") + _digest(previous, "a root")).digest()
 
 
-@dataclass(frozen=True, slots=True)
+def store_blocks(blocks: object) -> int:
+    """`N`, a store's blocks: a u64 (the registration's digest encodes it), at least 1."""
+    if type(blocks) is not int or not 1 <= blocks < 1 << 64:
+        raise ValueError("a store is 1 to 2^64 − 1 blocks")
+    return blocks
+
+
+def _u64s(native: bytes) -> array:
+    out = array("Q")
+    out.frombytes(native)
+    return out
+
+
 class Plan:
     """What one pass reads, in read order, in a store of `blocks` blocks: `runs` of `(first, count)` consecutive blocks.
     Construction refuses any plan but a canonical one of distinct blocks (the format above), so equal read sequences
-    have equal digests and no block is read twice."""
+    have equal digests and no block is read twice.  `Plan.from_array` is the same plan, or the same refusal, from an
+    (R, 2) integer numpy array of runs, checked and encoded in numpy."""
 
-    runs: tuple[tuple[int, int], ...]
-    blocks: int
-    ends: tuple[int, ...] = field(init=False, repr=False, compare=False)
+    __slots__ = ("blocks", "_encoding", "_firsts", "_ends", "_runs", "_digest")
 
-    def __post_init__(self) -> None:
-        if type(self.blocks) is not int or self.blocks < 1:
-            raise ValueError("a store has at least one block")
-        runs = tuple(self.runs) if isinstance(self.runs, Sequence) else None
+    def __init__(self, runs: Sequence[tuple[int, int]], blocks: int) -> None:
+        store_blocks(blocks)
+        runs = tuple(runs) if isinstance(runs, Sequence) else None
         if runs is None or not 1 <= len(runs) < 1 << 32:
             raise ValueError("a plan is 1 to 2^32 − 1 runs")
         for r in runs:
             if (type(r) is not tuple or len(r) != 2 or any(type(x) is not int for x in r) or r[0] < 0 or r[1] < 1
-                    or r[0] + r[1] > self.blocks):
+                    or r[0] + r[1] > blocks):
                 raise ValueError("a run is (first, count) with count ≥ 1, inside the store")
         if any(a[0] + a[1] == b[0] for a, b in zip(runs, runs[1:])):
             raise ValueError("a run that starts where the one before it ends is part of it")
         ordered = sorted(runs)
         if any(a[0] + a[1] > b[0] for a, b in zip(ordered, ordered[1:])):
             raise ValueError("a plan's runs are disjoint: no block is read twice in a pass")
-        object.__setattr__(self, "runs", runs)
-        object.__setattr__(self, "ends", tuple(itertools.accumulate(c for _, c in runs)))
+        encoding = len(runs).to_bytes(4, "big") + b"".join(f.to_bytes(8, "big") + c.to_bytes(8, "big") for f, c in runs)
+        self._set(blocks, encoding, array("Q", (f for f, _ in runs)), array("Q", itertools.accumulate(c for _, c in runs)),
+                  runs)
+
+    def _set(self, blocks: int, encoding: bytes, firsts: array, ends: array, runs: tuple | None) -> None:
+        for name, value in (("blocks", blocks), ("_encoding", encoding), ("_firsts", firsts), ("_ends", ends),
+                            ("_runs", runs), ("_digest", None)):
+            object.__setattr__(self, name, value)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError("a Plan is immutable")
+
+    @classmethod
+    def from_array(cls, runs, blocks: int) -> Plan:
+        """`Plan` of the rows of `runs`, an (R, 2) integer numpy array, as `(first, count)` tuples: the same plan with
+        the same digest, or the same refusal, checked and encoded in numpy (`verity.ml.kernels.plans`), so a KV pass's
+        10^5 runs take milliseconds.  An array of any other shape or dtype is `Plan` of its rows as tuples."""
+        from verity.ml.kernels import plans
+
+        store_blocks(blocks)
+        out = plans.checked(runs, blocks)
+        if out is None:
+            rows = runs.tolist()
+            return cls(tuple(tuple(r) if type(r) is list else r for r in rows) if type(rows) is list else rows, blocks)
+        plan = object.__new__(cls)
+        plan._set(blocks, out[0], _u64s(out[1]), _u64s(out[2]), None)
+        return plan
+
+    @property
+    def runs(self) -> tuple[tuple[int, int], ...]:
+        if self._runs is None:
+            object.__setattr__(self, "_runs", tuple(struct.iter_unpack(">QQ", memoryview(self._encoding)[4:])))
+        return self._runs
 
     @classmethod
     def whole(cls, blocks: int) -> Plan:
@@ -124,26 +168,41 @@ class Plan:
     @property
     def length(self) -> int:
         """L, the pass's positions."""
-        return self.ends[-1]
+        return self._ends[-1]
 
     def block(self, p: int) -> int:
         """The block at position `p`."""
         if type(p) is not int or not 0 <= p < self.length:
             raise IndexError(f"a plan of {self.length} positions has no position {p!r}")
-        r = bisect.bisect_right(self.ends, p)
-        return self.runs[r][0] + p - (self.ends[r - 1] if r else 0)
+        r = bisect.bisect_right(self._ends, p)
+        return self._firsts[r] + p - (self._ends[r - 1] if r else 0)
 
     def __iter__(self) -> Iterator[int]:
         for first, count in self.runs:
             yield from range(first, first + count)
 
     def encode(self) -> bytes:
-        return len(self.runs).to_bytes(4, "big") + b"".join(f.to_bytes(8, "big") + c.to_bytes(8, "big")
-                                                            for f, c in self.runs)
+        return self._encoding
 
     @property
     def digest(self) -> bytes:
-        return hashlib.sha512(PLAN_DOMAIN + self.encode()).digest()
+        if self._digest is None:
+            object.__setattr__(self, "_digest", hashlib.sha512(PLAN_DOMAIN + self._encoding).digest())
+        return self._digest
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Plan):
+            return NotImplemented
+        return self.blocks == other.blocks and self._encoding == other._encoding
+
+    def __hash__(self) -> int:
+        return hash((self.blocks, self._encoding))
+
+    def __repr__(self) -> str:
+        return f"Plan(runs={self.runs!r}, blocks={self.blocks!r})"
+
+    def __reduce__(self) -> tuple:
+        return type(self), (self.runs, self.blocks)
 
 
 def prefix(seed: bytes) -> bytes:

@@ -6,6 +6,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 
+import numpy as np
 import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
@@ -141,6 +142,14 @@ def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store
     assert g.timing == pytest.approx(1 - 162 * 4096 / (N * 4096 / 300e-9 * r.span_ns / 1e9))
 
 
+def test_plans_sent_as_arrays_are_received_as_their_runs_are(store) -> None:
+    """The verifier takes a plan as the store holds it, an (R, 2) array, and checks it in numpy (`Plan.from_array`)."""
+    s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial,
+                                     sent=lambda ps: np.array(ps.plan.runs, np.int64))
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    assert [w.lengths for w in s.record().windows] == [(15, 16, 17, 18), (15, 16, 17), (15, 16, 17)]
+
+
 def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
     plan = receipts.Plan(((7, 3), (0, 2), (12, 1)), N)
     assert list(plan) == [7, 8, 9, 0, 1, 12] and [plan.block(p) for p in range(6)] == list(plan)
@@ -171,6 +180,10 @@ def test_a_receipt_depends_on_its_block_not_its_position(store) -> None:
     (),                          # no blocks
     ([0, 5],),                   # not a run
     ((0, True),),
+    np.array([[0, 5], [3, 4]]),  # as arrays, `Plan.from_array`
+    np.array([[0, 3], [3, 2]]),
+    np.zeros((0, 2), np.int64),
+    np.array([[0.0, 5.0]]),
 ])
 def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
     s = Session(params(), store.registration, audit.NoiseTiles(96), challenger(store, params()), clock=Clock())

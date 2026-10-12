@@ -151,8 +151,7 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, round
     """The verifier's side of registration: the codec seed, drawn from its own secret `source` and a fresh nonce only
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
     zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload."""
-    if type(blocks) is not int or blocks < 1:
-        raise ValueError("a store has at least one block")
+    receipts.store_blocks(blocks)
     if type(payload_root) is not bytes or len(payload_root) != DIGEST_BYTES:
         raise ValueError(f"the payload root is {DIGEST_BYTES} bytes")
     nonce = secrets.token_bytes(NONCE_BYTES) if nonce is None else nonce
@@ -454,8 +453,9 @@ class Session:
         return self._release(t + 1, now) if t + 1 < self.params.windows else None
 
     def receive(self, t: int, i: int, root: bytes, runs: Sequence[tuple[int, int]] | None = None) -> Verdict | None:
-        """Root `i` of window `t` and its pass's plan as the prover sends it, `runs` (None: the whole store in order),
-        as they arrive.  Returns the rejection they cause, if any."""
+        """Root `i` of window `t` and its pass's plan as the prover sends it, `runs` (None: the whole store in order; a
+        numpy array of rows (first, count): `Plan.from_array`), as they arrive.  Returns the rejection they cause, if
+        any."""
         self._live()
         if not self.windows:
             raise SessionError("the session has not started")
@@ -470,8 +470,10 @@ class Session:
         d = self.deadline(t)
         if d is not None and now > d:
             return self._fail(t, "late")
+        N = self.params.blocks
         try:
-            plan = Plan.whole(self.params.blocks) if runs is None else Plan(tuple(runs), self.params.blocks)
+            plan = (Plan.whole(N) if runs is None else Plan.from_array(runs, N) if hasattr(runs, "tolist")
+                    else Plan(tuple(runs), N))
         except (TypeError, ValueError):
             return self._fail(t, "plan")
         self.windows[t].roots.append(root)
