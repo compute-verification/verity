@@ -35,8 +35,9 @@ The step from the ring game to the deployed system is four claims, each its own 
 separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded
-   between setup, the session and its rounds, with one session per audit and the coins drawn online, after its state
-   is fixed. It names no number.
+   between setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, which
+   the host never rolls back: `trusted-nebius-host`) and the coins drawn online, after its state is fixed. It names no
+   number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
    `D = 16,446`, `Q = 2^20` and `L = 2^64`; `EndToEndRingDeployed`'s docstring derives `D` and its margin.
@@ -51,13 +52,15 @@ separately so that each can be rejected alone:
 The ring game takes one more named assumption, `Pous.P2.Assumptions.CoinCommitHides` (`statistical-hiding`), because
 it hands the server the session commitment, and `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model.
 
-Two gaps stood between these statements and the deployed verifier, and both are fixed in code:
+Two gaps stood between these statements and the deployed verifier:
 
-* **G-1**, fixed: a session's `binding` is required and is the setup's root (`Run.check` refuses any other), so a
-  session names the setup it audits; and its id is the one the auditor designated for the audit (`Run.check` refuses
-  any other), which the memory challenger runs at most one session under (`memory_challenger.SessionLog`, a file of its
-  own, recorded before the session's first challenge). So an audit has at most one session the check accepts.
-  `RunCheckAccepts` states the check's side; the device's refusal of a used id is its code and log, not modeled here;
+* **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
+  presumption, which `trusted-nebius-host` now covers (Daniel, decision 2). The check's half: a session's `binding` is
+  required and is the setup's root (`Run.check` refuses any other), so a session names the setup it audits, and its id
+  is the one the auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The
+  memory challenger runs at most one session under an id (`memory_challenger.SessionLog`, a file of its own, recorded
+  before the session's first challenge), so an audit has at most one session the check accepts; that refusal is the
+  device's code and log, not modeled here;
 * **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
   acceptance gives.
 -/
@@ -308,8 +311,10 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-device` (the deployed server is a `Server`: state bounded between rounds, one session, online coins),
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
-derived streams are as good as uniform bytes). G-1 (one session per audit) and G-2 (the composed check) are fixed in
-code (this module's header): what the deployed verifier's acceptance gives is `RunCheckAccepts`. -/
+derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
+challenger's `SessionLog` under its host presumption, which `trusted-nebius-host` now covers (Daniel, decision 2). G-2
+(the composed check) is fixed in code. What the deployed verifier's acceptance gives is `RunCheckAccepts` (this module's
+header). -/
 def EndToEndRing : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
     ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →

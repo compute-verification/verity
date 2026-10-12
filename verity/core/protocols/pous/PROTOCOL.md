@@ -769,21 +769,22 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   uniform ω;
 - `prf/sha-512`: the memory challenger's derived index streams are as good as uniform bytes.
 
-Two gaps stood between these statements and the deployed verifier, and both are fixed in code:
+Two gaps stood between these statements and the deployed verifier:
 
-- G-1, one session per audit, fixed. Every session names its setup: a `SessionCommitment`'s `binding` has no default,
-  the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory challenger
-  (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the `C*` its
-  digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in the
-  signed header) is the auditor's, designated for one audit, and the device runs at most one session under an id. Its
-  `SessionLog` is a file of its own, never in the signer's key directory (`live.py --session-log`, `bench.py
-  --mc-session-log`). It is append-only: the id goes in, fsynced, when the session commits, before its first
-  challenge, so a session that never runs has used its id too. A used id is refused, a log that is missing or
-  unreadable refuses every session, and nothing rewrites, truncates or remakes a log. A file cannot see a restore of
-  itself from a snapshot, a backup or an older copy, nor a restart of the memory challenger onto older host-held state;
-  that the host does neither is `trusted-nebius-host` (`verity.core.claims`), which covers the device's host-held
-  state, this log and the LMS leaf state among it. Under one secret a reused id would also replay the coins, which
-  `CoinTree.draw` derives from the secret and the id. The composed check accepts a session only under the id the
+- G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
+  `SessionLog` under its host presumption, which `trusted-nebius-host` now covers (Daniel, decision 2). Every session
+  names its setup: a `SessionCommitment`'s `binding` has no default, the `MemoryChallenger` refuses one that is not a
+  64-byte root, and the harness's memory challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to
+  the root the setup publishes for the `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also
+  its audit's: its id (`session`, in the signed header) is the auditor's, designated for one audit, and the device runs
+  at most one session under an id. Its `SessionLog` is a file of its own, never in the signer's key directory (`live.py
+  --session-log`, `bench.py --mc-session-log`). It is append-only: the id goes in, fsynced, when the session commits,
+  before its first challenge, so a session that never runs has used its id too. A used id is refused, a log that is
+  missing or unreadable refuses every session, and nothing rewrites, truncates or remakes a log. A file cannot see a
+  restore of itself from a snapshot, a backup or an older copy, nor a restart of the memory challenger onto older
+  host-held state; that the host does neither is `trusted-nebius-host` (`verity.core.claims`), which covers the device's
+  host-held state, this log and the LMS leaf state among it. Under one secret a reused id would also replay the coins,
+  which `CoinTree.draw` derives from the secret and the id. The composed check accepts a session only under the id the
   auditor designated (`run.check`'s `session_id`), so an audit has at most one session it can accept. The Lean states
   the check's side (`RunCheckAccepts`: an accepted session carries the designated id); the device's refusal is its code
   and log, which the Lean does not model.
