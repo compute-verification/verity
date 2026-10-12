@@ -183,8 +183,8 @@ opening `j` of level `ℓ` is copy `cp ℓ j` of unit `un ℓ j` in session `ses
 through its siblings in the proof to its cap entry (`OpensTopAt`), and R's openings have the level's `q` and the run's
 `α`, then every consistency check passes at the messages w holds with the opened rows' consistency sums. -/
 theorem opened_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits)
-    (hG : ∀ s, (zs s).Good (Lb s)) {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings} {msId : String}
-    {cap : Array ByteArray} {p : LigeritoProof} {lg : RecAlgebra.LgPts} (hcs : ConssAt sh.sched lg)
+    (hG : ∀ s, (zs s).Good (Lb s)) {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
+    {msId : String} {cap : Array ByteArray} {p : LigeritoProof} {lg : RecAlgebra.LgPts} (hcs : ConssAt sh.sched lg)
     (hcaps : Family.CapsAt sh.sched cap p) (sibs : ℕ → Array ByteArray)
     (hO : ∀ ℓ < sh.sched.levels.size, openAt p (sh.sched.levels.size - 1) ℓ = (ops.rows ℓ, sibs ℓ, #[]))
     (hrs : ∀ ℓ < sh.sched.levels.size, (ops.rows ℓ).size = (sh.sched.levels[ℓ]!).q)
