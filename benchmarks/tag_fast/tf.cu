@@ -34,6 +34,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <unordered_set>
 #include <vector>
 
 namespace tf {
@@ -561,7 +562,7 @@ __device__ __forceinline__ void cp_wait() {
   asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory");
 }
 
-template <int V, int L>
+template <int V, int L, int R = 7>
 struct ChunkTag {
   static_assert(L == 1 || L == 2 || L == 4 || L == 8, "a block is 1, 2, 4 or 8 lanes' chunks");
   uint32_t cv[8], d0, d1;  // d0 d1: the lane's first 8 bytes (the next lane's P, or the tail chunk)
@@ -583,7 +584,7 @@ struct ChunkTag {
       m[1] = pos ? p1 : bswap32((uint32_t)j);
     }
     const uint32_t fl = KEYED | (qd == 0 ? START : 0) | (qd == 15 ? END : 0);
-    b3<V>(cv, m, (uint32_t)pos, 64, fl, cv, k);
+    b3<V, R>(cv, m, (uint32_t)pos, 64, fl, cv, k);
   }
 
   // The tag, in lanes with pos 0. Step 0: the tail chunk (every lane at L = 1, lane L - 1 otherwise) and the parents of
@@ -609,7 +610,7 @@ struct ChunkTag {
         m[8 + i] = tl ? 0u : o;
       }
       uint32_t out[8];
-      b3<V>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT) | (last ? ROOT : 0), out,
+      b3<V, R>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT) | (last ? ROOT : 0), out,
             k);
 #pragma unroll
       for (int i = 0; i < 8; ++i) {
@@ -622,9 +623,10 @@ struct ChunkTag {
   }
 };
 
-// W warps a CTA on consecutive row blocks of one span s (x's 2,048 columns of it in shared memory), each warp one unit.
-// Modes and PARTIALS as fused_kernel's; tags at tags[8 (j - jbase)] from the block's first lane.
-template <int V, int L, int NB8, int MODE, int W, int ST, bool PARTIALS>
+// W warps a CTA on consecutive row blocks of one span s (x's M rows of its 2,048 columns in shared memory), each warp one
+// unit. Modes and PARTIALS as fused_kernel's; tags at tags[8 (j - jbase)] from the block's first lane. R < 7 rounds is
+// not BLAKE3 (uncertified, a cost probe).
+template <int V, int L, int NB8, int MODE, int W, int ST, bool PARTIALS, int R = 7>
 __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                        float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N,
                                                        int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
@@ -632,7 +634,7 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
   extern __shared__ __align__(16) uint8_t smem[];
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
   uint8_t* xs = smem;
-  uint8_t* ring = smem + (GEMM ? NB8 * 8 * CXS : 0) + warp * ST * QUAD_BYTES + lane * 16;
+  uint8_t* ring = smem + (GEMM ? M * CXS : 0) + warp * ST * QUAD_BYTES + lane * 16;
   const int rts = N / 16, per_span = rts / W;
   const int s = blockIdx.x / per_span, nb = (blockIdx.x % per_span) * W + warp;
   const uint4* wp = wstore + ((size_t)nb * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
@@ -647,11 +649,10 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
 #pragma unroll
   for (int p = 0; p < ST - 1; ++p) issue(p);
   if constexpr (GEMM) {
-    for (int e = threadIdx.x; e < NB8 * 8 * CCOLS / 16; e += W * 32) {
+    for (int e = threadIdx.x; e < M * CCOLS / 16; e += W * 32) {
       const int b = e / (CCOLS / 16), c = e % (CCOLS / 16);
-      uint4 v = make_uint4(0, 0, 0, 0);
-      if (b < M) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)s * CCOLS) + c);
-      *reinterpret_cast<uint4*>(xs + b * CXS + 16 * c) = v;
+      *reinterpret_cast<uint4*>(xs + b * CXS + 16 * c) =
+          __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)s * CCOLS) + c);
     }
     __syncthreads();
   }
@@ -662,7 +663,7 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
   float acc[NB8][4];
 #pragma unroll
   for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
-  ChunkTag<V, L> ct;
+  ChunkTag<V, L, R> ct;
   if constexpr (TAG) ct.begin();
 
 #pragma unroll 1
@@ -680,9 +681,11 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
         const int col = 32 * (4 * qd + i) + 4 * tq;
 #pragma unroll
         for (int j = 0; j < NB8; ++j) {
-          const uint8_t* row = xs + (8 * j + g8) * CXS;
-          mma_e4m3(acc[j], a, *reinterpret_cast<const uint32_t*>(row + col),
-                   *reinterpret_cast<const uint32_t*>(row + col + 16));
+          const bool live = 8 * j + g8 < M;
+          const uint8_t* row = xs + (live ? 8 * j + g8 : 0) * CXS;
+          const uint32_t b0 = *reinterpret_cast<const uint32_t*>(row + col),
+                         b1 = *reinterpret_cast<const uint32_t*>(row + col + 16);
+          mma_e4m3(acc[j], a, live ? b0 : 0u, live ? b1 : 0u);
         }
       }
     }
@@ -809,6 +812,17 @@ __global__ void __launch_bounds__(SPAN_THREADS) node_span(uint64_t* nodes, SpanL
   }
 }
 
+// Levels 1 .. s.levels of the complete subtrees of 2^s.levels leaves from leaf `first` on, one a block of
+// 2^(s.levels - 1) threads (s from level 0).
+__global__ void __launch_bounds__(SPAN_THREADS) node_sub(uint64_t* nodes, SpanLv s, uint64_t first) {
+  const int threads = blockDim.x;
+  for (int t = 0; t < s.levels; ++t) {
+    const uint64_t i = (first >> (t + 1)) + blockIdx.x * (uint64_t)(threads >> t) + threadIdx.x;
+    if (threadIdx.x < (threads >> t)) level_step(nodes + s.off[t] * 8, s.n[t], nodes + s.off[t + 1] * 8, i);
+    __syncthreads();
+  }
+}
+
 struct Levels {
   std::vector<uint64_t> off, n;
   uint64_t total = 0;
@@ -828,9 +842,8 @@ static Levels levels_for(uint64_t leaves) {
   return L;
 }
 
-static void launch_tree(uint64_t* nodes, const Levels& lv, cudaStream_t st) {
+static void launch_tree(uint64_t* nodes, const Levels& lv, cudaStream_t st, size_t k = 0) {
   const size_t top = lv.n.size() - 1;
-  size_t k = 0;
   for (; k < top && lv.n[k] > WIDE; ++k) {
     const uint64_t nout = lv.n[k + 1];
     node_level<<<(unsigned)((nout + 127) / 128), 128, 0, st>>>(nodes + lv.off[k] * 8, lv.n[k], nodes + lv.off[k + 1] * 8);
@@ -988,6 +1001,18 @@ using namespace tf;
 #define FUSED_NB(V, SPAN, MODE, PD, P) FUSED_V(V, SPAN, 1, MODE, PD, P) FUSED_V(V, SPAN, 2, MODE, PD, P) FUSED_V(V, SPAN, 4, MODE, PD, P)
 #define FUSED_SP(V, MODE, PD, P) FUSED_NB(V, 32, MODE, PD, P) FUSED_NB(V, 64, MODE, PD, P)
 
+using Kern2 = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*);
+
+template <int L, int MODE, int W, int ST, bool P, int R = 7>
+Kern2 pick2(int nb8) {
+  if constexpr (MODE == MODE_TAGONLY)
+    return fused2_kernel<1, L, 1, MODE, W, ST, P, R>;
+  else
+    return nb8 == 1 ? fused2_kernel<1, L, 1, MODE, W, ST, P, R>
+           : nb8 == 2 ? fused2_kernel<1, L, 2, MODE, W, ST, P, R>
+                      : fused2_kernel<1, L, 4, MODE, W, ST, P, R>;
+}
+
 extern "C" {
 
 int tf_version() { return 1; }
@@ -1035,33 +1060,38 @@ int tf_fused(int v, int span, int mode, int pd, int partials, const void* w, con
   return cudaGetLastError() ? 2 : 0;
 }
 
-#define F2(L, MODE, W, ST, P)                                                                                    \
-  if (lanes == L && mode == MODE && wc == W && stages == ST && partials == P) {                                \
-    if (nb8 == 1) kern = fused2_kernel<1, L, 1, MODE, W, ST, P>;                                               \
-    if (nb8 == 2) kern = fused2_kernel<1, L, 2, MODE, W, ST, P>;                                               \
-    if (nb8 == 4) kern = fused2_kernel<1, L, 4, MODE, W, ST, P>;                                               \
-  }
+#define F2(L, MODE, W, ST, P, R) \
+  if (lanes == L && mode == MODE && wc == W && stages == ST && partials == P && rounds == R) kern = pick2<L, MODE, W, ST, P, R>(nb8);
 
 // The chunk-block GEMM (fused2_kernel, BLAKE3 variant 1). lanes: L, a block's chunks; mode as tf_fused's; wc: warps a
-// CTA (2 or 4); stages: the ring's quads. M <= 32, N a multiple of 16 wc, K of 2,048. 3: form not built; 4: its x slice
-// and ring exceed a CTA's shared memory.
-int tf_fused2(int lanes, int mode, int wc, int stages, int partials, const void* w, const uint8_t* x, float* y,
-              uint32_t* tags, int M, int N, int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
-  if (M < 1 || M > 32 || (wc != 2 && wc != 4) || N % (16 * wc) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
+// CTA; stages: the ring's quads; rounds 7, or 4 (not BLAKE3: uncertified). M <= 32, N a multiple of 16 wc, K of 2,048.
+// 3: form not built; 4: its x slice and ring exceed a CTA's shared memory.
+int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int partials, const void* w, const uint8_t* x,
+              float* y, uint32_t* tags, int M, int N, int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
+  if (M < 1 || M > 32 || wc < 1 || N % (16 * wc) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
   const int nb8 = mode == MODE_TAGONLY ? 1 : M <= 8 ? 1 : M <= 16 ? 2 : 4;
-  void (*kern)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*) = nullptr;
+  Kern2 kern = nullptr;
   if (mode == MODE_GEMM) lanes = 1;
-  // GEMM only: both CTA sizes at 4 and 6 stages, per-span sums at 4 warps and 4 stages
-  F2(1, 0, 4, 4, false) F2(1, 0, 2, 4, false) F2(1, 0, 4, 6, false) F2(1, 0, 2, 6, false) F2(1, 0, 4, 4, true)
-  // + tags: every L at 4 warps and 4 stages; L = 4 at 2 warps, at 6 stages and with per-span sums
-  F2(1, 1, 4, 4, false) F2(2, 1, 4, 4, false) F2(4, 1, 4, 4, false) F2(8, 1, 4, 4, false)
-  F2(4, 1, 2, 4, false) F2(4, 1, 4, 6, false) F2(4, 1, 4, 4, true)
-  // + sink, and tags only
-  F2(4, 2, 4, 4, false) F2(1, 3, 4, 4, false) F2(4, 3, 4, 4, false)
+  // GEMM only, at each CTA shape; per-span sums at 4 warps and 4 stages
+  F2(1, 0, 4, 2, false, 7) F2(1, 0, 4, 3, false, 7) F2(1, 0, 8, 2, false, 7) F2(1, 0, 4, 4, false, 7)
+  F2(1, 0, 4, 4, true, 7)
+  // + tags: L = 4 at each CTA shape and with per-span sums, L = 8 at the smaller rings, L = 1 at one
+  F2(4, 1, 4, 2, false, 7) F2(4, 1, 4, 3, false, 7) F2(4, 1, 8, 2, false, 7) F2(4, 1, 8, 3, false, 7)
+  F2(4, 1, 4, 4, false, 7) F2(4, 1, 4, 4, true, 7)
+  F2(8, 1, 4, 2, false, 7) F2(8, 1, 4, 3, false, 7) F2(8, 1, 8, 2, false, 7) F2(1, 1, 4, 3, false, 7)
+  // + sink; tags only; the 4-round probes
+  F2(4, 2, 4, 3, false, 7) F2(1, 3, 4, 3, false, 7) F2(4, 3, 4, 3, false, 7)
+  F2(4, 1, 4, 3, false, 4) F2(4, 3, 4, 3, false, 4)
   if (!kern) return 3;
-  const int smem = (mode == MODE_TAGONLY ? 0 : nb8 * 8 * CXS) + wc * stages * QUAD_BYTES;
+  const int smem = (mode == MODE_TAGONLY ? 0 : M * CXS) + wc * stages * QUAD_BYTES;
   if (smem > 99 * 1024) return 4;
-  if (smem > 48 * 1024 && cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2;
+  static std::unordered_set<const void*> configured;
+  if (!configured.count((const void*)kern)) {
+    if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, 99 * 1024) ||
+        cudaFuncSetAttribute(kern, cudaFuncAttributePreferredSharedMemoryCarveout, 100))
+      return 2;
+    configured.insert((const void*)kern);
+  }
   const int grid = (N / 16 / wc) * (Kd / CCOLS);
   kern<<<grid, wc * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
   return cudaGetLastError() ? 2 : 0;
@@ -1095,6 +1125,29 @@ uint64_t tf_tree_nodes(uint64_t leaves) { return levels_for(leaves).total; }
 int tf_tree(uint64_t* nodes, uint64_t leaves, cudaStream_t st) {
   if (!leaves) return 1;
   launch_tree(nodes, levels_for(leaves), st);
+  return cudaGetLastError() ? 2 : 0;
+}
+
+// Part of the tree before all its leaves are in: levels 1 .. levels over leaves [first, first + count), both multiples
+// of 2^levels (levels <= 9); then tf_tree_from(nodes, leaves, levels) the rest.
+int tf_subtree(uint64_t* nodes, uint64_t leaves, uint64_t first, uint64_t count, int levels, cudaStream_t st) {
+  const uint64_t span = 1ULL << levels;
+  if (levels < 1 || levels > SPANL || first % span || count % span || first + count > leaves) return 1;
+  const Levels lv = levels_for(leaves);
+  SpanLv s;
+  s.levels = levels;
+  for (int t = 0; t <= levels; ++t) {
+    s.off[t] = lv.off[t];
+    s.n[t] = lv.n[t];
+  }
+  node_sub<<<(unsigned)(count / span), (unsigned)(span / 2), 0, st>>>(nodes, s, first);
+  return cudaGetLastError() ? 2 : 0;
+}
+
+int tf_tree_from(uint64_t* nodes, uint64_t leaves, int from, cudaStream_t st) {
+  const Levels lv = levels_for(leaves);
+  if (!leaves || from < 0 || (size_t)from >= lv.n.size()) return 1;
+  launch_tree(nodes, lv, st, (size_t)from);
   return cudaGetLastError() ? 2 : 0;
 }
 
