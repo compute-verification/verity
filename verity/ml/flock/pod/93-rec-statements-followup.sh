@@ -5,6 +5,8 @@
 set -uxo pipefail
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 R0=$RESEARCH_RUN_DIR; mkdir -p $R0/out; O2=$R0/out
+export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
+export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 . verity/ml/flock/pod/rec-env.sh
 P=/workspace/research/runs/$RID/out; H=$P/honest/out; ST=/workspace/jobs/gap2/$RID/honest/stage; S9=/workspace/scratch/$RID; E9=$P/e2e
 IC=$ST/circuit.txt; IP=$ST/pub-16.bin; IQ=$ST/partition.json; REG=$ST/circuit-registration.json
