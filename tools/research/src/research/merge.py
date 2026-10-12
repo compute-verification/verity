@@ -375,6 +375,27 @@ def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], c
     return [rid for rid, c in found if refused(store, rid, kinds, tool, c, command, repo) is None]
 
 
+def after_landing(store, commit: str, tool: str = "check", *, command: tuple[str, ...]) -> str | None:
+    """The newest attempt that passed ``tool``'s after-landing jobs on the clean ``commit`` (`check.py --after-landing`, which
+    the landing hook `landed.py` records on each landing of main), or None.  Citations and tables read only commits it names
+    (Daniel, 12 Oct).  ``command`` is the target's `declared_command`; the attempt ran it with `--after-landing` and check.py's
+    own flags, and its result is a passed `check/v1`.  No merge gate takes such an attempt (`invocation` refuses the flag)."""
+    rows = store.index.sql("SELECT id FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 AND state = 'done' "
+                           "AND rc = 0 ORDER BY start_utc DESC", (tool, commit))
+    for (rid,) in rows:
+        got = _read(store, rid, tool, commit)
+        if isinstance(got, str):
+            continue
+        doc, _art, result = got
+        argv = doc.get("argv")
+        if not (isinstance(argv, list) and "--after-landing" in argv) or unlike([x for x in argv if x != "--after-landing"], command):
+            continue
+        meta = result.meta if result is not None and isinstance(result.meta, dict) else {}
+        if result.kind == "check/v1" and meta.get("run_id") == rid and (meta.get("validation") or {}).get("status") == "passed":
+            return rid
+    return None
+
+
 def tree_identical(repo: Path, commit: str) -> bool:
     """Whether merging ``commit`` into the checkout's HEAD, which it does not contain, gives ``commit``'s own tree: HEAD's
     changes are all in ``commit`` already (a train checked on the train ahead of it, which landed as a merge commit of the same

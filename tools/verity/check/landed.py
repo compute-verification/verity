@@ -6,8 +6,9 @@
 2. When the tree's ci.toml declares `after_landing` jobs (Daniel, 12 Oct: a part of check over about 10 min cold may run after
    the landing; the Lean audit never does), `train.sh COMMIT MACHINE --after-landing` records them on COMMIT (`check.py
    --after-landing`), and this waits for the run's end (`research status`, each POLL_S).  A run that failed is posted to the
-   merge thread for the lander, who reverts or fixes forward: the landing's own PRs, and any landing since the last after-landing
-   check that passed, are what it tested for the first time.  A launch that registered no run is posted by train.sh itself.
+   merge thread for the lander, who reverts the landing at once (Daniel, 12 Oct): the landing's own PRs, and any landing since
+   the last after-landing check that passed, are what it tested for the first time.  `research.merge.after_landing` reads a
+   commit's passing run, which citations and tables filter on.  A launch that registered no run is posted by train.sh itself.
 
 The landing stands whatever this finds; it reports, and changes nothing on main."""
 from __future__ import annotations
@@ -121,8 +122,8 @@ def main(argv: list[str] | None = None) -> int:
         post(f"{what} never took a slot ({' '.join(ids)} all exit {NOT_STARTED}): rerun "
              f"`python tools/verity/check/landed.py {a.commit[:12]} --no-post-train` (quiet)")
         return 1
-    post(f"{what} FAILED on {run} (`research inspect {run}`). It is the first check of these jobs on this landing and on "
-         "any landing since the last one that passed: revert or fix forward. (quiet)")
+    post(f"{what} FAILED on {run} (`research inspect {run}`). Daniel's rule: revert the landing at once. The jobs ran here "
+         "for the first time on this landing and on any since the last one that passed. (quiet)")
     return 1
 
 

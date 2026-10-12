@@ -676,6 +676,35 @@ def test_a_refused_kind_or_another_runs_result_passes_no_gate_even_where_the_dec
     assert refused(store, attempt("r20261003-000002-abcd", "check/v1", "r20261003-000002-abcd"), kinds, "check", commit, CHECKED) is None
 
 
+def test_a_commits_after_landing_check_is_the_newest_passed_run_of_the_declared_command_with_the_flag(tmp_path):
+    """What citations and tables filter main's commits on (Daniel, 12 Oct): `check.py --after-landing`'s passing attempt, which
+    the gate itself never takes; a merge check, a failed result or another command is no such attempt."""
+    from research.merge import after_landing, refused
+    from research.store.local import LocalStore
+
+    store = LocalStore(tmp_path / "store", config_path=tmp_path / "none.toml")
+    commit = "c" * 40
+
+    def attempt(rid: str, argv: list[str], verdict: str = "passed") -> str:
+        meta = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": rid, "validation": {"status": verdict}, "steps": []}
+        store.put_attempt({
+            "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "check", "version": None}, "derivation": "drv:" + "0" * 64,
+            "reuse_key": None, "argv": argv, "params": {}, "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [],
+            "source": {"commit": commit, "dirty": False}, "closure": None, "execution": {}, "cost": None,
+            "status": {"state": "done", "rc": 0}, "outputs": {"result": store.put_artifact("check/v1", meta)}, "telemetry": None,
+            "start_utc": rid})
+        return rid
+
+    attempt("r20261012-000000-aaaa", list(CHECKED))
+    assert after_landing(store, commit, command=CHECKED) is None, "the merge check is not the after-landing one"
+    attempt("r20261012-000001-aaaa", ["bash", "-c", shlex.join([*CHECKED, "--after-landing"])])
+    attempt("r20261012-000002-aaaa", [*CHECKED, "--keep-going", "--after-landing"], verdict="failed")
+    assert after_landing(store, commit, command=CHECKED) is None
+    late = attempt("r20261012-000003-aaaa", ["python3", "tools/verity/check/slot.py", "--", *CHECKED, "--keep-going", "--after-landing"])
+    assert after_landing(store, commit, command=CHECKED) == late
+    assert "which check.py doesn't take" in refused(store, late, frozenset({"check/v1"}), "check", commit, CHECKED)
+
+
 def test_a_train_whose_command_isnt_the_declared_one_is_refused_before_anything_is_checked(tmp_path, monkeypatch, capsys):
     """`research merge --train --command "bash -c '... check.py || true'"` (red team, #990): the gate refuses every attempt of it,
     so the train's check and its bisection would run for nothing.  Check.py's own flags are still the declared command."""
