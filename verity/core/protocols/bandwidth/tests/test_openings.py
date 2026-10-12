@@ -153,6 +153,34 @@ def test_multiproofs_share_paths():
     assert packed.leaf == pytest.approx(16 * 64) and packed.receipt_path == pytest.approx(8 * 64)
 
 
+def test_retention_is_exact():
+    """Every draw of 3 from the window's 10 receipts, two receipts a leaf and the last leaf short: the mean bytes read
+    again to rebuild every opened node at each level is `retention`'s, and level 0 keeps every receipt."""
+    g = o.Geometry(stores=1, blocks=5, passes=2, block_bytes=8, receipts_per_leaf=2)
+    assert o.retention(g, 3, 0) == o.Retention(0, 2 * (5 * 64 + 3 * 64), 0.0)
+    assert [o.retention(g, 3, level).kept for level in (1, 2)] == [2 * 3 * 64, 2 * 64]
+    for level in (1, 2):
+        span = (1 << level) * 2
+        total = 0
+        for picks in itertools.product(range(10), repeat=3):
+            opened = {(u // 5, u % 5 // span) for u in picks}
+            total += sum(min(5, (n + 1) * span) - n * span for _, n in opened) * 8
+        assert o.retention(g, 3, level).reread == pytest.approx(total / 10**3)
+
+
+def test_retention_trades_kept_trees_for_reads():
+    g = o.Geometry(stores=8, blocks=94 * 10**9 // 4096, passes=10, block_bytes=4096)
+    serving = [o.retention(g, 18_483, level) for level in range(0, 12)]
+    assert all(a.kept > b.kept and a.reread < b.reread for a, b in itertools.pairwise(serving))
+    assert serving[0].kept > g.passes * g.blocks * g.stores * 64
+    whole = o.retention(g, 10**6, (g.blocks - 1).bit_length())
+    assert whole.reread == pytest.approx(g.passes * g.store_bytes)
+    with pytest.raises(ValueError):
+        o.retention(g, 18_483, (g.blocks - 1).bit_length() + 1)
+    with pytest.raises(ValueError):
+        o.retention(g, 0, 4)
+
+
 NODE = o.Geometry(stores=8, blocks=94 * 10**9 // 4096, passes=10, block_bytes=4096)
 
 

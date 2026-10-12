@@ -37,7 +37,8 @@ per opening with every tree's openings sent as one multiproof (`verity.ml.commit
 expectation of the multiproof's size under the draw (`expected_siblings`).  The work is counted in operations: SHA-512
 compressions in the audit's framing (`pous.verifier`'s rows, leaves and nodes, `tags`' leaves), the codec's squarings
 to decode the block, and the sketch's multiply-adds.  `Rates` turns them into core-seconds, and `achievable` gives
-`μ_sample + λ` at the most openings a verifier's bandwidth and cores afford.
+`μ_sample + λ` at the most openings a verifier's bandwidth and cores afford.  `retention` is the prover's side: the
+receipt trees it keeps until the draw, and the blocks it reads again to serve it.
 """
 
 from __future__ import annotations
@@ -266,6 +267,40 @@ def opening_cost(g: Geometry, s: int) -> OpeningCost:
 
 
 @dataclass(frozen=True, slots=True)
+class Retention:
+    """What serving a window's draw costs the prover: the bytes of receipt trees it keeps until the draw, and the
+    expected bytes of blocks it reads again to rebuild the receipts under the nodes the draw opens."""
+
+    level: int
+    kept: float
+    reread: float
+
+
+def retention(g: Geometry, s: int, level: int) -> Retention:
+    """The prover keeps every receipt tree from `level` up until the window's `s` openings are drawn (level 0: every
+    receipt), and for each opened node at `level` rebuilds the receipts under it, reading each one's block again.
+    Rebuilding a receipt needs its block as it was in that pass and its `z`, so a block may not change, nor its `z`
+    become unrecoverable, before the window's draw."""
+    leaves = -(-g.blocks // g.receipts_per_leaf)
+    depth = (leaves - 1).bit_length()
+    if type(s) is not int or s < 1 or not 0 <= level <= depth:
+        raise ValueError(f"a draw has s >= 1 openings, and a kept level is in 0..{depth}")
+    trees = g.stores * g.passes
+    nodes = sum(-(-leaves // (1 << up)) for up in range(max(level, 1), depth + 1))
+    kept = trees * (nodes * NODE_BYTES + (g.blocks * g.receipt_bytes if level == 0 else 0))
+    if level == 0:
+        return Retention(level, kept, 0.0)
+
+    def rebuilt(receipts: int) -> float:
+        hit = 1.0 if receipts >= g.receipts else -math.expm1(s * math.log1p(-receipts / g.receipts))
+        return receipts * hit
+
+    span = (1 << level) * g.receipts_per_leaf
+    full, rest = divmod(g.blocks, span)
+    return Retention(level, kept, trees * g.block_bytes * (full * rebuilt(span) + (rebuilt(rest) if rest else 0.0)))
+
+
+@dataclass(frozen=True, slots=True)
 class Point:
     """A parameter point: `s` openings a window over a horizon of `windows`, the λ form, and what it certifies."""
 
@@ -353,6 +388,7 @@ __all__ = [
     "OpeningCost",
     "Point",
     "Rates",
+    "Retention",
     "Slack",
     "achievable",
     "cheapest",
@@ -365,6 +401,7 @@ __all__ = [
     "horizon_error_log2",
     "opening_cost",
     "point",
+    "retention",
     "samples_for",
     "slack_bits",
     "window_error",
