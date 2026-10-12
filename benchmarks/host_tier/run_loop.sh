@@ -74,7 +74,7 @@ fi
 B=$(mktemp -d /tmp/host-tier-loop.XXXXXX); trap 'rm -rf "$B"' EXIT
 NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
 { "$NVCC" --version && g++ -O3 -march=native -Wall -c receipt.cpp -o "$B/receipt.o" \
-    && "$NVCC" -O3 -std=c++17 -arch=sm_120 -Xcompiler -pthread -o "$B/loop" loop.cu "$B/receipt.o" \
+    && "$NVCC" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -pthread -o "$B/loop" loop.cu "$B/receipt.o" \
     && "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/pcie" pcie.cu && gcc -O3 -march=native -pthread -Wall -o "$B/dram" dram.c; } \
   > "$O/build.txt" 2>&1 || { cat "$O/build.txt"; exit 4; }
 GPU_LEASE_WHO=ra-host-tier gpu-lease "${NGPU:-1}" --wait --max-min 20 -- bash "$PWD/run_loop.sh" leased "$B"

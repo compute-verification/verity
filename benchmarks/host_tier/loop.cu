@@ -102,14 +102,11 @@ __global__ void stream_receipts(const uint4* __restrict__ host, size_t nblocks, 
                                 const uint32_t* __restrict__ z, uint64_t seed, unsigned long long* __restrict__ out) {
   const int lane = threadIdx.x & 31;
   const size_t warp = ((size_t)blockIdx.x * blockDim.x + threadIdx.x) >> 5, nw = ((size_t)gridDim.x * blockDim.x) >> 5;
+  __shared__ uint4 mask[256];  // the 4 KiB mask under z, as u32 words 4u .. 4u + 3
   uint64_t h = seed;
   for (int t = 0; t < 16; ++t) h = mix64(h ^ z[t]);
-  uint4 mk[8];  // this lane's words of the mask: u32 words 128 l + 4 lane + c
-#pragma unroll
-  for (int l = 0; l < 8; ++l) {
-    const uint64_t a = mix64(h ^ (0x6d00000000ull + 64 * l + 2 * lane)), b = mix64(h ^ (0x6d00000000ull + 64 * l + 2 * lane + 1));
-    mk[l] = make_uint4((uint32_t)a, (uint32_t)(a >> 32), (uint32_t)b, (uint32_t)(b >> 32));
-  }
+  for (int i = threadIdx.x; i < 512; i += blockDim.x) reinterpret_cast<uint64_t*>(mask)[i] = mix64(h ^ (0x6d00000000ull + i));
+  __syncthreads();
   for (size_t b = warp; b < nblocks; b += nw) {
     const uint4* p = host + b * 256;
     uint4 v[8];
@@ -119,7 +116,8 @@ __global__ void stream_receipts(const uint4* __restrict__ host, size_t nblocks, 
 #pragma unroll
     for (int l = 0; l < 8; ++l) {
       const int i = 128 * l + 4 * lane;
-      uint32_t x0 = v[l].x ^ mk[l].x, x1 = v[l].y ^ mk[l].y, x2 = v[l].z ^ mk[l].z, x3 = v[l].w ^ mk[l].w;
+      const uint4 m = mask[l * 32 + lane];
+      uint32_t x0 = v[l].x ^ m.x, x1 = v[l].y ^ m.y, x2 = v[l].z ^ m.z, x3 = v[l].w ^ m.w;
       r0 += x0 * __ldg(keys + i) + x1 * __ldg(keys + i + 1) + x2 * __ldg(keys + i + 2) + x3 * __ldg(keys + i + 3);
       r1 += x0 * __ldg(keys + 1024 + i) + x1 * __ldg(keys + 1025 + i) + x2 * __ldg(keys + 1026 + i) +
             x3 * __ldg(keys + 1027 + i);
@@ -297,6 +295,7 @@ int main(int argc, char** argv) {
       if (gating) {
         if (d == 0) {
           stream_receipts<<<grid, 512, 0, s>>>(hdev, 16, keys, zdev, seed64(), rec);
+          CK(cudaGetLastError());
           CK(cudaStreamSynchronize(s));
           CK(cudaMemcpy(gate_gpu.data(), rec, 16 * 8, cudaMemcpyDeviceToHost));
         }
@@ -306,6 +305,7 @@ int main(int argc, char** argv) {
       }
       // one untimed chunk, so the module load stays out of the time
       stream_receipts<<<grid, 512, 0, s>>>(hdev, chunk_blocks, keys, zdev, seed64(), rec);
+      CK(cudaGetLastError());
       CK(cudaStreamSynchronize(s));
       cudaEvent_t ev[2];
       CK(cudaEventCreateWithFlags(&ev[0], cudaEventDisableTiming));
