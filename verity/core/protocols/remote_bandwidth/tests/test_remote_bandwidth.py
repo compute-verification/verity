@@ -210,6 +210,8 @@ def test_draws_wait_for_final_roots(store) -> None:
     clock.now = s.deadline(2)
     with pytest.raises(SessionError, match="not final"):
         s.close(2)
+    with pytest.raises(SessionError, match="in order"):
+        s.close(1)
     assert isinstance(s.close(0), tuple)                    # window 1's first root made window 0's final
 
 

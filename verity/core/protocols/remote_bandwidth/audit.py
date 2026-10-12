@@ -403,6 +403,8 @@ class Session:
         w = self.windows[t] if t < len(self.windows) else None
         if w is None or w.draws is not None:
             raise SessionError(f"window {t} is not open to draw")
+        if any(v.draws is None for v in self.windows[:t]):
+            raise SessionError("windows are drawn in order: a window's first pass chains from the window before")
         d = self.deadline(t)
         if not w.final and (d is None or self.clock() <= d):
             raise SessionError(f"window {t}'s roots are not final before its deadline or the next window's first root")
