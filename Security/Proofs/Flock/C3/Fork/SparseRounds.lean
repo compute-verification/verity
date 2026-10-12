@@ -334,7 +334,7 @@ theorem eqAt_coord_high {sh : SparseShape} (c : RegClaim F sh) {a : ℕ}
   obtain ⟨j, hj⟩ := hbit
   unfold eqAt
   refine Finset.prod_eq_zero (Finset.mem_univ j) ?_
-  rw [if_pos hj]
+  rw [ite_eq_left hj]
   exact coord_eq_zero c (Nat.le_add_right _ _)
 
 /-- A registered claim's point, split into the entries', the planes' and the type's. -/
