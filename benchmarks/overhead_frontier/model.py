@@ -11,13 +11,14 @@ only spends resources of its own, so no host tier, no μ_link and no identity te
 is the optional PoUW join (``bound``).
 
 The step, per GPU (``step``):
-- plain: the linears take max(W·e_mem(m)/R, FLOPs/Φ), attention KV·e_attn/R, the ephemeral traffic (reads, and
-  writes at ``write_bus`` read-times a byte, measured by ra-ephemeral, ``eph_split`` of it divided across a step's
-  cards) its bytes/R, and a tensor-parallel step 2L all-reduces over PCIe;
+- plain: the linears take max(W·e_mem(m)/R, FLOPs/Φ), attention KV·e_attn/R, the stock step's ephemeral traffic
+  (``eph_plain``: reads, and writes at ``write_bus`` read-times a byte, measured by ra-ephemeral, ``eph_split`` of it
+  divided across a step's cards) its bytes/R, and a tensor-parallel step 2L all-reduces over PCIe;
 - audited: the linears' CUDA-core work (decode o_w and receipt τ_w per weight pass, and binding τ_bind if ``bound``)
   is exposed except for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h
   read-times a byte, for the step's tokens and P/O prompt tokens a sequence) hides in what tensor slack is left;
-  attention pays o_kv + τ_kv (+ τ_bind_kv) a KV pass;
+  attention pays o_kv + τ_kv (+ τ_bind_kv) a KV pass, and the encoded kernels' ephemeral traffic (``eph_read``,
+  ``eph_write``) its bytes/R;
 - each pass waits ``t_gap`` for the previous pass's root (its seed), less S_chip/R with ``prefetch``; with ``copies``
   c differently keyed copies of the weights and KV, a pass spans c steps, each reading its own copy (so no block twice
   in a pass), and the KV append encodes c times;
@@ -182,15 +183,19 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     R = v["R"] * 1e9
     W = s.weight_bytes / tp
     KV = m * w.ctx * s.kv_bytes_per_token / tp
+    append = m * s.kv_bytes_per_token / tp
     act = s.ephemeral(v["eph_read"], m, tp, v["eph_split"])
-    wr = (s.ephemeral(v["eph_write"], m, tp, v["eph_split"]) + m * s.kv_bytes_per_token / tp) * v["write_bus"]
+    wr = (s.ephemeral(v["eph_write"], m, tp, v["eph_split"]) + append) * v["write_bus"]
+    stock = v["eph_plain"]
+    act0 = s.ephemeral(stock["read"], m, tp, v["eph_split"])
+    wr0 = (s.ephemeral(stock["write"], m, tp, v["eph_split"]) + append) * v["write_bus"]
     e_mem = interp(v["e_mem"], m)
     t_rd = W * e_mem / R
     t_tc = s.flops_per_token * m / tp / v["phi"]
     t_kv = KV * v["e_attn"] / R
     t_act = (act + wr) / R
     t_ar = _allreduce(w, tp, v)
-    plain = max(t_rd, t_tc) + t_kv + t_act + t_ar
+    plain = max(t_rd, t_tc) + t_kv + (act0 + wr0) / R + t_ar
 
     blk = 0.75 + 0.25 * 4096 / p.block
     ksr = v["ks_ratio"][p.k_s]

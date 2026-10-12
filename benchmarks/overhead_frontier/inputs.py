@@ -150,6 +150,11 @@ INPUTS: dict[str, Input] = {
                        "the encoded GEMM and attention pass the 21:50Z gate (STACK:0, LOCAL:0, L2 writes no more than "
                        "their outputs and declared partials), leaving the activations' write-backs: about 0.1% at 70B "
                        "batch 1 (ra-ephemeral, estimate)"),
+    "eph_plain": Input({"read": {"8B": (107.0, 2.3), "70B": (60.0, 2.5), "405B": (107.0, 2.5)},
+                        "write": {"8B": (900.0, 6.0), "70B": (700.0, 6.5), "405B": (900.0, 6.5)}},
+                       "B per layer·hidden", "the stock step's ephemeral reads and writes, as ``eph_read`` and "
+                       "``eph_write`` measure them: the plain step every overhead is against, which the encoded "
+                       "kernels' levers leave as it is", "measured"),
     "eph_split": Input(0.0, "of the bytes divided across a step's cards", "ra-ephemeral: a card's rest barely splits "
                        "(38 MB a graph at TP 2 against 41 MB at TP 1), and 70B at TP 2 writes 0.79–1.51% of a card's "
                        "bus time (cd24 art:ccbe15a6), above even unsplit bytes here (0.36–1.16%); TP 4 and 8 are "

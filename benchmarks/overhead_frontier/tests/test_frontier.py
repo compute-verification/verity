@@ -14,6 +14,8 @@ from model import (SHAPES, Params, Shape, Workload, _timing, at_width, decode, e
 
 
 NO_EPHEMERAL = {name: (0.0, 0.0) for name in SHAPES}
+NONE_EPHEMERAL = {"eph_read": NO_EPHEMERAL, "eph_write": NO_EPHEMERAL,
+                  "eph_plain": {"read": NO_EPHEMERAL, "write": NO_EPHEMERAL}}
 P512 = {"bits": 512, "masked": False}
 
 
@@ -24,7 +26,7 @@ def _eta0(inputs=I.INPUTS) -> dict:
 def _measured_step() -> dict:
     """ra-codec-tensor's step at p512: one GPU, bf16 KV, no KV receipt, no ephemeral traffic, no prompt to encode."""
     v = I.values()
-    v.update(P512, tau_kv={2: 0.0, 3: 0.0}, eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL, t_gap=0.0, p_over_o=0.0)
+    v.update(P512, **NONE_EPHEMERAL, tau_kv={2: 0.0, 3: 0.0}, t_gap=0.0, p_over_o=0.0)
     return v
 
 
@@ -49,7 +51,7 @@ def test_reproduces_the_measured_step_from_above(name, batch, ctx, k, measured):
 
 def test_plain_step_is_the_measured_passes():
     v = I.values()
-    v.update(eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL)
+    v.update(NONE_EPHEMERAL)
     st = step(Workload(SHAPES["70B"], 8, 9280, tp=1), Params(2, 4096, 16, 0), v)
     assert 1.03 <= st["plain"] * v["R"] * 1e9 / (st["W"] + st["KV"]) <= 1.10
 
@@ -75,6 +77,13 @@ def test_the_unregistered_reads_are_ra_ephemerals_mu_eph():
     for name, batch, mu in (("70B", 16, 0.00061), ("8B", 64, 0.00162)):  # its worst timed fused points, at 2k
         st = step(Workload(SHAPES[name], batch, 2048, tp=1), Params(3, 4096, 16, 0), v)
         assert st["eph_read"] / (v["R"] * 1e9 * st["plain"]) == pytest.approx(mu, rel=0.35)
+
+
+def test_the_encoded_kernels_levers_leave_the_stock_step_alone():
+    w, p = Workload(SHAPES["70B"], 16, 8192), Params(3, 65536, 8, 0)
+    today = step(w, p, I.values())
+    gated = step(w, p, I.values(I.improved("eph_write", I.improved("eph_read"))))
+    assert gated["plain"] == today["plain"] and gated["t_act"] < today["t_act"]
 
 
 def test_mu_eph_with_writes_is_the_stock_upper_bound():

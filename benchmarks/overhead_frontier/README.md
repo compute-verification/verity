@@ -14,8 +14,10 @@ receipts to z is an opt-in. The codec is the stated one, masked p1024 at k = 3, 
 - `model.py`: the plain and audited decode step per GPU for a Llama-class shape in FP8 at a batch and context, and γ
   term by term under two definitions (against HBM's capacity over time, with top-up and padding; per pass, the red
   team's). Openings are the hybrid's (every window's sampling at most 1%, averaged over a 10-minute horizon), with
-  their serving cost and named λ. η, the share of R·T the honest engine leaves unread, is counted by phase (decode,
-  prefill, gaps, idle); `eta_allowance` is what the rest of γ leaves for it.
+  their serving cost and named λ. Every overhead is against the stock step, whose ephemeral traffic (`eph_plain`) no
+  lever moves; the encoded kernels' own (`eph_read`, `eph_write`) is μ_unreg. η, the share of R·T the honest engine
+  leaves unread, is counted by phase on the GPU's clock (decode, prefill, gaps, idle); `eta_allowance` is what the
+  rest of γ leaves for it.
 - `frontier.py`: the search over block size, k_s, binding granularity (when bound) and the number of keyed copies, per
   workload, at today's inputs (η as measured and at budgets of 0, 0.25% and 0.5%), with every lever improved and at
   the floor; steps past 4× the plain one are flagged as over the budget; the word width swept with the rounds, plain
