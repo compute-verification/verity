@@ -110,15 +110,33 @@ def test_mu_sample_and_lambda():
     assert G.mu_lambda(4096) == pytest.approx(0.0014, rel=0.01)
 
 
+def test_s_word_per_codeword():
+    """The red team's F14: s_c per stored codeword, 0.20 for 60 payload bits packed at 61."""
+    assert G.s_word(G.packed(G.MEASURED[3]), 0.19) == pytest.approx(0.203, abs=1e-3)
+    assert G.s_word(G.MEASURED[3], 0.19) == pytest.approx(0.194, abs=1e-3)
+    full = replace(G.WIDE["p511"], p_bits=512, payload_bits=512)
+    assert G.s_word(full, 0.19) == pytest.approx(0.19)
+
+
 def test_gamma_points():
-    c3 = replace(G.MEASURED[3], p_bits=64.0)
-    packed = G.Point(G.LLAMA_70B, 1, 4096, True, c3, idle=0.10).terms()
-    assert packed["fits"] and packed["gamma_bw"] == pytest.approx(0.0085, abs=3e-4)
-    unpacked = G.Point(G.LLAMA_70B, 1, 4096, True, replace(c3, p_bits=61.0), idle=0.10).terms()
+    packed = G.Point(G.LLAMA_70B, 1, 4096, True, G.packed(G.MEASURED[3]), idle=0.10).terms()
+    assert packed["fits"] and packed["gamma_bw"] == pytest.approx(0.0090, abs=3e-4)
+    assert packed["gamma_decode_free"] > 6 * packed["gamma_bw"]
+    unpacked = G.Point(G.LLAMA_70B, 1, 4096, True, G.MEASURED[3], idle=0.10).terms()
     assert unpacked["gamma_bw"] - packed["gamma_bw"] == pytest.approx(3 / 64, abs=1e-3)
-    kv_open = G.Point(G.LLAMA_8B, 1, 4096, False, c3, idle=0.37).terms()
-    assert kv_open["uncertified_reads"] == pytest.approx(0.063, abs=1e-3) and kv_open["gamma_bw"] > 0.09
-    assert not G.Point(G.LLAMA_70B, 32, 4096, True, c3).terms()["fits"]
+    kv_open = G.Point(G.LLAMA_8B, 1, 4096, False, G.packed(G.MEASURED[3]), idle=0.37).terms()
+    assert kv_open["uncertified_reads"] == pytest.approx(0.066, abs=1e-3) and kv_open["gamma_bw"] > 0.09
+    assert not G.Point(G.LLAMA_70B, 32, 4096, True, G.MEASURED[3]).terms()["fits"]
+
+
+def test_wide_words_without_the_data_assumption():
+    """Decode-free (no bound on s_c), 70B batch 1: 2^512 − 569 at k = 1 stays under 1%, 2^256 − 189 doesn't."""
+    def point(name):
+        c = replace(G.WIDE[name], tau=0.011, p_bits=G.WIDE[name].slot_bits, payload_bits=G.WIDE[name].slot_bits)
+        c = replace(c, y=G.WIDE_HIDDEN_Y[name])
+        return G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10, theta=G.WIDE_THETA[name]).terms()
+    assert point("p511")["gamma_decode_free"] < 0.01 < point("p255")["gamma_decode_free"]
+    assert point("p511")["gamma_bw"] == pytest.approx(0.0038, abs=2e-4)
 
 
 def test_alu_idle_falls_with_k():
