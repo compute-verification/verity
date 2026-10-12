@@ -64,7 +64,10 @@ theorem lmsCorrect_instance : ∃ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I
 
 def grid : Params := ⟨1, 1, 9, 1, 1⟩
 
-def issuer : Issuer := ⟨toyKey, #[]⟩
+/-- A certifier session id of 32 zero bytes. -/
+def session : ByteArray := ⟨Array.replicate 32 0⟩
+
+def issuer : Issuer := { key := toyKey, session }
 
 def record : Record := ⟨"responses", 0, #[#[none]], .complete⟩
 
@@ -76,7 +79,7 @@ theorem issuerSigns_instance : ∃ prepared, ValidKey issuer.key ∧ 0 < 2 ^ iss
     issuer.prepare record .egress grid digest true = .ok prepared := by
   obtain ⟨head, dg, m, -, hprep⟩ := Properties.CertifierNetwork.Proofs.prepare_of (i := issuer) (r := record)
     (d := .egress) (g := grid) (pd := digest) (by show toyKey.I.size = 16; rw [(key_spec toyKey_eq).2.1]; exact ident_size)
-    (by decide +kernel) (by
+    (by decide +kernel) (by decide +kernel) (by
       intro row hrow
       have : row = #[none] := by simpa [record] using hrow
       subst this
@@ -112,6 +115,8 @@ theorem syncsDeclared : SyncsDeclared config trace := by unfold SyncsDeclared; d
 
 theorem syncsAdmitted : SyncsAdmitted config trace := by unfold SyncsAdmitted; decide +kernel
 
+theorem sessionFits : SessionFits issuer := by unfold SessionFits; decide +kernel
+
 theorem leavesLeft : LeavesLeft issuer 0 config trace := by
   unfold LeavesLeft
   show 0 + (published config trace).length ≤ 2 ^ toyKey.params.H
@@ -120,16 +125,17 @@ theorem leavesLeft : LeavesLeft issuer 0 config trace := by
 
 /-- **`DeviceOutputAccepted`'s honest case holds** on this configuration, issuer and run, `Digested` aside. -/
 theorem deviceOutputAccepted_hypotheses : Ticking config ∧ FieldsFit config ∧ Distinct config ∧
-    ValidKey issuer.key ∧ Closed config trace ∧ NoFault config trace ∧ SyncsDeclared config trace ∧
-    SyncsAdmitted config trace ∧ LeavesLeft issuer 0 config trace :=
-  ⟨ticking, fieldsFit, distinct, toyKey_valid, closed, noFault, syncsDeclared, syncsAdmitted, leavesLeft⟩
+    ValidKey issuer.key ∧ SessionFits issuer ∧ Closed config trace ∧ NoFault config trace ∧
+    SyncsDeclared config trace ∧ SyncsAdmitted config trace ∧ LeavesLeft issuer 0 config trace :=
+  ⟨ticking, fieldsFit, distinct, toyKey_valid, sessionFits, closed, noFault, syncsDeclared, syncsAdmitted, leavesLeft⟩
 
 /-- So, if its grids have a `parameters_digest`, the check accepts this run's output. -/
 theorem deviceOutputAccepted_instance (hdg : Digested config) :
     ∃ i' crs, certifyAll config issuer 0 (published config trace) = .ok (i', crs) ∧
-      ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams config issuer.key) (commitment crs bytes)
+      ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams config issuer.key issuer.session)
+        (commitment crs bytes)
         (evidence config trace) :=
-  Proofs.deviceOutputAccepted_proof config trace issuer 0 ticking fieldsFit distinct hdg toyKey_valid closed noFault
-    syncsDeclared syncsAdmitted leavesLeft
+  Proofs.deviceOutputAccepted_proof config trace issuer 0 ticking fieldsFit distinct hdg toyKey_valid sessionFits
+    closed noFault syncsDeclared syncsAdmitted leavesLeft
 
 end Properties.CertifierNetwork.Instance
