@@ -9,8 +9,10 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   explains how each kernel is laid out.
 - `gpu.py` is the harness API over `libbwtag.so`. `Tagger.tag_pass(tag, store_ptr, blocks, seed, workspace)` returns a
   commitment whose `root` the prover sends; `commitment.open(j, store_tree)` gives the `audit.Opening` the core
-  verifier (`audit.Window.verdict`) checks. `gpu.py windows` runs whole windows through `audit.Verifier`, and one
-  window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed windows are late.
+  verifier (`audit.Window.verdict`) checks. `gpu.py windows` runs whole windows through `audit.Verifier`, each after
+  the honest prover's preparation (an untimed pass under a throwaway seed, then a 512 MiB read of another buffer, so L2
+  starts clean), and one window per tag at a deadline no certificate allows, which checks the openings of a tag whose
+  timed windows are late.
 - `reference.py` computes the expected roots with the core reference on CPU processes, and the store's PoUS leaves.
 - `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
   `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
