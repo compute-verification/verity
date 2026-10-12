@@ -18,8 +18,9 @@ tile, a stand-in for an in-kernel leaf). The host sets the stop flag (pinned mem
 `--starve-s` if the step never finishes (an arm whose filler starves the step is recorded as `starved`). These are family
 `stream`; family `short` runs chunks of one tile a CTA from shallower filler calls (`--short-k`), so a filler CTA holds its
 SM for less time; family `gc` captures the step on a green context of n SMs (`alone`: the step's rate against its SMs) and
-runs the persistent filler on a green context of the rest. `sm_spread` checks that a green context's launches, direct and
-from a graph, stay on its SMs.
+runs the persistent filler on a green context of the rest (`gc_arms`: the 64 x 64 tile at two CTAs an SM, the 128 x 128 tile
+at one, which reads half the operand bytes a FLOP, and the throttle, each CTA idle a set time after each tile). `sm_spread`
+checks that a green context's launches, direct and from a graph, stay on its SMs.
 
 The protocol-kernel gate is reported beside every timing: run.sh refuses the build unless `cuobjdump -res-usage` reports
 STACK:0 and LOCAL:0, and `--l2` is l2_gate.py's verdict on the filler's L2 write and atomic sectors (ncu) against what its
@@ -101,6 +102,7 @@ class Lib:
         self.l.fill_occupancy.argtypes = [i, i, i, C.POINTER(i)]
         self.l.gc_split.argtypes = [i, i, i, C.POINTER(vp), C.POINTER(vp), C.POINTER(i)]
         self.l.smid_at.argtypes = [vp, i, i, vp]
+        self.l.fill_smem.argtypes = [i]
         for f in ("fill_launch", "pearlc_d", "stamp_at", "flag_set", "fill_occupancy", "fill_smem", "gc_split", "smid_at"):
             getattr(self.l, f).restype = i
 
@@ -109,8 +111,9 @@ class Lib:
         if rc:
             raise RuntimeError(f"{what}: error {rc}")
 
-    def fill(self, persist: int, store: int, grid: int, a: Args, stream: torch.cuda.Stream) -> None:
-        self.ck(self.l.fill_launch(persist, 1, store, grid, C.byref(a), C.c_void_p(stream.cuda_stream)), "fill_launch")
+    def fill(self, persist: int, store: int, grid: int, a: Args, stream: torch.cuda.Stream, minb: int = 1) -> None:
+        """minb 1 or 2: the 64 x 64 tile's kernels at that launch bound; 128: the 128 x 128 tile's (`Filler.minb`)."""
+        self.ck(self.l.fill_launch(persist, minb, store, grid, C.byref(a), C.c_void_p(stream.cuda_stream)), "fill_launch")
 
     def pearlc_d(self, grid: int, a: Args, stream: torch.cuda.Stream) -> None:
         self.ck(self.l.pearlc_d(grid, C.byref(a), C.c_void_p(stream.cuda_stream)), "pearlc_d")
@@ -118,9 +121,9 @@ class Lib:
     def stamp(self, slot: torch.Tensor, stream: torch.cuda.Stream) -> None:
         self.ck(self.l.stamp_at(C.c_void_p(slot.data_ptr()), C.c_void_p(stream.cuda_stream)), "stamp")
 
-    def occupancy(self, persist: int, store: int) -> tuple[int, int]:
+    def occupancy(self, persist: int, store: int, minb: int = 1) -> tuple[int, int]:
         regs = C.c_int(0)
-        n = self.l.fill_occupancy(persist, 1, store, C.byref(regs))
+        n = self.l.fill_occupancy(persist, minb, store, C.byref(regs))
         return n, regs.value
 
     def sm_spread(self, stream: torch.cuda.Stream, grid: int, graph: bool) -> int:
@@ -157,13 +160,15 @@ def raster(t: int, tiles_m: int, tiles_n: int, group: int = RASTER) -> tuple[int
 
 
 class Filler:
-    """One Pearl-C call's formed operands and the filler's outputs, queue and log, on the device."""
+    """One Pearl-C call's formed operands and the filler's outputs, queue and log, on the device, run in T x T tiles a CTA
+    (64: the protocol's tile; 128: four of them, each output's arithmetic unchanged)."""
 
-    def __init__(self, M: int, N: int, K: int, at, bt, pa, pb, ia, ib, qcap: int):
-        assert M % TILE == 0 and N % TILE == 0 and K % 64 == 0, (M, N, K)
+    def __init__(self, M: int, N: int, K: int, at, bt, pa, pb, ia, ib, qcap: int, T: int = TILE):
+        assert T in (64, 128) and M % T == 0 and N % T == 0 and K % 64 == 0, (M, N, K, T)
         dev = "cuda"
-        self.M, self.N, self.K = M, N, K
-        self.tiles_m, self.tiles_n = M // TILE, N // TILE
+        self.M, self.N, self.K, self.T = M, N, K, T
+        self.minb = 128 if T == 128 else 1
+        self.tiles_m, self.tiles_n = M // T, N // T
         self.tiles = self.tiles_m * self.tiles_n
         self.at, self.bt, self.pa, self.pb, self.ia, self.ib = at, bt, pa, pb, ia, ib
         self.c = torch.empty((M, N), dtype=torch.int32, device=dev)
@@ -181,13 +186,18 @@ class Filler:
 
     @property
     def fp8_flops_tile(self) -> float:
-        return 2.0 * TILE * TILE * self.K
+        return 2.0 * self.T * self.T * self.K
 
     @property
     def bf16_flops_tile(self) -> float:
-        return 2.0 * TILE * TILE * PEEL_ROW
+        return 2.0 * self.T * self.T * PEEL_ROW
 
-    def args(self, first: int, count: int, *, log: bool = True, stop: bool = True, c=None, u=None, y=None) -> Args:
+    def with_tile(self, T: int, qcap: int) -> "Filler":
+        """The same call's operands, run in T x T tiles."""
+        return Filler(self.M, self.N, self.K, self.at, self.bt, self.pa, self.pb, self.ia, self.ib, qcap, T)
+
+    def args(self, first: int, count: int, *, log: bool = True, stop: bool = True, c=None, u=None, y=None,
+             gap_ns: int = 0) -> Args:
         a = Args()
         p = [self.at.data_ptr(), self.bt.data_ptr(), (c if c is not None else self.c).data_ptr(),
              (u if u is not None else self.u).data_ptr(), (y if y is not None else self.y).data_ptr(),
@@ -196,7 +206,7 @@ class Filler:
              self.fold.data_ptr()]
         for j, x in enumerate(p):
             a.p[j] = x
-        for j, x in enumerate((self.M, self.N, self.K, RASTER, first, count)):
+        for j, x in enumerate((self.M, self.N, self.K, RASTER, first, count, gap_ns)):
             a.i[j] = x
         return a
 
@@ -209,7 +219,7 @@ class Filler:
         self.stop[0] = 0
 
     def tile_view(self, x: torch.Tensor) -> torch.Tensor:
-        return x.view(self.tiles_m, TILE, self.tiles_n, TILE)
+        return x.view(self.tiles_m, self.T, self.tiles_n, self.T)
 
     def written(self) -> np.ndarray:
         """How many times each tile (by raster position) was written, from the log."""
@@ -220,9 +230,9 @@ class Filler:
 def fold_of(c: np.ndarray, u: np.ndarray, f: Filler) -> np.ndarray:
     out = np.zeros(2 * f.tiles, np.uint32)
     for t in range(f.tiles):
-        r, q = f.tm_of[t] * TILE, f.tn_of[t] * TILE
-        out[2 * t] = np.bitwise_xor.reduce(c[r:r + TILE, q:q + TILE].ravel())
-        out[2 * t + 1] = np.bitwise_xor.reduce(u[r:r + TILE, q:q + TILE].ravel())
+        r, q, T = f.tm_of[t] * f.T, f.tn_of[t] * f.T, f.T
+        out[2 * t] = np.bitwise_xor.reduce(c[r:r + T, q:q + T].ravel())
+        out[2 * t + 1] = np.bitwise_xor.reduce(u[r:r + T, q:q + T].ravel())
     return out
 
 
@@ -427,14 +437,14 @@ def window(lib: Lib, f: Filler | None, step: Step, reps: int, arm: dict, lo: tor
         def pump():
             pos = 0
             while not pump_done.is_set() and pos + per_launch <= f.qcap:
-                lib.fill(0, store, arm["grid"], f.args(pos, per_launch), stream)
+                lib.fill(0, store, arm["grid"], f.args(pos, per_launch), stream, f.minb)
                 pos += per_launch
             pumped[0] = pos
 
         thread = threading.Thread(target=pump, daemon=True)
         thread.start()
     elif f is not None and arm["mode"] == "persist":
-        lib.fill(1, store, arm["grid"], f.args(0, min(f.qcap, arm.get("limit", f.qcap))), lo)
+        lib.fill(1, store, arm["grid"], f.args(0, min(f.qcap, arm.get("limit", f.qcap)), gap_ns=arm.get("gap_ns", 0)), lo, f.minb)
     if f is not None:
         time.sleep(arm.get("lead_s", 0.02))         # the filler is resident before the window opens
     h0 = time.monotonic()
@@ -496,7 +506,7 @@ def score(out: dict, base: dict, f: Filler | None, step: Step, credit_tile: floa
 
 # ---------------------------------------------------------------- gates
 
-def load_fixture(d: Path, qcap: int) -> tuple[Filler, dict]:
+def load_fixture(d: Path, qcap: int, T: int = TILE) -> tuple[Filler, dict]:
     man = json.loads((d / "check.json").read_text())
     m, n, k = man["shape"]
     v = man["variants"]["sm120"]
@@ -510,15 +520,15 @@ def load_fixture(d: Path, qcap: int) -> tuple[Filler, dict]:
         return torch.from_numpy(x.copy()).to("cuda")
 
     f = Filler(m, n, k, to(raw(common, "at")), to(raw(common, "bt")), to(raw(v["files"], "pa_t", "sm120")),
-               to(raw(v["files"], "pb_t", "sm120")), to(raw(common, "ia_a")), to(raw(common, "ia_b")), qcap)
+               to(raw(v["files"], "pb_t", "sm120")), to(raw(common, "ia_a")), to(raw(common, "ia_b")), qcap, T)
     exp = {name: raw(v["files"], name, "sm120") for name in ("c", "u", "y")}
     exp["c32"] = exp["c"].view(np.uint32).reshape(m, n)
     exp["u32"] = exp["u"].view(np.uint32).reshape(m, n)
     return f, exp
 
 
-def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, log) -> bool:
-    f, exp = load_fixture(d, qcap=4096)
+def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, log, T: int = TILE) -> bool:
+    f, exp = load_fixture(d, qcap=4096, T=T)
     want = {"c": exp["c"], "u": exp["u"], "y": exp["y"]}
     want_fold = fold_of(exp["c32"], exp["u32"], f)
     ok = True
@@ -535,7 +545,7 @@ def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, lo
             detail = {kk: bool(np.array_equal(got[kk].cpu().numpy().view(np.uint8).ravel(), want[kk])) for kk in keys}
             res = all(detail.values())
         ok &= res
-        emit(log, {"gate": name, "store": store, "pass": res, **detail})
+        emit(log, {"gate": name, "tile": T, "store": store, "pass": res, **detail})
 
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     f.poison()
@@ -545,34 +555,37 @@ def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, lo
         for grid, per in ((1, f.tiles), (3, 5), (sms, 1)):
             f.poison()
             for pos in range(0, f.tiles, grid * per):
-                lib.fill(0, store, grid, f.args(pos, min(grid * per, f.tiles - pos)), lo)
+                lib.fill(0, store, grid, f.args(pos, min(grid * per, f.tiles - pos)), lo, f.minb)
             check(f"chunk grid={grid} per={per}", store)
         for grid in (1, 7, sms):
             f.poison()
-            lib.fill(1, store, grid, f.args(0, f.tiles), lo)
+            lib.fill(1, store, grid, f.args(0, f.tiles), lo, f.minb)
             check(f"persist grid={grid}", store)
+        f.poison()
+        lib.fill(1, store, 3, f.args(0, f.tiles, gap_ns=20000), lo, f.minb)
+        check("persist grid=3 throttled 20 us a tile", store)
         if step is not None:
             f.poison()
             step.replay(1)
             for pos in range(0, f.tiles, 8):
-                lib.fill(0, store, 4, f.args(pos, min(8, f.tiles - pos)), lo)
+                lib.fill(0, store, 4, f.args(pos, min(8, f.tiles - pos)), lo, f.minb)
             step.replay(2)
             torch.cuda.synchronize()
             check("chunk beside the step", store)
             same = step.identical()
             ok &= same
-            emit(log, {"gate": "step identical beside the fixture filler", "store": store, "pass": same})
+            emit(log, {"gate": "step identical beside the fixture filler", "tile": T, "store": store, "pass": same})
     f.poison()
     f.stop[0] = 1
-    lib.fill(1, 0, sms, f.args(0, f.tiles), lo)
+    lib.fill(1, 0, sms, f.args(0, f.tiles), lo, f.minb)
     torch.cuda.synchronize()
     stopped = int(f.counter.item()) == 0
     ok &= stopped
-    emit(log, {"gate": "persistent CTAs read the pinned stop flag", "pass": stopped})
+    emit(log, {"gate": "persistent CTAs read the pinned stop flag", "tile": T, "pass": stopped})
     return ok
 
 
-def random_filler(M: int, N: int, K: int, qcap: int, seed: int = 7) -> Filler:
+def random_filler(M: int, N: int, K: int, qcap: int, seed: int = 7, T: int = TILE) -> Filler:
     g = torch.Generator(device="cuda").manual_seed(seed)
 
     def codes(r, c):
@@ -587,12 +600,12 @@ def random_filler(M: int, N: int, K: int, qcap: int, seed: int = 7) -> Filler:
     def scale(r):
         return torch.full((r,), 1.0 / 1024, device="cuda", dtype=torch.float32)
 
-    return Filler(M, N, K, codes(M, K), codes(N, K), peel(M), peel(N), scale(M), scale(N), qcap)
+    return Filler(M, N, K, codes(M, K), codes(N, K), peel(M), peel(N), scale(M), scale(N), qcap, T)
 
 
 # ---------------------------------------------------------------- main
 
-def credit_tile(M: int, N: int, K: int) -> float | None:
+def credit_tile(M: int, N: int, K: int, T: int = TILE) -> float | None:
     try:
         sys.path.insert(0, str(ROOT))
         from verity.core.protocols.pouw.protocol import Shape
@@ -600,7 +613,7 @@ def credit_tile(M: int, N: int, K: int) -> float | None:
         from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
 
         s = PC.PearlC(forming="v1", device=SM120, hashing="h3")
-        return s.credit_of(Shape(M, K, N)) * TILE * TILE / (M * N)
+        return s.credit_of(Shape(M, K, N)) * T * T / (M * N)
     except Exception as e:  # noqa: BLE001
         print(f"credit_of unavailable: {e!r}", file=sys.stderr)
         return None
@@ -638,6 +651,21 @@ def gc_targets(sms: int, quick: bool) -> list[int]:
     return [sms - d for d in cut]
 
 
+def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: float, rate128: float) -> list[dict]:
+    """The persistent filler on the `fsms` SMs beside the step's green context: (store, tile, CTAs an SM, duty). A duty < 1 is
+    the throttle: each CTA idles `gap_ns` = its tile time x (1 / duty - 1) after each tile, its tile time taken from the
+    filler alone on every SM (`rate*` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one."""
+    out = []
+    for store, T, per_sm, duty in (("fold", 64, 2, 1.0), ("fold", 128, 1, 1.0), ("all", 128, 1, 1.0), ("fold", 128, 1, 0.5),
+                                   ("fold", 128, 1, 0.25), ("fold", 128, 1, 0.1), ("fold", 64, 2, 0.5)):
+        rate = rate128 if T == 128 else rate64
+        tile_ns = per_sm * sms / rate * 1e9
+        out.append({"family": "gc", "mode": "persist", "tile": T, "grid": per_sm * fsms, "store": store, "prio": "low",
+                    "step_sms": gsms, "fill_sms": fsms, "duty": duty, "gap_ns": int(tile_ns * (1 / duty - 1)),
+                    "limit": int(rate * fsms / sms * span_s * duty) + 4 * per_sm * fsms})
+    return out
+
+
 def references(lib: Lib, f: Filler, sms: int, lo: torch.cuda.Stream) -> tuple:
     """`gemm_pearlc_d`'s C~, U and y of the filler's call, and their per-tile fold."""
     ref_c, ref_u, ref_y = torch.empty_like(f.c), torch.empty_like(f.u), torch.empty_like(f.y)
@@ -645,7 +673,7 @@ def references(lib: Lib, f: Filler, sms: int, lo: torch.cuda.Stream) -> tuple:
     torch.cuda.synchronize()
 
     def tv(x: torch.Tensor) -> torch.Tensor:
-        return x.view(f.tiles_m, TILE, f.tiles_n, TILE).permute(0, 2, 1, 3).reshape(f.tiles_m, f.tiles_n, -1)
+        return x.view(f.tiles_m, f.T, f.tiles_n, f.T).permute(0, 2, 1, 3).reshape(f.tiles_m, f.tiles_n, -1)
 
     fc, fu = tv(ref_c).cpu().numpy().view(np.uint32), tv(ref_u).cpu().numpy().view(np.uint32)
     fold_np = np.zeros(2 * f.tiles, np.uint32)
@@ -664,7 +692,7 @@ def filler_alone(lib: Lib, f: Filler, refs: tuple, sms: int, lo: torch.cuda.Stre
         per = 2 * f.tiles
         e0.record(lo)
         for pos in range(0, per, sms * 4):
-            lib.fill(0, code, sms, f.args(pos, min(sms * 4, per - pos), stop=False), lo)
+            lib.fill(0, code, sms, f.args(pos, min(sms * 4, per - pos), stop=False), lo, f.minb)
         e1.record(lo)
         torch.cuda.synchronize()
         ms = e0.elapsed_time(e1)
@@ -685,30 +713,36 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     """The launches the L2 write gate measures under ncu (`--kernel-name regex:^fill_`), in order, each with the L2 write and
     atomic sectors its outputs declare: C~, U (FP32) and y (BF16) of each tile (`all`), y (`y`) or nothing (`fold`), plus the
     log's u64 a tile (a sector each); atomics: a warp's two fold words for each of a tile's 8 warps (`fold`), the queue
-    counter's add a tile plus the one each CTA takes past the end (persistent)."""
-    f = random_filler(4096, 4096, 1024, qcap=4 * sms)
+    counter's add a tile plus the one each CTA takes past the end (persistent). The 128 x 128 tile's rows are `STORE@128`.
+    Controls (`control`, not judged): each kernel at no tiles, whose sectors are the launch's own, not its outputs'."""
+    f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
     rows = []
-    out_sectors = {"all": TILE * TILE * (4 + 4 + 2) // 32, "y": TILE * TILE * 2 // 32, "fold": 0}
-    for store, code in STORES.items():
-        for persist in (0, 1):
-            f.poison()
-            torch.cuda.synchronize()
-            n = 4 * sms
-            lib.fill(persist, code, sms, f.args(0, n), lo)
-            torch.cuda.synchronize()
-            rows.append({"kernel": f"fill_{'persist' if persist else 'chunk'}_1_{code}", "store": store, "tiles": n,
-                         "logged": int((f.log > 0).sum()),
-                         "declared_write_sectors": n * (out_sectors[store] + 1),
-                         "declared_atom_sectors": n * (16 if store == "fold" else 0) + (n + sms if persist else 0)})
+    for f in (f64, f64.with_tile(128, 4 * sms)):
+        T = f.T
+        out_sectors = {"all": T * T * (4 + 4 + 2) // 32, "y": T * T * 2 // 32, "fold": 0}
+        suffix = "" if T == TILE else "128"
+        for store, code in STORES.items():
+            for persist in (0, 1):
+                for n in (4 * sms, 0):
+                    f.poison()
+                    torch.cuda.synchronize()
+                    lib.fill(persist, code, sms, f.args(0, n), lo, f.minb)
+                    torch.cuda.synchronize()
+                    rows.append({"kernel": f"fill_{'persist' if persist else 'chunk'}{suffix}_1_{code}",
+                                 "store": store if T == TILE else f"{store}@{T}", "tile": T, "tiles": n, "control": n == 0,
+                                 "logged": int((f.log > 0).sum()),
+                                 "declared_write_sectors": n * (out_sectors[store] + 1),
+                                 "declared_atom_sectors": n * (16 if store == "fold" else 0) + (n + sms if persist else 0)})
     path.write_text(json.dumps({"filler": [4096, 4096, 1024], "launches": rows}, indent=1) + "\n")
 
 
 def l2_of(l2: dict, arm: dict) -> str:
-    """The L2 write gate's verdict for the arm's store mode (`none` for an arm without a filler)."""
+    """The L2 write gate's verdict for the arm's store mode at its tile (`none` for an arm without a filler)."""
     if "store" not in arm:
         return "none"
-    return l2.get("by_store", {}).get(arm["store"], l2.get("status", "not run"))
+    key = arm["store"] if arm.get("tile", TILE) == TILE else f"{arm['store']}@{arm['tile']}"
+    return l2.get("by_store", {}).get(key, l2.get("status", "not run"))
 
 
 def run_arm(lib, f, refs, credit, step, reps, base, arm, lo, peer, clock, starve_s, head, log, l2) -> dict:
@@ -761,14 +795,16 @@ def run(args: argparse.Namespace, log) -> int:
     emit(log, {"device": props.name, "sms": sms, "torch": torch.__version__, "cuda": torch.version.cuda,
                "uuid": os.environ.get("GPU_LEASE_UUID"), "smi": clock.smi(), "clock": clock.source, "clock_error": clock.error,
                "stream_priority": {"lo": lo.priority, "hi": hi.priority, "peer": peer.priority},
-               "occupancy": {f"{m}/{s}": lib.occupancy(p, STORES[s]) for p, m in ((0, "chunk"), (1, "persist"))
-                             for s in STORES}, "fill_smem": lib.l.fill_smem(), "gate_l2": l2})
+               "occupancy": {f"{m}/{s}@{t}": lib.occupancy(p, STORES[s], 128 if t == 128 else 1)
+                             for p, m in ((0, "chunk"), (1, "persist")) for s in STORES for t in (TILE, 128)},
+               "fill_smem": {TILE: lib.l.fill_smem(1), 128: lib.l.fill_smem(128)}, "gate_l2": l2})
 
     # gate 1, with a small step beside it
     gstep = Step("8b", 16, 0, hi)
-    if not gate_fixture(lib, args.fixture, lo, gstep, log):
-        emit(log, {"verdict": "REFUSED", "why": "a fixture gate failed"})
-        return 4
+    for T in (TILE, 128):
+        if not gate_fixture(lib, args.fixture, lo, gstep, log, T):
+            emit(log, {"verdict": "REFUSED", "why": f"a fixture gate failed at the {T} x {T} tile"})
+            return 4
     del gstep
     torch.cuda.empty_cache()
 
@@ -786,6 +822,11 @@ def run(args: argparse.Namespace, log) -> int:
             return 4
         alone[k] = a
     f = fillers[K]
+    wide = f.with_tile(128, qcap=1 << 21)
+    refs_w, credit_w = references(lib, wide, sms, lo), credit_tile(M, N, K, 128)
+    alone_w = filler_alone(lib, wide, refs_w, sms, lo, clock, log, f"{M}x{N}x{K}@128")
+    if alone_w is None:
+        return 4
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     e0.record(lo)
     lib.pearlc_d(sms, f.args(0, f.tiles, log=False, stop=False, c=refs[K][0], u=refs[K][1], y=refs[K][2]), lo)
@@ -852,12 +893,9 @@ def run(args: argparse.Namespace, log) -> int:
             if g["fill"] is None:
                 continue
             span_s = 3 * reps * row["step_ms"] * 1e-3
-            limit = int(alone[K]["fold"] * fsms / sms * span_s) + 4 * fsms
-            for store, per_sm in (("fold", 2), ("all", 2), ("fold", 1)):
-                arm = {"family": "gc", "mode": "persist", "grid": per_sm * fsms, "store": store, "prio": "low",
-                       "step_sms": gsms, "fill_sms": fsms, "limit": limit}
-                row = run_arm(lib, f, refs[K], credits[K], step, reps, base, arm, g["fill"], peer, clock, args.starve_s,
-                              head, log, l2)
+            for arm in gc_arms(gsms, fsms, span_s, sms, alone[K]["fold"], alone_w["fold"]):
+                ff, rr, cc = (wide, refs_w, credit_w) if arm["tile"] == 128 else (f, refs[K], credits[K])
+                row = run_arm(lib, ff, rr, cc, step, reps, base, arm, g["fill"], peer, clock, args.starve_s, head, log, l2)
                 failed |= bool(row["mismatched"]) or not row["identical"]
                 rows.append(row)
         best = {}
@@ -868,6 +906,10 @@ def run(args: argparse.Namespace, log) -> int:
                 bu = max(ok, key=lambda x: x["util"])
                 bc = max(ok, key=lambda x: x.get("credit_w1_per_s", 0.0))
                 best[str(b)] = {"by_util": {k: bu[k] for k in keys if k in bu}, "by_credit": {k: bc[k] for k in keys if k in bc}}
+            loose = [r for r in rows if not r["starved"] and r["identical"] and not r["mismatched"] and r["slowdown"] <= b]
+            if loose:
+                bl = max(loose, key=lambda x: x.get("credit_w1_per_s", 0.0))
+                best.setdefault(str(b), {})["by_credit_l2_ungated"] = {k: bl[k] for k in keys if k in bl}
         board.append({**head, "unfilled": {**base, **sbase}, "gc_curve": curve, "best": best})
         del step
         torch.cuda.empty_cache()

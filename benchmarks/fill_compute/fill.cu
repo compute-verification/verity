@@ -10,7 +10,8 @@
 // p6 P_B (N x 128), p7 ia_a (M), p8 ia_b (N); i0 M, i1 N, i2 K, i3 the raster group.  The filler adds p11 a log of each tile's
 // end (u64 %globaltimer, one per queue position), p12 the queue counter (u32), p13 the stop flag (u32, pinned host memory
 // so the host can end a run whatever the device is doing), p14 the fold slots (F_FOLD); i4 the first queue position, i5 the
-// count (a chunk) or the queue's limit (persistent).  Queue positions past M/64 * N/64 wrap onto the problem again.
+// count (a chunk) or the queue's limit (persistent), i6 the persistent throttle's idle ns a tile.  Queue positions past
+// M/T * N/T (T the tile) wrap onto the problem again.
 #include "../pouw/pearl_c_sm120/pearl_c_sm120.cu"
 
 DEV uint64_t gtimer() {
@@ -19,7 +20,11 @@ DEV uint64_t gtimer() {
   return t;
 }
 
-constexpr int FT = 64, FB = 64, FG = 4, F_SMEM = gemm_smem<M_PEARLC, FT, FB>();
+// T the CTA's square tile: 64 (the protocol's, gemm_pearlc_d's) or 128 (four protocol tiles a CTA, each output's chain and peel
+// those of gemm_body<M_PEARLC, 128, 128, 4>, which are gemm_pearlc_d's word for word: the per-element arithmetic doesn't
+// depend on the tile; the operand bytes a FLOP halve)
+constexpr int FG = 4;
+template <int T> constexpr int f_smem() { return gemm_smem<M_PEARLC, T, T>(); }
 
 // What a tile writes: F_ALL C~, U and y (gemm_pearlc_d's buffers, the transcript the verifier's tile leaves read); F_Y y alone;
 // F_FOLD only the XOR of its C~ words and of its U words into p14[2 t], p14[2 t + 1] (a stand-in for an in-kernel tile leaf,
@@ -32,9 +37,9 @@ DEV uint32_t warp_xor(uint32_t v) {
   return v;
 }
 
-// One 64 x 64 tile (tm, tn): gemm_body<M_PEARLC, 64, 64, 4>'s loop body, unchanged but for its indices and what it stores.
-template <int STORE> DEV void tile(const Args& a, uint8_t* smem, int tm, int tn, int t) {
-  constexpr int TM = FT, BN = FB, G = FG;
+// One T x T tile (tm, tn): gemm_body<M_PEARLC, T, T, 4>'s loop body, unchanged but for its indices and what it stores.
+template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, int tn, int t) {
+  constexpr int TM = T, BN = T, G = FG;
   constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
   constexpr int PERIOD = G / 2;
   constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
@@ -188,32 +193,33 @@ template <int STORE> DEV void tile(const Args& a, uint8_t* smem, int tm, int tn,
   __syncthreads();
 }
 
-// Queue position t: tile t mod (M/64 * N/64) of the problem; the log's slot t gets its end time.  The fold slots are per tile
+// Queue position t: tile t mod (M/T * N/T) of the problem; the log's slot t gets its end time.  The fold slots are per tile
 // of the problem, so a fold over a queue that wraps XORs each tile in once per pass.
-template <int STORE> DEV void tile_at(const Args& a, uint8_t* smem, int t) {
-  const int tiles_m = a.i[0] / FT, tiles_n = a.i[1] / FB, tiles = tiles_m * tiles_n;
+template <int STORE, int T> DEV void tile_at(const Args& a, uint8_t* smem, int t) {
+  const int tiles_m = a.i[0] / T, tiles_n = a.i[1] / T, tiles = tiles_m * tiles_n;
   int tm, tn;
   raster(t % tiles, tiles_m, tiles_n, a.i[3], tm, tn);
-  tile<STORE>(a, smem, tm, tn, t % tiles);
+  tile<STORE, T>(a, smem, tm, tn, t % tiles);
   if (threadIdx.x == 0 && a.p[11]) reinterpret_cast<uint64_t*>(a.p[11])[t] = gtimer();
 }
 
 DEV bool stopped(const Args& a) { return a.p[13] && *reinterpret_cast<volatile unsigned*>(a.p[13]); }
 
 // A chunk: queue positions i4 .. i4 + i5 - 1, strided over the grid; a CTA leaves at the stop flag (checked per tile).
-template <int STORE> DEV void chunk_body(const Args& a) {
+template <int STORE, int T> DEV void chunk_body(const Args& a) {
   extern __shared__ __align__(128) uint8_t smem[];
   __shared__ int halt;
   for (int t = blockIdx.x; t < a.i[5]; t += gridDim.x) {
     if (threadIdx.x == 0) halt = stopped(a);
     __syncthreads();
     if (halt) return;
-    tile_at<STORE>(a, smem, a.i[4] + t);
+    tile_at<STORE, T>(a, smem, a.i[4] + t);
   }
 }
 
-// Persistent: each CTA takes the queue's next position until the stop flag is set or the queue reaches i5.
-template <int STORE> DEV void persist_body(const Args& a) {
+// Persistent: each CTA takes the queue's next position until the stop flag is set or the queue reaches i5; i6 > 0 a throttle,
+// each CTA idle for i6 ns after each tile (asleep: no instruction issued, no memory traffic).
+template <int STORE, int T> DEV void persist_body(const Args& a) {
   extern __shared__ __align__(128) uint8_t smem[];
   __shared__ int next;
   unsigned* counter = reinterpret_cast<unsigned*>(a.p[12]);
@@ -223,17 +229,29 @@ template <int STORE> DEV void persist_body(const Args& a) {
     const int t = next;
     __syncthreads();
     if (t < 0 || t >= a.i[5]) return;
-    tile_at<STORE>(a, smem, t);
+    tile_at<STORE, T>(a, smem, t);
+    if (a.i[6] > 0) {
+      const uint64_t t1 = gtimer();
+      while (gtimer() - t1 < (uint64_t)a.i[6]) __nanosleep(2000);
+    }
   }
 }
 
-// fill_<chunk|persist>_<MINB>_<STORE>: MINB the launch bound's CTAs per SM (2 caps the registers at 128)
+// fill_<chunk|persist>_<MINB>_<STORE>: the 64 x 64 tile, MINB the launch bound's CTAs per SM (2 caps the registers at 128);
+// fill_<chunk|persist>128_1_<STORE>: the 128 x 128 tile (96 KB of shared memory: one CTA an SM)
 #define FILL(MINB, STORE)                                                                                          \
   extern "C" __global__ void __launch_bounds__(NT, MINB) fill_chunk_##MINB##_##STORE(const Args a) {                \
-    chunk_body<STORE>(a);                                                                                         \
+    chunk_body<STORE, 64>(a);                                                                                     \
   }                                                                                                               \
   extern "C" __global__ void __launch_bounds__(NT, MINB) fill_persist_##MINB##_##STORE(const Args a) {              \
-    persist_body<STORE>(a);                                                                                       \
+    persist_body<STORE, 64>(a);                                                                                   \
+  }
+#define FILL128(STORE)                                                                                             \
+  extern "C" __global__ void __launch_bounds__(NT, 1) fill_chunk128_1_##STORE(const Args a) {                       \
+    chunk_body<STORE, 128>(a);                                                                                    \
+  }                                                                                                               \
+  extern "C" __global__ void __launch_bounds__(NT, 1) fill_persist128_1_##STORE(const Args a) {                     \
+    persist_body<STORE, 128>(a);                                                                                  \
   }
 FILL(1, 0)
 FILL(1, 1)
@@ -241,6 +259,9 @@ FILL(1, 2)
 FILL(2, 0)
 FILL(2, 1)
 FILL(2, 2)
+FILL128(0)
+FILL128(1)
+FILL128(2)
 
 // p0 a u64 slot: %globaltimer when the kernel runs
 extern "C" __global__ void stamp(const Args a) { *reinterpret_cast<uint64_t*>(a.p[0]) = gtimer(); }
@@ -272,16 +293,23 @@ static const void* FILLS[2][2][3] = {
      {(const void*)fill_chunk_2_0, (const void*)fill_chunk_2_1, (const void*)fill_chunk_2_2}},
     {{(const void*)fill_persist_1_0, (const void*)fill_persist_1_1, (const void*)fill_persist_1_2},
      {(const void*)fill_persist_2_0, (const void*)fill_persist_2_1, (const void*)fill_persist_2_2}}};
+static const void* FILLS128[2][3] = {
+    {(const void*)fill_chunk128_1_0, (const void*)fill_chunk128_1_1, (const void*)fill_chunk128_1_2},
+    {(const void*)fill_persist128_1_0, (const void*)fill_persist128_1_1, (const void*)fill_persist128_1_2}};
+// minb 1 or 2: the 64 x 64 tile at that launch bound; 128: the 128 x 128 tile
 static const void* fill_fn(int persist, int minb, int store) {
-  if (minb < 1 || minb > 2 || store < 0 || store > 2) return nullptr;
+  if (store < 0 || store > 2) return nullptr;
+  if (minb == 128) return FILLS128[persist ? 1 : 0][store];
+  if (minb < 1 || minb > 2) return nullptr;
   return FILLS[persist ? 1 : 0][minb - 1][store];
 }
+static int smem_of(int minb) { return minb == 128 ? f_smem<128>() : f_smem<64>(); }
 
-extern "C" int fill_smem() { return F_SMEM; }
+extern "C" int fill_smem(int minb) { return smem_of(minb); }
 // persist 0: a chunk; 1: persistent CTAs.  Returns the cudaError_t, or -1 for an unknown kernel.
 extern "C" int fill_launch(int persist, int minb, int store, int grid, const Args* a, void* stream) {
   const void* fn = fill_fn(persist, minb, store);
-  return fn ? launch(fn, grid, NT, F_SMEM, a, (cudaStream_t)stream) : -1;
+  return fn ? launch(fn, grid, NT, smem_of(minb), a, (cudaStream_t)stream) : -1;
 }
 // PoUW's own 64 x 64 kernel on the whole problem (the reference arm at the timing shape)
 extern "C" int pearlc_d(int grid, const Args* a, void* stream) {
@@ -356,8 +384,8 @@ extern "C" int fill_occupancy(int persist, int minb, int store, int* regs) {
   int n = 0;
   const void* fn = fill_fn(persist, minb, store);
   if (!fn) return -1;
-  cudaFuncSetAttribute(fn, cudaFuncAttributeMaxDynamicSharedMemorySize, F_SMEM);
-  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&n, fn, NT, F_SMEM);
+  cudaFuncSetAttribute(fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_of(minb));
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&n, fn, NT, smem_of(minb));
   cudaFuncAttributes at;
   if (regs && cudaFuncGetAttributes(&at, fn) == cudaSuccess) *regs = at.numRegs;
   return n;

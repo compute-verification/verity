@@ -3,7 +3,8 @@ more L2 sectors than its outputs declare (`lts__t_sectors_op_write.sum`) and mak
 queue declare (`lts__t_sectors_op_atom.sum` + `lts__t_sectors_op_red.sum`); there are no partials to declare.
 
 The verdict is per store mode too (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
-can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not.
+can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not. A `control` launch
+(no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs.
 
   python3 l2_gate.py DECLARED_JSON NCU_CSV OUT_JSON      exit 0 passed, 7 refused, 3 unmeasured (no ncu rows)
 """
@@ -35,6 +36,10 @@ def measured(text: str) -> list[dict]:
     return [by_id[i] for i in sorted(by_id, key=int)]
 
 
+def ratio(x: float, declared: int) -> float:
+    return x / declared if declared else (0.0 if x == 0 else float("inf"))
+
+
 def judge(declared: dict, rows: list[dict]) -> dict:
     launches = declared["launches"]
     if len(rows) != len(launches):
@@ -46,19 +51,21 @@ def judge(declared: dict, rows: list[dict]) -> dict:
             return {"status": "unmeasured", "why": f"profiled {m['kernel']} with {sorted(m)}, declared {d['kernel']}"}
         row = {**d, "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
                "read_sectors": m.get("lts__t_sectors_op_read.sum"), "dram_read_bytes": m.get("dram__bytes_read.sum"),
-               "write_ratio": w / d["declared_write_sectors"],
-               "atom_ratio": a / d["declared_atom_sectors"] if d["declared_atom_sectors"] else (0.0 if a == 0 else float("inf"))}
+               "write_ratio": ratio(w, d["declared_write_sectors"]), "atom_ratio": ratio(a, d["declared_atom_sectors"])}
         row["pass"] = w <= d["declared_write_sectors"] and a <= d["declared_atom_sectors"]
         out.append(row)
-        if not row["pass"]:
+        if not row["pass"] and not d.get("control"):
             bad.append(f"{d['kernel']}: {w:.0f} write / {d['declared_write_sectors']} declared, "
                        f"{a:.0f} atomic / {d['declared_atom_sectors']} declared")
     by_store = {}
-    for r in out:
+    judged = [r for r in out if not r.get("control")]
+    for r in judged:
         by_store[r["store"]] = by_store.get(r["store"], True) and r["pass"]
     return {"status": "REFUSED" if bad else "passed", "by_store": {s: "passed" if p else "REFUSED" for s, p in by_store.items()},
             "refusals": bad, "launches": out,
-            "max_write_ratio": max(r["write_ratio"] for r in out), "max_atom_ratio": max(r["atom_ratio"] for r in out)}
+            "controls": [{k: r[k] for k in ("kernel", "write_sectors", "atom_sectors", "declared_atom_sectors")} for r in out
+                         if r.get("control")],
+            "max_write_ratio": max(r["write_ratio"] for r in judged), "max_atom_ratio": max(r["atom_ratio"] for r in judged)}
 
 
 if __name__ == "__main__":
