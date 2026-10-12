@@ -18,7 +18,7 @@ static uint64_t seed64() {
   return s;
 }
 
-// ---- SHA-256 (FIPS 180-4), for the CPU leaves ----
+// ---- SHA-256 (FIPS 180-4), for the CPU leaves: portable, or on the SHA extensions if sha_ni ----
 static const uint32_t K256[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
     0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
@@ -28,7 +28,7 @@ static const uint32_t K256[64] = {
     0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
 static inline uint32_t ror(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
-static void sha256_block(uint32_t h[8], const uint8_t* p) {
+static void sha256_block_c(uint32_t h[8], const uint8_t* p) {
   uint32_t w[64];
   for (int i = 0; i < 16; ++i) w[i] = (uint32_t)p[4 * i] << 24 | (uint32_t)p[4 * i + 1] << 16 | (uint32_t)p[4 * i + 2] << 8 | p[4 * i + 3];
   for (int i = 16; i < 64; ++i) {
@@ -44,6 +44,33 @@ static void sha256_block(uint32_t h[8], const uint8_t* p) {
   }
   h[0] += a, h[1] += b, h[2] += c, h[3] += d, h[4] += e, h[5] += f, h[6] += g, h[7] += hh;
 }
+// one 64-byte block with the SHA extensions: the state as ABEF / CDGH, four rounds per pair of sha256rnds2
+static void sha256_block_ni(uint32_t h[8], const uint8_t* p) {
+  const __m128i bswap = _mm_set_epi64x(0x0c0d0e0f08090a0bull, 0x0405060700010203ull);
+  __m128i t = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)h), 0xb1);   // CDAB
+  __m128i s1 = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)(h + 4)), 0x1b);  // EFGH
+  __m128i s0 = _mm_alignr_epi8(t, s1, 8);                                   // ABEF
+  s1 = _mm_blend_epi16(s1, t, 0xf0);                                        // CDGH
+  const __m128i abef = s0, cdgh = s1;
+  __m128i w[16];
+  for (int j = 0; j < 4; ++j) w[j] = _mm_shuffle_epi8(_mm_loadu_si128((const __m128i*)(p + 16 * j)), bswap);
+  for (int j = 0; j < 16; ++j) {
+    if (j >= 4)
+      w[j] = _mm_sha256msg2_epu32(
+          _mm_add_epi32(_mm_sha256msg1_epu32(w[j - 4], w[j - 3]), _mm_alignr_epi8(w[j - 1], w[j - 2], 4)), w[j - 1]);
+    __m128i m = _mm_add_epi32(w[j], _mm_loadu_si128((const __m128i*)(K256 + 4 * j)));
+    s1 = _mm_sha256rnds2_epu32(s1, s0, m);
+    s0 = _mm_sha256rnds2_epu32(s0, s1, _mm_shuffle_epi32(m, 0x0e));
+  }
+  s0 = _mm_add_epi32(s0, abef);
+  s1 = _mm_add_epi32(s1, cdgh);
+  t = _mm_shuffle_epi32(s0, 0x1b);                // FEBA
+  s1 = _mm_shuffle_epi32(s1, 0xb1);               // DCHG
+  _mm_storeu_si128((__m128i*)h, _mm_blend_epi16(t, s1, 0xf0));     // DCBA
+  _mm_storeu_si128((__m128i*)(h + 4), _mm_alignr_epi8(s1, t, 8));  // HGFE
+}
+int sha_ni = 0;
+static void sha256_block(uint32_t h[8], const uint8_t* p) { sha_ni ? sha256_block_ni(h, p) : sha256_block_c(h, p); }
 void sha256(const uint8_t* m, size_t n, uint8_t out[32]) {
   uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
   size_t i = 0;
@@ -75,7 +102,10 @@ void cpu_mask(const uint32_t* z, uint8_t* M) {
   }
 }
 
-// NB blocks at once (NB streams from DRAM), KS sketches each; every key and mask line is read once for all NB blocks
+int pf_bytes = 1024;
+
+// NB blocks at once (NB streams from DRAM), KS sketches each; every key and mask line is read once for all NB blocks.
+// Each stream prefetches pf_bytes ahead (0: the hardware prefetchers alone).
 template <int KS, int NB>
 static void sketch(const uint8_t* const* xb, const uint8_t* M, const int8_t* K, int32_t* const* s) {
   __m512i acc[NB][KS];
@@ -87,6 +117,7 @@ static void sketch(const uint8_t* const* xb, const uint8_t* M, const int8_t* K, 
       const __m512i m = _mm512_load_si512(M + 64 * (c + q));
 #pragma GCC unroll 4
       for (int b = 0; b < NB; ++b) {
+        if (pf_bytes) _mm_prefetch((const char*)xb[b] + 64 * (c + q) + pf_bytes, _MM_HINT_T0);
         const __m512i d = _mm512_xor_si512(_mm512_load_si512(xb[b] + 64 * (c + q)), m);
 #pragma GCC unroll 16
         for (int l = 0; l < KS; ++l) acc[b][l] = _mm512_dpbusd_epi32(acc[b][l], d, _mm512_load_si512(K + l * 256 + 64 * q));

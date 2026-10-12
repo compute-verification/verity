@@ -6,11 +6,13 @@
 #     --declared-output 'out/*' -- env NGPU=1 taskset -c 48-95 bash benchmarks/host_tier/run_loop.sh
 #
 # Outside the lease: build loop.cu (+ receipt.cpp), pcie.cu and dram.c. Under `gpu-lease $NGPU --wait --max-min 20`: the
-# loop's gates against reference.py (a failed gate times nothing, exit 3); then, REPS times, the GPUs' receipts alone over
-# grids, the CPUs' receipts alone (one thread, one a core, every CPU; KS 4 and 16), the adversary's CPU read alone and
-# beside the GPUs' receipts, the full loop (GPUs and CPUs), the loop on half the CPUs beside the adversary on the other
-# half, and the adversary's CPU read beside each GPU's copy engines and zero-copy reads (dram.c and pcie.cu, as
-# run_pcie.sh); then hostproc.py alone and beside the loop, the adversary, and the GPUs' receipts alone.
+# loop's gates against reference.py (a failed gate times nothing, exit 3); then, REPS times, the GPUs' receipts alone
+# over grids, the CPUs' receipts alone (one thread, one a core, every CPU; on every CPU also without software prefetch,
+# with it twice as far, on the SHA extensions, and with KS 16), the adversary's CPU read alone and beside the GPUs'
+# receipts, the full loop (GPUs and CPUs; also on the SHA extensions, and with KS 16), the loop on half the CPUs beside
+# the adversary on the other half, and the adversary's CPU read beside each GPU's copy engines and zero-copy reads
+# (dram.c and pcie.cu, as run_pcie.sh); then hostproc.py alone and beside the loop, the adversary, and the GPUs'
+# receipts alone.
 # All host-tier memory is on NUMA node GPU_NODE (0), the node of the worker CPUs: one socket's DRAM.
 # Env: NGPU (1), REPS (2), SECONDS_EACH (3), LOOP_GRID (32), WORKERS (52-95), HOST_CPUS (GPU driver threads, 48,49),
 #      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (3), GPU_NODE (0).
@@ -40,11 +42,18 @@ if [ "${1:-}" = leased ]; then
   done
   first=${W%%[-,]*}; last=${W##*-}; half=$(( (first + last + 1) / 2 ))
   for r in $(seq "${REPS:-2}"); do
-    for g in 4 8 16 32 64 376; do one --label gpu --gpus "$N" --grid "$g"; done
-    for k in 4 16; do for c in "$first" "$first-$((last - 1)):2" "$W"; do one --label cpu --gpus 0 --cpus "$c" --ks "$k"; done; done
+    for g in 4 32; do one --label gpu --gpus "$N" --grid "$g"; done
+    for c in "$first" "$first-$((last - 1)):2" "$W"; do one --label cpu --gpus 0 --cpus "$c" --ks 4; done
+    for f in "--pf 0" "--pf 2048" "--sha ni" "--ks 16"; do
+      # shellcheck disable=SC2086
+      one --label cpu --gpus 0 --cpus "$W" --ks 4 $f
+    done
     one --label adv --gpus 0 --adv-cpus "$W"
     one --label gpu+adv --gpus "$N" --grid "$G" --adv-cpus "$W"
-    for k in 4 16; do one --label honest --gpus "$N" --grid "$G" --cpus "$W" --ks "$k"; done
+    for f in "" "--sha ni" "--ks 16"; do
+      # shellcheck disable=SC2086
+      one --label honest --gpus "$N" --grid "$G" --cpus "$W" --ks 4 $f
+    done
     one --label honest-half+adv --gpus "$N" --grid "$G" --cpus "$first-$((half - 1))" --adv-cpus "$half-$last" --ks 4
     # the adversary's CPU read beside the GPUs' copy engines and zero-copy reads, timed together
     D() { "$B/dram" --cpus "$W" --node "${GPU_NODE:-0}" --kernel multi --thp 1 --mib 256 --seconds "$S" "$@"; }

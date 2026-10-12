@@ -1,10 +1,11 @@
 // The host tier's honest loop: every visible GPU streams its part of the host tier from pinned host DRAM with zero copy
 // and makes a receipt per 4 KiB block bound to its current z; after each chunk it ships a fresh z down to host memory.
-// Host CPU threads make receipts over the rest of the host tier, each bound to the latest z a GPU shipped. Adversary
-// threads, if given, read DRAM of their own meanwhile: what they get is bandwidth the loop left over.
+// Host CPU threads make receipts over the rest of the host tier (one region a NUMA node, its 64 KiB groups taken from a
+// shared counter), each bound to the latest z a GPU shipped. Adversary threads, if given, read DRAM of their own
+// meanwhile: what they get is bandwidth the loop left over.
 //
 //   loop --seconds 5 --gpu-mib 4096 --grid 16 --cpus 52-95 --cpu-mib 512 --ks 16 [--adv-cpus L --adv-mib M]
-//        [--gpus N] [--gpu-node local|N] [--host-cpus L] [--go-file F] [--gate DIR] [--label S]
+//        [--gpus N] [--gpu-node local|N] [--host-cpus L] [--sha c|ni] [--pf BYTES] [--go-file F] [--gate DIR] [--label S]
 //
 // --gpus N streams from the first N visible GPUs only (0: the CPUs alone); GPU d's driver thread runs on the d-th CPU
 // of --host-cpus if given. CPU lists take lo-hi:step. --go-file F is created when the timed phase starts.
@@ -33,6 +34,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -218,6 +220,8 @@ int main(int argc, char** argv) {
     else if (a == "--gpus") use_gpus = atoi(v.c_str());
     else if (a == "--host-cpus") host_cpus = v;
     else if (a == "--go-file") go_file = v;
+    else if (a == "--sha") sha_ni = v == "ni";
+    else if (a == "--pf") pf_bytes = atoi(v.c_str());
     else {
       fprintf(stderr, "unknown flag %s\n", a.c_str());
       return 2;
@@ -257,6 +261,7 @@ int main(int argc, char** argv) {
   std::vector<unsigned long long> gate_gpu(16);
   std::vector<int32_t> gate_sk(16 * ks);
   uint8_t gate_leaf[32];
+  int gate_region = 1000;
   std::vector<std::thread> th;
 
   for (int d = 0; d < ngpu; ++d)
@@ -334,21 +339,44 @@ int main(int argc, char** argv) {
       z_published[d] = seq;
     });
 
+  // the CPUs' part of the host tier: one region a NUMA node, cpu_bytes for each of its threads, which take its 64 KiB
+  // groups four at a time from a shared counter, so a pass is done when the region is, whichever thread is slow
+  struct Pool {
+    int node = -1;
+    size_t members = 0, groups = 0;
+    uint8_t* x = nullptr;
+    std::vector<uint8_t> leaves;
+    alignas(64) std::atomic<uint64_t> next{0};
+  };
+  std::vector<std::unique_ptr<Pool>> pools;
+  std::vector<size_t> pool_of(cc.size()), rank(cc.size());
+  for (size_t t = 0; t < cc.size(); ++t) {
+    const int n = cpu_node(cc[t]);
+    size_t i = 0;
+    while (i < pools.size() && pools[i]->node != n) ++i;
+    if (i == pools.size()) pools.emplace_back(new Pool), pools.back()->node = n;
+    pool_of[t] = i, rank[t] = pools[i]->members++;
+  }
+  for (auto& q : pools) {
+    q->x = (uint8_t*)host_alloc(q->members * cpu_bytes, q->node);
+    if (!q->x) exit(5);
+    q->groups = q->members * cpu_bytes / 65536;
+    q->leaves.resize(q->groups * 32);
+  }
   for (size_t t = 0; t < cc.size(); ++t)
     th.emplace_back([&, t] {
       pin(cc[t]);
-      uint8_t* x = (uint8_t*)host_alloc(cpu_bytes, cpu_node(cc[t]));
-      if (!x) exit(5);
-      fill((uint64_t*)x, cpu_bytes / 8, 1000 + t, 1);
-      const size_t groups = cpu_bytes / 65536;
-      std::vector<uint8_t> leaves(groups * 32);
+      Pool& q = *pools[pool_of[t]];
+      const size_t w = cpu_bytes / 8;
+      uint64_t* xw = (uint64_t*)q.x;
+      for (size_t i = rank[t] * w; i < (rank[t] + 1) * w; ++i) xw[i] = splitmix64(i ^ ((uint64_t)(1000 + q.node) << 48));
       std::vector<int32_t> sk(16 * ks);
       const ZSlot* slot = slots + (ngpu ? t % ngpu : 0);
       uint32_t z[16];
       alignas(64) uint8_t M[4096];
       uint64_t zseq = 0, last = UINT64_MAX, distinct = 0;
       if (gating) {
-        if (t == 0) cpu_mask(zinit, M), cpu_group(x, M, 0, 0, K, ks, gate_leaf, gate_sk.data());
+        if (t == 0) cpu_mask(zinit, M), cpu_group(q.x, M, 0, 0, K, ks, gate_leaf, gate_sk.data()), gate_region = 1000 + q.node;
         pthread_barrier_wait(&ready);
         pthread_barrier_wait(&go);
         return;
@@ -356,11 +384,15 @@ int main(int argc, char** argv) {
       pthread_barrier_wait(&ready);
       pthread_barrier_wait(&go);
       double bytes = 0;
-      for (size_t g = 0; !stop.load(std::memory_order_relaxed); g = (g + 1) % groups) {
-        while (!read_z(slot, z, &zseq)) _mm_pause();
-        if (zseq != last) ++distinct, last = zseq, cpu_mask(z, M);
-        cpu_group(x + g * 65536, M, zseq, g, K, ks, &leaves[g * 32], sk.data());
-        bytes += 65536;
+      while (!stop.load(std::memory_order_relaxed)) {
+        const uint64_t g0 = q.next.fetch_add(4, std::memory_order_relaxed);
+        for (uint64_t k = 0; k < 4; ++k) {
+          const size_t g = (g0 + k) % q.groups;
+          while (!read_z(slot, z, &zseq)) _mm_pause();
+          if (zseq != last) ++distinct, last = zseq, cpu_mask(z, M);
+          cpu_group(q.x + g * 65536, M, zseq, g, K, ks, &q.leaves[g * 32], sk.data());
+        }
+        bytes += 4 * 65536;
       }
       cpu_bytes_done[t] = bytes;
       z_distinct[t] = distinct;
@@ -401,7 +433,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 32; ++i) fprintf(f, "%02x", SEED[i]);
     fprintf(f, "\", \"ks\": %d, \"gpu_region\": 0, \"gpu_receipts\": [", ks);
     for (int b = 0; b < 16; ++b) fprintf(f, "%s\"%016llx\"", b ? ", " : "", gate_gpu[b]);
-    fprintf(f, "], \"cpu_region\": 1000, \"cpu_sketches\": [");
+    fprintf(f, "], \"cpu_region\": %d, \"cpu_sketches\": [", gate_region);
     for (int i = 0; i < 16 * ks; ++i) fprintf(f, "%s%d", i ? ", " : "", gate_sk[i]);
     fprintf(f, "], \"cpu_leaf\": \"");
     for (int i = 0; i < 32; ++i) fprintf(f, "%02x", gate_leaf[i]);
@@ -428,9 +460,9 @@ int main(int argc, char** argv) {
   }
   for (size_t t = 0; t < ac.size(); ++t) a += adv_bytes_done[t] / el / 1e9;
   printf("{\"label\": \"%s\", \"seconds\": %.2f, \"gpus\": %d, \"grid\": %d, \"gpu_gb_per_s\": %.2f, \"cpu_threads\": %zu, "
-         "\"ks\": %d, \"cpu_gb_per_s\": %.2f, \"cpu_thread_min\": %.2f, \"cpu_thread_max\": %.2f, \"cpu_z_distinct_min\": %llu, "
+         "\"ks\": %d, \"sha_ni\": %d, \"pf\": %d, \"cpu_gb_per_s\": %.2f, \"cpu_thread_min\": %.2f, \"cpu_thread_max\": %.2f, \"cpu_z_distinct_min\": %llu, "
          "\"adv_threads\": %zu, \"adv_gb_per_s\": %.2f, \"honest_gb_per_s\": %.2f, \"per_gpu\": %s}\n",
-         label.c_str(), el, ngpu, grid, g, cc.size(), ks, c, cc.empty() ? 0 : cmin, cmax,
+         label.c_str(), el, ngpu, grid, g, cc.size(), ks, sha_ni, pf_bytes, c, cc.empty() ? 0 : cmin, cmax,
          (unsigned long long)(cc.empty() ? 0 : zmin), ac.size(), a, g + c, per.c_str());
   return 0;
 }

@@ -5,6 +5,8 @@
 #include <cstdint>
 
 extern const uint8_t SEED[32];
+extern int sha_ni;     // SHA-256 on the SHA extensions (1) or portable (0); a hypervisor may trap the extensions
+extern int pf_bytes;   // the sketch's software prefetch distance a stream, bytes (0: none)
 void sha256(const uint8_t* m, size_t n, uint8_t out[32]);
 void cpu_keys(int8_t* K, int ks);  // K[l * 256 + j], l < ks
 // the 4 KiB mask a receipt XORs into every block, expanded from all of z: M = the 512 words
