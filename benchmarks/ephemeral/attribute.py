@@ -13,7 +13,9 @@ KV cache, read once a step for every live token.  The rest of the reads are unre
 with ``kv_read`` taken analytically and checked against the attention kernels' own reads (node profiles), and the lm_head
 reported both plain (unregistered) and encoded (registered).  A node profile also gives each kernel class's bytes; a run at
 reduced depth (``steps.py --layers``) scales its per-layer bytes to the checkpoint's depth, keeping the per-step kernels
-(lm_head, sampler, embedding, input preparation) once.
+(lm_head, sampler, embedding, input preparation) once.  Any other ``.sum`` metric in the CSV (``run.sh`` NCU_EXTRA, such as
+``lts__t_sectors_op_write.sum``, each kernel's own writes into L2 in sectors) is summed a step per class and per kernel, in
+its own unit, under ``extra``.
 """
 from __future__ import annotations
 
@@ -69,12 +71,14 @@ def rows_from_text(text: str, name: str = "csv") -> list[dict]:
     head, body = r[0], r[2:]
     if READ not in head or WRITE not in head:
         raise SystemExit(f"{name}: no {READ} / {WRITE} columns")
+    extra = [h for h in head if h.endswith(".sum") and h not in (READ, WRITE)]
+    num = lambda v: float(v.replace(",", "") or 0)
     out = []
     for row in body:
         d = dict(zip(head, row))
         name = d.get(NAME, "")
         out.append({"name": name, "marker": any("spin_kernel" in v for v in row),
-                    "read": float(d[READ].replace(",", "") or 0), "write": float(d[WRITE].replace(",", "") or 0)})
+                    "read": num(d[READ]), "write": num(d[WRITE]), "extra": {m: num(d[m]) for m in extra}})
     return out
 
 
@@ -97,13 +101,15 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
     count the steps whether the window was profiled per kernel or per graph."""
     bud = arm["budget"]
     lin, lm = bud["linear_bytes"] + bud["linear_scale_bytes"], bud["lm_head_bytes"]
-    by: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0])
-    names: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0])
+    by: dict[str, list] = defaultdict(lambda: [0.0, 0.0, 0, defaultdict(float)])
+    names: dict[str, list] = defaultdict(lambda: [0.0, 0.0, 0, defaultdict(float)])
     for r in w:
         for d, key in ((by, classify(r["name"], r["read"], lm)), (names, r["name"][:120])):
             d[key][0] += r["read"]
             d[key][1] += r["write"]
             d[key][2] += 1
+            for m, v in r.get("extra", {}).items():
+                d[key][3][m] += v
     steps = by["lm_head"][2]
     node = "graph" not in by
     if not steps:
@@ -121,7 +127,9 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
     o["share_plain_lm"] = o["unreg_plain_lm"] / rd
     o["share_encoded_lm"] = o["unreg_encoded_lm"] / rd
     o["write_over_read"] = wr / rd
-    cls = {k: {"read": v[0] / steps, "write": v[1] / steps, "kernels": v[2] / steps} for k, v in by.items()}
+    per_step = lambda v: {"read": v[0] / steps, "write": v[1] / steps, "kernels": v[2] / steps,
+                          **({"extra": {m: x / steps for m, x in v[3].items()}} if v[3] else {})}
+    cls = {k: per_step(v) for k, v in by.items()}
     o["classes"] = cls
     if node:
         a = cls.get("attention", {}).get("read", 0.0)
@@ -130,8 +138,7 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
         o["kv_check"] = a / kv if kv else None
     else:
         o["graph_excess_read"] = cls["graph"]["read"] - lin - kv
-    o["top_kernels"] = sorted(({"name": k, "read": v[0] / steps, "write": v[1] / steps, "n": v[2] / steps}
-                               for k, v in names.items()), key=lambda x: -x["read"])[:25]
+    o["top_kernels"] = sorted(({"name": k, **per_step(v)} for k, v in names.items()), key=lambda x: -x["read"])[:25]
     L, Lf = bud["layers"], FULL_LAYERS.get(arm["model_shape"]["hidden"], bud["layers"])
     if L != Lf:
         layered = sum(cls.get(k, {}).get("read", 0.0) for k in LAYERED)

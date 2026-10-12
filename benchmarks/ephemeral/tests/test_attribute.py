@@ -114,6 +114,24 @@ def test_tensor_parallel_all_reduces_scale_with_depth_and_the_logits_gather_does
     assert s["full_depth"]["write"] == pytest.approx(32 * 8 + 3)
 
 
+def test_extra_metrics_are_summed_a_step_per_class_and_per_kernel():
+    l2w = "lts__t_sectors_op_write.sum"
+    text = ncu_csv([(SPIN, 0, 0)] + node_step(4, 4.0) * 2)
+    lines = text.splitlines()
+    head = next(i for i, ln in enumerate(lines) if ln.startswith('"ID"'))
+    lines[head] += f',"{l2w}"'
+    lines[head + 1] += ',"sector"'
+    for i in range(head + 2, len(lines)):
+        lines[i] += ',"1,000"' if GEMM in lines[i] else ',"10"'
+    s = A.split(arm(layers=4), {"batch": 1, "context": 0, "tokens_open": 1, "tokens_close": 1},
+                A.windows(A.rows_from_text("\n".join(lines)))[0])
+    assert s["classes"]["gemm"]["extra"] == {l2w: pytest.approx(4000)}
+    assert s["classes"]["attention"]["extra"] == {l2w: pytest.approx(40)}
+    assert next(k for k in s["top_kernels"] if k["name"] == GEMM[:120])["extra"][l2w] == pytest.approx(4000)
+    assert "extra" not in A.split(arm(layers=4), {"batch": 1, "context": 0, "tokens_open": 1, "tokens_close": 1},
+                                  A.windows(A.rows_from_text(text))[0])["classes"]["gemm"]
+
+
 def test_attn_bytes_attribute(tmp_path: Path):
     res = {"cells": [{"batch": 2, "context": 64, "plain_bytes": 1000, "encoded_bytes": 1000}],
            "windows": [{"batch": 2, "context": 64, "form": 3, "splits": 4, "layers": 2, "partial_bytes_max": 8},
