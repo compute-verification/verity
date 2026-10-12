@@ -16,16 +16,13 @@ WL=workloads/$ROW.json
 CMAP=manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json
 mkdir -p /workspace/tmp "$SWEEP_DIR"
 export TMPDIR=/workspace/tmp
-# The venv's torchcodec 0.17.0 is a CUDA 13 build (libnvrtc.so.13) beside torch cu129: `import vllm.multimodal` and cuteDSL's
-# ll_bf16 raise OSError without 0.16.0+cu129 ahead of site-packages (r20261012-221745-18e0).
-OV=/workspace/cp/overlay-tc
-if [ ! -f "$OV/torchcodec/__init__.py" ]; then
-  (flock 9
-   [ -f "$OV/torchcodec/__init__.py" ] || { rm -rf "$OV.tmp" && uv pip install --python "$PY" --target "$OV.tmp" --no-deps \
-     --index-url https://download.pytorch.org/whl/cu129 "torchcodec==0.16.0+cu129" && mv "$OV.tmp" "$OV"; }
-  ) 9> /workspace/cp/overlay-tc.lock >> "$O/overlay.log" 2>&1
-fi
-export PYTHONPATH=$OV:$PYTHONPATH
+# The bootstrap's torchcodec 0.17.0 is a CUDA 13 build (libnvrtc.so.13) beside torch cu129: `import vllm.multimodal` and cuteDSL's
+# ll_bf16 raise OSError (r20261012-221745-18e0), and every Build derive with them (r20261012-234841-c3ca). It is replaced in the
+# venv itself, since the row driver sets its children's PYTHONPATH (r20261012-235556-abc8; again here after a re-bootstrap).
+TC=0.16.0+cu129
+tc_ok() { [ "$("$PY" -c 'import importlib.metadata as m; print(m.version("torchcodec"))' 2>/dev/null)" = "$TC" ]; }
+tc_ok || (flock 9; tc_ok || uv pip install --python "$PY" --no-deps --index-url https://download.pytorch.org/whl/cu129 \
+  "torchcodec==$TC") 9> /workspace/cp/venv-torchcodec.lock >> "$O/venv-torchcodec.log" 2>&1
 export VLLM_USE_DEEP_GEMM=0 VLLM_BATCH_INVARIANT=0 VLLM_TUNED_CONFIG_FOLDER=/workspace/fs/glm53-configs/moe_configs
 export VLLM_DISABLE_SHARED_EXPERTS_STREAM=1 VLLM_ENABLE_V1_MULTIPROCESSING=0 NCCL_P2P_DISABLE=1
 ENGINE_ARGS=(--engine-arg gpu_memory_utilization=0.75 --engine-arg max_model_len=288 --engine-arg max_num_batched_tokens=2048
