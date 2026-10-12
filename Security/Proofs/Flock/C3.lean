@@ -33,6 +33,7 @@ import Proofs.Flock.C3.RegLevels.SrcTie
 import Proofs.Flock.C3.RegLevels.SrcRun
 import Proofs.Flock.C3.RegLevels.SrcOpened
 import Proofs.Flock.C3.RegLevels.SrcConss
+import Proofs.Flock.C3.RegLevels.SrcOpenRel
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
