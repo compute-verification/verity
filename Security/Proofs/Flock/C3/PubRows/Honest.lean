@@ -4,6 +4,8 @@ import Proofs.Flock.C3.Sparse.Session
 import Proofs.Flock.C3.Opening.Algebra
 import Proofs.Flock.C3.RegLevels.Chain
 import Proofs.Flock.C3.Compose.Honest
+import Proofs.Flock.C3.PubRows.Frame
+import Proofs.Flock.C3.PubRows.Check
 
 /-!
 # n1: the public rows, the tape and the commitments at the honest family
@@ -11,9 +13,13 @@ import Proofs.Flock.C3.Compose.Honest
 * `hPubRows_of_check` (stub): `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's
   public file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as
   `FlockVerify`'s `--rec-inner` path runs it after setup). `AcceptsZKR` does not make that check, and no premise of the
-  guarantee says it was made (gap n1b).
-* `hTape_honest` (stub): `HTape` at the honest family, from the stages' obligations there: where every stage plays on
-  the prefix `decodeRun` takes for it, the cap, the link points, the stages and the openings are the whole tape.
+  guarantee says it was made (gap n1b). The check reads less than `HPubRows` does: the drawn units only, the first
+  port of a name, and a rec-sparse unit's rows at its own shape. `hPubRows_of_check'` proves it with those
+  (`RowsHeld`, `PortsNamed`, `SparseAtShape`, `PubRows/Check.lean`).
+* `hTape_honest` (stub): `HTape` at the honest family, from the stages' obligations there. Those read only the decode,
+  and no step after the openings changes it, so they don't give `HTape`: at the honest family it is exactly `HFrame`
+  (`hTape_iff_frame`, `PubRows/Frame.lean`), the tape's cap and link points first and the openings alone after the
+  stages, an obligation on the decoder `dec`.
 * `hCommits_honest`: `VCommits` at the honest family, from `HPubRows`, the sessions' reads being `own`'s (`OwnIs`) and
   the rows the verifier holds being the history's commitments (`HeldIs`, the record–history link, gap n1c): G's
   `hCommits_of` after `pubCommits_of_pubRows`.
@@ -83,6 +89,40 @@ theorem hTape_honest {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hrows : HPub
     (hop : FlockC3.Opening.HOpening 𝓗 dg N k Rw) (hlv : FlockC3.RegLevels.HRegLevels 𝓗 dg N k Rw) :
     HTape 𝓗 dg N k Rw := by
   sorry
+
+/-- **(n1) The tape at the honest family is its frame**: `decodeRun` takes each stage on a prefix of what is left
+(`decodeRun_split`), so the tape is `holoSteps` of its decode exactly where the cap, the link points and the openings
+frame the stages (`holoSteps_iff_framed`). -/
+theorem hTape_iff_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HTape 𝓗 dg N k Rw ↔ HFrame 𝓗 dg N k Rw :=
+  ⟨fun h R ω t R₂ τ o hacc => framed_of_holoSteps (e := holoAt st hp) (h R ω t R₂ τ o hacc),
+    fun h R ω t R₂ τ o hacc => holoSteps_of_framed (e := holoAt st hp) (h R ω t R₂ τ o hacc)⟩
+
+/-- **(n1) The tape at the honest family, from its frame**: `hTape_honest` with `HFrame` for the stages' obligations,
+which `HTape` does not need. -/
+theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFrame 𝓗 dg N k Rw) : HTape 𝓗 dg N k Rw :=
+  hTape_iff_frame.2 hfr
+
+/-- **(n1) The public rows at the honest family, from the verifier's check**, where it reads every row `HPubRows`
+does: the accepted sessions draw and label the units reading a value `fixedRow` knows (`RowsHeld`), each circuit
+names each port once (`PortsNamed`) and V*'s rec-sparse units are at the verifier's shape (`SparseAtShape`). -/
+theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 tr record reg) (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗)
+    (hsp : SparseAtShape 𝓗) : HPubRows 𝓗 := by
+  intro R ω t R₂ j ⟨tr', hacc⟩ rg hrg u q x hname hread b hrow
+  obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
+    heldRow_some (show heldRow (innerCommitsAt tr record st reg) ish.sparse rg.value x = some b from hrow)
+  have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
+    rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
+    simp [hc]
+  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu, hlab⟩ := hdrawn R ω t R₂ j tr' hacc rg hrg hfix u x hread
+  have hfind := port_find_of_unique (hnames j) q
+  rw [hname] at hfind
+  have hchk' := hchk R ω t R₂ j tr' hacc
+  rw [hcs] at hchk'
+  obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) hchk' hrg hfix hfind hd hD
+    hdp hidx hu (by rw [hlab]; exact hread)
+  have he := (fixedRow_or (hsp j) hc).symm.trans hc'
+  simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
+  exact hdig.trans (he.2.symm.trans hb.symm)
 
 /-- **The commitments at the honest family**: each accepted session's row of a stage's commit string holds, by
 `HPubRows`, the row the verifier holds there, which is the history's commitment (`HeldIs`). -/
