@@ -88,7 +88,7 @@ def test_the_bench_stamps_its_model_and_70b_sets_its_linears_and_layers():
 
 def test_sketch_twins_keep_base_and_decode_and_replace_tag_and_commit():
     pts = F.check([point(), point(arithmetic="a/commit-overlapped"), point(batch=32), point(measured=False),
-                   point(batch=8)])
+                   point(batch=8), point(arithmetic="a/sketch"), point(arithmetic="a/sketch/mixed-k")])
     twins = F.sketch_twins(pts, {1: 0.07, 32: 0.15})
     assert [(t["batch"], t["arithmetic"]) for t in twins] == [(1, "a/sketch-model"), (32, "a/sketch-model")]
     t = twins[0]

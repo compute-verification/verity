@@ -190,11 +190,11 @@ def sketch_twins(points: list[dict], cost: dict[int, float], tau: float = 0.0) -
     """For each measured point (its commit serial: the overlapped twin has the same base and decode), a modelled twin
     with the sketch-then-hash tag in place of the full-byte one: its own base and decode, plus `cost[batch]`, the
     sketch's tag and commit together (ra-sketch-tag's measured y on a plain store), and τ the sketch's (0 grants the
-    adversary the most)."""
+    adversary the most); a point whose tag is the sketch already has none."""
     out = []
     for p in points:
-        if (p.get("reference") or not p["measured"] or p["batch"] not in cost
-                or p["arithmetic"].endswith(("/commit-overlapped", "/sketch-model"))):
+        if (p.get("reference") or not p["measured"] or p["batch"] not in cost or "/sketch" in p["arithmetic"]
+                or p["arithmetic"].endswith("/commit-overlapped")):
             continue
         y = p["y_base"] + p["y_decode"] + cost[p["batch"]]
         out.append({**p, "arithmetic": p["arithmetic"] + "/sketch-model", "y_total": y, "y_tag": cost[p["batch"]],
