@@ -7,10 +7,10 @@ import Definitions.Accounting.RateAuditRemote
 
 The game is `RateAudit.lean`'s with interactive side sources (`Definitions/Accounting/RateAuditInteractive.lean`), and
 the tiers, correct receipts and chained passes of `Definitions/Accounting/RateAuditRemote.lean`; proofs are in
-`Security/Proofs/Accounting/RateAudit/Remote/`. No named assumption: as for `RateAudit`, the device's bounds define the
-class the guarantees quantify over, and the claims registry carries them to a deployed node (`bandwidth-s-chip` at
-every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for `c_enc`, `random-oracle` for the
-receipt and the chained seed).
+`Security/Proofs/Accounting/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`,
+the device's bounds define the class the guarantees quantify over, and the claims registry carries them to a deployed
+node (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for
+`c_enc`, `random-oracle` for the receipt and the chained seed).
 
 * `RateConservationRO`, `RateConservation`: the window's correct receipts, wherever they were computed, cost reads of
   the counted tiers, rebuilt words, on-chip state and the link: with side sources that ignore the oracle, and with any.
@@ -42,9 +42,9 @@ is at most `N/2^h + C(q, k)/2^λ`.
 **The reading.** No sample: this counts the correct receipts themselves. Except with that probability, `k` correct
 receipts mean `k·b ≤ ∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ`: every receipt the node computed needed its word in hand,
 and the node had it from a read of some tier, from on chip, from over its NIC, or by rebuilding it from the codec at
-`c_enc` a word (`rate-codec-work`). The tiers are any partition of the node's memory (each GPU's HBM, host DRAM), and the
-chip is all of the node's processors, so it holds wherever on the node a receipt was computed; a host CPU reading host
-DRAM reads a counted tier. `N/2^h` is a receipt guessed for a word never queried, over all `N` words.
+`c_enc` a word (`rate-codec-work`). The tiers are any partition of the node's memory (each GPU's HBM, host DRAM), and
+the chip is all of the node's processors, so it holds wherever on the node a receipt was computed; a host CPU reading
+host DRAM reads a counted tier. `N/2^h` is a receipt guessed for a word never queried, over all `N` words.
 
 Proof: `Accounting.SecurityProofs.RateConservationRO`, `RateAudit`'s guessing and compression on the run's queried
 words, with the footprint at most the reads summed over the tiers.

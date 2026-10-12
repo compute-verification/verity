@@ -5,6 +5,8 @@ import Proofs.Accounting.RateAudit.Joint
 import Proofs.Accounting.RateAudit.Relay
 import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Sketch
+import Proofs.Accounting.RateAudit.Conservation
+import Proofs.Accounting.RateAudit.Chain
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows
@@ -13,4 +15,7 @@ completeness (`Accounting.SecurityProofs.RateHonest`), its time average over win
 (`Accounting.SecurityProofs.RateAuditInteractiveRO` when they ignore the oracle, `RateAuditInteractive` with relayed
 tags, and `RateOfAuditInteractive` and `RateOfAuditInteractiveRO` in a joint run), and the sketch-then-hash variant for
 a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`,
-`Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`). -/
+`Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`), and the remote protocol's
+conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateConservation`, their capacity forms
+`RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`) and chained passes
+(`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`). -/
