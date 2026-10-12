@@ -53,8 +53,8 @@ ALLOWED = {
     # service's challenger draws with it (`service.Stream.select`).
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "core.protocols.profile"},
     "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
-    # The resource-accounting agenda (§5, row 2, 11 Oct): the bandwidth audit's store is PoUS's `C*`, under its setup and
-    # `vk`, reused as they are.
+    # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
+    # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its

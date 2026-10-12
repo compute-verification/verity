@@ -1,13 +1,17 @@
 # The bandwidth audit, v0
 
 Status: v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
-`f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6) and fixed `T` and
-`s`; its conditions are met at `84fc4199d`, whose re-grant is pending. The Python reference and verifier are `audit.py`
-and `tags.py`, pinned by `tests/vectors.json`; the GPU tagger is `benchmarks/bandwidth`, checked bit for bit against
-them and timed on the RTX PRO 6000 (§6). The guarantee is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of
-`Security/`'s guarantees, proved as `Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane
-`ra-bandwidth-lean` (PR #1806); its completeness is `HonestPasses`. Until #1806 is on `main`, the statement is that
-PR's.
+`f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), fixing `T` and
+`s`, then objected at `5c62196c1` (art:dbbce953a1916411304d1f4558010b6c18cbcb4b69c2c514e32ca83a2bc6b9c5): windows over
+one store could share a key across verifiers, tags and restarts, and the verifier accepted a store not salted for its
+device. It granted `5761861fd`, with those fixes, with two conditions
+(art:c67e2351ef1718c239e20fca8ddc6d92fc3ded80941fb0f1e50812cd6892cb18): one challenger state per store (§3) and a
+device id the challenger reads itself (§2). Both are fixed and await its check; §6 quotes the rate granted at
+`5761861fd`. The Python reference and verifier are `audit.py` and `tags.py`, pinned by `tests/vectors.json`; the GPU
+tagger is `benchmarks/bandwidth`, checked bit for bit against them and timed on the RTX PRO 6000 (§6). The guarantee
+is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of `Security/`'s guarantees, proved as
+`Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane `ra-bandwidth-lean` (PR #1806); its completeness
+is `HonestPasses`. Until #1806 is on `main`, the statement is that PR's.
 
 ## 1. What a window certifies
 
@@ -41,9 +45,10 @@ At the deployed point, `ε_s = 1/64`, `s = 1,849`, `h = 256` (`ro-blake3/v1`), `
 | `λ` | 33,030,185 bits = 4,128,774 bytes, 0.38% of `E` |
 | error | `2^-42.01` (samples) + `2^-245.1` (guesses) + `2^-41` (compression) ≤ `2^-40.42` |
 
-`G = 0`, because `Params` refuses `T + RTT` at or past one rebuild (§5). `S` and `c` are the device's (§5); at
-`T = 1.2 ms` and `RTT = 0`, `I` is 741,353,308 bytes, 68.8% of `E`, 618 GB/s (§6). `audit.bound` computes `I` and the
-error; `test_bound_is_the_guarantee_at_the_proofs_point` checks it against the formula.
+`G = 0`, because `Params` refuses `T + RTT` at or past one rebuild (§5). `S` and `c` are the device's (§5).
+`audit.bound` computes `I` and the error, and §6 evaluates it at the measured `S` and `c` and quotes the rate the red
+team granted at `5761861fd`.
+`test_bound_is_the_guarantee_at_the_proofs_point` checks `bound` against the formula.
 
 `gf31-poly/v1` is an uncertified fast check: nothing bounds a device's ingress through it (§4), and `bound` refuses it.
 
@@ -54,19 +59,36 @@ encoded from the useful data `W` under PoUS's setup (`pous.setup`: the commitmen
 then `vk`). The audit reuses that setup and `vk`, with one change of input: a block's identity is its leaf under
 `vk.root` (`pous.verifier.leaf_hash`, RFC 6962 SHA-512 tree), and the verifier holds only `vk`.
 
-**One store per device.** The verifier draws each device's salt with the device's identity bound in,
+**One store per device.** The verifier draws each device's salt with the device's id bound in,
 
 ~~~text
-salt = derive(source, "verity/bandwidth/salt/v1", {w: commitment, device: id}).stream("salt", 24)
+salt = derive(source, "verity/bandwidth/salt/v2", {w: commitment, device: id}).stream("salt", 24)
 ~~~
 
-(`audit.draw_salt`), where `id` is the identity the device attests (its GPU's UUID, with its SKU recorded beside it),
-and runs PoUS's setup with that salt in place of `pous.setup.draw_salt`'s. PoUS's setup takes the salt as an input and
-needs only that it is drawn after the commitment to `W`, from the verifier's secret or a later beacon round, which
-this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different stores, so their
-`vk`, seeds and tags differ, and one device's commitment fails another's window
-(`test_one_devices_commitment_fails_anothers_window`). Without it, two such devices hold byte-identical stores and get
-the same `σ` for the same window number, and one device's root passes both windows.
+(`audit.draw_salt`), and runs PoUS's setup with that salt in place of `pous.setup.draw_salt`'s. PoUS's setup takes the
+salt as an input and needs only that it is drawn after the commitment to `W`, from the verifier's secret or a later
+beacon round, which this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different
+stores, so their `vk`, seeds and tags differ, and one device's commitment fails another's window
+(`test_one_devices_commitment_fails_anothers_window`). Without it, two such devices hold byte-identical stores, and one
+device's root passes the other's windows. So the verifier refuses any other store: `audit.Verifier` takes the device's
+id, the commitment to `W` and the source the salt was drawn from, and refuses `vk` unless `vk.salt` is `draw_salt`'s
+for them, before any window. A store set up under PoUS's own salt, another device's store, or one salted under another
+commitment is never audited as this device's (`test_a_store_not_salted_for_its_device_is_refused`).
+
+**The device's id** is the 16 bytes of its GPU's UUID, nothing else: `draw_salt` refuses any other value, and
+`audit.device_id` reads it only from the one spelling nvidia-smi prints, `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in
+lowercase hex, refusing uppercase, missing dashes, braces, a MIG instance's id and anything else. So one GPU has one id
+and one salt. The challenger reads the id itself, on the device's node, from the NVIDIA driver: `audit.read_device(gpu)`
+asks nvidia-smi (NVML) for the GPU's UUID and MIG mode, reads the `GPU-…` string through `device_id`, and refuses a MIG
+slice, whether the selector names one or the GPU is in MIG mode (its CUDA devices are then slices, each with a UUID of
+its own). The prover's word is only checked against it: `benchmarks/bandwidth` refuses a tagger whose CUDA device
+(`cudaDeviceProp.uuid`, `Tagger.device()`) has another UUID (`gpu.challenger_device`;
+`test_the_challenger_reads_a_devices_id_from_the_driver`, `test_the_challenger_reads_the_device_it_audits`). Nothing on
+the chip signs it: the verifier trusts the id because it trusts the host the challenger runs on (`trusted-nebius-host`,
+§5) to report the UUID of the GPU it audits. A host that reported another GPU's id would get that GPU's store, and two
+GPUs would answer from one store. The GPU's confidential-computing attestation could sign the UUID with a key in the
+chip, which would remove the host from this step; the audit does not use it yet. The SKU the device reports is
+recorded beside the id.
 
 The salt is the place for the device, not the window key. With the device only in the window key, two devices holding
 byte-identical stores get different seeds, but one device that reads each block once can tag it under both seeds and
@@ -79,14 +101,17 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
 
 ## 3. A window
 
-1. **Seed.** The verifier draws a fresh 32-byte nonce from its own randomness and derives the window's key from its
-   own secret,
+1. **Seed.** The verifier draws a fresh 32-byte nonce from its own randomness and records it in the store's state
+   (`Window.open`, below). Then it derives the window's key from its own secret,
    `key = derive(source, "verity/bandwidth/window/v2", {root: vk.root, salt: vk.salt, tag: name, nonce: nonce})`
    (`verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock (`Window.start`). The nonce is
    never a counter and never drawn twice for a store, so no two windows over a store share a key, whichever verifier,
    tag or restart opens them. A key fixed by a window number repeats in every verifier that counts from the same
    place: a window of the fast check reveals, after its commitment, the samples of the certified tag's window of the
-   same number, and a restarted verifier's window accepts a root replayed from before the restart.
+   same number, and a restarted verifier's window accepts a root replayed from before the restart. A second verifier
+   of the store, another tag's window and a restart each draw new samples, and a replayed root is refused
+   (`test_a_second_verifier_of_the_store_repeats_no_window`, `test_another_tags_window_reveals_no_samples`,
+   `test_a_restarted_challenger_repeats_no_window_and_refuses_a_replayed_root`).
 2. **Tags.** The prover computes `y_j = Tag(σ, j, E_j)` for every `j < N` (§4), packs them into leaves, and returns the
    RFC 6962 SHA-512 root of the leaves. The verifier stops its clock on the root (`Window.commit`); the root is on time
    iff the elapsed time is at most `T + RTT` (`Params.limit_ns`).
@@ -97,12 +122,51 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
    recomputes `y_i` from `σ`, `i` and `E_i` (`Window.verdict`). Openings are not timed: the root binds every tag.
 
 The verifier accepts iff the root is on time and every opening checks. It refuses a second start or a second root,
-and never redraws. One window over a store is open at a time: from `σ` until its root
-arrives, or until `T + RTT` has passed without one, the verifier refuses to start another window over the same store,
-which stays unstarted and may start once the first has closed. Two windows open at once could both be answered from
+and never redraws. One window over a store is open at a time: from its record until its root arrives, or until
+`T + RTT` after `σ` without one, the verifier refuses to open another window over the same store, which stays closed
+and may open once the first has closed. Two windows open at once could both be answered from
 one read of each block, so their ingress would not add; with one open at a time, each window's ingress is read within
-its own interval. A deployment keeps one `Verifier` per store, which enforces this
-(`test_one_window_over_a_store_is_open_at_a_time`). The verdict publishes one bit (`Verdict.public`); which check failed,
+its own interval (`test_one_window_over_a_store_is_open_at_a_time`).
+
+**The challenger's state.** Both rules hold across every verifier of a store, whatever its tag, and across restarts:
+every verifier of a store takes the store's one challenger state (`audit.ChallengerState`). It is a file in the
+challenger's state directory on its host, passed explicitly and never the LMS key directory, and the store names it:
+`<vk.root>-<vk.salt>.state` in hex (`audit.state_name`). The directory holds nothing else: `ChallengerState.create` and
+opening refuse a directory holding any file that is not a state named by the store its first line names, so a copy or
+hard link of a state under another name, a symbolic link, a subdirectory or a stray file is refused for every store,
+and `create` refuses a store that has a state. A store therefore has one state in the directory, and the directory's
+listing shows which stores have one (`test_a_store_has_one_challenger_state`). The file's first line names the format
+and the store (`vk.root`, `vk.salt`); then each window appends `open NONCE TAG`, fsynced before its `σ` leaves, and
+`close NONCE` when it closes (its root, or `T + RTT` without one). The file is append-only: nothing rewrites or
+truncates it, and a store's state is never made again, so it is never reset. A state that is missing, a link, unreadable
+(a record cut short, a nonce opened twice, a close that is not the open window's), another store's, or changed since this
+challenger last wrote it opens no window. The challenger holds the file's lock while it runs, so one challenger holds a
+store's state at a time. A nonce in the file is never drawn again, and one window over the store is open at a time,
+whichever verifier opens it. A window the file shows open when the state is reopened belonged to a challenger that
+stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being restored from a
+snapshot, nor a directory a copy of a state kept in another directory or on another host. Both rest on
+`trusted-nebius-host`, which network-accounting widens under the same id to say that the device runs its stated code
+on its Nebius host, "…, and its host never restores an earlier copy of the state the device keeps there", pending
+network-accounting's widening (Daniel, decision 2). The challenger's stated code keeps one state directory and never
+copies a state, and its host never brings an earlier copy back. PoUS's memory challenger cites the same assumption for
+its session-id log. The audit needs it for the two properties below.
+
+**What the no-rollback presumption is for.** A single window's bound does not need it. AuditRO's bound for one
+accepted window (§5) needs only that the prover could not know `σ` or the samples before `σ` left, and both come from
+the window's key, which binds the verifier's secret and a 32-byte nonce from the challenger's own randomness. Two
+windows over a store share a key only if their nonces collide, with probability below `n²/2^257` over `n` windows, so
+keys are unique given fresh randomness alone; the state's refusal of a nonce it holds only catches a source that
+repeats. A state rolled back, restored or forked therefore replays no window unless the randomness repeats too. The
+presumption is still needed for two properties, both about windows that overlap in time:
+
+- **One open window per store.** The state enforces it through its record of the open window and its lock. A second
+  copy of the state, or one restored to before an open window's record, would let a second challenger open a window
+  over the store while that one is open, and two such windows can be answered from one read of each block.
+- **Additivity across windows.** The ingress of a store's windows over a period, or of a co-audited set's (§5), adds up
+  only because no two windows over a store are open at once. Without the presumption each accepted window's bound
+  still holds, but their sum does not bound the total.
+
+The verdict publishes one bit (`Verdict.public`); which check failed,
 which sample and the elapsed time stay with the verifier. Openings reveal blocks of `C*` to the verifier, so the
 verifier that runs this is PoUS's memory challenger, which already holds `vk` and publishes only verdicts.
 
@@ -111,6 +175,9 @@ before `σ`, so the prover's preparation costs the verifier nothing. The honest 
 untimed pass under a throwaway seed, then a read of 512 MiB of another buffer, so the window starts with its launch
 path warm and L2 holding clean lines and no part of `E` (§6). The honest client always prepares before it asks for
 `σ` (`gpu.Prover`, checked by `benchmarks/bandwidth/tests/test_prover.py`): a window run without it took 1.195 ms.
+It opens the window first, so the state's fsync falls before the preparation, not between it and `σ`: with the fsync
+after the scrub, the GPU and the host idle for it, and honest windows took 1.095 ms at the median and one of 50 was
+late (§6).
 
 ## 4. Tags
 
@@ -170,7 +237,7 @@ only the words mod p (`w`, `w + p` and `w + 2p` agree), 15,934 of a block's 16,4
 | `q` | at most `2^64` oracle queries in a window | `audit.QUERIES_LOG2`; the RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms, so `2^64` covers `2^38` such devices helping, and the bound needs no assumption on `q` |
 | `λ` | `64·k + 41` bits | `audit.SLACK_LOG2`: `C(q, k)/2^λ ≤ q^k/2^λ = 2^-41`; raising `q` from `2^40` cost 1.55 MB (0.14 points) |
 | `S` | 239,992,832 bytes (22.3% of `E`) | `S_chip` (`summarize.s_chip_bytes`, from the device's properties in `device.json`): 128 MiB of L2; for each of 188 SMs, 256 KiB of registers, 128 KiB of L1 and shared memory, and 160 KiB of other stores; then 1 MiB at the chip level (see below) |
-| `c` | `cap_side · (T + RTT)`, `cap_side` = 63.0 GB/s | the GPU's PCIe Gen 5 x16 link at its raw rate, 32 GT/s × 16 lanes at 128b/130b; measured 56.6 GB/s host to device, 51.4 GB/s zero-copy (§6) |
+| `c` | `cap_side · (T + RTT)`, `cap_side` = 63.0 GB/s | the GPU's PCIe Gen 5 x16 link at its raw rate, 32 GT/s × 16 lanes at 128b/130b; measured 56.3 GB/s host to device, 51.3 GB/s zero-copy (§6) |
 | `G` | 0 | `Params` refuses `T + RTT ≥ 2 · ROOT_CALL_NS = 1,708,058 ns`, the fastest cooperating P2 root; one root, not two, so a device holding a block's inner root rebuilds nothing |
 
 `S` counts every on-chip store a resident kernel can hold data in across `σ`, at its raw capacity. Beside L2, the
@@ -203,7 +270,13 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   a faster root). The device for all three is a whole GPU, not a MIG slice: slices share the chip's L2 and crossbar,
   so a co-resident slice's path in is on chip, not over PCIe. The RTX PRO 6000 Server's only link is its PCIe Gen 5
   x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the device attests (it supports confidential
-  computing) beside its identity (§2).
+  computing) beside its id (§2).
+- **`trusted-nebius-host`** (assumption, core's): the challenger runs its stated code on its Nebius host, which offers
+  no attesting hardware, "…, and its host never restores an earlier copy of the state the device keeps there", the
+  wording network-accounting adds under the same id, pending network-accounting's widening (Daniel, decision 2). The
+  audit cites it for two properties: the device id the challenger reads from the driver is the UUID of the GPU it
+  audits (§2), and the challenger keeps one state directory, never copies a state and never gets an earlier copy back
+  (§3), which one open window per store and additivity across windows need and a single window's bound does not.
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
 
@@ -213,21 +286,26 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   of another device's store with its own pass, at its measured read rate (1,476 GB/s), covers
   `(T + RTT)` × 1,476 GB/s less its own `I`: about 500,000 blocks, 96% of `N`, at `T = 1.2 ms` (the red team counted
   92% at the earlier `I`). Charging that against `k` leaves nothing, so a per-device figure means something only for
-  a device no helper reaches. **Which of two readings `bandwidth-device` states is a model choice for Daniel:**
+  a device no helper reaches. **`bandwidth-device` is therefore stated for a co-audited set** (Daniel, decision 4,
+  11 Oct 2026, 8:54 PM PDT):
 
-  1. **A co-audited set** (the red team's recommendation). The devices of a set run their windows at the same time,
-     with one start and one deadline (an offset is a helper's time); their stores are pairwise distinct (§2); and
-     every device that could hold a copy of any of their stores is in the set or isolated. The set's chips are then
-     one chip, and the same compression argument gives
-     `Σ_i I_i ≥ Σ_i k·b − Σ_i S_i − c_ext − Σ_i λ` bits, except with probability the sum of the devices' errors,
-     where `c_ext` counts only links from outside the set. Traffic between the set's devices stays inside it, so a
-     helper's slack is counted and the residual disappears. For `m` RTX PRO 6000s, each on its own PCIe link,
-     `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is `m` times the per-device figure: 741,353,308 bytes a
-     device at `T = 1.2 ms`, certified for the set's total, not for any one device. AuditRO is stated for one store;
-     this reading needs it for `m` stores sampled separately, which is not in Lean yet.
-  2. **Per device, for isolated devices only.** `I ≥ k·b − S − c − λ` for one device whose side links carry nothing
-     computed from any copy of its store during the window. This is the statement AuditRO makes now. A device that is
-     neither isolated nor in a co-audited set gets no figure.
+  - **Which devices count.** Whole GPUs whose only link is PCIe: no MIG slice (§2) and no NVLink. Every device
+    that could hold a copy of a set's stores is in the set or isolated. An NVLink domain is certified as one set
+    later.
+  - **What a set certifies.** The devices of a set run their windows at the same time, with one start and one
+    deadline (an offset is a helper's time), over pairwise-distinct stores (§2). The set's chips are then one chip,
+    and the same compression argument gives `Σ_i I_i ≥ Σ_i k·b − Σ_i S_i − c_ext − Σ_i λ` bits, except with
+    probability the sum of the devices' errors, where `c_ext` counts only links from outside the set. Traffic between
+    the set's devices stays inside it, so a helper's slack is counted and the residual disappears. For `m`
+    RTX PRO 6000s, each on its own PCIe link, `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is at least `m`
+    times the per-device figure; that bounds the set's total, not any one device. This is AuditRO for `m` stores
+    sampled separately, which lane `ra-bandwidth-lean` is proving; the set's figure is certified once it lands.
+  - **What is certified now.** Per device, for an isolated device: `I ≥ k·b − S − c − λ` for one device whose side
+    links carry nothing computed from any copy of its store during the window, the statement AuditRO makes. A peer
+    that relays tags in over the side link is charged inside the side budget by `AuditRelay` (#1819), at `m·b` bits
+    beyond `c` for `m` relayed blocks with `m·(h − log₂ N) ≥ c + μ`; at the full PCIe cap that is more blocks than
+    `N`, so a device a peer can reach gets its figure only in a co-audited set. A device that is neither isolated nor
+    in a co-audited set gets no figure.
 
 Host RAM is not part of the allowed hardware (Daniel, 3 Oct 2026); the RTX PRO 6000 Server has no NVLink, so its side
 paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
@@ -236,14 +314,14 @@ paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
 
 `T` must cover the honest prover's elapsed time on the verifier's clock with margin, and leave `T + RTT` under the
 rebuild floor. The parameters: **`ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`**, which leaves up to 0.5 ms for `RTT`,
-fixed by the red team's grant of `f18c1854a`.
+fixed by the red team at `f18c1854a`.
 
-**The certified rate** (code at `84fc4199d`; red team: granted with conditions at `f18c1854a`,
-art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6, conditions met at `84fc4199d`, re-grant
-pending): an accepted window at `T = 1.2 ms`, with an on-node verifier and no round-trip allowance, certifies
-741,353,308 bytes (68.8% of `E`), 618 GB/s, except with probability `2^-40.42`; with a 0.3 ms round-trip allowance,
-722,448,693 bytes (67.0%), 482 GB/s. It is a per-device figure for an isolated device, or each device's share of a
-co-audited set's total, depending on which reading of `bandwidth-device` Daniel picks (§5).
+**The certified rate, granted at `5761861fd`** (art:c67e2351ef1718c239e20fca8ddc6d92fc3ded80941fb0f1e50812cd6892cb18).
+An accepted `ro-blake3/v1` window at `T = 1.2 ms` and `s = 1,849` certifies that the device's memory delivered at least
+741,353,308 bytes of `E` (68.8%) within `T + RTT`: 618 GB/s with `RTT = 0`, and 722,448,693 bytes (67.0%), 482 GB/s,
+with a 0.3 ms `RTT` allowance. The error is `2^-40.42`. The last table of this section is `audit.bound` at these
+parameters. Under Daniel's reading of `bandwidth-device` (§5), the rate is certified now for an isolated device, and
+for a co-audited set it is each device's share of the set's total once AuditRO for `m` stores lands.
 
 The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
 timed lease, SM clock 2,085 to 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and
@@ -251,11 +329,12 @@ keyed BLAKE3's known answers on host and device; every tag's root over the full 
 vectors' 37 blocks equal to the reference's, with the output buffers poisoned; and a pass without the tag kernel that
 does not match. A failed gate times nothing.
 
-This section reports run `r20261012-011339-b99d`
-(art:ebd5d428c8dcf6f0807b54454f3fb3107b53fcaa4635ebf3c300c83a3d211f5d) at `84fc4199d`. Runs `r20261012-001813-b2be`
-(art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603, at `f18c1854a`), `r20261011-235743-0c42`
-(art:8735b1084479fca8cf64bd225c58fb85a2afe6599a5b6c864759a421699a2e8e) and `r20261012-000847-217b` ran the same kernels
-and reproduced every clean pass time to within 0.01 ms.
+This section reports run `r20261012-024259-a1d6`
+(art:34582b732f2c2e97ecd0621bad0bd17688684365b24c51538f8e9146153b3a14) at `7eb0467af`, the objection's fixes in place.
+Runs `r20261012-011339-b99d` (art:ebd5d428c8dcf6f0807b54454f3fb3107b53fcaa4635ebf3c300c83a3d211f5d, at `84fc4199d`),
+`r20261012-001813-b2be` (art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603, at `f18c1854a`),
+`r20261011-235743-0c42` (art:8735b1084479fca8cf64bd225c58fb85a2afe6599a5b6c864759a421699a2e8e) and
+`r20261012-000847-217b` ran the same kernels and reproduced every clean pass time to within 0.01 ms.
 
 Times are medians of 100 passes (20 for *idle*; p99 in brackets), in ms, under four L2 conditions set before the pass:
 *dirty*, after a 512 MiB write; *warm*, whatever the last pass left; *clean*, after a 512 MiB read of another buffer;
@@ -264,25 +343,37 @@ Times are medians of 100 passes (20 for *idle*; p99 in brackets), in ms, under f
 | | dirty | warm | clean | idle |
 |---|---|---|---|---|
 | raw device read of `E` | 0.730, 1,476 GB/s | | | |
-| `ro-blake3/v1` pass: tags, then leaves and tree | 1.579 (1.599) | 1.131 (1.357) | **0.978 (0.995)** = 0.835 + 0.143 | 0.998 (1.006) |
-| `ro-sha512/v1` pass | 1.725 (1.730) | 1.720 (1.724) | 1.719 (1.724) = 1.408 + 0.311 | 1.731 (1.742) |
-| `gf31-poly/v1` pass | 0.910 (0.921) | 0.879 (0.886) | 0.883 (0.891) = 0.741 + 0.142 | 0.894 (0.900) |
+| `ro-blake3/v1` pass: tags, then leaves and tree | 1.574 (1.595) | 1.129 (1.346) | **0.976 (0.983)** = 0.832 + 0.143 | 0.994 (1.042) |
+| `ro-sha512/v1` pass | 1.729 (1.742) | 1.725 (1.734) | 1.726 (1.737) = 1.412 + 0.313 | 1.744 (1.748) |
+| `gf31-poly/v1` pass | 0.909 (0.920) | 0.878 (0.885) | 0.883 (0.893) = 0.742 + 0.141 | 0.899 (0.913) |
 
 Whole windows through `audit.Verifier` at `T = 1.2 ms` and `s = 1,849`, 50 per tag, each after the honest prover's
 preparation (§3), with the verifier's clock beside the device's pass time:
 
 | | verifier's clock, p50 (max) | device's pass, p50 (max) | accepted |
 |---|---|---|---|
-| `ro-blake3/v1` | 1.011 ms (1.043) | 0.982 ms (0.991) | 50 of 50 |
-| `gf31-poly/v1` | 0.931 ms (1.017) | 0.887 ms (0.918) | 50 of 50 |
-| `ro-sha512/v1` | 1.748 ms (1.757) | 1.725 ms (1.732) | none: all late |
+| `ro-blake3/v1` | 1.024 ms (1.042) | 0.985 ms (0.995) | 50 of 50 |
+| `gf31-poly/v1` | 0.920 ms (1.000) | 0.889 ms (0.923) | 50 of 50 |
+| `ro-sha512/v1` | 1.773 ms (1.792) | 1.735 ms (1.750) | none: all late |
 
-The slowest honest `ro-blake3/v1` window took 1.043 ms, 157 µs (13%) inside `T = 1.2 ms`, and `T + RTT` leaves
+The slowest honest `ro-blake3/v1` window took 1.042 ms, 158 µs (13%) inside `T = 1.2 ms`, and `T + RTT` leaves
 0.508 ms for the round trip under the rebuild floor. One window per tag at a 100 ms deadline with the floor lifted,
 which certifies nothing, was accepted for all three: `ro-sha512/v1`'s openings pass even though its timed windows are
-late. Prepared like the others, that window's `ro-blake3/v1` pass took 1.008 ms on the verifier's clock (1.195 ms
+late. Prepared like the others, that window's `ro-blake3/v1` pass took 1.025 ms on the verifier's clock (1.195 ms
 unprepared at `f18c1854a`). PCIe into the GPU measured 56.3 GB/s (pinned copy) and 51.3 GB/s (a kernel reading
 pinned host memory).
+
+Every window of the run went through the store's one challenger state: 53 per tag (50 timed, two with skipped blocks,
+one at the 100 ms deadline), 159 nonces in all, each opened and closed once and none repeated. Run
+`r20261012-022850-f3ea` (art:a2154aeefb5c7c1e6c0f99218828d44ddd764514489ca00da3688ce8d74395f8) at `4ae302654`, before
+`Window.open`, fsynced the state between the prover's scrub and `σ` (§3). Its gates passed and every skipping device
+was rejected, but honest `ro-blake3/v1` windows took 1.095 ms at the median on the verifier's clock (1.221 ms at most)
+with the device's pass at 1.007 ms, and one of 50 was late; three of 50 `gf31-poly/v1` windows were late. It is the
+finding behind §3's ordering, not a measurement of the audit. Run `r20261012-034853-e233`
+(art:6efb3ebf776e10ced6fe6ad128185373189cfc0cedeae3e5fbb67a4f63856737) at `a677eaf3c` checked the grant's two
+conditions on the node and timed nothing: nvidia-smi gave the leased GPU's `GPU-…` UUID with MIG disabled,
+`challenger_device` accepted the tagger running on it, and 15 windows over the pinned vectors' 37-block store went
+through the one state file the store names.
 
 `ro-blake3/v1`'s pass depends on L2's state when it starts. Its loads fetch 256 bytes into L2 per miss
 (`ld.global.nc.L1::no_allocate.L2::256B`), which helps when L2's lines are clean and costs 0.6 ms when they are dirty
@@ -300,17 +391,17 @@ device that skips 1% or 5% of the blocks was rejected in every run, for every ta
 probability `0.99^1849 ≈ 2^-26.8` or `0.95^1849 ≈ 2^-136.8`.
 
 `bound` at `s = 1,849`, `q ≤ 2^64`, `S = 239,992,832` bytes and `cap_side = 63.0 GB/s` (error `2^-40.42`
-throughout):
+throughout); the rows at `T = 1.2 ms` are the rate granted at `5761861fd`, and the others are the formula's arithmetic:
 
 | `T` | `RTT` | `I` | share of `E` | `I / (T + RTT)` |
 |---|---|---|---|---|
 | 1.0 ms | 0 | 753,956,385 bytes | 69.9% | 754 GB/s |
-| **1.2 ms** | **0** | **741,353,308 bytes** | **68.8%** | **618 GB/s** |
+| 1.2 ms | 0 | 741,353,308 bytes | 68.8% | 618 GB/s |
 | 1.2 ms | 0.3 ms | 722,448,693 bytes | 67.0% | 482 GB/s |
 | 1.4 ms | 0 | 728,750,231 bytes | 67.6% | 521 GB/s |
 | 1.708 ms (the largest `Params` allows) | 0 | 709,337,901 bytes | 65.8% | 415 GB/s |
 
-At `T = 1.2 ms` the certified rate is 42% of the raw read rate (1,476 GB/s). Of `E`'s 1,078 MB, the chip's storage
+At `T = 1.2 ms`, `bound`'s `I / T` is 42% of the raw read rate (1,476 GB/s). Of `E`'s 1,078 MB, the chip's storage
 takes 240 MB (22.3%), the side link 76 MB (7.0%), the sample 17 MB (1.6%) and `λ` 4.1 MB (0.38%); the rest of the gap
 from the raw rate is the time the honest pass and its margin take beyond a raw read.
 
@@ -324,9 +415,9 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88 (notes
    `kb/sm120/tried-techniques.md`, run `r20260930-061717-3e84`), a compute floor of 0.56 ms on this store against
    0.51 ms.
-3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so `bandwidth-device`
-   states either the bound for a co-audited set or a per-device bound for isolated devices only. Daniel picks; the
-   set's reading needs AuditRO for `m` stores.
+3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so Daniel stated
+   `bandwidth-device` for a co-audited set of whole PCIe-only GPUs (decision 4). The set's figure needs AuditRO for `m`
+   stores (lane `ra-bandwidth-lean`); until then the per-device bound covers an isolated device.
 4. **The store's leaves are PoUS's, not P2 spec §4's.** `vk`'s leaf is the 99-byte little-endian leaf of
    `pous.verifier`; the P2 spec's is 107 bytes, big-endian (`benchmarks/pous/p2_v1/wire.py`). The audit uses what PoUS
    uses on `main` and inherits its resolution.
@@ -336,21 +427,28 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    them on the RTX PRO 6000 is open.
 6. **Openings disclose sampled blocks** of `C*` (an encoding of `W`) to the verifier; the memory challenger already
    holds `vk` and publishes only verdicts, so nothing leaves it.
-7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. The import
-   boundary for protocols is Daniel's to rule on; until then `tests/test_boundaries.py` carries the edge.
+7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. Daniel
+   allowed this import edge (decision 7, 11 Oct 2026), and `tests/test_boundaries.py` enforces it.
 
 ## 8. Code
 
 - `tags.py`: `get(name)`, each construction's `keyed(σ)(j, block)`, `certified`, `guess`, `info_bits`; the tag tree
   (`leaves`).
-- `audit.py`: a device's salt (`draw_salt`), the prover's reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
-  `open(j) -> Opening`), the verifier (`Verifier(vk, params, source).window()`: `start() -> σ`, `commit(root) ->
-  samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
-  `certified_blocks`, `samples_for`) and `bound`.
+- `audit.py`: a device's id and salt (`device_id(uuid)`, `read_device(gpu)` from nvidia-smi,
+  `draw_salt(source, commitment, device)`), the prover's
+  reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
+  `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(state_dir, vk)` once, then
+  `ChallengerState(state_dir, vk)`, the file `state_name(vk)` in the challenger's state directory, shared by every
+  verifier of the store), the verifier
+  (`Verifier(vk, params, source, state, device=, commitment=, salt_source=).window()`: `open()`, `start() -> σ`,
+  `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point
+  (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`, `certified_blocks`, `samples_for`) and `bound`.
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
-  salts, window seeds and samples, and a whole window over 37 blocks.
+  ids and salts, window seeds and samples over the first device's store, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
-  (`gpu.py`: `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
-  `Opening` this verifier checks; `Prover.commit(window)` prepares, then takes `σ` and commits; `windows` runs every
-  window through it), its Python twins
+  (`gpu.py`: `challenger_device(tagger, gpu)` is the id the challenger reads, refused unless `Tagger.device()`, the
+  tagger's CUDA device, is that GPU; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
+  `Opening` this verifier checks; `Prover(tagger, store, blocks, scrub)` is a store's one prover for every tag, and
+  `commit(window)` opens the window, prepares, then takes `σ` and commits; `windows` runs every window of every tag through it and
+  through the store's one challenger state), its Python twins
   (`benchmarks/bandwidth/tests/test_tagger_twin.py`), and the runs of §6.
