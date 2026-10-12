@@ -238,6 +238,15 @@ def test_unchained_passes_are_rejected(store) -> None:
     assert verdicts[-1] == audit.Verdict(0, False, "receipt-path", (1, 0))
 
 
+def test_a_window_not_chained_from_the_window_before_is_rejected(store) -> None:
+    """Each window's first pass seeded from the registration rather than the previous window's last root (so a window's
+    first pass could run beside the last of the window before, from the same reads) fails in window 1."""
+    def per_window(pr, t, challenge, i, previous, plan):
+        return pr.run(t, challenge, i, store.registration.digest if i == 0 else previous, plan)
+    s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, run=per_window)
+    assert finish(s, prover, passes, clock) == [audit.Verdict(0, True), audit.Verdict(1, False, "receipt-path", (0, 0))]
+
+
 def test_a_root_after_the_deadline_rejects_the_session(store) -> None:
     late = dataclasses.replace(SCHEDULE, arrivals=tuple((t, i, at + 200 if (t, i) == (1, 2) else at)
                                                          for t, i, at in SCHEDULE.arrivals))
