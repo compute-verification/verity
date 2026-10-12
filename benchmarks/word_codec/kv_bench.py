@@ -57,6 +57,9 @@ ATTN_SPLIT_TILES = (1, 8)        # each split at least this many tiles (a split'
                                  # split hide more of a tile's decode latency at small batch)
 ATTN_RTOL = 1e-3
 ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
+NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1 (r20261012-100856-7247): x's denominator
+CLOCK_LOCKED_MHZ, CLOCK_MAX_MHZ = 2092, 2430  # the nodes' locked SM clock (vy-clocks.service) and the card's max
+RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 
 class Lib:
@@ -250,6 +253,34 @@ def rates(lib: Lib, torch, ks, sms: int, reps: int, log) -> dict:
         log(f"rates {lib.name} k={k}: decode {d['per_s']:.3e} words/s ({d['per_s'] * f.word_bytes / 1e9:.0f} GB/s), "
             f"encode {e['per_s']:.3e} words/s ({e['per_s'] * f.word_bytes / 1e9:.2f} GB/s, "
             f"{e['per_s'] * k / floor:.0%} of the floor), r = {d['per_s'] / e['per_s']:.0f}")
+    return out
+
+
+def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
+    """Each field's compute-only rates at each k as `RATES_SCHEMA` records, for the frontier's pooled x: x is the encode
+    of 70B's linears (`E_70B` bytes as words) at the measured rate, in `NATIVE_70B_S` steps, at the locked clock;
+    `x_max_clock` scales it by the clocks' ratio (not measured: the nodes' clocks are locked)."""
+    out = []
+    hz = CLOCK_LOCKED_MHZ * 1e6
+    for lib in libs:
+        f, r = lib.field, res["libs"][lib.name].get("rates")
+        if not r:
+            continue
+        words = E_70B / f.word_bytes
+        for k, e in r["encode"].items():
+            d = r["decode"][k]
+            x = words / e["per_s"] / NATIVE_70B_S
+            out.append({"schema": RATES_SCHEMA, "lane": "ra-word-codec", "b": f.n, "field": f"2^{f.n}-{f.c}",
+                        "lib": lib.name, "k": int(k),
+                        "arithmetic": "cuda-int32/thread-per-word/column" + ("/streamed-fold" if f.limbs > 24 else ""),
+                        "squarings_per_s": r["square_s"], "sm_clocks_per_squaring": res["sms"] * hz / r["square_s"],
+                        "roots_per_s": e["per_s"] * int(k), "encode_words_per_s": e["per_s"],
+                        "root_over_squaring_floor": e["per_s"] * int(k) / r["encode_floor_words_s"],
+                        "decode_words_per_s": d["per_s"], "r": d["per_s"] / e["per_s"],
+                        "x": x, "x_boosted": False, "x_max_clock": x * CLOCK_LOCKED_MHZ / CLOCK_MAX_MHZ,
+                        "delta": words / d["per_s"] / NATIVE_70B_S, "clock_mhz": CLOCK_LOCKED_MHZ,
+                        "clock_max_mhz": CLOCK_MAX_MHZ, "max_clock_measured": False, "sms": res["sms"],
+                        "measured": True, "run": run, "art": None})
     return out
 
 
@@ -606,6 +637,8 @@ def main() -> int:
         if not a.no_native:
             res["native"] = native_70b(torch, batches, a.reps, log)
         res["model"] = model(res, libs, batches, contexts, props.total_memory)
+        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"))
+        (out_dir / "rates.json").write_text(json.dumps(res["frontier_rates"], indent=1) + "\n")
     (out_dir / "kv-codec.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, libs, out_dir)
     log("done" if res["ok"] else "FAILED")

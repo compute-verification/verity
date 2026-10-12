@@ -1,8 +1,9 @@
 """The KV cache's codec, byte-exact: Sloth over one wide word, the word as its payload (`kv.cu` is the kernel).
 
 ~~~text
-field      p = 2^n − c, n a multiple of 32, p ≡ 3 (mod 4), c the smallest such: 2^512 − 569 and 2^768 − 825
-word       S = n/8 bytes, little-endian, canonical (< p); the payload is the whole word (64 or 96 bytes)
+field      p = 2^n − c, n a multiple of 32, p ≡ 3 (mod 4), c the smallest such: 2^512 − 569, 2^768 − 825,
+           2^1024 − 105, 2^1280 − 1665 and 2^1536 − 3453
+word       S = n/8 bytes, little-endian, canonical (< p); the payload is the whole word (64 to 192 bytes)
 ρ(a)       Sloth's permutation: s = a^((p+1)/4); if s² = a the even one of {s, p − s}, else (s² = −a) the odd one
 ρ⁻¹(y)     y² if y is even, p − y² if y is odd: one squaring and the sign rule
 XOF(m)     SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ …
@@ -13,18 +14,20 @@ round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the pay
            x ↦ ρ⁻¹(x) − c_j − t(i)
 ~~~
 
-The derivation is `benchmarks/codec_tensor/wide.py`'s (ra-codec-tensor) under a domain of its own, at the two fields
-ra-codec-theory chose, whose words hold 64 and 96 bytes with no slack. A payload is any word below p. For p = 2^n − c
+The derivation is `benchmarks/codec_tensor/wide.py`'s (ra-codec-tensor) under a domain of its own, at the fields
+ra-codec-theory chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
 with c < 2^16 a payload at or above p has its top 16 bits all ones, a NaN in bf16 (and its top byte 0xFF, a NaN in
 E4M3), so every word of finite values is one; `encode_word` refuses the rest.
 
-Encoding a word costs k roots, each (p+1)/4 = (2^M − 1)·2^8 + LOW: x_M = a^(2^M − 1) by M's bits from the top
-(x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a), then 8 squarings with a multiply by a at LOW's set bits, n − 3 squarings
-and 18 multiplies at either field, then the square test (one more). Decoding costs k squarings.
+Encoding a word costs k roots, each (p+1)/4 = (2^M − 1)·2^b + LOW: x_M = a^(2^M − 1) by M's bits from the top
+(x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a), then b squarings with a multiply by a at LOW's set bits, b = 8 or the
+fewest bits that hold (c − 1)/4, so n − 3 squarings and 16 to 20 multiplies (`root_multiplies`), then the square
+test (one more). Decoding costs k squarings.
 
 The KV cache's layout (`token_layer_words`): a token's keys and values in one layer, K then V, each `KV_HEADS` ×
 `HEAD_DIM` bf16 (Llama-3.1-70B: 8 × 128, 4,096 bytes together), are the payloads of W = ⌈4096 / S⌉ consecutive words,
-zero-padded (64 words at 2^512 − 569, 43 at 2^768 − 825), the words of slot s's layer l at index (s · LAYERS + l) · W.
+zero-padded (64 words at 2^512 − 569, 43 at 2^768 − 825, 32, 26 and 22 at 1,024, 1,280 and 1,536 bits), the words of
+slot s's layer l at index (s · LAYERS + l) · W.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ from dataclasses import dataclass
 DOMAIN = b"verity/word-codec/kv/v0\0"
 SEED_BYTES = 32
 TWEAK_INDEX = (1 << 32) - 1
-LOW_BITS = 8
+LOW_MIN = 8
 
 # Llama-3.1-70B's attention: 80 layers, 8 KV heads of 128, bf16.
 LAYERS = 80
@@ -70,14 +73,19 @@ class Field:
         return (self.p + 1) // 4
 
     @property
+    def low_bits(self) -> int:
+        return max(LOW_MIN, ((self.c - 1) // 4).bit_length())
+
+    @property
     def chain(self) -> tuple[int, int]:
-        """(M, LOW) with (p+1)/4 = (2^M − 1)·2^8 + LOW."""
-        return self.n - 2 - LOW_BITS, (1 << LOW_BITS) - (self.c - 1) // 4
+        """(M, LOW) with (p+1)/4 = (2^M − 1)·2^b + LOW, b = `low_bits`."""
+        b = self.low_bits
+        return self.n - 2 - b, (1 << b) - (self.c - 1) // 4
 
     @property
     def root_squarings(self) -> int:
-        """The chain's squarings: M − 1 for x_M, then 8."""
-        return self.chain[0] - 1 + LOW_BITS
+        """The chain's squarings: M − 1 for x_M, then b."""
+        return self.chain[0] - 1 + self.low_bits
 
     @property
     def root_multiplies(self) -> int:
@@ -85,7 +93,8 @@ class Field:
         return m.bit_length() - 1 + m.bit_count() - 1 + low.bit_count()
 
 
-FIELDS = {f.name: f for f in (Field("p512", 512, 569), Field("p768", 768, 825))}
+FIELDS = {f.name: f for f in (Field("p512", 512, 569), Field("p768", 768, 825), Field("p1024", 1024, 105),
+                               Field("p1280", 1280, 1665), Field("p1536", 1536, 3453))}
 
 
 def field(name: str) -> Field:
@@ -99,7 +108,7 @@ def check_fields() -> None:
     for f in FIELDS.values():
         m, low = f.chain
         assert f.n % 32 == 0 and f.p % 4 == 3 and f.p.bit_length() == f.n and f.c < 1 << 16
-        assert 0 < low < 1 << LOW_BITS and ((1 << m) - 1) * (1 << LOW_BITS) + low == f.root_exp
+        assert 0 < low < 1 << f.low_bits and ((1 << m) - 1) * (1 << f.low_bits) + low == f.root_exp
 
 
 @dataclass(frozen=True, slots=True)

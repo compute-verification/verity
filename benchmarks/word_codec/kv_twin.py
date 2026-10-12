@@ -1,12 +1,12 @@
 """`kv.cu`'s arithmetic step for step on Python limbs, every intermediate checked to fit the register it lives in.
 
-The tests run the twin against `kv.py` at both fields: what holds here for every input in a lazy form's range holds on
+The tests run the twin against `kv.py` at every field: what holds here for every input in a lazy form's range holds on
 the device, since each step below is one of the kernel's 32- or 64-bit operations.
 """
 
 from __future__ import annotations
 
-from kv import LOW_BITS, Field, from_limbs, to_limbs
+from kv import Field, from_limbs, to_limbs
 
 U32 = (1 << 32) - 1
 
@@ -67,7 +67,7 @@ def fold(t: list[int], f: Field) -> list[int]:
         v = _fits(v + x[k], 64)
         x[k], v = v & U32, v >> 32
     if v:
-        assert from_limbs(x) < 1 << 20
+        assert from_limbs(x) < c * c
         z = c
         for k in range(nl):
             z = _fits(z + x[k], 64)
@@ -148,7 +148,7 @@ def root(a: list[int], f: Field) -> tuple[list[int], int, int]:
             x = mul(sqr(x, f), a, f)
             sq, mu, cur = sq + 1, mu + 1, cur + 1
     assert cur == m
-    for b in range(LOW_BITS - 1, -1, -1):
+    for b in range(f.low_bits - 1, -1, -1):
         x = sqr(x, f)
         sq += 1
         if (low >> b) & 1:

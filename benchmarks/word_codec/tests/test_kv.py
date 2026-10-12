@@ -54,8 +54,9 @@ def test_fields(name):
     f = K.field(name)
     assert _probable_prime(f.p)
     assert not any(_probable_prime((1 << f.n) - c) for c in range(1, f.c, 4))
-    assert f.root_squarings == f.n - 3 and f.root_multiplies == 18
-    assert f.word_bytes == {"p512": 64, "p768": 96}[name]
+    assert f.root_squarings == f.n - 3
+    assert f.root_multiplies == {"p512": 18, "p768": 18, "p1024": 21, "p1280": 18, "p1536": 19}[name]
+    assert f.word_bytes == f.n // 8 and f.c < 1 << 16
     with pytest.raises(ValueError, match="unknown field"):
         K.field("p511")
 
@@ -64,7 +65,7 @@ def test_kernel_constants_match():
     src = (HERE.parent / "kv.cu").read_text()
     for f in K.FIELDS.values():
         assert re.search(rf"constexpr int NBITS = {f.n};\nconstexpr u32 CF = {f.c};", src)
-    assert f"constexpr int LOW_BITS = {K.LOW_BITS};" in src and "constexpr int KMAX = 8;" in src
+    assert f"constexpr int LOW_MIN = {K.LOW_MIN};" in src and "constexpr int KMAX = 8;" in src
 
 
 @pytest.mark.parametrize("n,c", [(3, 1), (4, 5), (5, 1), (5, 9), (6, 21), (7, 1)])
@@ -127,7 +128,7 @@ def test_token_layer_layout(name):
     k = K.key(name, SEED, 1)
     f = k.field
     assert K.TOKEN_LAYER_BYTES == 4096 and K.TOKEN_BYTES == 327_680
-    assert K.token_layer_words(f) == {"p512": 64, "p768": 43}[name]
+    assert K.token_layer_words(f) == {"p512": 64, "p768": 43, "p1024": 32, "p1280": 26, "p1536": 22}[name]
     assert K.token_words(f) == K.LAYERS * K.token_layer_words(f)
     rng = random.Random(7)
     data = bytes(rng.randrange(256) for _ in range(K.TOKEN_LAYER_BYTES))

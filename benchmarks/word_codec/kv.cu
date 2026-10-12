@@ -1,10 +1,11 @@
 // The KV cache's codec on the RTX PRO 6000 (sm_120): Sloth over one wide word, `kv.py` the reference. One build per
-// field, KV_FIELD = 512 or 768 (p = 2^n - c, n = 32 NL), any k up to KMAX at run time.
+// field, KV_FIELD = 512, 768, 1024, 1280 or 1536 (p = 2^n - c, n = 32 NL), any k up to KMAX at run time.
 //
 // A thread a word, NL 32-bit limbs: the square column by column, each unordered pair once and doubled
 // (`benchmarks/codec_tensor/wt.cu`'s), then 2^n = c folded twice, a lazy value below 2^n; canonical (< p) only where a
-// comparison, the sign rule or an addition reads it. The root is `kv.py`'s chain: x_M = a^(2^M - 1) by M's bits from the
-// top, then 8 squarings with a multiply by a at LOW's set bits.
+// comparison, the sign rule or an addition reads it. Past 768 bits (STREAM) each high column is folded into the low
+// limbs as it is produced, so the 2 NL-limb product is never held, with the same result. The root is `kv.py`'s chain:
+// x_M = a^(2^M - 1) by M's bits from the top, then LOW_BITS squarings with a multiply by a at LOW's set bits.
 //
 // Kernels (extern "C" launchers at the end): encode and decode of a flat store of words (NL limbs each, contiguous), the
 // decode written out or XORed into a checksum (the read-and-decode rate); the read of a store; compute-only chains for the
@@ -27,18 +28,30 @@ constexpr u32 CF = 569;
 #elif KV_FIELD == 768
 constexpr int NBITS = 768;
 constexpr u32 CF = 825;
+#elif KV_FIELD == 1024
+constexpr int NBITS = 1024;
+constexpr u32 CF = 105;
+#elif KV_FIELD == 1280
+constexpr int NBITS = 1280;
+constexpr u32 CF = 1665;
+#elif KV_FIELD == 1536
+constexpr int NBITS = 1536;
+constexpr u32 CF = 3453;
 #else
 #error "KV_FIELD is one of kv.FIELDS"
 #endif
 constexpr int NL = NBITS / 32;
 constexpr int KMAX = 8;
-constexpr int LOW_BITS = 8;
+constexpr int bitlen(int x) { return x ? 1 + bitlen(x >> 1) : 0; }
+constexpr int LOW_MIN = 8;
+constexpr int LOW_BITS = bitlen((CF - 1) / 4) > LOW_MIN ? bitlen((CF - 1) / 4) : LOW_MIN;
 constexpr int CHAIN_M = NBITS - 2 - LOW_BITS;
 constexpr u32 LOW = (1u << LOW_BITS) - (CF - 1) / 4;
-constexpr int bitlen(int x) { return x ? 1 + bitlen(x >> 1) : 0; }
 constexpr int MBITS = bitlen(CHAIN_M);
 constexpr int WPB = 128;
-static_assert(NBITS % 32 == 0 && NL % 4 == 0 && CF % 4 == 1 && (CF - 1) / 4 < (1u << LOW_BITS), "p = 2^n - c");
+constexpr bool STREAM = NL > 24;
+static_assert(NBITS % 32 == 0 && NL % 4 == 0 && CF % 4 == 1 && CF < (1u << 16) && (CF - 1) / 4 < (1u << LOW_BITS),
+              "p = 2^n - c");
 
 __constant__ u32 kC[KMAX][NL];
 __constant__ u32 kTau[NL];
@@ -133,16 +146,65 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
   if (add_small(x, h * CF)) add_small(x, CF);
 }
 
+// Column m >= NL of a product, v, folded into the low limbs y as c v, the carry word f running up them.
+__device__ __forceinline__ void fold_column(u32 (&y)[NL], int j, u32 v, u32 &f) {
+  const u64 s = (u64)y[j] + (u64)v * CF + f;
+  y[j] = (u32)s;
+  f = (u32)(s >> 32);
+}
+
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
-  u32 t[2 * NL];
-  sqr_full(a, t);
-  fold(t, x);
+  if constexpr (STREAM) {
+    u32 y[NL];
+    u32 c0 = 0, c1 = 0, f = 0;
+#pragma unroll
+    for (int m = 0; m < 2 * NL - 1; ++m) {
+      u32 r[3] = {0, 0, 0};
+#pragma unroll
+      for (int i = (m < NL ? 0 : m - NL + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+      r[2] = (r[2] << 1) | (r[1] >> 31);
+      r[1] = (r[1] << 1) | (r[0] >> 31);
+      r[0] <<= 1;
+      if ((m & 1) == 0) mac(r, a[m / 2], a[m / 2]);
+      add3(r, c0, c1);
+      if (m < NL) y[m] = r[0];
+      else fold_column(y, m - NL, r[0], f);
+      c0 = r[1];
+      c1 = r[2];
+    }
+    fold_column(y, NL - 1, c0, f);
+    if (add_small(y, f * CF)) add_small(y, CF);
+    copy(x, y);
+  } else {
+    u32 t[2 * NL];
+    sqr_full(a, t);
+    fold(t, x);
+  }
 }
 
 __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
-  u32 t[2 * NL];
-  mul_full(a, b, t);
-  fold(t, x);
+  if constexpr (STREAM) {
+    u32 y[NL];
+    u32 c0 = 0, c1 = 0, f = 0;
+#pragma unroll
+    for (int m = 0; m < 2 * NL - 1; ++m) {
+      u32 r[3] = {0, 0, 0};
+#pragma unroll
+      for (int i = (m < NL ? 0 : m - NL + 1); i <= (m < NL ? m : NL - 1); ++i) mac(r, a[i], b[m - i]);
+      add3(r, c0, c1);
+      if (m < NL) y[m] = r[0];
+      else fold_column(y, m - NL, r[0], f);
+      c0 = r[1];
+      c1 = r[2];
+    }
+    fold_column(y, NL - 1, c0, f);
+    if (add_small(y, f * CF)) add_small(y, CF);
+    copy(x, y);
+  } else {
+    u32 t[2 * NL];
+    mul_full(a, b, t);
+    fold(t, x);
+  }
 }
 
 __device__ __forceinline__ void copy(u32 (&x)[NL], const u32 (&a)[NL]) {
@@ -293,14 +355,16 @@ __device__ __forceinline__ void round_constant(int j, u32 (&c)[NL]) {
   for (int k = 0; k < NL; ++k) c[k] = kC[j][k];
 }
 
+// Past 768 bits the tweak is recomputed each round, so it isn't held through the root.
 __device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
   u32 t[NL];
-  tweak(i, t);
+  if (!STREAM) tweak(i, t);
 #pragma unroll 1
   for (int j = 0; j < k; ++j) {
     u32 c[NL];
     round_constant(j, c);
     add_mod(x, c);
+    if (STREAM) tweak(i, t);
     add_mod(x, t);
     rho(x);
   }
@@ -432,7 +496,7 @@ __global__ void spin_kernel(long long cycles) {
 // tile's words in place there, a thread a word, and then runs the plain form's arithmetic on the payloads, so the two
 // agree bit for bit. q is bf16 (vLLM's), pre-scaled by log2(e)/sqrt(128), so scores are in base 2; each split leaves its
 // unnormalized output, max and sum, which attn_combine merges. Shared memory stays under half an SM's 100 KB, so two
-// CTAs fit an SM.
+// CTAs fit an SM; past 768 bits (STREAM) the decode's registers allow one.
 constexpr int HEADS = 64, KV_HEADS = 8, GROUP = HEADS / KV_HEADS, HEAD_DIM = 128;
 constexpr int TL_BYTES = 2 * KV_HEADS * HEAD_DIM * 2;
 constexpr int WB = NBITS / 8;
@@ -531,7 +595,7 @@ __device__ __forceinline__ void attn_out(float *o, int g, int lane, const float 
 }
 
 template <bool ENC>
-__global__ void __launch_bounds__(AT, 2) attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
+__global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
                                                      float *__restrict__ part, int ctx, int layers, int layer,
                                                      int per_split, int splits, int k) {
   constexpr int RAW = ENC ? TLE : TL_BYTES;
