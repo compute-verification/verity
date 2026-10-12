@@ -133,6 +133,16 @@ def queued(lib: Lib, torch, fn) -> tuple[float, float]:
     return a.elapsed_time(b) / 1e3, h
 
 
+def sm_clock(lib: Lib, torch, cycles: int = 20_000_000) -> float:
+    """The SM clock (Hz) now: a one-thread spin of `cycles` clock64 ticks over its event time."""
+    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    a.record()
+    lib.call("wt_spin", cycles, stream(torch))
+    b.record()
+    b.synchronize()
+    return cycles / (a.elapsed_time(b) / 1e3)
+
+
 def limbs_bytes(x: int, nl: int) -> bytes:
     return x.to_bytes(4 * nl, "little")
 
@@ -820,12 +830,12 @@ def main() -> int:
         save()
     if "pipes" in phases:
         xr = torch.zeros(1, dtype=torch.int64, device="cuda")
-        clock_hz = torch.cuda.clock_rate() * 1e6
-        res["pipes"] = {"clock_hz": clock_hz}
+        res["pipes"] = {}
         for op, name in enumerate(PIPE_OPS):
             r = max((dict(calibrated(torch, lambda s: libs[0].call("wt_chain", 5, 1, op, s, ptr(xr), sms * m,
                                                                    stream(torch)), sms * m * 128 * 8, 0.08, a.reps),
                           grid_per_sm=m) for m in (4, 8, 16)), key=lambda v: v["per_s"])
+            r["clock_hz"] = clock_hz = sm_clock(libs[0], torch)
             r["lanes_per_sm_clock"] = r["per_s"] / (sms * clock_hz)
             res["pipes"][name] = r
             log(f"pipe {name}: {r['per_s']:.3e}/s, {r['lanes_per_sm_clock']:.1f} lanes an SM a clock "
