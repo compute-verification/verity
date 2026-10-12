@@ -13,7 +13,7 @@ fused kernel's chunk partial sums, written and read once; the BF16 LM head, whic
 
 Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`, ra-codec-wide's
 `benchmarks/word_codec/frontier.py`), with ``end_to_end: true`` and the context: y over stock vLLM compiled (the decode
-headline's baseline), split by the run's own arms into base (the arm's kernel on plain payloads: `plain`, or the wide
+headline's baseline; only arms compiled the same way), split by the run's own arms into base (the arm's kernel on plain payloads: `plain`, or the wide
 kernel at k = 0), decode (over base) and tag (the tagged arm over the same arm untagged); the step runs no commit, so
 y_commit is 0.  x, Δ (and τ for a tagged arm) are the codec lanes' measurements for the same field, k and packing (`CODEC`).
 Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
@@ -202,7 +202,7 @@ def main() -> int:
                          ws["uncertified_share"]))
             ref = CODEC.get((cod["word_bits"], cod["payload_bits"], a["k"]))
             bs, un = tps(base, b, ctx), tps(untagged, b, ctx)
-            if sc is None or bs is None or ref is None or not encoded(a):
+            if md != "-c" or sc is None or bs is None or ref is None or not encoded(a):
                 continue
             y_total, y_base = sc / e, sc / bs
             y_tag = sc / e - sc / un if un else 0.0

@@ -13,7 +13,8 @@
 # ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
 # ro-blake3/v1 tag of every block read, as decode runs), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
-# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
+# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); a last /g makes an arm its gates and one
+# point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
 # MODE=profile runs the arms (default "stock enc:2") under Nsight Compute, each point's profiler window over two decode
@@ -92,7 +93,8 @@ fi
           --format=csv,noheader -i "$UUID" | sed "s/^/$1, /" >> "$O/gpu.txt" 2>&1; }
   i=0
   for arm in $ARMS; do
-    i=$((i + 1)); C=(); c=
+    i=$((i + 1)); C=(); c=; G=(); g=
+    case $arm in */g) G=(--batches 1 --contexts 512 --steps 16); g=-g; arm=${arm%/g} ;; esac
     case $arm in
       *+c) C=(--compiled); c=-c; arm=${arm%+c} ;;
       *+d) C=(--compiled --no-autotune); c=-d; arm=${arm%+d} ;;
@@ -105,7 +107,7 @@ fi
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac
-    A+=("${C[@]}"); tag=$i-$tag$c; q "$tag start"
+    A+=("${C[@]}" "${G[@]}"); tag=$i-$tag$c$g; q "$tag start"
     # shellcheck disable=SC2206
     P=(); [ -n "$NCU_ARGS" ] && P=("$NCU_BIN" $NCU_ARGS -f -o "$O/ncu-$tag")
     # shellcheck disable=SC2086
