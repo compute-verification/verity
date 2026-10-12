@@ -14,7 +14,8 @@
 # Env: BLOCKS (default 524,288), SEED (hex, default 00..1f), MODES (default "link hbm gen pipe absorb interfere window";
 # also fold),
 # REPS (7), WINDOWS (20), SIZES_MIB (16,32,48,56,60,64), PIECE (bytes, 1 MiB), GEN_THREADS (16), WINDOWS_ALSO (more window
-# configurations, `suffix:args;...`), GPUS (0,1,2,3: NUMA node 0's), WORKERS (the reference's processes, 32), TIMED.
+# configurations, `suffix:args;...`), GPUS (0,1,2,3: NUMA node 0's), WORKERS (the reference's processes, 32), TIMED,
+# MPS (1: an MPS daemon for WINDOWS_ALSO's `--mps-dir @MPS@`).
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, host.txt, expect.json, gpu.txt, env.txt, smi.csv, <mode>.json for each mode.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -45,10 +46,21 @@ if [ "${1:-}" = leased ]; then
   for m in ${MODES:-link hbm gen pipe absorb interfere window}; do
     "$S/bwstream" --mode "$m" "${common[@]}" || { rc=$?; echo "mode $m exited $rc"; exit $rc; }
   done
+  # MPS=1: an MPS control daemon of this run's own (its pipe and logs under $S, so no other process finds it) for the
+  # leased GPU, quit on exit; `@MPS@` in WINDOWS_ALSO's args is its pipe directory (`--mps-dir @MPS@`).
+  if [ -n "${MPS:-}" ]; then
+    command -v nvidia-cuda-mps-control > /dev/null || { echo "REFUSED: MPS=1 but no nvidia-cuda-mps-control"; exit 3; }
+    export MPSDIR=$S/mps-pipe MPSLOG=$S/mps-log; mkdir -p "$MPSDIR" "$MPSLOG"
+    CUDA_MPS_PIPE_DIRECTORY=$MPSDIR CUDA_MPS_LOG_DIRECTORY=$MPSLOG nvidia-cuda-mps-control -d
+    trap 'echo quit | CUDA_MPS_PIPE_DIRECTORY=$MPSDIR nvidia-cuda-mps-control; sleep 1; cp "$MPSLOG"/*.log "$O"/ 2> /dev/null;
+          nvidia-smi -i "$UUID" --query-compute-apps=pid,process_name,used_memory --format=csv > "$O/mps_after.txt" 2>&1;
+          kill $SMI 2> /dev/null || true' EXIT
+  fi
   # WINDOWS_ALSO: more window configurations, `;`-separated, each `suffix:args` (e.g. `_graph:--path graph`)
   IFS=';' read -ra extra <<< "${WINDOWS_ALSO:-}"
   for e in "${extra[@]}"; do
-    "$S/bwstream" --mode window "${common[@]}" --suffix "${e%%:*}" ${e#*:} || { rc=$?; echo "window ${e%%:*} exited $rc"; exit $rc; }
+    args=${e#*:}; args=${args//@MPS@/${MPSDIR:-}}
+    "$S/bwstream" --mode window "${common[@]}" --suffix "${e%%:*}" $args || { rc=$?; echo "window ${e%%:*} exited $rc"; exit $rc; }
   done
   exit 0
 fi
