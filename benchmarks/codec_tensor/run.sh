@@ -26,7 +26,7 @@ done
 for n in $FIELDS; do
   wait "${PIDS[$n]}" || { tail -40 "$O/wt-$n.ptxas"; exit 4; }
 done
-SASS_KEEP='chain_kernelILi0ELi1ELi1E|tc_chain_kernelILi1E|gemm_ws_kernelILi3ELi1ELi1ELb0E'
+SASS_KEEP='chain_kernelILi0ELi1ELi1E|tc_chain_kernelILi1E|fused_kernelILi1ELi1ELb0E'
 for n in $FIELDS; do
   cuobjdump -sass "$B/wt-$n.so" | awk -v keep="$SASS_KEEP" '/Function : /{p = ($0 ~ keep)} p' > "$O/wt-$n.sass" 2>&1
 done

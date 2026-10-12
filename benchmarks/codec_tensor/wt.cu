@@ -878,13 +878,10 @@ __global__ void __launch_bounds__(32) tc_square_gate(const u32 *__restrict__ in,
 // As `benchmarks/word_codec/wc.cu`'s gemm_ws: a CTA keeps one 512-column chunk of x in shared memory and takes the 16-row
 // blocks nb = g0 + i groups; the last warp's lane 0 bulk-copies task i into stage i mod stages, consumer warp c takes
 // tasks c, c + C, ... MODE 0: plain fragments (8,192 bytes a stage); MODE 1: plain, plus `knob` int8 MMAs a tile on
-// the tile's own registers; MODE 2: plain, plus `knob` IMADs a tile a thread; MODE 3: the task's TW stored words (SB
-// bytes), decoded in place (lane l takes words l, l + 32, ...: all of a round's words are read before any payload is
-// written, and a round's payloads end before the next round's words begin), then the plain kernel's 16 tiles.
+// the tile's own registers; MODE 2: plain, plus `knob` IMADs a tile a thread. The fused decode is fused_kernel.
 
 constexpr int LANES = 32, TASK_TILES = 16, TASK_COLS = 512, XS_STRIDE = TASK_COLS + 16;
-constexpr int WS_MAX_CONSUMERS = 8, WS_FUSED_CONSUMERS = 7;
-constexpr int ROUNDS = (TW + 31) / 32;
+constexpr int WS_MAX_CONSUMERS = 8;
 
 __device__ __forceinline__ void mma_e4m3(float (&d)[4], const u32 (&a)[4], u32 b0, u32 b1) {
   asm volatile(
@@ -917,12 +914,155 @@ __device__ __forceinline__ void bulk_load(void *dst, const void *src, u32 bytes,
                : "memory");
 }
 
-template <int MODE>
-__host__ __device__ constexpr int ws_stage_bytes() { return MODE == 3 ? SB : TASK_BYTES; }
+template <int NB8>
+__device__ __forceinline__ void load_xs(uint8_t (*xs)[XS_STRIDE], const uint8_t *__restrict__ x, int M, int Kd, int kc) {
+  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += blockDim.x) {
+    int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
+    uint4 v = make_uint4(0, 0, 0, 0);
+    if (b < M) v = __ldg(reinterpret_cast<const uint4 *>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
+    *reinterpret_cast<uint4 *>(&xs[b][16 * c]) = v;
+  }
+}
 
-template <int MODE, int NB8>
+// Tile tt of a task: the warp's A fragment a (rows nb 16 .., columns 32 tt ..) against x's batch groups.
+template <int NB8>
+__device__ __forceinline__ void mma_tile(float (&acc)[NB8][4], const u32 (&a)[4], const uint8_t (*xs)[XS_STRIDE],
+                                         int tt, int g, int tq) {
+#pragma unroll
+  for (int j = 0; j < NB8; ++j) {
+    const u32 b0 = *reinterpret_cast<const u32 *>(&xs[8 * j + g][32 * tt + 4 * tq]);
+    const u32 b1 = *reinterpret_cast<const u32 *>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
+    mma_e4m3(acc[j], a, b0, b1);
+  }
+}
+
+template <int NB8, bool PARTIALS>
+__device__ __forceinline__ void store_task(const float (&acc)[NB8][4], float *__restrict__ y, int M, int N, int kc,
+                                           int nb, int g, int tq) {
+#pragma unroll
+  for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+      if (b < M) {
+        if constexpr (PARTIALS) y[((size_t)kc * M + b) * N + n] = acc[j][e];
+        else atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+      }
+    }
+  }
+}
+
+template <int NB8>
 __host__ __device__ constexpr int ws_smem_bytes(int stages) {
-  return stages * ws_stage_bytes<MODE>() + NB8 * 8 * XS_STRIDE + 2 * stages * 8;
+  return stages * TASK_BYTES + NB8 * 8 * XS_STRIDE + 2 * stages * 8;
+}
+
+// An SM's registers are four sub-partitions of 16K, a warp on one: WS_MAX_CONSUMERS + 1 = 9 warps put three on one, so
+// 168 registers a thread.
+template <int MODE, int NB8, bool PARTIALS>
+__global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore, const uint8_t *__restrict__ x,
+                                                float *__restrict__ y, int M, int N, int Kd, int groups, int consumers,
+                                                int stages, int knob, unsigned long long *xr) {
+  extern __shared__ __align__(128) uint8_t smem[];
+  uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * TASK_BYTES);
+  u64 *full = reinterpret_cast<u64 *>(smem + stages * TASK_BYTES + NB8 * 8 * XS_STRIDE);
+  u64 *empty = full + stages;
+  const int nchunks = Kd / TASK_COLS;
+  const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
+  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
+  load_xs<NB8>(xs, x, M, Kd, kc);
+  if (threadIdx.x == 0) {
+    for (int s = 0; s < stages; ++s) { mbar_init(full + s, 1); mbar_init(empty + s, 1); }
+    asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
+  }
+  __syncthreads();
+  const int ntasks = nbs > g0 ? (nbs - g0 + groups - 1) / groups : 0;
+
+  if (warp == consumers) {
+    if (lane == 0) {
+      for (int i = 0; i < ntasks; ++i) {
+        const int s = i % stages;
+        if (i >= stages) mbar_wait(empty + s, (i / stages - 1) & 1);
+        const u64 q = (u64)(g0 + i * groups) * nchunks + kc;
+        mbar_expect_tx(full + s, TASK_BYTES);
+        bulk_load(smem + s * TASK_BYTES, static_cast<const uint8_t *>(wstore) + q * TASK_BYTES, TASK_BYTES, full + s);
+      }
+    }
+    return;
+  }
+
+  u32 sink = 0;
+  int32_t dacc[4][4] = {};
+  for (int i = warp; i < ntasks; i += consumers) {
+    const int s = i % stages, nb = g0 + i * groups;
+    const uint8_t *st = smem + s * TASK_BYTES;
+    mbar_wait(full + s, (i / stages) & 1);
+    float acc[NB8][4];
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+    const uint4 *sp = reinterpret_cast<const uint4 *>(st) + lane;
+    uint4 wv[TASK_TILES];
+#pragma unroll
+    for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
+    __syncwarp();
+    if (lane == 0) mbar_arrive(empty + s);
+#pragma unroll
+    for (int tt = 0; tt < TASK_TILES; ++tt) {
+      const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
+      mma_tile<NB8>(acc, a, xs, tt, g, tq);
+      if constexpr (MODE == 1) {
+#pragma unroll 1
+        for (int e = 0; e < knob; e += 4) {
+          mma_u8(dacc[0], a, a[0], a[1]);
+          mma_u8(dacc[1], a, a[1], a[2]);
+          mma_u8(dacc[2], a, a[2], a[3]);
+          mma_u8(dacc[3], a, a[3], a[0]);
+        }
+      } else if constexpr (MODE == 2) {
+        u32 z[8];
+#pragma unroll
+        for (int c = 0; c < 8; ++c) z[c] = a[c & 3] + c;
+#pragma unroll 1
+        for (int e = 0; e < knob; e += 8) {
+#pragma unroll
+          for (int c = 0; c < 8; ++c) z[c] = z[c] * a[(c + 1) & 3] + a[(c + 2) & 3];
+        }
+#pragma unroll
+        for (int c = 0; c < 8; ++c) sink ^= z[c];
+      }
+    }
+    store_task<NB8, PARTIALS>(acc, y, M, N, kc, nb, g, tq);
+  }
+  if (MODE == 1 || MODE == 2) {
+    u32 h = sink;
+#pragma unroll
+    for (int c = 0; c < 4; ++c) h ^= (u32)(dacc[c][0] ^ dacc[c][1] ^ dacc[c][2] ^ dacc[c][3]);
+    if (h == 0x12345679u) atomicXor(xr, (unsigned long long)h);
+  }
+}
+
+// --- the fused decode GEMM --------------------------------------------------------------------------------------------
+//
+// The last warp's lane 0 bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps
+// decode them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each.
+// The CTA's tasks are one sequence of words (task i's word w is word TW i + w), cut into units of 32: decoder warp d
+// takes units d, d + D, ..., lane l a unit's word l. A lane loads its word, decodes it, and writes its payload (stage
+// bytes PB w ..) only once every word of the task is loaded, since a payload overwrites the stored bytes of the words
+// before it. Barriers a stage: full (the copy), loaded (TW lanes), decoded (TW lanes), empty (the MMA warp's lanes).
+//
+// A parity wait is right only while its barrier is at most one phase behind, which the host's bounds give: D at least
+// the units a task spans (no warp holds two units of one task, which would deadlock on `loaded`), and at least
+// ceil(32 D / TW) stages (a decoder's tasks advance by at most that from one unit to its next, whose stage it then
+// finds refilled or being refilled). One MMA warp keeps `decoded` and `empty` in task order.
+//
+// An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
+// 128 registers, three at 168, two at 255).
+constexpr int FUSED_WARPS = NL <= 17 ? 16 : (NL <= 24 ? 12 : 8);
+constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
+
+template <int NB8>
+__host__ __device__ constexpr int fused_smem_bytes(int stages) {
+  return stages * SB + NB8 * 8 * XS_STRIDE + 4 * stages * 8;
 }
 
 // Bytes [o, o + PB) of the stage get y's low PB bytes: whole 32-bit words inside, single bytes at the two ends (they
@@ -945,140 +1085,102 @@ __device__ __forceinline__ void put_payload(uint8_t *st, int o, const u32 (&y)[N
   }
 }
 
-// An SM's registers are four sub-partitions of 16K, a warp on one: WS_MAX_CONSUMERS + 1 = 9 warps put three on one, so
-// 168 registers a thread. The fused decode (a word, its tweaks and the double-width square live at once) takes up to
-// 224, so its CTA is at most 8 warps (WS_FUSED_CONSUMERS).
-template <int MODE, int K, int NB8, bool PARTIALS>
-__global__ void __maxnreg__(MODE == 3 ? 224 : 168) gemm_ws_kernel(
-    const void *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
-    u64 base, int groups, int consumers, int stages, int knob, const u32 *__restrict__ tsteps,
-    unsigned long long *xr) {
-  constexpr int STB = ws_stage_bytes<MODE>();
+// tsteps: tau (32 D mod TW + A G TW) and tau (32 D mod TW - TW + (A + 1) G TW) mod p, A = floor(32 D / TW), G the
+// store's tasks between the CTA's consecutive ones: the tweak's step to a lane's next unit, its task advancing A or
+// A + 1.
+template <int K, int NB8, bool PARTIALS>
+__global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
+    const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
+    u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps) {
   extern __shared__ __align__(128) uint8_t smem[];
-  uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * STB);
-  u64 *full = reinterpret_cast<u64 *>(smem + stages * STB + NB8 * 8 * XS_STRIDE);
-  u64 *empty = full + stages;
+  uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
+  u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
+  u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages;
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
-  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
-  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += blockDim.x) {
-    int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
-    uint4 v = make_uint4(0, 0, 0, 0);
-    if (b < M) v = __ldg(reinterpret_cast<const uint4 *>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
-    *reinterpret_cast<uint4 *>(&xs[b][16 * c]) = v;
-  }
+  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
+  load_xs<NB8>(xs, x, M, Kd, kc);
   if (threadIdx.x == 0) {
-    for (int s = 0; s < stages; ++s) { mbar_init(full + s, 1); mbar_init(empty + s, 1); }
+    for (int s = 0; s < stages; ++s) {
+      mbar_init(full + s, 1);
+      mbar_init(loaded + s, TW);
+      mbar_init(decoded + s, TW);
+      mbar_init(empty + s, LANES);
+    }
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
   }
   __syncthreads();
   const int ntasks = nbs > g0 ? (nbs - g0 + groups - 1) / groups : 0;
+  const u64 q0 = (u64)g0 * nchunks + kc, gq = (u64)groups * nchunks;   // task i is the store's task q0 + i gq
 
-  if (warp == consumers) {
+  if (warp == decoders + 1) {
     if (lane == 0) {
       for (int i = 0; i < ntasks; ++i) {
         const int s = i % stages;
         if (i >= stages) mbar_wait(empty + s, (i / stages - 1) & 1);
-        const u64 q = (u64)(g0 + i * groups) * nchunks + kc;
-        mbar_expect_tx(full + s, STB);
-        bulk_load(smem + s * STB, static_cast<const uint8_t *>(wstore) + q * STB, STB, full + s);
+        mbar_expect_tx(full + s, SB);
+        bulk_load(smem + s * SB, wstore + (q0 + i * gq) * SB, SB, full + s);
       }
     }
     return;
   }
 
-  u32 t[NL];                       // MODE 3: the tweak of the lane's first word of its current task
-  if constexpr (MODE == 3) {
-    if (warp < ntasks) tweak(base + ((u64)(g0 + warp * groups) * nchunks + kc) * TW + lane, t);
+  if (warp == decoders) {
+    const int g = lane >> 2, tq = lane & 3;
+    for (int i = 0; i < ntasks; ++i) {
+      const int s = i % stages;
+      mbar_wait(decoded + s, (i / stages) & 1);
+      float acc[NB8][4];
+#pragma unroll
+      for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+      const uint4 *sp = reinterpret_cast<const uint4 *>(smem + s * SB) + lane;
+      uint4 wv[TASK_TILES];
+#pragma unroll
+      for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
+      mbar_arrive(empty + s);
+#pragma unroll
+      for (int tt = 0; tt < TASK_TILES; ++tt) {
+        const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
+        mma_tile<NB8>(acc, a, xs, tt, g, tq);
+      }
+      store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
+    }
+    return;
   }
-  u32 sink = 0;
-  int32_t dacc[4][4] = {};
-  for (int i = warp; i < ntasks; i += consumers) {
-    const int s = i % stages, nb = g0 + i * groups;
-    uint8_t *st = smem + s * STB;
-    mbar_wait(full + s, (i / stages) & 1);
-    if constexpr (MODE == 3) {
-      u32 tw[NL];
-      copy(tw, t);
-#pragma unroll 1
-      for (int r = 0; r < ROUNDS; ++r) {
-        const int w = 32 * r + lane;
-        u32 yw[NL];
-        if (w < TW) load_word_smem(st + w * S, yw);
-        __syncwarp();
-        if (w < TW) {
-          decode_word<K>(yw, tw);
-          put_payload(st, PB * w, yw);
-        }
-        __syncwarp();
-        u32 t2[NL], step[NL];
-#pragma unroll
-        for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + k);
-        addmod(tw, step, t2);
-        copy(tw, t2);
-      }
-      u32 step[NL], t2[NL];
-#pragma unroll
-      for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + NL + k);
-      addmod(t, step, t2);
-      copy(t, t2);
+
+  const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
+  int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
+  u32 t[NL];
+  tweak(base + (q0 + (u64)i * gq) * TW + w, t);
+  for (;;) {
+    const int lo = __shfl_sync(~0u, i, 0);
+    if (lo >= ntasks) break;
+    const int hi = min(__shfl_sync(~0u, i, LANES - 1), ntasks - 1);
+    const bool on = i < ntasks;
+    const int s = i % stages;
+    uint8_t *st = smem + s * SB;
+    mbar_wait(full + lo % stages, (lo / stages) & 1);
+    if (hi != lo) mbar_wait(full + hi % stages, (hi / stages) & 1);
+    u32 yw[NL];
+    if (on) {
+      load_word_smem(st + w * S, yw);
+      mbar_arrive(loaded + s);
+      decode_word<K>(yw, t);
     }
-    float acc[NB8][4];
-#pragma unroll
-    for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
-    const uint4 *sp = reinterpret_cast<const uint4 *>(st) + lane;
-    uint4 wv[TASK_TILES];
-#pragma unroll
-    for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
-    __syncwarp();
-    if (lane == 0) mbar_arrive(empty + s);
-#pragma unroll
-    for (int tt = 0; tt < TASK_TILES; ++tt) {
-      const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
-#pragma unroll
-      for (int j = 0; j < NB8; ++j) {
-        const u32 b0 = *reinterpret_cast<const u32 *>(&xs[8 * j + g][32 * tt + 4 * tq]);
-        const u32 b1 = *reinterpret_cast<const u32 *>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
-        mma_e4m3(acc[j], a, b0, b1);
-      }
-      if constexpr (MODE == 1) {
-#pragma unroll 1
-        for (int e = 0; e < knob; e += 4) {
-          mma_u8(dacc[0], a, a[0], a[1]);
-          mma_u8(dacc[1], a, a[1], a[2]);
-          mma_u8(dacc[2], a, a[2], a[3]);
-          mma_u8(dacc[3], a, a[3], a[0]);
-        }
-      } else if constexpr (MODE == 2) {
-        u32 z[8];
-#pragma unroll
-        for (int c = 0; c < 8; ++c) z[c] = a[c & 3] + c;
-#pragma unroll 1
-        for (int e = 0; e < knob; e += 8) {
-#pragma unroll
-          for (int c = 0; c < 8; ++c) z[c] = z[c] * a[(c + 1) & 3] + a[(c + 2) & 3];
-        }
-#pragma unroll
-        for (int c = 0; c < 8; ++c) sink ^= z[c];
-      }
+    mbar_wait(loaded + lo % stages, (lo / stages) & 1);
+    if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
+    if (on) {
+      put_payload(st, PB * w, yw);
+      mbar_arrive(decoded + s);
     }
+    const bool wrap = w + rem >= TW;
+    u32 step[NL], t2[NL];
 #pragma unroll
-    for (int j = 0; j < NB8; ++j) {
-#pragma unroll
-      for (int e = 0; e < 4; ++e) {
-        int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
-        if (b < M) {
-          if constexpr (PARTIALS) y[((size_t)kc * M + b) * N + n] = acc[j][e];
-          else atomicAdd(y + (size_t)b * N + n, acc[j][e]);
-        }
-      }
-    }
-  }
-  if (MODE == 1 || MODE == 2) {
-    u32 h = sink;
-#pragma unroll
-    for (int c = 0; c < 4; ++c) h ^= (u32)(dacc[c][0] ^ dacc[c][1] ^ dacc[c][2] ^ dacc[c][3]);
-    if (h == 0x12345679u) atomicXor(xr, (unsigned long long)h);
+    for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
+    addmod(t, step, t2);
+    copy(t, t2);
+    w += wrap ? rem - TW : rem;
+    i += wrap ? adv + 1 : adv;
   }
 }
 
@@ -1094,13 +1196,38 @@ __global__ void empty_kernel() {}
 
 using namespace wt;
 
+// The groups (16-row blocks a CTA's chunk advances by) and the launch: groups <= 0 takes as many as fill the device at
+// the occupancy the shared memory and registers allow. *launched gets the grid; with w == nullptr nothing is launched
+// (the fused kernel's caller needs the groups for its tweak steps first).
+template <typename Kern, typename Launch>
+static int launch_gemm(Kern kern, int smem, int threads, int groups, int nchunks, int nbs, bool dry, int *launched,
+                       Launch launch) {
+  if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2;
+  int gr = groups;
+  if (gr <= 0) {
+    int per_sm = 0, dev = 0, sms = 0;
+    if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, threads, smem)) return 2;
+    if (per_sm < 1) return 6;
+    cudaGetDevice(&dev);
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+    gr = (per_sm * sms) / nchunks;
+    if (gr < 1) gr = 1;
+    if (gr > nbs) gr = nbs;
+  }
+  if (launched) *launched = gr * nchunks;
+  if (dry) return 0;
+  launch(gr);
+  return cudaGetLastError() ? 4 : 0;
+}
+
 #define WT_K_SWITCH(k, F) switch (k) { case 1: F(1); break; case 2: F(2); break; default: return 1; }
 
 extern "C" {
 
 int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
-  out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB;
+  out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
+  out[13] = FUSED_SPAN;
   return 0;
 }
 
@@ -1189,49 +1316,53 @@ int wt_mix(u64 sc, u64 stc, int cw, unsigned long long *xr, int grid, cudaStream
   return cudaGetLastError() ? 4 : 0;
 }
 
-// mode 0 plain, 1 plain + knob MMAs a tile, 2 plain + knob IMADs a tile, 3 fused decode (k rounds). groups <= 0: as
-// many 16-row groups as fill the device at the occupancy the shared memory allows. *launched gets the grid; with
-// w == nullptr nothing is launched (the fused mode's caller needs the groups for its tweak steps first).
-int wt_gemm(int mode, int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
-            int consumers, int stages, int groups, int knob, const u32 *tsteps, unsigned long long *xr, int *launched,
-            cudaStream_t s) {
-  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || consumers < 1 || stages < 1 ||
-      consumers > (mode == 3 ? WS_FUSED_CONSUMERS : WS_MAX_CONSUMERS))
+// mode 0 plain, 1 plain + knob MMAs a tile, 2 plain + knob IMADs a tile.
+int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, int partials, int consumers,
+            int stages, int groups, int knob, unsigned long long *xr, int *launched, cudaStream_t s) {
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || consumers < 1 || stages < 1 || consumers > WS_MAX_CONSUMERS ||
+      mode < 0 || mode > 2)
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
-  const int nchunks = Kd / TASK_COLS, nbs = N / 16;
-  const bool dry = w == nullptr;
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (consumers + 1) * 32;
   auto go = [&](auto kern, int smem) -> int {
-    if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2;
-    int gr = groups;
-    if (gr <= 0) {
-      int per_sm = 0, dev = 0, sms = 0;
-      if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, (consumers + 1) * 32, smem)) return 2;
-      if (per_sm < 1) return 6;
-      cudaGetDevice(&dev);
-      cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
-      gr = (per_sm * sms) / nchunks;
-      if (gr < 1) gr = 1;
-      if (gr > nbs) gr = nbs;
-    }
-    if (launched) *launched = gr * nchunks;
-    if (dry) return 0;
-    kern<<<gr * nchunks, (consumers + 1) * 32, smem, s>>>(w, x, y, M, N, Kd, base, gr, consumers, stages, knob, tsteps,
-                                                          xr);
-    return cudaGetLastError() ? 4 : 0;
+    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
+      kern<<<gr * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, gr, consumers, stages, knob, xr);
+    });
   };
-#define G(MO, KK, NB) \
-  return partials ? go(gemm_ws_kernel<MO, KK, NB, true>, ws_smem_bytes<MO, NB>(stages)) \
-                  : go(gemm_ws_kernel<MO, KK, NB, false>, ws_smem_bytes<MO, NB>(stages))
-#define GN(MO, KK) do { if (nb8 == 1) G(MO, KK, 1); else if (nb8 == 2) G(MO, KK, 2); else G(MO, KK, 4); } while (0)
-  if (mode == 0) GN(0, 1);
-  if (mode == 1) GN(1, 1);
-  if (mode == 2) GN(2, 1);
-  if (mode == 3 && k == 1) GN(3, 1);
-  if (mode == 3 && k == 2) GN(3, 2);
+#define G(MO, NB) \
+  return partials ? go(gemm_ws_kernel<MO, NB, true>, ws_smem_bytes<NB>(stages)) \
+                  : go(gemm_ws_kernel<MO, NB, false>, ws_smem_bytes<NB>(stages))
+#define GN(MO) do { if (nb8 == 1) G(MO, 1); else if (nb8 == 2) G(MO, 2); else G(MO, 4); } while (0)
+  if (mode == 0) GN(0);
+  if (mode == 1) GN(1);
+  GN(2);
 #undef GN
 #undef G
-  return 1;
+}
+
+// The fused decode GEMM at k rounds: `decoders` decoder warps, an MMA warp and a producer, `stages` stored stages;
+// tsteps as fused_kernel's.
+int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
+             int decoders, int stages, int groups, const u32 *tsteps, int *launched, cudaStream_t s) {
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN ||
+      decoders + 2 > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW)
+    return 1;
+  const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2) * 32;
+  auto go = [&](auto kern, int smem) -> int {
+    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
+      kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
+                                               stages, tsteps);
+    });
+  };
+#define G(KK, NB) \
+  return partials ? go(fused_kernel<KK, NB, true>, fused_smem_bytes<NB>(stages)) \
+                  : go(fused_kernel<KK, NB, false>, fused_smem_bytes<NB>(stages))
+#define GN(KK) do { if (nb8 == 1) G(KK, 1); else if (nb8 == 2) G(KK, 2); else G(KK, 4); } while (0)
+  if (k == 1) GN(1);
+  GN(2);
+#undef GN
+#undef G
 }
 
 int wt_spin(long long cycles, cudaStream_t s) {

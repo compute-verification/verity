@@ -64,13 +64,14 @@ class Lib:
         so.wt_tc_square_gate.argtypes = [v, v, i, v]
         so.wt_chain.argtypes = [i, i, i, q, v, i, v]
         so.wt_mix.argtypes = [q, q, i, v, i, v]
-        so.wt_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, v, v]
+        so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
+        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 12)()
+        cs = (ctypes.c_int * 14)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb) = list(cs)
+         self.sb, self.fused_warps, self.fused_span) = list(cs)
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
         if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
@@ -349,11 +350,41 @@ def standalone_decode(lib: Lib, torch, store_bytes: int, sms: int, reps: int, lo
 
 # --- the GEMM ----------------------------------------------------------------------------------------------------------
 
-def tsteps(lib: Lib, torch, key: W.Key, consumers: int, groups: int, nchunks: int):
-    p = lib.field.p
-    s32 = key.tau * 32 % p
-    sq = key.tau * (lib.tw * consumers * groups * nchunks) % p
-    return to_dev(torch, limbs_bytes(s32, lib.nl) + limbs_bytes(sq, lib.nl))
+def tsteps(lib: Lib, torch, key: W.Key, decoders: int, groups: int, nchunks: int):
+    """The fused kernel's tweak steps: a lane's next unit is 32 D words on in the CTA's sequence, its task A or A + 1
+    on (the CTA's consecutive tasks are groups * nchunks apart in the store)."""
+    p, tw = lib.field.p, lib.tw
+    adv, rem = divmod(32 * decoders, tw)
+    gq = groups * nchunks
+    steps = (adv * gq * tw + rem, (adv + 1) * gq * tw + rem - tw)
+    return to_dev(torch, b"".join(limbs_bytes(key.tau * d % p, lib.nl) for d in steps))
+
+
+SMEM_PER_BLOCK = 101376          # sm_120's opt-in dynamic shared memory a CTA
+
+
+def parse(spec: str) -> list[tuple[int, ...]]:
+    return [tuple(int(v) for v in c.split("x")) for c in spec.split(",") if c]
+
+
+def fused_cfgs(lib: Lib, spec: str) -> list[tuple[int, int]]:
+    """`auto`: the most decoder warps the field's register count allows with the most stages that fit at M = 32, the
+    same with fewer stages, and two fewer decoders; else DECODERSxSTAGES, each checked against wt_fused's bounds."""
+    smax = (SMEM_PER_BLOCK - 4 * 8 * 528) // (lib.sb + 32)
+    dmax = lib.fused_warps - 2
+    need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
+    if spec == "auto":
+        cfgs = [(dmax, smax), (dmax, max(need(dmax), smax - 4)), (dmax - 2, smax)]
+    else:
+        cfgs = parse(spec)
+    out = []
+    for d, st in cfgs:
+        if not (lib.fused_span <= d <= dmax and need(d) <= st <= smax):
+            raise SystemExit(f"{lib.name}: fused {d}x{st} is outside {lib.fused_span} <= D <= {dmax}, "
+                             f"ceil(32 D / TW) <= stages <= {smax}")
+        if (d, st) not in out:
+            out.append((d, st))
+    return out
 
 
 def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, cfgs, fused_cfgs,
@@ -378,13 +409,21 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
 
     def groups_for(mode, k, mb, cfg):
         launched = ctypes.c_int(0)
-        lib.call("wt_gemm", mode, k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None,
-                 ctypes.byref(launched), st)
+        if mode == 3:
+            lib.call("wt_fused", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, None, ctypes.byref(launched),
+                     st)
+        else:
+            lib.call("wt_gemm", mode, None, None, None, mb, n, kd, 0, cfg[0], cfg[1], 0, 0, None,
+                     ctypes.byref(launched), st)
         return launched.value // nch
 
     def call(mode, k, wbuf, x, y, partials, cfg, knob=0, groups=0, steps=None):
-        lib.call("wt_gemm", mode, k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
-                 cfg[0], cfg[1], groups, knob, ptr(steps) if steps is not None else None, ptr(xr), None, st)
+        if mode == 3:
+            lib.call("wt_fused", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
+                     cfg[0], cfg[1], groups, ptr(steps), None, st)
+        else:
+            lib.call("wt_gemm", mode, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, int(partials),
+                     cfg[0], cfg[1], groups, knob, ptr(xr), None, st)
 
     steps_cache = {}
 
@@ -413,7 +452,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 gr, sp = steps_for(k, mb, cfg)
                 pf = torch.zeros_like(pp)
                 call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
-                entry["equal_plain"][f"fused_k{k}_c{cfg[0]}s{cfg[1]}"] = bool(torch.equal(pf, pp))
+                entry["equal_plain"][f"fused_k{k}_d{cfg[0]}s{cfg[1]}"] = bool(torch.equal(pf, pp))
         for knob in mma_knobs:
             pf = torch.zeros_like(pp)
             call(1, 1, plain, x, pf, True, cfgs[0], knob=knob)
@@ -466,8 +505,12 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
 
             def f():
                 rc = 0
-                for p in ps:
-                    rc |= so.wt_gemm(mode, k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, knob, spp, xrp, None, st)
+                if mode == 3:
+                    for p in ps:
+                        rc |= so.wt_fused(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, spp, None, st)
+                else:
+                    for p in ps:
+                        rc |= so.wt_gemm(mode, p, xp, yp, mb, n, kd, 0, cfg[0], cfg[1], gr, knob, xrp, None, st)
                 if rc:
                     raise RuntimeError(f"wt_gemm mode {mode} k={k} M={mb}: error {rc}")
             return f
@@ -486,7 +529,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             arms[f"plain_c{cfg[0]}s{cfg[1]}"] = arm(0, 1, cfg)
         for k in ks:
             for cfg in fused_cfgs:
-                arms[f"fused_k{k}_c{cfg[0]}s{cfg[1]}"] = arm(3, k, cfg)
+                arms[f"fused_k{k}_d{cfg[0]}s{cfg[1]}"] = arm(3, k, cfg)
         for knob in mma_knobs:
             arms[f"mma{knob}"] = arm(1, 1, cfgs[0], knob)
         for knob in imad_knobs:
@@ -513,7 +556,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                             "plain_best_s": plain_best, "host_enqueue_max_s": max(max(v) for v in host.values()),
                             "ratio_vs_native": {a: med[a] / native for a in med},
                             "ratio_vs_plain0": {a: med[a] / med[f"plain_c{cfgs[0][0]}s{cfgs[0][1]}"] for a in med}}
-        fb = {k: min((med[f"fused_k{k}_c{c[0]}s{c[1]}"], f"c{c[0]}s{c[1]}") for c in fused_cfgs) for k in ks}
+        fb = {k: min((med[f"fused_k{k}_d{c[0]}s{c[1]}"], f"d{c[0]}s{c[1]}") for c in fused_cfgs) for k in ks}
         log(f"gemm {lib.name} {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain best {plain_best * 1e6:.1f} us; "
             f"native {native * 1e6:.1f} us; "
             + ", ".join(f"fused k{k} {fb[k][0] / native:.2f}x ({fb[k][1]})" for k in ks)
@@ -567,7 +610,8 @@ def main() -> int:
     ap.add_argument("--gemm-libs", default="", help="field names the GEMM runs with (default: all)")
     ap.add_argument("--gemm-ks", default="1")
     ap.add_argument("--plain", default="4x4,8x8", help="plain kernel CONSUMERSxSTAGES")
-    ap.add_argument("--fused", default="4x8,6x9,7x9", help="fused kernel CONSUMERSxSTAGES (at most 7 consumers)")
+    ap.add_argument("--fused", default="auto",
+                    help="fused kernel DECODERSxSTAGES, or auto (per field: its most decoder warps and stages, and fewer)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
     a = ap.parse_args()
@@ -590,7 +634,6 @@ def main() -> int:
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     phases = set(a.phases.split(","))
-    parse = lambda s: [tuple(int(v) for v in c.split("x")) for c in s.split(",") if c]  # noqa: E731
     res = {"device": {"name": props.name, "sms": sms, "cc": f"{props.major}.{props.minor}"}, "seed": SEED.hex(),
            "libs": {}, "ok": True, "args": vars(a)}
     log(f"device {props.name}, {sms} SMs; fields {[l.name for l in libs]}")
@@ -638,7 +681,8 @@ def main() -> int:
             e["gemm"] = {}
             for name in a.shapes.split(","):
                 n, kd = SHAPES[name]
-                g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain), parse(a.fused), *knobs)
+                g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain),
+                              fused_cfgs(lib, a.fused), *knobs)
                 e["gemm"][name] = g
                 res["ok"] &= g.get("ok", False)
                 save()
