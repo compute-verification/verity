@@ -290,7 +290,7 @@ def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
     if isinstance(lin, K.TensorLinear):
         ct, t = K._ct(), lin.tlib
         for j in [rng.randrange(lin.words) for _ in range(n)]:
-            y, want = layout.tensor_word(lin.store, j, t.word_bytes), layout.tensor_limb_word(lin.payloads, j, t.limbs)
+            y, want = layout.tensor_word(lin.bytes, j, t.word_bytes), layout.tensor_limb_word(lin.payloads, j, t.limbs)
             if ct.decode_word(y, lin.base + j, t.key) != want:
                 raise RuntimeError(f"gate: {name}: codec_tensor/wide.py decodes word {lin.base + j} otherwise")
         return
@@ -321,7 +321,7 @@ def check_tags(lin: K.WideLinear | K.TensorLinear, name: str, n: int) -> int:
     first = lin.tag_base if tensor else lin.tag_block_base
     for j, t in zip(js, got):
         if tensor:
-            block = lin.store[w.tag_block * j:w.tag_block * (j + 1)].cpu().numpy().tobytes()
+            block = lin.bytes[w.tag_block * j:w.tag_block * (j + 1)].cpu().numpy().tobytes()
         else:
             block = layout.wide_block(lin.store, j, w.lane_words, w.limbs)
         if t.tobytes() != keyed(first + j, block):

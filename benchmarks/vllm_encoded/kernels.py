@@ -464,10 +464,11 @@ class WideLinear(Linear):
 
 
 class TensorLinear(Linear):
-    """Only `wt.cu`'s words (ra-codec-tensor's fused decode GEMM): `store` (uint8, S bytes a word) holds W's payloads
-    (`layout.tensor_limbs`) encoded k >= 1 rounds under the tensor lib's key at word indices base, base + 1, ...  With
-    the lib's tag seed set, its tag warps write the ro-blake3/v1 tag of each 4,088-byte block jl of the store at index
-    tag_base + jl to the lib's tag buffer.  `lib` (a `ve.cu` build) only reduces the chunk sums."""
+    """Only `wt.cu`'s words (ra-codec-tensor's fused decode GEMM): `store` (S bytes a word, held as int16 so no uint8
+    tensor of a linear's size is in the process: `bytes` is its uint8 view) holds W's payloads (`layout.tensor_limbs`)
+    encoded k >= 1 rounds under the tensor lib's key at word indices base, base + 1, ...  With the lib's tag seed set,
+    its tag warps write the ro-blake3/v1 tag of each 4,088-byte block jl of the store at index tag_base + jl to the lib's
+    tag buffer.  `lib` (a `ve.cu` build) only reduces the chunk sums."""
 
     def __init__(self, lib: Lib, tlib: TensorLib, w: torch.Tensor, weight_scale: torch.Tensor, k: int, base: int,
                  tag_base: int, grid: int = 0) -> None:
@@ -477,11 +478,17 @@ class TensorLinear(Linear):
         self.tlib, self.k, self.base, self.tag_base, self.bits = tlib, k, base, tag_base, 8 * tlib.payload_bytes
         payloads = layout.tensor_limbs(w, tlib.task_words, tlib.payload_bytes, tlib.limbs)
         self.words = payloads.numel() // tlib.limbs
-        self.store = torch.empty(self.words * tlib.word_bytes, dtype=torch.uint8, device=w.device)
+        if tlib.word_bytes % 2:
+            raise ValueError(f"{tlib.field.name}: a word of {tlib.word_bytes} bytes is not whole int16s")
+        self.store = torch.empty(self.words * tlib.word_bytes // 2, dtype=torch.int16, device=w.device)
         tlib.call("wt_encode", payloads.data_ptr(), self.store.data_ptr(), self.words, base, k, grid or 4 * tlib.sms,
                   stream())
-        self.blocks = -(-self.store.numel() // tlib.tag_block)
+        self.blocks = -(-self.nbytes // tlib.tag_block)
         self.payloads = payloads
+
+    @property
+    def bytes(self) -> torch.Tensor:
+        return self.store.view(torch.uint8)
 
     def default(self) -> Config:
         return self.candidates(1)[0]
