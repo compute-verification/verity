@@ -1,4 +1,4 @@
-import Proofs.Flock.C3.Compose.Decoder
+import Proofs.Flock.C3.Compose.DecodeFix
 
 /-!
 # n7: `SrcOK`'s coin clause and its message types, stage by stage
@@ -8,7 +8,8 @@ import Proofs.Flock.C3.Compose.Decoder
 stage's coins are the history's at that stage's rounds (`CoinsAt`), the stages' rounds following one another from
 round 1 to the last coin (`srcCoins_of_stages`). `MsgTysC3` follows from each stage's message types (`TysAt`) and the
 frame's three, `Cap Dig`, the first interaction's marker `Bool` and the openings, among `T` (`msgTysC3_of_stages`).
-`srcOK_of_stages` puts them together: what is left of `SrcOK` is `MsgsReadC3` and the decode fixed point.
+`srcOK_of_stages` puts them together: what is left of `SrcOK` is `MsgsReadC3` and the decode fixed point, which
+`srcOK_of_plays` takes from each stage playing on its steps to the run's own output (`RunPlays`).
 
 The ties (`SparseTie`, `OpenTie`) leave their stages' coins existential, so each tie's discharge adds its stage's
 `CoinsAt`: that its unit's coins are the history's at its rounds, which reads the custody record's coins (`ChecksC3`'s
@@ -171,6 +172,21 @@ theorem srcOK_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     (hdec : AtSrc zs dg N k Rw src fun _ u => decodeRun (holoAt st hp) (runSteps u) = u) :
     SrcOK zs dg N k Rw src own sel :=
   ⟨hleaf, srcCoins_of_stages hleaf hcoins, hread, msgTysC3_of_stages hcap hbool hos htys, hdec⟩
+
+/-- **`SrcOK` from the stages' plays**: `srcOK_of_stages`, the decode fixed point from each stage playing on its steps
+to the run's own output (`RunPlays`, `srcDecode_of_plays`). -/
+theorem srcOK_of_plays {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    (hleaf : HLeafC3 zs dg N k Rw) (hcoins : AtSrc zs dg N k Rw src fun t u => StageCoins (CT := CT) (t.map Prod.snd) u)
+    (hread : MsgsReadC3 zs dg N k Rw src own sel)
+    (hcap : ∃ j, T j = Cap Dig) (hbool : ∃ j, T j = Bool) (hos : ∃ j, T j = (Opens GF128 Dig × Salts (List UInt8)))
+    (htys : AtSrc zs dg N k Rw src fun _ u => TysAt T (u.ts 0) ∧ TysAt T (u.ts 1) ∧ TysAt T (u.sp 0) ∧
+      TysAt T (u.sp 1) ∧ TysAt T u.op ∧ TysAt T u.lg)
+    (hplays : AtSrc zs dg N k Rw src fun _ u => RunPlays (holoAt st hp) u) :
+    SrcOK zs dg N k Rw src own sel :=
+  srcOK_of_stages hleaf hcoins hread hcap hbool hos htys (srcDecode_of_plays hplays)
 
 end src
 
