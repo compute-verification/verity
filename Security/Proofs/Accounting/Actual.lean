@@ -4,6 +4,7 @@ import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Bridges
 
 /-!
 # The actual circuit's guarantees
@@ -28,4 +29,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; at tick 0 the state is the inputs (`state_zero`), and causality's global
   form (`global_of_causal`); the content is a function of the state as seen (`content_congr`), of at most `mem` bits
   (`content_length_le`).
+* `Actual/Bridges.lean`: `B4`, egress factoring: across `X`'s secret inputs, what the outside does takes at most (the
+  number of records) × `2^{res_out}` values, from causality, links as alphabets and the trusted devices across the
+  strategy.
 -/

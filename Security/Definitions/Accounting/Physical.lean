@@ -1,21 +1,23 @@
-import Definitions.Accounting.Actual
+import Definitions.Accounting.Confidence
 
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1), sections 1 and 3. A physical assumption is
-a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis by what needs it, never
-a global assumption. The *feasible set* is the actual circuits that meet all of them (`Feasible`); each guarantee names
-the ones it uses. Each that fails frees a different covert resource:
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.4), sections 1 and 3.
+A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
+by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
+certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
+constraints on one run (`Feasible`); each guarantee names the ones it uses. Each that fails frees a different covert
+resource:
 
-| Constraint | On `A` | What its failure frees |
+| Constraint | What it says | What its failure frees |
 | --- | --- | --- |
 | `Causal ℓ` | a gate reads `a` at least `ℓ (x a) (x g)` ticks after `a` | answers before questions |
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
 | `SequentialSpeed root t_root` | a path that computes a P2 root spans at least `t_root` ticks | rebuilding a block in time |
 | `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` carries at most `β_e (b − a)` bits read during `[a, b)`, and as many sent | side channels, hidden bandwidth |
-| `TrustedUnits 𝒱 cert …` | gates in `𝒱` are the protocol's; a certifier reads at most `log₂ χ` bits a bucket beyond its record (`χ` jitter classes) | forged records, timing channels |
+| `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱` are the protocol's; what the certifiers send outside is a function of their record and of a jitter word, one of `χ` classes a bucket | forged records, timing channels |
 
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
 leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
@@ -28,7 +30,8 @@ Four constraints read what the circuit doesn't carry, taken as parameters: which
 paths of `A` compute a P2 root (`root`, a predicate on paths), the certifiers' leaves (`cert`) and records (`record`),
 the trusted devices' leaves (`𝒱`) with what the protocol says each of their gates does (`Spec`), and the buckets of
 ticks over which a certifier's jitter is counted. `Hardware` bundles the parameters that don't depend on `A`, and
-`Annotation A` those that name its gates.
+`Annotation A` those of the constraints on one run that name its gates; `TrustedUnits` takes each run's `Spec` and
+record.
 -/
 
 namespace Accounting
@@ -88,19 +91,22 @@ structure Spec where
   reads : Fin A.N → Finset (Fin A.N)
   op : (g : Fin A.N) → ((a : Fin A.N) → BitVec (A.w a)) → BitVec (A.w g)
 
-open Classical in
-/-- **Trusted devices**: every computed gate placed in `𝒱` reads what the protocol `spec` says and computes as it says;
-the certifiers' leaves `cert` lie in `𝒱`; and in each bucket `k` of ticks (`bucket`), the gates that a certifier's gates
-read from outside the certifiers, beyond its record `record`, are at most `jitter` bits wide (`log₂ χ`, W2 and J). A
-certifier's gates being the protocol's, what it emits is then a function of its record and of those bits. -/
-def TrustedUnits (𝒱 cert : Finset L) (spec : A.Spec) (record : Finset (Fin A.N)) (bucket : ℕ → ℕ) (jitter : ℕ) :
-    Prop :=
-  cert ⊆ 𝒱 ∧
-  (∀ g, A.x g ∈ 𝒱 → A.isInput g = false → A.reads g = spec.reads g ∧ A.op g = spec.op g) ∧
-  ∀ k, A.width (univ.filter fun a => A.x a ∉ cert ∧ a ∉ record ∧
-    ∃ e, A.x e ∈ cert ∧ bucket (A.t e) = k ∧ a ∈ A.reads e) ≤ jitter
-
 end Placed
+
+/-- **Trusted devices** (v2.4), across a strategy `S`: in every run, every computed gate placed in `𝒱` reads what the
+protocol (`spec r`) says and computes as it says, and the certifiers' leaves `cert` lie in `𝒱` (W1); and for some jitter
+word `J`, one of `χ = 2^jitter` classes a bucket of ticks (`bucket`) in each run, what the certifiers send outside
+themselves from the gates they place during `[a, b)`, values and ticks (`sent`), is a function of their record as they
+keep it (`record r`, its gates as seen, so whatever timing it logs is counted there) and of the jitter word on the
+buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained. -/
+def TrustedUnits {Ω L : Type*} (S : Ω → Actual.Run L) (𝒱 cert : Finset L) (spec : ∀ r, (S r).A.Spec)
+    (record : ∀ r, Finset (Fin (S r).A.N)) (bucket : ℕ → ℕ) (jitter : ℕ) : Prop :=
+  cert ⊆ 𝒱 ∧
+  (∀ r g, (S r).A.x g ∈ 𝒱 → (S r).A.isInput g = false →
+    (S r).A.reads g = (spec r).reads g ∧ (S r).A.op g = (spec r).op g) ∧
+  ∃ J : Ω → ℕ → Fin (2 ^ jitter), ∀ a b r r', (S r).seen '' ↑(record r) = (S r').seen '' ↑(record r') →
+    (∀ t ∈ Set.Ico a b, J r (bucket t) = J r' (bucket t)) →
+    (S r).sent ↑cert (Set.Ico a b) = (S r').sent ↑cert (Set.Ico a b)
 
 section Links
 
@@ -144,19 +150,17 @@ structure Hardware (L : Type*) (E : Type*) where
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
   X ∈ H.units ∧ uncertifiedCapacity H.ends H.β H.cert X = 0
 
-/-- What the physical assumptions read about `A` that its gates don't carry: the pricing `π`, which link each wire runs
-on, which paths compute a P2 root, what the protocol says the trusted gates do, and the certifiers' record. -/
+/-- What the physical assumptions on one run read about `A` that its gates don't carry: the pricing `π`, which link
+each wire runs on and which paths compute a P2 root. -/
 structure Annotation {L : Type*} (A : Placed L) (E : Type*) where
   π : Fin A.N → ℕ
   link : Fin A.N → Fin A.N → E
   root : (k : ℕ) → (Fin (k + 1) → Fin A.N) → Prop
-  spec : A.Spec
-  record : Finset (Fin A.N)
 
-/-- **The feasible set**: `A` meets every physical assumption on the hardware `H`, read with `ann`. -/
+/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `ann`.
+`TrustedUnits`, on a strategy, is taken beside it. -/
 def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (ann : Annotation A E) : Prop :=
   A.Causal H.ℓ ∧ A.ComputeRate H.units ann.π H.compute ∧ A.SequentialSpeed ann.root H.tRoot ∧
-    A.Memory H.units H.M ∧ A.Links H.ends H.β ann.link ∧
-    A.TrustedUnits H.trusted H.cert ann.spec ann.record H.bucket H.jitter
+    A.Memory H.units H.M ∧ A.Links H.ends H.β ann.link
 
 end Accounting
