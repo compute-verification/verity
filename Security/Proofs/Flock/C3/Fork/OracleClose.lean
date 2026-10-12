@@ -55,7 +55,6 @@ theorem close_tableOf (A : Arith F K) (rsch : RegSchedule cls) (w : Oracle F)
     rsch.Close A w (tableOf A rsch M) :=
   ⟨M, hM, bits_tableOf A rsch M⟩
 
-omit [DecidableEq F] [DecidableEq K] in
 /-- **Every message near `w` packs the cells of the table close to `w`**, at a level 0 that fits: at most one
 message is within its unique-decoding radius. -/
 theorem cells_of_close (A : Arith F K) (hA : A.Correct) (rsch : RegSchedule cls) (hfit : rsch.sch.level₀.Fits)
