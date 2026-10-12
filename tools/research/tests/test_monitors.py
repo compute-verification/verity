@@ -473,15 +473,16 @@ def test_the_watermarks_key_breaches_as_the_stewards_tick_did_and_hard_ones_page
     assert set(got) == {"HARD root free # GB < # GB: no new check starts", "GPU<3> holds # GiB at #% for # min", "error:idle_gpus"}
     assert got["HARD root free # GB < # GB: no new check starts"].severity == "page"
     assert got["error:idle_gpus"].for_s == 1200 and got["GPU<3> holds # GiB at #% for # min"].severity is None
-    assert ctx.memo["rate_base"]["t"] == T0 and run.calls[0][0][:5] == M.NICE
+    assert [b["t"] for b in ctx.memo["rate_base"]] == [T0] and run.calls[0][0][:5] == M.NICE
 
 
-def test_the_inode_rate_compares_with_the_base_reading_the_memo_keeps():
+def test_the_inode_rate_compares_with_the_base_readings_the_memo_keeps():
     memo: dict = {}
     for t, iused in ((T0, 7_000_000), (T0 + 1000, 7_200_000)):
         run = Run((has("--reading"), (0, json.dumps(reading(iused=iused, t=t)), "")))
         keys = [f.key for f in M.watermarks("n1")(M.Ctx(now=t, memo=memo, run=run))]
-    assert any("inodes/h" in k for k in keys) and memo["rate_base"]["t"] == T0
+    assert any("inodes/h" in k for k in keys) and [b["t"] for b in memo["rate_base"]] == [T0, T0 + 1000]
+    assert M.norm("/workspace gaining 1 inodes/h > 2 (growing a/b +3, c +4 in 60 min)") == "/workspace gaining # inodes/h > #"
 
 
 def test_node_2s_probe_runs_in_its_session_and_its_reading_is_judged_on_node_1():

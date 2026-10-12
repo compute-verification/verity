@@ -401,8 +401,9 @@ def _probe():
 
 def norm(line: str) -> str:
     """The resource steward's dedupe key for a breach line (its tick.sh): numbers become `#`, a GPU's index stays, and the
-    custody backlog's `(oldest <run ids>)` goes, so the backlog keeps its key while its oldest runs change."""
-    line = re.sub(r"\s*\(oldest [^)]*\)$", "", line)
+    custody backlog's `(oldest <run ids>)` and the inode line's `(growing <dirs>)` go, so a breach keeps its key while the runs
+    or directories it names change."""
+    line = re.sub(r"\s*\((oldest|growing) [^)]*\)$", "", line)
     return re.sub(r"(^|[^<0-9])[0-9][0-9.,]*", r"\1#", re.sub(r"GPU ([0-9]+)", r"GPU<\1>", line))
 
 
@@ -425,7 +426,8 @@ def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
                                 for_s=1200) for e in r.get("errors") or []]
 
     check.__doc__ = (f"{name}'s disk, inode, RAM, replay-RAM, idle-GPU-memory and custody-backlog watermarks (resource_probe.py "
-                     "--reading; the inode rate's base reading kept between passes). A HARD line pages.")
+                     "--reading; the inode rate's base readings, the last hour's, kept between passes). A HARD line pages; an "
+                     "inode rate's only over a base at least 45 min old.")
     return check
 
 
