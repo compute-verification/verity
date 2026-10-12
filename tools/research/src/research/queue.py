@@ -542,7 +542,7 @@ class Queue:
             from .store.cli import _label_write_through
 
             target = label_target(pr, prs[pr].head)
-            self.store.add_label(target, vocab.READY, False, by)
+            self.store.add_label(target, vocab.READY, False, by, ref=reason)
             said, lost = _label_write_through(self.store, target)
             self.log(f"research queue: #{pr}'s ready mark at {prs[pr].head[:12]} is withdrawn ({target}); {said}")
             if lost:

@@ -512,7 +512,7 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     q.eject(1, "held for Daniel's decision 10", "memory-accounting")
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
-    assert (lab.value, lab.by) == (False, "memory-accounting")
+    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
 
 
 def test_rules_name_the_hold_label_and_refuse_anything_else():
