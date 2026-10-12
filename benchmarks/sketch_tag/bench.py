@@ -599,6 +599,10 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
 
 
 SEQ = ("qkv", "o", "gate_up", "down")
+# the sequence's deferred commits: fused (each committing call writes its tags' leaves), split (the leaves one call
+# behind their tags), late (down only tags; gate_up writes the leaves of the layer two back, all its tags in one tree);
+# 8: eight leaves a warp
+COMMIT_MODES = ("fused", "split", "split8", "late", "late8")
 
 
 def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
@@ -665,6 +669,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
         gu = [torch.zeros(ngu * ks, dtype=torch.int32, device="cuda") for _ in range(2)]
         crest = [WB.Commit(lib, torch, nrest) for _ in range(2)]
         cgu = [WB.Commit(lib, torch, ngu) for _ in range(2)]
+        cl = [WB.Commit(lib, torch, nrest + ngu) for _ in range(3)]
         fps = {s: WB.ptr(sks[s].frag) for s in SEQ}
         lr = {"layers": nl, "layer_store_bytes": layer_bytes, "times": {}}
         res["layouts"][lay] = lr
@@ -673,7 +678,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             """The ring's calls as sk_gemm argument tuples (groups fixed by a first launch of each)."""
             xp = {kd: WB.ptr(x) for (b, kd), x in xs.items() if b == mb}
             calls = []
-            commits, lanes = mode in ("fused", "split", "split8"), 8 if mode == "split8" else 32
+            commits, lanes = mode in COMMIT_MODES, 8 if mode in ("split8", "late8") else 32
             for li in range(nl):
                 cur, prev = li % 2, (li - 1) % 2
                 for name in SEQ:
@@ -687,7 +692,12 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                     skp = (None if not k_ else WB.ptr(gu[cur]) if name == "gate_up"
                            else WB.ptr(rest[cur]) + 4 * ks * off[name])
                     commit = (0, None, 0, 0, None, 0, 0, None, 0)
-                    if commits and name == "gate_up":
+                    if mode in ("late", "late8") and name == "gate_up":
+                        commit = (cn, WB.ptr(rest[prev]), nrest, 0, cl[(li - 1) % 3].ptr, 1, nrest + ngu,
+                                  cl[(li - 2) % 3].ptr, lanes)
+                    elif mode in ("late", "late8") and name == "down":
+                        commit = (cn, WB.ptr(gu[cur]), ngu, nrest, cl[li % 3].ptr + 32 * nrest, 1, 0, cl[li % 3].ptr, 0)
+                    elif commits and name == "gate_up":
                         lv = (ngu, cgu[prev].ptr, lanes) if mode != "fused" else (0, None, 0)
                         commit = (cn, WB.ptr(rest[prev]), nrest, 0, crest[prev].ptr, 1, *lv)
                     elif commits and name == "down":
@@ -727,23 +737,33 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             yy = torch.zeros(kd // C.TASK_COLS * mb0 * n, dtype=torch.float32, device="cuda")
             gemm(lib, torch, kr, ks, ring[0][name], xs[(mb0, kd)], yy, n, kd, True, a.cfgs[0], sko.t, sko.run,
                  sko.frag, dst)
+        # the late modes' layer commit: one tree over the layer's qkv, o, down and then gate_up tags
+        cref = WB.Commit(lib, torch, nrest + ngu)
+        lib.call("sk_hash", ks, WB.ptr(sep_r), nrest, SKETCH_SEED, 0, cref.tags, 0, st)
+        lib.call("sk_hash", ks, WB.ptr(sep_g), ngu, SKETCH_SEED, nrest, cref.tags + 32 * nrest, 0, st)
+        lib.call("sk_leaves", cref.ptr, nrest + ngu, SKETCH_SEED, st)
         for buf, cm, nv in ((sep_r, cr, nrest), (sep_g, cg, ngu)):
             lib.call("sk_hash", ks, WB.ptr(buf), nv, SKETCH_SEED, 0, cm.tags, 1, st)
             lib.call("sk_leaves", cm.ptr, nv, SKETCH_SEED, st)
         torch.cuda.synchronize()
         want = (cr.tag_list(), cr.leaf_list(), cg.tag_list(), cg.leaf_list())
-        del sep_r, sep_g, cr, cg
+        want_l = (cref.tag_list(), cref.leaf_list())
+        del sep_r, sep_g, cr, cg, cref
         lr["commit_equal"] = {}
-        for mode in ("fused", "split", "split8"):
+        for mode in COMMIT_MODES:
             f0 = plan(mode, mb0)
             for b in rest + gu:
                 b.zero_()
-            for cm in crest + cgu:
+            for cm in crest + cgu + cl:
                 cm.buf.zero_()
             f0()
             torch.cuda.synchronize()
-            got = (crest[0].tag_list(), crest[0].leaf_list(), cgu[0].tag_list(), cgu[0].leaf_list())
-            lr["commit_equal"][mode] = got == want
+            if mode in ("late", "late8"):
+                got = (cl[nl % 3].tag_list(), cl[nl % 3].leaf_list())
+                lr["commit_equal"][mode] = got == want_l
+            else:
+                got = (crest[0].tag_list(), crest[0].leaf_list(), cgu[0].tag_list(), cgu[0].leaf_list())
+                lr["commit_equal"][mode] = got == want
         ok = all(lr["commit_equal"].values())
         res["ok"] &= ok
         log(f"sequence {lay}: {nl} layers, deferred commit "
@@ -751,7 +771,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
         if not ok or a.mode != "bench":
             continue
         for mb in a.batches:
-            arms = {m: plan(m, mb) for m in ("base", "sk", "fused", "split", "split8")}
+            arms = {m: plan(m, mb) for m in ("base", "sk", *COMMIT_MODES)}
             if lay == "plain":
                 def cublas(mb=mb):
                     for li in range(nl):
@@ -780,7 +800,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             # each call's time in the sequence (events between the calls, queued behind a spin; the mean, as the events'
             # clock ticks are ~2 us), against its linear's time alone (`gemm`'s ring of one linear) under the same arm
             per = {}
-            for m in ("base", "sk", "split"):
+            for m in ("base", "sk", "split", "late"):
                 f, got = arms[m], {s: [] for s in SEQ}
                 for _ in range(3):
                     ev = [torch.cuda.Event(enable_timing=True) for _ in range(f.calls + 1)]
@@ -789,15 +809,14 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                     ev[-1].synchronize()
                     for i in range(f.calls):
                         got[SEQ[i % len(SEQ)]].append(ev[i].elapsed_time(ev[i + 1]) / 1e3)
-                arm = {"base": "base_plain" if lay == "plain" else "dec_enc", "sk": f"sk_{lay}_{ks}_{nt}",
-                       "split": f"sk_{lay}_{ks}_{nt}"}[m]
+                arm = ("base_plain" if lay == "plain" else "dec_enc") if m == "base" else f"sk_{lay}_{ks}_{nt}"
                 per[m] = {s: {"in_sequence_s": statistics.mean(v),
                               "alone_s": cases[s]["times"][mb]["best_s"].get(arm)} for s, v in got.items()}
             lr["times"][mb]["per_call"] = per
             log(f"sequence {lay} M={mb} per call (us, in sequence / alone): "
                 + "; ".join(f"{m} " + ", ".join(f"{s} {d['in_sequence_s'] * 1e6:.1f}/{(d['alone_s'] or 0) * 1e6:.1f}"
                                                 for s, d in p.items()) for m, p in per.items()))
-        del ring, wring, fp8, rest, gu, crest, cgu, stores, sks
+        del ring, wring, fp8, rest, gu, crest, cgu, cl, stores, sks
         torch.cuda.empty_cache()
     return res
 
@@ -810,18 +829,18 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
         for mb, t in lr["times"].items():
             r, nat = t["ratio_vs_native_seq"], t["native_seq_s"]
             enc = lay == "enc"
-            mode = min(("fused", "split", "split8"), key=lambda m: r.get(m, float("inf")))
+            mode = min(COMMIT_MODES, key=lambda m: r.get(m, float("inf")))
+            how = {"fused": ")", "split": "; each call the leaves of the tags before)",
+                   "late": "; gate_up the leaves of the layer two back, all its tags in one tree)"}[mode.rstrip("8")]
             points.append({
                 "schema": "verity/codec-frontier-point/v0", "lane": "ra-sketch-tag", "b": 61 if enc else 8,
                 "k": a.kr if enc else 0, "batch": int(mb),
                 "arithmetic": f"cuda-int8-mma/sketch-k{seq['k']}-n{seq['n_target']}/" +
                               (f"{lib.name}/pb{lib.bits}" if enc else "plain") + "/layer-sequence",
                 "y_total": r[mode] - 1,
-                "commit_mode": f"deferred, {mode} (gate_up tags the previous qkv, o, down; down its gate_up" +
-                               ("; each call the leaves of the tags before)" if mode != "fused" else ")"),
-                "y_total_vs_linears_native": t["ratio_vs_native"][mode] - 1, "y_total_fused": r["fused"] - 1,
-                "y_total_split": r["split"] - 1 if "split" in r else None,
-                "y_total_split8": r["split8"] - 1 if "split8" in r else None,
+                "commit_mode": f"deferred, {mode} (gate_up tags the previous qkv, o, down; down its gate_up{how}",
+                "y_total_vs_linears_native": t["ratio_vs_native"][mode] - 1,
+                **{f"y_total_{m}": r[m] - 1 if m in r else None for m in COMMIT_MODES},
                 "y_base": r["base"] - 1, "y_sketch": r["sk"] - r["base"], "y_commit": r[mode] - r["sk"],
                 "y_hash": None, "x": None, "delta": None, "tau": None, "measured": True,
                 "label": f"sketch-then-hash k={seq['k']} n~{seq['n_target']} layer sequence "
