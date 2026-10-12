@@ -5,6 +5,7 @@ import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Transducer
+import Proofs.Accounting.Actual.Ticks
 
 /-!
 # The actual circuit's guarantees
@@ -33,4 +34,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
   (`acts_encard_le_links`; the `+ 1` is the content's length).
+* `Actual/Ticks.lean`: memory accounting's `held_tick` (a width-0 held gate at a coin-dependent tick, causal under
+  v2.2's state as seen) is closed by v2.4's content: no holding makes it causal from every tick (`held_tick_closed`),
+  and it admits one (`tick_holding`).
 -/
