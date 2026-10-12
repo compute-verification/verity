@@ -11,11 +11,14 @@ openings coin); the payload salts are drawn in block order and the receipt leave
 three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
 receipts and roots against these.  The middle pass reads a partial plan out of store order, so its receipt for position
-p is block plan[p]'s and its tree has 10 positions.
+p is block plan[p]'s and its tree has 10 positions.  `sketch` is the same store registered under sketch-sha512 with the
+same nonce: the same codec seed and blocks (the receipt kind is not in the seed's context), another digest, so other
+coins' binding, seeds, signs and roots.
 """
 
 from __future__ import annotations
 
+import copy
 import functools
 import hashlib
 import json
@@ -36,6 +39,7 @@ LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
 BLOCKS = 21
 PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
 PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6)
+TILES = audit.NoiseTiles(96)
 
 
 class Entropy:
@@ -75,35 +79,64 @@ def store() -> audit.Store:
     return audit.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
 
 
-def generate() -> dict:
+@functools.cache
+def sketch_store() -> audit.Store:
+    """`store()` registered under sketch-sha512 with the same nonce: its codec seed, so its blocks, are `store()`'s."""
     st = store()
-    payloads, salts, tree, reg, blocks = st.payloads, st.salts, st.payload_tree, st.registration, st.blocks
-    key = reg.key
-    tiles = audit.NoiseTiles(96)
+    reg = audit.register(SOURCE, NODE, BLOCKS, st.registration.payload_root, st.registration.codec,
+                         receipts.SKETCH_SHA512, nonce=NONCE)
+    assert reg.codec_seed == st.registration.codec_seed and reg.digest != st.registration.digest
+    out = copy.copy(st)
+    out.registration = reg
+    return out
+
+
+def chain(st: audit.Store) -> tuple[coins.CoinOpening, list[dict], coins.CoinOpening, coins.Challenger]:
+    """Window 0's challenge, its three passes under the registration's receipt kind, its openings coin and the
+    challenger."""
+    reg, blocks, tiles = st.registration, st.blocks, TILES
     challenger = coins.Challenger(reg.digest, 0, PARAMS.coins, entropy=Entropy(COIN_LABEL))
     leaf_salts = Entropy(LEAF_SALT_LABEL)
+    sketched = reg.receipt == receipts.SKETCH_SHA512
 
     challenge = challenger.open(0)
     passes, previous = [], reg.digest
     for i, plan in enumerate(PLANS):
         s = receipts.seed(challenge.coin, i, previous)
-        receipter = receipts.Receipter(s)
+        receipter = receipts.receipter(reg.receipt, s)
         ys = [receipter(j, blocks[j], tiles.output(s, j)) for j in plan]
         ss = [leaf_salts(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length))]
         leaf0 = b"".join(ys[:receipts.PER_LEAF])
         root = receipts.tree(s, plan, ys, ss).commitment.root
-        passes.append({"i": i, "previous": previous.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
+        ends = (0, 1, plan.length - 1)
+        passes.append({"i": i, "previous": previous.hex(), "seed": s.hex(),
+                       "prefix": (receipts.sketch_prefix if sketched else receipts.prefix)(s).hex(),
                        "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),
                        "plan_digest": plan.digest.hex(), "binding": receipts.binding(s, plan).hex(),
-                       "z_1": tiles.output(s, 1).hex(), "y": {str(p): ys[p].hex() for p in (0, 1, plan.length - 1)},
+                       "z_1": tiles.output(s, 1).hex(), "y": {str(p): ys[p].hex() for p in ends},
                        "receipts_sha512": _sha(b"".join(ys)),
                        "leaf_0": {"x": sha512_row_v2_digest(leaf0, 8 * len(leaf0)).hex(), "salt": ss[0].hex(),
                                   "value": receipts.hidden(leaf0, ss[0]).hex()},
                        "root": root.hex()})
+        if sketched:
+            sigma = {str(p): receipter.sketch(blocks[j], tiles.output(s, j)).hex() for p, j in zip(ends, map(plan.block, ends))}
+            passes[-1] |= {"sign_bits_sha512": _sha(b"".join(receipts.sign_bits(s))), "sigma": sigma}
         previous = root
+    return challenge, passes, challenger.open(PARAMS.windows), challenger
 
-    opening = challenger.open(PARAMS.windows)
-    draw_key = derive(opening.coin, audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
+
+def draws(reg: audit.Registration, opening: coins.CoinOpening) -> list[int]:
+    key = derive(opening.coin, audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
+    return list(key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))
+
+
+def generate() -> dict:
+    st = store()
+    payloads, salts, tree, reg, blocks = st.payloads, st.salts, st.payload_tree, st.registration, st.blocks
+    key = reg.key
+    challenge, passes, opening, challenger = chain(st)
+    sk = sketch_store()
+    sk_challenge, sk_passes, sk_opening, sk_challenger = chain(sk)
     first = coins.Challenger(reg.digest, 0, PARAMS.coins, entropy=Entropy(COIN_LABEL)).open(0)
     z_short, z_long = bytes(range(100)), bytes((7 * u) % 251 for u in range(codec.BLOCK_BYTES + 1000))
     s, last = reg.codec.field.word_bytes, reg.codec.field.block_words - 1
@@ -118,7 +151,7 @@ def generate() -> dict:
                                "value": receipts.hidden(payloads[0], salts[0]).hex()},
                     "root": tree.commitment.root.hex()},
         "registration": {"source": SOURCE.hex(), "node": NODE.hex(), "blocks": BLOCKS, "nonce": NONCE.hex(),
-                         "payload_root": reg.payload_root.hex(), "codec": reg.codec.name,
+                         "payload_root": reg.payload_root.hex(), "codec": reg.codec.name, "receipt": reg.receipt,
                          "codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()},
         "coins": {"scheme": coins.SCHEME, "session": 0, "count": PARAMS.coins,
                   "binding": coins.domain(reg.digest, 0, PARAMS.coins).binding.hex(),
@@ -127,9 +160,16 @@ def generate() -> dict:
                   "root": challenger.commitment.root.hex()},
         "spread": {"short": {"z": z_short.hex(), "sha512": _sha(receipts.spread(z_short))},
                    "long": {"z_len": len(z_long), "sha512": _sha(receipts.spread(z_long))}},
-        "passes": {"window": 0, "challenge": challenge.coin.hex(), "z_bytes": tiles.z_bytes, "passes": passes},
+        "passes": {"window": 0, "challenge": challenge.coin.hex(), "z_bytes": TILES.z_bytes, "passes": passes},
         "openings": {"coin": opening.coin.hex(), "index": opening.index, "units": sum(p.length for p in PLANS),
-                     "draws": list(draw_key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))},
+                     "draws": draws(reg, opening)},
+        "sketch": {"registration": {"receipt": sk.registration.receipt, "codec_seed": sk.registration.codec_seed.hex(),
+                                    "digest": sk.registration.digest.hex()},
+                   "sign_domain": receipts.SIGN_DOMAIN, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
+                   "rows": receipts.SKETCH_ROWS, "coins_root": sk_challenger.commitment.root.hex(),
+                   "passes": {"window": 0, "challenge": sk_challenge.coin.hex(), "z_bytes": TILES.z_bytes,
+                              "passes": sk_passes},
+                   "openings": {"coin": sk_opening.coin.hex(), "draws": draws(sk.registration, sk_opening)}},
     }
 
 

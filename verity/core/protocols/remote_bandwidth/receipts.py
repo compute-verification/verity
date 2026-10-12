@@ -12,8 +12,15 @@ plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store
               digest SHA512(PLAN_DOMAIN ‖ u32be R ‖ (u64be first ‖ u64be count) × R),  PLAN_DOMAIN = "…/plan/v0\0"
 spread(z)     z laid over b = 4096 bytes: byte u of z XORed into byte u mod b (a z of b bytes or more folds), a shorter
               z repeated
-y_(i,p)       SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j)))),  j = plan_i[p],
-              RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                     64 bytes
+y_(i,p)       block-sha512, the default: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j)))),
+              j = plan_i[p],  RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                    64 bytes
+              sketch-sha512: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_(i,j)),
+              SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"                      64 bytes
+S_i           sketch-sha512's 16 × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
+              "k": 16, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first)
+              1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
+σ_(i,j)       S_i · (E_j ⊕ spread(z_(i,j))), the block's 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19):
+              16 int32 little-endian                                                                     64 bytes
 leaf c        v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
               hm96-sha512/row/v2 leaf: x_c = sha512/row/v2(v_c), value hm96-sha512 tree_leaf(key, commit_string(key,
               x_c, salt_c)), salt_c 192 fresh bytes, key hm96-sha512's pinned key
@@ -25,6 +32,11 @@ root_(t,i)    frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512
 over a block's bytes exists before the seed, and the seed exists only after the previous pass's root.  `z_(i,j)` is
 PoUW's noised output of the tile before block j's read in pass i; it enters elementwise, before any compression, so a
 relay that meets the block and z over a link carries `min(|z|, b)` bytes per block, not a digest of one side.
+
+The registration names its receipt kind (`KINDS`).  A sketch-sha512 receipt hashes 72 bytes after the seed's block, not
+4,104: one SHA-512 compression where block-sha512 takes 33, and the signs, derived from the pass's seed, exist only
+after the previous pass's root, as the seed does.  Leaves, salts and the tree are the same under either kind.  What
+each kind rests on is `PROTOCOL.md` §4.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
@@ -46,14 +58,19 @@ from collections.abc import Iterator, Sequence
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
 from verity.ml.commitments import hm96, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
-from verity.ml.randomness import frame
+from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
 
 SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
 PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
 RECEIPT_DOMAIN = b"verity/remote-bandwidth/receipt/v0\0"
+SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
+SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
 TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
+BLOCK_SHA512 = "block-sha512"
+SKETCH_SHA512 = "sketch-sha512"
+SKETCH_ROWS = 16
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 CHALLENGE_BYTES = 32
 DIGEST_BYTES = 64
@@ -227,21 +244,93 @@ def _xor(a: bytes, b: bytes) -> bytes:
     return (int.from_bytes(a, "little") ^ int.from_bytes(b, "little")).to_bytes(len(a), "little")
 
 
+def _index(j: int) -> bytes:
+    if type(j) is not int or not 0 <= j < 1 << 64:
+        raise ValueError("a block index is a u64")
+    return j.to_bytes(8, "big")
+
+
+def _block(block: bytes) -> bytes:
+    if type(block) is not bytes or len(block) != BLOCK_BYTES:
+        raise ValueError(f"a block is {BLOCK_BYTES} bytes")
+    return block
+
+
 class Receipter:
-    """Receipts under one pass's seed: `receipter(j, block, z)` is `y_(i,j)`."""
+    """block-sha512 receipts under one pass's seed: `receipter(j, block, z)` is `y_(i,j)`."""
+
+    kind = BLOCK_SHA512
 
     def __init__(self, seed: bytes) -> None:
         self.head = hashlib.sha512(prefix(seed))
 
     def __call__(self, j: int, block: bytes, z: bytes) -> bytes:
-        if type(j) is not int or not 0 <= j < 1 << 64:
-            raise ValueError("a block index is a u64")
-        if type(block) is not bytes or len(block) != BLOCK_BYTES:
-            raise ValueError(f"a block is {BLOCK_BYTES} bytes")
         h = self.head.copy()
-        h.update(j.to_bytes(8, "big"))
-        h.update(_xor(block, spread(z)))
+        h.update(_index(j))
+        h.update(_xor(_block(block), spread(z)))
         return h.digest()
+
+
+def sign_bits(seed: bytes) -> tuple[bytes, ...]:
+    """`S_i`'s sign bits, 16 rows of 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where `S_i[c][u] = −1`."""
+    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": SKETCH_ROWS, "n": BLOCK_BYTES})
+    return tuple(key.stream(("row", c), BLOCK_BYTES // 8) for c in range(SKETCH_ROWS))
+
+
+def sketch_prefix(seed: bytes) -> bytes:
+    """`Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed))`, one SHA-512 block."""
+    body = SKETCH_RECEIPT_DOMAIN + frame(_digest(seed, "a pass seed"))
+    return body + bytes(-len(body) % 128)
+
+
+_BYTE_BITS = tuple(bytes((b >> u) & 1 for u in range(8)) for b in range(256))
+_EVERY_BYTE = int.from_bytes(b"\1" * BLOCK_BYTES, "little")
+
+
+def _int8_sum(planes: list[int], mask: int) -> int:
+    """Σ e[u] over the bytes u whose bit 8u `mask` sets, e a block's bytes as int8 and `planes[k]` the block as an
+    integer shifted right by k: bits 0 to 6 count 2^k each, bit 7 −2^7."""
+    return sum((p & mask).bit_count() << k for k, p in enumerate(planes[:7])) - ((planes[7] & mask).bit_count() << 7)
+
+
+class SketchReceipter:
+    """sketch-sha512 receipts under one pass's seed: `receipter(j, block, z)` is `y_(i,j)`, and `sketch(block, z)` its
+    `σ_(i,j)`.  The product is in pure Python, a row's ±1 dot product as T − 2·(the sum where its sign is −1), each sum
+    over the block's bit planes: about 0.25 ms a block."""
+
+    kind = SKETCH_SHA512
+
+    def __init__(self, seed: bytes) -> None:
+        self.rows = tuple(int.from_bytes(b"".join(_BYTE_BITS[b] for b in row), "little") for row in sign_bits(seed))
+        self.head = hashlib.sha512(sketch_prefix(seed))
+
+    def sketch(self, block: bytes, z: bytes) -> bytes:
+        x = int.from_bytes(_block(block), "little") ^ int.from_bytes(spread(z), "little")
+        planes = [x >> k for k in range(8)]
+        total = _int8_sum(planes, _EVERY_BYTE)
+        return struct.pack(f"<{SKETCH_ROWS}i", *(total - 2 * _int8_sum(planes, row) for row in self.rows))
+
+    def __call__(self, j: int, block: bytes, z: bytes) -> bytes:
+        h = self.head.copy()
+        h.update(_index(j))
+        h.update(self.sketch(block, z))
+        return h.digest()
+
+
+RECEIPTERS = {BLOCK_SHA512: Receipter, SKETCH_SHA512: SketchReceipter}
+KINDS = tuple(RECEIPTERS)
+
+
+def receipt_kind(kind: object) -> str:
+    """`kind`, if it is one of `KINDS`."""
+    if type(kind) is not str or kind not in RECEIPTERS:
+        raise ValueError(f"a receipt kind is one of {list(KINDS)}")
+    return kind
+
+
+def receipter(kind: str, seed: bytes) -> Receipter | SketchReceipter:
+    """The receipter of `kind` under one pass's seed."""
+    return RECEIPTERS[receipt_kind(kind)](seed)
 
 
 def leaves(positions: int) -> int:

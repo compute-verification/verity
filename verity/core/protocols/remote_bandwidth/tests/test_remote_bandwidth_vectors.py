@@ -1,15 +1,40 @@
-"""The code reproduces every pinned vector (`vectors.json`, written by `remote_bandwidth_vectors.py`), and the codec is
-kv/v0's: masked at p1024, k = 2 and 3, and at p512."""
+"""The code reproduces every pinned vector (`vectors.json`, written by `remote_bandwidth_vectors.py`), the codec is
+kv/v0's (masked at p1024, k = 2 and 3, and at p512), and sketch-sha512 is ra-codec-tensor's reference's."""
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import itertools
 import json
 
 import pytest
 import remote_bandwidth_vectors as rv
 
-from verity.core.protocols.remote_bandwidth import audit, codec, coins
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+
+# `benchmarks/codec_tensor/sketch_receipt.py` (cursor/ra-device-reader-0f7a at 5b8decfc5, #1916), numpy, run on these
+# inputs: seed k is SHA512(SKETCH_PINS ‖ u8 k), "counter" n bytes of SHA512(SKETCH_PINS ‖ label ‖ u32be c) for
+# c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s.
+SKETCH_PINS = b"verity/remote-bandwidth/sketch-pins/v0\0"
+SKETCH_SIGN_BITS_SHA512 = [
+    "02c8dbb7ab436a92e8cf7006a0907d635b75cadec8d7959d15c7cebd007a5bdbdf645569e2540abd3906f2c3b566674a6a3580b79177bd9b7d892d8ba3ef3108",
+    "4a6c53f126bd07a216ca31b753133d080c85ad79a6ca693ad82e3bcf1e2e36169110a36a4a8365075678a8d5eee65a19da5ed96c0e87b53478cfff3ad8c2a792",
+]
+SKETCH_CASES = [
+    (0, "0x80", "one", 0,
+     "b02700004ed9ffff4ed9ffff5ad3ffffec0900000000000016f5ffffba220000d2160000fa02000002ffffff36e5ffff20f0fffff4050000ba220000e40d0000",
+     "81417a3dfc2da9e7b9ed8d5a5379c80ad5f7a5dbdd92b5b88a7f43bd3aaf5b222c9364513ed69ac7b2f846b48b1679d85d5697df7f6d8d169074a90279cb2dfa"),
+    (0, "0x7f", "short", 1,
+     "c4e3ffffe610000018140000281a0000c8f9ffffc00a0000500f000006f2ffff0af7ffff0608000010000000781f0000f4090000eeffffff16eeffff10ffffff",
+     "42d5e0d3d4651466e7918aeb312f1d9bee48f26d06a9673008331b786b309ef42e58c140bf47e691389d62204ba831f9e99edeb6d14a08bc7614caecb8641a56"),
+    (0, "counter", "folded", 20,
+     "4afeffffc80b000060f0ffffac080000b2f7ffff6e07000042fbffff54100000f00500004e00000038210000083500000609000032daffff8cf5ffffa20b0000",
+     "a60cb97c4444fea57afde1f4466f6fbb59286edf99a560e5a0407273d3644344b46e8c036e71068d31a73cddb8857fc5a51d444a0bcce49fe6cb7a5b8bb98e13"),
+    (1, "counter", "short", (1 << 64) - 1,
+     "3f100000a9fbffff47ffffff3bf1ffff6b280000db040000110d0000e10900000bfefffff71100008dfcffff1b1e00005b0500002fecffffbb040000eb040000",
+     "6dd31d65ca1d94c620420c240e3834c3d09159020309c455514f6384f5bc0d566c31936d25ef206d6481b907ed3cff83ac3e4e245c2d7c9e9ca7004e99b3de6d"),
+]
 
 # `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", cursor/ra-word-codec-10bf at 56818bb77): the kv/v0 codec
 # the KV kernel (`kv.cu`) implements, under its vector seed SHA256("verity/word-codec/kv/vectors").
@@ -88,6 +113,10 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
     assert pinned["payload"]["root"] == root.hex() and pinned["registration"]["digest"] == reg.digest.hex()
     assert pinned["registration"]["codec"] == pinned["codec"]["name"] == reg.codec.name == "p1024/k3/masked"
+    assert pinned["registration"]["receipt"] == reg.receipt == "block-sha512"
+    sk = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, receipts.SKETCH_SHA512, nonce=rv.NONCE)
+    assert pinned["sketch"]["registration"] == {"receipt": "sketch-sha512", "codec_seed": reg.codec_seed.hex(),
+                                                "digest": sk.digest.hex()}
     k, f = reg.key, reg.codec.field
     assert pinned["codec"]["c"] == [format(c, "x") for c in k.c] and pinned["codec"]["tau"] == format(k.tau, "x")
     assert pinned["codec"]["mask"] == format(k.mask, "x") and pinned["codec"]["seed"] == reg.codec_seed.hex()
@@ -109,6 +138,13 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     assert len({p["seed"] for p in passes}) == 3
     assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
     assert pinned["openings"]["index"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
+    sketch = pinned["sketch"]["passes"]["passes"]
+    assert sketch[0]["previous"] == pinned["sketch"]["registration"]["digest"] != pinned["registration"]["digest"]
+    assert all(b["previous"] == a["root"] for a, b in itertools.pairwise(sketch))
+    assert len({p["sign_bits_sha512"] for p in sketch}) == 3                  # the signs are re-keyed every pass
+    assert [p["plan_digest"] for p in sketch] == [p["plan_digest"] for p in passes]
+    assert pinned["sketch"]["passes"]["challenge"] == pinned["passes"]["challenge"]   # the same coins, another binding
+    assert pinned["sketch"]["coins_root"] != pinned["coins"]["root"]
 
 
 class Clock:
@@ -120,25 +156,32 @@ class Clock:
 
 
 @pytest.mark.slow
-def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones() -> None:
+@pytest.mark.parametrize("kind", receipts.KINDS)
+def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind) -> None:
     """The generator computes receipts and draws on its own; the audit's `Prover` and `Session` must agree with it, at the
-    default codec.  Slow for the same store as `test_vectors_are_reproduced`, which encodes it once for both."""
-    store = rv.store()
+    default codec, under each receipt kind.  Slow for the same store as `test_vectors_are_reproduced`, which encodes it
+    once for all three."""
+    store = rv.store() if kind == receipts.BLOCK_SHA512 else rv.sketch_store()
     reg = store.registration
     challenger = coins.Challenger(reg.digest, 0, rv.PARAMS.coins, entropy=rv.Entropy(rv.COIN_LABEL))
     clock = Clock()
-    s = audit.Session(rv.PARAMS, reg, audit.NoiseTiles(96), challenger, clock=clock)
+    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind), reg, audit.NoiseTiles(96), challenger, clock=clock)
     prover = audit.Prover(store, audit.NoiseTiles(96), s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
-    challenge, previous = s.start(), reg.digest
+    pinned = pinned if kind == receipts.BLOCK_SHA512 else pinned["sketch"]
+    challenge, previous, passes = s.start(), reg.digest, []
     for i, (plan, want) in enumerate(zip(rv.PLANS, pinned["passes"]["passes"], strict=True)):
-        ps = prover.run(challenge, i, previous, plan)
+        passes.append(prover.run(challenge, i, previous, plan))
+        ps = passes[-1]
         assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
         assert s.receive(0, i, ps.root, ps.plan.runs) is None
         previous = ps.root
     assert s.boundary() is None
     clock.now = s.deadline(0) + 1
-    assert list(s.close(0)) == [unit(u) for u in pinned["openings"]["draws"]]
+    draws = s.close(0)
+    assert list(draws) == [unit(u) for u in pinned["openings"]["draws"]]
+    assert s.verify(0, [prover.open(passes[i], p) for i, p in draws]) == audit.Verdict(0, True)
+    assert s.record().public()["receipt"] == kind
 
 
 def unit(u: int) -> tuple[int, int]:
@@ -156,6 +199,25 @@ def test_codec_is_kv_v0_at_p512() -> None:
     for i, m, y in KV_P512_K2["words"]:
         assert codec.encode_word(int(m, 16), i, k) == int(y, 16)
         assert codec.decode_word(int(y, 16), i, k) == int(m, 16)
+
+
+def _counter(label: bytes, n: int) -> bytes:
+    return b"".join(hashlib.sha512(SKETCH_PINS + label + c.to_bytes(4, "big")).digest() for c in range(-(-n // 64)))[:n]
+
+
+def test_sketch_sha512_is_ra_codec_tensors_reference() -> None:
+    """Byte for byte with the numpy reference the GPU reader is held to: the signs, σ_j at the int8 extremes, under a
+    one-byte, a repeated and a folded z, and y up to the last u64 index."""
+    seeds = [hashlib.sha512(SKETCH_PINS + bytes([k])).digest() for k in range(2)]
+    assert [hashlib.sha512(b"".join(receipts.sign_bits(s))).hexdigest() for s in seeds] == SKETCH_SIGN_BITS_SHA512
+    blocks = {"0x80": b"\x80" * codec.BLOCK_BYTES, "0x7f": b"\x7f" * codec.BLOCK_BYTES,
+              "counter": _counter(b"block", codec.BLOCK_BYTES)}
+    zs = {"one": b"\x01", "short": bytes(range(100)), "folded": _counter(b"z", 5000)}
+    receipters = [receipts.SketchReceipter(s) for s in seeds]
+    for k, b, z, j, sigma, y in SKETCH_CASES:
+        assert receipters[k].sketch(blocks[b], zs[z]).hex() == sigma
+        assert receipters[k](j, blocks[b], zs[z]).hex() == y
+        assert receipts.receipter(receipts.SKETCH_SHA512, seeds[k])(j, blocks[b], zs[z]).hex() == y
 
 
 @pytest.mark.parametrize("c", [codec.FALLBACK, codec.DEFAULT], ids=lambda c: c.name)
