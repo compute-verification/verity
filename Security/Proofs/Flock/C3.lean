@@ -2,6 +2,7 @@ import Proofs.Flock.C3.Fork.Sound
 import Proofs.Flock.C3.Compose.Bridge
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Custody
+import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
