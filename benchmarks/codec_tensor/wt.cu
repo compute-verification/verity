@@ -229,9 +229,18 @@ __device__ __forceinline__ void mul_fold(const u32 (&a)[NL], const u32 (&b)[NL],
   fold_top(x, c0, c1);
 }
 
+__device__ __forceinline__ void copy(u32 (&d)[NL], const u32 (&s)[NL]) {
+#pragma unroll
+  for (int k = 0; k < NL; ++k) d[k] = s[k];
+}
+
+// x may be a or b (pow_root's mul(t, r, r)): the fold forms write x[k] while later limbs still read a and b, so they
+// build into y.
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   if constexpr (FULL_SLOT) {
-    sqr_fold(a, x);
+    u32 y[NL];
+    sqr_fold(a, y);
+    copy(x, y);
   } else {
     u32 t[2 * NL];
     sqr_full(a, t);
@@ -241,17 +250,14 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
 
 __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
   if constexpr (FULL_SLOT) {
-    mul_fold(a, b, x);
+    u32 y[NL];
+    mul_fold(a, b, y);
+    copy(x, y);
   } else {
     u32 t[2 * NL];
     mul_full(a, b, t);
     fold(t, x);
   }
-}
-
-__device__ __forceinline__ void copy(u32 (&d)[NL], const u32 (&s)[NL]) {
-#pragma unroll
-  for (int k = 0; k < NL; ++k) d[k] = s[k];
 }
 
 // x < 2p to [0, p): x - p = x + c - 2^n when x + c >= 2^n.
