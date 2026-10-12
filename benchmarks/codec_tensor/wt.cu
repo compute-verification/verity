@@ -1,5 +1,5 @@
 // Sloth over one wide word on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field, WT_FIELD = n
-// (255, 511, 521, 767, 1023, 1279, or the full-slot 512 and 768; p = 2^n - c as in `wide.FIELDS`).
+// (255, 511, 521, 767, 1023, 1279, or the full-slot 512, 768, 1536 and 2048; p = 2^n - c as in `wide.FIELDS`).
 //
 // Two squarings mod p:
 //   CUDA cores   a thread per word, NL 32-bit limbs; the square column by column (mad.lo.cc / madc.hi.cc / addc, each
@@ -52,6 +52,12 @@ constexpr u32 CF = 569;
 #elif WT_FIELD == 768
 constexpr int NBITS = 768, TW = 86;
 constexpr u32 CF = 825;
+#elif WT_FIELD == 1536
+constexpr int NBITS = 1536, TW = 43;
+constexpr u32 CF = 3453;
+#elif WT_FIELD == 2048
+constexpr int NBITS = 2048, TW = 32;
+constexpr u32 CF = 1557;
 #else
 #error "WT_FIELD is one of wide.FIELDS"
 #endif
@@ -663,7 +669,7 @@ constexpr int DB = 8 * U;                               // digit bits a lane
 constexpr u64 MASK = DB == 64 ? ~0ull : (1ull << DB) - 1;
 constexpr u32 FW = 2 * CF;                              // 2^(8S) = 2^(n+1) = 2c (mod p) when S = 32U
 constexpr int SHUF_ROUNDS = U == 1 ? 11 : U == 2 ? 6 : U == 3 ? 5 : U == 4 ? 4 : 3;
-static_assert(U <= 5, "the plan is wide.tc_plan's for U <= 5");
+static_assert(!TC_OK || U <= 5, "the plan is wide.tc_plan's for U <= 5");
 
 __device__ __forceinline__ void mma_u8(int32_t (&d)[4], const u32 (&a)[4], u32 b0, u32 b1) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.u8.u8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"

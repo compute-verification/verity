@@ -3,8 +3,8 @@
 ~~~text
 field      p = 2^n − c, p ≡ 3 (mod 4), c the smallest such that p is prime: n = 256U − 1 for U = 1 … 5 (a word fills U
            32-byte chunks, the tensor-core squaring's unit; 2^255 − 19 is 1 mod 4, so p255 = 2^255 − 765), m521, and
-           the full-slot p512 = 2^512 − 569 and p768 = 2^768 − 825
-word       S = ⌈n/8⌉ bytes, little-endian, canonical (< p): 32U, 66 for m521, 64 and 96 for the full-slot fields
+           the full-slot p512 = 2^512 − 569, p768 = 2^768 − 825, p1536 = 2^1536 − 3453 and p2048 = 2^2048 − 1557
+word       S = ⌈n/8⌉ bytes, little-endian, canonical (< p): 32U, 66 for m521, n/8 for the full-slot fields
 payload    B = ⌊(n − 1)/8⌋ bytes, little-endian (m < 2^(8B) < p): 32U − 1, and 65; a full-slot field's payload is the
            whole word, any m < p, which every S FP8 weights are unless the last is 0xFF (an E4M3 NaN)
 ρ(a)       Sloth's permutation: s = a^((p+1)/4); if s² = a the even one of {s, p − s}, else (s² = −a) the odd one
@@ -71,8 +71,10 @@ class Field:
 
 FIELDS = {f.name: f for f in (Field("p255", 255, 765), Field("p511", 511, 481), Field("m521", 521, 1),
                                Field("p767", 767, 1081), Field("p1023", 1023, 361), Field("m1279", 1279, 1),
-                               Field("p512", 512, 569), Field("p768", 768, 825))}
-TASK_WORDS = {"p255": 265, "p511": 131, "m521": 128, "p767": 87, "p1023": 65, "m1279": 52, "p512": 128, "p768": 86}
+                               Field("p512", 512, 569), Field("p768", 768, 825), Field("p1536", 1536, 3453),
+                               Field("p2048", 2048, 1557))}
+TASK_WORDS = {"p255": 265, "p511": 131, "m521": 128, "p767": 87, "p1023": 65, "m1279": 52, "p512": 128, "p768": 86,
+              "p1536": 43, "p2048": 32}
 
 
 def field(name: str) -> Field:
