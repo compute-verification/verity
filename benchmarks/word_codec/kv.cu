@@ -1226,22 +1226,24 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     float o[8][4] = {};
     float m_own = -INFINITY, l_own = 0.f;
     mma_load_q(q, seq, g, lane, qa);
+    const int rem = t1 - t0;
     if constexpr (RC > 0) {
-      for (int jt = 0; jt < min(RLAG, ntiles); ++jt) {
+      for (int jt = 0; jt < RLAG && jt * MT < rem; ++jt) {
         rc_fill<RC>(bbuf + jt * ZW, jt, 32 * w + lane);
         mbar_arrive(bfull + jt);
       }
     }
-    for (int tile = 0; tile < ntiles; ++tile) {
-      const int b = tile % MNB, nt = min(MT, t1 - t0 - tile * MT);
+    for (int tile = 0; tile * MT < rem; ++tile) {
+      const int b = tile % MNB, nt = min(MT, rem - tile * MT);
       mbar_wait(full + b, (tile / MNB) & 1);
       if (nt > 16 * w)
         mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
       mbar_arrive(empty + b);
       if constexpr (RC > 0) {
         const int jt = tile + RLAG;
+        const bool next = jt * MT < rem;
         u32 *bs = bbuf + tile % ZB * ZW;
-        if (RC == 1 && jt < ntiles) rc_fill<1>(bs, jt, 32 * w + lane);
+        if (RC == 1 && next) rc_fill<1>(bs, jt, 32 * w + lane);
         if constexpr (RC == 2) {
           constexpr int ZL = GROUP / 2;
           const int gid = lane >> 2, t4 = lane & 3;
@@ -1253,7 +1255,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
             for (int mt = 0; mt < 8; ++mt) {
               const uint4 v = make_uint4(__float_as_uint(o[mt][0]), __float_as_uint(o[mt][1]),
                                          __float_as_uint(o[mt][2]), __float_as_uint(o[mt][3]));
-              if (jt < ntiles) {
+              if (next) {
                 const uint4 m = rows[mt];
                 *reinterpret_cast<uint4 *>(bs + zi + 4 * mt) = make_uint4(v.x ^ m.x, v.y ^ m.y, v.z ^ m.z, v.w ^ m.w);
               }
@@ -1261,7 +1263,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
             }
           }
         }
-        if (jt < ntiles) mbar_arrive(bfull + tile % ZB);
+        if (next) mbar_arrive(bfull + tile % ZB);
       }
     }
     mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
@@ -1711,6 +1713,29 @@ int kv_rc_buffers(int *sk, uint32_t *tags, uint32_t *zdump) {
 int kv_rc_tag(int rc, uint64_t n, cudaStream_t s) {
   if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
   kv::rc_tag_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
+  return launched();
+}
+
+// Holds the first `bytes` of kv_rc_buffers' sketches in L2 on stream s (an access policy window over as much of the
+// device's persisting L2 as they need), so attention's sketch writes and the receipts' kernel's reads stay off DRAM;
+// bytes = 0 clears it. out: the window's bytes and the persisting L2 set aside.
+int kv_rc_l2(uint64_t bytes, cudaStream_t s, uint64_t *out) {
+  int dev = 0, max_persist = 0, max_window = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&max_persist, cudaDevAttrMaxPersistingL2CacheSize, dev);
+  cudaDeviceGetAttribute(&max_window, cudaDevAttrMaxAccessPolicyWindowSize, dev);
+  const size_t win = bytes && rc_sk ? std::min<size_t>(bytes, (size_t)max_window) : 0;
+  const size_t persist = std::min<size_t>(win, (size_t)max_persist);
+  if (cudaDeviceSetLimit(cudaLimitPersistingL2CacheSize, persist) != cudaSuccess) return launched();
+  cudaStreamAttrValue a = {};
+  a.accessPolicyWindow.base_ptr = win ? rc_sk : nullptr;
+  a.accessPolicyWindow.num_bytes = win;
+  a.accessPolicyWindow.hitRatio = win ? std::min(1.0f, (float)persist / (float)win) : 0.f;
+  a.accessPolicyWindow.hitProp = cudaAccessPropertyPersisting;
+  a.accessPolicyWindow.missProp = cudaAccessPropertyStreaming;
+  if (cudaStreamSetAttribute(s, cudaStreamAttributeAccessPolicyWindow, &a) != cudaSuccess) return launched();
+  if (!win && cudaCtxResetPersistingL2Cache() != cudaSuccess) return launched();
+  out[0] = win, out[1] = persist;
   return launched();
 }
 
