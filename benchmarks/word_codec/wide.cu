@@ -1348,22 +1348,6 @@ __global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict_
 // The tree levels a linear's leaves fold into (`ww_sketch_fold`) before the pass's tree goes on from level SUB.
 constexpr int SUB = 6;
 
-struct Levels {
-  uint64_t off[SUB + 1];  // in nodes: level t's node for the range's first, t = 0..SUB
-};
-
-// `ww_sketch_fold`'s levels with one warp a block (2^SUB leaves, 2^(SUB−1) threads at level 1), so that a block's
-// registers fit in what three fused-GEMM CTAs an SM leave (4096 at 160 registers) and it never waits for a CTA's slot.
-static_assert(SUB == 6, "one warp a block at level 1");
-__global__ void __launch_bounds__(32) fold_warp(uint64_t* nodes, Levels lv, uint64_t c) {
-#pragma unroll 1
-  for (int t = 0; t < SUB; ++t) {
-    const uint64_t w = 32 >> t;
-    if (threadIdx.x < w) bw::level_step(nodes + lv.off[t] * 8, c >> t, nodes + lv.off[t + 1] * 8, blockIdx.x * w + threadIdx.x);
-    __syncwarp();
-  }
-}
-
 __global__ void dtw_kernel(uint32_t* out) {
   uint32_t v[N], dv[N];
   tw_init(v, dv, 0, LANES);
@@ -1718,22 +1702,15 @@ int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uin
 }
 
 // The tree's levels 1 … SUB over the leaves [jbase / 16, (jbase + n) / 16) that `ww_sketch_leaves` wrote, while L2
-// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node), in one launch
-// (`node_span`, or with warp `fold_warp`): `ww_sketch_tree` from level SUB then reads back 64 B a 2^SUB leaves rather
-// than every leaf.
-int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n, int warp, cudaStream_t s) {
+// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node), in one `node_span`
+// launch: `ww_sketch_tree` from level SUB then reads back 64 B a 2^SUB leaves rather than every leaf.
+int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n, cudaStream_t s) {
   const uint64_t span = 16ull << SUB;
   if (jbase % span || n % span || jbase + n > blocks) return 2;
   if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   if (p.lv.n.size() <= (size_t)SUB) return 2;
   const uint64_t l0 = jbase / 16, c = n / 16;
-  if (warp) {
-    Levels lv;
-    for (int t = 0; t <= SUB; ++t) lv.off[t] = p.lv.off[t] + (l0 >> t);
-    fold_warp<<<(unsigned)(c >> SUB), 32, 0, s>>>(p.nodes, lv, c);
-    return cudaGetLastError() ? 4 : 0;
-  }
   static_assert(SUB <= bw::SPAN, "one node_span launch");
   bw::Span sp;
   sp.levels = SUB;
