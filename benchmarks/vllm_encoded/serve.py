@@ -222,16 +222,16 @@ class Install:
             fn = apply(len(K.LINEARS) - 1, layer.quant_method.fp8_linear.quant_fp8)
             self.hooks.wrap(layer.quant_method, "apply", lambda orig, fn=fn: fn)
             gates["layers"] += 1
-        if args.commit:
-            lins = [lin for _, lin in self.linears]
-            lins[0].first = lins[-1].last = True
-            tlib.commit_every_step(sum(lin.blocks for lin in lins))
         gc.collect()
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
         alloc1 = torch.cuda.memory_allocated()
         selection = self.select()
         if args.commit:
+            lins = [lin for _, lin in self.linears]
+            lins[0].first = lins[-1].last = True
+            tlib.commit_every_step(max(sum(tlib.vectors(lin.n, lin.kd, tlib.steps(m, lin.n, lin.kd, lin.configs[m])[0])
+                                           for lin in lins) for m in CAPTURE))
             gates["commit"] = {m: check_commit(self.linears, m, 1) for m in CAPTURE}
         scan = plaintext_scan(min(lin.n * lin.kd for _, lin in self.linears))
         if k and (scan["fp8"] or scan["uint8"]):
@@ -246,6 +246,9 @@ class Install:
                                                          tlib.sketch["t"]) for _, lin in self.linears) for m in CAPTURE}
                 codec |= {"sketch_k": tlib.sketch["k"], "sketch_t": tlib.sketch["t"], "tag_blocks": vecs[1],
                           "tag_vectors": vecs, "tag_index_space": tag_base, "commit": bool(args.commit)}
+                if tlib.step:
+                    codec["commit_buffer_bytes"] = sum(x.numel() * x.element_size()
+                                                       for x in (tlib.step["tags"], tlib.step["nodes"]))
         elif wide:
             codec = {"field": wlib.field.name, "word_bits": wlib.bits, "payload_bits": wlib.payload, "limbs": wlib.limbs,
                      "lane_words": wlib.lane_words, "wide_lib": Path(args.wide_lib).name, "kmax": wlib.kmax,
