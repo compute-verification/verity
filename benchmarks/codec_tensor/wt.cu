@@ -95,6 +95,26 @@ __device__ __forceinline__ void add3(u32 *r, u32 a, u32 b) {
       : "r"(a), "r"(b));
 }
 
+// Carry chains in PTX (one SASS instruction a limb, against two to three for the u64 forms below). The flag lives
+// between consecutive asm volatile statements, which the compiler keeps in order.
+__device__ __forceinline__ u32 add_cc(u32 a, u32 b) { u32 r; asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc_cc(u32 a, u32 b) { u32 r; asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+
+// x += a (a < 2^32) into NL limbs; returns the carry out of 2^(32 NL). The carry leaves limb 0 with probability
+// a / 2^32 (every caller's a is at most c^2 + c < 2^24), so the rest of the chain is a branch.
+__device__ __forceinline__ u32 add_small(u32 (&x)[NL], u32 a) {
+  x[0] += a;
+  if (x[0] >= a) return 0u;
+  x[1] = add_cc(x[1], 1u);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = addc_cc(x[k], 0u);
+  return addc(0u, 0u);
+}
+
 // t = a^2, a < 2^(32 NL): column m sums each unordered pair once, doubles, adds the diagonal and the carry in.
 __device__ __forceinline__ void sqr_full(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
   u32 c0 = 0, c1 = 0;
@@ -141,14 +161,7 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
       x[k] = (u32)v;
       carry = v >> 32;
     }
-    u64 c = carry * CF;
-#pragma unroll
-    for (int k = 0; k < NL; ++k) {
-      c += x[k];
-      x[k] = (u32)c;
-      c >>= 32;
-    }
-    x[0] += (u32)c * CF;
+    if (add_small(x, (u32)carry * CF)) add_small(x, CF);
   } else {
     constexpr int QY = Q % NL;
     u32 y[NL + 1];
@@ -328,17 +341,12 @@ __device__ __forceinline__ void negate(u32 (&x)[NL]) {
   }
 }
 
-// Carry chains in PTX (one SASS instruction a limb, against two to three for the u64 forms above). The flag lives
-// between consecutive asm volatile statements, which the compiler keeps in order.
-__device__ __forceinline__ u32 add_cc(u32 a, u32 b) { u32 r; asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 addc_cc(u32 a, u32 b) { u32 r; asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-
-// x < 2p to [0, p), as canon.
+// x < 2p to [0, p), as canon. At full slot x >= p needs x's top limb all ones (p's limbs above the lowest are, c < 2^32),
+// with probability 2^-32 a word.
 __device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
+  if constexpr (FULL_SLOT) {
+    if (x[NL - 1] != 0xffffffffu) return;
+  }
   u32 y[NL];
   y[0] = add_cc(x[0], CF);
 #pragma unroll
@@ -356,8 +364,17 @@ __device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
   for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
 }
 
-// x = a + b mod p, a + b < 2p, as addmod.
+// x = a + b mod p, a + b < 2p, as addmod. At full slot, when s = a + b carries out of 2^n, s - p = (s - 2^n) + c < p
+// carries out of limb 0 only rarely (add_small); otherwise s < 2^n and canon_cc takes off p if s >= p.
 __device__ __forceinline__ void addmod_cc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  if constexpr (FULL_SLOT) {
+    x[0] = add_cc(a[0], b[0]);
+#pragma unroll
+    for (int k = 1; k < NL; ++k) x[k] = addc_cc(a[k], b[k]);
+    add_small(x, CF & (0u - addc(0u, 0u)));
+    canon_cc(x);
+    return;
+  }
   u32 s[NL], y[NL];
   s[0] = add_cc(a[0], b[0]);
 #pragma unroll
@@ -379,8 +396,18 @@ __device__ __forceinline__ void add_nc(const u32 (&a)[NL], const u32 (&b)[NL], u
   x[NL - 1] = addc(a[NL - 1], b[NL - 1]);
 }
 
-// q = p - q when neg, q canonical (so 0 becomes p).
+// q = p - q when neg, q canonical (so 0 becomes p). At full slot p's limbs above the lowest are all ones, so p - q
+// complements them unless the lowest limb borrows (q[0] > 2^32 - c, rare).
 __device__ __forceinline__ void neg_if(u32 (&q)[NL], bool neg) {
+  if constexpr (FULL_SLOT) {
+    if (!neg || q[0] <= 0u - CF) {
+      const u32 m = 0u - (u32)neg;
+      q[0] = neg ? (0u - CF) - q[0] : q[0];
+#pragma unroll
+      for (int k = 1; k < NL; ++k) q[k] ^= m;
+      return;
+    }
+  }
   u32 z[NL];
   z[0] = sub_cc(kP[0], q[0]);
 #pragma unroll
@@ -390,11 +417,21 @@ __device__ __forceinline__ void neg_if(u32 (&q)[NL], bool neg) {
   for (int k = 0; k < NL; ++k) q[k] = neg ? z[k] : q[k];
 }
 
-// x = a - b mod p, a and b canonical, as submod.
+// x = a - b mod p, a and b canonical, as submod. At full slot, on a borrow r = a - b + 2^n >= c + 1 and a - b + p = r - c,
+// which borrows past limb 0 only when r's low limb is below c.
 __device__ __forceinline__ void submod_cc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
   x[0] = sub_cc(a[0], b[0]);
 #pragma unroll
   for (int k = 1; k < NL; ++k) x[k] = subc_cc(a[k], b[k]);
+  if constexpr (FULL_SLOT) {
+    const u32 d = CF & subc(0u, 0u), lo = x[0];
+    x[0] = lo - d;
+    if (lo >= d) return;
+    x[1] = sub_cc(x[1], 1u);
+#pragma unroll
+    for (int k = 2; k < NL; ++k) x[k] = subc_cc(x[k], 0u);
+    return;
+  }
   const u32 m = subc(0u, 0u);
   x[0] = add_cc(x[0], kP[0] & m);
 #pragma unroll
@@ -511,10 +548,10 @@ __device__ __forceinline__ void decode_word_wk(u32 (&y)[NL], const u32 (&w)[NL])
   decode_word_w(y, w);
 }
 
-// u = (c_0 + tau i) mod p, canonical, at full slot and without a double-width product: limb k sums c_0's, tau_k lo
-// and tau_(k-1) hi into the carry (three words), and the part above 2^n (< 2^66) comes back times c.
+// u = (c_0 + tau i) mod p, canonical, at full slot (2^n = c; FRESH_DECODE, its one caller, is full slot only) and
+// without a double-width product: limb k sums c_0's, tau_k lo and tau_(k-1) hi into the carry (three words), and the
+// part above 2^n (< 2^66) comes back times c.
 __device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
-  static_assert(FULL_SLOT, "2^n = c");
   const u32 lo = (u32)i, hi = (u32)(i >> 32);
   u32 r[3] = {0, 0, 0};
 #pragma unroll
@@ -686,6 +723,35 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     copy(t, t2);
   }
   atomicXor(xr, (unsigned long long)acc);
+}
+
+// The decode's field primitives a word a thread, for the gate at their rare carries (`kv_twin.rare_cases`): op 0
+// addmod_cc(a, b), 1 submod_cc(a, b), 2 neg_if(a, b odd), 3 canon_cc(a), 4 sqr(a).
+__global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict__ a, const u32 *__restrict__ b,
+                                                   u32 *__restrict__ out, int n) {
+  const int w = blockIdx.x * WPB + threadIdx.x;
+  if (w >= n) return;
+  u32 x[NL], y[NL], z[NL];
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    x[k] = a[(u64)w * NL + k];
+    y[k] = b[(u64)w * NL + k];
+  }
+  if (op == 0) {
+    addmod_cc(x, y, z);
+  } else if (op == 1) {
+    submod_cc(x, y, z);
+  } else if (op == 2) {
+    copy(z, x);
+    neg_if(z, y[0] & 1);
+  } else if (op == 3) {
+    copy(z, x);
+    canon_cc(z);
+  } else {
+    sqr(x, z);
+  }
+#pragma unroll
+  for (int k = 0; k < NL; ++k) out[(u64)w * NL + k] = z[k];
 }
 
 __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ store, u64 n16, unsigned long long *xr) {
@@ -2163,6 +2229,12 @@ int wt_decode(const uint8_t *store, u32 *out, u64 n, u64 base, int k, unsigned l
                   else decode_kernel<K, 0><<<grid, WPB, 0, s>>>(store, out, n, base, xr); } while (0)
   WT_K_SWITCH(k, F)
 #undef F
+  return cudaGetLastError() ? 4 : 0;
+}
+
+int wt_prim(int op, const u32 *a, const u32 *b, u32 *out, int n, cudaStream_t s) {
+  if (op < 0 || op > 4 || n < 1) return 1;
+  prim_kernel<<<(n + WPB - 1) / WPB, WPB, 0, s>>>(op, a, b, out, n);
   return cudaGetLastError() ? 4 : 0;
 }
 

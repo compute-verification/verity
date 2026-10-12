@@ -7,6 +7,7 @@ fastest native FP8 GEMM, the faster plain attention form, a plain append) is its
 the step reads) its unit. Writes `step.json` and `step.log` under `--out`, and in a `research run` its `result.json`.
 
 Nothing is timed before its gate passed:
+- wt.cu's decode primitives at inputs that take their rare branches (`gate_prims`), which no gate's random words reach;
 - the codecs: wt.cu's encode and decode against `wide.py` at each k (`bench.gate_codec`) and its plain fragment layout
   (`bench.gate_layout`); kv.cu's against `kv.py` (`kv_bench.gate`);
 - each linear of the model at M = batch (`bench.gemm_case`): the fused kernel's partial sums equal the plain kernel's
@@ -35,6 +36,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import statistics
 import sys
 import time
@@ -52,6 +54,7 @@ import wide as W  # noqa: E402
 sys.path.insert(0, str(HERE.parent / "word_codec"))
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
+import kv_twin as KT  # noqa: E402
 
 LM_HEAD = {"8b": (128256, 4096), "70b": (128256, 8192), "tiny": (2048, 512)}
 TINY = (2, {"qkv": (384, 512), "o": (512, 512), "gate_up": (1024, 512), "down": (512, 1024)})
@@ -93,6 +96,29 @@ def part_floats(sh: dict, b: int, cands: dict[int, list[int]]) -> int:
 
 
 # --- gates -------------------------------------------------------------------------------------------------------------
+
+def gate_prims(wt, torch, log) -> dict:
+    """wt.cu's decode primitives (`wt_prim`) at inputs that take their rare branches, which random words reach about
+    once in 2^23 (`kv_twin.rare_cases` for p512: a carry or borrow past limb 0, canon's subtraction of p, the square's
+    rare fold), against `kv_twin.prim_want`."""
+    f = K.field("p512")
+    cases = KT.rare_cases(f, random.Random(f.n + 7))
+    nb, st, out = 4 * wt.nl, BW.stream(torch), {}
+    for op, rows in cases.items():
+        a = BW.to_dev(torch, b"".join(BW.limbs_bytes(x, wt.nl) for x, _ in rows))
+        b = BW.to_dev(torch, b"".join(BW.limbs_bytes(y, wt.nl) for _, y in rows))
+        o = torch.zeros(len(rows) * nb, dtype=torch.uint8, device="cuda")
+        wt.call("wt_prim", op, BW.ptr(a), BW.ptr(b), BW.ptr(o), len(rows), st)
+        torch.cuda.synchronize()
+        got = bytes(o.cpu().tolist())
+        bad = [i for i, (x, y) in enumerate(rows)
+               if int.from_bytes(got[i * nb:(i + 1) * nb], "little") != KT.prim_want(f, op, x, y)]
+        out[KT.PRIMS[op]] = {"cases": len(rows), "bad": bad}
+    ok = all(not v["bad"] for v in out.values())
+    counts = ", ".join(f"{k} {v['cases']}" for k, v in out.items())
+    log(f"gate wt primitives at their rare branches: {'ok' if ok else 'FAIL'} ({counts}) {out if not ok else ''}")
+    return {"ok": ok, "ops": out}
+
 
 def gate_append(kv, torch, ks, log) -> dict:
     f = kv.field
@@ -586,6 +612,7 @@ def main() -> int:
     kv = KB.Lib("p512", a.kv_lib)
     v, i = ctypes.c_void_p, ctypes.c_int
     kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
+    wt.so.wt_prim.argtypes = [i, v, v, v, i, v]
     if wt.n != 512 or kv.field.n != 512 or max(ks) > min(wt.kmax, kv.kmax):
         raise SystemExit(f"want p512 builds with k up to {max(ks)}: wt {wt.n} bits kmax {wt.kmax}, kv {kv.field.n}")
     ash = KB.attn_shape(kv)
@@ -606,10 +633,12 @@ def main() -> int:
     log(f"{props.name}: {sms} SMs, {props.total_memory / 2**30:.1f} GiB; {a.model} B={a.batch} (linears at M={m}) k {ks}; "
         f"kv_attn {ash}")
     res["gate"]["layout"] = BW.gate_layout(torch, log)
+    res["gate"]["wt_prims"] = gate_prims(wt, torch, log)
     res["gate"]["wt_codec"] = {k: BW.gate_codec(wt, torch, k, 256, log) for k in ks}
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
     res["gate"]["append"] = gate_append(kv, torch, ks, log)
-    res["ok"] = (res["gate"]["layout"]["ok"] and all(g["ok"] for g in res["gate"]["wt_codec"].values())
+    res["ok"] = (res["gate"]["layout"]["ok"] and res["gate"]["wt_prims"]["ok"]
+                 and all(g["ok"] for g in res["gate"]["wt_codec"].values())
                  and all(g["ok"] for g in res["gate"]["kv_codec"].values()) and res["gate"]["append"]["ok"])
     save()
     if not res["ok"]:
