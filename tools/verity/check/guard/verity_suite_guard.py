@@ -67,8 +67,9 @@ _test = ""                                                       # the node id o
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 #: node id -> seconds of its setup and call, None once a phase did not pass. Setup counts: a module-scoped fixture's setup goes
 #: to the first test that needs it, and ordering by call alone started those late (test_lean_witness, 12 Oct: 138 s of calls
-#: behind 1,270-1,475 s of `f1` setup per worker)
+#: behind 1,270-1,475 s of `f1` setup per worker). A test enters only once its call passed: one stopped mid-call never counts
 _outcomes: dict[str, float | None] = {}
+_setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
 _traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
@@ -292,8 +293,10 @@ def pytest_runtest_logreport(report) -> None:
         _outcomes[report.nodeid] = None
         if report.outcome == "failed":
             _failed.add(report.nodeid)
-    elif report.when in ("setup", "call") and _outcomes.get(report.nodeid, 0.0) is not None:
-        _outcomes[report.nodeid] = _outcomes.get(report.nodeid, 0.0) + report.duration
+    elif report.when == "setup":
+        _setup_s[report.nodeid] = report.duration
+    elif report.when == "call" and _outcomes.get(report.nodeid, 0.0) is not None:
+        _outcomes[report.nodeid] = _setup_s.pop(report.nodeid, 0.0) + report.duration
     if report.when == "call":
         _counts[report.outcome] += 1
         if report.duration > SLOW_S and "slow" not in report.keywords:
