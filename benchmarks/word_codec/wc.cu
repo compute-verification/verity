@@ -839,37 +839,91 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
   }
 }
 
-// The audit's own pass over the store, no decode and no product: each thread tags lane blocks (32 q + l's words are
-// q TASK_WORDS + 32 w + l, a warp's loads coalesced), its words loaded a compression at a time. Its tags are
-// gemm_ws_kernel's.
+// Lane block j's tag straight from the store (32 q + l's words are q TASK_WORDS + 32 w + l, a warp's loads coalesced),
+// its words loaded a compression at a time; jj = jbase + j, its index in the tag.
+__device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ store, const bw::Key3& key, uint64_t j,
+                                               uint64_t jj, uint32_t* tags) {
+  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
+  const unsigned long long* src =
+      reinterpret_cast<const unsigned long long*>(store) + (j / LANES) * TASK_WORDS + j % LANES;
+  uint32_t cv[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+  for (int b = 0; b < BLOCKS; ++b) {
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 16; i += 2) {
+      const int u = 16 * b + i, w = (u - 2) / 2;
+      const uint64_t v = u == 0 ? 0 : u < MSG ? __ldcs(src + (size_t)w * LANES) : 0;
+      m[i] = u == 0 ? bw::bswap32((uint32_t)(jj >> 32)) : (uint32_t)v;
+      m[i + 1] = u == 0 ? bw::bswap32((uint32_t)jj) : (uint32_t)(v >> 32);
+    }
+    const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+    const uint32_t flags =
+        bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+    bw::b3_compress(cv, m, 0, len, flags, cv);
+  }
+  uint4* o = reinterpret_cast<uint4*>(tags + 8 * j);
+  o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+  o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+}
+
+// The audit's own pass over the store, no decode and no product: a thread a lane block. Its tags are gemm_ws_kernel's.
 __global__ void __launch_bounds__(256) audit_tag_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
                                                         bw::Key3 key, uint64_t jbase, uint32_t* __restrict__ tags) {
-  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
-  for (uint64_t j = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x; j < blocks; j += (uint64_t)gridDim.x * blockDim.x) {
-    const unsigned long long* src =
-        reinterpret_cast<const unsigned long long*>(store) + (j / LANES) * TASK_WORDS + j % LANES;
-    const uint64_t jj = jbase + j;
-    uint32_t cv[8];
+  for (uint64_t j = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x; j < blocks; j += (uint64_t)gridDim.x * blockDim.x)
+    audit_lane_tag(store, key, j, jbase + j, tags);
+}
+
+// b3_leaf over 16 tags this warp wrote before its __syncwarp, read through L1 (ld.ca), never the read-only path a
+// const __restrict__ pointer allows.
+__device__ __forceinline__ void audit_leaf(const uint32_t* T, uint64_t leaf, const bw::Mid& mid, uint64_t* out) {
+  uint64_t s[8];
 #pragma unroll
-    for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+  for (int i = 0; i < 8; ++i) s[i] = mid.h[i];
+#pragma unroll 1
+  for (int blk = 0; blk < 5; ++blk) {
+    uint64_t w[16];
 #pragma unroll
-    for (int b = 0; b < BLOCKS; ++b) {
-      uint32_t m[16];
-#pragma unroll
-      for (int i = 0; i < 16; i += 2) {
-        const int u = 16 * b + i, w = (u - 2) / 2;
-        const uint64_t v = u == 0 ? 0 : u < MSG ? __ldcs(src + (size_t)w * LANES) : 0;
-        m[i] = u == 0 ? bw::bswap32((uint32_t)(jj >> 32)) : (uint32_t)v;
-        m[i + 1] = u == 0 ? bw::bswap32((uint32_t)jj) : (uint32_t)(v >> 32);
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      uint64_t v = 0;
+      if (q == 0) {
+        v = leaf;
+      } else if (q <= 64) {
+        const uint2 t = __ldca(reinterpret_cast<const uint2*>(T) + (q - 1));
+        v = ((uint64_t)bw::bswap32(t.x) << 32) | bw::bswap32(t.y);
+      } else if (q == 65) {
+        v = 0x80ULL << 56;
       }
-      const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
-      const uint32_t flags =
-          bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-      bw::b3_compress(cv, m, 0, len, flags, cv);
+      if (q == 79) v = (uint64_t)(128 + 8 + 512) * 8;
+      w[i] = v;
     }
-    uint4* o = reinterpret_cast<uint4*>(tags + 8 * j);
-    o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
-    o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+    bw::compress(s, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) out[i] = s[i];
+}
+
+// The audit pass with its leaves: a warp tags 16 tasks' lane blocks (512, as audit_tag_kernel), then each lane hashes
+// one of their 32 leaves from the tags just written, still in L1 or L2, so the tags make no second trip to memory.
+// blocks % 512 == 0; the leaves are wc_commit_leaves'.
+__global__ void __launch_bounds__(256) audit_commit_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
+                                                           bw::Key3 key, bw::Mid mid, uint64_t jbase, uint32_t* tags,
+                                                           uint64_t* __restrict__ leaves) {
+  const int lane = threadIdx.x % 32;
+  const uint64_t warps = (uint64_t)gridDim.x * (blockDim.x / 32);
+  for (uint64_t g = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) / 32; g < blocks / 512; g += warps) {
+#pragma unroll 1
+    for (int u = 0; u < 16; ++u) {
+      const uint64_t j = g * 512 + 32 * u + lane;
+      audit_lane_tag(store, key, j, jbase + j, tags);
+    }
+    __syncwarp();
+    const uint64_t c = g * 32 + lane;
+    audit_leaf(tags + c * 16 * 8, c, mid, leaves + c * 8);
+    __syncwarp();
   }
 }
 
@@ -1147,6 +1201,16 @@ int wc_audit_tag(const void* store, uint64_t blocks, const uint8_t* seed, uint64
                  cudaStream_t s) {
   if (!store || !seed || !tags || !blocks || grid < 1 || blocks % LANES) return 1;
   audit_tag_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, ws_tag_keys(seed).key, jbase, tags);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// wc_audit_tag with the commit's leaves (a workspace's wc_commit_leaves_at) in the same pass: blocks % 512 == 0.
+int wc_audit_commit(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, uint32_t* tags,
+                    uint64_t* leaves, int grid, cudaStream_t s) {
+  if (!store || !seed || !tags || !leaves || !blocks || grid < 1 || blocks % 512) return 1;
+  const WsTag& tg = ws_tag_keys(seed);
+  audit_commit_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, tg.key, tg.leafmid, jbase, tags,
+                                           leaves);
   return cudaGetLastError() ? 4 : 0;
 }
 
