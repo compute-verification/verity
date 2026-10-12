@@ -1,0 +1,685 @@
+"""The wide-word codec's benchmark on one GPU: `wt.cu`'s libraries (`--lib PATH`, one per field) gated against
+`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and in a `research run` its
+`result.json`.
+
+Nothing is timed before its gate passed, in this order:
+- `gate`: per field and k, device encode equals `wide.encode_word` on random and edge payloads, and both decodes (CUDA
+  cores, tensor cores) give the payloads back; the tensor-core squaring equals a^2 mod p on random and edge inputs; the
+  plain fragment layout built on the device equals `codec.plain_fragments` (`benchmarks/word_codec`);
+- `read`: the device read rate R over a store of `--store-gib`, the best of a few grids;
+- `rates`: compute-only throughputs: the squaring on CUDA cores (ILP 1, 2) and on tensor cores (1 or 2 words a warp),
+  both at once in one CTA (`wt_mix`), decode and encode chains on CUDA cores;
+- `decode`: a store of `--store-gib` encoded on the device, its decode on CUDA and tensor cores equal to the payloads,
+  then each decode timed (read, decode, XOR);
+- `gemm`: at Llama-3.1-8B's linears and batch 1-32, the fused kernel's partial sums equal the plain kernel's bit for bit,
+  the plain kernel's within FP32 rounding of torch's; then interleaved reps (each on cold weights, a ring of copies past
+  the L2, queued behind a spin kernel) of cuBLASLt FP8 (`torch._scaled_mm`), the plain FP8 kernel, the plain kernel with
+  `--mma-knobs` extra int8 MMAs a tile or `--imad-knobs` extra IMADs a tile a thread (the budget a decode on tensor or
+  CUDA cores has before it slows the memory-bound step), and the fused decode at k = 1 (and `--gemm-ks`).
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import hashlib
+import importlib.util
+import json
+import os
+import random
+import statistics
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import wide as W  # noqa: E402
+
+SEED = hashlib.sha256(b"verity/codec-tensor/bench/seed").digest()
+SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
+BATCHES = (1, 2, 4, 8, 16, 32)
+L2_DEFEAT_BYTES = 1 << 30
+SPIN_CYCLES = 20_000_000
+
+
+def word_codec():
+    spec = importlib.util.spec_from_file_location("wc_codec", HERE.parent / "word_codec" / "codec.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class Lib:
+    def __init__(self, path: str) -> None:
+        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+        self.path, self.so = path, ctypes.CDLL(path)
+        so = self.so
+        so.wt_set_key.argtypes = [v, i, v, v]
+        so.wt_encode.argtypes = [v, v, q, q, i, i, v]
+        so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
+        so.wt_tc_decode.argtypes = [v, v, q, q, i, v, i, v]
+        so.wt_read.argtypes = [v, q, v, i, v]
+        so.wt_tc_square_gate.argtypes = [v, v, i, v]
+        so.wt_chain.argtypes = [i, i, i, q, v, i, v]
+        so.wt_mix.argtypes = [q, q, i, v, i, v]
+        so.wt_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, v, v]
+        so.wt_spin.argtypes = [ctypes.c_longlong, v]
+        so.wt_empty.argtypes = [i, v]
+        cs = (ctypes.c_int * 12)()
+        so.wt_constants(cs)
+        (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
+         self.sb) = list(cs)
+        self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
+        f = self.field
+        if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
+                                                             W.TASK_WORDS[f.name] * f.word_bytes):
+            raise RuntimeError(f"{path}: constants {list(cs)} are not wide.py's {f}")
+        self.name = f.name
+        self.tc = self.tc_mmas > 0
+
+    def call(self, fn: str, *args) -> None:
+        rc = getattr(self.so, fn)(*args)
+        if rc:
+            raise RuntimeError(f"{self.name}: {fn} error {rc}")
+
+
+def stream(torch) -> int:
+    return torch.cuda.current_stream().cuda_stream
+
+
+def ptr(t) -> int:
+    return t.data_ptr()
+
+
+def timed(torch, fn, reps: int, warm: int = 1) -> list[float]:
+    for _ in range(warm):
+        fn()
+    torch.cuda.synchronize()
+    out = []
+    for _ in range(reps):
+        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        a.record()
+        fn()
+        b.record()
+        b.synchronize()
+        out.append(a.elapsed_time(b) / 1e3)
+    return out
+
+
+def queued(lib: Lib, torch, fn) -> tuple[float, float]:
+    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    lib.call("wt_spin", SPIN_CYCLES, stream(torch))
+    a.record()
+    h = time.perf_counter()
+    fn()
+    h = time.perf_counter() - h
+    b.record()
+    b.synchronize()
+    return a.elapsed_time(b) / 1e3, h
+
+
+def limbs_bytes(x: int, nl: int) -> bytes:
+    return x.to_bytes(4 * nl, "little")
+
+
+def to_dev(torch, data: bytes):
+    return torch.frombuffer(bytearray(data), dtype=torch.uint8).cuda()
+
+
+def set_key(lib: Lib, torch, key: W.Key) -> None:
+    c = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in key.c))
+    tau = to_dev(torch, limbs_bytes(key.tau, lib.nl))
+    p = to_dev(torch, limbs_bytes(lib.field.p, lib.nl))
+    lib.call("wt_set_key", ptr(c), key.rounds, ptr(tau), ptr(p))
+
+
+# --- gates -------------------------------------------------------------------------------------------------------------
+
+def gate_codec(lib: Lib, torch, k: int, n_words: int, log) -> dict:
+    f = lib.field
+    key = W.key(f.name, SEED, k)
+    set_key(lib, torch, key)
+    rng = random.Random(7 + k + f.n)
+    top = (1 << (8 * f.payload_bytes)) - 1
+    payloads = [0, 1, 2, top, top - 1, 1 << (8 * f.payload_bytes - 1)]
+    payloads += [rng.getrandbits(8 * f.payload_bytes) for _ in range(n_words - len(payloads))]
+    base = (1 << 40) + 12345
+    m = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in payloads))
+    store = torch.zeros(n_words * f.word_bytes, dtype=torch.uint8, device="cuda")
+    out = torch.zeros(n_words * 4 * lib.nl, dtype=torch.uint8, device="cuda")
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    lib.call("wt_encode", ptr(m), ptr(store), n_words, base, k, 64, stream(torch))
+    torch.cuda.synchronize()
+    sb = bytes(store.cpu().tolist())
+    want = b"".join(W.word_bytes(W.encode_word(x, base + i, key), f) for i, x in enumerate(payloads))
+    bad_enc = [i for i in range(n_words) if sb[i * f.word_bytes:(i + 1) * f.word_bytes]
+               != want[i * f.word_bytes:(i + 1) * f.word_bytes]]
+    res = {"words": n_words, "encode_mismatch": bad_enc[:8], "encode_ok": not bad_enc}
+    for fn, name in (("wt_decode", "cuda"), ("wt_tc_decode", "tc")):
+        if name == "tc" and not lib.tc:
+            continue
+        out.zero_()
+        lib.call(fn, ptr(store), ptr(out), n_words, base, k, ptr(xr), 32, stream(torch))
+        torch.cuda.synchronize()
+        res[f"decode_{name}_ok"] = bool(torch.equal(out, m))
+    res["ok"] = all(v for kk, v in res.items() if kk.endswith("_ok"))
+    log(f"gate {lib.name} k={k}: {'ok' if res['ok'] else 'FAIL'} {res}")
+    return res
+
+
+def gate_tc_square(lib: Lib, torch, n_words: int, log) -> dict:
+    f = lib.field
+    rng = random.Random(3 + f.n)
+    xs = [0, 1, 2, f.p - 1, f.p - 2, (1 << (f.n - 1)), (1 << (f.n - 1)) - 1]
+    xs += [rng.randrange(f.p) for _ in range(n_words - len(xs))]
+    inp = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in xs))
+    out = torch.zeros_like(inp)
+    lib.call("wt_tc_square_gate", ptr(inp), ptr(out), n_words, stream(torch))
+    torch.cuda.synchronize()
+    ob = bytes(out.cpu().tolist())
+    nb = 4 * lib.nl
+    bad = [i for i, x in enumerate(xs) if int.from_bytes(ob[nb * i:nb * (i + 1)], "little") != x * x % f.p]
+    res = {"words": n_words, "mismatch": bad[:8], "ok": not bad}
+    log(f"gate {lib.name} tc square: {'ok' if res['ok'] else 'FAIL'} ({len(bad)} bad)")
+    return res
+
+
+def plain_layout(w):
+    n, kd = w.shape
+    w8 = w.view(n // 16, 2, 8, kd // 512, 16, 2, 4, 4)
+    return w8.permute(0, 3, 4, 2, 6, 5, 1, 7).contiguous().view(-1)
+
+
+def gate_layout(torch, log) -> dict:
+    C = word_codec()
+    rng = random.Random(8)
+    n, kd = 64, 1024
+    w = bytes(rng.getrandbits(8) for _ in range(n * kd))
+    wt = torch.tensor(list(w), dtype=torch.uint8, device="cuda").view(n, kd)
+    ok = bytes(plain_layout(wt).cpu().tolist()) == C.plain_fragments(w, n, kd)
+    log(f"gate layout: plain {ok}")
+    return {"ok": ok}
+
+
+# --- the store of whole tasks (`wide.encode_tasks`) on the device ------------------------------------------------------
+
+def task_payload_limbs(lib: Lib, torch, plain):
+    """plain (a multiple of 8,192 bytes) as the payload limbs of its tasks' words (TW words a task, NL u32 each)."""
+    f = lib.field
+    tasks = plain.numel() // W.TASK_BYTES
+    pad = torch.zeros(tasks, lib.tw * f.payload_bytes, dtype=torch.uint8, device="cuda")
+    pad[:, :W.TASK_BYTES] = plain.view(tasks, W.TASK_BYTES)
+    m = torch.zeros(tasks * lib.tw, 4 * lib.nl, dtype=torch.uint8, device="cuda")
+    m[:, :f.payload_bytes] = pad.view(tasks * lib.tw, f.payload_bytes)
+    return m.view(-1)
+
+
+def encode_store(lib: Lib, torch, m, k: int, sms: int) -> tuple:
+    n = m.numel() // (4 * lib.nl)
+    store = torch.empty(n * lib.s, dtype=torch.uint8, device="cuda")
+    t = timed(torch, lambda: lib.call("wt_encode", ptr(m), ptr(store), n, 0, k, sms * 8, stream(torch)), 1, warm=0)
+    return store, t[0]
+
+
+# --- read, rates, standalone decode ------------------------------------------------------------------------------------
+
+def read_rate(lib: Lib, torch, store, sms: int, reps: int) -> dict:
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    best = None
+    for mult in (4, 8, 16):
+        ts = timed(torch, lambda: lib.call("wt_read", ptr(store), store.numel(), ptr(xr), sms * mult, stream(torch)), reps)
+        med = statistics.median(ts)
+        if best is None or med < best[1]:
+            best = (mult, med, ts)
+    return {"bytes": store.numel(), "grid_per_sm": best[0], "median_s": best[1], "times_s": best[2],
+            "gbps": store.numel() / best[1] / 1e9}
+
+
+def calibrated(torch, run, unit: int, target_s: float, reps: int) -> dict:
+    """run(steps) timed at the step count that takes about target_s; unit = items a step."""
+    steps = 1
+    while True:
+        t = statistics.median(timed(torch, lambda: run(steps), 1))
+        if t > target_s / 8 or steps > 1 << 24:
+            break
+        steps *= 4
+    steps = max(1, int(steps * target_s / max(t, 1e-6)))
+    ts = timed(torch, lambda: run(steps), reps)
+    med = statistics.median(ts)
+    return {"steps": steps, "items": steps * unit, "median_s": med, "times_s": ts, "per_s": steps * unit / med}
+
+
+def rates(lib: Lib, torch, sms: int, reps: int, log) -> dict:
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    st = stream(torch)
+    out = {"square_cuda": {}, "square_tc": {}, "mix": {}, "decode": {}, "encode": {}}
+    for ilp in (1, 2):
+        for mult in (2, 4, 8):
+            grid = sms * mult
+            r = calibrated(torch, lambda s: lib.call("wt_chain", 0, 1, ilp, s, ptr(xr), grid, st), grid * 128 * ilp,
+                           0.08, reps)
+            out["square_cuda"][f"ilp{ilp}_g{mult}"] = r
+    best_c = max(out["square_cuda"].values(), key=lambda r: r["per_s"])
+    log(f"rates {lib.name}: CUDA squarings/s best {best_c['per_s']:.3e} ("
+        + ", ".join(f"{k} {r['per_s']:.2e}" for k, r in out["square_cuda"].items()) + ")")
+    for k in (1, 2):
+        grid = sms * 4
+        out["decode"][k] = calibrated(torch, lambda s: lib.call("wt_chain", 1, k, 1, s, ptr(xr), grid, st), grid * 128,
+                                      0.08, reps)
+        out["encode"][k] = calibrated(torch, lambda s: lib.call("wt_chain", 2, k, 1, s, ptr(xr), grid, st), grid * 128,
+                                      0.3, 3)
+        log(f"rates {lib.name} k={k}: decode {out['decode'][k]['per_s']:.3e} words/s, encode "
+            f"{out['encode'][k]['per_s']:.3e} words/s, r = {out['decode'][k]['per_s'] / out['encode'][k]['per_s']:.0f}")
+    if lib.tc:
+        for ilp in (1, 2):
+            for mult in (2, 4, 8, 12):
+                grid = sms * mult
+                r = calibrated(torch, lambda s: lib.call("wt_chain", 3, 1, ilp, s, ptr(xr), grid, st), grid * 4 * ilp,
+                               0.08, reps)
+                out["square_tc"][f"ilp{ilp}_g{mult}"] = r
+        best_t = max(out["square_tc"].values(), key=lambda r: r["per_s"])
+        log(f"rates {lib.name}: TC squarings/s best {best_t['per_s']:.3e} ("
+            + ", ".join(f"{k} {r['per_s']:.2e}" for k, r in out["square_tc"].items()) + ")")
+        for cw in (4, 6, 7):
+            for mult in (1, 2):
+                grid = sms * mult
+                rc = calibrated(torch, lambda s: lib.call("wt_mix", s, 0, cw, ptr(xr), grid, st), grid * cw * 32, 0.08,
+                                reps)
+                if cw < 8:
+                    rt = calibrated(torch, lambda s: lib.call("wt_mix", 0, s, cw, ptr(xr), grid, st),
+                                    grid * (8 - cw), 0.08, reps)
+                    sc = rc["steps"]
+                    stc = max(1, int(rt["per_s"] / (grid * (8 - cw)) * rc["median_s"]))
+                    ts = timed(torch, lambda: lib.call("wt_mix", sc, stc, cw, ptr(xr), grid, st), reps)
+                    med = statistics.median(ts)
+                    items_c, items_t = sc * grid * cw * 32, stc * grid * (8 - cw)
+                    both = {"sc": sc, "stc": stc, "median_s": med, "times_s": ts, "cuda_per_s": items_c / med,
+                            "tc_per_s": items_t / med, "per_s": (items_c + items_t) / med}
+                else:
+                    rt, both = None, None
+                out["mix"][f"cw{cw}_g{mult}"] = {"cuda_alone": rc, "tc_alone": rt, "both": both}
+                if both:
+                    log(f"rates {lib.name} mix cw={cw} g={mult}: CUDA alone {rc['per_s']:.3e}, TC alone "
+                        f"{rt['per_s']:.3e}, both {both['per_s']:.3e} ({both['cuda_per_s']:.2e} + {both['tc_per_s']:.2e})")
+    return out
+
+
+def standalone_decode(lib: Lib, torch, store_bytes: int, sms: int, reps: int, log) -> dict:
+    f = lib.field
+    n = store_bytes // f.word_bytes
+    gen = torch.Generator(device="cuda").manual_seed(11)
+    m = torch.randint(0, 256, (n, 4 * lib.nl), dtype=torch.uint8, device="cuda", generator=gen)
+    m[:, f.payload_bytes:] = 0
+    m = m.view(-1)
+    out = {}
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    for k in (1, 2):
+        set_key(lib, torch, W.key(f.name, SEED, k))
+        store, enc_s = encode_store(lib, torch, m, k, sms)
+        back = torch.empty_like(m)
+        entry = {"words": n, "store_bytes": n * f.word_bytes, "setup_encode_s": enc_s}
+        for fn, name, mults in (("wt_decode", "cuda", (4, 8, 16)), ("wt_tc_decode", "tc", (4, 8, 16, 24))):
+            if name == "tc" and not lib.tc:
+                continue
+            back.zero_()
+            lib.call(fn, ptr(store), ptr(back), n, 0, k, ptr(xr), sms * 8, stream(torch))
+            torch.cuda.synchronize()
+            if not torch.equal(back, m):
+                entry[name] = {"ok": False}
+                log(f"decode {lib.name} {name} k={k}: FAIL")
+                continue
+            best = None
+            for mult in mults:
+                ts = timed(torch, lambda: lib.call(fn, ptr(store), 0, n, 0, k, ptr(xr), sms * mult, stream(torch)), reps)
+                med = statistics.median(ts)
+                if best is None or med < best[1]:
+                    best = (mult, med, ts)
+            entry[name] = {"ok": True, "grid_per_sm": best[0], "median_s": best[1], "times_s": best[2],
+                           "gbps_stored": n * f.word_bytes / best[1] / 1e9}
+            log(f"decode {lib.name} {name} k={k}: {entry[name]['gbps_stored']:.0f} GB/s stored")
+        entry["ok"] = all(v["ok"] for kk, v in entry.items() if kk in ("cuda", "tc"))
+        out[k] = entry
+        del store, back
+        torch.cuda.empty_cache()
+    return out
+
+
+# --- the GEMM ----------------------------------------------------------------------------------------------------------
+
+def tsteps(lib: Lib, torch, key: W.Key, consumers: int, groups: int, nchunks: int):
+    p = lib.field.p
+    s32 = key.tau * 32 % p
+    sq = key.tau * (lib.tw * consumers * groups * nchunks) % p
+    return to_dev(torch, limbs_bytes(s32, lib.nl) + limbs_bytes(sq, lib.nl))
+
+
+def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, cfgs, fused_cfgs,
+              mma_knobs, imad_knobs) -> dict:
+    g = torch.Generator(device="cuda").manual_seed(100 + n + kd)
+    w = (torch.randn(n, kd, device="cuda", generator=g) * 0.25).to(torch.float8_e4m3fn)
+    plain = plain_layout(w.view(torch.uint8))
+    m = task_payload_limbs(lib, torch, plain)
+    keys, stores = {}, {}
+    for k in ks:
+        keys[k] = W.key(lib.field.name, SEED, k)
+        set_key(lib, torch, keys[k])
+        stores[k], _ = encode_store(lib, torch, m, k, 188)
+    del m
+    torch.cuda.synchronize()
+    nch = kd // 512
+    st = stream(torch)
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    gx = torch.Generator(device="cuda").manual_seed(5)
+    xs = {mb: torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn) for mb in batches}
+    res = {"N": n, "K": kd, "weight_bytes": n * kd, "store_bytes": stores[ks[0]].numel(), "gate": {}, "times": {}}
+
+    def groups_for(mode, k, mb, cfg):
+        launched = ctypes.c_int(0)
+        lib.call("wt_gemm", mode, k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None,
+                 ctypes.byref(launched), st)
+        return launched.value // nch
+
+    def call(mode, k, wbuf, x, y, partials, cfg, knob=0, groups=0, steps=None):
+        lib.call("wt_gemm", mode, k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
+                 cfg[0], cfg[1], groups, knob, ptr(steps) if steps is not None else None, ptr(xr), None, st)
+
+    steps_cache = {}
+
+    def steps_for(k, mb, cfg):
+        gr = groups_for(3, k, mb, cfg)
+        key = (k, mb, cfg)
+        if key not in steps_cache:
+            steps_cache[key] = (gr, tsteps(lib, torch, keys[k], cfg[0], gr, nch))
+        return steps_cache[key]
+
+    for mb in batches:
+        x = xs[mb]
+        ref = x.float() @ w.float().t()
+        scale = (x.float().abs() @ w.float().abs().t()).clamp_min(1e-30)
+        pp = torch.zeros(nch * mb * n, dtype=torch.float32, device="cuda")
+        call(0, 1, plain, x, pp, True, cfgs[0])
+        err = float(((pp.view(nch, mb, n).sum(0) - ref).abs() / scale).max())
+        entry = {"plain_vs_torch_rel": err, "equal_plain": {}}
+        for cfg in cfgs[1:]:
+            pf = torch.zeros_like(pp)
+            call(0, 1, plain, x, pf, True, cfg)
+            entry["equal_plain"][f"plain_c{cfg[0]}s{cfg[1]}"] = bool(torch.equal(pf, pp))
+        for k in ks:
+            set_key(lib, torch, keys[k])
+            for cfg in fused_cfgs:
+                gr, sp = steps_for(k, mb, cfg)
+                pf = torch.zeros_like(pp)
+                call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
+                entry["equal_plain"][f"fused_k{k}_c{cfg[0]}s{cfg[1]}"] = bool(torch.equal(pf, pp))
+        for knob in mma_knobs:
+            pf = torch.zeros_like(pp)
+            call(1, 1, plain, x, pf, True, cfgs[0], knob=knob)
+            entry["equal_plain"][f"mma{knob}"] = bool(torch.equal(pf, pp))
+        for knob in imad_knobs:
+            pf = torch.zeros_like(pp)
+            call(2, 1, plain, x, pf, True, cfgs[0], knob=knob)
+            entry["equal_plain"][f"imad{knob}"] = bool(torch.equal(pf, pp))
+        entry["ok"] = err < 1e-5 and all(entry["equal_plain"].values())
+        res["gate"][mb] = entry
+        log(f"gemm gate {lib.name} {name} M={mb}: {'ok' if entry['ok'] else 'FAIL'} (plain rel {err:.1e}) "
+            + ("" if entry["ok"] else str({k: v for k, v in entry["equal_plain"].items() if not v})))
+        if not entry["ok"]:
+            res["ok"] = False
+            return res
+    res["ok"] = True
+
+    copies = max(2, -(-L2_DEFEAT_BYTES // res["store_bytes"]))
+    ring = {"plain": [plain] + [plain.clone() for _ in range(copies - 1)]}
+    for k in ks:
+        ring[k] = [stores[k]] + [stores[k].clone() for _ in range(copies - 1)]
+    wring = [w] + [w.clone() for _ in range(copies - 1)]
+    res["copies"] = copies
+    so = lib.so
+    for mb in batches:
+        x = xs[mb]
+        xp = ptr(x.view(torch.uint8))
+        y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
+        yp = ptr(y)
+        one = torch.ones((), device="cuda")
+        mpad = mb
+        try:
+            torch._scaled_mm(x, w.t(), one, one, out_dtype=torch.bfloat16)
+            xc = x
+        except Exception:  # noqa: BLE001  cuBLASLt's FP8 path needs M a multiple of 16 here
+            mpad = 16 * -(-mb // 16)
+            xc = torch.zeros(mpad, kd, device="cuda").to(torch.float8_e4m3fn)
+            xc[:mb] = x
+        wts = [wc_.t() for wc_ in wring]
+
+        def arm_cublas():
+            for wt_ in wts:
+                torch._scaled_mm(xc, wt_, one, one, out_dtype=torch.bfloat16)
+
+        def arm(mode, k, cfg, knob=0):
+            ps = [ptr(b) for b in ring["plain" if mode != 3 else k]]
+            gr, sp = steps_for(k, mb, cfg) if mode == 3 else (groups_for(mode, k, mb, cfg), None)
+            spp = ptr(sp) if sp is not None else None
+            xrp = ptr(xr)
+
+            def f():
+                rc = 0
+                for p in ps:
+                    rc |= so.wt_gemm(mode, k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, knob, spp, xrp, None, st)
+                if rc:
+                    raise RuntimeError(f"wt_gemm mode {mode} k={k} M={mb}: error {rc}")
+            return f
+
+        grid = 188
+
+        def arm_empty():
+            rc = 0
+            for _ in range(copies):
+                rc |= so.wt_empty(grid, st)
+            if rc:
+                raise RuntimeError("wt_empty")
+
+        arms = {"cublas": arm_cublas, "empty": arm_empty}
+        for cfg in cfgs:
+            arms[f"plain_c{cfg[0]}s{cfg[1]}"] = arm(0, 1, cfg)
+        for k in ks:
+            for cfg in fused_cfgs:
+                arms[f"fused_k{k}_c{cfg[0]}s{cfg[1]}"] = arm(3, k, cfg)
+        for knob in mma_knobs:
+            arms[f"mma{knob}"] = arm(1, 1, cfgs[0], knob)
+        for knob in imad_knobs:
+            arms[f"imad{knob}"] = arm(2, 1, cfgs[0], knob)
+        set_key(lib, torch, keys[ks[0]])
+        for f_ in arms.values():
+            f_()
+        torch.cuda.synchronize()
+        times = {a: [] for a in arms}
+        host = {a: [] for a in arms}
+        names = list(arms)
+        for rep in range(reps):
+            order = names[rep % len(names):] + names[:rep % len(names)]
+            for a in order:
+                if a.startswith("fused_k"):
+                    set_key(lib, torch, keys[int(a[7])])
+                t, h = queued(lib, torch, arms[a])
+                times[a].append(t / copies)
+                host[a].append(h)
+        med = {a: statistics.median(v) for a, v in times.items()}
+        native = min(med[a] for a in med if a == "cublas" or a.startswith("plain_"))
+        plain_best = min(med[a] for a in med if a.startswith("plain_"))
+        res["times"][mb] = {"median_s": med, "times_s": times, "cublas_m": mpad, "native_s": native,
+                            "plain_best_s": plain_best, "host_enqueue_max_s": max(max(v) for v in host.values()),
+                            "ratio_vs_native": {a: med[a] / native for a in med},
+                            "ratio_vs_plain0": {a: med[a] / med[f"plain_c{cfgs[0][0]}s{cfgs[0][1]}"] for a in med}}
+        fb = {k: min((med[f"fused_k{k}_c{c[0]}s{c[1]}"], f"c{c[0]}s{c[1]}") for c in fused_cfgs) for k in ks}
+        log(f"gemm {lib.name} {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain best {plain_best * 1e6:.1f} us; "
+            f"native {native * 1e6:.1f} us; "
+            + ", ".join(f"fused k{k} {fb[k][0] / native:.2f}x ({fb[k][1]})" for k in ks)
+            + "; mma " + " ".join(f"{kn}:{med[f'mma{kn}'] / native:.2f}" for kn in mma_knobs)
+            + "; imad " + " ".join(f"{kn}:{med[f'imad{kn}'] / native:.2f}" for kn in imad_knobs))
+    del ring, wring, stores, plain, w
+    torch.cuda.empty_cache()
+    return res
+
+
+# --- analysis ----------------------------------------------------------------------------------------------------------
+
+def analysis(lib: Lib, read_gbps: float, r: dict) -> dict:
+    """x per unit (the adversary's root at the squaring floor, n - 2 squarings a word for a Mersenne prime and at least
+    that for p = 2^n - c, on CUDA cores, on tensor cores, and both in one CTA), Delta (decode's compute-only time per
+    native pass) and r = x / Delta, per k. A native pass reads the plain weights (W bytes) at R; their store is
+    W TW / 8192 words."""
+    f = lib.field
+    words_per_byte = lib.tw / W.TASK_BYTES
+    t_native = 1 / (read_gbps * 1e9)                      # seconds a plain byte
+    sq = {"cuda": max(v["per_s"] for v in r["square_cuda"].values())}
+    if r["square_tc"]:
+        sq["tc"] = max(v["per_s"] for v in r["square_tc"].values())
+        both = [v["both"]["per_s"] for v in r["mix"].values() if v.get("both")]
+        sq["both"] = max([*both, sq["cuda"]])
+    out = {"read_gbps": read_gbps, "words_per_plain_byte": words_per_byte, "squarings_s": sq, "k": {}}
+    for k in (1, 2):
+        row = {}
+        for unit, rate in sq.items():
+            root_s = rate / (f.n - 2)                       # words/s at the floor
+            row[f"x_{unit}"] = k * words_per_byte / root_s / t_native
+        enc = r["encode"][k]["per_s"]
+        dec = r["decode"][k]["per_s"]
+        row["x_cuda_measured_encode"] = words_per_byte / enc / t_native
+        row["delta_cuda"] = words_per_byte / dec / t_native
+        row["r_cuda"] = dec / enc
+        out["k"][k] = row
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--lib", action="append", required=True, help="a wt.cu build")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--phases", default="rates,decode,gemm")
+    ap.add_argument("--store-gib", type=float, default=2.0)
+    ap.add_argument("--reps", type=int, default=7)
+    ap.add_argument("--gate-words", type=int, default=256)
+    ap.add_argument("--shapes", default=",".join(SHAPES))
+    ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
+    ap.add_argument("--gemm-libs", default="", help="field names the GEMM runs with (default: all)")
+    ap.add_argument("--gemm-ks", default="1")
+    ap.add_argument("--plain", default="4x4,8x8", help="plain kernel CONSUMERSxSTAGES")
+    ap.add_argument("--fused", default="4x8,8x9", help="fused kernel CONSUMERSxSTAGES")
+    ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
+    ap.add_argument("--imad-knobs", default="32,64,128,192,256")
+    a = ap.parse_args()
+
+    import torch
+    out_dir = Path(a.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log_path = out_dir / "bench.log"
+
+    def log(msg: str) -> None:
+        line = f"{time.strftime('%H:%M:%SZ', time.gmtime())} {msg}"
+        print(line, flush=True)
+        with log_path.open("a") as fh:
+            fh.write(line + "\n")
+
+    def save() -> None:
+        (out_dir / "codec-tensor.json").write_text(json.dumps(res, indent=1))
+
+    libs = [Lib(p) for p in a.lib]
+    props = torch.cuda.get_device_properties(0)
+    sms = props.multi_processor_count
+    phases = set(a.phases.split(","))
+    parse = lambda s: [tuple(int(v) for v in c.split("x")) for c in s.split(",") if c]  # noqa: E731
+    res = {"device": {"name": props.name, "sms": sms, "cc": f"{props.major}.{props.minor}"}, "seed": SEED.hex(),
+           "libs": {}, "ok": True, "args": vars(a)}
+    log(f"device {props.name}, {sms} SMs; fields {[l.name for l in libs]}")
+    res["layout"] = gate_layout(torch, log)
+    res["ok"] &= res["layout"]["ok"]
+    for lib in libs:
+        g = {k: gate_codec(lib, torch, k, a.gate_words, log) for k in (1, 2)}
+        e = {"path": lib.path, "constants": {"n": lib.n, "NL": lib.nl, "S": lib.s, "PB": lib.pb, "TW": lib.tw,
+                                             "U": lib.u, "c": lib.c, "tc_mmas": lib.tc_mmas},
+             "sha256": hashlib.sha256(Path(lib.path).read_bytes()).hexdigest(), "gate": g}
+        if lib.tc:
+            e["gate_tc_square"] = gate_tc_square(lib, torch, 512, log)
+        res["libs"][lib.name] = e
+        res["ok"] &= all(v["ok"] for v in g.values()) and e.get("gate_tc_square", {"ok": True})["ok"]
+    save()
+    if not res["ok"]:
+        log("a gate failed: nothing timed")
+        write_result(res, libs, out_dir)
+        return 5
+    store = torch.randint(0, 255, (int(a.store_gib * (1 << 30)) // 16 * 16,), dtype=torch.uint8, device="cuda")
+    res["read"] = read_rate(libs[0], torch, store, sms, a.reps)
+    del store
+    torch.cuda.empty_cache()
+    log(f"read {res['read']['gbps']:.0f} GB/s")
+    for lib in libs:
+        e = res["libs"][lib.name]
+        set_key(lib, torch, W.key(lib.field.name, SEED, 2))
+        if "rates" in phases:
+            e["rates"] = rates(lib, torch, sms, a.reps, log)
+            e["analysis"] = analysis(lib, res["read"]["gbps"], e["rates"])
+            for k, row in e["analysis"]["k"].items():
+                log(f"analysis {lib.name} k={k}: " + ", ".join(f"{kk} {v:.3g}" for kk, v in row.items()))
+            save()
+        if "decode" in phases:
+            e["decode"] = standalone_decode(lib, torch, int(a.store_gib * (1 << 30)), sms, a.reps, log)
+            res["ok"] &= all(v["ok"] for v in e["decode"].values())
+            save()
+    if "gemm" in phases:
+        names = a.gemm_libs.split(",") if a.gemm_libs else [l.name for l in libs]
+        ks = [int(k) for k in a.gemm_ks.split(",")]
+        batches = [int(b) for b in a.batches.split(",")]
+        knobs = ([int(v) for v in a.mma_knobs.split(",") if v], [int(v) for v in a.imad_knobs.split(",") if v])
+        for lib in [l for l in libs if l.name in names]:
+            e = res["libs"][lib.name]
+            e["gemm"] = {}
+            for name in a.shapes.split(","):
+                n, kd = SHAPES[name]
+                g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain), parse(a.fused), *knobs)
+                e["gemm"][name] = g
+                res["ok"] &= g.get("ok", False)
+                save()
+            knobs = ([], [])
+    save()
+    write_result(res, libs, out_dir)
+    log("done" if res["ok"] else "done with a failed gate")
+    return 0 if res["ok"] else 5
+
+
+def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if not run_dir or not run_id:
+        return
+    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
+    for name, e in res["libs"].items():
+        for unit, v in e.get("analysis", {}).get("squarings_s", {}).items():
+            ms.append({"name": f"{name}_squarings_{unit}", "value": v, "unit": "1/s"})
+        for k, row in e.get("analysis", {}).get("k", {}).items():
+            for kk, v in row.items():
+                ms.append({"name": f"{name}_k{k}_{kk}", "value": v, "unit": "1"})
+        for k, d in e.get("decode", {}).items():
+            for unit in ("cuda", "tc"):
+                if d.get(unit, {}).get("ok"):
+                    ms.append({"name": f"{name}_decode_k{k}_{unit}", "value": d[unit]["gbps_stored"], "unit": "GB/s"})
+        for shape, g in e.get("gemm", {}).items():
+            for mb, t in g.get("times", {}).items():
+                for arm, ratio in t["ratio_vs_native"].items():
+                    if arm != "empty":
+                        ms.append({"name": f"{name}_{shape}_m{mb}_{arm}_vs_native", "value": ratio, "unit": "1"})
+    rel = os.path.relpath(out_dir, run_dir)
+    files = [f"{rel}/codec-tensor.json", f"{rel}/bench.log"]
+    doc = {"schema": "research/result/v0.1", "run_id": run_id,
+           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
+                                    "seed": SEED.hex()},
+           "validation": {"status": "passed" if res["ok"] else "failed", "checker": "codec-tensor gates",
+                          "detail": "device codec = wide.py, TC square = a^2 mod p, fused partial sums = plain",
+                          "evidence": files},
+           "measurements": ms, "measurement_files": files, "artifacts": files}
+    tmp = Path(run_dir) / "result.json.tmp"
+    tmp.write_text(json.dumps(doc, indent=1))
+    os.replace(tmp, Path(run_dir) / "result.json")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

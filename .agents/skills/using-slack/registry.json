@@ -130,7 +130,8 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
-        "benchmarks/word_codec/"
+        "benchmarks/word_codec/",
+        "benchmarks/codec_tensor/"
       ]
     },
     {
