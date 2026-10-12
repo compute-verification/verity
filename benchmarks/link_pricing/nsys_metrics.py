@@ -33,15 +33,29 @@ def main(path, label):
     if "GPU_METRICS" not in have:
         print(json.dumps(out))
         return
-    lo, hi = span(db, have)
-    if lo is None:
-        out["error"] = "no CUDA activity"
-        print(json.dumps(out))
-        return
-    a, b = lo + (hi - lo) // 10, hi - (hi - lo) // 10
     names = {}
     for row in db.execute("select typeId, metricId, metricName from TARGET_INFO_GPU_METRICS"):
         names[(row[0], row[1])] = row[2]
+    lo, hi = span(db, have)
+    if lo is None:
+        # no CUDA activity of the profiled process (a NIC moving GPU memory): the span where a PCIe metric is
+        # above a quarter of its peak in this profile
+        pcie = [k for k, v in names.items() if "PCIe" in v and ("RX" in v.upper() or "TX" in v.upper())]
+        best = None
+        for t, m in pcie:
+            mx = db.execute("select max(value) from GPU_METRICS where typeId=? and metricId=?", (t, m)).fetchone()[0]
+            if mx is not None and (best is None or mx > best[2]):
+                best = (t, m, mx)
+        if best is None or best[2] <= 0:
+            out["error"] = "no CUDA activity and no PCIe traffic"
+            print(json.dumps(out))
+            return
+        lo, hi = db.execute(
+            "select min(timestamp), max(timestamp) from GPU_METRICS where typeId=? and metricId=? and value > ?",
+            (best[0], best[1], best[2] / 4),
+        ).fetchone()
+        out["span_by"] = names[(best[0], best[1])]
+    a, b = lo + (hi - lo) // 10, hi - (hi - lo) // 10
     gpus = {}
     q = "select typeId, metricId, avg(value), count(*) from GPU_METRICS where timestamp between ? and ? group by typeId, metricId"
     for type_id, metric_id, mean, n in db.execute(q, (a, b)):
