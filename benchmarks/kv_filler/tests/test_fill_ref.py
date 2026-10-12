@@ -71,6 +71,17 @@ def test_the_key_and_the_signs_change_the_root():
     assert F.chunk([bytes(flipped)], 0, 1, SEED, SEED)[0][0] != base
 
 
+def test_a_v1_epoch_across_passes_xors_each_pass_chunk_under_its_pass_key():
+    rng = np.random.default_rng(4)
+    regions = [rng.integers(0, 256, size=n, dtype=np.uint8).tobytes() for n in (2 * F.UNIT_BYTES, F.UNIT_BYTES + 9)]
+    # the plan is 3 units: s = 2 .. 6 is pass 0's unit 2, pass 1's units 0 .. 2 and pass 2's unit 0
+    want = (F.chunk(regions, 2, 1, F.chunk_seed(SEED, 0), SEED)[1] ^ F.chunk(regions, 0, 3, F.chunk_seed(SEED, 1), SEED)[1]
+            ^ F.chunk(regions, 0, 1, F.chunk_seed(SEED, 2), SEED)[1])
+    assert F.epoch(regions, 2, 5, SEED, SEED) == want
+    assert F.epoch(regions, 3, 3, SEED, SEED) == F.chunk(regions, 0, 3, F.chunk_seed(SEED, 1), SEED)[1]
+    assert F.epoch(regions, 2, 5, SEED, SEED) != F.epoch(regions, 5, 5, SEED, SEED)
+
+
 def test_pinned_root():
     unit = bytes(range(256)) * (F.UNIT_BYTES // 256)
     assert F.chunk([unit], 0, 1, SEED, SEED)[0][0].hex() == PINNED
