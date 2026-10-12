@@ -22,11 +22,12 @@
 #   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
 #   sparse claims (--points, after the sparse streams, into the same session); rec_vstar checks R's openings and rec_vstage
 #   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold). R's top
-#   is registered before the session as the entry `stacked` of the private circuit's verity/registration/v2 record
-#   (rec_inner.py registration, then rec_session --registration; inner/circuit-registration.json)
-#   FORGE=cell|point (with STACKED): R committed with a flipped cell, or a claim point off; the algebra is not staged, and the
-#   run passes when the session runs and rec_vstage refuses R's opening (summary.json's refused). FORGE=late: R's cell
-#   flipped after its registration, which the firewall refuses at R's binding round (the session stops)
+#   is registered at staging (rec_inner.py stage --stacked): the entry `stacked` of the staged statement's circuit
+#   registration (stage/circuit-registration.json, verity/registration/v2), whose digest META's `registration` binds; its
+#   salts are the prover's (stage/circuit-registration-private.json)
+#   FORGE=cell|point (with STACKED): R committed (and registered) with a flipped cell, or a claim point off; the algebra is not
+#   staged, and the run passes when the session runs and rec_vstage refuses R's opening (summary.json's refused). FORGE=late:
+#   R's cell flipped after its registration, which the firewall refuses at R's binding round (the session stops)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
@@ -34,10 +35,11 @@ export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
 
-N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}; STK=; MR=
+N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}; STK=; MR=; REG=
 if [ -n "${STACKED:-}" ]; then
   MR=$(python3 -c "from verity_flock import rec_sparse as S; print(S.table_m(S.Shape($SPARSE)))") || exit 1
-  STK="--stacked $B --registration $D/circuit-registration.json ${FORGE:+--forge $FORGE}"
+  STK="--stacked $B ${FORGE:+--forge $FORGE}"
+  REG="$SPA --stacked $B"; [ "${FORGE:-}" = cell ] && REG="$REG --forge cell"
 fi
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
@@ -51,13 +53,10 @@ FOLD_BIN=$L/fold-$FSHA/inner-fold
   fi
 ) > $O/build-fold.log 2>&1 &
 FP=$!
-python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves > $O/stage.json 2> $O/stage.err \
+python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
-if [ -n "${STACKED:-}" ]; then
-  python3 verity/ml/flock/pod/rec_inner.py registration --n $N --sets $S/sets --out $D/circuit-registration.json \
-    > $O/registration-base.json 2> $O/registration-base.err || { tail -20 $O/registration-base.err; exit 1; }
-fi
+[ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/
 
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1
@@ -75,7 +74,7 @@ grep -h panicked $O/prove.err | head -3
 [ -f $O/inner/prover/session.json ] || { tail -20 $O/session.log $O/prove.err; exit 1; }
 $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt --sessions $O/inner/prover > $O/replay.txt 2>&1
 echo "replay exit $?"
-python3 -m verity_flock.rec_vstar $O/inner > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
+python3 -m verity_flock.rec_vstar $O/inner --circuit $D/circuit.txt > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
 
 mkdir -p $V
 python3 -m verity_flock.rec_vstage points $O/inner $D/circuit.txt $D/pub-$N.bin > $O/points.json 2> $O/points.err \
