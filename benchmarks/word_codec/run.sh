@@ -9,7 +9,8 @@
 #     -- taskset -c 48-95 bash benchmarks/word_codec/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
-# the profiles; LIBSET (default "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4)
+# the profiles (NCU_KS, default 2,3, the GEMM's k there; NCU_WS and NCU_TAG_WS its configurations); LIBSET (default
+# "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4)
 # and WC_KMAX (default 8) the largest k they hold.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -40,7 +41,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
-export B PY NCU_BIN WC BENCH_ARGS=${BENCH_ARGS:-} NCU=${NCU:-1} NCU_WS=${NCU_WS:-}
+export B PY NCU_BIN WC BENCH_ARGS=${BENCH_ARGS:-} NCU=${NCU:-1} NCU_WS=${NCU_WS:-} NCU_KS=${NCU_KS:-2,3}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -54,7 +55,8 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   q
   if [ "$NCU" = 1 ] && [ $rc = 0 ]; then
     S=(--clock-control none --cache-control all --section SpeedOfLight --section ComputeWorkloadAnalysis
-       --section InstructionStats --section Occupancy --section MemoryWorkloadAnalysis)
+       --section InstructionStats --section Occupancy --section MemoryWorkloadAnalysis --section WarpStateStats
+       --section SchedulerStats)
     for lib in split wide; do
       [ -e "$B/wc-$lib.so" ] || continue
       "$NCU_BIN" "${S[@]}" -k "regex:decode_kernel|read_kernel|tag_kernel" -f -o "$O/ncu-decode-$lib" \
@@ -66,7 +68,8 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
       [ -e "$B/wc-$lib.so" ] || continue
       "$NCU_BIN" "${S[@]}" -k "regex:gemm_kernel|gemm_pipe_kernel|gemm_ws_kernel" -f -o "$O/ncu-gemm-$lib" \
         "$PY" $WC/bench.py --lib $lib="$B/wc-$lib.so" --out "$O/ncu-gemm-$lib" --mode ncu-gemm --shapes gate_up \
-        --batches 1,32 --ks 2,3 ${NCU_WS:+--ws "$NCU_WS"} > "$O/ncu-gemm-$lib.log" 2>&1
+        --batches 1,32 --ks "${NCU_KS:-2,3}" ${NCU_WS:+--ws "$NCU_WS"} ${NCU_TAG_WS+--tag-ws "$NCU_TAG_WS"} \
+        > "$O/ncu-gemm-$lib.log" 2>&1
       "$NCU_BIN" --import "$O/ncu-gemm-$lib.ncu-rep" --csv --page raw > "$O/ncu-gemm-$lib.csv" 2>&1
     done
     q

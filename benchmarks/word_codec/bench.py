@@ -897,6 +897,10 @@ def main() -> int:
                     for k in ks:
                         lib.call(fn, k, ptr(pay), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, *extra,
                                  stream(torch))
+                cm = Commit(lib, torch, pay.numel() // C.lane_words(lib.bits)) if tag_cfgs else None
+                for c, k, decode in ((c, k, d) for c in tag_cfgs for k in ks for d in (0, 1, 2)):
+                    lib.call("wc_gemm_ws_tag", k, ptr(pay), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, *c, 0,
+                             None, decode, TAG_SEED, 0, cm.tags, 0, None, 0, None, stream(torch))
         torch.cuda.synchronize()
         return 0
 
