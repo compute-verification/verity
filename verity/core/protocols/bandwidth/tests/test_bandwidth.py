@@ -383,6 +383,15 @@ def test_one_window_over_a_store_is_open_at_a_time(big_store, state_of) -> None:
     third = verifier.window()
     third.start()
     third.commit(b"short")
+    fourth = verifier.window()
+    fourth.open()
+    with pytest.raises(RuntimeError, match="open"):
+        fourth.open()
+    clock.now += 10 * params.limit_ns
+    with pytest.raises(RuntimeError, match="open"):
+        verifier.window().open()
+    c4 = audit.tag_pass(store, params.tag, fourth.start())
+    assert fourth.verdict([c4.open(i) for i in fourth.commit(c4.root)]).accepted
     verifier.window().start()
 
 
@@ -462,7 +471,8 @@ def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store, state_of
 
 
 def test_the_state_records_a_window_before_its_seed(big_store, tmp_path, monkeypatch) -> None:
-    """`open NONCE TAG` is written and fsynced before `σ` is derived, and `close NONCE` follows the commitment."""
+    """`open NONCE TAG` is written and fsynced before `σ` is derived, by `start` or by `open` ahead of it, and
+    `close NONCE` follows the commitment."""
     store, vk = big_store
     path = tmp_path / "state"
     audit.ChallengerState.create(path, vk)
@@ -470,14 +480,22 @@ def test_the_state_records_a_window_before_its_seed(big_store, tmp_path, monkeyp
     fsync, seed = audit.os.fsync, audit.seed
     monkeypatch.setattr(audit.os, "fsync", lambda fd: (events.append(path.read_text().splitlines()[-1]), fsync(fd))[1])
     monkeypatch.setattr(audit, "seed", lambda key: (events.append("seed"), seed(key))[1])
-    nonce = bytes(range(32))
-    with audit.ChallengerState(path, vk, nonces=lambda n: nonce) as state:
-        w = big_store.verifier(_params("ro-blake3/v1"), state).window()
+    nonces = iter((bytes(range(32)), bytes(range(1, 33))))
+    a, b = bytes(range(32)).hex(), bytes(range(1, 33)).hex()
+    with audit.ChallengerState(path, vk, nonces=lambda n: next(nonces)) as state:
+        verifier = big_store.verifier(_params("ro-blake3/v1"), state)
+        w = verifier.window()
         s = w.start()
-        assert events == [f"open {nonce.hex()} ro-blake3/v1", "seed"]
+        assert events == [f"open {a} ro-blake3/v1", "seed"]
         c = audit.tag_pass(store, "ro-blake3/v1", s)
         assert w.verdict([c.open(i) for i in w.commit(c.root)]).accepted
-    assert path.read_text().splitlines()[1:] == [f"open {nonce.hex()} ro-blake3/v1", f"close {nonce.hex()}"]
+        w = verifier.window()
+        w.open()
+        assert events[-1] == f"open {b} ro-blake3/v1"
+        w.start()
+        assert events[-2:] == [f"open {b} ro-blake3/v1", "seed"]
+    assert path.read_text().splitlines()[1:] == [f"open {a} ro-blake3/v1", f"close {a}", f"open {b} ro-blake3/v1",
+                                                 f"close {b}"]
 
 
 def test_the_state_fails_closed(big_store, tmp_path) -> None:
@@ -518,7 +536,8 @@ def test_the_state_fails_closed(big_store, tmp_path) -> None:
 
 def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_path) -> None:
     """A window still open when its state closes, or when its challenger dies, closes with it: its commitment is
-    refused, and reopening the state records the dead challenger's window closed."""
+    refused, a window opened but not started never starts, and reopening the state records the dead challenger's
+    window closed."""
     store, vk = big_store
     path = tmp_path / "state"
     audit.ChallengerState.create(path, vk)
@@ -528,6 +547,11 @@ def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_pat
         c = audit.tag_pass(store, params.tag, w.start())
     with pytest.raises(audit.StateError, match="closed"):
         w.commit(c.root)
+    with audit.ChallengerState(path, vk, nonces=_nonces(b"opened")) as state:
+        opened = big_store.verifier(params, state).window()
+        opened.open()
+    with pytest.raises(audit.StateError, match="closed"):
+        opened.start()
     state = audit.ChallengerState(path, vk, nonces=_nonces(b"died"))
     w = big_store.verifier(params, state).window()
     c = audit.tag_pass(store, params.tag, w.start())
@@ -538,7 +562,7 @@ def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_pat
         assert path.read_text().splitlines()[-1] == f"close {nonce}"
     with pytest.raises(audit.StateError, match="closed"):
         w.commit(c.root)
-    assert len(path.read_text().splitlines()) == 5
+    assert len(path.read_text().splitlines()) == 7
 
 
 # --- no window's samples are reused, across verifiers, tags and restarts ----------------------------------------------

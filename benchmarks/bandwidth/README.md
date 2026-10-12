@@ -10,8 +10,9 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
 - `gpu.py` is the harness API over `libbwtag.so`. `Tagger.tag_pass(tag, store_ptr, blocks, seed, workspace)` returns a
   commitment whose `root` the prover sends; `commitment.open(j, store_tree)` gives the `audit.Opening` the core
   verifier (`audit.Window.verdict`) checks. `Prover(tagger, store, blocks, scrub)` is the honest prover of one store
-  for every tag, and `Prover.commit(window)` its window under the window's tag: it always prepares (an untimed pass
-  under a throwaway seed, then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed.
+  for every tag, and `Prover.commit(window)` its window under the window's tag: it opens the window
+  (`window.open()`, whose record the verifier fsyncs), then always prepares (an untimed pass under a throwaway seed,
+  then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed (`window.start()`).
   `Tagger.device()` is the GPU's id (`audit.device_id`'s 16 bytes, from the driver), for which the store's salt is
   drawn.
 - A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(path, vk)` once,

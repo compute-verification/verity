@@ -206,10 +206,11 @@ class Commitment:
 class Prover:
     """The honest prover of one store in device memory, for every tag: a store has one prover, as it has one challenger
     state that every tag's verifier shares.  `commit(window)` tags under the window's own tag (`window.params.tag`), in
-    a workspace kept per tag until `release(tag)`, and always prepares before it asks for `σ`: one untimed pass under a
-    throwaway seed, then a read of `SCRUB_BYTES` of its own buffer, so the window starts with the launch path warm and
-    L2 clean and holding no part of the store.  The bound holds for any state before `σ`, so the preparation is the
-    prover's liveness, not the verifier's concern."""
+    a workspace kept per tag until `release(tag)`.  It opens the window first (`window.open`, whose record the verifier
+    fsyncs), then always prepares before it asks for `σ`: one untimed pass under a throwaway seed, then a read of
+    `SCRUB_BYTES` of its own buffer, so the window starts with the launch path warm and L2 clean and holding no part of
+    the store, and no fsync left between the preparation and `σ`.  The bound holds for any state before `σ`, so the
+    preparation is the prover's liveness, not the verifier's concern."""
 
     def __init__(self, tagger: Tagger, store: int, blocks: int, scrub: int) -> None:
         self.tagger, self.store, self.blocks, self.scrub = tagger, store, blocks, scrub
@@ -225,11 +226,12 @@ class Prover:
         self.tagger.free(self.workspaces.pop(tag))
 
     def commit(self, window: audit.Window, tagged: int | None = None) -> tuple[Commitment, tuple[int, ...], float]:
-        """One window: prepare, take `σ` (`window.start`), run the pass and commit its root.  Returns the commitment,
-        the samples and the host call's time in ms.  `tagged` below the store's blocks is a negative control that tags
-        only blocks `0..tagged-1` over a poisoned workspace."""
+        """One window: open it, prepare, take `σ` (`window.start`), run the pass and commit its root.  Returns the
+        commitment, the samples and the host call's time in ms.  `tagged` below the store's blocks is a negative control
+        that tags only blocks `0..tagged-1` over a poisoned workspace."""
         t, tag, tagged = self.tagger, window.params.tag, self.blocks if tagged is None else tagged
         ws = self.workspace(tag)
+        window.open()
         t.tag_pass(tag, self.store, self.blocks, bytes(tags.SEED_BYTES), ws)
         if tagged < self.blocks:
             t.memset(ws, 0xA5, t.workspace_bytes(tag, self.blocks))

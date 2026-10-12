@@ -95,8 +95,8 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
 
 ## 3. A window
 
-1. **Seed.** The verifier draws a fresh 32-byte nonce from its own randomness and derives the window's key from its
-   own secret,
+1. **Seed.** The verifier draws a fresh 32-byte nonce from its own randomness and records it in the store's state
+   (`Window.open`, below). Then it derives the window's key from its own secret,
    `key = derive(source, "verity/bandwidth/window/v2", {root: vk.root, salt: vk.salt, tag: name, nonce: nonce})`
    (`verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock (`Window.start`). The nonce is
    never a counter and never drawn twice for a store, so no two windows over a store share a key, whichever verifier,
@@ -116,9 +116,9 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
    recomputes `y_i` from `σ`, `i` and `E_i` (`Window.verdict`). Openings are not timed: the root binds every tag.
 
 The verifier accepts iff the root is on time and every opening checks. It refuses a second start or a second root,
-and never redraws. One window over a store is open at a time: from `σ` until its root
-arrives, or until `T + RTT` has passed without one, the verifier refuses to start another window over the same store,
-which stays unstarted and may start once the first has closed. Two windows open at once could both be answered from
+and never redraws. One window over a store is open at a time: from its record until its root arrives, or until
+`T + RTT` after `σ` without one, the verifier refuses to open another window over the same store, which stays closed
+and may open once the first has closed. Two windows open at once could both be answered from
 one read of each block, so their ingress would not add; with one open at a time, each window's ingress is read within
 its own interval (`test_one_window_over_a_store_is_open_at_a_time`).
 
@@ -146,6 +146,9 @@ before `σ`, so the prover's preparation costs the verifier nothing. The honest 
 untimed pass under a throwaway seed, then a read of 512 MiB of another buffer, so the window starts with its launch
 path warm and L2 holding clean lines and no part of `E` (§6). The honest client always prepares before it asks for
 `σ` (`gpu.Prover`, checked by `benchmarks/bandwidth/tests/test_prover.py`): a window run without it took 1.195 ms.
+It opens the window first, so the state's fsync falls before the preparation, not between it and `σ`: with the fsync
+after the scrub, the GPU and the host idle for it, and honest windows took 1.095 ms at the median and one of 50 was
+late (§6).
 
 ## 4. Tags
 
@@ -383,7 +386,7 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
   reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
   `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(path, vk)` once, then
   `ChallengerState(path, vk)`, shared by every verifier of the store), the verifier
-  (`Verifier(vk, params, source, state, device=, commitment=, salt_source=).window()`: `start() -> σ`,
+  (`Verifier(vk, params, source, state, device=, commitment=, salt_source=).window()`: `open()`, `start() -> σ`,
   `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point
   (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`, `certified_blocks`, `samples_for`) and `bound`.
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
@@ -391,6 +394,6 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
   (`gpu.py`: `Tagger.device()` is the GPU's id; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
   `Opening` this verifier checks; `Prover(tagger, store, blocks, scrub)` is a store's one prover for every tag, and
-  `commit(window)` prepares, then takes `σ` and commits; `windows` runs every window of every tag through it and
+  `commit(window)` opens the window, prepares, then takes `σ` and commits; `windows` runs every window of every tag through it and
   through the store's one challenger state), its Python twins
   (`benchmarks/bandwidth/tests/test_tagger_twin.py`), and the runs of §6.

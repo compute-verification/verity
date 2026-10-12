@@ -2,9 +2,9 @@
 a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`), so devices holding one `W` hold
 different stores, and the verifier refuses a store whose salt is not its device's (`Verifier`).
 
-1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk,
-   derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and sends the seed `σ`
-   (`Window.start`, which starts its clock).
+1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk
+   (`Window.open`); then it derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and
+   sends the seed `σ` (`Window.start`, which starts its clock).
 2. Before `T = deadline_ns` (plus `rtt_allowance_ns`) the prover computes `y_j = Tag(σ, j, E_j)` for every block and
    returns the root of the tags' tree (`tag_pass`, then `Window.commit`, which stops the clock).
 3. Only then does the verifier draw `s = samples` indices, uniform with replacement, from the same key.  A late
@@ -14,8 +14,8 @@ different stores, and the verifier refuses a store whose salt is not its device'
    Openings are not timed: the commitment already binds every tag.
 
 A window is used once: a second start or commitment is refused, a nonce is never drawn twice, and nothing is redrawn.
-One window over a store is open at a time, from its seed to its commitment or until `T + RTT` has passed without one:
-the verifier refuses to start another before then, so no read serves two windows' ingress.  Both rules hold for every
+One window over a store is open at a time, from its record to its commitment or until `T + RTT` after its seed without
+one: the verifier refuses to open another before then, so no read serves two windows' ingress.  Both rules hold for every
 verifier of a store, whatever its tag, and across restarts, because all of them share the store's `ChallengerState`, a
 file that fails closed.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
@@ -338,7 +338,8 @@ class ChallengerState:
         store is open."""
         o = self._open
         if o is not None and o._live():
-            raise RuntimeError("another window over this store is open: it closes at its commitment or at T + RTT")
+            raise RuntimeError("another window over this store is open: it closes at its commitment or at T + RTT "
+                               "after its seed")
         self._check()
         if o is not None:
             self._close(o)
@@ -351,6 +352,11 @@ class ChallengerState:
         self._used.add(nonce)
         self._open = w
         return nonce
+
+    def _hold(self, w: Window) -> None:
+        """`w`, open, still holds the store."""
+        if self._file.closed or self._open is not w:
+            raise StateError(f"{self.path}: closed while the window was open")
 
     def _release(self, w: Window) -> None:
         """`w` has its commitment: its record closes, unless it closed already (past `T + RTT`)."""
@@ -399,8 +405,8 @@ class Verifier:
 
 
 class Window:
-    """One window: `start()` sends `σ`, `commit(root)` takes the prover's root and returns the samples, and
-    `verdict(openings)` checks them, each once and in that order."""
+    """One window: `open()` records it, `start()` sends `σ` (opening it first if it is not open), `commit(root)` takes
+    the prover's root and returns the samples, and `verdict(openings)` checks them, each once and in that order."""
 
     def __init__(self, verifier: Verifier) -> None:
         self._v = verifier
@@ -418,15 +424,28 @@ class Window:
         return self._v.params
 
     def _live(self) -> bool:
-        """Whether the window holds its store: started, without a commitment, and within `T + RTT` on its clock."""
-        return (self._started is not None and self._elapsed is None
-                and self._v.clock() - self._started <= self._v.params.limit_ns)
+        """Whether the window holds its store: open, without a commitment, and unstarted or within `T + RTT` of its
+        start on its clock."""
+        return (self._nonce is not None and self._elapsed is None
+                and (self._started is None or self._v.clock() - self._started <= self._v.params.limit_ns))
+
+    def open(self) -> None:
+        """Take the window's nonce and record it in the store's state, fsynced, before its `σ` exists: from here the
+        window holds the store until its commitment, or until `T + RTT` after `start`.  The prover prepares between
+        `open` and `start`, so the record's write is not in the gap it prepares for.  Refused, and the window left
+        closed, while another over the store is open."""
+        if self._nonce is not None:
+            raise RuntimeError("the window is open")
+        self._nonce = self._v.state._claim(self)
 
     def start(self) -> bytes:
-        """`σ`, and the clock starts; refused, and the window left unstarted, while another over the store is open."""
+        """`σ`, and the clock starts; the window opens first if it is not open."""
         if self._key is not None:
             raise RuntimeError("the window has started")
-        self._nonce = self._v.state._claim(self)
+        if self._nonce is None:
+            self.open()
+        else:
+            self._v.state._hold(self)
         self._key = window_key(self._v.source, self._v.vk, self._v.params.tag, self._nonce)
         s = seed(self._key)
         self._started = self._v.clock()

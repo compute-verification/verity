@@ -73,6 +73,9 @@ class _Window:
     def __init__(self, log: list) -> None:
         self.log = log
 
+    def open(self) -> None:
+        self.log.append(("open",))
+
     def start(self) -> bytes:
         self.log.append(("start",))
         return bytes(range(32))
@@ -91,18 +94,18 @@ def test_the_prover_prepares_before_it_asks_for_the_seed(tagged) -> None:
     poison = [("memset", ws)] if tagged else []
     timed = ("prefix" if tagged else "pass", False)
     assert drawn == (0,)
-    assert log == [("pass", True), *poison, ("scrub", SCRUB, gpu.SCRUB_BYTES), ("start",), timed, ("commit",)]
+    assert log == [("open",), ("pass", True), *poison, ("scrub", SCRUB, gpu.SCRUB_BYTES), ("start",), timed,
+                   ("commit",)]
 
 
 def _run_windows(monkeypatch, tmp_path, log: list) -> tuple[SimpleNamespace, dict]:
     monkeypatch.setattr(gpu, "Tagger", lambda lib: _Tagger(log))
-    start = audit.Window.start
+    for step in ("open", "start"):
+        def logged(self, _f=getattr(audit.Window, step), _step=step):
+            log.append((_step,))
+            return _f(self)
 
-    def logged(self):
-        log.append(("start",))
-        return start(self)
-
-    monkeypatch.setattr(audit.Window, "start", logged)
+        monkeypatch.setattr(audit.Window, step, logged)
     a = SimpleNamespace(lib="fake", blocks=37, workers=1, samples=4, deadline_ns=1_200_000, windows=3, skip=[0.1],
                         tags=sorted(gpu.TAG_IDS), state=tmp_path / "state")
     return a, gpu._windows(a)
@@ -125,14 +128,16 @@ def test_one_store_has_one_challenger_state_whatever_the_tag(monkeypatch, tmp_pa
 
 
 def test_every_window_of_the_harness_is_prepared(monkeypatch, tmp_path) -> None:
-    """Honest windows, skip controls and the openings check alike: each `σ` follows a throwaway pass and the read, with
-    nothing between them but a skip control's poisoned workspace, and comes before the timed pass."""
+    """Honest windows, skip controls and the openings check alike: each window is open (its record written) before its
+    preparation, and each `σ` follows a throwaway pass and the read, with nothing between them but a skip control's
+    poisoned workspace, and comes before the timed pass."""
     log: list = []
     a, out = _run_windows(monkeypatch, tmp_path, log)
     starts = [i for i, e in enumerate(log) if e == ("start",)]
-    assert len(starts) == len(a.tags) * (a.windows + len(a.skip) + 1)
+    assert len(starts) == len(a.tags) * (a.windows + len(a.skip) + 1) == log.count(("open",))
     assert len(out["results"]) == len(a.tags) * (a.windows + len(a.skip)) and len(out["openings_check"]) == 3
     for i in starts:
-        before = log[i - 3:i] if log[i - 2][0] == "memset" else log[i - 2:i]
-        assert before[0] == ("pass", True) and before[-1][0] == "scrub" and before[-1][2] == gpu.SCRUB_BYTES
+        before = log[i - 4:i] if log[i - 2][0] == "memset" else log[i - 3:i]
+        assert before[0] == ("open",) and before[1] == ("pass", True)
+        assert before[-1][0] == "scrub" and before[-1][2] == gpu.SCRUB_BYTES
         assert log[i + 1] in (("pass", False), ("prefix", False))
