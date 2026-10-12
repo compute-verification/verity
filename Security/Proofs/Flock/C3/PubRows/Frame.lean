@@ -27,8 +27,9 @@ theorem stageOf_prefix {α : Type} (g : Game α) (l : List Step) (d : α) : (sta
   · exact List.nil_prefix
 
 theorem repsOf_prefix {α β : Type} (g₀ : Game α) (g₁ : Game β) (l : List Step) (a : α) (b : β) :
-    firstSteps (repsOf g₀ g₁ l ([], a, [], b)).1 ++ (repsOf g₀ g₁ l ([], a, [], b)).2.2.1 <+: l := by
-  unfold repsOf
+    firstSteps (FlockC3.Compose.repsOf g₀ g₁ l ([], a, [], b)).1 ++
+      (FlockC3.Compose.repsOf g₀ g₁ l ([], a, [], b)).2.2.1 <+: l := by
+  unfold FlockC3.Compose.repsOf
   split
   · rename_i h
     exact h.choose_spec.1
