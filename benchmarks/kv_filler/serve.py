@@ -138,6 +138,31 @@ def windows(steps: list[dict], idle: list[tuple[float, float]], recs, offset_ms:
             "filler_share": sum(fil) / max(1.0, sum(reg) + sum(fil)), "fractions": [round(v, 4) for v in frac]}
 
 
+def filler_by_phase(steps: list[dict], recs, offset_ms: float) -> dict:
+    """The filler's bytes by where they fell on the host's clock, pro rata: in decode steps, in steps that prefill
+    (a step's tokens beyond one a request), and between steps."""
+    import bisect
+    t0s = [s["t0"] for s in steps]
+    out = {"decode": 0.0, "prefill": 0.0, "between": 0.0}
+    for a, b, nbytes, *_ in recs:
+        ha, hb = (a - offset_ms) / 1e3, (b - offset_ms) / 1e3
+        if hb <= ha:
+            out["between"] += nbytes
+            continue
+        rate, inside = nbytes / (hb - ha), 0.0
+        for i in range(max(0, bisect.bisect_right(t0s, ha) - 1), len(steps)):
+            s = steps[i]
+            if s["t0"] >= hb:
+                break
+            ov = min(hb, s["t1"]) - max(ha, s["t0"])
+            if ov > 0:
+                pre = max(s["prefill_tokens"], s["tokens"] - s["reqs"]) > 0
+                out["prefill" if pre else "decode"] += rate * ov
+                inside += rate * ov
+        out["between"] += nbytes - inside
+    return out
+
+
 def main() -> int:
     global LOGF
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -562,7 +587,8 @@ def main() -> int:
                                for w in (0.25, 1.0, 5.0)],
                    "step_records": [{k2: (round(v - t_start, 5) if k2 in ("t0", "t1") else v) for k2, v in s.items()}
                                     for s in steps],
-                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts}
+                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts,
+                   "filler_by_phase": filler_by_phase(steps, recs, offset_ms)}
             if ek:
                 run.update({"encode_k": ek, "encode_prefill_tokens": cur["enc_prefill_tokens"],
                             "encode_decode_tokens": cur["enc_decode_tokens"], "encode_decode_inline": not a.encode_grid,

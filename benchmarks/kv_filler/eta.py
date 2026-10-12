@@ -1,5 +1,6 @@
 """η over `serve.py`'s runs (`serve-<pool>.json`), the leaderboard's rows: each run's η and its 1 s windows' mean, its
-TPOT against the same engine's `none` run, its token gate, and η before filler by phase (`analyze.shortfall`).
+TPOT against the same engine's `none` run, its token gate, and η before filler by phase (`analyze.shortfall`), and
+after it where the run placed its filler (`filler_by_phase`).
 Torch-free; writes `eta.json`.
 
     python eta.py --serve serve-large.json [...] --out eta.json
@@ -29,6 +30,13 @@ def rows(serve: dict, R: float) -> list[dict]:
             "tpot_x": r["tpot_ms_median"] / base["tpot_ms_median"] if base else None,
             "filler": sh["filler"], "before_filler": {k: sh[k]["eta"] for k in ("decode", "prefill", "empty", "gaps", "idle")},
         })
+        fp = r.get("filler_by_phase")
+        if fp:
+            cap = R * 1e9 * r["seconds"]
+            bf = out[-1]["before_filler"]
+            out[-1]["after_filler"] = {"decode": bf["decode"] - fp["decode"] / cap,
+                                       "prefill": bf["prefill"] - fp["prefill"] / cap,
+                                       "between": bf["gaps"] + bf["idle"] + bf["empty"] - fp["between"] / cap}
     return out
 
 
@@ -47,7 +55,9 @@ def main() -> int:
             print(f"{p.name} {r['policy']:>12}/{r['mode']:<6} η {r['eta']:.3f} (1 s windows {1 - (r['windows_mean'] or 0):.3f})"
                   f"  TPOT {r['tpot_ms']:.2f} ms ×{r['tpot_x'] or 0:.2f}  gate {r['token_gate']}  filler {r['filler']:.3f}"
                   f"  before: decode {b['decode']:.3f} prefill {b['prefill']:.3f} gaps {b['gaps']:.3f}"
-                  f" idle {b['idle']:.3f} empty {b['empty']:.3f}")
+                  f" idle {b['idle']:.3f} empty {b['empty']:.3f}" + (
+                      "  after: " + " ".join(f"{k} {v:.3f}" for k, v in r["after_filler"].items())
+                      if "after_filler" in r else ""))
     a.out.write_text(json.dumps(res, indent=1))
     return 0
 
