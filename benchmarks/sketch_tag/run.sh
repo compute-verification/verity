@@ -21,7 +21,7 @@ export LIBSET=${LIBSET:-dense split}
 B=$(mktemp -d /tmp/sketch-tag.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX=3 -DSK_KMAX=3)
 declare -A DEFS=([dense]="-DWC_PB=60" [split]="-DWC_PB=56" [dense1]="-DWC_PB=60 -DSK_CHAINS=1"
-                 [split1]="-DWC_PB=56 -DSK_CHAINS=1")
+                 [split1]="-DWC_PB=56 -DSK_CHAINS=1" [dense8]="-DWC_PB=60 -DSK_CHAINS=8")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086
