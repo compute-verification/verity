@@ -46,6 +46,7 @@ void sg_ctr_vaes(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t b
 void sg_ctr_vaes_nt(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks);
 void sg_ctr_aesni(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks);
 int sg_ctr_openssl(const uint8_t key[16], uint64_t first, uint8_t* out, uint64_t blocks);
+void sg_flush(const uint8_t* p, uint64_t n);
 }
 
 #define OK(x)                                                                                           \
@@ -684,6 +685,7 @@ struct Args {
   std::string path = "streams", priority = "high";  // window: the stream's enqueue (streams or graph), its priority
   uint64_t blocks = 524288;
   int reps = 7, windows = 20, samples = 1849, gen_threads = 16, live = 0;
+  bool flush = false;  // window --live: evict the challenger's buffer from the host's caches before σ
   size_t piece = 1 << 20, interfere_mib = 64, first_piece = 2 << 20;
   std::vector<size_t> sizes_mib = {16, 32, 48, 56, 60, 64};
 };
@@ -1236,7 +1238,8 @@ static int mode_window(const Args& a) {
                   ",\"path\":\"" + a.path + "\",\"priority\":\"" + a.priority + "\",\"copy_streams\":" +
                   std::to_string(graph ? BRANCHES : COPY_STREAMS) + ",\"samples\":" + std::to_string(a.samples) +
                   ",\"live_generators\":" + std::to_string(a.live) +
-                  (live ? ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"first_piece\":" + std::to_string(a.first_piece)
+                  (live ? ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"first_piece\":" +
+                              std::to_string(a.first_piece) + ",\"flush\":" + (a.flush ? "true" : "false")
                         : std::string()) +
                   ",\"sizes\":[";
   uint8_t throwaway[32] = {0}, root[64], check[64];
@@ -1252,6 +1255,10 @@ static int mode_window(const Args& a) {
     const size_t slots = live ? n / LIVE_SLOT : 0;
     std::unique_ptr<std::atomic<uint8_t>[]> ready(new std::atomic<uint8_t>[slots + 1]);
     std::atomic<uint64_t> next{0};
+    // --live, per piece: when its bytes were all written (host, from σ) and when its copy landed (device, from P.t0)
+    std::vector<cudaEvent_t> landed(spans.size());
+    for (auto& e : landed) OK(cudaEventCreate(&e));
+    std::vector<std::vector<double>> ready_ms(spans.size()), landed_ms(spans.size());
     // generate's non-temporal stores need 64-byte alignment, which a vector's storage doesn't have
     std::unique_ptr<uint8_t, decltype(&free)> regen((uint8_t*)(live && n ? aligned_alloc(4096, n) : nullptr), &free);
     Timer gt;
@@ -1287,7 +1294,7 @@ static int mode_window(const Args& a) {
       bw_read_scrub(dev.scrub, SCRUB);
     };
     // --live, at σ: the tag pass and the generators start, and each piece goes out once its slots are written.
-    auto send_live = [&](const Gen& gen, bool tags, const uint8_t* seed) {
+    auto send_live = [&](const Gen& gen, bool tags, const uint8_t* seed, double sigma) {
       if (tags)
         tagger->post([&, seed] {
           OK(cudaSetDevice(0));
@@ -1307,9 +1314,11 @@ static int mode_window(const Args& a) {
         for (size_t k = off / LIVE_SLOT; k < (off + len) / LIVE_SLOT; ++k)
           while (!ready[k].load(std::memory_order_acquire)) {
           }
+        if (tags) ready_ms[p].push_back((now_s() - sigma) * 1e3);
         cudaStream_t c = P.copy[p % COPY_STREAMS];
         OK(cudaMemcpyAsync(s.dev + off, s.host + off, len, cudaMemcpyHostToDevice, c));
         OK(cudaEventRecord(P.ev[p], c));
+        OK(cudaEventRecord(landed[p], c));
         OK(cudaStreamWaitEvent(P.abs, P.ev[p]));
         absorb_kernel<<<(unsigned)(len / GROUP_BYTES), GROUP, 0, P.abs>>>((const uint4*)s.dev, off / GROUP_BYTES,
                                                                           s.key_dev, s.cvs, s.nodes);
@@ -1320,6 +1329,11 @@ static int mode_window(const Args& a) {
       OK(cudaStreamSynchronize(P.abs));
       if (tags) tagger->wait();
       for (auto& g : gens) g->wait();
+      for (size_t p = 0; tags && p < spans.size(); ++p) {
+        float ms;
+        OK(cudaEventElapsedTime(&ms, P.t0, landed[p]));
+        landed_ms[p].push_back(ms);
+      }
     };
     std::vector<double> both, stream_only, dev_pass, dev_stream, verify_ms;
     int bad_d = 0, bad_root = 0, bad_open = 0, bad_bytes = 0;
@@ -1332,6 +1346,12 @@ static int mode_window(const Args& a) {
         prepare();
         if (n && !live) generate(gen, s.host, n, a.gen_threads, cpus);
         if (n && live) {
+          if (a.flush) {
+            const size_t per = (n / a.gen_threads + 63) / 64 * 64;
+            parallel(a.gen_threads, cpus, [&](int t) {
+              if (t * per < n) sg_flush(s.host + t * per, std::min(per, n - t * per));
+            });
+          }
           for (size_t k = 0; k < slots; ++k) ready[k].store(0, std::memory_order_relaxed);
           next.store(0, std::memory_order_release);
         }
@@ -1339,7 +1359,7 @@ static int mode_window(const Args& a) {
         const double t0 = now_s();
         if (n && live) {
           absorb_key(seed, s.key_host);
-          send_live(gen, arm == 0, seed);
+          send_live(gen, arm == 0, seed, t0);
         } else {
           if (n) {
             absorb_key(seed, s.key_host);
@@ -1410,7 +1430,17 @@ static int mode_window(const Args& a) {
          ",\"stream_only_ms\":" + stats(stream_only) + ",\"verify_ms\":" + stats(verify_ms) +
          ",\"bad_digest\":" + std::to_string(bad_d) + ",\"bad_root\":" + std::to_string(bad_root) +
          ",\"bad_openings\":" + std::to_string(bad_open) +
-         (live ? ",\"pieces\":" + std::to_string(spans.size()) + ",\"bad_bytes\":" + std::to_string(bad_bytes)
+         (live ? ",\"pieces\":" + std::to_string(spans.size()) + ",\"bad_bytes\":" + std::to_string(bad_bytes) +
+                     [&] {  // per piece, medians over the windows beside the tag pass
+                       std::string b = ",\"piece_bytes\":[", r = "],\"piece_ready_ms\":[", l = "],\"piece_landed_ms\":[";
+                       for (size_t p = 0; p < spans.size(); ++p) {
+                         const char* sep = p ? "," : "";
+                         b += sep + std::to_string(spans[p].second);
+                         r += sep + num(median(ready_ms[p]));
+                         l += sep + num(median(landed_ms[p]));
+                       }
+                       return b + r + l + "]";
+                     }()
                : std::string()) +
          ",\"skip_control\":" + control + "}";
     first = false;
@@ -1419,6 +1449,7 @@ static int mode_window(const Args& a) {
       write(a, "window", j);
       return fail("a window's digest, root, openings or bytes");
     }
+    for (auto& e : landed) cudaEventDestroy(e);
     if (n) free_stream(s);
   }
   j += "]}";
@@ -1543,6 +1574,7 @@ int main(int argc, char** argv) {
     else if (k == "--piece") a.piece = std::stoull(v());
     else if (k == "--live") a.live = std::stoi(v());
     else if (k == "--first-piece") a.first_piece = std::stoull(v());
+    else if (k == "--flush") a.flush = true;
     else if (k == "--path") a.path = v();
     else if (k == "--priority") a.priority = v();
     else if (k == "--suffix") a.suffix = v();
