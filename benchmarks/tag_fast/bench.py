@@ -943,6 +943,32 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
     return out
 
 
+STAGE_TAG_ARMS = ("tag", "tagr", "tagk", "tagrs", "tagd", "tagds")
+
+
+def stage_points(res: dict, batches, run: str | None) -> list[dict]:
+    """The tag stage as a drop-in for the codec lanes' frontier (`verity/tag-stage-point/v0`, one per block size and
+    batch): y_tag the fastest certified step arm's increment over native, y_commit the serial commit's (commitL over
+    tagL), tau the tag's compressions per step at the V1 chain rate over the native step."""
+    rate = res["chains"]["b3_v1_r7"]["compressions_per_s"]
+    out = []
+    for mb in batches:
+        step = res["step"][mb]
+        for g in STEP_GROUPS:
+            arms = [f"{a}{g}" for a in STAGE_TAG_ARMS if f"{a}{g}" in step["y"]]
+            if not arms or f"commit{g}" not in step["y"]:
+                continue
+            best = min(arms, key=lambda a: step["y"][a])
+            y_tag, y_commit = step["y"][best] - 1, step["y"][f"commit{g}"] - step["y"][f"tag{g}"]
+            tau = layout.store_chunk_blocks(g) * (17 * g + 1) / rate / step["median_s"]["native"]
+            out.append({"schema": "verity/tag-stage-point/v0", "lane": "ra-tag-fast", "model": "llama-3.1-8b",
+                        "tag": "ro-blake3/v1", "certified": True, "block_bytes": 1024 * g, "batch": mb,
+                        "y_tag": y_tag, "y_commit": y_commit, "y_total": 1 + y_tag + y_commit, "tag_arm": best,
+                        "commit": f"commit{g} - tag{g} (SHA-512 leaves and tree after the step)", "tau": tau,
+                        "measured": True, "run": run, "sm_hz": res.get("clock_hz")})
+    return out
+
+
 NCU_FORMS = (("g", 0, MODE_GEMM, 1), ("t", 1, MODE_TAGS, 1), ("t", 1, MODE_TAGS, 2))
 NCU_CHUNK_FORMS = ((1, MODE_GEMM, 4, 2, False), (4, MODE_TAGS, 4, 2, False), (4, MODE_TAGS, 4, 2, True))
 NCU_REG_FORMS = ((1, MODE_GEMM, 1, 0), (4, MODE_TAGS, 1, 0), (4, MODE_TAGS, 1, 1), (4, MODE_TAGS, 1, 2))
@@ -1054,6 +1080,8 @@ def main() -> int:
     if len(shapes) == len(layout.SHAPES):
         res["summary"] = summarize(res, batches, spans)
         res["points"] = points(res, batches, res["run"])
+        if "step" in res:
+            (out_dir / "tag-stage-points.json").write_text(json.dumps(stage_points(res, batches, res["run"]), indent=1))
         for mb in batches:
             s = res["summary"]
             log(f"layer-weighted M={mb}: y_tag {s['y_tag'][mb]['y']:.3f} ({s['y_tag'][mb]['arm']}), sink "
