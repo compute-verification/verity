@@ -470,6 +470,12 @@
    "assumptions": [],
    "type_hash": "fe3aacfe7a8dd81fb55e915f8f44cdf3ef38d59842916837e282b68b881a9bb6"
   },
+  "Accounting.SecurityProofs.B2AddsP2Ring": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2AddsP2Ring.{u_1, u_2} : Accounting.Guarantees.B2AddsP2Ring"],
+   "assumptions": [],
+   "type_hash": "2b1611b4bfa5b88c1ad1b8b73a9cf643342afd88cebfb73d3405224805eaa85f"
+  },
   "Accounting.SecurityProofs.B2Audit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.B2Audit.{u_1, u_2} : Accounting.Guarantees.B2Audit"],
@@ -3790,9 +3796,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.B2AddsP2Ring": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -4271,6 +4274,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -4317,6 +4321,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -4476,6 +4481,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -4577,6 +4583,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -4960,6 +4967,7 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
@@ -5003,6 +5011,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -5036,6 +5045,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -5083,6 +5093,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -5177,6 +5188,7 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
@@ -5208,6 +5220,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -5280,6 +5293,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -5354,6 +5368,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -13071,10 +13086,11 @@
    "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw"]
   },
   "Models.Accounting.Guarantees.Responder": {
-   "digest": "dcbe273650dd81fe6a95100363dfa3069d1bf75650ae64d94d7df4623cf2c756",
+   "digest": "01b0e41e897b18509f1523025d75356864c4c55c82c270a7319976b4025ebe86",
    "definitions": {
     "Accounting.Guarantees.B2": "82cc5c36fa921f53a00acea5e5eb08d4a4c3f5cfbdef70a6f9c118d09f0e6fa3",
     "Accounting.Guarantees.B2Adds": "b16b3cb0f8205a6687bcdfdca8127256c4bf551166efb2cf61fd97678e074181",
+    "Accounting.Guarantees.B2AddsP2Ring": "dc946d7d83b2c0a4cfc9474257b6d4a4f35c371d7ba018e9ac78b3b6c0ab1b4c",
     "Accounting.Guarantees.B2Audit": "3b90bc235fb7dc6e5d24268f2ade81d2b696ab933cfe2bd3f598b50dfdcdcda5",
     "Accounting.Guarantees.B2Determines": "be1b5b39ad850595f72a9c558f3440cad5612032d89ecd9403d826fdd9211f50",
     "Accounting.Guarantees.B2P2Ring": "d81353dafcd7800bfe364325d7a1c1de3ffedfa0f8ba44fe0964875906fd5db6",
@@ -13083,6 +13099,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2Audit",
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
@@ -13265,6 +13282,7 @@
     "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2AddsP2Ring",
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
