@@ -25,8 +25,9 @@ from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_iface as _vi  # noqa: F401  (defines the vllm_iface stand-ins)
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
-from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS, wgmma_tile
+from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.program.frontend.targets import wgmma_tile
 from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import moe as MOE

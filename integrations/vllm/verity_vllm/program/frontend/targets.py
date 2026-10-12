@@ -171,6 +171,34 @@ def moe_expert_fp8_dot(profile):
     return dot
 
 
+def wgmma_tile(config: dict, swap: bool) -> bool:
+    """Whether Triton lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Hopper Definitions model: the
+    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
+    smaller tile takes `mma.sync` or FMA, which no Definition models."""
+    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
+    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
+
+
+def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
+    """None when a tuned (not batch-invariant) block-FP8 `fused_moe_kernel` tile is one the Definitions model on the declared target:
+    cc 9.0, SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, vLLM d9105ea80 fused_moe/utils.py:628-633), BLOCK_SIZE_K
+    a multiple of the k32 step and a `wgmma_tile`; else why not.  The Build's rule and the fold's are this one."""
+    if tuple(profile.compute_capability) != (9, 0):
+        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only (wgmma), not on "
+                f"cc {profile.capability_str}")
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (bm, bn, kb, warps)):
+        return f"tiling BLOCK_SIZE_M/N/K={bm!r}/{bn!r}/{kb!r}, num_warps={warps!r} are not positive integers"
+    want = bm < 64 and bn >= 64
+    if swap is not want:
+        return f"numerics_unregistered: SWAP_AB={swap!r} is not enable_swap_ab(BLOCK_SIZE_M={bm}, BLOCK_SIZE_N={bn}) = {want} on cc 9.0"
+    if kb % 32:
+        return f"numerics_unregistered: BLOCK_SIZE_K={kb} is not a multiple of the k32 step"
+    if not wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": warps}, want):
+        return (f"numerics_unregistered: the launch's tl.dot (BLOCK_SIZE_M {bm} x BLOCK_SIZE_N {bn}, SWAP_AB {want}, {warps} warps) is no "
+                f"wgmma tile: it takes mma.sync, whose e4m3 step no Definition models")
+    return None
+
+
 def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, routed: bool):
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""

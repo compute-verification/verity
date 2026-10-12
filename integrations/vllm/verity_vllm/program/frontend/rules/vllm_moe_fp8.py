@@ -14,8 +14,9 @@ The pins are `vllm_moe.MOE_GEMM_PINS`' kernel body with the FP8 numeric constexp
 (`frontend.targets.moe_expert_fp8_dot`, the GEMM target's `fp8_moe_dot`; a target that records none refuses by name).  The tile is
 the one vLLM picks: on a batch-invariant target `get_default_config`'s fixed BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB
 False; on cc 9.0 without batch invariance the tuned config's (fused_moe.py:1422-1451), any tile whose `tl.dot` Triton lowers to wgmma
-(`wgmma_tile`) with SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633).  The
-Definitions read only KB = BLOCK_SIZE_K and SWAP.  The schedule (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
+with SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633): the rule is
+`frontend.targets.moe_fp8_tuned_tile_refusal`, which the fold applies too.  The Definitions read only KB = BLOCK_SIZE_K and SWAP.
+The schedule (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
 
     _C.silu_and_mul_per_block_quant(q! e4m3 [pairs, I], gu bf16 [pairs, 2I], scale! f32 [pairs, I/G], G, None, False)
         -> `SiluMulFp8BlockQuant{I,G}` per (token, slot) row; `q` and `scale` are rebound (the w2 launch's `a` and `a_scale`).
@@ -46,14 +47,6 @@ MOE_FP8_CONSTEXPRS = {"SPLIT_K": 1, "HAS_BIAS": False, "SWAP_AB": False, "USE_TD
 _OPERANDS = ("a_ptr", "b_ptr", "c_ptr", "a_scale_ptr", "b_scale_ptr")
 
 
-def wgmma_tile(config: dict, swap: bool) -> bool:
-    """Whether Triton lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Hopper Definitions model: the
-    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
-    smaller tile takes `mma.sync` or FMA, which no Definition models."""
-    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
-
-
 def _tile_pins(meta, sc, profile) -> str | None:
     """None when the launch's tile is the one vLLM picks on the declared target and its dot is modelled (the module doc)."""
     geom = meta.get("geometry") or {}
@@ -67,21 +60,8 @@ def _tile_pins(meta, sc, profile) -> str | None:
         if (warps, stages) != (MOE_GEMM_PINS["num_warps"], MOE_GEMM_PINS["num_stages"]):
             return f"numerics_unregistered: num_warps/num_stages {warps}/{stages} are not {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
         return None
-    if tuple(profile.compute_capability) != (9, 0):
-        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only (wgmma), not on "
-                f"cc {profile.capability_str}")
-    bm, bn, kb = sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"), sc.get("BLOCK_SIZE_K")
-    if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (bm, bn, kb, warps)):
-        return f"tiling BLOCK_SIZE_M/N/K={bm!r}/{bn!r}/{kb!r}, num_warps={warps!r} are not positive integers"
-    swap = bm < 64 and bn >= 64
-    if sc.get("SWAP_AB") is not swap:
-        return f"numerics_unregistered: SWAP_AB={sc.get('SWAP_AB')!r} is not enable_swap_ab(BLOCK_SIZE_M={bm}, BLOCK_SIZE_N={bn}) = {swap} on cc 9.0"
-    if kb % 32:
-        return f"numerics_unregistered: BLOCK_SIZE_K={kb} is not a multiple of the k32 step"
-    if not wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": warps}, swap):
-        return (f"numerics_unregistered: the launch's tl.dot (BLOCK_SIZE_M {bm} x BLOCK_SIZE_N {bn}, SWAP_AB {swap}, {warps} warps) is no "
-                f"wgmma tile: it takes mma.sync, whose e4m3 step no Definition models")
-    return None
+    from verity_vllm.program.frontend import targets as T
+    return T.moe_fp8_tuned_tile_refusal(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"), sc.get("BLOCK_SIZE_K"), warps, sc.get("SWAP_AB"))
 
 
 def _fp8_launch_pins(node, meta, sc, profile) -> str | None:
@@ -279,4 +259,4 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
 VLLM_MOE_FP8_RULES = [FusedMoeKernelFp8Rule(), SiluAndMulPerBlockQuantRule()]
 
 __all__ = ["FP8_E4M3", "FusedMoeKernelFp8Rule", "MOE_FP8_CONSTEXPRS", "SiluAndMulPerBlockQuantRule", "VLLM_MOE_FP8_RULES",
-           "moe_expert_fp8_role", "wgmma_tile"]
+           "moe_expert_fp8_role"]
