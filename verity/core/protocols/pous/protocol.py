@@ -53,7 +53,7 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "
           "(ASICs out of scope); it bounds an adversary only in the ideal-permutation model, since at the reference "
           "Feistel-SHAKE256 permutation a prover answers from kept round states without completing any call",
-          "Step floor", "conjectured"),
+          "Step floor", "measured"),
     Entry("feistel-indifferentiability", "assumption",
           "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
           "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
@@ -67,7 +67,7 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
-          "with up to 8 cores of one chiplet cooperating", "SeqRoot", "conjectured"),
+          "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
 )}
 """Claims a certificate cites that `verity.core.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""

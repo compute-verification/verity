@@ -532,8 +532,17 @@ REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
 
 @pytest.mark.slow
 def test_inner_unit_agrees(server):
-    stats = D.run(port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON), examples=40,
-                  seed=SEED, server=server)
+    """Drawn, and replayed on an S whose GfResiduals S is in range but whose row ports repeat a name (`checkRepS`'s refusal)
+    and on one whose ports are right but whose add term is past w (`checkS`'s): Lean's `residualForms` reads such a term as
+    zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
+    usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
+    p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
+    gf = lambda t: {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
+    good = {"S": {"gf": gf(["w", 1]), "ports": [["a", 2]]}, "name": "row0"}
+    assert D.replay(p, good, server)[0] == "output"
+    for S in ({"gf": gf(["w", 1]), "ports": [["a", 1], ["a", 1]]}, {"gf": gf(["w", 2]), "ports": [["a", 2]]}):
+        assert D.replay(p, {"S": S, "name": "row0"}, server)[0] == "reject", S
+    stats = D.run(p, examples=40, seed=SEED, server=server)
     assert stats.outputs >= 5 and stats.rejects >= 5, stats
 
 

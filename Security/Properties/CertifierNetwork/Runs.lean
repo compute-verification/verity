@@ -20,6 +20,16 @@ two distinct strings of `runStrings`, the strings the check and the device hash,
 (`cr/sha-512`), or a certificate of the commitment whose signature verifies under the device's key over its message
 (`certMessage`) though the device never signed that message (`Signed`, `euf-cma/lms-sha512-n64`).
 
+**One key, one run.** `Signed (device x)` is what the device signs in run `x`, while the signer's next leaf (`next`) is
+an input, so one key may sign several runs. Nothing a certificate signs names its run: its message binds the key's
+identifier, the link, the direction, the window and the record's digest (`NetworkCheck.certificateMessage`); the record
+binds its grid's parameters (on egress with Σ_sync, `parameters`), its status, its counts and its frames' root
+(`RecordHead.encode`); and every run numbers its windows from its own origin, `0` to `W − 1`. Neither the
+configuration's `origin` nor a digest of the configuration enters. So a certificate that another run under the same key
+signed, for the same link, direction and window, verifies here, is not in `Signed (device x)`, and meets the forgery
+disjunct with no LMS break. That disjunct is an EUF-CMA break only while each key signs one run, which a deployment
+that gives each run its own key makes so.
+
 `Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`.
@@ -85,7 +95,8 @@ def deviceStrings (c : Config) (out : DeviceOutput) : List ByteArray :=
 def runStrings (x : DeviceInput) (out : DeviceOutput) (c : Commitment) (e : Evidence) : List ByteArray :=
   checkStrings (deviceParams x) c e (egressDigest (deviceParams x)) ++ deviceStrings x.config out
 
-/-- The messages the device signs: each of its certificates' own message. -/
+/-- The messages the device signs in this run: each of its certificates' own message. Not those another run under the
+same key signed (the module docstring, "One key, one run"). -/
 def Signed (out : DeviceOutput) (m : ByteArray) : Prop := ∃ cr ∈ out.certificates, certMessage (certified cr) = some m
 
 /-! ## (5a) An accepted run's records -/
@@ -105,7 +116,8 @@ def ProgramRecords (x : DeviceInput) (out : DeviceOutput) (e : Evidence) : Prop 
 /-- **An accepted run's records are the Program's (5a).** For every input of the device and every commitment and
 evidence the check accepts under the device's parameters, if the device runs as built, its records of the `W` windows
 are the Program's (`ProgramRecords`); or two distinct strings the run hashes have one SHA-512 digest, or a certificate of
-the commitment verifies under the device's key over a message the device never signed. -/
+the commitment verifies under the device's key over a message the device didn't sign in this run (an LMS forgery while
+each key signs one run: the module docstring, "One key, one run"). -/
 def AcceptedRowsAreProgramRows : Prop :=
   ∀ (device : DeviceInput → DeviceOutput) (x : DeviceInput) (c : Commitment) (e : Evidence),
     protocol.Accepts (deviceParams x) c e → NetTiming.DeviceIntact device deviceCode →
@@ -166,7 +178,8 @@ def RunIsProgramRun (x : DeviceInput) (out : DeviceOutput) (e : Evidence) : Prop
 /-- **An accepted run is a run of the certifier program under the declared advice (5b).** For every input of the device
 and every commitment and evidence the check accepts under the device's parameters, if the device runs as built, every
 observation sequence read off its run is accepted by the reference's constant-rate Program (`RunIsProgramRun`); or, as
-in `AcceptedRowsAreProgramRows`, the run's strings hold a SHA-512 collision or its certificates an LMS forgery. -/
+in `AcceptedRowsAreProgramRows`, the run's strings hold a SHA-512 collision or its certificates one over a message the
+device didn't sign in this run (an LMS forgery while each key signs one run). -/
 def AcceptedRunsAreProgramRuns : Prop :=
   ∀ (device : DeviceInput → DeviceOutput) (x : DeviceInput) (c : Commitment) (e : Evidence),
     protocol.Accepts (deviceParams x) c e → NetTiming.DeviceIntact device deviceCode →
@@ -198,7 +211,8 @@ def AcceptedObservations (cfg : Config) (key : Lms.PrivateKey) (device : DeviceI
 
 /-- The accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`, or some accepted run carries a
 break: two distinct strings it hashes with one SHA-512 digest, or a certificate that verifies under the device's key
-over a message the device never signed. -/
+over a message the device didn't sign in that run. The accepted runs here share one key, so the last is an LMS forgery
+only while that key signs one run (the module docstring, "One key, one run"). -/
 def ObservationsBounded (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat}
     {In Ac : Type} [Fintype Ac] (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat) : Prop :=
