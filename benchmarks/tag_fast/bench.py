@@ -4,7 +4,7 @@ Gates; a failed gate times nothing (exit 5):
   key       tf_init's K is `tags.Blake3Tag().key(seed)`
   compress  every BLAKE3 variant's compression is `blake3.compress` on 256 random inputs; Keccak-p[1600, 12] is
             `turboshake.keccak_p` on 16 random states
-  small     a 64 x 4096 store: every tag of every kernel form is `tags.Blake3Tag().keyed(seed)` computed here, and the
+  small     a 128 x 4096 store: every tag of every kernel form is `tags.Blake3Tag().keyed(seed)` computed here, and the
             leaves and root are `tags.leaf_hash`'s and `layout.tree_root`'s
   shapes    each of Llama-3.1-8B's linears from `reference.py`'s W: every tag of every timed form (buffers poisoned with
             0xFF first) is reference.py's, every leaf too and the root; the sink form's XOR is the reference tags';
@@ -160,9 +160,11 @@ CHUNK_SINK = 4
 CCOLS, CXS, QUAD_BYTES, SMEM_MAX = 2048, 2064, 2048, 99 * 1024
 
 
-def fits(m: int, mode: int, wc: int, st: int) -> bool:
-    """Whether a chunk form's shared memory (tf_fused2's x slice of m rows and weight ring) fits a CTA."""
-    return (0 if mode == MODE_TAGONLY else m * CXS) + wc * st * QUAD_BYTES <= SMEM_MAX
+def fits(m: int, mode: int, wc: int, st: int, n: int = 0) -> bool:
+    """Whether a chunk form's shared memory (tf_fused2's x slice and weight ring) fits a CTA at batch m, and its CTA
+    tiles n rows."""
+    xbytes = m * CXS if m <= 8 else 2 * m * (CCOLS // 8 + 16)
+    return (0 if mode == MODE_TAGONLY else xbytes) + wc * st * QUAD_BYTES <= SMEM_MAX and n % (16 * wc) == 0
 
 
 def ctz(v: int) -> int:
@@ -238,7 +240,7 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                                                n, k, jb))
             for wc, st in CHUNK_TAG_FORMS[lanes]:
                 for mb in (1, 16, 32):
-                    if fits(mb, MODE_TAGS, wc, st):
+                    if fits(mb, MODE_TAGS, wc, st, n):
                         check(f"t_w{wc}s{st}_m{mb}", lambda: fused2(lib, torch, lanes, MODE_TAGS, wc, st, 0, plain,
                                                                     xs[mb], y, tb, mb, n, k, jb))
             if lanes == CHUNK_SINK:
@@ -320,7 +322,7 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             forms += [("u4kw4s3", (4, MODE_TAGS, *CHUNK_ONE))]
             xr = torch.zeros(1, dtype=torch.int32, device="cuda")
             for label, (lanes, mode, wc, st) in forms:
-                if not fits(mb, mode, wc, st):
+                if not fits(mb, mode, wc, st, n):
                     continue
                 ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
                 fused2(lib, torch, lanes, mode, wc, st, 0, plain, x, ya, tb, mb, n, k, 0, xr,
@@ -885,9 +887,9 @@ def main() -> int:
     res["gates"]["key"] = bytes(key) == tags.Blake3Tag().key(SEED) == bytes.fromhex(expect["key"])
     log(f"gate key: {'ok' if res['gates']['key'] else 'FAIL'}")
     res["gates"]["compress"] = gate_compress(lib, torch, log)
-    w8s, refs = small_reference(torch, 64, 4096, R.JBASE + (1 << 20))
+    w8s, refs = small_reference(torch, 128, 4096, R.JBASE + (1 << 20))
     refs = {s: r for s, r in refs.items() if s in spans}
-    res["gates"]["small"] = gate_store(lib, torch, "small", 64, 4096, w8s.cuda(), to_device_ref(torch, refs),
+    res["gates"]["small"] = gate_store(lib, torch, "small", 128, 4096, w8s.cuda(), to_device_ref(torch, refs),
                                        (1, 8, 16, 32), log)
     res["ok"] = res["gates"]["key"] and res["gates"]["compress"]["ok"] and res["gates"]["small"]["ok"]
     weights = {}

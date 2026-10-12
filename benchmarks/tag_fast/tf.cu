@@ -623,9 +623,16 @@ struct ChunkTag {
   }
 };
 
-// W warps a CTA on consecutive row blocks of one span s (x's M rows of its 2,048 columns in shared memory), each warp one
-// unit. Modes and PARTIALS as fused_kernel's; tags at tags[8 (j - jbase)] from the block's first lane. R < 7 rounds is
-// not BLAKE3 (uncertified, a cost probe).
+// x in shared memory: at M <= 8 its M rows of the span's 2,048 columns, loaded once; above, eighths of them (256 columns,
+// two quads) double-buffered with cp.async, so the slice stays small enough for two CTAs an SM at M = 32.
+template <int NB8>
+struct XSlice {
+  static constexpr int SL = NB8 == 1 ? 1 : 8, COLS = CCOLS / SL, STRIDE = COLS + 16, BUFS = SL == 1 ? 1 : 2,
+                       QPS = 16 / SL;
+};
+
+// W warps a CTA on consecutive row blocks of one span s, each warp one unit. Modes and PARTIALS as fused_kernel's; tags at
+// tags[8 (j - jbase)] from the block's first lane. R < 7 rounds is not BLAKE3 (uncertified, a cost probe).
 template <int V, int L, int NB8, int MODE, int W, int ST, bool PARTIALS, int R = 7>
 __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                        float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N,
@@ -633,8 +640,9 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
   constexpr bool GEMM = MODE != MODE_TAGONLY, TAG = MODE != MODE_GEMM;
   extern __shared__ __align__(16) uint8_t smem[];
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
+  using X = XSlice<NB8>;
   uint8_t* xs = smem;
-  uint8_t* ring = smem + (GEMM ? M * CXS : 0) + warp * ST * QUAD_BYTES + lane * 16;
+  uint8_t* ring = smem + (GEMM ? X::BUFS * M * X::STRIDE : 0) + warp * ST * QUAD_BYTES + lane * 16;
   const int rts = N / 16, per_span = rts / W;
   const int s = blockIdx.x / per_span, nb = (blockIdx.x % per_span) * W + warp;
   const uint4* wp = wstore + ((size_t)nb * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
@@ -646,12 +654,21 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
     }
     cp_commit();
   };
+  // slice q of x into buffer q % BUFS, in the next commit group
+  auto issue_x = [&](int q) {
+    uint8_t* dst = xs + (q % X::BUFS) * M * X::STRIDE;
+    for (int e = threadIdx.x; e < M * X::COLS / 16; e += W * 32) {
+      const int b = e / (X::COLS / 16), c = e % (X::COLS / 16);
+      cp16(dst + b * X::STRIDE + 16 * c, x + (size_t)b * Kd + (size_t)s * CCOLS + q * X::COLS + 16 * c);
+    }
+  };
+  if constexpr (GEMM && X::SL > 1) issue_x(0);
 #pragma unroll
   for (int p = 0; p < ST - 1; ++p) issue(p);
-  if constexpr (GEMM) {
+  if constexpr (GEMM && X::SL == 1) {
     for (int e = threadIdx.x; e < M * CCOLS / 16; e += W * 32) {
       const int b = e / (CCOLS / 16), c = e % (CCOLS / 16);
-      *reinterpret_cast<uint4*>(xs + b * CXS + 16 * c) =
+      *reinterpret_cast<uint4*>(xs + b * X::STRIDE + 16 * c) =
           __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)s * CCOLS) + c);
     }
     __syncthreads();
@@ -669,7 +686,21 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
 #pragma unroll 1
   for (int qd = 0; qd < 16; ++qd) {
     issue(qd + ST - 1);
-    cp_wait<ST - 1>();
+    // slice q + 1 was issued after the barrier at quad QPS q, so it is in group QPS q + ST: at a slice's first quad
+    // wait for all but the QPS - 1 newest groups
+    constexpr int XW = X::QPS - 1 < ST - 1 ? X::QPS - 1 : ST - 1;
+    if (GEMM && X::SL > 1 && qd % X::QPS == 0)
+      cp_wait<XW>();
+    else
+      cp_wait<ST - 1>();
+    const uint8_t* xb = xs;
+    if constexpr (GEMM && X::SL > 1) {
+      if (qd % X::QPS == 0) {
+        __syncthreads();
+        if (qd / X::QPS + 1 < X::SL) issue_x(qd / X::QPS + 1);
+      }
+      xb = xs + (qd / X::QPS % X::BUFS) * M * X::STRIDE;
+    }
     const uint8_t* src = ring + (qd % ST) * QUAD_BYTES;
     uint4 q[4];
 #pragma unroll
@@ -678,11 +709,11 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
 #pragma unroll
       for (int i = 0; i < 4; ++i) {
         const uint32_t a[4] = {q[i].x, q[i].y, q[i].z, q[i].w};
-        const int col = 32 * (4 * qd + i) + 4 * tq;
+        const int col = 32 * (4 * (qd % X::QPS) + i) + 4 * tq;
 #pragma unroll
         for (int j = 0; j < NB8; ++j) {
           const bool live = 8 * j + g8 < M;
-          const uint8_t* row = xs + (live ? 8 * j + g8 : 0) * CXS;
+          const uint8_t* row = xb + (live ? 8 * j + g8 : 0) * X::STRIDE;
           const uint32_t b0 = *reinterpret_cast<const uint32_t*>(row + col),
                          b1 = *reinterpret_cast<const uint32_t*>(row + col + 16);
           mma_e4m3(acc[j], a, live ? b0 : 0u, live ? b1 : 0u);
@@ -1083,7 +1114,8 @@ int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int partials,
   F2(4, 2, 4, 3, false, 7) F2(1, 3, 4, 3, false, 7) F2(4, 3, 4, 3, false, 7)
   F2(4, 1, 4, 3, false, 4) F2(4, 3, 4, 3, false, 4)
   if (!kern) return 3;
-  const int smem = (mode == MODE_TAGONLY ? 0 : M * CXS) + wc * stages * QUAD_BYTES;
+  const int xbytes = nb8 == 1 ? M * XSlice<1>::STRIDE : XSlice<2>::BUFS * M * XSlice<2>::STRIDE;
+  const int smem = (mode == MODE_TAGONLY ? 0 : xbytes) + wc * stages * QUAD_BYTES;
   if (smem > 99 * 1024) return 4;
   static std::unordered_set<const void*> configured;
   if (!configured.count((const void*)kern)) {
