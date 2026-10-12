@@ -795,12 +795,14 @@ __device__ __forceinline__ void tag_step(uint32_t (&cv)[8], const uint32_t (&w)[
 }
 
 // One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk. TAG: lane l's block j = jbase + 32q + l
-// (its L encoded words) is hashed before it is decoded, and its tag written to tags[8 (32q + l) …].
+// (its L encoded words) is hashed before it is decoded, and its tag written to tags[8 (32q + l) …]. ahead > 0: once its
+// own record is in registers, each warp prefetches into the L2 the record of the same warp `ahead` CTAs on (a wave
+// later when ahead is the resident CTAs), so the next wave's HBM reads overlap this wave's arithmetic.
 template <int KR, int NB8, bool PARTIALS, bool TAG>
 __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
-                                                               uint32_t* __restrict__ tags) {
+                                                               uint32_t* __restrict__ tags, int ahead) {
   __shared__ __align__(16) uint8_t xs[NB8 * 8][XS_STRIDE];
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks;
@@ -821,6 +823,12 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* _
   for (int i = 0; i < L; ++i)
 #pragma unroll
     for (int e = 0; e < N; ++e) w[i][e] = __ldcs(rec + 32 * (i * N + e));
+  const uint32_t* nxt = nullptr;
+  if (ahead > 0) {
+    const unsigned bx = blockIdx.x + (unsigned)ahead;
+    const int nb2 = (int)(bx / nchunks) * GEMM_WARPS + threadIdx.x / 32;
+    if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + bx % nchunks) * (32ull * L * N);
+  }
 
   // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
   // the decode's multiplies and the hash's ALU work are independent instructions in one stream.
@@ -834,6 +842,10 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* _
 #pragma unroll
   for (int b = 0; b < MSG_BLOCKS; ++b) {
     if constexpr (TAG) tag_step(cv, w, j, b);
+    if (b == 0 && nxt) {
+      // a record is L·N rows of 128 bytes, one L2 line each
+      for (int r = lane; r < L * N; r += 32) asm volatile("prefetch.global.L2 [%0];" ::"l"(nxt + 32 * r));
+    }
     if constexpr (KR > 0) {
 #pragma unroll
       for (int i = 0; i < L; ++i)
@@ -1038,10 +1050,11 @@ int ww_spin(long long cycles, cudaStream_t s) {
 }
 
 // The fused GEMM: k rounds (0: the store holds payloads, no decode), tag_seed (32 bytes) or null for no tag; tags is
-// the commit workspace's tag area (`ww_workspace_tags`).
+// the commit workspace's tag area (`ww_workspace_tags`); ahead: the L2 prefetch's distance in CTAs (0: none; a wave is
+// `ww_gemm_occupancy` × the SMs).
 int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn, int Kd, uint64_t wbase, int partials,
-            const uint8_t* tag_seed, uint32_t* tags, cudaStream_t s) {
-  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || k < 0 || k > KMAX) return 1;
+            const uint8_t* tag_seed, uint32_t* tags, int ahead, cudaStream_t s) {
+  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || k < 0 || k > KMAX || ahead < 0) return 1;
   if (tag_seed && !tags) return 1;
   if (wbase % (32ull * L)) return 1;
   const uint64_t jbase = wbase / L;
@@ -1049,12 +1062,14 @@ int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn
   const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS);
   bw::Key3 key = {};
   if (tag_seed) key = key_of(tag_seed);
-#define G(KR, NB, T)                                                                                       \
-  do {                                                                                                     \
-    if (partials)                                                                                          \
-      gemm_kernel<KR, NB, true, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags); \
-    else                                                                                                   \
-      gemm_kernel<KR, NB, false, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags); \
+#define G(KR, NB, T)                                                                                             \
+  do {                                                                                                           \
+    if (partials)                                                                                                \
+      gemm_kernel<KR, NB, true, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags, \
+                                                                    ahead);                                      \
+    else                                                                                                         \
+      gemm_kernel<KR, NB, false, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags, \
+                                                                     ahead);                                     \
   } while (0)
 #define GT(KR, NB) do { if (tag_seed) G(KR, NB, true); else G(KR, NB, false); } while (0)
 #define GK(KR) do { if (nb8 == 1) GT(KR, 1); else if (nb8 == 2) GT(KR, 2); else GT(KR, 4); } while (0)
@@ -1067,6 +1082,29 @@ int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn
 #undef GT
 #undef G
   return cudaGetLastError() ? 4 : 0;
+}
+
+// The fused GEMM's resident CTAs an SM for k, Mb and tag (as `ww_gemm` would launch it), or −1.
+int ww_gemm_occupancy(int k, int Mb, int tag, int partials) {
+  if (Mb < 1 || Mb > 32 || k < 0 || k > KMAX) return -1;
+  const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
+  int r = -1;
+#define G(KR, NB, T)                                                                                             \
+  do {                                                                                                           \
+    if (partials) cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, true, T>, GEMM_WARPS * 32, 0); \
+    else cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, false, T>, GEMM_WARPS * 32, 0);    \
+  } while (0)
+#define GT(KR, NB) do { if (tag) G(KR, NB, true); else G(KR, NB, false); } while (0)
+#define GK(KR) do { if (nb8 == 1) GT(KR, 1); else if (nb8 == 2) GT(KR, 2); else GT(KR, 4); } while (0)
+  switch (k) {
+    case 0: GK(0); break;
+    WW_CASES(GK)
+    default: return -1;
+  }
+#undef GK
+#undef GT
+#undef G
+  return r;
 }
 
 size_t ww_workspace_bytes(uint64_t blocks) { return bw::workspace_bytes(bw::TAG_B3, blocks); }

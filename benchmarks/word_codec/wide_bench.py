@@ -15,8 +15,10 @@ Nothing is timed before its gate passed, in this order:
   the poison is caught); a sample of tags equals `ro-blake3/v1` over the encoded words; the commit's root equals
   `MerkleTree(tags.leaves(…))` over the device's tags. Then interleaved reps of cuBLASLt FP8 (`torch._scaled_mm`),
   `wc.cu`'s plain FP8 kernels (`--wc`), the wide kernel on the payload store (`ww0`), decode only (`d<k>`), decode and
-  tag (`t<k>`), tag only (`t0`) and the commit, every call on cold weights (a ring of copies past the L2), each arm
-  queued behind a spin kernel. Native is the fastest of cuBLASLt and the plain kernels.
+  tag (`t<k>`; `t<k>_flat` without the L2 prefetch of the next wave's records), tag only (`t0`) and the commit, every
+  call on cold weights (a ring of copies past the L2), each arm queued behind a spin kernel. Native is the fastest of
+  cuBLASLt and the plain kernels. The wide kernels prefetch a wave ahead (`ww_gemm_occupancy` × the SMs) unless
+  `_flat`.
 
 The frontier's quantities, per field and k (`wide.json` "frontier"):
   x        k · (L / 256) · R / (encode roots/s at k = 1): the encode time of the whole store per native pass at R, from the
@@ -69,7 +71,8 @@ class WLib:
         so.ww_chain.argtypes = [i, i, i, q, v, i, v]
         so.ww_read.argtypes = [v, q, v, i, v]
         so.ww_spin.argtypes = [ctypes.c_longlong, v]
-        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, v]
+        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, i, v]
+        so.ww_gemm_occupancy.argtypes = [i, i, i, i]
         so.ww_workspace_bytes.argtypes = [q]
         so.ww_workspace_bytes.restype = s
         so.ww_workspace_tags.argtypes = [v, q]
@@ -335,9 +338,18 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     res = {"N": n, "K": kd, "weight_bytes": n * kd, "store_bytes": pay.numel() * 4, "blocks": blocks, "gate": {},
            "times": {}}
 
+    sms = torch.cuda.get_device_properties(0).multi_processor_count
+
+    def wave(k, mb, tag, partials=False):
+        occ = lib.so.ww_gemm_occupancy(k, mb, int(tag), int(partials))
+        if occ < 1:
+            raise RuntimeError(f"ww_gemm_occupancy k={k} M={mb}: {occ}")
+        return occ * sms
+
     def run(k, store, x, y, partials, tag):
         lib.call("ww_gemm", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
-                 seed_buf if tag else None, tags_p if tag else None, stream(torch))
+                 seed_buf if tag else None, tags_p if tag else None, wave(k, x.shape[0], tag, partials),
+                 stream(torch))
 
     def commit(root=None):
         lib.call("ww_commit", ptr(ws), blocks, seed_buf, root, stream(torch))
@@ -438,14 +450,15 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             for wt in wts:
                 torch._scaled_mm(xc, wt, one, one, out_dtype=torch.bfloat16)
 
-        def arm(k, tag):
+        def arm(k, tag, prefetch=True):
             ps = [ptr(b) for b in ring[k]]
             sp, tp = (seed_buf, tags_p) if tag else (None, None)
+            ah = wave(k, mb, tag) if prefetch else 0
 
             def go():
                 rc = 0
                 for p in ps:
-                    rc |= so.ww_gemm(k, p, xp, yp, mb, n, kd, 0, 0, sp, tp, st)
+                    rc |= so.ww_gemm(k, p, xp, yp, mb, n, kd, 0, 0, sp, tp, ah, st)
                 if rc:
                     raise RuntimeError(f"ww_gemm k={k} tag={tag} M={mb}: error {rc}")
             return go
@@ -481,6 +494,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         for k in ks:
             arms[f"d{k}"] = arm(k, False)
             arms[f"t{k}"] = arm(k, True)
+            arms[f"t{k}_flat"] = arm(k, True, prefetch=False)
         lib.set_key(W.key(f, SEED, max(ks)))
         for fn in arms.values():
             fn()
@@ -493,11 +507,13 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         med = {a: statistics.median(v) for a, v in times.items()}
         native = min(med[a] for a in ("cublas", "wc_plain", "wc_pipe") if a in med)
         res["times"][mb] = {"median_s": med, "times_s": times, "cublas_m": mpad, "native_s": native,
-                            "ratio_vs_native": {a: med[a] / native for a in med}}
+                            "ratio_vs_native": {a: med[a] / native for a in med},
+                            "wave_ctas": {k: wave(k, mb, True) for k in ks}}
         log(f"gemm {lib.name} {name} M={mb}: native {native * 1e6:.1f} us (cublas {med['cublas'] * 1e6:.1f}"
             + (f", wc {med['wc_plain'] * 1e6:.1f}, wc_pipe {med['wc_pipe'] * 1e6:.1f}" if "wc_plain" in med else "")
             + f"); ww0 {med['ww0'] / native:.2f}x, t0 {med['t0'] / native:.2f}x, commit {med['commit'] / native:.2f}x, "
-            + ", ".join(f"d{k} {med[f'd{k}'] / native:.2f}x t{k} {med[f't{k}'] / native:.2f}x" for k in ks))
+            + ", ".join(f"d{k} {med[f'd{k}'] / native:.2f}x t{k} {med[f't{k}'] / native:.2f}x "
+                        f"(no prefetch {med[f't{k}_flat'] / native:.2f}x, wave {wave(k, mb, True)} CTAs)" for k in ks))
     del ring, wring, stores, pay, w, ws, plain_ring
     torch.cuda.empty_cache()
     return res
@@ -544,7 +560,8 @@ def breakdown(cases: dict, batches, ks, commit_s: float) -> dict:
         for k in ks:
             row[k] = {"y_total": s[f"t{k}"] / native + y_commit, "y_decode": (s[f"d{k}"] - s["ww0"]) / native,
                       "y_tag": (s[f"t{k}"] - s[f"d{k}"]) / native, "y_commit": y_commit,
-                      "y_commit_linear": s["commit"] / native, "y_base": s["ww0"] / native}
+                      "y_commit_linear": s["commit"] / native, "y_base": s["ww0"] / native,
+                      "y_total_no_prefetch": s[f"t{k}_flat"] / native + y_commit}
         out[mb] = row
     return out
 
