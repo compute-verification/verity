@@ -192,6 +192,53 @@ theorem openingReadAt_normOs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (hol
   rw [FlockC3.Opening.afterSparse_runSteps, he]
   exact List.prefix_append _ _
 
+/-! ## The tied run under `normOs`: the same steps
+
+Stated field by field and rewritten, not unfolded: checking `tie (normOs v)` against `tie v` by unfolding compares the
+stages' plays. -/
+
+theorem tie_normOs_steps (v : C3Run e) :
+    (tie (normOs v)).cap₀ = (tie v).cap₀ ∧ (tie (normOs v)).pts = (tie v).pts ∧ (tie (normOs v)).ts = (tie v).ts ∧
+      (tie (normOs v)).sp = (tie v).sp ∧ (tie (normOs v)).op = (tie v).op ∧ (tie (normOs v)).lg = (tie v).lg := by
+  simp only [tie, tieLig, tieOpening, tieSparse, tieReps, normOs, and_self]
+
+theorem tie_os (v : C3Run e) : (tie v).os = v.os := by
+  simp only [tie, tieLig, tieOpening, tieSparse, tieReps]
+
+theorem take_two_runSteps (u : C3Run e) :
+    (runSteps u).take 2 = [.inl ⟨Cap Dig, u.cap₀⟩, .inr ⟨Fin 2 → Fin e.cls.mPts → GF128, u.pts⟩] := by
+  rw [runSteps, FlockC3.PubRows.holoSteps_eq]
+  rfl
+
+theorem take_two_norm (v : C3Run e) : (runSteps (tie (normOs v))).take 2 = (runSteps (tie v)).take 2 := by
+  obtain ⟨h₁, h₂, -⟩ := tie_normOs_steps v
+  rw [take_two_runSteps, take_two_runSteps, h₁, h₂]
+
+theorem repPart_norm (v : C3Run e) : repPart (tie (normOs v)) = repPart (tie v) := by
+  obtain ⟨-, -, h₃, -⟩ := tie_normOs_steps v
+  rw [repPart, repPart, take_two_norm, h₃]
+
+theorem sparsePart_norm (v : C3Run e) : sparsePart (tie (normOs v)) = sparsePart (tie v) := by
+  obtain ⟨-, -, h₃, h₄, -⟩ := tie_normOs_steps v
+  rw [sparsePart, sparsePart, take_two_norm, h₃, h₄]
+
+theorem openPart_norm (v : C3Run e) : openPart (tie (normOs v)) = openPart (tie v) := by
+  obtain ⟨-, -, h₃, h₄, h₅, -⟩ := tie_normOs_steps v
+  rw [openPart, openPart, take_two_norm, h₃, h₄, h₅]
+
+theorem ligPart_norm (v : C3Run e) : ligPart (tie (normOs v)) = ligPart (tie v) := by
+  obtain ⟨-, -, h₃, h₄, h₅, h₆⟩ := tie_normOs_steps v
+  rw [ligPart, ligPart, FlockC3.PubRows.stagesOf, FlockC3.PubRows.stagesOf, take_two_norm, h₃, h₄, h₅, h₆]
+
+theorem osNormal_tie_norm (v : C3Run e) : OsNormal (tie (normOs v)) := by
+  unfold OsNormal
+  rw [tie_os]
+  exact osNormal_normOs v
+
+theorem os_norm (v : C3Run e) {s : ℕ} (hs : s < 3) : (tie (normOs v)).os.1 s = (tie v).os.1 s := by
+  rw [tie_os, tie_os]
+  exact normOs_os_of_lt hs
+
 end run
 
 /-! ## The read facts -/
@@ -329,6 +376,42 @@ theorem msgsReadC3_of_parts {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
 
 /-! ## At the normalized tied source -/
 
+theorem part_norm {part : C3Run (holoAt st hp) → List Step} (hpart : ∀ v, part (tie (normOs v)) = part (tie v))
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) (R : Reg)
+    (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) :
+    part (tiedSrc (normSrc stp) R ω t Lb) = part (tiedSrc stp R ω t Lb) :=
+  hpart (stp R ω t Lb)
+
+theorem partMsgsRead_norm {prev part : C3Run (holoAt st hp) → List Step}
+    (hprev : ∀ v, prev (tie (normOs v)) = prev (tie v)) (hpart : ∀ v, part (tie (normOs v)) = part (tie v))
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    (h : PartMsgsRead prev part zs dg N k Rw (tiedSrc stp) own sel) :
+    PartMsgsRead prev part zs dg N k Rw (tiedSrc (normSrc stp)) own sel := by
+  intro i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX
+  rw [part_norm (part := prev) hprev stp R ω t, part_norm (part := prev) hprev stp R' ω' t',
+    part_norm (part := part) hpart stp R ω t, part_norm (part := part) hpart stp R' ω' t']
+  exact h i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX
+
+theorem repsMsgsRead_norm {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    (h : RepsMsgsRead zs dg N k Rw (tiedSrc stp) own sel) :
+    RepsMsgsRead zs dg N k Rw (tiedSrc (normSrc stp)) own sel := by
+  intro i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX
+  rw [part_norm (part := repPart) repPart_norm stp R ω t, part_norm (part := repPart) repPart_norm stp R' ω' t']
+  exact h i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX
+
+theorem ligWhole_norm {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    (h : LigWhole zs dg N k Rw (tiedSrc stp)) : LigWhole zs dg N k Rw (tiedSrc (normSrc stp)) := by
+  intro R ω t R₂ τ o hA
+  obtain ⟨l, c, hl⟩ := h R ω t R₂ τ o hA
+  exact ⟨l, c, (tie_normOs_steps (stp R ω t (layers zs dg N k Rw R ω t R₂ τ))).2.2.2.2.2.trans hl⟩
+
 /-- **`MsgsReadC3` at the normalized tied source**, from the read facts at the tied source `tiedSrc stp`. -/
 theorem msgsReadC3_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
@@ -340,13 +423,16 @@ theorem msgsReadC3_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     (hop : OpenMsgsRead zs dg N k Rw (tiedSrc stp) own sel) (hlg : LigMsgsRead zs dg N k Rw (tiedSrc stp) own sel)
     (hos : ∀ s < 3, OpensReadAt zs dg N k Rw (tiedSrc stp) s) (hw : LigWhole zs dg N k Rw (tiedSrc stp)) :
     MsgsReadC3 zs dg N k Rw (tiedSrc (normSrc stp)) own sel :=
-  msgsReadC3_of_parts (src := tiedSrc (normSrc stp)) hleaf hcoins hrp hsp hop hlg
-    (fun R ω t R₂ τ o _ => osNormal_normOs (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)))
+  msgsReadC3_of_parts (src := tiedSrc (normSrc stp)) hleaf hcoins (repsMsgsRead_norm hrp)
+    (partMsgsRead_norm (prev := repPart) (part := sparsePart) repPart_norm sparsePart_norm hsp)
+    (partMsgsRead_norm (prev := sparsePart) (part := openPart) sparsePart_norm openPart_norm hop)
+    (partMsgsRead_norm (prev := openPart) (part := ligPart) openPart_norm ligPart_norm hlg)
+    (fun R ω t R₂ τ o _ => osNormal_tie_norm (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)))
     (fun s hs R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX =>
-      (normOs_os_of_lt (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hs).trans
+      (os_norm (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hs).trans
         ((hos s hs R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX).trans
-          (normOs_os_of_lt (u := stp R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')) hs).symm))
-    hw
+          (os_norm (stp R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')) hs).symm))
+    (ligWhole_norm hw)
 
 /-- **`SrcOK` at the normalized tied source**: `srcOK_tied_of_shapes` at `normSrc stp`, its reads `msgsReadC3_tied`,
 and its other clauses as at `tiedSrc stp`, since no stage reads what `normOs` changes. -/
