@@ -247,6 +247,7 @@ class _Pass:
     top: dict[tuple[int, int], bytes] | None = None     # the tree's nodes outside the aligned segments; None: the reader's
     positions: int = 0
     starts: list[int] = field(default_factory=list)
+    z: Callable[[str, int], bytes | None] | None = None     # the z each receipt is bound to, kept for the openings
     _plan: Plan | None = None
 
     def plan(self) -> Plan:
@@ -626,7 +627,7 @@ class Store:
 
     def receipts(self, ps: _Pass, index: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
         """The reference reader: segment ``index``'s receipts, from its blocks' bytes now."""
-        seg = ps.segments[index]
+        seg, z = ps.segments[index], ps.z if z is None else z
         r = self._by_name[seg.region]
         keyed, bb, first = r.receipt.keyed(ps.seed), r.info.block_bytes, r.info.first
         return [keyed(first + b, r.backing.read(b * bb, bb), z(seg.region, b) if z else None)
@@ -636,7 +637,8 @@ class Store:
                  root: bytes | None = None) -> PassCommitment | None:
         """Close the open pass and return its commitment (None outside a window).  A device reader hands in its
         aligned segments' roots (``roots``, by segment number), the reference computing the rest of the tree from its
-        receipts now, or the pass's ``root`` when it built the whole tree (then it, not the store, opens the pass)."""
+        receipts now, or the pass's ``root`` when it built the whole tree (then it, not the store, opens the pass).
+        ``z(region, block)`` is what each receipt is bound to; the pass keeps it for its openings."""
         t = time.perf_counter()
         ps = self._open_pass
         if ps is None:
@@ -644,7 +646,7 @@ class Store:
         roots = roots or {}
         if any(not aligned(ps.segments[k]) for k in roots):
             raise ValueError(f"pass {ps.index}'s segments {sorted(roots)} are not all subtrees of its tree")
-        self._open_pass = None
+        self._open_pass, ps.z = None, z
         if ps.seed is None:
             self.counters.add("end_pass", time.perf_counter() - t)
             return None

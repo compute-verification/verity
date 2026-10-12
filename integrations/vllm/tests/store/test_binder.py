@@ -192,3 +192,30 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     assert [len(w.passes) for w in recs] == [3, 1] and [w.challenge for w in recs] == sigma
     assert recs[0].passes[0].seed == rb.seed(sigma[0], 0, digest)
     assert recs[1].passes[0].seed == rb.seed(sigma[1], 0, b"\x02" * 64) and b.windows == 2
+
+
+def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_its_z():
+    """Each receipt bound to the tile output before its block (`NoiseTiles`, PoUW's stub), under the driver's own
+    receipt: the pass's root is the driver's `Prover`'s over the same blocks, and an opening, made after the next pass,
+    verifies with the tile's z."""
+    from verity.core.protocols.remote_bandwidth import audit
+    from verity.core.protocols.remote_bandwidth import receipts as rb
+    from verity_vllm.store.registry import RemoteBandwidthReceipt, verify_opening
+
+    s, recs, tiles = Store(salt_key=bytes(32)), [], audit.NoiseTiles()
+    b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
+    assert isinstance(b.receipt, RemoteBandwidthReceipt)
+    r = runner()
+    r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    for _ in range(3):
+        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+    pc, info = recs[0].passes[1], s.region("0.weight")
+    data = [s._regions[0].backing.read(i * 4096, 4096) for i in range(info.blocks)]
+    plan = rb.Plan.whole(len(data))
+    ys = [rb.Receipter(pc.seed)(j, data[j], tiles.output(pc.seed, j)) for j in plan]
+    assert pc.root == rb.tree(pc.seed, plan, ys, [s.salt(pc.seed, 0)]).commitment.root
+    o = s.open([(1, 1)], window=0)[0]
+    assert verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, tiles.output(pc.seed, 1))
+    assert not verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, bytes(64))

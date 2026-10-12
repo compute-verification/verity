@@ -27,13 +27,16 @@ import time
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.store.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.store.registry import Store, TagReceipt
+from verity_vllm.store.registry import RemoteBandwidthReceipt, Store, TagReceipt
+
+if TYPE_CHECKING:
+    from verity.core.protocols.remote_bandwidth.audit import Tiles
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
@@ -224,21 +227,24 @@ class Binder:
     `Every` for a fixed schedule): each ends the open window, whose last pass is the one that just ended, and a
     challenge begins the next, the session's first chained from ``registration`` (the driver's
     `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
-    reference's, every block read on the CPU."""
+    reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
+    ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
+    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
-                 on_window: Callable[[WindowRecord], None] | None = None) -> None:
+                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None) -> None:
         self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
-        self.receipt = receipt or default_receipt()
-        self.weights, self.reader, self.fifo = weights, reader, fifo
+        self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
+        self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window = messages, registration, on_window
         self.hooks: Hooks | None = None
         self.step = 0
         self.windows = 0
         self._in_window = False
+        self._seed: bytes | None = None
         self._segments: Sequence[Segment] = ()
         self.unregistered: dict[str, int] = {}
         self.slots = 0
@@ -329,12 +335,19 @@ class Binder:
             if m is not None:
                 self.store.begin_window(m, None if self.windows else self.registration)
                 self._in_window = True
-        self._segments = self.store.begin_pass(None).segments
+        ps = self.store.begin_pass(None)
+        self._segments, self._seed = ps.segments, ps.seed
+
+    def z(self, seed: bytes) -> Callable[[str, int], bytes]:
+        """The tile outputs a pass under ``seed`` binds its receipts to, by region and region block."""
+        tiles, region = self.tiles, self.store.region
+        return lambda name, b: tiles.output(seed, region(name).first + b)
 
     def end(self) -> None:
         if self.store.in_pass:
             read = self.reader(self._segments) if self.reader else None
-            self.store.end_pass(root=read) if isinstance(read, bytes) else self.store.end_pass(read)
+            z = self.z(self._seed) if self.tiles is not None and self._seed is not None else None
+            self.store.end_pass(root=read) if isinstance(read, bytes) else self.store.end_pass(read, z)
 
     def end_window(self) -> None:
         """Close the open window (after its last pass), if one is."""
