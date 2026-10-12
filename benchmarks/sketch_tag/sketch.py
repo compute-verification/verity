@@ -183,7 +183,7 @@ def fragment_signs(frag: np.ndarray, k: int, m: int, t: int) -> np.ndarray:
 
 
 def sketch_from_fragments(store: bytes, n_rows: int, kdim: int, bits: int, t: int, frag: np.ndarray, k: int):
-    """The sketch as the device computes it, one mma.m16n8k32 at a time from the packed signs (a check of the packing)."""
+    """The sketch as the device computes it, one mma.m16n8k32 at a time from the packed signs (checks the packing)."""
     a = lane_steps(store, n_rows, kdim, bits).view(np.int8).astype(np.int64)
     nbs, nchunks, m = a.shape[:3]
     b = fragment_signs(frag, k, m, t)                              # i, s, c, tq, blk, h, q

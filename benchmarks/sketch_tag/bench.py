@@ -184,7 +184,8 @@ def gate_sketch(lib: Lib, torch, sko: Sketch, store_np: np.ndarray, n: int, kd: 
         dev2 = sko.sk2.cpu().numpy().reshape(sko.nvec, sko.ks).astype(np.int64)
         out[f"committers_{cfg_name(c)}"] = {
             "y_equal_plain": bool(torch.equal(y, pp)), "sketch_equal": bool(np.array_equal(dev2, ref)),
-            "tags_equal": sko.commit2.tag_list() == ys, "leaves_equal": sko.commit2.leaf_list() == sko.commit.leaf_list(),
+            "tags_equal": sko.commit2.tag_list() == ys,
+            "leaves_equal": sko.commit2.leaf_list() == sko.commit.leaf_list(),
             "cleared": (not bool(sko.sk.any())) if clear else True}
     out["ok"] = (all(out[f"run{r}"]["y_equal_plain"] and out[f"run{r}"]["sketch_equal"] for r in {sko.t, sko.run})
                  and out["bad_tags"] == 0 and out["leaves_ok"] and out["root_ok"] and out["cleared"]
@@ -202,7 +203,8 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
     def committers_of(c):
         return min(a.committers, WB.WS_MAX_WARPS - 1 - c[0])
 
-    focus_of = {lay: (lay, 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0]) for lay in ("plain", "enc")}
+    focus_of = {lay: (lay, 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0])
+                for lay in ("plain", "enc")}
     w = WB.fp8_weights(torch, n, kd, 100 + n + kd)
     wb = w.view(torch.uint8)
     plain = WB.plain_layout(wb)
@@ -417,7 +419,8 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
             groups = lc.value // nch
             lo, hi = torch.cuda.Stream(priority=0), torch.cuda.Stream(priority=-1)
             lo_h, hi_h, cur = lo.cuda_stream, hi.cuda_stream, torch.cuda.current_stream()
-            start, made, done = torch.cuda.Event(), [torch.cuda.Event() for _ in bufs], [torch.cuda.Event() for _ in bufs]
+            start = torch.cuda.Event()
+            made, done = [torch.cuda.Event() for _ in bufs], [torch.cuda.Event() for _ in bufs]
 
             def f():
                 rc = 0
@@ -616,12 +619,26 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
     xs = {(mb, kd): torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn)
           for mb in a.batches for kd in {SHAPES[s][1] for s in SEQ}}
     ys = {s: torch.zeros(32, SHAPES[s][0], dtype=torch.float32, device="cuda") for s in SEQ}
+    one = torch.ones((), device="cuda")
+    xc = {}
+    for (mb, kd), x in xs.items():
+        try:
+            torch._scaled_mm(x, torch.zeros(16, kd, device="cuda").to(torch.float8_e4m3fn).t(), one, one,
+                             out_dtype=torch.bfloat16)
+            xc[(mb, kd)] = x
+        except Exception:  # noqa: BLE001  as in case(): cuBLASLt's FP8 path needs M a multiple of 16 here
+            xc[(mb, kd)] = torch.zeros(16 * -(-mb // 16), kd, device="cuda").to(torch.float8_e4m3fn)
+            xc[(mb, kd)][:mb] = x
+    native_seq = {}
     for lay in ("plain", "enc") if a.kr else ("plain",):
         kr = 0 if lay == "plain" else a.kr
-        stores, sks = {}, {}
+        stores, sks, fp8 = {}, {}, {}
         for name in SEQ:
             n, kd = SHAPES[name]
-            wb = WB.fp8_weights(torch, n, kd, 100 + n + kd).view(torch.uint8)
+            wf = WB.fp8_weights(torch, n, kd, 100 + n + kd)
+            wb = wf.view(torch.uint8)
+            if lay == "plain":
+                fp8[name] = wf
             if kr:
                 payloads = WB.fragment_payloads(torch, wb, lib.bits)
                 WB.set_key(lib, torch, C.key(SEED, kr))
@@ -637,6 +654,8 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
         layer_bytes = sum(v.numel() * v.element_size() for v in stores.values())
         nl = max(2, -(-WB.L2_DEFEAT_BYTES // layer_bytes))
         ring = [stores] + [{k: v.clone() for k, v in stores.items()} for _ in range(nl - 1)]
+        wring = [{k: v.t() for k, v in fp8.items()}] + [{k: v.clone().t() for k, v in fp8.items()}
+                                                        for _ in range(nl - 1)]
         off = {"qkv": 0, "o": sks["qkv"].nvec, "down": sks["qkv"].nvec + sks["o"].nvec}
         nrest, ngu = off["down"] + sks["down"].nvec, sks["gate_up"].nvec
         rest = [torch.zeros(nrest * ks, dtype=torch.int32, device="cuda") for _ in range(nl)]
@@ -724,6 +743,13 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             continue
         for mb in a.batches:
             arms = {m: plan(m, mb) for m in ("base", "sk", "fused", "split", "split8")}
+            if lay == "plain":
+                def cublas(mb=mb):
+                    for li in range(nl):
+                        for name in SEQ:
+                            torch._scaled_mm(xc[(mb, SHAPES[name][1])], wring[li][name], one, one,
+                                             out_dtype=torch.bfloat16)
+                arms["cublas"] = cublas
             for f in arms.values():
                 f()
             torch.cuda.synchronize()
@@ -734,21 +760,26 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                     times[m].append(WB.queued(lib, torch, arms[m])[0] / nl)
             med = {m: statistics.median(v) for m, v in times.items()}
             native = sum(cases[s]["times"][mb]["native_s"] for s in SEQ)
-            lr["times"][mb] = {"median_s": med, "times_s": times, "native_s": native,
-                               "ratio_vs_native": {m: v / native for m, v in med.items()}}
-            log(f"sequence {lay} M={mb}: native {native * 1e6:.1f} us a layer; "
-                + ", ".join(f"{m} {v / native:.3f}x" for m, v in med.items()))
-        del ring, rest, gu, crest, cgu, stores, sks
+            if lay == "plain":
+                native_seq[mb] = min(med["cublas"], med["base"])
+            ns = native_seq.get(mb, native)
+            lr["times"][mb] = {"median_s": med, "times_s": times, "native_s": native, "native_seq_s": ns,
+                               "ratio_vs_native": {m: v / native for m, v in med.items()},
+                               "ratio_vs_native_seq": {m: v / ns for m, v in med.items()}}
+            log(f"sequence {lay} M={mb}: linears' native {native * 1e6:.1f} us a layer, in sequence {ns * 1e6:.1f} us; "
+                + ", ".join(f"{m} {v / ns:.3f}x" for m, v in med.items()))
+        del ring, wring, fp8, rest, gu, crest, cgu, stores, sks
         torch.cuda.empty_cache()
     return res
 
 
 def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
-    """The layer sequence's points: y_total = (the layer with the deferred commit) / native - 1."""
+    """The layer sequence's points: y_total = (the layer with the deferred commit) / native - 1, native the faster of
+    cuBLASLt and this kernel without the sketch over the same sequence."""
     points = []
     for lay, lr in (seq or {}).get("layouts", {}).items():
         for mb, t in lr["times"].items():
-            r, nat = t["ratio_vs_native"], t["native_s"]
+            r, nat = t["ratio_vs_native_seq"], t["native_seq_s"]
             enc = lay == "enc"
             mode = min(("fused", "split", "split8"), key=lambda m: r.get(m, float("inf")))
             points.append({
@@ -759,7 +790,8 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
                 "y_total": r[mode] - 1,
                 "commit_mode": f"deferred, {mode} (gate_up tags the previous qkv, o, down; down its gate_up" +
                                ("; each call the leaves of the tags before)" if mode != "fused" else ")"),
-                "y_total_fused": r["fused"] - 1, "y_total_split": r["split"] - 1 if "split" in r else None,
+                "y_total_vs_linears_native": t["ratio_vs_native"][mode] - 1, "y_total_fused": r["fused"] - 1,
+                "y_total_split": r["split"] - 1 if "split" in r else None,
                 "y_total_split8": r["split8"] - 1 if "split8" in r else None,
                 "y_base": r["base"] - 1, "y_sketch": r["sk"] - r["base"], "y_commit": r[mode] - r["sk"],
                 "y_hash": None, "x": None, "delta": None, "tau": None, "measured": True,
@@ -852,12 +884,13 @@ def write_result(ok: bool, points: list[dict], libs: list[Lib], out: Path) -> No
         stem = (f"seq_{lay}_k{p['sketch_k']}_m{p['batch']}" if "layers" in p
                 else f"{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}")
         ms += [{"name": f"y_{f}_{stem}", "value": p[f"y_{f}"], "unit": "1"}
-               for f in ("total", "total_fused", "total_side", "total_window", "total_separate", "sketch", "hash",
-                         "commit", "commit_window") if p.get(f"y_{f}") is not None]
+               for f in ("total", "total_fused", "total_split", "total_side", "total_window", "total_separate",
+                         "sketch", "hash", "commit", "commit_window") if p.get(f"y_{f}") is not None]
     rel = os.path.relpath(out, run_dir)
     files = [f"{rel}/sketch-tag.json", f"{rel}/codec-frontier-points.json", f"{rel}/bench.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
+           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest()
+                                             for l in libs},
                                     "seed": SKETCH_SEED.hex()},
            "validation": {"status": "passed" if ok else "failed", "checker": "sketch-tag gates",
                           "detail": "y = plain FP8 kernel's, sketch = sketch.py's int64 over every vector, "

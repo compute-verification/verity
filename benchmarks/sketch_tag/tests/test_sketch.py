@@ -1,5 +1,5 @@
-"""Sketch-then-hash's reference (`sketch.py`): the sign derivation from the window's seed, the vectors, the exact sketch,
-the device's sign packing, and the tag, leaves and root under ro-sketch-blake3/v0. `vectors.json` pins the bytes
+"""Sketch-then-hash's reference (`sketch.py`): the sign derivation from the window's seed, the vectors, the exact
+sketch, the device's sign packing, and the tag, leaves and root under ro-sketch-blake3/v0. `vectors.json` pins the bytes
 (`SKETCH_REGEN=1` rewrites it)."""
 
 from __future__ import annotations
