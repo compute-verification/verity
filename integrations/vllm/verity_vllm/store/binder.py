@@ -50,10 +50,18 @@ class TorchBacking:
 
     @classmethod
     def of_tensor(cls, t: Any, block_bytes: int) -> TorchBacking | None:
-        """A contiguous tensor's whole blocks (None if it holds less than one, or isn't contiguous)."""
-        if not t.is_contiguous() or t.numel() * t.element_size() < block_bytes:
+        """The whole blocks of a tensor whose elements fill one range of its storage, in storage order: a contiguous
+        tensor, or a permuted one such as stock vLLM's FP8 weights (held transposed).  None if it holds less than one
+        block or has gaps."""
+        dims, step = sorted((s, n) for s, n in zip(t.stride(), t.shape) if n != 1), 1
+        for s, n in dims:
+            if s != step:
+                return None
+            step *= n
+        es = t.element_size()
+        if t.numel() * es < block_bytes:
             return None
-        flat = t.detach().reshape(-1).view(_torch().uint8)
+        flat = storage_bytes(t.detach())[t.storage_offset() * es:(t.storage_offset() + t.numel()) * es]
         return cls(flat, flat.numel() // block_bytes * block_bytes)
 
     def read(self, offset: int, n: int) -> bytes:

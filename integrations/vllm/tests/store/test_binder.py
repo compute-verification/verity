@@ -42,6 +42,13 @@ def test_torch_backing_reads_and_writes_bytes():
     assert TorchBacking.of_tensor(torch.zeros(10), 4096) is None
 
 
+def test_a_transposed_weight_is_backed_in_storage_order_and_a_strided_one_is_not():
+    base = torch.arange(64 * 32, dtype=torch.int16).reshape(64, 32)
+    b = TorchBacking.of_tensor(base[16:].t(), 1024)
+    assert b.nbytes == 3 * 1024 and b.read(0, b.nbytes) == base[16:].numpy().tobytes()
+    assert TorchBacking.of_tensor(base[:, :16], 1024) is None
+
+
 class Block:
     def __init__(self, i: int) -> None:
         self.block_id, self.ref_cnt, self.is_null = i, 0, i == 0
