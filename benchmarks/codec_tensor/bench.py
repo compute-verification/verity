@@ -435,7 +435,8 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     fewer, and 18 untagged at 4 fewer. gemm_case skips each config at an M whose kernel doesn't take its warps
     (fused_fits). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on early tasks of
     random CTAs, unexplained, so auto leaves them out."""
-    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (lib.sb + 48)  # noqa: E731
+    smax = lambda ks, w=False: (  # noqa: E731
+        (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 64 * (8 if w else 3) * ks) // (lib.sb + 48))
     dmax, dwide = lib.fused_warps - 2, lib.fused_most - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     full_slot = lib.pb == lib.s
@@ -451,7 +452,7 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
         for ks in (int(v) for v in sketch.split(",") if v):
             cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (0, 2, 3, 4)]
             if ks == 16 and full_slot:
-                cfgs += [(d, min(2 * sketch_t - 1, max(need(d), smax(ks) - f)), -2, ks)
+                cfgs += [(d, min(2 * sketch_t - 1, max(need(d), smax(ks, True) - f)), -2, ks)
                          for d in sorted({dmax, dmax - 2, dmax - 3, dwide - 2}, reverse=True) if d >= lib.fused_span
                          for f in (0, 2)]
     else:
@@ -461,11 +462,11 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
         if len(c) not in (2, 3, 4):
             raise SystemExit(f"fused {c}: DxS, DxSxT, DxSx-1xK_S or DxSx-2x16")
         d, st, t, ks = tuple(c) + (-1, 0)[len(c) - 2:]
-        if not (lib.fused_span <= d and d + max(t, 0) <= dwide and need(d) <= st <= smax(ks) and t >= -2
+        if not (lib.fused_span <= d and d + max(t, 0) <= dwide and need(d) <= st <= smax(ks, t == -2) and t >= -2
                 and ks in (0, 16, 64) and (ks == 0 or (t in (-1, -2) and st < 2 * sketch_t))
                 and (t != -2 or (ks == 16 and full_slot))):
             raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dwide}, "
-                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T (or T = -2: two "
+                             f"ceil(32 D / TW) <= stages <= {smax(ks, t == -2)}, k_s in 16, 64 with no T (or T = -2: two "
                              f"sketch warps, k_s = 16, full slot) and stages < {2 * sketch_t}")
         if (d, st, t, ks) not in out:
             out.append((d, st, t, ks))

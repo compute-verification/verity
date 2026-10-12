@@ -1864,6 +1864,16 @@ constexpr int FUSED_WARPS = FRESH_DECODE ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
+// sketch_warp hashes the tiles of a batch at once, a lane a vector (16 / SKW vectors of each tile a warp), from two
+// sets of a batch's buffers.
+template <int SKW>
+__host__ __device__ constexpr int sk_batch() {
+  return SKW ? 32 / (16 / SKW) : 1;
+}
+template <int SKW>
+__host__ __device__ constexpr int sk_bufs() {
+  return SKW ? 2 * sk_batch<SKW>() : SK_BUFS;
+}
 // A diagnostic build (WT_SK_DIAG, bits) drops parts of the sketch to time them, so its sketches and tags are wrong
 // (bench.py gates only its partial sums): 1 the MMA warp's hash, 2 the decoders' MMAs and adds, 4 their sign loads.
 #ifndef WT_SK_DIAG
@@ -1871,9 +1881,9 @@ constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
 #endif
 // sgs sign words (k_s = 16's signs, skt tasks' steps, a u32 a lane) after the sketch's buffers: wt_fused_sketch puts
 // them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0).
-template <int NB8, int SKK>
+template <int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((6 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK + 4 * sgs;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((6 * stages + 1) / 2) + 16 + sk_bufs<SKW>() * 64 * SKK + 4 * sgs;
 }
 
 // The CTA's warps: FUSED_WARPS, and with SKW sketch warps (sketch_warp) SKW more where the registers allow (the MMA
@@ -2115,9 +2125,11 @@ __device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, i
 // of it. Sketch warp q takes tasks ii = q, q + SKW, ... of each of the CTA's tiles: it loads the task's signs, waits
 // on `ready`, reads the stage's stored bytes (a step's A fragment a uint4 a lane, k_s / 8 MMAs) and arrives on
 // `sketched`, which the decoders wait on before they overwrite the stage in place. Its sums for the tile stay in its
-// MMAs' accumulators; at the tile's end the warps add them into the tile's buffer (tl % 2), meet at named barrier 1,
-// and warp q copies out, hashes (a lane a vector, from the window's or pass's kTagKey) and zeroes vectors
-// 16 q / SKW .. 16 (q + 1) / SKW - 1. Tile tl + 2's adds come after tile tl + 1's barrier, which follows the zeroing.
+// MMAs' accumulators; at the tile's end the warps add them into the tile's buffer (tl % 2 NBT). At the end of each
+// batch of NBT tiles (and of the CTA's last tile) they meet at named barrier 1, and warp q copies out, hashes (a lane
+// a vector, from the window's or pass's kTagKey) and zeroes vectors 16 q / SKW .. 16 (q + 1) / SKW - 1 of each of the
+// batch's tiles: a hash's instructions issue once for all 32 lanes, so the batch takes a quarter of a tile's issue
+// each at SKW = 2. Batch b + 2's adds come after batch b + 1's barrier, which follows batch b's zeroing.
 // Every warp runs every one of the CTA's tiles (tpc), its tasks or none, so the tiles past the CTA's tasks hash zeros.
 //
 // The B operand is SkB's (the interface a bound receipt drops into): SkB{}(sw, r, ii, p, lane) is B register r
@@ -2134,7 +2146,7 @@ template <int KS, int SKW, class SkB>
 __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
                                             int lane, const Sketch &k) {
   static_assert(sk_words<KS>() == 1 && 16 % SKW == 0, "a sign word a lane a step; whole vectors a warp");
-  constexpr int KB = KS / 8, VW = 16 / SKW, LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
+  constexpr int KB = KS / 8, VW = 16 / SKW, NBT = sk_batch<SKW>(), LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
   const int g = lane >> 2, tq = lane & 3, swz = sk_swz<KS>(g);
   const u32 one = kOne;
   const SkB bop{};
@@ -2162,7 +2174,7 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
       __syncwarp();
       if (lane == 0) mbar_arrive(sketched + s);
     }
-    int *buf = k.buf + (tl & 1) * 16 * KS;
+    int *buf = k.buf + (tl % (2 * NBT)) * 16 * KS;
 #pragma unroll
     for (int b = 0; b < KB; ++b) {
       int *r0 = buf + g * KS, *r1 = r0 + 8 * KS;
@@ -2172,17 +2184,19 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
       atomicAdd(r1 + c, acc[b][2]);
       atomicAdd(r1 + (c ^ 1), acc[b][3]);
     }
+    if (tl % NBT != NBT - 1 && tl != k.tpc - 1) continue;
     asm volatile("bar.sync 1, %0;\n" ::"r"(32 * SKW) : "memory");
-    const u64 t0 = 16 * (k.tile0 + tl);
+    const int tb = tl - tl % NBT, nt = tl - tb + 1;   // the batch's tiles, whose buffers follow one another
+    int *bb = k.buf + (tb % (2 * NBT)) * 16 * KS;
     if (k.out)
-      for (int e = lane; e < VW * KS; e += 32) {
-        const int row = VW * q + e / KS, col = e % KS;
-        k.out[(t0 + row) * KS + col] = buf[row * KS + (col ^ sk_swz<KS>(row & 7))];
+      for (int e = lane; e < nt * VW * KS; e += 32) {
+        const int t = e / (VW * KS), row = VW * q + e / KS % VW, col = e % KS;
+        k.out[(16 * (k.tile0 + tb + t) + row) * KS + col] = bb[(16 * t + row) * KS + (col ^ sk_swz<KS>(row & 7))];
       }
-    if (k.tags && lane < VW) {
-      const int r = VW * q + lane, sz = sk_swz<KS>(r & 7);
-      const int *w = buf + r * KS;
-      const u64 j = k.jbase + t0 + r;
+    if (k.tags && lane < nt * VW) {
+      const int t = lane / VW, r = VW * q + lane % VW, sz = sk_swz<KS>(r & 7);
+      const int *w = bb + (16 * t + r) * KS;
+      const u64 vi = 16 * (k.tile0 + tb + t) + r, j = k.jbase + vi;
       u32 cv[8];
 #pragma unroll
       for (int i = 0; i < 8; ++i) cv[i] = kTagKey[i];
@@ -2199,12 +2213,12 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
         b3(cv, m, 0, last ? LEN - 64 * blk : 64,
            B3_KEYED | (blk == 0 ? B3_START : 0) | (last ? B3_END | B3_ROOT : 0), cv, one);
       }
-      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 8 * (t0 + r));
+      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 8 * vi);
       o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
       o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
     }
     __syncwarp();
-    for (int e = lane; e < VW * KS; e += 32) buf[VW * q * KS + e] = 0;
+    for (int e = lane; e < nt * VW * KS; e += 32) bb[(16 * (e / (VW * KS)) + VW * q) * KS + e % (VW * KS)] = 0;
     __syncwarp();
   }
 }
@@ -2314,8 +2328,8 @@ __global__ void __launch_bounds__(fused_warps<NB8, SKK, SKW>() * 32, 1) fused_ke
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
   constexpr int MW = fused_mma_warps<NB8, SKK, SKW>();
   load_xs<NB8>(xs, x, M, Kd, kc);
-  for (int e = threadIdx.x; e < SK_BUFS * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
-  u32 *sksg = reinterpret_cast<u32 *>(skbuf + SK_BUFS * 16 * SKK);
+  for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
+  u32 *sksg = reinterpret_cast<u32 *>(skbuf + sk_bufs<SKW>() * 16 * SKK);
   if (sgs && signs)
     for (int e = threadIdx.x; e < sgs; e += blockDim.x) sksg[e] = __ldg(signs + e);
   const u32 *sgn = sgs ? sksg : signs;
@@ -2636,9 +2650,9 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   };
 #define G(KK, NB, SK, SW)                                                                              \
   do {                                                                                                 \
-    const int sg = fused_smem_bytes<NB, SK>(stages, signs16) <= optin ? signs16 : 0;                   \
-    return partials ? go(fused_kernel<KK, NB, true, SK, SW>, fused_smem_bytes<NB, SK>(stages, sg), sg) \
-                    : go(fused_kernel<KK, NB, false, SK, SW>, fused_smem_bytes<NB, SK>(stages, sg), sg); \
+    const int sg = fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;                   \
+    return partials ? go(fused_kernel<KK, NB, true, SK, SW>, fused_smem_bytes<NB, SK, SW>(stages, sg), sg) \
+                    : go(fused_kernel<KK, NB, false, SK, SW>, fused_smem_bytes<NB, SK, SW>(stages, sg), sg); \
   } while (0)
 #define GN(KK, SK, SW) \
   do { if (nb8 == 1) G(KK, 1, SK, SW); else if (nb8 == 2) G(KK, 2, SK, SW); else G(KK, 4, SK, SW); } while (0)
