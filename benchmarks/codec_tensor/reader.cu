@@ -26,9 +26,11 @@ using u64 = uint64_t;
 
 constexpr int BLOCK = 4096, PER_LEAF = 16, SALT = 192, KEY_WORDS = 64, MSG = 384;
 constexpr int HEAD_LEAF = 0, HEAD_NODE = 1, HEAD_PAD = 2;
+constexpr int NODE_LEVELS = 64, NODE_HEAD = 113;
 
 struct Consts {
   u64 receipt_mid[8], row_mid[8], row_mid_last[8], salt_mid[8], leaf_mid[8];
+  u64 node_mid[NODE_LEVELS][8];  // a node's first block at each level (`node_digest`)
   u32 key[KEY_WORDS];        // hm96-sha512's key, little-endian: bit t of the key is bit t % 32 of word t / 32
   uint8_t head[3][128];      // frame-v3 FRAME ‖ u32be |tag| ‖ tag ‖ u64be 64 ‖ domain id, for leaf, node and pad
   uint8_t schema[32], salt_in[128];
@@ -470,10 +472,44 @@ __global__ void __launch_bounds__(128) pads_kernel(u64 r0, u64 n, u64 *__restric
 }
 
 // Nodes [i0, i0 + n) of the level above level h: node i over in[2 (i − i0)] and in[2 (i − i0) + 1].
+// A node's message is head ‖ u64be 1 ‖ h ‖ u64be len(i) ‖ i ‖ u64be 64 ‖ L ‖ u64be 64 ‖ R. For h < NODE_LEVELS its
+// first 128 bytes (the 113-byte head, u64be 1, h and the first 6 bytes of u64be len(i)) are fixed by h, so the node
+// starts from kC.node_mid[h], and the rest, 146 + len(i) bytes, is built as words: two compressions in all.
+__device__ __forceinline__ void node_digest(const u64 *mid, u64 i, const u64 *L, const u64 *R, u64 (&s)[8]) {
+  int len = 1;
+  while (len < 8 && i >> (8 * len)) ++len;
+  const int a = 2 + len, q = a >> 3, r = 8 * (a & 7);   // the tail's bytes before L's frame, at most 8
+  u64 U[19];
+  U[0] = 64;
+#pragma unroll
+  for (int k = 0; k < 8; ++k) U[1 + k] = L[k], U[10 + k] = R[k];
+  U[9] = 64, U[18] = 0x80ULL << 56;
+  const u64 P = ((u64)len << (8 * len)) | i;            // 0x00 ‖ len ‖ i, a bytes big-endian
+  u64 w[32];
+#pragma unroll
+  for (int k = 0; k < 32; ++k) {
+    const u64 u0 = k < 19 ? U[k] : 0, u1 = k >= 1 && k <= 19 ? U[k - 1] : 0;
+    w[k] = q ? u1 : (u0 >> r) | (u1 << (64 - r));   // q = 1 only at a = 8, r = 0; else 24 ≤ r ≤ 56
+  }
+  w[0] |= a == 8 ? P : P << (64 - 8 * a);
+  w[31] = (u64)(128 + 146 + len) * 8;
+#pragma unroll
+  for (int k = 0; k < 8; ++k) s[k] = mid[k];
+  sha512_compress(s, w);
+  sha512_compress(s, w + 16);
+}
+
 __global__ void __launch_bounds__(128) level_kernel(const u64 *__restrict__ in, u64 *__restrict__ out, int h, u64 i0,
                                                     u64 n) {
   const u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x;
   if (t >= n) return;
+  if (h < NODE_LEVELS && i0 + t < (1ULL << 48)) {
+    u64 d[8];
+    node_digest(kC.node_mid[h], i0 + t, in + 16 * t, in + 16 * t + 8, d);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[8 * t + i] = d[i];
+    return;
+  }
   Msg msg;
   put_head(msg, HEAD_NODE);
   put_uint(msg, (u64)h);
@@ -545,6 +581,13 @@ int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8
   c.head_len[HEAD_LEAF] = head(c.head[HEAD_LEAF], "leaf", domain_id);
   c.head_len[HEAD_NODE] = head(c.head[HEAD_NODE], "node", domain_id);
   c.head_len[HEAD_PAD] = head(c.head[HEAD_PAD], "pad", domain_id);
+  if (c.head_len[HEAD_NODE] != NODE_HEAD) return 1;
+  for (int h = 0; h < NODE_LEVELS; ++h) {
+    uint8_t first[128] = {};
+    memcpy(first, c.head[HEAD_NODE], NODE_HEAD);
+    first[NODE_HEAD + 7] = 1, first[NODE_HEAD + 8] = (uint8_t)h;
+    midstate(first, c.node_mid[h]);
+  }
   memcpy(c.schema, schema, schema_len);
   c.schema_len = schema_len;
   memcpy(c.salt_in, salt_in, salt_in_len);
