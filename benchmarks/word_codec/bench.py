@@ -1177,14 +1177,16 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
         if "rebuild" in row:
             ms.append({"name": f"rebuild_k{k}", "value": row["rebuild"], "unit": "1"})
         ms.append({"name": f"rebuild_free_k{k}", "value": row["free"]["rebuild"], "unit": "1"})
-    for key in [k for k in res if k == "gemm" or k.startswith("gemm_") and isinstance(res[k], dict)]:
-        for name, g in res[key].items():
-            for mb, t in g.get("times", {}).items():
-                for arm, ratio in t["ratio_vs_native"].items():
-                    if arm != "empty":
-                        ms.append({"name": f"{key}_{name}_m{mb}_{arm}_vs_native", "value": ratio, "unit": "1"})
+    # Each arm's ratio per shape stays in word-codec.json: as measurements they outgrow the store's 256 KiB meta.
+    for p in res.get("frontier", {}).get("points", ()):
+        name = f"{p['lib']}_{p['commit']}_k{p['k']}_m{p['batch']}"
+        ms.append({"name": f"{name}_y", "value": p["y"], "unit": "1"})
+        if "mu_rebuild_window" in p:
+            ms.append({"name": f"{name}_mu_window", "value": p["mu_rebuild_window"], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/word-codec.json", f"{rel}/bench.log"]
+    if (out_dir / "codec-frontier-points.json").exists():
+        files.append(f"{rel}/codec-frontier-points.json")
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
                                     "seed": SEED.hex()},
