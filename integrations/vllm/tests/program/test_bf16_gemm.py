@@ -1,7 +1,8 @@
 """`registry.cublas_bf16` and `registry.ll_bf16`, GLM-5.3's bf16 GEMMs on sm_90: on bits they are Boolean and are the Boolean
 versions of their words; they agree with their words (the reference evaluator) and with `bf16_gemm_check`'s numpy models of the
 kernels on random words and on words at every class edge (signed zeros, subnormals, infinities, NaNs, and products that overflow
-or underflow f32, the only inputs on which the dotprod's contraction changes a word); `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
+or underflow f32, the only inputs on which the dotprod's contraction changes a word); the dotprod's steps agree with their words
+on accumulators that cancel the product; `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
 function; the words at GLM-5.3's gate statics (K 6144) agree with the models; `dispatch_sm90` is vLLM's table; and each is pinned
 by gate count and program digest."""
 from __future__ import annotations
@@ -30,22 +31,27 @@ HOPW = word_of(HOP)
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
+    "LlBf16FmaStep_v2":
+        (2167, 3453, 201, "48db93e73765c747ba5de6951b33bea6fc1ce7559c4ba711792c82cfacb817acc0ae4a68ded8ec856cd9964e4dcbb8bfe9c5a9802913956d1335d427dcfca8cd"),
+    "LlBf16MulAddStep_v2":
+        (1561, 2492, 191, "7bc8c779b3e4e00c45c01163b150fd6798924a0d22ee980db1b0a635b1a16e122b9d0bc1431e1898d5c57a4b13915a55e5ff3fe1a29353a168306e2651957424"),
     "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
         (47232, 90294, 4566, "3f63d9f7123b765e7ce6a1d981accb6b9bf30ddd8857db8c619cf9da3d3b461536d3ad9c6b0e0746417cb0853e5a4bde0c29cdbf3d6428e1d4adbf899040628b"),
     "BatchedGemm_v2{B=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
         (94860, 181176, 9222, "d1b876b03912d35319d3a8d818e86459dd37556f384e309a370e5cc1ff4c78b6eb17e6ef9fae3a98dca67af35d2616b69d93f55be5e51ba24777fee38f772ee4"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=1}":
-        (1200128, 2102208, 75712, "ee7e0114e6f337a91cdf018c646bc41aff5e1584c7e76e73bf50a65ee496802d95782138ddd400f412733638c7b0bf67860372befb9658fe89806b2f5af12ab6"),
+        (606720, 973248, 58816, "01cad2b33bbf806a2678681b273e4e87db088a717745dd3441603be25a01465763035c8314df3bd3c981a90ba3bbdcda12a5f15810a4546d321273ef5ccaf8cd"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=0}":
-        (881920, 1636800, 64960, "7f0d8204e8d54979b80199893b83db241aa46354ee3748617db47bb8bccad0a29097299e0c2661441a11684a1818bbf6ab00a520e0820bad939210185b777098"),
+        (451584, 727232, 56256, "d73cc074d8d3b938c685fcc5b19ab7d1aa7236241436d40c0608627b86f7487600dfbf67e93c9b4739edd39795da55569905baa95da16833e4d61e87062e8926"),
     "LlBf16SplitKDot_v2{K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
         (67848, 128762, 6778, "438a7d3e324cfcb4d025466be392931c8872377c9019ee676a5331eb5b1212a59b859aec141b190fdd0ef9aa20b099fcb26685cf5c624bc54809978696ae59eb"),
     "LlBf16DotprodGemm_v2{N=2,K=128,BS=64,VEC=2,FMA=1}":
-        (1252096, 2191488, 83072, "bc236b02a555828cd9d0949abf47545bbe1ef47f6cef8ad18226fa0e779d4b83f3fba148483cbec06e38f002f5a270a42666d3f4922862643024a47ae7bd6b4f"),
+        (658688, 1062528, 66176, "bb87f212ee8f53abe49912be23652eb0d57f90dd2706dfee84a8e9b9ec1ddad7a2432676047fc26adbb8c589492b01b1fa5f70da853b4d81b4cb44d9f6b40830"),
     "LlBf16SplitKGemm_v2{N=2,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
         (135696, 257524, 13556, "aec7c44c327014f6ffd016196643cdc5618d4daf01e1b83b689234b67c61e45c4d2ce171218a4f54620f20b17e29ade587f157bea43d41fbac7f2e173e9feffb"),
 }
-PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
+PINNED = [bind(LL.LlBf16FmaStep), bind(LL.LlBf16MulAddStep),
+          bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
           bind(LL.LlBf16DotprodGemm, N=2, K=128, BS=64, VEC=2, FMA=1),
@@ -72,6 +78,13 @@ def _bf16_words(rng, shape, kind: str) -> np.ndarray:
     return x.reshape(shape)
 
 
+def _f32_words(rng, shape, kind: str) -> np.ndarray:
+    """f32 words of a kind: a bf16 word of it with random low bits, except on infinities and NaNs, which keep theirs."""
+    hi = _bf16_words(rng, shape, kind).astype(U32)
+    lo = rng.integers(0, 1 << 16, hi.shape).astype(U32)
+    return (hi << 16) | np.where((hi >> 7) & 0xFF == 0xFF, 0, lo).astype(U32)
+
+
 def _rows(rng, M: int, N: int, K: int) -> list[tuple[np.ndarray, np.ndarray]]:
     """(x (M, K), w (N, K)) of each kind."""
     return [(_bf16_words(rng, (M, K), k), _bf16_words(rng, (N, K), k)) for k in KINDS]
@@ -94,14 +107,32 @@ def test_every_definition_is_boolean_and_the_boolean_version_of_its_word() -> No
 
 @pytest.mark.parametrize("target", PINNED, ids=[t.id for t in PINNED])
 def test_bits_agree_with_the_word(target) -> None:
-    """Each Boolean Definition against its word (the reference evaluator) on eight instances of each kind, word for word."""
+    """Each Boolean Definition against its word (the reference evaluator) on eight instances of each kind (bf16 or f32 words by
+    the parameter's width), word for word."""
     rng = np.random.default_rng(1)
     word = word_of(target)
     for kind in KINDS:
-        args = [_bf16_words(rng, (8, *type_shape(BL.word_type(p))), kind) for p in BS.compile(target).params]
+        args = [(_f32_words if BL.word_type(p).leaf_widths()[0] == 32 else _bf16_words)(rng, (8, *type_shape(BL.word_type(p))), kind)
+                for p in BS.compile(target).params]
         got = np.asarray(BS.evaluate_words(target, *args)).reshape(8, -1)
         want = np.array([evaluate(word, *(a[i].reshape(-1).astype(np.int64).tolist() for a in args)) for i in range(8)])
         assert np.array_equal(got.astype(np.int64), want.astype(np.int64)), (target.id, kind)
+
+
+@pytest.mark.parametrize("step", [LL.LlBf16FmaStep, LL.LlBf16MulAddStep], ids=lambda d: d.name)
+def test_steps_agree_with_the_word(step) -> None:
+    """The dotprod's steps on bits against their words on 256 instances of each kind, and on accumulators that cancel the
+    product exactly (a bf16 product is exact in f32), where the sum's zero takes its sign from the rounding mode."""
+    rng = np.random.default_rng(8)
+    target, word = bind(step), word_of(bind(step))
+    cases = [(_bf16_words(rng, (256,), k), _bf16_words(rng, (256,), k), _f32_words(rng, (256,), k)) for k in KINDS]
+    x, w = _bf16_words(rng, (256,), "spread"), _bf16_words(rng, (256,), "spread")
+    product = (x.astype(U32) << 16).view(np.float32) * (w.astype(U32) << 16).view(np.float32)
+    cases.append((x, w, MK.u32(-product)))
+    for x, w, acc in cases:
+        got = np.asarray(BS.evaluate_words(target, x, w, acc)).astype(np.int64)
+        want = [evaluate(word, int(a), int(b), int(c))[0] for a, b, c in zip(x, w, acc)]
+        assert np.array_equal(got, np.array(want, np.int64)), step.name
 
 
 @pytest.mark.parametrize("FMA", [1, 0])
