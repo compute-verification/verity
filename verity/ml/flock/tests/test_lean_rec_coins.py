@@ -371,6 +371,26 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
                         fresh.result()["why"]), fresh.result()["why"]
 
 
+def test_the_registered_reads_hold_no_message_round_port_the_statement_lacks(algebra, shape, undrawn, rows, tmp_path):
+    """`RecVStar.checkOwn`: a part's reads file with one null read (a unit outside the population, which the registered
+    reads' own check accepts) appended to one message-round port is refused by that port against the statement's, with the
+    verifier's shared rows unedited; `checkRows` would refuse the same file by the shared row, so the exact refusal pins
+    `checkOwn`. One verify sets the part's statement up over its whole population, about 9 minutes."""
+    ports = lambda p: json.loads((p / "registered.json").read_text())["ports"]
+    a = next(p for p in sorted(algebra.iterdir()) if any(re.fullmatch(r"m\d+", k) for k in ports(p)))
+    d = shutil.copytree(a, tmp_path / "extra")
+    r = json.loads((d / "registered.json").read_text())
+    port = next(k for k in r["ports"] if re.fullmatch(r"m\d+", k))
+    value, honest = r["ports"][port]["value"], r["ports"][port]["reads"]
+    r["ports"][port]["reads"] = [*honest, None]
+    (d / "registered.json").write_text(json.dumps(r))
+    show = lambda rd: "[" + ", ".join("null" if x is None else str(x) for x in rd) + "]"
+    v = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
+                str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)
+    assert v["why"] == (f"setup: {_unit(d)}: the registered reads' port {port} under {value} reading {show([*honest, None])} "
+                        f"is not the statement's: the statement's is {port} under {value} reading {show(honest)}"), v["why"]
+
+
 def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
     """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the recorded level 3 reads `rec-acc` as `acc` and
     `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and passes setup at those shared rows
