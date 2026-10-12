@@ -28,7 +28,6 @@
 },
 {
 "path": "Security/lean-audit.json",
-"sha256": "ccd9ea778af21f2207b272f10d4d47949d6d316fc2ea6ce5750490f3b4beab27",
 "twins": 64
 }
 ],
