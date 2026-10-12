@@ -58,6 +58,9 @@
    "owner": "@memory-accounting",
    "digest": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
   },
+  "Pous.P2.Assumptions.P2RingRoundSecure": {
+   "owner": "@memory-accounting"
+  },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
    "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
@@ -2627,6 +2630,12 @@
    "assumptions": [],
    "type_hash": "1430a42ac1ac32fb42666fe8becc5e5f1fad79c7219249f8261d1e361e311d55"
   },
+  "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.P2RingGradedOfRoundSecure": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.P2SlackB19Uncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2SlackB19Uncond : Pous.Guarantees.P2SlackB19Uncond"],
@@ -4058,7 +4067,9 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p."
+   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
+   "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean, Rounds.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
+   "Pous.SecurityProofs.P2RingGradedOfRoundSecure": "frozen (no-function,hash): It bounds P2's ring-model audit (Security/Definitions/Pous/P2/Rounds.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -4078,6 +4089,11 @@
     "status": "open",
     "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
     "why": "Every ring-model responder against P2 at k = 105 is matched up to 2^-130 by an m1p responder with 128 more bits per block (P2-M1-SGI); open, and it implies P2RingAuditSecure, so a refutation of that is one of this."
+   },
+   "Pous.P2.Assumptions.P2RingRoundSecure": {
+    "status": "open",
+    "test": "Security/Proofs/Pous/P2/RoundTests.lean (PousP2Rounds.round_tight, PousP2Rounds.round_trunc, PousP2Rounds.round_trunc_b19), built by check",
+    "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass eta, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) and m/N <= 1 - p + eta at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19), which its tests prove."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
