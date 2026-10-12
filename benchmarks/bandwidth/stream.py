@@ -30,6 +30,9 @@ compressions.
 The GPU's tree is bottom-up, an odd last node promoted, which is BLAKE3's left-heavy shape (`levels`): the absorb kernel
 reduces each group's `GROUP` chunks to one node in shared memory, and one final launch takes the groups' nodes to the
 root.
+
+`fold` is a far cheaper leaf, `stream-fold/v1`: each 1 KiB chunk of `S` to the XOR of its AES blocks, 16 bytes, which
+the verifier checks whole against `S` regenerated, with no tree and no sampling (`bwstream --mode fold`, `foldlive`).
 """
 
 from __future__ import annotations
@@ -267,6 +270,29 @@ def samples(window: Key, chunks: int, s: int) -> tuple[int, ...]:
     return tuple(window.uniform(chunks, ("stream", t)) for t in range(s))
 
 
+FOLD_NAME = "stream-fold/v1"
+
+
+def fold(stream: bytes) -> bytes:
+    """`F`, the fold leaf `stream-fold/v1`: chunk `i` of `S` itself (bytes `[1024·i, 1024·(i + 1))`, not `M`'s) to the
+    XOR of its 64 AES blocks, 16 bytes a chunk, in order.
+
+    The verifier regenerates `S` from `K_s` and checks `F` whole, so the check is exact and costs the verifier one pass
+    of AES. Byte `b` of chunk `i`'s fold is the XOR of the 64 stream bytes at offset `b` of its blocks, each uniform to
+    a device that never fetched it, so a device that withheld any `X` bytes of `S` leaves at least `⌈X/64⌉` fold bytes
+    uniform to it and passes with probability at most `2^(-8⌈X/64⌉) ≤ 2^(-X/8)` (336 bytes: `2^-42`); a skipped
+    chunk, `2^-128`."""
+    if len(stream) % CHUNK:
+        raise ValueError(f"the fold reads whole {CHUNK}-byte chunks")
+    out = bytearray()
+    for i in range(0, len(stream), CHUNK):
+        acc = 0
+        for k in range(i, i + CHUNK, AES):
+            acc ^= int.from_bytes(stream[k:k + AES], "little")
+        out += acc.to_bytes(AES, "little")
+    return bytes(out)
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Pinned vectors (tests/stream_vectors.json), which `bwstream --mode gates` holds the host generators and the device to.
 
@@ -293,6 +319,7 @@ def vectors() -> dict:
         out[f"stream_{name}_bytes"] = n
         out[f"stream_{name}_digest"] = d.hex()
         out[f"stream_{name}_group_nodes"] = b"".join(cv_bytes(cv) for cv in group_nodes(lv)).hex()
+        out[f"stream_{name}_fold"] = fold(stream_bytes(key, n)).hex()
     return out
 
 

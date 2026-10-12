@@ -854,7 +854,55 @@ static int mode_gates(const Args& a) {
     OK(cudaDeviceSynchronize());
     cudaGraphExecDestroy(ctl);
     if (hex((const uint8_t*)s.D_host, 32) == want) return fail("control matched");
-    j += "\"" + pre + "\":{\"bytes\":" + std::to_string(n) + ",\"device\":true,\"host\":true,\"control_rejected\":true},";
+    // the fold leaf stream-fold/v1, zero copy over the challenger's buffer: fold_chunks, and fold_live on two CTAs behind
+    // a frontier that covers the stream; behind a frontier of another epoch, with a 1 ns deadline, fold_live starts no
+    // step and writes nothing; one byte of S changed moves exactly its fold byte
+    const std::string fwant = field(v, pre + "_fold");
+    uint8_t* hdev;
+    OK(cudaHostGetDevicePointer((void**)&hdev, s.host, 0));
+    unsigned long long *fr, *fr_dev;
+    OK(cudaHostAlloc(&fr, 64, cudaHostAllocMapped));
+    OK(cudaHostGetDevicePointer((void**)&fr_dev, fr, 0));
+    *fr = 1ull << 32 | 1;
+    uint4* fout;
+    uint32_t* fsteps;
+    OK(cudaMalloc(&fout, s.chunks * 16));
+    OK(cudaMalloc(&fsteps, 2 * 4));
+    std::vector<uint8_t> fg(s.chunks * 16);
+    uint32_t st[2];
+    auto run_fold = [&](int how) {
+      OK(cudaMemset(fout, 0, fg.size()));
+      OK(cudaMemset(fsteps, 0xFF, sizeof st));
+      if (how == 0)
+        fold_chunks<<<1, 1024>>>((const uint4*)hdev, s.chunks, fout);
+      else
+        fold_live<<<2, 1024>>>((const uint4*)hdev, s.chunks, fout, fr_dev, s.chunks, how, how == 2 ? 1 : 0, fsteps);
+      OK(cudaGetLastError());
+      OK(cudaDeviceSynchronize());
+      OK(cudaMemcpy(fg.data(), fout, fg.size(), cudaMemcpyDeviceToHost));
+      OK(cudaMemcpy(st, fsteps, sizeof st, cudaMemcpyDeviceToHost));
+    };
+    run_fold(0);
+    if (hex(fg.data(), fg.size()) != fwant) return fail((pre + " fold_chunks").c_str());
+    run_fold(1);
+    if (hex(fg.data(), fg.size()) != fwant) return fail((pre + " fold_live").c_str());
+    if (st[0] + st[1] != (s.chunks + 127) / 128) return fail((pre + " fold_live steps").c_str());
+    run_fold(2);
+    if (st[0] + st[1] != 0 || std::any_of(fg.begin(), fg.end(), [](uint8_t b) { return b != 0; }))
+      return fail((pre + " fold_live deadline").c_str());
+    const size_t at = s.n / 2 + 37;
+    s.host[at] ^= 0x5A;
+    run_fold(0);
+    s.host[at] ^= 0x5A;
+    const std::vector<uint8_t> fw = unhex(fwant);
+    for (size_t k = 0; k < fg.size(); ++k)
+      if ((fg[k] ^ fw[k]) != (k == 16 * (at / CHUNK) + at % 16 ? 0x5A : 0)) return fail((pre + " fold control").c_str());
+    cudaFree(fout);
+    cudaFree(fsteps);
+    cudaFreeHost(fr);
+    j += "\"" + pre + "\":{\"bytes\":" + std::to_string(n) +
+         ",\"device\":true,\"host\":true,\"control_rejected\":true,\"fold_chunks\":true,\"fold_live\":true,"
+         "\"fold_deadline\":true,\"fold_control\":true},";
     free_stream(s);
   }
   // 3. The tag pass over the full store against expect.json's ro-blake3/v1 root.
