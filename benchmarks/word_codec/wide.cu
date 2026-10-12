@@ -1706,16 +1706,14 @@ int ww_sketch_commit(void* workspace, uint64_t n, const uint8_t* seed, uint8_t* 
 }
 
 // `ww_sketch_commit`'s leaves of the pass's tags [jbase, jbase + n) (jbase a multiple of 16), read from `tags`, into
-// the leaves of the commit workspace of a pass of `blocks` tags; its own tag area is not read. threads (32 or 128) a
-// block: at 32 a block's registers fit beside three fused-GEMM CTAs an SM.
+// the leaves of the commit workspace of a pass of `blocks` tags; its own tag area is not read.
 int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
-                     const uint8_t* seed, int threads, cudaStream_t s) {
-  if (jbase % 16 || jbase + n > blocks || (threads != 32 && threads != 128)) return 2;
+                     const uint8_t* seed, cudaStream_t s) {
+  if (jbase % 16 || jbase + n > blocks) return 2;
   if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
-  sketch_leaves<<<(unsigned)(((n + 15) / 16 + threads - 1) / threads), threads, 0, s>>>(tags, blocks, jbase / 16, n, lm,
-                                                                                        p.nodes);
+  sketch_leaves<<<(unsigned)(((n + 15) / 16 + 127) / 128), 128, 0, s>>>(tags, blocks, jbase / 16, n, lm, p.nodes);
   return cudaGetLastError() ? 4 : 0;
 }
 
