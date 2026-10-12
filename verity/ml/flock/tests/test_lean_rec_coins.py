@@ -19,12 +19,15 @@ rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in 
 from __future__ import annotations
 
 import concurrent.futures as cf
+import fcntl
 import functools
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -46,14 +49,33 @@ S2_R7 = "S2/R7: the session parameters are not the verifier's"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
 
+def _once(factory, name: str, make) -> Path:
+    """The directory `make` fills, made once in the whole run: xdist's workers share their base directory's parent, and the
+    first to take the lock makes it while the others wait for it."""
+    root = factory.getbasetemp().parent if os.environ.get("PYTEST_XDIST_WORKER") else factory.getbasetemp()
+    d = root / f"rec-coins-{name}"
+    with open(f"{d}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not (d / "done").exists():
+            shutil.rmtree(d, ignore_errors=True)
+            d.mkdir()
+            make(d)
+            (d / "done").touch()
+    return d
+
+
 @pytest.fixture(scope="module")
-def forged(tmp_path_factory) -> Path:
-    """Level 3 staged with rep 0's opening 0 `coef` one bit off (bit 0 of its first word) where V* computes it, so its
-    registration, the running sums and the prover's row all agree with it. The circuit, program and partition do not read
-    the coefficients: they are the recorded level's."""
+def built() -> None:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins`")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+
+
+@pytest.fixture(scope="module")
+def forged(built, tmp_path_factory) -> Path:
+    """Level 3 staged with rep 0's opening 0 `coef` one bit off (bit 0 of its first word) where V* computes it, so its
+    registration, the running sums and the prover's row all agree with it. The circuit, program and partition do not read
+    the coefficients: they are the recorded level's."""
     honest = S.coefficients
 
     def coefficients(vf, qs):
@@ -62,19 +84,20 @@ def forged(tmp_path_factory) -> Path:
         cs[(0, LEVEL, 0)] = [c[0] ^ 1, *c[1:]]
         return cs
 
-    d = tmp_path_factory.mktemp("rec-coins")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(S, "coefficients", coefficients)
-        res = S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
-                      algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
-    out = d / f"L{LEVEL}"
-    assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
+    def make(d):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(S, "coefficients", coefficients)
+            res = S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
+                          algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+        assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
+
+    out = _once(tmp_path_factory, "forged", make) / f"L{LEVEL}"
     assert hashlib.sha512((out / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return out
 
 
 @pytest.fixture(scope="module")
-def shape(forged, tmp_path_factory) -> Path:
+def shape(built, tmp_path_factory) -> Path:
     """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement."""
     u = SET / "u" / "stage"
     p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
@@ -99,9 +122,11 @@ def _own(level: Path, shape: Path) -> list[str]:
     with (level / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
     f = level / "rec-bindings.json"
-    if not f.exists():
-        f.write_text(json.dumps(RB.bindings(json.loads((level / "partition.json").read_text()),
-                                            json.loads((level / "program.json").read_text()))))
+    if not f.exists():  # written whole, by rename: another worker's verify may read it at once
+        tmp = level / f"rec-bindings.{os.getpid()}.{threading.get_ident()}"
+        tmp.write_text(json.dumps(RB.bindings(json.loads((level / "partition.json").read_text()),
+                                              json.loads((level / "program.json").read_text()))))
+        tmp.rename(f)
     return ["--rec-part", str(names.index(unit)), "--rec-bindings", str(f)]
 
 
@@ -126,15 +151,17 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
 
 
 @pytest.fixture(scope="module")
-def coins(forged, tmp_path_factory) -> Path:
+def coins(built, tmp_path_factory) -> Path:
     """`rec-coins`' record of what check 5 reads of the honest inner session, set up once from the inner statement."""
     u = SET / "u" / "stage"
-    p = subprocess.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
-                        str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
-                        str(SET / "inner-honest" / "session")], capture_output=True, text=True, check=True)
-    f = tmp_path_factory.mktemp("rec-coins-record") / "coins.json"
-    f.write_text(p.stdout)
-    return f
+
+    def make(d):
+        p = subprocess.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
+                            str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
+                            str(SET / "inner-honest" / "session")], capture_output=True, text=True, check=True)
+        (d / "coins.json").write_text(p.stdout)
+
+    return _once(tmp_path_factory, "coins", make) / "coins.json"
 
 
 def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
@@ -224,11 +251,27 @@ def undrawn(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def algebra(forged, tmp_path_factory) -> Path:
+def algebra(built, tmp_path_factory) -> Path:
     """V*'s algebra parts (`p<j>`) staged over the honest inner session."""
-    d = tmp_path_factory.mktemp("rec-alg")
-    _stage(d, levels=[], algebra=True, evaluate=False)
-    return d / "alg"
+    return _once(tmp_path_factory, "algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False)) / "alg"
+
+
+@pytest.fixture(scope="module")
+def comb(built, tmp_path_factory) -> Path:
+    """The algebra staged with rep 0's first comb element of v one bit off (`rec_vstage --forge comb`)."""
+    return _once(tmp_path_factory, "comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb")) / (
+        "forged-comb/alg")
+
+
+@pytest.fixture(scope="module")
+def salted(built, tmp_path_factory) -> Path:
+    """Level 3 and the algebra staged under another salt of the running sums' row 0 (`_salted`)."""
+    def make(d):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(S, "acc_salts", _salted)
+            _stage(d, levels=[LEVEL], algebra=True, evaluate=False)
+
+    return _once(tmp_path_factory, "salted", make)
 
 
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
@@ -249,12 +292,12 @@ def rows(algebra, tmp_path_factory) -> Path:
     return _rec_rows(tmp_path_factory.mktemp("rec-rows") / "rows.json", sorted(algebra.iterdir()))
 
 
-def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, undrawn, rows, tmp_path):
+def test_a_v_registered_one_element_off_is_refused_at_its_part(comb, algebra, shape, undrawn, rows):
     """`HVCoins`' check (`RecCoins.checkResiduals`): the algebra staged with rep 0's first comb element of v one bit off
     (`rec_vstage --forge comb`) changes one part's registration, and that part is refused by the v the verifier's coins and
-    fold give."""
-    _stage(tmp_path, levels=[], algebra=True, evaluate=False, forge="comb")
-    parts = sorted((tmp_path / "forged-comb" / "alg").iterdir())
+    fold give. Its one verify sets the part up over its whole population, minutes at one core: at this shape V*'s algebra
+    is two parts of about 400 MB of circuit each, and no level reads v."""
+    parts = sorted(comb.iterdir())
     changed = [p for p in parts if (p / "registered.json").read_bytes() != (algebra / p.name / "registered.json").read_bytes()]
     assert len(changed) == 1 and len(parts) > 1, changed
     (p,) = changed
@@ -283,10 +326,6 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
     with (a / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
     t = SET / "inner-honest" / "public.json"
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t), session=undrawn, rows=rows)
-    assert v["why"] == S2_R7, v["why"]
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", session=undrawn, rows=rows)
-    assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
 
     def flip(r):
         c = bytearray.fromhex(r["commits"][0])
@@ -294,7 +333,14 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
         r["commits"] = [c.hex()]
 
     bad = _transcript(tmp_path / "c0.json", flip)
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn, rows=rows)
+    with cf.ThreadPoolExecutor(max_workers=3) as ex:  # each verify sets the part up for minutes; none reuses another's
+        honest, bare, c0 = [ex.submit(_verify, a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *x,
+                                      session=undrawn, rows=rows)
+                            for x in (["--rec-inner-transcript", str(t)], [], ["--rec-inner-transcript", str(bad)])]
+    assert honest.result()["why"] == S2_R7, honest.result()["why"]
+    v = bare.result()
+    assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
+    v = c0.result()
     assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not rep 0's c_0 \(inner round \d+\) "
                         "of the inner transcript", v["why"]), v["why"]
     bad = _transcript(tmp_path / "coins.json", lambda r: r.__setitem__("coins", ["00" * 16] * len(r["coins"])))
@@ -330,55 +376,53 @@ def _unregistered(src: Path, dst: Path, port: str) -> Path:
     return dst
 
 
+def _part(ex, d: Path, shape: Path, undrawn: Path, shared: Path | None = None, coins: Path | None = None) -> cf.Future:
+    """`ex` running a verify of algebra part `d` at the inner transcript, under `undrawn`'s session, at shared rows `shared`."""
+    return ex.submit(_verify, d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
+                     str(SET / "inner-honest" / "public.json"), session=undrawn, rows=shared, coins=coins)
+
+
 def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn, rows, tmp_path):
     """`OwnNamesRows` and `PartPortsOne`'s check (`RecVStar.checkRows`): the honest part that reads `acc0` passes setup at the
-    verifier's shared rows (`--rec-rows`, the honest algebra's) and is refused without them. The algebra staged under another
-    salt of the running sums' row 0 registers the same rows as another `rec-acc`, consistently: that part passes setup at its
-    own staging's shared rows and is refused at the verifier's, by `acc0`'s root. The honest part with `acc0` committed
-    afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing row port.
+    verifier's shared rows (`--rec-rows`, the honest algebra's) and is refused without them. The honest part with `acc0`
+    committed afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing row port.
 
-    Each of the five verifies sets the part's statement up over its whole population before any V* check (about 9 minutes
-    at one core and 4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the
-    salted staging (about 5 minutes) beside the first three, and the test takes about as long as the staging and one verify
-    (one after the other they took 49 minutes, `r20261010-121137-2b46`)."""
+    Each verify sets the part's statement up over its whole population before any V* check (about 9 minutes at one core and
+    4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the next test's beside
+    these (with the salted staging, the five took 49 minutes one after the other, `r20261010-121137-2b46`)."""
     a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
     unit = _unit(a)
-    t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
-
-    def verify(ex, d, shared=None):
-        _own(d, shape)  # writes d's rec-bindings.json before any verify of d reads it
-        return ex.submit(_verify, d, d / "pub.bin", d / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=shared)
-
-    with cf.ThreadPoolExecutor(max_workers=5) as ex:
-        honest, bare = verify(ex, a, rows), verify(ex, a)
-        c = _unregistered(a, tmp_path / "fresh", "acc0")
-        fresh = verify(ex, c, rows)
-        with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(S, "acc_salts", _salted)
-            _stage(tmp_path / "salted", levels=[], algebra=True, evaluate=False)
-        b = tmp_path / "salted" / "alg" / a.name
-        own = _rec_rows(tmp_path / "own.json", sorted((tmp_path / "salted" / "alg").iterdir()))
-        salted_own, salted = verify(ex, b, own), verify(ex, b, rows)
+    with cf.ThreadPoolExecutor(max_workers=3) as ex:
+        honest, bare = _part(ex, a, shape, undrawn, rows), _part(ex, a, shape, undrawn)
+        fresh = _part(ex, _unregistered(a, tmp_path / "fresh", "acc0"), shape, undrawn, rows)
     assert honest.result()["why"] == S2_R7, honest.result()["why"]
     assert bare.result()["why"] == (f"setup: {unit}: one of V*'s parts; pass the verifier's record of V*'s shared rows "
                                     "(--rec-rows F), which each of its row ports must be"), bare.result()["why"]
+    assert re.fullmatch(rf"setup: {re.escape(unit)}: its row port acc0 is not a port of the registered reads \(\[.*\]\)",
+                        fresh.result()["why"]), fresh.result()["why"]
+
+
+def test_a_part_staged_under_another_salt_is_refused_at_the_verifiers_shared_rows(salted, algebra, shape, undrawn, rows,
+                                                                                tmp_path):
+    """`checkRows` at another registration: the algebra staged under another salt of the running sums' row 0 registers the
+    same rows as another `rec-acc`, consistently: its part that reads `acc0` passes setup at its own staging's shared rows
+    and is refused at the verifier's, by `acc0`'s root. Its two verifies run at once, as the previous test's do."""
+    a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
+    unit, b = _unit(a), salted / "alg" / a.name
+    own = _rec_rows(tmp_path / "own.json", sorted((salted / "alg").iterdir()))
+    with cf.ThreadPoolExecutor(max_workers=2) as ex:
+        salted_own, other = _part(ex, b, shape, undrawn, own), _part(ex, b, shape, undrawn, rows)
     assert salted_own.result()["why"] == S2_R7, salted_own.result()["why"]
     root = lambda f: json.loads(f.read_text())["ports"]["acc0"]["root"]
     assert root(b / "registered.json") != root(rows)
-    assert salted.result()["why"] == (f"setup: {unit}: its row port acc0 is not the verifier's shared row acc0 (--rec-rows): "
-                                      f"root {root(b / 'registered.json')}, against {root(rows)}"), salted.result()["why"]
-    assert re.fullmatch(rf"setup: {re.escape(unit)}: its row port acc0 is not a port of the registered reads \(\[.*\]\)",
-                        fresh.result()["why"]), fresh.result()["why"]
+    assert other.result()["why"] == (f"setup: {unit}: its row port acc0 is not the verifier's shared row acc0 (--rec-rows): "
+                                     f"root {root(b / 'registered.json')}, against {root(rows)}"), other.result()["why"]
 
 
 def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
     """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the recorded level 3 reads `rec-acc` as `acc` and
     `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and passes setup at those shared rows
-    (`--rec-rows`; S2/R7 refuses its outer session after) and is refused without them. Level 3 staged under another salt
-    of the running sums' row 0 reads the same rows as another `rec-acc`, consistently: it passes setup at its own
-    registration and is refused at the verifier's by `acc`'s root. The recorded level with its `acc_out` read at that other
-    registration (its reads file's entry and `pub.bin`'s paths; the rows it reads are the same, row 0 being no opening's
-    `acc_out`) and `acc` at the honest one is refused as two registrations."""
+    (`--rec-rows`; S2/R7 refuses its outer session after) and is refused without them."""
     reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
     site = lambda e: {k: x for k, x in e.items() if k != "reads"}
     shared = json.loads(rows.read_text())["ports"]
@@ -388,11 +432,17 @@ def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, sha
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: {UNIT}: it reads rec-acc; pass the verifier's record of V*'s shared rows (--rec-rows F), whose "
                         "rec-acc registration it must be"), v["why"]
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(S, "acc_salts", _salted)
-        _stage(tmp_path / "salted", levels=[LEVEL], algebra=False)
-    b = tmp_path / "salted" / f"L{LEVEL}"
-    other, honest = reads(b)["acc"]["root"], shared["acc0"]["root"]
+
+
+def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registration(salted, forged, shape, rows, tmp_path):
+    """`checkAcc` at another registration: level 3 staged under another salt of the running sums' row 0 reads the same rows
+    as another `rec-acc`, consistently: it passes setup at its own registration and is refused at the verifier's by `acc`'s
+    root. The recorded level with its `acc_out` read at that other registration (its reads file's entry and `pub.bin`'s
+    paths; the rows it reads are the same, row 0 being no opening's `acc_out`) and `acc` at the honest one is refused as two
+    registrations."""
+    reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
+    b = salted / f"L{LEVEL}"
+    other, honest = reads(b)["acc"]["root"], json.loads(rows.read_text())["ports"]["acc0"]["root"]
     assert other != honest
     v = _verify(forged, b / "pub.bin", b / "registered.json", shape, "inner-honest", rows=_acc_rows(tmp_path / "own.json", b))
     assert v["why"] == S2_R7, v["why"]
@@ -447,12 +497,20 @@ def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp
     assert v["why"] == why, v["why"]
 
 
-def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged, algebra, shape, undrawn, rows, coins,
-                                                                         tmp_path):
+def test_check_5_gives_the_part_holding_vs_comb_one_verdict_with_the_record_or_without(algebra, shape, undrawn, rows, coins):
+    """Check 5's setup once per inner session at a part: the part holding v's comb gets the same verdict on `rec-coins`' record
+    as on the inner statement's files. Each verify sets the part up over its whole population (minutes), so the two run at
+    once; no level reads v."""
+    p = sorted(algebra.iterdir())[-1]
+    with cf.ThreadPoolExecutor(max_workers=2) as ex:
+        both = [f.result() for f in [_part(ex, p, shape, undrawn, rows, c) for c in (None, coins)]]
+    assert both[0] == both[1] and both[0]["why"] == S2_R7, both
+
+
+def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged, shape, coins, tmp_path):
     """Check 5's setup once per inner session (`rec-coins`, `--rec-inner-coins`): the honest level passes setup on the record,
-    the coef registered one bit off is refused with the message the inner statement's files give, and the part holding v's
-    comb gets the same verdict either way. The record is refused against another inner session's record, and in place of
-    nothing: beside the inner statement's files."""
+    and the coef registered one bit off is refused with the message the inner statement's files give. The record is refused
+    against another inner session's record, and in place of nothing: beside the inner statement's files."""
     acc = _acc_rows(tmp_path / "rows.json", SET / "L3")
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=acc, coins=coins)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
@@ -460,11 +518,6 @@ def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged,
                 rows=_acc_rows(tmp_path / "forged-rows.json", forged), coins=coins)
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
                         "verifier's rec-coef row 0"), v["why"]
-    p = sorted(algebra.iterdir())[-1]
-    t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
-    both = [_verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows, coins=c)
-            for c in (None, coins)]
-    assert both[0] == both[1] and both[0]["why"] == S2_R7, both
     other = tmp_path / "other"
     shutil.copytree(SET / "inner-honest" / "session", other / "session")
     (other / "session" / "session.json").write_text((other / "session" / "session.json").read_text() + "\n")
