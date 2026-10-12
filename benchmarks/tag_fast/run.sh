@@ -45,7 +45,7 @@ else
 fi
 cp "$REF/expect.json" "$O/expect.json"
 
-export B REF PY NCU_BIN TF BENCH_ARGS=${BENCH_ARGS:-} NCU=${NCU:-1} NCU_ARGS=${NCU_ARGS:---shapes gate_up,o --batches 1,32}
+export B REF PY NCU_BIN TF BENCH_ARGS=${BENCH_ARGS:-} NCU=${NCU:-1} NCU_ARGS=${NCU_ARGS:---shapes gate_up,down,o --batches 1,16}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -60,7 +60,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
     S=(--clock-control none --cache-control all --section SpeedOfLight --section ComputeWorkloadAnalysis
        --section InstructionStats --section Occupancy --section MemoryWorkloadAnalysis --section WarpStateStats)
     # shellcheck disable=SC2086
-    "$NCU_BIN" "${S[@]}" -k "regex:fused_kernel|fused2_kernel|plain_kernel" -f -o "$O/ncu-fused" \
+    "$NCU_BIN" "${S[@]}" -k "regex:fused_kernel|fused2_kernel|fused3_kernel|plain_kernel" -f -o "$O/ncu-fused" \
       "$PY" $TF/bench.py --lib "$B/libtf.so" --ref "$REF" --out "$O/ncu" --mode ncu $NCU_ARGS > "$O/ncu.log" 2>&1
     "$NCU_BIN" --import "$O/ncu-fused.ncu-rep" --csv --page raw > "$O/ncu-fused.csv" 2>&1
     q

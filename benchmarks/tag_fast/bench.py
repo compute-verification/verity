@@ -57,7 +57,8 @@ TIME_FORMS = ((1, 1), (1, 2))  # of the timed ones (V0 and V3 lose to V1: runs r
 MODE_GEMM, MODE_TAGS, MODE_SINK, MODE_TAGONLY = 0, 1, 2, 3
 # an arm of tf.cu's kernels: lane spans g32p1, t32v1p2 (span, variant, load depth); chunk blocks t4kw4s3 (lanes, warps
 # a CTA, stages); u4kw4s3 is t4kw4s3 at 4 rounds (not BLAKE3: uncertified)
-FORM = re.compile(r"(?P<stage>[gtcsou])(?P<span>\d+)(?:(?P<k>k)w(?P<w>\d+)s(?P<st>\d+)(?P<pk>f)?|(?:v(?P<v>\d+))?p(?P<pd>\d+))$")
+FORM = re.compile(r"(?P<stage>[gtcsou])(?P<span>\d+)(?:(?P<k>k)(?:w(?P<w>\d+)s(?P<st>\d+)(?P<pk>f)?|r(?P<rpd>\d+))"
+                  r"|(?:v(?P<v>\d+))?p(?P<pd>\d+))$")
 PROBE_ROUNDS = 4
 
 
@@ -72,6 +73,7 @@ class Lib:
         sig = {
             "tf_init": [v, v], "tf_fused": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
+            "tf_fused3": [i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_chain": [i, i, i, u64, v, i, i, v], "tf_b3_one": [i, v, v, v], "tf_keccak_one": [v, v],
@@ -147,6 +149,11 @@ def fused2(lib: Lib, torch, lanes, mode, wc, st, partials, w, x, y, tags_buf, m,
              stream(torch))
 
 
+def fused3(lib: Lib, torch, lanes, mode, pd, w, x, y, tags_buf, m, n, k, jbase, xr=None):
+    lib.call("tf_fused3", lanes, mode, pd, ptr(w), ptr(x.view(torch.uint8)) if x is not None else 0, ptr(y),
+             ptr(tags_buf), m, n, k, jbase, ptr(xr), stream(torch))
+
+
 def is_chunk(key) -> bool:
     return str(key)[0] == "k"
 
@@ -159,6 +166,8 @@ CHUNK_GEMM_FORMS = ((1, 3), (2, 3), (4, 2), (4, 3), (8, 2), (4, 4))
 # the forms with the CTA's packed finish (suffix f), and the tag-only one at CHUNK_ONE
 CHUNK_PACKED = {1: ((4, 3),), 4: ((2, 3), (4, 2), (4, 3)), 8: ((2, 3), (4, 2), (4, 3))}
 CHUNK_PACKED_ONLY = 4
+# fused3 (registers, no ring): the L of each tag form and the depths
+CHUNK_REG_LANES, CHUNK_REG_PD = (1, 4, 8), (1, 2)
 CHUNK_ONE = (4, 3)
 CHUNK_ONLY = (1, 4)
 CHUNK_SINK = 4
@@ -254,6 +263,11 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                         check(f"t_w{wc}s{st}{'f' if pk else ''}_m{mb}",
                               lambda: fused2(lib, torch, lanes, MODE_TAGS, wc, st, 0, plain, xs[mb], y, tb, mb, n, k, jb,
                                              packed=pk))
+            if lanes in CHUNK_REG_LANES and n % 64 == 0:
+                for pd in CHUNK_REG_PD:
+                    for mb in (1, 16, 32):
+                        check(f"t_r{pd}_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, pd, plain, xs[mb], y, tb,
+                                                                mb, n, k, jb))
             if lanes == CHUNK_SINK:
                 for mb in (1, 16, 32):
                     xr.zero_()
@@ -334,6 +348,12 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             forms += [(f"s{CHUNK_SINK}kw4s3", (CHUNK_SINK, MODE_SINK, *CHUNK_ONE))]
             forms += [("u4kw4s3", (4, MODE_TAGS, *CHUNK_ONE))]
             xr = torch.zeros(1, dtype=torch.int32, device="cuda")
+            reg = [(f"g0kr{pd}", (1, MODE_GEMM, pd)) for pd in CHUNK_REG_PD]
+            reg += [(f"t{lanes}kr{pd}", (lanes, MODE_TAGS, pd)) for lanes in CHUNK_REG_LANES for pd in CHUNK_REG_PD]
+            for label, (lanes, mode, pd) in reg if n % 64 == 0 else ():
+                ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
+                fused3(lib, torch, lanes, mode, pd, plain, x, ya, tb, mb, n, k, 0)
+                e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
             for label, (lanes, mode, wc, st) in forms:
                 if not fits(mb, mode, wc, st, n):
                     continue
@@ -533,6 +553,16 @@ def time_shape(lib: Lib, torch, name, n, k, w8, maps, batches, reps, log) -> dic
                 check(rc, f"fused2 k{lanes} m{mode} w{wc} s{stages} r{rounds}")
             return f
 
+        def arm_f3(lanes, mode, pd):
+            tp, xrp = ptr(ctb), ptr(xr)
+
+            def f():
+                rc = 0
+                for p in rp:
+                    rc |= so.tf_fused3(lanes, mode, pd, p, xp, yp, tp, mb, n, k, 0, xrp, st)
+                check(rc, f"fused3 k{lanes} m{mode} p{pd}")
+            return f
+
         def arm_empty():
             rc = 0
             for _ in rp:
@@ -550,6 +580,8 @@ def time_shape(lib: Lib, torch, name, n, k, w8, maps, batches, reps, log) -> dic
             for wc, stages in CHUNK_GEMM_FORMS:
                 if fits(mb, MODE_GEMM, wc, stages):
                     arms[f"g0kw{wc}s{stages}"] = arm_f2(1, MODE_GEMM, wc, stages)
+            for pd in CHUNK_REG_PD:
+                arms[f"g0kr{pd}"] = arm_f3(1, MODE_GEMM, pd)
         for lanes in groups:
             for wc, stages in CHUNK_TAG_FORMS[lanes]:
                 if fits(mb, MODE_TAGS, wc, stages):
@@ -557,6 +589,9 @@ def time_shape(lib: Lib, torch, name, n, k, w8, maps, batches, reps, log) -> dic
             for wc, stages in CHUNK_PACKED.get(lanes, ()):
                 if fits(mb, MODE_TAGS, wc, stages):
                     arms[f"t{lanes}kw{wc}s{stages}f"] = arm_f2(lanes, MODE_TAGS, wc, stages, 7, 1)
+            if lanes in CHUNK_REG_LANES:
+                for pd in CHUNK_REG_PD:
+                    arms[f"t{lanes}kr{pd}"] = arm_f3(lanes, MODE_TAGS, pd)
             if lanes == CHUNK_SINK and fits(mb, MODE_SINK, *CHUNK_ONE):
                 arms[f"s{lanes}kw4s3"] = arm_f2(lanes, MODE_SINK, *CHUNK_ONE)
             if lanes == 4 and fits(mb, MODE_TAGS, *CHUNK_ONE):
@@ -651,6 +686,9 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
         return lambda: so.tf_plain(ptr(pl), xp, yp, mb, n, k, 0, stream(torch))
     m = FORM.match(arm)
     mode = {"g": MODE_GEMM, "t": MODE_TAGS, "s": MODE_SINK, "u": MODE_TAGS}[m["stage"]]
+    if m["rpd"]:
+        lanes, pd = int(m["span"]) or 1, int(m["rpd"])
+        return lambda: so.tf_fused3(lanes, mode, pd, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, stream(torch))
     if m["k"]:
         lanes, wc, st = int(m["span"]) or 1, int(m["w"]), int(m["st"])
         rounds = PROBE_ROUNDS if m["stage"] == "u" else 7
@@ -836,8 +874,8 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
 
 
 NCU_FORMS = (("g", 0, MODE_GEMM, 1), ("t", 1, MODE_TAGS, 1), ("t", 1, MODE_TAGS, 2))
-NCU_CHUNK_FORMS = ((1, MODE_GEMM, 4, 2, False), (4, MODE_TAGS, 4, 2, False), (4, MODE_TAGS, 4, 2, True),
-                   (4, MODE_TAGS, 4, 3, True), (8, MODE_TAGS, 4, 2, True))
+NCU_CHUNK_FORMS = ((1, MODE_GEMM, 4, 2, False), (4, MODE_TAGS, 4, 2, False), (4, MODE_TAGS, 4, 2, True))
+NCU_REG_FORMS = ((1, MODE_GEMM, 1), (4, MODE_TAGS, 1), (4, MODE_TAGS, 2))
 
 
 def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
@@ -858,6 +896,8 @@ def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
             if any(is_chunk(s) for s in maps):
                 for lanes, mode, wc, st, pk in NCU_CHUNK_FORMS:
                     fused2(lib, torch, lanes, mode, wc, st, 0, plain, x, y, tb, mb, n, k, 0, packed=pk)
+                for lanes, mode, pd in NCU_REG_FORMS:
+                    fused3(lib, torch, lanes, mode, pd, plain, x, y, tb, mb, n, k, 0)
     torch.cuda.synchronize()
     return 0
 

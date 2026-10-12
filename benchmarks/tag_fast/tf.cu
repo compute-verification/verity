@@ -834,6 +834,100 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
   gemm_out();
 }
 
+// fused2's chunk-block map in fused_kernel's shape: FW warps a CTA on one span s of consecutive row blocks (spans fastest
+// in the grid), each lane's chunk loaded into registers PD quads ahead (no ring, no cp.async), x's M rows of the span in
+// shared memory. Tags and modes as fused2_kernel's.
+template <int V, int L, int NB8, int MODE, int PD>
+__global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
+                                                         float* __restrict__ y, uint32_t* __restrict__ tags, int M,
+                                                         int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
+  constexpr bool GEMM = MODE != MODE_TAGONLY, TAG = MODE != MODE_GEMM;
+  constexpr int NQ = CHUNK_TILES / 4, DEPTH = PD + 1;
+  extern __shared__ __align__(16) uint8_t xs[];
+  const int nspans = Kd / CCOLS, rts = N / 16;
+  const int s = blockIdx.x % nspans;
+  const int nb = (blockIdx.x / nspans) * FW + threadIdx.x / 32;
+  const int lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
+  const uint4* wp = wstore + ((size_t)nb * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
+  uint4 buf[DEPTH][4];
+  auto load = [&](uint4 (&q)[4], int qd) {
+#pragma unroll
+    for (int i = 0; i < 4; ++i) q[i] = ldw(wp + (4 * qd + i) * LANES);
+  };
+#pragma unroll
+  for (int p = 0; p < PD; ++p) load(buf[p], p);
+  if constexpr (GEMM) {
+    for (int e = threadIdx.x; e < M * CCOLS / 16; e += FW * 32) {
+      const int b = e / (CCOLS / 16), c = e % (CCOLS / 16);
+      *reinterpret_cast<uint4*>(xs + b * CXS + 16 * c) =
+          __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)s * CCOLS) + c);
+    }
+    __syncthreads();
+  }
+  const Mul k = muls();
+  const uint64_t u = (uint64_t)s * rts + nb;
+  const int pos = lane % L;
+  const uint64_t jl = u * (32 / L) + lane / L;
+  float acc[NB8][4];
+#pragma unroll
+  for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+  ChunkTag<V, L> ct;
+  if constexpr (TAG) ct.begin();
+  auto step = [&](const uint4 (&q)[4], int qd) {
+    if constexpr (GEMM) {
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        const uint32_t a[4] = {q[i].x, q[i].y, q[i].z, q[i].w};
+        const int col = 32 * (4 * qd + i) + 4 * tq;
+#pragma unroll
+        for (int j = 0; j < NB8; ++j) {
+          const bool live = 8 * j + g8 < M;
+          const uint8_t* row = xs + (live ? 8 * j + g8 : 0) * CXS;
+          const uint32_t b0 = *reinterpret_cast<const uint32_t*>(row + col),
+                         b1 = *reinterpret_cast<const uint32_t*>(row + col + 16);
+          mma_e4m3(acc[j], a, live ? b0 : 0u, live ? b1 : 0u);
+        }
+      }
+    }
+    if constexpr (TAG) ct.absorb(q, qd, pos, jbase + jl, k);
+  };
+#pragma unroll 1
+  for (int qb = 0; qb < NQ; qb += DEPTH) {
+#pragma unroll
+    for (int v = 0; v < DEPTH; ++v) {
+      const int qd = qb + v;
+      if (NQ % DEPTH == 0 || qd < NQ) {
+        if (qd + PD < NQ) load(buf[(v + PD) % DEPTH], qd + PD);
+        step(buf[v], qd);
+      }
+    }
+  }
+  if constexpr (GEMM) {
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+      for (int e = 0; e < 4; ++e) {
+        const int n = nb * 16 + g8 + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+        if (b < M) atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+      }
+    }
+  }
+  if constexpr (TAG) {
+    uint32_t t[8];
+    ct.finish(t, pos, k);
+    if constexpr (MODE == MODE_SINK) {
+      uint32_t a = pos ? 0u : t[0] ^ t[1] ^ t[2] ^ t[3] ^ t[4] ^ t[5] ^ t[6] ^ t[7];
+#pragma unroll
+      for (int dd = 16; dd; dd >>= 1) a ^= __shfl_xor_sync(FULL, a, dd);
+      if (lane == 0) atomicXor(xr, a);
+    } else if (pos == 0) {
+      uint4* o = reinterpret_cast<uint4*>(tags + jl * 8);
+      o[0] = make_uint4(t[0], t[1], t[2], t[3]);
+      o[1] = make_uint4(t[4], t[5], t[6], t[7]);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // The commitment: #1805's leaves (16 tags, u64be leaf || 512 bytes after the leaf prefix's midstate: five compressions)
 // and its RFC 6962 tree (benchmarks/bandwidth/tagger.cu). leaf0 is the first leaf's index in the store.
@@ -1218,6 +1312,36 @@ int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int packed, i
   return cudaGetLastError() ? 2 : 0;
 }
 #undef F2
+
+#define F3(L, MODE, PD)                                                                                                \
+  if (lanes == L && mode == MODE && pd == PD)                                                                          \
+    kern = nb8 == 1 ? fused3_kernel<1, L, 1, MODE, PD> : nb8 == 2 ? fused3_kernel<1, L, 2, MODE, PD>                   \
+                                                                  : fused3_kernel<1, L, 4, MODE, PD>;
+
+// The chunk-block GEMM in registers (fused3_kernel): lanes L; mode GEMM or tags; pd quads ahead (1 or 2). M <= 32, N a
+// multiple of 16 FW, K of 2,048. 3: form not built; 4: x's M rows exceed a CTA's shared memory.
+int tf_fused3(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
+              int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
+  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
+  if (mode == MODE_GEMM) lanes = 1;
+  Kern2 kern = nullptr;
+  F3(1, 0, 1) F3(1, 0, 2) F3(1, 1, 1) F3(1, 1, 2) F3(4, 1, 1) F3(4, 1, 2) F3(8, 1, 1) F3(8, 1, 2)
+  if (!kern) return 3;
+  const int smem = M * CXS;
+  if (smem > 99 * 1024) return 4;
+  static std::unordered_set<const void*> configured;
+  if (!configured.count((const void*)kern)) {
+    if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, 99 * 1024) ||
+        cudaFuncSetAttribute(kern, cudaFuncAttributePreferredSharedMemoryCarveout, 100))
+      return 2;
+    configured.insert((const void*)kern);
+  }
+  const int grid = (N / 16 / FW) * (Kd / CCOLS);
+  kern<<<grid, FW * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
+  return cudaGetLastError() ? 2 : 0;
+}
+#undef F3
 
 int tf_plain(const void* w, const uint8_t* x, float* y, int M, int N, int Kd, int partials, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % TASK_COLS) return 1;
