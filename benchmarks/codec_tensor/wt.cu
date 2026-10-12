@@ -1,5 +1,5 @@
 // Sloth over one wide word on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field, WT_FIELD = n
-// (255, 511, 521, 767, 1023, 1279, or the full-slot 512 and 768; p = 2^n - c as in `wide.FIELDS`).
+// (255, 511, 521, 767, 1023, 1279, or the full-slot 512, 768, 1536 and 2048; p = 2^n - c as in `wide.FIELDS`).
 //
 // Two squarings mod p:
 //   CUDA cores   a thread per word, NL 32-bit limbs; the square column by column (mad.lo.cc / madc.hi.cc / addc, each
@@ -52,6 +52,12 @@ constexpr u32 CF = 569;
 #elif WT_FIELD == 768
 constexpr int NBITS = 768, TW = 86;
 constexpr u32 CF = 825;
+#elif WT_FIELD == 1536
+constexpr int NBITS = 1536, TW = 43;
+constexpr u32 CF = 3453;
+#elif WT_FIELD == 2048
+constexpr int NBITS = 2048, TW = 32;
+constexpr u32 CF = 1557;
 #else
 #error "WT_FIELD is one of wide.FIELDS"
 #endif
@@ -663,7 +669,7 @@ constexpr int DB = 8 * U;                               // digit bits a lane
 constexpr u64 MASK = DB == 64 ? ~0ull : (1ull << DB) - 1;
 constexpr u32 FW = 2 * CF;                              // 2^(8S) = 2^(n+1) = 2c (mod p) when S = 32U
 constexpr int SHUF_ROUNDS = U == 1 ? 11 : U == 2 ? 6 : U == 3 ? 5 : U == 4 ? 4 : 3;
-static_assert(U <= 5, "the plan is wide.tc_plan's for U <= 5");
+static_assert(!TC_OK || U <= 5, "the plan is wide.tc_plan's for U <= 5");
 
 __device__ __forceinline__ void mma_u8(int32_t (&d)[4], const u32 (&a)[4], u32 b0, u32 b1) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.u8.u8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
@@ -1567,9 +1573,10 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 constexpr int FUSED_WARPS = NL <= 17 ? 16 : (NL <= 24 ? 12 : 8);
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
+constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
 template <int NB8, int SKK>
 __host__ __device__ constexpr int fused_smem_bytes(int stages) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 6 * stages * 8 + 16 + 64 * SKK;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK;
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -1609,13 +1616,185 @@ __device__ __forceinline__ void put_payload_w(uint8_t *st, int w, int lane, cons
   }
 }
 
+// --- ro-sketch-blake3/v0 (sketching.py) -------------------------------------------------------------------------------
+//
+// A step is 512 stored bytes of a task, lane l's 16 at 16 l the A fragment of k_s / 8 mma.m16n8k32.s8 against the
+// signs (`sign_fragments`: a lane's sk_words u32 a step, one prmt a register); a tile is skt tasks, its 16 vectors the
+// MMAs' rows. The decoder warps sketch the stored words they decode (`sk_begin`), so no warp is given over to it.
+constexpr int SK_STEP = 512, SK_M = (SB + SK_STEP - 1) / SK_STEP, SK_CHUNKS = S / 16;
+static_assert(SB % 16 == 0 && S % 16 == 0, "a step's lane loads (uint4) and the shared memory after the stages");
+template <int KS>
+__host__ __device__ constexpr int sk_words() {
+  return (KS / 4 + 5) / 6 == 3 ? 4 : (KS / 4 + 5) / 6;
+}
+
+__device__ __forceinline__ u32 sk_sign(u32 sel, int e) {
+  return e == 0 ? __byte_perm(0xFF01FF01u, 0xFF01FF01u, sel)
+                : e == 1 ? __byte_perm(0xFFFF0101u, 0xFFFF0101u, sel) : __byte_perm(0x01010101u, 0xFFFFFFFFu, sel);
+}
+
+// A tile buffer's row r holds its column c at c ^ sk_swz(r % 8): the lanes of a C fragment's red (rows g, columns
+// 8 b + 2 tq) then hit 32 distinct banks.
+template <int KS>
+__host__ __device__ constexpr int sk_swz(int g) {
+  return KS >= 32 ? 8 * (g & 3) + (g >> 2) : 8 * ((g >> 1) & 1) + (g >> 2);
+}
+
+// The CTA's sketch state: SK_BUFS tile buffers of 16 x k_s int32 (tile tl's is tl % SK_BUFS).
+constexpr int SK_NP = TW % 32 == 0 ? SK_CHUNKS : SK_CHUNKS + 1;   // the most steps a warp's units of a task touch
+struct Sketch {
+  int *buf;
+  const u32 *__restrict__ signs;
+  int *__restrict__ out;
+  u32 *__restrict__ tags;
+  u64 jbase, tile0;   // the tag index of vector 0; the CTA's first tile
+  int skt, tpc, ntasks;
+};
+
+// The MMA warp's hash of a finished tile: SkJob holds lanes 0-15's chaining values (vector `lane` of tile `tile`),
+// and sk_hash_block runs the next BLAKE3 block of all 16, so the hash runs in the MMA warp's waits on `decoded`. At
+// the last block it writes the tags and zeroes the buffer. sk_start first copies the tile to out (if given).
+struct SkJob {
+  u32 cv[8];
+  int tile, blk;   // blk < 0: no job
+};
+
+template <int KS>
+__device__ __forceinline__ void sk_start(SkJob &J, int tile, int lane, const Sketch &k) {
+  const int *b = k.buf + (tile % SK_BUFS) * 16 * KS;
+  if (k.out)
+    for (int e = lane; e < 16 * KS; e += 32)
+      k.out[(k.tile0 + tile) * 16 * KS + e] = b[e / KS * KS + ((e % KS) ^ sk_swz<KS>((e / KS) & 7))];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) J.cv[i] = kTagKey[i];
+  J.tile = tile;
+  J.blk = 0;
+}
+
+template <int KS>
+__device__ __forceinline__ void sk_hash_block(SkJob &J, int lane, const Sketch &k) {
+  constexpr int LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
+  int *b = k.buf + (J.tile % SK_BUFS) * 16 * KS;
+  const int blk = J.blk;
+  if (k.tags && lane < 16) {
+    const u64 j = k.jbase + 16 * (k.tile0 + J.tile) + lane;
+    const int *w = b + lane * KS, swz = sk_swz<KS>(lane & 7);
+    u32 m[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i - 2;
+      const u32 x = q >= 0 && q < KS ? (u32)w[q ^ swz] : 0u;
+      m[i] = blk == 0 && i == 0 ? bswap32((u32)(j >> 32)) : blk == 0 && i == 1 ? bswap32((u32)j) : x;
+    }
+    const bool last = blk == NMB - 1;
+    b3(J.cv, m, 0, last ? LEN - 64 * blk : 64, B3_KEYED | (blk == 0 ? B3_START : 0) | (last ? B3_END | B3_ROOT : 0),
+       J.cv, kOne);
+    if (last) {
+      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 8 * (16 * (k.tile0 + J.tile) + lane));
+      o[0] = make_uint4(J.cv[0], J.cv[1], J.cv[2], J.cv[3]);
+      o[1] = make_uint4(J.cv[4], J.cv[5], J.cv[6], J.cv[7]);
+    }
+  }
+  __syncwarp();
+  J.blk = blk + 1;
+  if (J.blk == NMB) {
+    for (int e = lane; e < 16 * KS; e += 32) b[e] = 0;
+    __syncwarp();
+    J.blk = -1;
+  }
+}
+
+template <int KS>
+__device__ __forceinline__ void sk_finish(SkJob &J, int lane, const Sketch &k) {
+  while (J.blk >= 0) sk_hash_block<KS>(J, lane, k);
+}
+
+// The warp's units of task x (the lanes with `mine`, consecutive, units ua .. ub - 1) hold chunks [ua, ub) S / 16 of
+// x's stage: step p's lane l takes chunk 32 p + l if it is one of them and zero otherwise, so the warps holding a
+// step's chunks add up to its sketch. sk_begin finds them and loads their signs (before the stage is ready), and sk_mma
+// adds the warp's sums into the tile's buffer (while the warp holds the stage, before its lanes arrive on `decoded`).
+// A warp's lanes are in at most two consecutive tasks, so tile tl's sums are all in once the MMA warp has waited on
+// `decoded` for task min(skt (tl + 1), ntasks - 1); it starts the tile's hash after that task's arrive on `empty`
+// (SkJob). Tile tl + SK_BUFS reuses the buffer, and no warp adds to it before its first task is ready, after the MMA
+// warp's arrive on `empty` for task skt (tl + SK_BUFS) - stages: the MMA warp finishes the hash before that arrive,
+// which comes after the hash's start while stages < (SK_BUFS - 1) skt.
+template <int KS>
+struct SkPart {
+  u32 sw[SK_NP][sk_words<KS>()];
+  int c0, c1, p0, tl;
+};
+
+template <int KS>
+__device__ __forceinline__ void sk_begin(SkPart<KS> &P, int x, bool mine, int w, int lane, const Sketch &k) {
+  constexpr int WP = sk_words<KS>();
+  const unsigned bal = __ballot_sync(FULL, mine);
+  const int f = __ffs(bal) - 1;
+  P.c0 = SK_CHUNKS * __shfl_sync(FULL, w, f);
+  P.c1 = SK_CHUNKS * (__shfl_sync(FULL, w, f + __popc(bal) - 1) + 1);
+  P.tl = x / k.skt;
+  P.p0 = P.c0 / 32;
+  const u32 *sg = k.signs + ((size_t)((x % k.skt) * SK_M + P.p0) * LANES + lane) * WP;
+#pragma unroll
+  for (int h = 0; h < SK_NP; ++h) {
+#pragma unroll
+    for (int q = 0; q < WP; ++q) P.sw[h][q] = 0u;
+    if (32 * (P.p0 + h) < P.c1) {
+      const u32 *sp = sg + h * LANES * WP;
+      if constexpr (WP == 4) {
+        const uint4 v = __ldg(reinterpret_cast<const uint4 *>(sp));
+        P.sw[h][0] = v.x, P.sw[h][1] = v.y, P.sw[h][2] = v.z, P.sw[h][3] = v.w;
+      } else if constexpr (WP == 2) {
+        const uint2 v = __ldg(reinterpret_cast<const uint2 *>(sp));
+        P.sw[h][0] = v.x, P.sw[h][1] = v.y;
+      } else {
+        P.sw[h][0] = __ldg(sp);
+      }
+    }
+  }
+}
+
+template <int KS>
+__device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, int lane, const Sketch &k) {
+  constexpr int KB = KS / 8;
+  int acc[KB][4];
+#pragma unroll
+  for (int b = 0; b < KB; ++b) acc[b][0] = acc[b][1] = acc[b][2] = acc[b][3] = 0;
+#pragma unroll
+  for (int h = 0; h < SK_NP; ++h)
+    if (32 * (P.p0 + h) < P.c1) {
+      const int c = 32 * (P.p0 + h) + lane;
+      const uint4 a = c >= P.c0 && c < P.c1 ? *reinterpret_cast<const uint4 *>(st + 16 * c) : make_uint4(0u, 0u, 0u, 0u);
+#pragma unroll
+      for (int b = 0; b < KB; ++b) {
+        const int r0 = 2 * b, r1 = 2 * b + 1;
+        const u32 b0 = sk_sign((r0 % 6) / 3 ? P.sw[h][r0 / 6] >> 16 : P.sw[h][r0 / 6], r0 % 3);
+        const u32 b1 = sk_sign((r1 % 6) / 3 ? P.sw[h][r1 / 6] >> 16 : P.sw[h][r1 / 6], r1 % 3);
+        mma_s8(acc[b], a, b0, b1);
+      }
+    }
+  int *buf = k.buf + (P.tl % SK_BUFS) * 16 * KS;
+  const int g = lane >> 2, tq = lane & 3, swz = sk_swz<KS>(g);
+#pragma unroll
+  for (int b = 0; b < KB; ++b) {
+    int *r0 = buf + g * KS, *r1 = r0 + 8 * KS;
+    const int c = (8 * b + 2 * tq) ^ swz;
+    atomicAdd(r0 + c, acc[b][0]);
+    atomicAdd(r0 + (c ^ 1), acc[b][1]);
+    atomicAdd(r1 + c, acc[b][2]);
+    atomicAdd(r1 + (c ^ 1), acc[b][3]);
+  }
+}
+
 // The decoder warps' loop (fused_kernel's comment). At k = 1 a lane keeps w = -(c_0 + t) in place of its tweak t and
 // steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
 // behind a proxy fence. At full slot a payload is its own word's bytes, so a lane writes it in place without `loaded`.
-template <int K>
-__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, u64 *sketched,
-                                             int stages, int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp,
-                                             int lane, const u32 *__restrict__ tsteps) {
+// With SKK > 0 the warp sketches its units of lo and hi (sk_begin, sk_mma) before it loads its words: every read of
+// the stage's stored bytes is then before the lane's arrive on `loaded` (the warp's, behind __syncwarp), and its
+// sums are in before its lanes arrive on `decoded`.
+template <int K, int SKK>
+__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
+                                             int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
+                                             const u32 *__restrict__ tsteps, const Sketch &sk) {
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
@@ -1632,8 +1811,19 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     const bool on = i < ntasks;
     const int s = i % stages;
     uint8_t *st = smem + s * SB;
+    constexpr bool SPLIT = TW % 32 != 0;   // else a warp's lanes are in one task
+    SkPart<(SKK > 0 ? SKK : 16)> P0, P1;
+    if constexpr (SKK > 0) {
+      sk_begin(P0, lo, on && i == lo, w, lane, sk);
+      if (SPLIT && hi != lo) sk_begin(P1, hi, on && i == hi, w, lane, sk);
+    }
     mbar_wait(ready + lo % stages, (lo / stages) & 1);
     if (hi != lo) mbar_wait(ready + hi % stages, (hi / stages) & 1);
+    if constexpr (SKK > 0) {
+      sk_mma(P0, smem + (lo % stages) * SB, lane, sk);
+      if (SPLIT && hi != lo) sk_mma(P1, smem + (hi % stages) * SB, lane, sk);
+      __syncwarp();
+    }
     u32 yw[NL];
     yw[0] = 0;
     if (on) {
@@ -1643,10 +1833,6 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       else decode_word<K>(yw, t);
     }
     if constexpr (PAY_E == 0) {
-      if (sketched) {
-        mbar_wait(sketched + lo % stages, (lo / stages) & 1);
-        if (hi != lo) mbar_wait(sketched + hi % stages, (hi / stages) & 1);
-      }
       if (on) {
         uint4 *o = reinterpret_cast<uint4 *>(st + w * S);
 #pragma unroll
@@ -1658,10 +1844,6 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       const u32 nxt = __shfl_down_sync(FULL, yw[0], 1);
       mbar_wait(loaded + lo % stages, (lo / stages) & 1);
       if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
-      if (sketched) {
-        mbar_wait(sketched + lo % stages, (lo / stages) & 1);
-        if (hi != lo) mbar_wait(sketched + hi % stages, (hi / stages) & 1);
-      }
       if (on) {
         put_payload_w(st, w, lane, yw, nxt);
         asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
@@ -1680,163 +1862,27 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
   }
 }
 
-// --- ro-sketch-blake3/v0 (sketching.py) -------------------------------------------------------------------------------
-//
-// Sketch warp sw of nsw takes steps sw, sw + nsw, ... of each task (a step is 512 stored bytes, lane l's 16 at 16 l the
-// int8 A fragment, zero past SB) and runs k_s / 8 mma.m16n8k32.s8 on each against the signs (`sign_fragments`: a
-// lane's sk_words u32 a step, one prmt a register), keeping the tile's 16 × k_s sums in its accumulators. A lane arrives
-// on `sketched` once its loads of the task have landed (a use of every loaded register before the arrive), and the
-// decoders write payloads only behind it. At a tile's end (skt tasks, or the CTA's last) the warps add their sums in
-// skbuf; sk_out, if given, gets the tile's 16 × k_s int32 at 16 k_s tile, and a lane a vector hashes y_v into
-// tags[8 v ..] (tag index jbase + v). The CTA's tiles past its last task are zero vectors, and are tagged as such.
-constexpr int SK_STEP = 512, SK_M = (SB + SK_STEP - 1) / SK_STEP, SK_HOLD = 5;
-static_assert(SB % 16 == 0, "a stage's lane loads (uint4) and the shared memory after the stages stay 16-byte aligned");
-template <int KS>
-__host__ __device__ constexpr int sk_words() {
-  return (KS / 4 + 5) / 6 == 3 ? 4 : (KS / 4 + 5) / 6;
-}
-
-__device__ __forceinline__ u32 sk_sign(u32 sel, int e) {
-  return e == 0 ? __byte_perm(0xFF01FF01u, 0xFF01FF01u, sel)
-                : e == 1 ? __byte_perm(0xFFFF0101u, 0xFFFF0101u, sel) : __byte_perm(0x01010101u, 0xFFFFFFFFu, sel);
-}
-__device__ __forceinline__ void sk_bar(int nsw) { asm volatile("bar.sync 1, %0;\n" ::"r"(32 * nsw) : "memory"); }
-
-template <int KS>
-__device__ __forceinline__ void sk_tag(const int *w, u64 j, u32 *__restrict__ out) {
-  constexpr int LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
-  const u32 one = kOne;
-  u32 cv[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) cv[i] = kTagKey[i];
-#pragma unroll 1
-  for (int b = 0; b < NMB; ++b) {
-    u32 m[16];
-#pragma unroll
-    for (int i = 0; i < 16; ++i) {
-      const int q = 16 * b + i;
-      m[i] = q == 0 ? bswap32((u32)(j >> 32)) : q == 1 ? bswap32((u32)j) : q - 2 < KS ? (u32)w[q - 2] : 0u;
-    }
-    b3(cv, m, 0, b == NMB - 1 ? LEN - 64 * b : 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == NMB - 1 ? B3_END | B3_ROOT : 0),
-       cv, one);
-  }
-  uint4 *o = reinterpret_cast<uint4 *>(out);
-  o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
-  o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
-}
-
-template <int KS>
-__device__ __forceinline__ void sk_flush(int (&acc)[KS / 8][4], int *skbuf, u64 tile, int sw, int nsw, int lane,
-                                         int *__restrict__ sk_out, u32 *__restrict__ tags, u64 jbase) {
-  const int g = lane >> 2, tq = lane & 3, t = 32 * sw + lane;
-#pragma unroll
-  for (int b = 0; b < KS / 8; ++b) {
-    int *r0 = skbuf + g * KS + 8 * b + 2 * tq, *r1 = r0 + 8 * KS;
-    atomicAdd(r0, acc[b][0]);
-    atomicAdd(r0 + 1, acc[b][1]);
-    atomicAdd(r1, acc[b][2]);
-    atomicAdd(r1 + 1, acc[b][3]);
-    acc[b][0] = acc[b][1] = acc[b][2] = acc[b][3] = 0;
-  }
-  sk_bar(nsw);
-  if (sk_out)
-    for (int e = t; e < 4 * KS; e += 32 * nsw)
-      reinterpret_cast<int4 *>(sk_out + tile * 16 * KS)[e] = reinterpret_cast<const int4 *>(skbuf)[e];
-  const int r = lane * nsw + sw;
-  if (tags && r < 16) sk_tag<KS>(skbuf + r * KS, jbase + 16 * tile + r, tags + 8 * (16 * tile + r));
-  sk_bar(nsw);
-  for (int e = t; e < 16 * KS; e += 32 * nsw) skbuf[e] = 0;
-  sk_bar(nsw);
-}
-
-template <int KS>
-__device__ __noinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int *skbuf, int stages,
-                                         int ntasks, int sw, int nsw, const u32 *__restrict__ signs,
-                                         int *__restrict__ sk_out, u32 *__restrict__ tags, u64 jbase, int skt,
-                                         int tpc) {
-  constexpr int KB = KS / 8, WP = sk_words<KS>();
-  const int lane = threadIdx.x & 31;
-  int acc[KB][4];
-#pragma unroll
-  for (int b = 0; b < KB; ++b) acc[b][0] = acc[b][1] = acc[b][2] = acc[b][3] = 0;
-  for (int i = 0; i < ntasks; ++i) {
-    const int s = i % stages, ii = i % skt;
-    const uint8_t *st = smem + s * SB;
-    const u32 *sg = signs + ((size_t)ii * SK_M * LANES + lane) * WP;
-    mbar_wait(ready + s, (i / stages) & 1);
-#pragma unroll 1
-    for (int s0 = sw; s0 < SK_M; s0 += SK_HOLD * nsw) {
-      uint4 a[SK_HOLD];
-      u32 w[SK_HOLD][WP];
-#pragma unroll
-      for (int h = 0; h < SK_HOLD; ++h) {
-        const int p = s0 + h * nsw, off = SK_STEP * p + 16 * lane;
-        a[h] = make_uint4(0u, 0u, 0u, 0u);
-        if (p < SK_M && off < SB) a[h] = *reinterpret_cast<const uint4 *>(st + off);
-#pragma unroll
-        for (int q = 0; q < WP; ++q) w[h][q] = 0u;
-        if (p < SK_M) {
-          const u32 *sp = sg + (size_t)p * LANES * WP;
-          if constexpr (WP == 4) {
-            const uint4 v = __ldg(reinterpret_cast<const uint4 *>(sp));
-            w[h][0] = v.x, w[h][1] = v.y, w[h][2] = v.z, w[h][3] = v.w;
-          } else if constexpr (WP == 2) {
-            const uint2 v = __ldg(reinterpret_cast<const uint2 *>(sp));
-            w[h][0] = v.x, w[h][1] = v.y;
-          } else {
-            w[h][0] = __ldg(sp);
-          }
-        }
-      }
-      if (s0 + SK_HOLD * nsw >= SK_M) {
-        u32 dep = 0;
-#pragma unroll
-        for (int h = 0; h < SK_HOLD; ++h) dep ^= a[h].x ^ a[h].y ^ a[h].z ^ a[h].w;
-        asm volatile("" ::"r"(dep));
-        mbar_arrive(sketched + s);
-      }
-#pragma unroll
-      for (int h = 0; h < SK_HOLD; ++h) {
-        if (s0 + h * nsw < SK_M) {
-#pragma unroll
-          for (int b = 0; b < KB; ++b) {
-            const int r0 = 2 * b, r1 = 2 * b + 1;
-            const u32 b0 = sk_sign((r0 % 6) / 3 ? w[h][r0 / 6] >> 16 : w[h][r0 / 6], r0 % 3);
-            const u32 b1 = sk_sign((r1 % 6) / 3 ? w[h][r1 / 6] >> 16 : w[h][r1 / 6], r1 % 3);
-            mma_s8(acc[b], a[h], b0, b1);
-          }
-        }
-      }
-    }
-    if (ii == skt - 1 || i == ntasks - 1)
-      sk_flush<KS>(acc, skbuf, (u64)blockIdx.x * tpc + i / skt, sw, nsw, lane, sk_out, tags, jbase);
-  }
-  for (int j = (ntasks + skt - 1) / skt; j < tpc; ++j)
-    sk_flush<KS>(acc, skbuf, (u64)blockIdx.x * tpc + j, sw, nsw, lane, sk_out, tags, jbase);
-}
-
 // tsteps: tau (32 D mod TW + A G TW) and tau (32 D mod TW - TW + (A + 1) G TW) mod p, A = floor(32 D / TW), G the
 // store's tasks between the CTA's consecutive ones: the tweak's step to a lane's next unit, its task advancing A or
 // A + 1.
-// With SKK > 0, warps D + 2 .. D + 1 + sketchers sketch (sketch_warp) into sk_out and tags (ro-sketch-blake3/v0,
-// index tag_base + v), and there are no tag warps.
+// With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
+// (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps.
 template <int K, int NB8, bool PARTIALS, int SKK>
 __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
-    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sketchers) {
+    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt) {
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
   u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages, *ready = empty + stages;
-  u64 *sketched = ready + stages;
-  u32 *tagq = reinterpret_cast<u32 *>(sketched + stages);
-  int *skbuf = reinterpret_cast<int *>(tagq + 4);   // 16-byte aligned: sk_flush reads it as int4
+  u32 *tagq = reinterpret_cast<u32 *>(full + 2 * ((5 * stages + 1) / 2));
+  int *skbuf = reinterpret_cast<int *>(tagq + 4);   // 16-byte aligned
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
   load_xs<NB8>(xs, x, M, Kd, kc);
-  for (int e = threadIdx.x; e < 16 * SKK; e += blockDim.x) skbuf[e] = 0;
+  for (int e = threadIdx.x; e < SK_BUFS * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
   if (threadIdx.x == 0) {
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
@@ -1844,14 +1890,14 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       mbar_init(decoded + s, TW);
       mbar_init(empty + s, LANES);
       mbar_init(ready + s, 1);
-      mbar_init(sketched + s, 32 * (SKK > 0 ? sketchers : 1));
     }
-    *tagq = 0;
+    tagq[0] = tagq[1] = tagq[2] = tagq[3] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
   }
   __syncthreads();
   const int ntasks = nbs > g0 ? (nbs - g0 + groups - 1) / groups : 0;
   const u64 q0 = (u64)g0 * nchunks + kc, gq = (u64)groups * nchunks;   // task i is the store's task q0 + i gq
+  [[maybe_unused]] const int tpc = ((nbs + groups - 1) / groups + skt - 1) / skt;   // the sketch's tiles a CTA
 
   if (warp == decoders + 1) {
     if (lane == 0) {
@@ -1872,8 +1918,14 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     __syncwarp();
   } else if (warp == decoders) {
     const int g = lane >> 2, tq = lane & 3;
+    [[maybe_unused]] const Sketch sk{skbuf, signs, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+    [[maybe_unused]] SkJob J;
+    J.blk = -1;
+    int hashed = 0;   // the tiles whose hash has started
     for (int i = 0; i < ntasks; ++i) {
       const int s = i % stages;
+      if constexpr (SKK > 0)
+        while (J.blk >= 0 && !mbar_test(decoded + s, (i / stages) & 1)) sk_hash_block<SKK>(J, lane, sk);
       mbar_wait(decoded + s, (i / stages) & 1);
       float acc[NB8][4];
 #pragma unroll
@@ -1894,18 +1946,26 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
         const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
         mma_tile<NB8>(acc, a, xs, tt, g, tq);
       }
+      if constexpr (SKK > 0)
+        if (J.blk >= 0 && skt * (J.tile + SK_BUFS) <= i + stages) sk_finish<SKK>(J, lane, sk);
       mbar_arrive(empty + s);
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
+      if constexpr (SKK > 0)
+        while (hashed * skt < ntasks && i == min(skt * (hashed + 1), ntasks - 1)) {
+          sk_finish<SKK>(J, lane, sk);
+          sk_start<SKK>(J, hashed++, lane, sk);
+        }
+    }
+    if constexpr (SKK > 0) {
+      sk_finish<SKK>(J, lane, sk);
+      for (; hashed < tpc; ++hashed) {   // the CTA's tiles past its tasks: zero sketches
+        sk_start<SKK>(J, hashed, lane, sk);
+        sk_finish<SKK>(J, lane, sk);
+      }
     }
   } else if (warp < decoders) {
-    decode_tasks<K>(smem, ready, loaded, decoded, SKK > 0 ? sketched : nullptr, stages, ntasks, q0, gq, base, decoders,
-                    warp, lane, tsteps);
-  } else if (SKK > 0 && warp < decoders + 2 + sketchers) {
-    if constexpr (SKK > 0) {
-      const int tpc = ((nbs + groups - 1) / groups + skt - 1) / skt;
-      sketch_warp<SKK>(smem, ready, sketched, skbuf, stages, ntasks, warp - decoders - 2, sketchers, signs, sk_out, tags,
-                       tag_base, skt, tpc);
-    }
+    const Sketch sk{skbuf, signs, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+    decode_tasks<K, SKK>(smem, ready, loaded, decoded, stages, ntasks, q0, gq, base, decoders, warp, lane, tsteps, sk);
   }
   if constexpr (SKK == 0)
     if (tags) tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, tagq, tags);
@@ -2077,27 +2137,25 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 
 // The fused decode GEMM at k rounds: `decoders` decoder warps, an MMA warp, a producer and `taggers` tag warps (block
 // jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps as fused_kernel's.
-// wt_fused_sketch instead has `sketchers` sketch warps (k = 1, no tag warps): ro-sketch-blake3/v0 at k_s = sketch_k
-// over tiles of skt tasks, the signs as sketching.sign_fragments, each vector v's tag at tag_base + v into
-// tags[8 v ..] and, if sk_out, its sketch at sk_out[k_s v ..]; tags and sk_out hold sketch_vectors(...) vectors.
+// wt_fused_sketch with sketch_k > 0 (k = 1, no tag warps) has the decoders sketch: ro-sketch-blake3/v0 at
+// k_s = sketch_k over tiles of skt tasks (stages < 2 skt), the signs as sketching.sign_fragments, each vector v's tag at
+// tag_base + v into tags[8 v ..] and, if sk_out, its sketch at sk_out[k_s v ..]; tags and sk_out hold
+// sketch_vectors(...) vectors.
 int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
-                    int sketch_k, int sketchers, const u32 *signs, int *sk_out, int skt, int *launched,
-                    cudaStream_t s) {
+                    int sketch_k, const u32 *signs, int *sk_out, int skt, int *launched, cudaStream_t s) {
   if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
-      decoders + 2 + taggers + sketchers > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW ||
-      (w && taggers && !tags))
+      decoders + 2 + taggers > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
     return 1;
-  if (sketch_k ? (sketch_k != 16 && sketch_k != 64) || k != 1 || taggers || sketchers < 1 || sketchers > 4 ||
-                     sketchers > SK_M || skt < 1 || (w && (!signs || !(tags || sk_out)))
-               : sketchers != 0)
+  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || k != 1 || taggers || stages >= (SK_BUFS - 1) * skt ||
+                   (w && (!signs || !(tags || sk_out)))))
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
-  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers + sketchers) * 32;
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers) * 32;
   auto go = [&](auto kern, int smem) -> int {
     return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
       kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
-                                               stages, tsteps, tags, tag_base, signs, sk_out, skt, sketchers);
+                                               stages, tsteps, tags, tag_base, signs, sk_out, skt);
     });
   };
 #define G(KK, NB, SK) \
@@ -2116,7 +2174,7 @@ int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int
              int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
              int *launched, cudaStream_t s) {
   return wt_fused_sketch(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags, tag_base,
-                         0, 0, nullptr, nullptr, 1, launched, s);
+                         0, nullptr, nullptr, 1, launched, s);
 }
 
 // The vectors a sketched launch tags: 16 a tile, ceil(ceil(nbs / groups) / skt) tiles a CTA.

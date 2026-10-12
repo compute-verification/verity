@@ -8,7 +8,8 @@
 #     -- taskset -c 48-95 bash benchmarks/codec_tensor/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 512 521 767 768 1023
-# 1279") names the builds; NVFLAGS adds nvcc flags (a variant's -D); BENCH_ARGS passes through to bench.py.
+# 1279") names the builds; NVFLAGS adds nvcc flags (a variant's -D); BENCH_ARGS passes through to bench.py. PROFILE, if
+# set, runs bench.py under ncu with those options (out/prof.ncu-rep) and prints its details and SASS source pages.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -35,7 +36,7 @@ if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $CT/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
 [ -n "${COMPILE_ONLY:-}" ] && exit 0
-export B PY CT FIELDS BENCH_ARGS=${BENCH_ARGS:-}
+export B PY CT FIELDS BENCH_ARGS=${BENCH_ARGS:-} PROFILE=${PROFILE:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -44,7 +45,12 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
           -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
   LIBS=(); for n in $FIELDS; do LIBS+=(--lib "$B/wt-$n.so"); done
+  NCU=(); [ -n "$PROFILE" ] && NCU=(ncu $PROFILE -f -o "$O/prof")
   # shellcheck disable=SC2086
-  "$PY" $CT/bench.py "${LIBS[@]}" --out "$O" $BENCH_ARGS; rc=$?
+  "${NCU[@]}" "$PY" $CT/bench.py "${LIBS[@]}" --out "$O" $BENCH_ARGS; rc=$?
+  if [ -n "$PROFILE" ]; then
+    ncu -i "$O/prof.ncu-rep" --page details > "$O/prof-details.txt" 2>&1
+    ncu -i "$O/prof.ncu-rep" --page source --csv --print-source sass > "$O/prof-source.csv" 2>&1
+  fi
   q
   exit $rc'
