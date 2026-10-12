@@ -1,4 +1,5 @@
 import Definitions.Accounting.Responder
+import Definitions.Accounting.Window
 import Definitions.Pous.P2.Cost
 import Definitions.Pous.Model.SampledAudit
 import Models.Pous.Assumptions.P2
@@ -7,7 +8,7 @@ import Models.Pous.Assumptions.P2
 # B2: a location as PoUS's responder (trusted)
 
 Obligation B2 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.6), on PoUS's ring model, for a location
-that does no arithmetic modulo `p` during a window (the oracle-location form, where it does, is not stated yet). A
+that does no arithmetic modulo `p` during a window (where it does, `B2Window` states the oracle-location form's core). A
 strategy `S` maps PoUS's outcome (the primitive `ω`, the encoder's coins, the `k` challenges) to a run, causal from
 every tick. Challenge `j` reaches the location `X` at tick `t j`, the ticks increasing, and its answer is read off what
 `X` does during window `j`. What `X` does during a window includes its state at the window's end (v2.6), so its state
@@ -36,11 +37,16 @@ at each challenge tick is a function of its state at the previous one and of wha
 * `B2Adds`, lemma M through `B2Determines`: under `AuditSecureOn … N 0 0 0 c δ ε`, a location that keeps a uniform
   `q`-bit `z` passes while `q + N ≥ M + 1 + H + k` with probability at most `δ + ε + c·2^-k`; `B2AddsP2Ring`, the same
   at P2's deployed point under `P2RingAuditSecure 0 0 0`, with `δ + 2^-129 + 2^-130 + 105·2^-k`.
+* `B2Window`, the core of the oracle-location form (B2's row at 13:50Z and 14:05Z): where the location does use the
+  ring, at oracle locations of its own (`RingWindow`), a window whose multiplications take at least `ℓ > 0` ticks to
+  answer and which spans at most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the
+  additions, `one` and the keys at once and holds each multiplication until the earliest held one could be due. With
+  `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`.
 
 The help is whatever the setup fixes that, with the challenge, determines what reaches `X`: under isolation nothing,
 and when the rest of the prover learns nothing that depends on the challenges (the model's `e = 0` across the audit),
 what the rest sends `X` during the whole audit, with `H` the log of the number of values it takes. The proofs are in
-`Security/Proofs/Accounting/Responder.lean`.
+`Security/Proofs/Accounting/Responder.lean`, `B2Window`'s in `Security/Proofs/Accounting/Responder/Latency.lean`.
 -/
 
 namespace Accounting.Guarantees
@@ -180,5 +186,20 @@ def B2AddsP2Ring : Prop :=
       Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Passes (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W (S x.1) X t ans x.2 ∧ ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + 1 + H + k) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
+
+/-- **B2's oracle-location form: a window as a ring responder.** For a ring-model scheme and a window for each
+codeword's `W`, public parameters, challenge index, `N`-bit state and challenged block (`Wd`), each yielding an answer
+and the next state: when every multiplication takes at least `ℓ > 0` ticks to answer and every window spans at most
+`D·ℓ` ticks, some `(N, D, Q, L)` sequential responder's step yields what the window yields, whatever the oracle
+locations answer, wherever the window asks at most `Q` key queries and `L` ring queries. -/
+def B2Window : Prop :=
+  ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N D Q L ℓ : ℕ)
+    (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
+      RingWindow B w (Pous.Bits sch.ℓ × Pous.Bits N)),
+    0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry B w), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
+    (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
+    ∃ A₂ : Pous.SeqResponderOn sch N D Q L, ∀ W pp j σ i (f : Pous.RingQry B w → Pous.Bits w),
+      (Wd W pp j σ i).keys f ≤ Q → (Wd W pp j σ i).ops f ≤ L →
+      (A₂.step W pp j σ i).run f = (Wd W pp j σ i).result f
 
 end Accounting.Guarantees
