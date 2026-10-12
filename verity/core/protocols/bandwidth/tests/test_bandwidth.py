@@ -37,16 +37,22 @@ class _Clock:
         return self.now
 
 
+def _nonces(label: bytes = b""):
+    """Deterministic nonces for a test, distinct for each label and draw: the verifier's own randomness, replayed."""
+    counter = itertools.count()
+    return lambda n: hashlib.sha512(b"test nonce " + label + next(counter).to_bytes(8, "big")).digest()[:n]
+
+
 def _params(tag: str, samples: int = 8, deadline_ns: int = 1_000_000) -> audit.Params:
     return audit.Params(tag, samples, deadline_ns, rtt_allowance_ns=100_000)
 
 
-def _run(store: audit.Store, vk, params: audit.Params, *, step: int = 1_000, window: int = 0,
+def _run(store: audit.Store, vk, params: audit.Params, *, step: int = 1_000, nonces=None,
          prover=None) -> tuple[audit.Verdict, tuple[int, ...]]:
     """One window, the clock advancing `step` ns per reading; `prover(seed) -> TagCommitment` defaults to the honest
     pass."""
-    verifier = audit.Verifier(vk, params, b"verifier secret", clock=_ticks(step))
-    w = verifier.window(window)
+    verifier = audit.Verifier(vk, params, b"verifier secret", clock=_ticks(step), nonces=nonces or _nonces())
+    w = verifier.window()
     seed = w.start()
     commitment = (prover or (lambda s: audit.tag_pass(store, params.tag, s)))(seed)
     drawn = w.commit(commitment.root)
@@ -207,12 +213,19 @@ def test_last_leaf_opens_short(big_store) -> None:
 
 
 def test_samples_come_after_the_commitment_from_the_window_key(big_store) -> None:
+    """The window's key binds its tag and the nonce the verifier drew for it, and changes with either."""
     store, vk = big_store
     params = _params("ro-sha512/v1")
-    _, drawn = _run(store, vk, params, window=3)
-    key = audit.window_key(b"verifier secret", vk, 3)
+    nonce = bytes(range(32))
+    _, drawn = _run(store, vk, params, nonces=lambda n: nonce)
+    key = audit.window_key(b"verifier secret", vk, params.tag, nonce)
     assert drawn == audit.samples(key, 37, 8)
-    assert audit.seed(key) != audit.seed(audit.window_key(b"verifier secret", vk, 4))
+    other_tag = audit.window_key(b"verifier secret", vk, "gf31-poly/v1", nonce)
+    other_nonce = audit.window_key(b"verifier secret", vk, params.tag, bytes(32))
+    assert len({audit.seed(k) for k in (key, other_tag, other_nonce)}) == 3
+    for bad in (bytes(31), bytes(33), bytearray(32), 0):
+        with pytest.raises(ValueError):
+            audit.window_key(b"verifier secret", vk, params.tag, bad)
 
 
 def test_late_commitment_is_rejected_and_draws_nothing(big_store) -> None:
@@ -227,7 +240,7 @@ def test_late_commitment_is_rejected_and_draws_nothing(big_store) -> None:
 
 def test_malformed_root_is_rejected(big_store) -> None:
     _, vk = big_store
-    w = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", clock=_ticks(1)).window(0)
+    w = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", clock=_ticks(1)).window()
     w.start()
     assert w.commit(b"\0" * 63) == () and w.verdict().failure == "malformed"
 
@@ -254,8 +267,9 @@ def test_a_skipped_fraction_passes_only_when_no_sample_lands_in_it(big_store) ->
     store, vk = big_store
     params = _params("gf31-poly/v1", samples=4)
     outcomes = set()
-    for window in range(12):
-        verdict, drawn = _run(store, vk, params, window=window,
+    nonces = _nonces(b"skipped")
+    for _ in range(12):
+        verdict, drawn = _run(store, vk, params, nonces=nonces,
                               prover=lambda s: _Corrupt(store, params.tag, s, lambda j: j < 9))
         assert verdict.accepted == all(i >= 9 for i in drawn)
         outcomes.add(verdict.accepted)
@@ -265,7 +279,7 @@ def test_a_skipped_fraction_passes_only_when_no_sample_lands_in_it(big_store) ->
 def test_wrong_block_fails_the_store_path(big_store) -> None:
     store, vk = big_store
     params = _params("ro-sha512/v1")
-    w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window(0)
+    w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window()
     c = audit.tag_pass(store, params.tag, w.start())
     drawn = w.commit(c.root)
     openings = [c.open(i) for i in drawn]
@@ -276,7 +290,7 @@ def test_wrong_block_fails_the_store_path(big_store) -> None:
 def test_wrong_tag_path_fails(big_store) -> None:
     store, vk = big_store
     params = _params("gf31-poly/v1")
-    w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window(0)
+    w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window()
     c = audit.tag_pass(store, params.tag, w.start())
     drawn = w.commit(c.root)
     openings = [c.open(i) for i in drawn]
@@ -289,7 +303,7 @@ def test_openings_must_answer_the_samples_in_order(big_store) -> None:
     params = _params("ro-sha512/v1")
     for mutate in (lambda o: o[1:], lambda o: o[::-1] if o[0].index != o[-1].index else o[1:],
                    lambda o: [replace(o[0], leaf_tags=o[0].leaf_tags * 2), *o[1:]]):
-        w = audit.Verifier(vk, params, b"s", clock=_ticks(1)).window(0)
+        w = audit.Verifier(vk, params, b"s", clock=_ticks(1), nonces=_nonces()).window()
         c = audit.tag_pass(store, params.tag, w.start())
         drawn = w.commit(c.root)
         assert w.verdict(mutate([c.open(i) for i in drawn])).failure == "malformed"
@@ -298,9 +312,7 @@ def test_openings_must_answer_the_samples_in_order(big_store) -> None:
 def test_a_window_runs_once(big_store) -> None:
     store, vk = big_store
     verifier = audit.Verifier(vk, _params("ro-sha512/v1"), b"s", clock=_ticks(1))
-    w = verifier.window(0)
-    with pytest.raises(RuntimeError):
-        verifier.window(0)
+    w = verifier.window()
     with pytest.raises(RuntimeError):
         w.commit(bytes(64))
     with pytest.raises(RuntimeError):
@@ -322,7 +334,7 @@ def test_one_window_over_a_store_is_open_at_a_time(big_store) -> None:
     params = _params("ro-blake3/v1")
     clock = _Clock()
     verifier = audit.Verifier(vk, params, b"s", clock=clock)
-    first, second = verifier.window(0), verifier.window(1)
+    first, second = verifier.window(), verifier.window()
     c1 = audit.tag_pass(store, params.tag, first.start())
     with pytest.raises(RuntimeError, match="open"):
         second.start()
@@ -334,10 +346,10 @@ def test_one_window_over_a_store_is_open_at_a_time(big_store) -> None:
     c2 = audit.tag_pass(store, params.tag, second.start())
     clock.now += params.limit_ns
     assert second.verdict([c2.open(i) for i in second.commit(c2.root)]).accepted
-    third = verifier.window(2)
+    third = verifier.window()
     third.start()
     third.commit(b"short")
-    verifier.window(3).start()
+    verifier.window().start()
 
 
 def test_one_devices_commitment_fails_anothers_window(p2_store) -> None:
@@ -348,16 +360,16 @@ def test_one_devices_commitment_fails_anothers_window(p2_store) -> None:
     assert store_a.salt != store_b.salt and store_a.blocks != store_b.blocks and vk_a.root != vk_b.root
     params = _params("ro-blake3/v1")
     va, vb = (audit.Verifier(vk, params, b"window secret", clock=_ticks(1)) for vk in (vk_a, vk_b))
-    win_a, win_b = va.window(0), vb.window(0)
+    win_a, win_b = va.window(), vb.window()
     seed_a, seed_b = win_a.start(), win_b.start()
     assert seed_a != seed_b
     ca = audit.tag_pass(store_a, params.tag, seed_a)
     assert win_a.verdict([ca.open(i) for i in win_a.commit(ca.root)]).accepted
     assert win_b.verdict([ca.open(i) for i in win_b.commit(ca.root)]).failure == "store-path"
-    win_b = vb.window(1)
+    win_b = vb.window()
     forged = audit.tag_pass(store_a, params.tag, win_b.start())
     assert win_b.verdict([forged.open(i) for i in win_b.commit(forged.root)]).failure == "store-path"
-    win_b = vb.window(2)
+    win_b = vb.window()
     cb = audit.tag_pass(store_b, params.tag, win_b.start())
     assert win_b.verdict([cb.open(i) for i in win_b.commit(cb.root)]).accepted
     with pytest.raises(ValueError):
@@ -369,7 +381,7 @@ def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store) -> None:
     params = _params("ro-blake3/v1")
     clock = _Clock()
     verifier = audit.Verifier(vk, params, b"s", clock=clock)
-    first, second = verifier.window(0), verifier.window(1)
+    first, second = verifier.window(), verifier.window()
     s1 = first.start()
     clock.now = params.limit_ns + 1
     s2 = second.start()

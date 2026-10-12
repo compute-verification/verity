@@ -21,6 +21,7 @@ BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"
 SEED = bytes(range(32))
 SOURCE = b"verity bandwidth vector source"
 SALT = bytes(range(100, 124))
+NONCES = (bytes(32), bytes(range(32)), bytes([0xFF]) * 32)
 BLOCK_BYTES = 2056
 
 
@@ -66,12 +67,21 @@ def _window_vectors() -> list[dict]:
     s = store(37)
     vk = vk_of(s)
     out = []
-    for window in (0, 1, 1 << 32):
-        key = audit.window_key(SOURCE, vk, window)
-        out.append({"source": SOURCE.hex(), "vk_root": vk.root.hex(), "salt": SALT.hex(), "window": window,
-                    "seed": audit.seed(key).hex(), "samples_of_2^19": list(audit.samples(key, 1 << 19, 8)),
+    for tag, nonce in (("ro-blake3/v1", NONCES[0]), ("ro-blake3/v1", NONCES[1]), ("gf31-poly/v1", NONCES[1]),
+                       ("ro-sha512/v1", NONCES[2])):
+        key = audit.window_key(SOURCE, vk, tag, nonce)
+        out.append({"source": SOURCE.hex(), "vk_root": vk.root.hex(), "salt": SALT.hex(), "tag": tag,
+                    "nonce": nonce.hex(), "seed": audit.seed(key).hex(),
+                    "samples_of_2^19": list(audit.samples(key, 1 << 19, 8)),
                     "samples_of_37": list(audit.samples(key, 37, 8))})
     return out
+
+
+def _root_vectors() -> list[dict]:
+    """Every tag's root over the 37 generated blocks under `SEED`: the GPU tagger's small case."""
+    s = store(37)
+    return [{"tag": name, "blocks": 37, "seed": SEED.hex(), "tag_root": audit.tag_pass(s, name, SEED).root.hex()}
+            for name in sorted(tags.TAGS)]
 
 
 def _audit_vectors() -> list[dict]:
@@ -80,11 +90,11 @@ def _audit_vectors() -> list[dict]:
     vk = vk_of(s)
     out = []
     for name in sorted(tags.TAGS):
-        key = audit.window_key(SOURCE, vk, 0)
+        key = audit.window_key(SOURCE, vk, name, NONCES[1])
         commitment = audit.tag_pass(s, name, audit.seed(key))
         drawn = audit.samples(key, 37, 5)
         out.append({"tag": name, "blocks": 37, "block_bytes": BLOCK_BYTES, "salt": SALT.hex(),
-                    "store_root": s.root.hex(), "window": 0, "samples": 5,
+                    "store_root": s.root.hex(), "nonce": NONCES[1].hex(), "samples": 5,
                     "leaves": len(commitment.tree.leaves), "tag_root": commitment.root.hex(), "drawn": list(drawn),
                     "opened_leaf_tags": [[y.hex() for y in commitment.open(i).leaf_tags] for i in drawn[:2]]})
     return out
@@ -93,7 +103,7 @@ def _audit_vectors() -> list[dict]:
 def generate() -> dict:
     return {"block": "SHA512('verity/bandwidth/test-block/v1\\0' || u64be j || u32be c), c = 0, 1, ..., truncated",
             "tags": _tag_vectors(), "salts": _salt_vectors(), "windows": _window_vectors(),
-            "audits": _audit_vectors()}
+            "roots": _root_vectors(), "audits": _audit_vectors()}
 
 
 if __name__ == "__main__":

@@ -79,10 +79,14 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
 
 ## 3. A window
 
-1. **Seed.** The verifier derives the window's key from its own secret,
-   `key = derive(source, "verity/bandwidth/window/v1", {root: vk.root, salt: vk.salt, window: n})`
-   (`verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock (`Window.start`). A window number
-   is used once.
+1. **Seed.** The verifier draws a fresh 32-byte nonce from its own randomness and derives the window's key from its
+   own secret,
+   `key = derive(source, "verity/bandwidth/window/v2", {root: vk.root, salt: vk.salt, tag: name, nonce: nonce})`
+   (`verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock (`Window.start`). The nonce is
+   never a counter and never drawn twice for a store, so no two windows over a store share a key, whichever verifier,
+   tag or restart opens them. A key fixed by a window number repeats in every verifier that counts from the same
+   place: a window of the fast check reveals, after its commitment, the samples of the certified tag's window of the
+   same number, and a restarted verifier's window accepts a root replayed from before the restart.
 2. **Tags.** The prover computes `y_j = Tag(σ, j, E_j)` for every `j < N` (§4), packs them into leaves, and returns the
    RFC 6962 SHA-512 root of the leaves. The verifier stops its clock on the root (`Window.commit`); the root is on time
    iff the elapsed time is at most `T + RTT` (`Params.limit_ns`).
@@ -92,8 +96,8 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
    of `i`'s leaf with the leaf's path to the committed root (`TagCommitment.open`). The verifier checks both paths and
    recomputes `y_i` from `σ`, `i` and `E_i` (`Window.verdict`). Openings are not timed: the root binds every tag.
 
-The verifier accepts iff the root is on time and every opening checks. It refuses a second start, a second root, or a
-window number used before, and never redraws. One window over a store is open at a time: from `σ` until its root
+The verifier accepts iff the root is on time and every opening checks. It refuses a second start or a second root,
+and never redraws. One window over a store is open at a time: from `σ` until its root
 arrives, or until `T + RTT` has passed without one, the verifier refuses to start another window over the same store,
 which stays unstarted and may start once the first has closed. Two windows open at once could both be answered from
 one read of each block, so their ingress would not add; with one open at a time, each window's ingress is read within
@@ -340,8 +344,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 - `tags.py`: `get(name)`, each construction's `keyed(σ)(j, block)`, `certified`, `guess`, `info_bits`; the tag tree
   (`leaves`).
 - `audit.py`: a device's salt (`draw_salt`), the prover's reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
-  `open(j) -> Opening`), the verifier (`Verifier(vk, params, source).window(n)`: `start() -> σ`, `commit(root) ->
-  samples`, `verdict(openings) -> Verdict`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
+  `open(j) -> Opening`), the verifier (`Verifier(vk, params, source).window()`: `start() -> σ`, `commit(root) ->
+  samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
   `certified_blocks`, `samples_for`) and `bound`.
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
   salts, window seeds and samples, and a whole window over 37 blocks.

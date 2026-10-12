@@ -487,8 +487,8 @@ def test_tree_launches_write_every_node_once_from_their_own_block(n):
 def test_reference_small_case_is_the_pinned_vectors():
     out = reference.small()
     vectors = json.loads(reference.VECTORS.read_text())
-    assert out["seed"] == vectors["windows"][0]["seed"]
-    assert out["roots"] == {a["tag"]: a["tag_root"] for a in vectors["audits"]}
+    assert {r["seed"] for r in vectors["roots"]} == {out["seed"]}
+    assert out["roots"] == {r["tag"]: r["tag_root"] for r in vectors["roots"]}
 
 
 def test_reference_roots_across_chunks(monkeypatch, tmp_path):
