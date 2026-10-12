@@ -129,7 +129,8 @@
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
-        "benchmarks/pous/"
+        "benchmarks/pous/",
+        "benchmarks/word_codec/"
       ]
     },
     {
