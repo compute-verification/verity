@@ -260,27 +260,31 @@ class _Pass:
     def lay_out(self, parts: Sequence[tuple[str, int, int, np.ndarray | None, np.ndarray | None]]) -> None:
         """Segments from ``parts`` (region, start, count, blocks or None for a run, epochs or None) as subtrees: each
         part's power-of-two runs of whole leaves, the largest first, then each part's last ``count % PER_LEAF``."""
-        whole, tail = [], []
+        by_size: dict[int, list] = {}
+        tail = []
         for part in parts:
             q, r = divmod(part[2], PER_LEAF)
             lo = 0
             for h in range(q.bit_length() - 1, -1, -1):
                 if q >> h & 1:
-                    whole.append((-h, len(whole), part, lo, PER_LEAF << h))
+                    by_size.setdefault(h, []).append((part, lo, PER_LEAF << h))
                     lo += PER_LEAF << h
             if r:
                 tail.append((part, lo, r))
-        whole.sort(key=lambda w: w[:2])
-        for (region, start, _, blocks, epochs), lo, n in [w[2:] for w in whole] + tail:
-            k = len(self.segments)
-            self.segments.append(Segment(region, start + lo if blocks is None else -1, n, self.positions))
-            self.blocks.append(None if blocks is None else blocks[lo:lo + n])
-            if blocks is not None:
+        segments, blocks_of, starts, position = self.segments, self.blocks.append, self.starts.append, self.positions
+        for (region, start, _, blocks, epochs), lo, n in [p for h in sorted(by_size, reverse=True) for p in by_size[h]] + tail:
+            k = len(segments)
+            segments.append(Segment(region, start + lo if blocks is None else -1, n, position))
+            if blocks is None:
+                blocks_of(None)
+            else:
+                blocks_of(blocks[lo:lo + n])
                 self.views[k] = (id(blocks), lo)
             if epochs is not None:
                 self.epochs[k] = epochs[lo:lo + n]
-            self.starts.append(self.positions)
-            self.positions += n
+            starts(position)
+            position += n
+        self.positions = position
 
     def at(self, position: int) -> int:
         """The segment holding ``position``."""
@@ -577,16 +581,21 @@ class Store:
 
     def plan_runs(self, ps: _Pass) -> np.ndarray:
         """The pass's plan as canonical runs of store indices, in read order (``(R, 2)``: first, count)."""
-        parts, local = [], {}
+        parts, local, runs = [], {}, []
         for i, s in enumerate(ps.segments):
             first, b = self._by_name[s.region].info.first, ps.blocks[i]
             if b is None:
-                parts.append(np.array([[first + s.start, s.count]], np.int64))
+                runs.append((first + s.start, s.count))
                 continue
+            if runs:
+                parts.append(np.array(runs, np.int64))
+                runs = []
             key = (*ps.views[i], s.count)
             if key not in local:
                 local[key] = runs_of(b)
             parts.append(local[key] + np.array([first, 0], np.int64))
+        if runs:
+            parts.append(np.array(runs, np.int64))
         return canonical(np.concatenate(parts)) if parts else np.zeros((0, 2), np.int64)
 
     def salt(self, seed: bytes, leaf: int) -> bytes:
