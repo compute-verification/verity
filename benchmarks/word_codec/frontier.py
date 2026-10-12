@@ -6,7 +6,8 @@ Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON lis
       --meta '{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}'
 
 and this script selects them all (`research data select --kind codec-frontier-points/v0`), or reads `--art` ids and
-`--file` paths, and draws:
+`--file` paths, adds ra-codec-tensor's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
+draws:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
   axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
   passes of E (the red team's F1: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is a
@@ -88,6 +89,53 @@ def load_art(art: str) -> list[dict]:
     for p in pts:
         p.setdefault("art", art)
     return pts
+
+
+TENSOR_MODELS = {"70b": "llama-3.1-70b", "8b": "llama-3.1-8b"}
+
+
+def load_tensor(src: str) -> tuple[dict, str | None]:
+    """A `codec-tensor.json` (ra-codec-tensor's `benchmarks/codec_tensor/bench.py`): a path, or the art of its run's
+    files."""
+    if not src.startswith("art:"):
+        return json.loads(Path(src).read_text()), None
+    root = Path(research("data", "fetch", src, "--path", "out/codec-tensor.json").strip().splitlines()[-1])
+    return json.loads((root / "out" / "codec-tensor.json" if root.is_dir() else root).read_text()), src
+
+
+def tensor_points(docs: list[tuple[dict, str | None]]) -> list[dict]:
+    """ra-codec-tensor's runs as points: y from each run's `layer` (per batch, each linear at its best arm over native:
+    `plain` the base, `fused_k<k>` − plain the decode; untagged, so tag and commit 0 and τ 0, which the sketch twins
+    replace), x and Δ from whichever document's `analysis` names the field: x the adversary's best root at the squaring
+    floor over CUDA cores, tensor cores and both (at the locked clock), Δ the CUDA decode's. A field no `analysis`
+    names is left out."""
+    rates = {}
+    for doc, _ in docs:
+        for name, e in doc.get("libs", {}).items():
+            if e.get("analysis"):
+                rates[name] = e["analysis"]["k"]
+    out = []
+    for doc, art in docs:
+        model = TENSOR_MODELS.get((doc.get("model") or {}).get("name"), (doc.get("model") or {}).get("name"))
+        for name, e in doc.get("libs", {}).items():
+            if not e.get("layer"):
+                continue
+            if name not in rates:
+                print(f"tensor: {name} has no analysis (x, Δ) in the documents given; left out", file=sys.stderr)
+                continue
+            for mb, row in e["layer"].items():
+                for key, y in row.items():
+                    if not (key.startswith("fused_k") and key[7:].isdigit()) or key[7:] not in rates[name]:
+                        continue
+                    k, r = int(key[7:]), rates[name][key[7:]]
+                    x = min(v for u, v in r.items() if u in ("x_cuda", "x_tc", "x_both"))
+                    out.append({"schema": SCHEMA, "lane": "ra-codec-tensor", "model": model,
+                                "b": e.get("constants", {}).get("n", int(name.lstrip("pm"))), "k": k,
+                                "arithmetic": f"tensor-lane/wt.cu/{name}/untagged", "batch": int(mb),
+                                "y_total": y, "y_base": row["plain"], "y_decode": y - row["plain"], "y_tag": 0.0,
+                                "y_commit": 0.0, "x": x, "delta": r.get("delta_cuda"), "tau": 0.0, "measured": True,
+                                "label": f"{name} k={k} wt.cu untagged", "run": None, "art": art})
+    return out
 
 
 def check(points: list[dict]) -> list[dict]:
@@ -291,6 +339,8 @@ def main() -> int:
                     "tag, Y its tag and commit at that batch (e.g. 1:0.073,32:0.150, ra-sketch-tag's plain store)")
     ap.add_argument("--sketch-tau", type=float, default=0.0, help="the sketch twins' τ (default 0)")
     ap.add_argument("--only-sketch", action="store_true", help="with --sketch: draw and rank only the twins")
+    ap.add_argument("--tensor", action="append", default=[],
+                    help="ra-codec-tensor's codec-tensor.json, a path or its run's files art (`tensor_points`)")
     a = ap.parse_args()
     points = []
     arts = a.art or ([] if a.file else store_arts())
@@ -298,6 +348,7 @@ def main() -> int:
         points += load_art(art)
     for f in a.file:
         points += json.loads(Path(f).read_text())
+    points += tensor_points([load_tensor(s) for s in a.tensor])
     batches = tuple(int(b) for b in a.batches.split(","))
     if a.p2:
         x, y, tau = (float(v) for v in a.p2.split(","))

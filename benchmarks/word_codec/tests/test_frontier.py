@@ -96,6 +96,25 @@ def test_sketch_twins_keep_base_and_decode_and_replace_tag_and_commit():
     assert t["tau"] == 0.0 and t["measured"] is False and t["x"] == 230.0
 
 
+def test_tensor_points_take_y_from_a_runs_layer_and_x_from_any_runs_analysis(capsys):
+    gemm = {"model": {"name": "70b"}, "libs": {
+        "p512": {"constants": {"n": 512}, "layer": {"1": {"cublas": 1.05, "plain": 1.0, "fused_k1": 1.051,
+                                                          "fused_k1_tagged": 3.0},
+                                                    "32": {"plain": 1.017, "fused_k1": 1.445}}},
+        "p768": {"layer": {"1": {"plain": 1.0, "fused_k1": 1.159}}}}}
+    rates = {"libs": {"p512": {"analysis": {"k": {"1": {"x_cuda": 210.0, "x_both": 203.0, "x_tc": 900.0,
+                                                        "x_cuda_measured_encode": 150.0, "delta_cuda": 0.48}}}}}}
+    pts = F.check(F.tensor_points([(gemm, "art:g"), (rates, "art:r")]))
+    assert "p768 has no analysis" in capsys.readouterr().err
+    assert sorted(p["batch"] for p in pts) == [1, 32]
+    p1 = next(p for p in pts if p["batch"] == 1)
+    assert (p1["b"], p1["k"], p1["model"], p1["x"], p1["delta"], p1["tau"], p1["art"]) == (
+        512, 1, "llama-3.1-70b", 203.0, 0.48, 0.0, "art:g")
+    assert p1["y_decode"] == pytest.approx(0.051) and p1["y_base"] == 1.0 and p1["y_tag"] == p1["y_commit"] == 0.0
+    (twin,) = F.sketch_twins([p1], {1: 0.073})
+    assert twin["y_total"] == pytest.approx(1.124)
+
+
 def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
     pts = F.check([point(y_total=1.7), point(y_total=1.6, arithmetic="b"), point(k=2, y_total=1.9),
                    point(lane="u", y_total=1.8), point(batch=32, y_total=2.0), point(y_total=1.0, measured=False)])
