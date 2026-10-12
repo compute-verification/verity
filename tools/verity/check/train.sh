@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `tools/verity/check/train.sh COMMIT MACHINE [--agreement]`: the lander's recorded check of a train, and the one way the lander
+# `tools/verity/check/train.sh COMMIT MACHINE [--agreement] [--queued-since NS]`: the lander's recorded check of a train, and the one way the lander
 # launches a check. It runs the merge queue's command (`research.jobs.dispatch.command`: `check.py --record --on MACHINE`, against
 # origin/main, on the passes it gathers from the newest recorded checks) in a priority slot and past a failed step, and refuses
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
@@ -12,7 +12,8 @@
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` and no free slot, check.py launches twins, one run per machine that can take it (`slot.py
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
-# twin exits 75 (check.py's own exit 75), none of them ran: rerun the train.
+# twin exits 75 (check.py's own exit 75), none of them ran: rerun the train. `--queued-since NS` dates its place in the slot line
+# (`slot.py --queued-since`): `research queue drive` gives a rebuilt train's check the arrival of the one it cancelled.
 #
 # `--against BASE`: the touched-suites run in place of the check, every suite the change from BASE (an ancestor of COMMIT, such
 # as the main a passed train was checked on) touches, slow tests included (`suites.py --changed BASE`, through the quick tier's
@@ -25,18 +26,20 @@
 # empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
 # doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() against=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
+    --queued-since) [[ ${2:-} =~ ^[0-9]+$ ]] || { echo "train: --queued-since needs nanoseconds since the epoch" >&2; exit 2; }
+      pass+=(--queued-since "$2"); shift ;;
     --against) [ $# -ge 2 ] || { echo "train: --against needs BASE" >&2; exit 2; }; against=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement and --against BASE alone" >&2; exit 2 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --queued-since NS and --against BASE alone" >&2; exit 2 ;;
   esac
   shift
 done
-[ -z "$against" ] || [ ${#pass[@]} -eq 0 ] || { echo "train: --agreement refused with --against: a touched-suites run sends no build" >&2; exit 2; }
+[ -z "$against" ] || [ ${#pass[@]} -eq 0 ] || { echo "train: --agreement refused with --against, as is --queued-since: a touched-suites run sends no build and is no check" >&2; exit 2; }
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }

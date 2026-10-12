@@ -385,7 +385,7 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
-    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: [])
+    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority, **kw: [])
     monkeypatch.setattr(CHECK, "gather_verdicts", gathered)
     assert CHECK.record(["--base", "HEAD", "--on", "vy-x"]) == 0
     [cmd] = launched
@@ -1037,6 +1037,10 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
         p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
                            capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+    for bad in ([], ["soon"]):
+        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--queued-since", *bad],
+                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+        assert p.returncode == 2 and "--queued-since needs nanoseconds" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1060,7 +1064,8 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     lines = (["check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2: the first to take a check slot runs"]
              if twins else []) + ["research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r"]
     lines += ["research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r"] if twins else []
-    (bin_ / "uv").write_text("#!/bin/sh\n" + "".join(f"echo '{x}'\n" for x in lines) + f"touch {done}\n")
+    (bin_ / "uv").write_text("#!/bin/sh\n" + f"echo \"$*\" > {tmp_path / 'argv'}\n" + "".join(f"echo '{x}'\n" for x in lines)
+                             + f"touch {done}\n")
     (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")    # waits on the launch, not on a clock
     for f in bin_.iterdir():
         f.chmod(0o755)
@@ -1068,10 +1073,12 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
            "R2_ENDPOINT": "dummy"}
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
-    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto"],
+    since = ["--queued-since", "123"] if twins else []                       # a rebuilt train's check keeps its place
+    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto", *since],
                        capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
     want = "RUN r20261009-050001-aaaa r20261009-050002-bbbb" if twins else "RUN r20261009-050001-aaaa"
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
+    assert ("--queued-since 123" in (tmp_path / "argv").read_text()) == twins
 
 
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches

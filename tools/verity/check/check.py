@@ -12,7 +12,8 @@
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take;
-                                                            --priority takes the next free slot ahead of waiting lane checks;
+                                                            --priority takes the next free slot ahead of waiting lane checks
+                                                            (`--queued-since NS`: in line as of NS, a rebuilt train's place);
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
@@ -249,11 +250,13 @@ SHARD_PARTS = "check-shard-parts.json"
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 
 
-def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
+def slot_wrap(priority: bool = False, twin: str | None = None, queued: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks and --twin for one of a check's twins."""
+    with --priority for the lander's train checks (dated ``queued``, `slot.py --queued-since`) and --twin for one of a check's
+    twins."""
     by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []),
+    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--queued-since", queued] if priority and queued else []),
+            *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
 
 
@@ -780,6 +783,7 @@ def record(argv: list[str]) -> int:
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it)."""
     on = base = None
     agreement = priority = False
+    queued = None
     rest = []
     it = iter(argv)
     for x in it:
@@ -791,8 +795,14 @@ def record(argv: list[str]) -> int:
             agreement = True
         elif x == "--priority":
             priority = True
+        elif x == "--queued-since":
+            queued = next(it, "")
+            if not queued.isdigit():
+                raise SystemExit("check: --queued-since needs nanoseconds since the epoch")
         else:
             rest.append(x)
+    if queued and not priority:
+        raise SystemExit("check: --queued-since dates a priority waiter (slot.py); it needs --priority")
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
@@ -880,11 +890,11 @@ def record(argv: list[str]) -> int:
             for m in both:
                 c = list(cmd)
                 c[c.index("--on") + 1] = m
-                procs.append(subprocess.Popen([*c, "--", *slot_wrap(priority, pair if m == on else f"{pair}@{on}"),
+                procs.append(subprocess.Popen([*c, "--", *slot_wrap(priority, pair if m == on else f"{pair}@{on}", queued),
                                                *tool.CHECK.command, *rest], cwd=ROOT, env=env))
             rcs = [p.wait() for p in procs]
             return 0 if 0 in rcs else next((rc for rc in rcs if rc != SLOT.NOT_STARTED), rcs[0])
-        cmd += ["--", *(slot_wrap(priority) if on else []), *tool.CHECK.command, *rest]
+        cmd += ["--", *(slot_wrap(priority, queued=queued) if on else []), *tool.CHECK.command, *rest]
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
         shutil.rmtree(d, ignore_errors=True)

@@ -30,6 +30,8 @@ lock is not in the line: it takes that slot whenever it frees.
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
+`--queued-since NS` (with --priority): the ticket is dated NS (nanoseconds since the epoch, never later than now), the arrival
+of the check this one replaces: a train `research queue drive` rebuilt and checks again keeps its place in the line (top, 12 Oct).
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
@@ -81,7 +83,7 @@ RUN_TIMEOUT = Path("control") / "timeout_s"
 RUN_SLOT = "slot.json"
 #: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
-USAGE = "usage: slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
+USAGE = "usage: slot.py [--priority [--queued-since NS]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
 #: machine name, then the ssh destination and options with which this machine's research user reaches it (`--twin PAIR@HOME`)
@@ -400,12 +402,14 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
 PRIORITY = "!"
 
 
-def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: str = LINE) -> tuple[Path, int]:
+def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: str = LINE,
+         since_ns: int | None = None) -> tuple[Path, int]:
     """This waiter's ticket in the line and the descriptor holding its lock; named by arrival (after every priority ticket
     unless it is one), and locked before it is visible."""
     d = lock_dir / line
     d.mkdir(exist_ok=True)
-    name = f"{PRIORITY if priority else ''}{time.time_ns():020d}-{os.getpid()}"
+    t = time.time_ns()
+    name = f"{PRIORITY if priority else ''}{min(since_ns, t) if since_ns is not None else t:020d}-{os.getpid()}"
     fd = os.open(d / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
     fcntl.flock(fd, fcntl.LOCK_EX)
     if who:
@@ -547,7 +551,15 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
+    queued = None
+    if "--queued-since" in opts:
+        i = opts.index("--queued-since")
+        if i + 1 >= len(opts) or not opts[i + 1].isdigit():
+            sys.exit(f"slot: --queued-since needs nanoseconds since the epoch; {USAGE}")
+        queued, opts = int(opts[i + 1]), opts[:i] + opts[i + 2:]
     priority, by, wait_max, run_max, pair = options(opts)
+    if queued is not None and not priority:
+        sys.exit(f"slot: --queued-since is a priority waiter's (a rebuilt train's check keeping its place); {USAGE}")
     if not cmd:
         sys.exit(USAGE)
     if not SLOTS.exists():
@@ -565,7 +577,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not priority and all(s["trains"] for s in slots):
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine")
     me = asker(by, pair)
-    ticket, tfd = join(SLOTS.parent, priority=priority, who=me)
+    ticket, tfd = join(SLOTS.parent, priority=priority, who=me, since_ns=queued)
     told, joined, peeked = None, now(), None
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {})}

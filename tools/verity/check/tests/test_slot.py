@@ -185,8 +185,8 @@ def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_
     afd = _hold(ahead)
     real_join = SLOT.join
 
-    def join(d, priority=False, who=None):
-        ticket, fd = real_join(d, priority, who)
+    def join(d, priority=False, who=None, **kw):
+        ticket, fd = real_join(d, priority, who, **kw)
         later = line / f"{int(ticket.name.split('-')[0]) + 1:020d}-12"
         later.write_text(json.dumps({"pid": 12, "run": "r-later"}))
         fds.append(_hold(later))
@@ -436,8 +436,8 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     monkeypatch.chdir(tmp_path)
     real, tickets = SLOT.join, []
 
-    def join(d, priority=False, who=None):
-        ticket, fd = real(d, priority, who)
+    def join(d, priority=False, who=None, **kw):
+        ticket, fd = real(d, priority, who, **kw)
         tickets.append(json.loads(ticket.read_text()))
         return ticket, fd
 
@@ -539,7 +539,11 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
     assert SLOT.ahead(lane2) == 2                                            # behind the train and the older lane waiter
     train2, t2 = SLOT.join(tmp_path, priority=True)
     assert SLOT.ahead(train2) == 1                                           # behind the older train only
-    for fd in (lane, tfd, lfd, t2):
+    rebuilt, r = SLOT.join(tmp_path, priority=True, since_ns=int(train.name[1:].split("-")[0]) - 1)
+    assert SLOT.ahead(rebuilt) == 0 and SLOT.ahead(train) == 1               # a rebuilt train keeps the place of the one it replaced
+    late, lt = SLOT.join(tmp_path, priority=True, since_ns=10**30)
+    assert SLOT.ahead(late) == 3                                             # never dated later than it arrived
+    for fd in (lane, tfd, lfd, t2, r, lt):
         os.close(fd)
 
 
@@ -590,6 +594,14 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     monkeypatch.setenv("RESEARCH_LANE", "lander")
     assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
     assert calls[-1][calls[-1].index("--") + 1:][:6] == ["python3", "tools/verity/check/slot.py", "--priority", "--by", "lander", "--"]
+    assert check.record(["--on", "vy-nebius-1", "--priority", "--queued-since", "123"]) == 0
+    assert calls[-1][calls[-1].index("--") + 1:][:8] == ["python3", "tools/verity/check/slot.py", "--priority", "--queued-since", "123",
+                                                         "--by", "lander", "--"]
+    for bad in (["--queued-since", "123"], ["--priority", "--queued-since", "soon"]):
+        with pytest.raises(SystemExit):
+            check.record(["--on", "vy-nebius-1", *bad])
+    with pytest.raises(SystemExit):
+        SLOT.main(["--queued-since", "123", "--", "true"])
     with pytest.raises(SystemExit):
         SLOT.main(["--fast", "--", "true"])
 
