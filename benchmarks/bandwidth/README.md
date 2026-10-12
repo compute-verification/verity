@@ -9,12 +9,16 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   explains how each kernel is laid out.
 - `gpu.py` is the harness API over `libbwtag.so`. `Tagger.tag_pass(tag, store_ptr, blocks, seed, workspace)` returns a
   commitment whose `root` the prover sends; `commitment.open(j, store_tree)` gives the `audit.Opening` the core
-  verifier (`audit.Window.verdict`) checks. `Prover.commit(window)` is the honest prover's window: it always prepares
-  (an untimed pass under a throwaway seed, then a 512 MiB read of another buffer, so L2 starts clean) before it asks
-  for the seed. `gpu.py windows` runs every window through it: the timed windows through `audit.Verifier`, the skip
-  controls, and one window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed
-  windows are late. `Tagger.device()` is the GPU's id (`audit.device_id`'s 16 bytes, from the driver), for which the
-  store's salt is drawn.
+  verifier (`audit.Window.verdict`) checks. `Prover(tagger, store, blocks, scrub)` is the honest prover of one store
+  for every tag, and `Prover.commit(window)` its window under the window's tag: it always prepares (an untimed pass
+  under a throwaway seed, then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed.
+  `Tagger.device()` is the GPU's id (`audit.device_id`'s 16 bytes, from the driver), for which the store's salt is
+  drawn.
+- A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(path, vk)` once,
+  then one `audit.ChallengerState(path, vk)` that every tag's
+  `audit.Verifier(vk, params, secret, state, device=, commitment=, salt_source=)` takes, and `verifier.window()`
+  takes no number. `gpu.py windows` runs every window through them: the timed windows, the skip controls, and one
+  window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed windows are late.
 - `reference.py` computes the expected roots with the core reference on CPU processes, and the store's PoUS leaves
   under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once the GPU is known.
 - `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
@@ -31,5 +35,6 @@ requires (`audit.Verifier` refuses any other salt).
 
 `tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
 of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
-`tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed. Run it
-with `uv run tools/verity/check/suites.py benchmarks/bandwidth`.
+`tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
+in the store's one challenger state under a nonce of its own. Run it with
+`uv run tools/verity/check/suites.py benchmarks/bandwidth`.

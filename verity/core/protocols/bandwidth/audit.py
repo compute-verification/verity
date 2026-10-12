@@ -412,6 +412,11 @@ class Window:
         self._samples: tuple[int, ...] | None = None
         self._verdict: Verdict | None = None
 
+    @property
+    def params(self) -> Params:
+        """The window's tag, samples and deadline, which the prover is told."""
+        return self._v.params
+
     def _live(self) -> bool:
         """Whether the window holds its store: started, without a commitment, and within `T + RTT` on its clock."""
         return (self._started is not None and self._elapsed is None

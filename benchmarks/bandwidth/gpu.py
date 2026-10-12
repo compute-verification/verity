@@ -19,9 +19,9 @@ runs honest windows through `audit.Verifier` on the generated test store (`refer
 out, draws its salt for the GPU the tagger runs on (`Tagger.device`, `audit.draw_salt` under `reference.COMMITMENT`) and
 every window's key; the store's leaves under that salt are computed here (`reference.store_leaves`, on `--workers`
 processes), and the store's one challenger state is made at `--state`.  Then negative controls that tag only part of the
-store, and one
-window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.  Every
-window goes through `Prover`, which prepares before it asks for the seed: one untimed pass under a throwaway seed, then
+store, and one window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass
+is late.  One store, one challenger state, whatever the tag: every tag's verifiers take that state, and every window
+goes through the store's one `Prover`, which prepares before it asks for the seed: one untimed pass under a throwaway seed, then
 a read of `SCRUB_BYTES` of another buffer, so the window starts with its launch path warm and L2 clean and holding no
 part of the store.  Without the pass, the last window's openings and verdict (seconds of Python for `ro-blake3/v1`)
 leave up to 0.2 ms of host time inside the next window; without the read, L2's dirty lines cost the pass 0.6 ms.  Each
@@ -204,28 +204,40 @@ class Commitment:
 
 
 class Prover:
-    """The honest prover of one tag over a store in device memory.  `commit(window)` always prepares before it asks for
-    `σ`: one untimed pass under a throwaway seed, then a read of `SCRUB_BYTES` of its own buffer, so the window starts
-    with the launch path warm and L2 clean and holding no part of the store.  The bound holds for any state before `σ`,
-    so the preparation is the prover's liveness, not the verifier's concern."""
+    """The honest prover of one store in device memory, for every tag: a store has one prover, as it has one challenger
+    state that every tag's verifier shares.  `commit(window)` tags under the window's own tag (`window.params.tag`), in
+    a workspace kept per tag until `release(tag)`, and always prepares before it asks for `σ`: one untimed pass under a
+    throwaway seed, then a read of `SCRUB_BYTES` of its own buffer, so the window starts with the launch path warm and
+    L2 clean and holding no part of the store.  The bound holds for any state before `σ`, so the preparation is the
+    prover's liveness, not the verifier's concern."""
 
-    def __init__(self, tagger: Tagger, tag: str, store: int, blocks: int, workspace: int, scrub: int) -> None:
-        self.tagger, self.tag, self.store, self.blocks, self.workspace, self.scrub = (tagger, tag, store, blocks,
-                                                                                      workspace, scrub)
+    def __init__(self, tagger: Tagger, store: int, blocks: int, scrub: int) -> None:
+        self.tagger, self.store, self.blocks, self.scrub = tagger, store, blocks, scrub
+        self.workspaces: dict[str, int] = {}
+
+    def workspace(self, tag: str) -> int:
+        if tag not in self.workspaces:
+            self.workspaces[tag] = self.tagger.alloc(self.tagger.workspace_bytes(tag, self.blocks))
+        return self.workspaces[tag]
+
+    def release(self, tag: str) -> None:
+        """Free `tag`'s workspace; the openings of its commitments go with it."""
+        self.tagger.free(self.workspaces.pop(tag))
 
     def commit(self, window: audit.Window, tagged: int | None = None) -> tuple[Commitment, tuple[int, ...], float]:
         """One window: prepare, take `σ` (`window.start`), run the pass and commit its root.  Returns the commitment,
         the samples and the host call's time in ms.  `tagged` below the store's blocks is a negative control that tags
         only blocks `0..tagged-1` over a poisoned workspace."""
-        t, tagged = self.tagger, self.blocks if tagged is None else tagged
-        t.tag_pass(self.tag, self.store, self.blocks, bytes(tags.SEED_BYTES), self.workspace)
+        t, tag, tagged = self.tagger, window.params.tag, self.blocks if tagged is None else tagged
+        ws = self.workspace(tag)
+        t.tag_pass(tag, self.store, self.blocks, bytes(tags.SEED_BYTES), ws)
         if tagged < self.blocks:
-            t.memset(self.workspace, 0xA5, t.workspace_bytes(self.tag, self.blocks))
+            t.memset(ws, 0xA5, t.workspace_bytes(tag, self.blocks))
         t.read_scrub(self.scrub, SCRUB_BYTES)
         seed = window.start()
         c0 = time.perf_counter_ns()
-        commitment = (t.tag_pass(self.tag, self.store, self.blocks, seed, self.workspace) if tagged == self.blocks
-                      else t.tag_pass_prefix(self.tag, self.store, self.blocks, tagged, seed, self.workspace))
+        commitment = (t.tag_pass(tag, self.store, self.blocks, seed, ws) if tagged == self.blocks
+                      else t.tag_pass_prefix(tag, self.store, self.blocks, tagged, seed, ws))
         c1 = time.perf_counter_ns()
         return commitment, window.commit(commitment.root), (c1 - c0) / 1e6
 
@@ -251,11 +263,10 @@ def _windows(a: argparse.Namespace) -> dict:
     out: dict = {"blocks": a.blocks, "device": uuid_text(device), "salt": salt.hex(), "store_root": vk.root.hex(),
                  "samples": a.samples, "scrub_mib": SCRUB_BYTES >> 20, "results": [], "openings_check": []}
     bind = {"device": device, "commitment": COMMITMENT, "salt_source": secret}
+    prover = Prover(t, store, a.blocks, scrub)
     audit.ChallengerState.create(a.state, vk)
     with audit.ChallengerState(a.state, vk) as state:
         for name in a.tags:
-            ws = t.alloc(t.workspace_bytes(name, a.blocks))
-            prover = Prover(t, name, store, a.blocks, ws, scrub)
             p = audit.Params(name, a.samples, a.deadline_ns)
             verifier = audit.Verifier(vk, p, secret, state, **bind)
             for n, f in enumerate([0.0] * a.windows + a.skip):
@@ -281,7 +292,7 @@ def _windows(a: argparse.Namespace) -> dict:
             v = w.verdict([commitment.open(j, store_tree) for j in drawn])
             out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
                                           "elapsed_ns": v.elapsed_ns, "accepted": v.accepted, "failure": v.failure})
-            t.free(ws)
+            prover.release(name)
     t.free(store)
     t.free(scrub)
     return out
