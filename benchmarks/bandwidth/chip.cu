@@ -7,6 +7,12 @@
 //             and for four (one a scheduler), on one SM.  Knees: the L0 instruction cache (per scheduler), the SM's L1
 //             instruction cache, any level between it and L2.  The kernels are PTX that bwchip writes and ptxas
 //             assembles (run_chip.sh, which checks each cubin's SASS holds the 8·N steps).
+//   icache8   icache with 8 chains (16 instructions a step), and icachef with 8 chains of FFMA (8 a step, issuable every
+//             cycle): code a warp can issue faster than integer code, for an L0 that 4 chains leave hidden.
+//   unified   whether code evicts constants: the constant bank chased, N steps of code, the bank chased again.
+//   clevel    where the evicted constants come back from: unified's second chase with and without the other SMs
+//             thrashing L2 in between.
+//   --ur      whether uniform register URn holds a value: urt rewritten (chip_ur.py) into chosen URs.
 //   const     a pointer chase through __constant__ memory (64 KiB, the bank's size), one thread: cycles per load against
 //             the footprint, at strides of 64 and 256 bytes (the line size from the ratio of the knees).
 //   tlb       a pointer chase over N pages of a 16 GiB allocation, one load a page (each in its own L2 set, L1
@@ -143,6 +149,102 @@ static std::string unified_ptx(int n) {
   return s;
 }
 
+// Where constants go when code evicts them: clevel(out, cyc, warm, n, y, mask, scrub, words, flags, thrash) is unified
+// with STEPS steps in block 0's first warp (its j at out[128], its cycles at cyc[lane]), and when thrash is 1 every
+// other block (one an SM) reads its `words` of `scrub` through
+// L2 (four times L2's size in all) after block 0's code and before its timed chase.  If the constants then come back
+// at the latency they had without the thrash, the level that holds them is not L2.
+constexpr int CLEVEL_STEPS = 2048;
+
+static std::string clevel_ptx() {
+  std::string s = ptx_head() + ".const .align 4 .b32 cbank[16384];\n\n" +
+                  ".visible .entry clevel(.param .u64 out, .param .u64 cyc, .param .u32 warm, .param .u32 n, "
+                  ".param .u32 y, .param .u32 mask, .param .u64 scrub, .param .u64 words, .param .u64 flags, "
+                  ".param .u32 thrash)\n{\n"
+                  " .reg .b32 %x<4>, %y, %i, %j, %k, %wm, %n, %m, %t, %th, %c, %b, %nb, %acc, %v;\n"
+                  " .reg .b64 %base, %p, %o, %q, %w, %t0, %t1, %sc, %wd, %fl, %e, %end, %step;\n .reg .pred %z;\n"
+                  " ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n ld.param.u32 %wm, [warm];\n"
+                  " ld.param.u32 %n, [n];\n ld.param.u32 %y, [y];\n ld.param.u32 %m, [mask];\n"
+                  " ld.param.u64 %sc, [scrub];\n ld.param.u64 %wd, [words];\n ld.param.u64 %fl, [flags];\n"
+                  " ld.param.u32 %th, [thrash];\n cvta.to.global.u64 %o, %o;\n cvta.to.global.u64 %q, %q;\n"
+                  " cvta.to.global.u64 %sc, %sc;\n cvta.to.global.u64 %fl, %fl;\n mov.u32 %b, %ctaid.x;\n"
+                  " mov.u32 %nb, %nctaid.x;\n mov.u32 %i, %tid.x;\n setp.ne.u32 %z, %b, 0;\n @%z bra THRASH;\n"
+                  " setp.ge.u32 %z, %i, 32;\n @%z bra DONE;\n mov.u64 %base, cbank;\n"
+                  " and.b32 %j, %i, %m;\n mov.u32 %k, 0;\n"  // warp 0, a per-thread j: both chases LDC
+                  "WARM:\n mul.wide.u32 %p, %j, 4;\n add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n"
+                  " add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %wm;\n @%z bra WARM;\n and.b32 %t, %j, %m;\n";
+  for (int k = 0; k < 4; ++k)
+    s += " add.u32 %x" + std::to_string(k) + ", %i, " + std::to_string(k) + ";\n xor.b32 %x" + std::to_string(k) +
+         ", %x" + std::to_string(k) + ", %t;\n";
+  ptx_steps(s, CLEVEL_STEPS, 4);
+  s += " and.b32 %t, %x0, %m;\n xor.b32 %j, %j, %t;\n setp.eq.u32 %z, %th, 0;\n @%z bra CHASE;\n"
+       " st.volatile.global.u32 [%fl], 1;\n sub.u32 %nb, %nb, 1;\n"
+       "WAIT0:\n ld.volatile.global.u32 %c, [%fl+4];\n setp.lt.u32 %z, %c, %nb;\n @%z bra WAIT0;\n"
+       "CHASE:\n mov.u32 %k, 0;\n mov.u64 %t0, 0;\n"
+       "TIMED:\n setp.eq.u32 %z, %k, 1;\n @%z mov.u64 %t0, %clock64;\n mul.wide.u32 %p, %j, 4;\n"
+       " add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %n;\n"
+       " @%z bra TIMED;\n mov.u64 %t1, %clock64;\n sub.u64 %t1, %t1, %t0;\n";
+  ptx_store_chains(s, 4);
+  s += " st.global.u32 [%o+512], %j;\n mul.wide.u32 %w, %i, 8;\n add.u64 %w, %w, %q;\n st.global.u64 [%w], %t1;\n"
+       " bra DONE;\n"
+       "THRASH:\n setp.eq.u32 %z, %th, 0;\n @%z bra DONE;\n setp.ne.u32 %z, %i, 0;\n @%z bra GO;\n"
+       "WAIT1:\n ld.volatile.global.u32 %c, [%fl];\n setp.eq.u32 %z, %c, 0;\n @%z bra WAIT1;\n"
+       "GO:\n barrier.sync 0;\n sub.u32 %c, %b, 1;\n mul.wide.u32 %e, %c, 4;\n mul.lo.u64 %e, %e, %wd;\n"
+       " add.u64 %e, %e, %sc;\n mul.wide.u32 %p, %i, 4;\n add.u64 %p, %p, %e;\n mul.lo.u64 %end, %wd, 4;\n"
+       " add.u64 %end, %end, %e;\n mov.u32 %v, %ntid.x;\n mul.wide.u32 %step, %v, 4;\n mov.u32 %acc, 0;\n"
+       "READ:\n setp.ge.u64 %z, %p, %end;\n @%z bra READ_DONE;\n ld.global.cg.u32 %v, [%p];\n"
+       " xor.b32 %acc, %acc, %v;\n add.u64 %p, %p, %step;\n bra READ;\n"
+       "READ_DONE:\n mul.wide.u32 %p, %b, 4;\n add.u64 %p, %p, %fl;\n add.u64 %p, %p, 64;\n"
+       " atom.global.xor.b32 %v, [%p], %acc;\n barrier.sync 0;\n setp.ne.u32 %z, %i, 0;\n @%z bra DONE;\n"
+       " atom.global.add.u32 %v, [%fl+4], 1;\n"
+       "DONE:\n ret;\n}\n";
+  return s;
+}
+
+// Code that can issue every cycle: icachef(out, cycles, reps, h) is icache with 8 chains of FFMA, x_k = x_k·h + c, one
+// instruction a chain a step (128 bytes a step); h = 0.5 and c in [1, 2) keep every x_k in [0, 4).
+static const int ICACHEF_STEPS[] = {8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 640, 768, 896, 1024, 1280, 2048};
+
+static uint32_t ffma_c(int i) { return 0x3f800000u | (imm(i) & 0x7fffffu); }
+
+static std::string icachef_ptx(int n) {
+  std::string s = ptx_head() +
+                  ".visible .entry icache(.param .u64 out, .param .u64 cyc, .param .u32 reps, .param .f32 h)\n{\n"
+                  " .reg .f32 %x<8>, %h;\n .reg .b32 %r, %n, %i, %u;\n .reg .b64 %t0, %t1, %o, %q, %w;\n"
+                  " .reg .pred %p, %z;\n ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n"
+                  " ld.param.u32 %n, [reps];\n ld.param.f32 %h, [h];\n cvta.to.global.u64 %o, %o;\n"
+                  " cvta.to.global.u64 %q, %q;\n mov.u32 %i, %tid.x;\n";
+  for (int k = 0; k < 8; ++k)
+    s += " add.u32 %u, %i, " + std::to_string(k) + ";\n cvt.rn.f32.u32 %x" + std::to_string(k) + ", %u;\n";
+  s += " mov.u32 %r, 0;\n mov.u64 %t0, 0;\nLOOP:\n setp.eq.u32 %z, %r, 1;\n @%z mov.u64 %t0, %clock64;\n";
+  s.reserve(s.size() + (size_t)n * 8 * 40);
+  char line[80];
+  for (int i = 0; i < n; ++i)
+    for (int k = 0; k < 8; ++k) {
+      snprintf(line, sizeof line, " fma.rn.f32 %%x%d, %%x%d, %%h, 0f%08X;\n", k, k, ffma_c(8 * i + k));
+      s += line;
+    }
+  s += " add.u32 %r, %r, 1;\n setp.lt.u32 %p, %r, %n;\n @%p bra LOOP;\n mov.u64 %t1, %clock64;\n"
+       " sub.u64 %t1, %t1, %t0;\n mul.wide.u32 %w, %i, 32;\n add.u64 %w, %w, %o;\n"
+       " st.global.v4.f32 [%w], {%x0, %x1, %x2, %x3};\n st.global.v4.f32 [%w+16], {%x4, %x5, %x6, %x7};\n"
+       " mul.wide.u32 %w, %i, 8;\n add.u64 %w, %w, %q;\n st.global.u64 [%w], %t1;\n ret;\n}\n";
+  return s;
+}
+
+static void icachef_host(uint32_t tid, int n, int reps, uint32_t* out) {
+  float x[8];
+  for (int k = 0; k < 8; ++k) x[k] = (float)(tid + k);
+  for (int r = 0; r < reps; ++r)
+    for (int s = 0; s < n; ++s)
+      for (int k = 0; k < 8; ++k) {
+        const uint32_t cb = ffma_c(8 * s + k);
+        float c;
+        memcpy(&c, &cb, 4);
+        x[k] = fmaf(x[k], 0.5f, c);
+      }
+  memcpy(out, x, 32);
+}
+
 // urt(out, v1, pad, v2): thread t writes t·v1 and t ^ v2 to out[2t], out[2t+1]; chip_ur.py moves v1 and v2 into
 // chosen uniform registers.
 static std::string urt_ptx() {
@@ -235,6 +337,8 @@ static int emit_ptx(const std::string& dir) {
   for (int n : ICACHE_STEPS) rc |= write_file(dir + "/icache_" + std::to_string(n) + ".ptx", icache_ptx(n, 4));
   for (int n : ICACHE8_STEPS) rc |= write_file(dir + "/icache8_" + std::to_string(n) + ".ptx", icache_ptx(n, 8));
   for (int n : UNIFIED_STEPS) rc |= write_file(dir + "/unified_" + std::to_string(n) + ".ptx", unified_ptx(n));
+  for (int n : ICACHEF_STEPS) rc |= write_file(dir + "/icachef_" + std::to_string(n) + ".ptx", icachef_ptx(n));
+  rc |= write_file(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".ptx", clevel_ptx());
   rc |= write_file(dir + "/urt.ptx", urt_ptx());
   return rc;
 }
@@ -244,6 +348,112 @@ static cudaKernel_t load_kernel(const std::string& path, const char* name, cudaL
   OK(cudaLibraryLoadFromFile(lib, path.c_str(), nullptr, nullptr, 0, nullptr, nullptr, 0));
   OK(cudaLibraryGetKernel(&fn, *lib, name));
   return fn;
+}
+
+static int run_icachef(std::string& j, const std::string& dir) {
+  uint32_t* out;
+  unsigned long long* cyc;
+  OK(cudaMalloc(&out, 128 * 32));
+  OK(cudaMalloc(&cyc, 128 * 8));
+  j += "\"icachef\":{\"bytes_per_step\":128,\"instructions_per_step\":8,\"runs\":[";
+  bool first = true;
+  for (int n : ICACHEF_STEPS) {
+    cudaLibrary_t lib;
+    cudaKernel_t fn = load_kernel(dir + "/icachef_" + std::to_string(n) + ".cubin", "icache", &lib);
+    const int reps = std::max(4, (1 << 21) / (8 * n));
+    for (int warps : {1, 4, 8}) {
+      std::vector<double> cpi;
+      for (int t = 0; t < 3; ++t) {
+        int r = reps;
+        float h = 0.5f;
+        void* args[] = {&out, &cyc, &r, &h};
+        OK(cudaLaunchKernel((const void*)fn, dim3(1), dim3(32 * warps), args, 0, 0));
+        OK(cudaGetLastError());
+        OK(cudaDeviceSynchronize());
+        std::vector<uint32_t> got(8 * 32 * warps);
+        std::vector<unsigned long long> cy(32 * warps);
+        OK(cudaMemcpy(got.data(), out, got.size() * 4, cudaMemcpyDeviceToHost));
+        OK(cudaMemcpy(cy.data(), cyc, cy.size() * 8, cudaMemcpyDeviceToHost));
+        for (uint32_t tid = 0; tid < 32u * warps; tid += 7) {
+          uint32_t x[8];
+          icachef_host(tid, n, reps, x);
+          if (memcmp(x, &got[8 * tid], 32)) return fail("icachef result, n=" + std::to_string(n));
+        }
+        double worst = 0;
+        for (auto x : cy) worst = std::max(worst, (double)x);
+        cpi.push_back(worst / ((double)(reps - 1) * 8 * n));
+      }
+      std::sort(cpi.begin(), cpi.end());
+      j += std::string(first ? "" : ",") + "{\"steps\":" + std::to_string(n) + ",\"code_bytes\":" +
+           std::to_string(128 * n) + ",\"warps\":" + std::to_string(warps) + ",\"reps\":" + std::to_string(reps) +
+           ",\"cycles_per_instruction\":" + num(cpi[1]) + ",\"min\":" + num(cpi[0]) + ",\"max\":" + num(cpi[2]) + "}";
+      first = false;
+    }
+    OK(cudaLibraryUnload(lib));
+  }
+  j += "]},";
+  cudaFree(out);
+  cudaFree(cyc);
+  return 0;
+}
+
+// The 64 KiB constant bank after 256 KiB of code, without and with the other SMs' L2 thrash between them.
+static int run_clevel(std::string& j, const std::string& dir, const Dev& d) {
+  cudaLibrary_t lib;
+  cudaKernel_t fn = load_kernel(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".cubin", "clevel", &lib);
+  void* bank;
+  size_t bank_bytes;
+  OK(cudaLibraryGetGlobal(&bank, &bank_bytes, lib, "cbank"));
+  const int count = 65536 / 64, sw = 16;
+  std::vector<uint32_t> img(bank_bytes / 4, 0);
+  for (int k = 0; k < count; ++k) img[k * sw] = ((k + 1) % count) * sw;
+  OK(cudaMemcpy(bank, img.data(), bank_bytes, cudaMemcpyHostToDevice));
+  const int blocks = d.sms;
+  const size_t scrub_bytes = 4 * d.l2;
+  uint64_t words = scrub_bytes / 4 / (blocks - 1);
+  uint32_t *out, *flags, *scrub;
+  unsigned long long* cyc;
+  OK(cudaMalloc(&out, 1024));
+  OK(cudaMalloc(&cyc, 32 * 8));
+  OK(cudaMalloc(&flags, 4096));
+  OK(cudaMalloc(&scrub, words * 4 * (blocks - 1)));
+  OK(cudaMemset(scrub, 0x5A, words * 4 * (blocks - 1)));
+  const uint32_t y = 0x2545F491u;
+  j += "\"clevel\":{\"code_bytes\":" + std::to_string(128 * CLEVEL_STEPS) +
+       ",\"const_footprint\":65536,\"stride\":64,\"thrash_bytes\":" + std::to_string(words * 4 * (blocks - 1)) +
+       ",\"runs\":[";
+  bool first = true;
+  for (uint32_t thrash : {0u, 1u, 0u, 1u}) {
+    int warm = 2 * count, loads = 2 * count;
+    uint32_t yy = y, mask = 0, th = thrash;
+    OK(cudaMemset(flags, 0, 4096));
+    void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th};
+    OK(cudaLaunchKernel((const void*)fn, dim3(blocks), dim3(256), args, 0, 0));
+    OK(cudaGetLastError());
+    OK(cudaDeviceSynchronize());
+    uint32_t got[129], arrived;
+    unsigned long long cy[32];
+    OK(cudaMemcpy(got, out, sizeof got, cudaMemcpyDeviceToHost));
+    OK(cudaMemcpy(cy, cyc, sizeof cy, cudaMemcpyDeviceToHost));
+    OK(cudaMemcpy(&arrived, flags + 1, 4, cudaMemcpyDeviceToHost));
+    uint32_t x0[8], x31[8];
+    icache_host(0, CLEVEL_STEPS, 4, 1, y, x0);
+    icache_host(31, CLEVEL_STEPS, 4, 1, y, x31);
+    if (memcmp(x0, got, 16) || memcmp(x31, got + 124, 16) || got[128] != (uint32_t)(((warm + loads) % count) * sw) ||
+        arrived != (thrash ? (uint32_t)(blocks - 1) : 0u))
+      return fail("clevel result, thrash=" + std::to_string(thrash));
+    const double c = (double)*std::max_element(cy, cy + 32);
+    j += std::string(first ? "" : ",") + "{\"thrash\":" + std::to_string(thrash) + ",\"cycles_per_load\":" +
+         num(c / (loads - 1)) + "}";
+    first = false;
+  }
+  j += "]},";
+  OK(cudaLibraryUnload(lib));
+  cudaFree(out);
+  cudaFree(cyc);
+  cudaFree(flags);
+  cudaFree(scrub);
+  return 0;
 }
 
 static int run_icache(std::string& j, const std::string& dir, int chains) {
@@ -616,6 +826,8 @@ int main(int argc, char** argv) {
     sweep("icache", [&](std::string& s) { return chip::run_icache(s, ptx_dir, 4); });
     sweep("icache8", [&](std::string& s) { return chip::run_icache(s, ptx_dir, 8); });
     sweep("unified", [&](std::string& s) { return chip::run_unified(s, ptx_dir); });
+    sweep("icachef", [&](std::string& s) { return chip::run_icachef(s, ptx_dir); });
+    sweep("clevel", [&](std::string& s) { return chip::run_clevel(s, ptx_dir, d); });
   }
   sweep("const", [&](std::string& s) { return chip::run_const(s); });
   sweep("tlb", [&](std::string& s) { return chip::run_tlb(s); });

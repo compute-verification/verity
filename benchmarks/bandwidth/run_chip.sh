@@ -17,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
-PAIRS=${UR_PAIRS:-6:7 63:6 64:0 72:8 78:14 80:16 96:32 112:48 126:62 127:63 128:0 128:64 160:32 160:96 192:0 192:64 224:96 254:126 254:62}
+PAIRS=${UR_PAIRS:-6:7 63:6 64:0 72:8 78:14 79:15 79:78 80:16 96:32 112:48 126:62 127:63 128:0 128:64 160:32 160:96 192:0 192:64 224:96 254:126 254:62}
 
 if [ "${1:-}" = leased ]; then
   S=$2
@@ -49,19 +49,23 @@ mkdir "$S/ptx" "$S/ur"
 ls "$S"/ptx/*.ptx | xargs -P 16 -I{} sh -c '"$1" -arch=sm_120 -O3 "$2" -o "${2%.ptx}.cubin"' _ "$CUDA/bin/ptxas" {}
 sha256sum chip.cu chip_ur.py "$S/bwchip" >> "$O/build.txt"
 
-# Each kernel's steps: icache_N 4 chains, icache8_N 8, unified_N 4 (and its two chases per-thread LDCs).
+# Each kernel's steps: icache_N 4 chains of add/xor, icache8_N 8, unified_N and clevel_N 4 (and their two chases
+# per-thread LDCs), icachef_N 8 chains of FFMA with immediates (one instruction a chain a step).
 echo "kernel steps instructions alu_steps code_bytes sha256" > "$O/sass.txt"
 for f in $(ls "$S"/ptx/*_*.cubin | sort -t_ -k1,1 -k2n); do
   k=$(basename "$f" .cubin); n=${k##*_}; kind=${k%_*}
-  case $kind in icache8) chains=8 ;; *) chains=4 ;; esac
+  case $kind in icache8) need=$((16 * n)) op='IADD3|LOP3' ;; icachef) need=$((8 * n)) op=FFMA ;;
+    *) need=$((8 * n)) op='IADD3|LOP3' ;; esac
   "$CUDA/bin/cuobjdump" -sass "$f" > "$S/sass.txt"
   ins=$(grep -cE '^\s+/\*[0-9a-f]+\*/' "$S/sass.txt")
-  alu=$(grep -cE '^\s+/\*[0-9a-f]+\*/\s+(IADD3|LOP3)' "$S/sass.txt" || true)
+  alu=$(grep -cE "^\s+/\*[0-9a-f]+\*/\s+($op)\b" "$S/sass.txt" || true)
   last=$(grep -E '^\s+/\*[0-9a-f]+\*/' "$S/sass.txt" | tail -1 | grep -oE '[0-9a-f]+' | head -1)
   echo "$kind $n $ins $alu $((16#$last + 16)) $(sha256sum "$f" | cut -c1-16)" >> "$O/sass.txt"
-  [ "$alu" -ge $((2 * chains * n)) ] || { echo "REFUSED: $k.cubin has $alu add/xor, under $((2 * chains))·$n"; exit 3; }
-  if [ "$kind" = unified ] && grep -qE 'LDCU UR[0-9]+, c\[0x3\]' "$S/sass.txt"; then
-    echo "REFUSED: $k.cubin chases through the uniform path"; exit 3; fi
+  [ "$alu" -ge "$need" ] || { echo "REFUSED: $k.cubin has $alu of $op, under $need"; exit 3; }
+  if [ "$kind" = icachef ] && grep -qE 'FFMA [^;]*c\[' "$S/sass.txt"; then
+    echo "REFUSED: $k.cubin reads its FFMA constants from a bank"; exit 3; fi
+  case $kind in unified | clevel) if grep -qE 'LDCU UR[0-9]+, c\[0x3\]' "$S/sass.txt"; then
+    echo "REFUSED: $k.cubin chases through the uniform path"; exit 3; fi ;; esac
 done
 rm -f "$S"/ptx/*.ptx "$S/sass.txt"
 
