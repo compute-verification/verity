@@ -17,7 +17,9 @@ from dataclasses import replace
 
 from model import gamma as g
 
-IDLE = {"Llama-3.1-8B": 0.37, "Mistral-Small-24B": 0.15, "Llama-3.1-70B": 0.10}
+# The step outside E's reads, in passes of E: 70B from ra-vllm-encoded's certified 70B step at batch 1, d − y = 0.19
+# less the KV read [measured, art:b855d202]; the red team's F24 brackets it at 0.17-0.27.
+IDLE = {"Llama-3.1-8B": 0.37, "Mistral-Small-24B": 0.15, "Llama-3.1-70B": 0.17}
 SHAPES = {"70": g.LLAMA_70B, "24": g.MISTRAL_24B, "8": g.LLAMA_8B}
 OUT_TOKENS = 512
 TAG = 0.227  # ra-sketch-tag's sketch (0.117) and its layer sequence (0.11), on top of the fused decode
