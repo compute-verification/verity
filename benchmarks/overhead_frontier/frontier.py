@@ -35,7 +35,8 @@ KS = (2, 3)
 # Every stated guarantee is at three rounds (STEERING 18:35Z); two rounds is the upgrade behind assumption 7, and two
 # masked rounds (ra-codec-mix's σ_K) the upgrade behind "no completion skips the inner root".
 ROUNDS = {"k3": (3,), "k2": (2,), "k2m": (2,)}
-MASKED = {"k2m"}
+WIDTH_CODECS = {**ROUNDS, "k3m": (3,)}
+MASKED = {"k2m", "k3m"}
 STATED = "k3"
 BLOCKS = (2048, 4096, 8192, 16384, 32768, 65536)
 K_S = (8, 12, 16, 32)
@@ -46,7 +47,7 @@ BATCHES = (1, 4, 16, 64, 256)
 CONTEXTS = (2048, 8192, 32768, 131072)
 FRONTIERS = (("cap", "C"), ("pass", "C"), ("cap", "N"))
 ETA_PHASES = ("eta_decode", "eta_prefill", "eta_gaps", "eta_idle")
-WIDTHS = (256, 320, 384, 448, 512, 576, 640)
+WIDTHS = (256, 320, 384, 448, 512, 576, 640, 768, 1024)
 WIDTH_WORKLOADS = (("8B", 1, 8192), ("8B", 16, 8192), ("8B", 64, 8192), ("70B", 1, 8192), ("70B", 16, 8192),
                    ("70B", 64, 8192))
 
@@ -118,7 +119,9 @@ def _point(w, p, st, g, link, definition, feasible, limit) -> dict[str, Any]:
     if definition == "cap":
         out["eta_allowance"] = GAMMA_MAX - out["gamma"] + terms["mu_eta"]
     else:
+        per_d = (terms["mu_rebuild"] + terms["mu_partial"] + terms["mu_host"]) / g["d"]
         out["d"] = g["d"]
+        out["d_cap"] = (GAMMA_MAX - (out["gamma"] - g["d"] * per_d)) / per_d
         out["residual"] = g["residual"]
     return out
 
@@ -133,10 +136,10 @@ def widths(v: dict[str, Any]) -> list[dict[str, Any]]:
     codec's cost a byte, the adversary's rebuild, the red team's partial-completion margin (k = 2's table, an
     estimate; masked rows ra-codec-mix's) and the fastest ``cap/C`` step for 8B and 70B at ctx 8k. Mixing widths
     across weights, KV and filler gains nothing: the adversary rebuilds the weakest class, and at equal strength
-    k·x₁(b) the wider word decodes cheaper."""
+    k·x₁(b) the wider word decodes cheaper. Masked k = 3 (``k3m``) is swept here only, beside ra-codec-mix's p768."""
     out = []
-    for bits, rounds in itertools.product(WIDTHS, ("k2", "k3", "k2m")):
-        (k,) = ROUNDS[rounds]
+    for bits, rounds in itertools.product(WIDTHS, WIDTH_CODECS):
+        (k,) = WIDTH_CODECS[rounds]
         vb = codec({**v, "bits": bits}, rounds)
         points = [best(Workload(SHAPES[n], b, c), vb, "cap", "C", (k,)) for n, b, c in WIDTH_WORKLOADS]
         feasible = [r["overhead"] for r in points if r["feasible"]]
@@ -219,7 +222,7 @@ def sensitivity(inputs: dict[str, I.Input], key: str = "cap/C", rounds: str = ST
         path.append({"input": lever, "lever": inputs[lever].lever, **c,
                      "feasible": len(feasible), "median_overhead": statistics.median(feasible) if feasible else None,
                      "median_gamma_least": statistics.median(r["gamma_least"] for r in base)})
-        if len(feasible) == len(base) and c["median_gain"] <= 0.0:
+        if len(feasible) == len(base) and c["newly_feasible"] == 0 and c["median_gain"] <= 0.0:
             break
     back = []
     for lever in I.levers(inputs):
@@ -262,7 +265,7 @@ def summary(points: list[dict[str, Any]]) -> str:
         if p["copies"] > 1:
             note += f" {p['copies']} copies"
         if "residual" in r:
-            note += f" d {r['d']:.2f} residual {100 * r['residual']:.1f}%"
+            note += f" d {r['d']:.2f} (cap {r['d_cap']:.2f}) residual {100 * r['residual']:.1f}%"
         lines.append(f"{r['workload']:22} {r['tp']:>2} {r['f_kv_hbm']:5.2f} {100 * r['overhead']:6.1f}% "
                      f"{100 * r['gamma']:5.2f}% {p['k']:>1} {p['block'] // 1024:>5}K {p['k_s']:>3} "
                      f"{p['binding']:>12} {p['host_share']:4.2f} {p['openings']:6.0f}  {note}")
