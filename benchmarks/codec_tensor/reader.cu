@@ -24,7 +24,7 @@ using u64 = uint64_t;
 
 #include "sha512.cuh"
 
-constexpr int BLOCK = 4096, PER_LEAF = 16, SALT = 192, KEY_WORDS = 64, MSG = 384;
+constexpr int BLOCK = 4096, PER_LEAF = 16, SALT = 192, KEY_WORDS = 64;
 constexpr int HEAD_LEAF = 0, HEAD_NODE = 1, HEAD_PAD = 2;
 constexpr int NODE_LEVELS = 64, NODE_HEAD = 113;
 
@@ -32,8 +32,10 @@ struct Consts {
   u64 receipt_mid[8], row_mid[8], row_mid_last[8], salt_mid[8], leaf_mid[8];
   u64 node_mid[NODE_LEVELS][8];  // a node's first block at each level (`node_digest`)
   u32 key[KEY_WORDS];        // hm96-sha512's key, little-endian: bit t of the key is bit t % 32 of word t / 32
-  uint8_t head[3][128];      // frame-v3 FRAME ‖ u32be |tag| ‖ tag ‖ u64be 64 ‖ domain id, for leaf, node and pad
-  uint8_t schema[32], salt_in[128];
+  u64 head[3][16];           // frame-v3 FRAME ‖ u32be |tag| ‖ tag ‖ u64be 64 ‖ domain id, for leaf, node and pad, as
+                             // big-endian words, zero past head_len
+  u64 schema[4];             // the leaf schema, the same
+  u64 salt_block[17];        // SHAKE256's block of salt_in ‖ u64be 0, padded, as little-endian lanes (`salt_of`)
   int head_len[3], schema_len, salt_in_len;
   u64 positions;             // the pass's positions L: ⌈L / 16⌉ leaves, the last of L − 16 (leaves − 1) receipts
 };
@@ -272,45 +274,85 @@ __global__ void __launch_bounds__(128) sketch_hash_kernel(const uint4 *__restric
 
 // --- framed messages ---------------------------------------------------------------------------------------------
 
+// A message of at most 16 W − 17 bytes as W big-endian words, zero past its n bytes. Its bytes land by compile-time
+// word index only (a byte array or a runtime word index would put it on the stack, and every append would be a local
+// store that reaches L2).
+template <int W>
 struct Msg {
-  uint8_t b[MSG];
+  u64 w[W];
   int n;
 };
-__device__ __forceinline__ void put_be(Msg &m, u64 v, int bytes) {
-  for (int i = bytes - 1; i >= 0; --i) m.b[m.n++] = (uint8_t)(v >> (8 * i));
+// v's low `bytes` bytes, big-endian, at byte n.
+template <int W>
+__device__ __forceinline__ void put_be(Msg<W> &m, u64 v, int bytes) {
+  const u64 x = bytes == 8 ? v : v << (64 - 8 * bytes);
+  const int q = m.n >> 3, r = 8 * (m.n & 7);
+  const u64 hi = x >> r, lo = r ? x << (64 - r) : 0;
+#pragma unroll
+  for (int k = 0; k < W; ++k) m.w[k] |= k == q ? hi : k == q + 1 ? lo : 0;
+  m.n += bytes;
 }
 // A frame-v3 part `_uint(v)`: u64be its length, then v big-endian in the fewest bytes (at least one).
-__device__ __forceinline__ void put_uint(Msg &m, u64 v) {
+template <int W>
+__device__ __forceinline__ void put_uint(Msg<W> &m, u64 v) {
   int len = 1;
   while (len < 8 && v >> (8 * len)) ++len;
   put_be(m, len, 8);
   put_be(m, v, len);
 }
-__device__ __forceinline__ void put_digest(Msg &m, const u64 *s) {
+template <int W>
+__device__ __forceinline__ void put_digest(Msg<W> &m, const u64 *s) {
   put_be(m, 64, 8);
+#pragma unroll
   for (int k = 0; k < 8; ++k) put_be(m, s[k], 8);
 }
-__device__ __forceinline__ void put_head(Msg &m, int t) {
-  m.n = 0;
-  for (int i = 0; i < kC.head_len[t]; ++i) m.b[m.n++] = kC.head[t][i];
+template <int W>
+__device__ __forceinline__ void put_head(Msg<W> &m, int t) {
+#pragma unroll
+  for (int k = 0; k < W; ++k) m.w[k] = k < 16 ? kC.head[t][k] : 0;
+  m.n = kC.head_len[t];
 }
-__device__ void sha512_msg(const Msg &m, u64 (&s)[8]) {
+template <int W>
+__device__ __forceinline__ void put_schema(Msg<W> &m) {
+  put_be(m, kC.schema_len, 8);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const int b = kC.schema_len - 8 * i;
+    if (b > 0) put_be(m, b >= 8 ? kC.schema[i] : kC.schema[i] >> (64 - 8 * b), b >= 8 ? 8 : b);
+  }
+}
+// Once m has passed its first block: that block compressed into s, the rest slid down a block (done counts the bytes).
+template <int W>
+__device__ __forceinline__ void flush_block(Msg<W> &m, u64 (&s)[8], int &done) {
+  if (m.n < 128) return;
+  sha512_compress(s, m.w);
+#pragma unroll
+  for (int k = 0; k < W; ++k) m.w[k] = k + 16 < W ? m.w[k + 16] : 0;
+  m.n -= 128;
+  done += 128;
+}
+// SHA-512's padding and last blocks of a message whose first done bytes are in s.
+template <int W>
+__device__ __forceinline__ void sha512_finish(Msg<W> &m, u64 (&s)[8], int done) {
+  static_assert(W == 32 || W == 48, "a framed message is two or three blocks");
+  const int n = m.n, nb = (n + 17 + 127) / 128;
+  put_be(m, 0x80, 1);
+  // Unconditional stores at fixed words: a store only where k = 16 nb − 1 folds to one store at a runtime index, and a
+  // loop over the blocks runs to the runtime nb with m.w + 16 blk a runtime index.
+  const u64 bits = (u64)(done + n) * 8;
+  m.w[15] = nb == 1 ? bits : m.w[15];
+  m.w[31] = nb == 2 ? bits : m.w[31];
+  if constexpr (W == 48) m.w[47] = nb == 3 ? bits : m.w[47];
+  sha512_compress(s, m.w);
+  if (nb > 1) sha512_compress(s, m.w + 16);
+  if constexpr (W == 48)
+    if (nb > 2) sha512_compress(s, m.w + 32);
+}
+template <int W>
+__device__ __forceinline__ void sha512_msg(Msg<W> &m, u64 (&s)[8]) {
 #pragma unroll
   for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
-  const int nb = (m.n + 17 + 127) / 128;
-  for (int blk = 0; blk < nb; ++blk) {
-    u64 w[16];
-    for (int i = 0; i < 16; ++i) {
-      u64 v = 0;
-      for (int b = 0; b < 8; ++b) {
-        const int o = 128 * blk + 8 * i + b;
-        v = (v << 8) | (o < m.n ? m.b[o] : o == m.n ? 0x80u : 0u);
-      }
-      w[i] = v;
-    }
-    if (blk == nb - 1) w[15] = (u64)m.n * 8;
-    sha512_compress(s, w);
-  }
+  sha512_finish(m, s, 0);
 }
 
 // --- leaves ------------------------------------------------------------------------------------------------------
@@ -352,20 +394,12 @@ __device__ void keccak_f(u64 (&A)[25]) {
 
 // salt_c as 24 little-endian lanes: SHAKE256 of kC.salt_in ‖ u64be c (one block at rate 136), squeezed to 192 bytes.
 __device__ void salt_of(u64 c, u64 (&S)[24]) {
-  uint8_t m[136];
-  const int n = kC.salt_in_len;
-  for (int i = 0; i < 136; ++i) m[i] = i < n ? kC.salt_in[i] : 0;
-  for (int i = 0; i < 8; ++i) m[n + i] = (uint8_t)(c >> (56 - 8 * i));
-  m[n + 8] ^= 0x1F;
-  m[135] ^= 0x80;
+  const int q = kC.salt_in_len >> 3, r = 8 * (kC.salt_in_len & 7);
+  const u64 x = bswap64(c);   // u64be c's bytes as a little-endian lane
+  const u64 lo = x << r, hi = r ? x >> (64 - r) : 0;
   u64 A[25];
 #pragma unroll
-  for (int i = 0; i < 25; ++i) A[i] = 0;
-  for (int i = 0; i < 17; ++i) {
-    u64 v = 0;
-    for (int b = 7; b >= 0; --b) v = (v << 8) | m[8 * i + b];
-    A[i] = v;
-  }
+  for (int i = 0; i < 25; ++i) A[i] = i < 17 ? kC.salt_block[i] ^ (i == q ? lo : i == q + 1 ? hi : 0) : 0;
   keccak_f(A);
 #pragma unroll
   for (int i = 0; i < 17; ++i) S[i] = A[i];
@@ -443,15 +477,18 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
   w[0] = 0x80ULL << 56, w[15] = 256 * 8;
   sha512_compress(val, w);
 
-  Msg msg;
+  Msg<32> msg;
+  u64 d[8];
+  int done = 0;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) d[i] = kSha512Iv[i];
   put_head(msg, HEAD_LEAF);
   put_uint(msg, c);
   put_uint(msg, c);
-  put_be(msg, kC.schema_len, 8);
-  for (int i = 0; i < kC.schema_len; ++i) msg.b[msg.n++] = kC.schema[i];
+  flush_block(msg, d, done);   // past 128 bytes (head 113, two uints of at least 9), at most 129 to come
+  put_schema(msg);
   put_digest(msg, val);
-  u64 d[8];
-  sha512_msg(msg, d);
+  sha512_finish(msg, d, done);
 #pragma unroll
   for (int i = 0; i < 8; ++i) dig[8 * t + i] = d[i];
   if (salts)
@@ -464,7 +501,7 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
 __global__ void __launch_bounds__(128) pads_kernel(u64 r0, u64 n, u64 *__restrict__ out) {
   const u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x;
   if (t >= n) return;
-  Msg msg;
+  Msg<32> msg;
   put_head(msg, HEAD_PAD);
   put_uint(msg, r0 + t);
   u64 d[8];
@@ -512,7 +549,7 @@ __global__ void __launch_bounds__(128) level_kernel(const u64 *__restrict__ in, 
     for (int i = 0; i < 8; ++i) out[8 * t + i] = d[i];
     return;
   }
-  Msg msg;
+  Msg<48> msg;
   put_head(msg, HEAD_NODE);
   put_uint(msg, (u64)h);
   put_uint(msg, i0 + t);
@@ -542,6 +579,14 @@ void midstate(const uint8_t *block, u64 *out) {
   }
   for (int i = 0; i < 8; ++i) out[i] = SHA512_IV_HOST[i];
   sha512_compress(out, w);
+}
+
+void be_words(const uint8_t *b, int bytes, u64 *out) {
+  for (int i = 0; i < bytes / 8; ++i) {
+    u64 v = 0;
+    for (int k = 0; k < 8; ++k) v = (v << 8) | b[8 * i + k];
+    out[i] = v;
+  }
 }
 
 int head(uint8_t *out, const char *tag, const uint8_t *domain_id) {
@@ -580,19 +625,32 @@ int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8
   midstate(leaf_prefix, c.leaf_mid);
   for (int i = 0; i < KEY_WORDS; ++i)
     c.key[i] = (u32)key[4 * i] | (u32)key[4 * i + 1] << 8 | (u32)key[4 * i + 2] << 16 | (u32)key[4 * i + 3] << 24;
-  c.head_len[HEAD_LEAF] = head(c.head[HEAD_LEAF], "leaf", domain_id);
-  c.head_len[HEAD_NODE] = head(c.head[HEAD_NODE], "node", domain_id);
-  c.head_len[HEAD_PAD] = head(c.head[HEAD_PAD], "pad", domain_id);
+  static const char *const TAGS[3] = {"leaf", "node", "pad"};
+  uint8_t heads[3][128] = {};
+  for (int t = 0; t < 3; ++t) {
+    c.head_len[t] = head(heads[t], TAGS[t], domain_id);
+    be_words(heads[t], 128, c.head[t]);
+  }
   if (c.head_len[HEAD_NODE] != NODE_HEAD) return 1;
   for (int h = 0; h < NODE_LEVELS; ++h) {
     uint8_t first[128] = {};
-    memcpy(first, c.head[HEAD_NODE], NODE_HEAD);
+    memcpy(first, heads[HEAD_NODE], NODE_HEAD);
     first[NODE_HEAD + 7] = 1, first[NODE_HEAD + 8] = (uint8_t)h;
     midstate(first, c.node_mid[h]);
   }
-  memcpy(c.schema, schema, schema_len);
+  uint8_t sch[32] = {};
+  memcpy(sch, schema, schema_len);
+  be_words(sch, 32, c.schema);
   c.schema_len = schema_len;
-  memcpy(c.salt_in, salt_in, salt_in_len);
+  uint8_t blk[136] = {};
+  memcpy(blk, salt_in, salt_in_len);
+  blk[salt_in_len + 8] ^= 0x1F;
+  blk[135] ^= 0x80;
+  for (int i = 0; i < 17; ++i) {
+    u64 v = 0;
+    for (int b = 7; b >= 0; --b) v = (v << 8) | blk[8 * i + b];
+    c.salt_block[i] = v;
+  }
   c.salt_in_len = salt_in_len;
   c.positions = positions;
   return cudaMemcpyToSymbolAsync(kC, &c, sizeof c, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;

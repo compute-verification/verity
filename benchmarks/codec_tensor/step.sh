@@ -11,7 +11,7 @@
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). MODEL (8b, 70b) and BATCH name the point (kv.cu
 # is built at the model's query heads, KV_QHEADS), GEMM_M the linears' M past a batch of 32 (step.py --gemm-m),
 # STEP_ARGS passes through to step.py; SANITIZE=0 skips the smoke run. RECEIPT=1 builds wt.cu's sketch warps with
-# sketch-sha512 (WT_RECEIPT) and reader.cu for its commit. Each library's `cuobjdump -res-usage` goes in OUT/*.res, and
+# sketch-sha512 (WT_RECEIPT) and reader.cu for its commit, gated first against the driver (reader.py). Each library's `cuobjdump -res-usage` goes in OUT/*.res, and
 # after the step write_gate.py (Nsight Compute) checks its linears' launches' L2 writes (WRITE_GATE=0 skips it;
 # WG_STEP, a step.json's text, runs only the gate at that step's picks).
 set -uxo pipefail
@@ -47,6 +47,10 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
   if "$PY" -c "import pytest" 2> /dev/null; then
     "$PY" -m pytest -q -p no:cacheprovider $CT/tests benchmarks/word_codec/tests/test_kv.py > "$O/tests.log" 2>&1 \
       || { tail -30 "$O/tests.log"; exit 5; }
+  fi
+  if [ "$RECEIPT" = 1 ]; then
+    "$PY" $CT/reader.py --lib "$B/reader.so" --out "$O/reader-gate" --gib 0 > "$O/reader-gate.log" 2>&1 \
+      || { tail -30 "$O/reader-gate.log"; exit 6; }
   fi
   [ -n "$COMPILE_ONLY" ] && exit 0
   q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
