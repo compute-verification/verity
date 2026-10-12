@@ -75,6 +75,7 @@ constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
 
 __constant__ u32 kC[MAXK][NL];
+__constant__ u32 kD[MAXK][NL];   // (c_0 - c_j) mod p, the decode's round j against w = -(c_0 + t)
 __constant__ u32 kTau[NL];
 __constant__ u32 kP[NL];
 #ifdef WT_DEBUG_DUMP
@@ -475,16 +476,13 @@ __device__ __forceinline__ void load_key(int j, u32 (&c)[NL]) {
   for (int k = 0; k < NL; ++k) c[k] = kC[j][k];
 }
 
-template <int K>
-__device__ __forceinline__ void decode_word(u32 (&y)[NL], const u32 (&t)[NL]) {
-#pragma unroll
-  for (int j = K - 1; j >= 0; --j) {
-    u32 c[NL], x[NL];
-    load_key(j, c);
-    rho_inv(y, x);
-    submod(x, c, y);
-    submod(y, t, x);
-    copy(y, x);
+// x = a + b mod p, a + b < 2p, a and b below 2^n.
+__device__ __forceinline__ void addmod_lt2p(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  if constexpr (FULL_SLOT) {
+    addmod_cc(a, b, x);
+  } else {
+    add_nc(a, b, x);
+    canon_cc(x);
   }
 }
 
@@ -495,12 +493,22 @@ __device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) 
   sqr(y, q);
   canon_cc(q);
   neg_if(q, y[0] & 1);
-  if constexpr (FULL_SLOT) {
-    addmod_cc(q, w, y);
-  } else {
-    add_nc(q, w, y);
-    canon_cc(y);
+  addmod_lt2p(q, w, y);
+}
+
+// K rounds against w as decode_word_w: round j's rho^-1(y) - c_j - t is decode_word_w's plus kD[j] = (c_0 - c_j) mod p.
+template <int K>
+__device__ __forceinline__ void decode_word_wk(u32 (&y)[NL], const u32 (&w)[NL]) {
+#pragma unroll 1
+  for (int j = K - 1; j > 0; --j) {
+    u32 d[NL], z[NL];
+    decode_word_w(y, w);
+#pragma unroll
+    for (int k = 0; k < NL; ++k) d[k] = kD[j][k];
+    addmod_lt2p(y, d, z);
+    copy(y, z);
   }
+  decode_word_w(y, w);
 }
 
 // u = (c_0 + tau i) mod p, canonical, at full slot and without a double-width product: limb k sums c_0's, tau_k lo
@@ -653,7 +661,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     mul_small(a, (u64)gridDim.x * WPB, step);
     mul_small(a, base + (u64)blockIdx.x * WPB + threadIdx.x, t);
   }
-  if constexpr (K == 1) {
+  {
     u32 w[NL];
     w_of(t, w);
     copy(t, w);
@@ -666,8 +674,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     if (i < n) {
       u32 y[NL];
       load_word_smem(sm + threadIdx.x * S, y);
-      if constexpr (K == 1) decode_word_w(y, t);
-      else decode_word<K>(y, t);
+      decode_word_wk<K>(y, t);
       if (MODE == 2) {
 #pragma unroll
         for (int k = 0; k < NL; ++k) out[i * NL + k] = y[k];
@@ -675,8 +682,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
       acc ^= fold64(y);
     }
     u32 t2[NL];
-    if constexpr (K == 1) submod_cc(t, step, t2);
-    else addmod(t, step, t2);
+    submod_cc(t, step, t2);
     copy(t, t2);
   }
   atomicXor(xr, (unsigned long long)acc);
@@ -741,8 +747,7 @@ __global__ void __launch_bounds__(128, 1) chain_kernel(u64 steps, unsigned long 
         copy(x[w], y);
       }
     } else if (WHAT == 1) {
-      if constexpr (K == 1) decode_word_w(x[0], t);
-      else decode_word<K>(x[0], t);
+      decode_word_wk<K>(x[0], t);
     } else {
       encode_word<K>(x[0], t);
     }
@@ -1882,8 +1887,8 @@ __device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, i
   }
 }
 
-// The decoder warps' loop (fused_kernel's comment). At k = 1 a lane keeps w = -(c_0 + t) in place of its tweak t and
-// steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
+// The decoder warps' loop (fused_kernel's comment). A lane keeps w = -(c_0 + t) in place of its tweak t and steps it
+// down (decode_word_wk). A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
 // behind a proxy fence. At full slot a payload is its own word's bytes, so a lane writes it in place without `loaded`.
 // With SKK > 0 the warp sketches its units of lo and hi (sk_begin, sk_mma) before it loads its words: every read of
 // the stage's stored bytes is then before the lane's arrive on `loaded` (the warp's, behind __syncwarp), and its
@@ -1896,9 +1901,9 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
-  if constexpr (!FRESH) tweak(base + (q0 + (u64)i * gq) * TW + w, t);
-  if constexpr (K == 1 && !FRESH) {
+  if constexpr (!FRESH) {
     u32 wn[NL];
+    tweak(base + (q0 + (u64)i * gq) * TW + w, t);
     w_of(t, wn);
     copy(t, wn);
   }
@@ -1928,8 +1933,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       load_word_smem(st + w * S, yw);
       if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
       if constexpr (FRESH) decode_word_fresh(yw, base + (q0 + (u64)i * gq) * TW + w);
-      else if constexpr (K == 1) decode_word_w(yw, t);
-      else decode_word<K>(yw, t);
+      else decode_word_wk<K>(yw, t);
     }
     if constexpr (PAY_E == 0) {
       if (on) {
@@ -1954,8 +1958,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       u32 step[NL], t2[NL];
 #pragma unroll
       for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
-      if constexpr (K == 1) submod_cc(t, step, t2);
-      else addmod(t, step, t2);
+      submod_cc(t, step, t2);
       copy(t, t2);
     }
     w += wrap ? rem - TW : rem;
@@ -2126,10 +2129,24 @@ int wt_constants(int *out) {
 // c (k elements of NL limbs), tau and p in host memory.
 int wt_set_key(const u32 *c, int k, const u32 *tau, const u32 *p) {
   if (k < 1 || k > MAXK) return 1;
-  u32 cc[MAXK][NL] = {};
+  u32 cc[MAXK][NL] = {}, dd[MAXK][NL] = {};
   for (int j = 0; j < k; ++j)
     for (int i = 0; i < NL; ++i) cc[j][i] = c[j * NL + i];
-  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kTau, tau, NL * 4) || cudaMemcpyToSymbol(kP, p, NL * 4))
+  for (int j = 1; j < k; ++j) {
+    u64 br = 0, cy = 0;
+    for (int i = 0; i < NL; ++i) {
+      const u64 v = (u64)cc[0][i] - cc[j][i] - br;
+      dd[j][i] = (u32)v;
+      br = (v >> 32) & 1;
+    }
+    for (int i = 0; br && i < NL; ++i) {
+      cy += (u64)dd[j][i] + p[i];
+      dd[j][i] = (u32)cy;
+      cy >>= 32;
+    }
+  }
+  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kD, dd, sizeof dd) ||
+      cudaMemcpyToSymbol(kTau, tau, NL * 4) || cudaMemcpyToSymbol(kP, p, NL * 4))
     return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
