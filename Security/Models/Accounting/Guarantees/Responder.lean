@@ -194,8 +194,8 @@ def B2AddsP2Ring : Prop :=
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
 
 /-- **B2's oracle-location form: a window as a ring responder.** For a ring-model scheme and a window for each
-codeword's `W`, public parameters, challenge index, `N`-bit state and challenged block (`Wd`), each yielding an answer
-and the next state: when every multiplication takes at least `ℓ > 0` ticks to answer and every window spans at most
+encoder input `W`, public parameters, challenge index, `N`-bit state and challenged block (`Wd`), each yielding an
+answer and the next state: when every multiplication takes at least `ℓ > 0` ticks to answer and every window spans at most
 `D·ℓ` ticks, some `(N, D, Q, L)` sequential responder's step yields what the window yields, whatever the oracle
 locations answer, wherever the window asks at most `Q` key queries and `L` ring queries. -/
 def B2Window : Prop :=
