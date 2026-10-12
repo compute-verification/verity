@@ -89,6 +89,8 @@ def test_frontier_points_respect_gamma():
         r = F.best(w, v, "cap", "C")
         assert r["feasible"] and r["gamma"] <= 0.01
         assert r["params"]["width_bits"] == 512 and r["params"]["k"] in (2, 3)
+        for rounds, ks in F.ROUNDS.items():
+            assert F.best(w, v, "cap", "C", ks)["params"]["k"] in ks, rounds
 
 
 def test_the_floor_is_never_slower_than_the_projection():

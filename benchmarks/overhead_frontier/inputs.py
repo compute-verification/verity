@@ -52,9 +52,10 @@ INPUTS: dict[str, Input] = {
                    "a measured or proved squaring floor at 512 bits"),
     "h_host_sq": Input(0.003, "of the GPUs' squaring rate", "red team: host CPUs with GMP, 1.12e7 squarings/s/core × "
                        "128 (IFMA port bound 0.067)", "measured"),
-    "mu_partial_k2": Input(0.0015, "of capacity", "red team: partial completion at 512 bits, k = 2 (margin 0.75× at "
-                           "the GPU floor's low end, 0.12–0.17 points)", "estimate", 0.0,
-                           "measure partial completion at 512 bits, k = 2"),
+    "mu_partial": Input({2: 0.0015, 3: 0.0015}, "of capacity", "red team: partial completion at 512 bits, k = 2 "
+                        "(margin 0.75× at the GPU floor's low end, 0.12–0.17 points); k = 3 taken at k = 2's price, "
+                        "an upper bound (its completion window is narrower; unpriced, ra-partial-lean)", "estimate",
+                        {2: 0.0, 3: 0.0}, "price partial completion at 512 bits (assumption 7; no agent may measure it)"),
     # The honest prover's codec costs, per pass over the bytes they cover.
     "o_w": Input({2: ((8, 0.36), (32, 0.73)), 3: ((8, 0.97), (32, 1.00))}, "per weight pass",
                  "ra-codec-tensor 17:58Z: wt.cu decode at M=8 (70B, r20261012-175923-0080) and M=32 (8B, "
@@ -120,7 +121,7 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "tau_bind": (0.0, "binding folded into the sign matrix for free"),
     "tau_host": (0.0, "the host tier's stream costs the HBM stream nothing"),
     "rho_l2": (1.0, "no activation byte reaches HBM"),
-    "mu_partial_k2": (0.0, "partial completion costs its share of an encode"),
+    "mu_partial": ({2: 0.0, 3: 0.0}, "partial completion costs its share of an encode"),
     "s_adv": (1.0, "the adversary squares no faster than the best measured"),
     "v_budget": (10.0, "a 10 Gb/s verifier link"),
     "x_from_transcript": (True, "z from PoUW's transcript"),

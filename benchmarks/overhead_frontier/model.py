@@ -205,7 +205,7 @@ def _openings(w: Workload, p: Params, v: dict[str, Any]) -> tuple[float, float]:
 def _common(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     s, n_blocks = _openings(w, p, v)
     return {
-        "mu_partial": v["mu_partial_k2"] if p.k == 2 else 0.0,
+        "mu_partial": v["mu_partial"][p.k],
         "mu_sample": math.log(2) * v["log2_inv_delta"] / s,
         "lambda": max(0.0, v["log2_q"] + math.log2(math.e) - math.log2(n_blocks)) / (8 * p.block),
         "mu_sketch": 2.0 ** -p.k_s,

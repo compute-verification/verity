@@ -7,7 +7,8 @@ Three frontiers: ``cap/C`` (γ against the node's read capacity, top-up filling 
 the ruling's reading, and the headline), ``pass/C`` (the design's per-pass γ, for comparison with the red team) and
 ``cap/N`` (memory-only helpers over the NIC priced, not excluded). Each at today's inputs, at every lever improved
 (``projected``) and at every lever at its floor (``floor``, ``inputs.FLOOR``: how fast the audit can get on this node
-with this codec). The sensitivity takes one lever at a time from today, and reverts one at a time from projected.
+with this codec). Each at three rounds (``k3``, the stated guarantee) and at two (``k2``, the upgrade once assumption
+7 is measured). The sensitivity takes one lever at a time from today, and reverts one at a time from projected.
 """
 
 from __future__ import annotations
@@ -27,6 +28,9 @@ import inputs as I  # noqa: E402
 from model import GAMMA_MAX, SHAPES, Params, Workload, gamma_cap, gamma_pass, layout, link_n, pad, step  # noqa: E402
 
 KS = (2, 3)
+# Every stated guarantee is at three rounds (STEERING 18:35Z); two rounds is the upgrade behind assumption 7.
+ROUNDS = {"k3": (3,), "k2": (2,)}
+STATED = "k3"
 BLOCKS = (4096, 8192, 16384, 32768, 65536)
 K_S = (8, 12, 16, 32)
 BINDINGS = (0, 32, 64, 128, 256)
@@ -47,12 +51,13 @@ def workloads(v: dict[str, Any]) -> list[Workload]:
     return out
 
 
-def best(w: Workload, v: dict[str, Any], definition: str, statement: str) -> dict[str, Any]:
-    """The fastest point with γ ≤ 1%, or, if there is none, the point of least γ (``feasible`` false)."""
+def best(w: Workload, v: dict[str, Any], definition: str, statement: str, ks: tuple[int, ...] = KS) -> dict[str, Any]:
+    """The fastest point with γ ≤ 1% at rounds in ``ks``, or, if there is none, the point of least γ (``feasible``
+    false)."""
     limit = GAMMA_MAX - (v["eta_reserve"] if definition == "cap" else 0.0)
     win: tuple | None = None
     least: tuple | None = None
-    for k, block, k_s, share in itertools.product(KS, BLOCKS, K_S, HOST_SHARES):
+    for k, block, k_s, share in itertools.product(ks, BLOCKS, K_S, HOST_SHARES):
         st0 = step(w, Params(k, block, k_s, 0, share), v)
         for binding in BINDINGS:
             p = Params(k, block, k_s, binding, share)
@@ -101,9 +106,9 @@ def _point(w, p, st, g, link, definition, feasible, limit) -> dict[str, Any]:
     return out
 
 
-def frontier(v: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def frontier(v: dict[str, Any], ks: tuple[int, ...] = KS) -> dict[str, list[dict[str, Any]]]:
     ws = workloads(v)
-    return {f"{d}/{s}": [best(w, v, d, s) for w in ws] for d, s in FRONTIERS}
+    return {f"{d}/{s}": [best(w, v, d, s, ks) for w in ws] for d, s in FRONTIERS}
 
 
 def compare(base: list[dict], alt: list[dict]) -> dict[str, Any]:
@@ -123,13 +128,13 @@ def compare(base: list[dict], alt: list[dict]) -> dict[str, Any]:
     }
 
 
-def sensitivity(inputs: dict[str, I.Input], key: str = "cap/C") -> dict[str, Any]:
+def sensitivity(inputs: dict[str, I.Input], key: str = "cap/C", rounds: str = STATED) -> dict[str, Any]:
     d, s = key.split("/")
     ws = workloads(I.values(inputs))
 
     def run(inp):
         v = I.values(inp)
-        return [best(w, v, d, s) for w in ws]
+        return [best(w, v, d, s, ROUNDS[rounds]) for w in ws]
 
     today = run(inputs)
     projected_inputs = I.all_improved(inputs)
@@ -157,7 +162,7 @@ def sensitivity(inputs: dict[str, I.Input], key: str = "cap/C") -> dict[str, Any
             risks.append({"input": name, "value": value, "why": why, "from": label, "median_cost": c["median_gain"],
                           "mean_cost": c["mean_gain"],
                           "max_cost": c["max_gain"], "lost": c["newly_feasible"]})
-    return {"key": key, "one_at_a_time_from_today": one, "revert_one_from_projected": back, "risks": risks,
+    return {"key": key, "rounds": rounds, "one_at_a_time_from_today": one, "revert_one_from_projected": back, "risks": risks,
             "feasible_today": sum(r["feasible"] for r in today),
             "feasible_projected": sum(r["feasible"] for r in projected), "workloads": len(ws)}
 
@@ -190,20 +195,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
-    today = frontier(I.values(I.INPUTS))
-    projected = frontier(I.values(I.all_improved(I.INPUTS)))
-    floor = frontier(I.values(I.at_floor(I.INPUTS)))
-    sens = {key: sensitivity(I.INPUTS, key) for key in ("cap/C", "pass/C")}
-    doc = {"schema": "verity/overhead-frontier/v0", "gamma_max": GAMMA_MAX, "inputs": describe(I.INPUTS),
+    scenarios = {"today": I.INPUTS, "projected": I.all_improved(I.INPUTS), "floor": I.at_floor(I.INPUTS)}
+    frontiers = {name: {r: frontier(I.values(inp), ks) for r, ks in ROUNDS.items()} for name, inp in scenarios.items()}
+    sens = {f"{key} {r}": sensitivity(I.INPUTS, key, r) for key, r in (("cap/C", "k3"), ("cap/C", "k2"),
+                                                                       ("pass/C", "k3"))}
+    doc = {"schema": "verity/overhead-frontier/v1", "gamma_max": GAMMA_MAX, "stated_rounds": STATED,
+           "inputs": describe(I.INPUTS),
            "floor_inputs": {n: {"value": v, "why": why} for n, (v, why) in I.FLOOR.items()},
-           "grid": {"k": KS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "host_share": HOST_SHARES,
+           "grid": {"rounds": ROUNDS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "host_share": HOST_SHARES,
                     "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512]},
-           "today": today, "projected": projected, "floor": floor, "sensitivity": sens}
+           "frontiers": frontiers, "sensitivity": sens}
     (args.out / "frontier.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    for name, fr in (("today", today), ("projected", projected), ("floor", floor)):
-        for key, points in fr.items():
-            print(f"\n== {name} {key}")
-            print(summary(points))
+    for name, by_rounds in frontiers.items():
+        for r, fr in by_rounds.items():
+            for key, points in fr.items():
+                print(f"\n== {name} {r} {key}")
+                print(summary(points))
     for key, sv in sens.items():
         print(f"\n== sensitivity {key}: one lever at a time from today")
         for r in sv["one_at_a_time_from_today"]:
