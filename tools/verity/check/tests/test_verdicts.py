@@ -50,6 +50,7 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # lean_changed.py's built tree
     _write(r["check"] / "lean-changed" / "links.json", "{}")                 # check's early Lean step's tree
     _write(r["check"] / "lean-records" / "build-0" / "p" / "lean-audit.json", "{}")   # the Lean fast path's
+    _write(r["check"] / "lean-builds" / "k" / "ir" / "P" / "M.setup.json", "{}")  # the Lean audit's kept builds
     _write(r["check"] / "lean-artifacts" / "outputs" / "p" / "h.json", "{}")   # Lake's cache of built modules
 
 
@@ -126,13 +127,13 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
         assert sorted(tar.getnames()) == VERDICTS[:-1]
 
 
-@pytest.mark.parametrize("member", ["../escape.json", "/abs.json", "other/x.json", "check/lean-deps/m.json", "tests/logs/a.json",
-                                    "check/lean-changed/links.json", "check/lean-records/build-0/p/lean-audit.json",
-                                    "tests/durations.json", "check/.hidden.json", "tests/k.txt", "link",
-                                    "check/lean-audit-scratch-x1/p/lake-manifest.json", "check/lean-changed/p/lean-audit.json",
-                                    "check/lean-artifacts/outputs/p/h.json"])
-def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, monkeypatch, member):
-    r = _machine(tmp_path, monkeypatch, "b")
+SKIPPED = ["check/lean-deps/m.json", "tests/logs/a.json", "check/lean-changed/links.json",
+           "check/lean-records/build-0/p/lean-audit.json", "tests/durations.json", "check/lean-audit-scratch-x1/p/lake-manifest.json",
+           "check/lean-changed/p/lean-audit.json", "check/lean-builds/k/ir/P/M.setup.json",
+           "check/lean-artifacts/outputs/p/h.json"]
+
+
+def _pack_with(tmp_path: Path, member: str) -> Path:
     pack = tmp_path / "bad.tar.gz"
     with tarfile.open(pack, "w:gz") as tar:
         good = tarfile.TarInfo("tests/good.json")
@@ -144,6 +145,27 @@ def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, 
         else:
             bad.size = 2
         tar.addfile(bad, io.BytesIO(b"{}") if member != "link" else None)
+    return pack
+
+
+@pytest.mark.parametrize("member", SKIPPED)
+def test_a_member_in_a_part_of_the_caches_never_packed_is_left_out_and_the_rest_taken(tmp_path, monkeypatch, member):
+    """Packs written before `lean-builds/` was skipped hold its kept builds' `ir/*.setup.json`: their verdicts still count, and
+    neither `import` nor `combine` carries the builds (12 Oct: a combine of them ran a 15 GB VM out of disk)."""
+    r = _machine(tmp_path, monkeypatch, "b")
+    pack = _pack_with(tmp_path, member)
+    assert V.refusal(pack) is None
+    assert V.import_(pack) == (1, 0) and (r["tests"] / "good.json").exists()
+    assert not (r[member.split("/")[0]] / member.split("/", 1)[1]).exists()
+    assert V.combine([pack], tmp_path / "all.tar.gz") == 1
+    with tarfile.open(tmp_path / "all.tar.gz") as tar:
+        assert tar.getnames() == ["tests/good.json"]
+
+
+@pytest.mark.parametrize("member", ["../escape.json", "/abs.json", "other/x.json", "check/.hidden.json", "tests/k.txt", "link"])
+def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, monkeypatch, member):
+    r = _machine(tmp_path, monkeypatch, "b")
+    pack = _pack_with(tmp_path, member)
     with pytest.raises(V.BadPack):
         V.import_(pack)
     assert not (r["tests"] / "good.json").exists()                 # nothing is written from a refused pack
@@ -158,8 +180,8 @@ def test_combine_streams_its_entries_and_writes_the_pack_holding_them_whole_woul
 
     big = 8 << 20
     a, b = tmp_path / "a.tar.gz", tmp_path / "b.tar.gz"
-    V._write(a, [("check/lean-builds/x.json", os.urandom(big)), ("tests/k.json", b"{\"a\": 1}")])
-    V._write(b, [("check/lean-builds/y.json", os.urandom(big)), ("tests/k.json", b"{\"b\": 2}")])
+    V._write(a, [("check/circuit-check/x.json", os.urandom(big)), ("tests/k.json", b"{\"a\": 1}")])
+    V._write(b, [("check/circuit-check/y.json", os.urandom(big)), ("tests/k.json", b"{\"b\": 2}")])
     out = tmp_path / "out" / "all.tar.gz"
     tracemalloc.start()
     assert V.combine([a, b], out) == 3
@@ -244,12 +266,13 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
 
 def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,
                                                                                                           capsys):
-    """A pack holding a Lean audit's scratch (9 Oct: `check/lean-audit-scratch-*/.../lake-manifest.json` in a recorded check's
-    pack crashed every `--record`) is skipped and the next one taken; none of its entries is reused."""
+    """A pack holding anything but verdict entries (9 Oct: a Lean audit's scratch in a recorded check's pack crashed every
+    `--record`; such a part is now left out of a pack, and a link or another prefix still refuses it) is skipped and the next one
+    taken; none of its entries is reused."""
     check = _load("check")
     bad = tmp_path / "bad.tar.gz"
     with tarfile.open(bad, "w:gz") as tar:
-        for name in ("tests/k7.json", "check/lean-audit-scratch-_2hjygw7/backends/flock/verifier/lean/lake-manifest.json"):
+        for name in ("tests/k7.json", "other/lean/lake-manifest.json"):
             data = b"{}"
             info = tarfile.TarInfo(name)
             info.size = len(data)
@@ -259,7 +282,7 @@ def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refu
     V.export(old := tmp_path / "old.tar.gz")
     got = check.gather_verdicts(tmp_path / "out", _Store(tmp_path, {"r-bad": bad, "r-old": old}), limit=1)
     out = capsys.readouterr().out
-    assert "skipping r-bad's pack, which import refuses (BadPack: member 'check/lean-audit-scratch-" in out
+    assert "skipping r-bad's pack, which import refuses (BadPack: member 'other/lean/lake-manifest.json'" in out
     assert "1 entries gathered from 1 recorded checks (r-old)" in out
     _machine(tmp_path, monkeypatch, "pod")
     assert V.import_(got) == (1, 0) and not (V.roots()["tests"] / "k7.json").exists()
