@@ -1342,7 +1342,7 @@ __global__ void __launch_bounds__(128) rc_tag_kernel(int rc, const int *__restri
 __global__ void __launch_bounds__(128) rc_tag16_kernel(int rc, const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
                                                        u64 jbase) {
   constexpr u32 B3_PARENT = 4;
-  const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
+  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (u >= n) return;
   const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 256);
   u32 m[16], key[8], cv[8], c1[8], out[8];
@@ -1367,6 +1367,38 @@ __global__ void __launch_bounds__(128) rc_tag16_kernel(int rc, const int *__rest
 #pragma unroll
   for (int i = 0; i < 8; ++i) m[i] = cv[i], m[8 + i] = c1[i];
   b3_compress(key, m, 64, B3_KEYED | B3_PARENT | B3_ROOT, out);
+  uint4 *o = reinterpret_cast<uint4 *>(tags + u * 8);
+  o[0] = make_uint4(out[0], out[1], out[2], out[3]);
+  o[1] = make_uint4(out[4], out[5], out[6], out[7]);
+}
+
+// Two receipts a block, over 8 vectors each: BLAKE3-keyed(kRcKey[rc - 1], u64be(jbase + u) ‖ rc_sk[8 u .. 8 u + 7] as
+// 128 int32 LE), 520 bytes in one chunk, so 9 blocks: the same 18 compressions a block of 16 as rc_tag16_kernel, twice
+// the threads and half the chain.
+__global__ void __launch_bounds__(128) rc_tag8_kernel(int rc, const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
+                                                      u64 jbase) {
+  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (u >= n) return;
+  const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 128);
+  u32 m[16], cv[8], out[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = kRcKey[rc - 1][i];
+  const u64 j = jbase + u;
+  u32 h0 = __byte_perm((u32)(j >> 32), 0, 0x0123), h1 = __byte_perm((u32)j, 0, 0x0123);
+#pragma unroll 1
+  for (int t = 0; t < 8; ++t) {
+    const uint4 a = p[4 * t], b = p[4 * t + 1], c = p[4 * t + 2], d = p[4 * t + 3];
+    m[0] = h0, m[1] = h1, m[2] = a.x, m[3] = a.y, m[4] = a.z, m[5] = a.w, m[6] = b.x, m[7] = b.y, m[8] = b.z;
+    m[9] = b.w, m[10] = c.x, m[11] = c.y, m[12] = c.z, m[13] = c.w, m[14] = d.x, m[15] = d.y;
+    h0 = d.z, h1 = d.w;
+    b3_compress(cv, m, 64, B3_KEYED | (t == 0 ? B3_CHUNK_START : 0), out);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) cv[i] = out[i];
+  }
+  m[0] = h0, m[1] = h1;
+#pragma unroll
+  for (int i = 2; i < 16; ++i) m[i] = 0u;
+  b3_compress(cv, m, 8, B3_KEYED | B3_CHUNK_END | B3_ROOT, out);
   uint4 *o = reinterpret_cast<uint4 *>(tags + u * 8);
   o[0] = make_uint4(out[0], out[1], out[2], out[3]);
   o[1] = make_uint4(out[4], out[5], out[6], out[7]);
@@ -1870,6 +1902,13 @@ int kv_rc_tag(int rc, uint64_t n, cudaStream_t s) {
 int kv_rc_tag16(int rc, uint64_t n, cudaStream_t s) {
   if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
   kv::rc_tag16_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
+  return launched();
+}
+
+// rc_tag8_kernel's receipts of the n halves (8 vectors) of blocks of kv_rc_buffers' sketches, 64 threads a CTA.
+int kv_rc_tag8(int rc, uint64_t n, cudaStream_t s) {
+  if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
+  kv::rc_tag8_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
   return launched();
 }
 
