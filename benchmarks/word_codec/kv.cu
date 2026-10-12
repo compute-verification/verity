@@ -1093,20 +1093,24 @@ static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's
 // tile offsets of RT. Each decoder lane feeds its raw word of each tile, before decoding it, to mma.m16n8k32.s8 as the A
 // operand: step s (0..3) is registers x[4s..4s+3], so the warp's 16 A rows are its 16 vectors of 128 bytes a tile
 // (ra-sketch-tag's fragment order: A register 2h + e is row g + 8e, column 16h + 4tq + b of lane 4g + tq, byte b), and
-// its B operand, the 16 sketch columns, is register q = 2 blk + h of step s: kRcSigns' bits (ra-sketch-tag's packing,
-// register r = 4s + q of a tile at bit 16 ((r % 6) / 3) + 4 b + r % 3 of word r / 6, expanded by one PRMT) as ±1 (RC =
-// 1), or as 0x00/0xFF masks M XORed with R (RC = 2, ro-bound-sketch/v0): R's register q of (warp i, step s, lane l)
-// is z word (512 i + 128 s + 4 l + q) mod ZW, z the MMA warps' PV accumulators after tile j - RLAG, copied to shared
-// memory (word (w 16 + 2 g + t4) 32 + 4 mt + e of warp w's o[mt][e] at lane 4g + t4, t4 < GROUP / 2), R = 0 for a
-// CTA's first RLAG tiles. A block's sketch, 16 int32 a vector, goes to rc_sk[vector][16], vector ((pair NBLK + block)
-// MDW + warp) 16 + row; rc_tag_kernel hashes each into its receipt.
+// its B operand, the 16 sketch columns, is register q = 2 blk + h of step s, loaded from shared memory: word
+// (512 i mod ZW) + 128 s + 4 l + q of the tile's B slot (RC = 1: offset 0, not 512 i). kRcB holds a block's sign rows,
+// word 128 s + 4 l + q of tile τ (kv_receipt.rows): ±1 bytes (RC = 1), or 0x00/0xFF masks M (RC = 2, ro-bound-sketch/v0,
+// B = R ⊕ M with R's word the z word of the same index, z the MMA warps' PV accumulators after tile j - RLAG: word
+// (w 16 + 2 g + t4) 32 + 4 mt + e of warp w's o[mt][e] at lane 4g + t4, t4 < GROUP / 2; R = 0 for a CTA's first RLAG
+// tiles). The MMA warps fill tile j's slot after folding tile j - RLAG (the first RLAG before their first tile), so the
+// decoder warps spend a tile 4 LDS and 8 IMMA on the sketch. A block's sketch, 16 int32 a vector, goes to
+// rc_sk[vector][16], vector ((pair NBLK + block) MDW + warp) 16 + row; rc_tag_kernel hashes each into its receipt.
 #ifndef KV_RT
 #define KV_RT 16
 #endif
-constexpr int RT = KV_RT, RLAG = MNB, ZB = 2, ZW = MW * 8 * (GROUP / 2) * 32;
-static_assert(RLAG >= MNB && ZB == 2 && (ZW & (ZW - 1)) == 0 && GROUP % 2 == 0, "z slots outlive their readers");
-constexpr int rc_smem(int rc) { return mws_smem() + (rc == 2 ? ZB * ZW * 4 + ZB * 8 : 0); }
-__device__ uint4 kRcSigns[2][RT * 32];
+#ifndef KV_RLAG
+#define KV_RLAG MNB
+#endif
+constexpr int RT = KV_RT, RLAG = KV_RLAG, ZB = RLAG, ZW = MW * 8 * (GROUP / 2) * 32;
+static_assert(RLAG >= 1 && (ZW & (ZW - 1)) == 0 && ZW >= 512 && GROUP % 2 == 0, "B slots outlive their readers");
+constexpr int rc_smem(int rc) { return mws_smem() + (rc ? ZB * ZW * 4 + ZB * 8 : 0); }
+__device__ uint4 kRcB[2][RT * 128];
 __constant__ uint32_t kRcKey[2][8];
 
 __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u32 a3, u32 b0, u32 b1) {
@@ -1116,29 +1120,23 @@ __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
 }
 
-// One tile of a lane's sketch: zr the tile's z (shared), nullptr for R = 0.
-template <int RC>
-__device__ __forceinline__ void rc_sketch(const u32 (&x)[NL], int (&acc)[2][4], uint4 sg, const u32 *zr, int i,
-                                          int lane) {
-  constexpr u32 LO[3] = {RC == 1 ? 0xFF01FF01u : 0xFF00FF00u, RC == 1 ? 0xFFFF0101u : 0xFFFF0000u,
-                         RC == 1 ? 0x01010101u : 0x00000000u};
-  constexpr u32 HI[3] = {RC == 1 ? 0xFF01FF01u : 0xFF00FF00u, RC == 1 ? 0xFFFF0101u : 0xFFFF0000u, 0xFFFFFFFFu};
-  const u32 sel[6] = {sg.x, sg.x >> 16, sg.y, sg.y >> 16, sg.z, sg.z >> 16};
+// One tile of a lane's sketch: br its B words in the tile's slot (shared), step s at br + 128 s.
+__device__ __forceinline__ void rc_sketch(const u32 (&x)[NL], int (&acc)[2][4], const u32 *br) {
 #pragma unroll
   for (int s = 0; s < 4; ++s) {
-    u32 b[4];
-#pragma unroll
-    for (int q = 0; q < 4; ++q) {
-      const int r = 4 * s + q;
-      b[q] = __byte_perm(LO[r % 3], HI[r % 3], sel[2 * (r / 6) + (r % 6) / 3]);
-    }
-    if (RC == 2 && zr) {
-      const uint4 R = *reinterpret_cast<const uint4 *>(zr + ((512 * i + 128 * s + 4 * lane) & (ZW - 1)));
-      b[0] ^= R.x, b[1] ^= R.y, b[2] ^= R.z, b[3] ^= R.w;
-    }
-    imma16832(acc[0], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b[0], b[1]);
-    imma16832(acc[1], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b[2], b[3]);
+    const uint4 b = *reinterpret_cast<const uint4 *>(br + 128 * s);
+    imma16832(acc[0], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b.x, b.y);
+    imma16832(acc[1], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b.z, b.w);
   }
+}
+
+// The MMA warps' share of tile jt's B slot bs: R = 0, so B is kRcB's rows (both halves of ZW for RC = 2).
+template <int RC>
+__device__ __forceinline__ void rc_fill(u32 *bs, int jt, int mlane) {
+  const uint4 *rows = kRcB[RC - 1] + jt % RT * 128;
+#pragma unroll
+  for (int v = mlane; v < (RC == 2 ? ZW : 512) / 4; v += 32 * MW)
+    reinterpret_cast<uint4 *>(bs)[v] = rows[v % 128];
 }
 
 __device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
@@ -1163,8 +1161,8 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     extern __shared__ __align__(16) uint8_t sm[];
     uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
     u32 *td = reinterpret_cast<u32 *>(empty + MNB);
-    u32 *zbuf = td + NL;
-    uint64_t *zfull = reinterpret_cast<uint64_t *>(zbuf + ZB * ZW);
+    u32 *bbuf = td + NL;
+    uint64_t *bfull = reinterpret_cast<uint64_t *>(bbuf + ZB * ZW);
     const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
     const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
     const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
@@ -1174,8 +1172,8 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         mbar_init(full + b, 32 * MDW);
         mbar_init(empty + b, 32 * MW);
       }
-      if (RC == 2)
-        for (int b = 0; b < ZB; ++b) mbar_init(zfull + b, 32 * MW);
+      if (RC > 0)
+        for (int b = 0; b < ZB; ++b) mbar_init(bfull + b, 32 * MW);
       u32 s[NL];
       tweak((u64)MT * layers * TLW, s);
 #pragma unroll
@@ -1201,12 +1199,8 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
           const int i = w - MW;
           if (t >= nt)
             for (int l = 0; l < NL; ++l) x[l] = 0u;
-          const u32 *zr = nullptr;
-          if (RC == 2 && tile >= RLAG) {
-            mbar_wait(zfull + (tile - RLAG) % ZB, ((tile - RLAG) / ZB) & 1);
-            zr = zbuf + (tile - RLAG) % ZB * ZW;
-          }
-          rc_sketch<RC>(x, acc, __ldg(&kRcSigns[RC - 1][tile % RT * 32 + lane]), zr, i, lane);
+          mbar_wait(bfull + tile % ZB, (tile / ZB) & 1);
+          rc_sketch(x, acc, bbuf + tile % ZB * ZW + (RC == 2 ? 512 * i & (ZW - 1) : 0) + 4 * lane);
           if (tile % RT == RT - 1 || tile == ntiles - 1) {
             const int nblk = (ctx + RT * MT - 1) / (RT * MT), blk = (t0 / MT + tile) / RT, gid = lane >> 2, t4 = lane & 3;
             int *vp = rc_sk + ((((size_t)seq * KV_HEADS + g) * nblk + blk) * MDW + i) * 16 * 16;
@@ -1232,27 +1226,41 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     float o[8][4] = {};
     float m_own = -INFINITY, l_own = 0.f;
     mma_load_q(q, seq, g, lane, qa);
+    if constexpr (RC > 0) {
+      for (int jt = 0; jt < min(RLAG, ntiles); ++jt) {
+        rc_fill<RC>(bbuf + jt * ZW, jt, 32 * w + lane);
+        mbar_arrive(bfull + jt);
+      }
+    }
     for (int tile = 0; tile < ntiles; ++tile) {
       const int b = tile % MNB, nt = min(MT, t1 - t0 - tile * MT);
       mbar_wait(full + b, (tile / MNB) & 1);
       if (nt > 16 * w)
         mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
-      if constexpr (RC == 2) {
-        constexpr int ZL = GROUP / 2;
-        const int gid = lane >> 2, t4 = lane & 3;
-        if (t4 < ZL) {
-          const int zi = (w * 8 * ZL + gid * ZL + t4) * 32;
-          u32 *zs = zbuf + tile % ZB * ZW + zi;
-          u32 *zd = zdump ? zdump + ((size_t)blockIdx.x * (per_split / MT) + tile) * ZW + zi : nullptr;
+      if constexpr (RC > 0) {
+        const int jt = tile + RLAG;
+        u32 *bs = bbuf + tile % ZB * ZW;
+        if (RC == 1 && jt < ntiles) rc_fill<1>(bs, jt, 32 * w + lane);
+        if constexpr (RC == 2) {
+          constexpr int ZL = GROUP / 2;
+          const int gid = lane >> 2, t4 = lane & 3;
+          if (t4 < ZL) {
+            const int zi = (w * 8 * ZL + gid * ZL + t4) * 32;
+            const uint4 *rows = kRcB[1] + jt % RT * 128 + (zi & 511) / 4;
+            u32 *zd = zdump ? zdump + ((size_t)blockIdx.x * (per_split / MT) + tile) * ZW + zi : nullptr;
 #pragma unroll
-          for (int mt = 0; mt < 8; ++mt) {
-            const uint4 v = make_uint4(__float_as_uint(o[mt][0]), __float_as_uint(o[mt][1]), __float_as_uint(o[mt][2]),
-                                       __float_as_uint(o[mt][3]));
-            *reinterpret_cast<uint4 *>(zs + 4 * mt) = v;
-            if (zd) *reinterpret_cast<uint4 *>(zd + 4 * mt) = v;
+            for (int mt = 0; mt < 8; ++mt) {
+              const uint4 v = make_uint4(__float_as_uint(o[mt][0]), __float_as_uint(o[mt][1]),
+                                         __float_as_uint(o[mt][2]), __float_as_uint(o[mt][3]));
+              if (jt < ntiles) {
+                const uint4 m = rows[mt];
+                *reinterpret_cast<uint4 *>(bs + zi + 4 * mt) = make_uint4(v.x ^ m.x, v.y ^ m.y, v.z ^ m.z, v.w ^ m.w);
+              }
+              if (zd) *reinterpret_cast<uint4 *>(zd + 4 * mt) = v;
+            }
           }
         }
-        mbar_arrive(zfull + tile % ZB);
+        if (jt < ntiles) mbar_arrive(bfull + tile % ZB);
       }
       mbar_arrive(empty + b);
     }
@@ -1682,12 +1690,12 @@ void kv_rc_shape(int *out) {
   out[0] = kv::RT; out[1] = kv::RLAG; out[2] = kv::ZW; out[3] = kv::MDW; out[4] = kv::MT;
 }
 
-// kv_attn forms 10 (rc = 1) and 11 (rc = 2): the sign table (RT * 32 entries of 4 u32, a tile's and lane's packed
-// sign bits) and the BLAKE3 key (8 u32).
-int kv_rc_set(int rc, const uint32_t *signs, const uint32_t *key) {
+// kv_attn forms 10 (rc = 1) and 11 (rc = 2): a block's sign rows (RT * 512 u32, kv_receipt.rows) and the BLAKE3 key
+// (8 u32).
+int kv_rc_set(int rc, const uint32_t *rows, const uint32_t *key) {
   if (rc < 1 || rc > 2) return -1;
-  const size_t ns = sizeof(uint4) * kv::RT * 32;
-  if (cudaMemcpyToSymbol(kv::kRcSigns, signs, ns, (rc - 1) * ns) != cudaSuccess) return launched();
+  const size_t ns = sizeof(uint4) * kv::RT * 128;
+  if (cudaMemcpyToSymbol(kv::kRcB, rows, ns, (rc - 1) * ns) != cudaSuccess) return launched();
   if (cudaMemcpyToSymbol(kv::kRcKey, key, 32, (rc - 1) * 32) != cudaSuccess) return launched();
   return 0;
 }

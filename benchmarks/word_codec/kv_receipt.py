@@ -40,21 +40,15 @@ def sign_bits(seed: bytes, rc: int, n: int) -> np.ndarray:
     return np.unpackbits(np.stack(rows), axis=1, bitorder="little")[:, :n]
 
 
-def pack(bits: np.ndarray, rt: int) -> np.ndarray:
-    """`kv_rc_set`'s table, (rt, 32 lanes, 4) uint32: register r = 4s + 2 blk + h of tile τ at bit
-    16 ((r % 6) // 3) + 4b + r % 3 of word r // 6, set where byte b's sign is −1."""
+def rows(bits: np.ndarray, rt: int, rc: int) -> np.ndarray:
+    """`kv_rc_set`'s table, (rt, 512) uint32: word 128 s + 4 l + q of tile τ is B register q = 2 blk + h of step s at
+    lane l = 4g + tq, byte b the sign of column 8 blk + g at position 128 τ + 32 s + 16 h + 4 tq + b: 0x01 or 0xFF for
+    +1 or −1 (rc 1), the mask M's 0x00 or 0xFF (rc 2)."""
     if bits.shape != (KS, 128 * rt):
         raise ValueError("a block's signs are 16 × 128 RT")
-    out = np.zeros((rt, LANES, 4), dtype=np.uint32)
-    lane = np.arange(LANES)
-    g, tq = lane // 4, lane % 4
-    for tau in range(rt):
-        for r in range(16):
-            s, blk, h = r // 4, (r % 4) // 2, r % 2
-            for b in range(4):
-                bit = bits[8 * blk + g, 128 * tau + 32 * s + 16 * h + 4 * tq + b].astype(np.uint32)
-                out[tau, :, r // 6] |= bit << (16 * ((r % 6) // 3) + 4 * b + r % 3)
-    return out
+    m = bits.reshape(2, 8, rt, 4, 2, 4, 4).transpose(2, 3, 1, 5, 0, 4, 6)  # τ, s, g, tq, blk, h, b
+    by = np.where(m == 1, 0xFF, 0x01 if rc == 1 else 0x00).astype(np.uint8)
+    return np.ascontiguousarray(by).reshape(rt, 512, 4).view("<u4").reshape(rt, 512).astype(np.uint32)
 
 
 def key_words(seed: bytes, rc: int) -> np.ndarray:

@@ -99,7 +99,7 @@ def rc_shape(lib: B.Lib) -> dict:
 
 
 def rc_setup(lib: B.Lib, seed: bytes) -> dict:
-    """Both receipt forms' sign tables and keys under `seed`; their sign bits by rc."""
+    """Both receipt forms' sign rows and keys under `seed`; their sign bits by rc."""
     v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
     so = lib.so
     so.kv_rc_set.argtypes, so.kv_rc_buffers.argtypes, so.kv_rc_tag.argtypes = [i, v, v], [v, v, v], [i, q, v]
@@ -107,7 +107,7 @@ def rc_setup(lib: B.Lib, seed: bytes) -> dict:
     bits = {}
     for rc in (1, 2):
         bits[rc] = R.sign_bits(seed, rc, 128 * rt)
-        table, key = R.pack(bits[rc], rt), R.key_words(seed, rc)
+        table, key = R.rows(bits[rc], rt, rc), R.key_words(seed, rc)
         lib.call("kv_rc_set", rc, table.ctypes.data, key.ctypes.data)
     return bits
 
