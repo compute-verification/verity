@@ -1252,7 +1252,8 @@ static int mode_window(const Args& a) {
     const size_t slots = live ? n / LIVE_SLOT : 0;
     std::unique_ptr<std::atomic<uint8_t>[]> ready(new std::atomic<uint8_t>[slots + 1]);
     std::atomic<uint64_t> next{0};
-    std::vector<uint8_t> regen(live ? n : 0);
+    // generate's non-temporal stores need 64-byte alignment, which a vector's storage doesn't have
+    std::unique_ptr<uint8_t, decltype(&free)> regen((uint8_t*)(live && n ? aligned_alloc(4096, n) : nullptr), &free);
     Timer gt;
     if (n) {
       alloc_stream(s, n, a.piece);
@@ -1349,8 +1350,8 @@ static int mode_window(const Args& a) {
         }
         const double t1 = now_s();
         if (n && live) {
-          generate(gen, regen.data(), n, a.gen_threads, cpus);
-          bad_bytes += memcmp(regen.data(), s.host, n) != 0;
+          generate(gen, regen.get(), n, a.gen_threads, cpus);
+          bad_bytes += memcmp(regen.get(), s.host, n) != 0;
         }
         float tags_ms = 0, pass_ms = 0;
         if (arm == 0) bw_last_pass_ms(&tags_ms, &pass_ms);
