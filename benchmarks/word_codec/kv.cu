@@ -146,6 +146,11 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
   if (add_small(x, h * CF)) add_small(x, CF);
 }
 
+__device__ __forceinline__ void copy(u32 (&x)[NL], const u32 (&a)[NL]) {
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] = a[k];
+}
+
 // Column m >= NL of a product, v, folded into the low limbs y as c v, the carry word f running up them.
 __device__ __forceinline__ void fold_column(u32 (&y)[NL], int j, u32 v, u32 &f) {
   const u64 s = (u64)y[j] + (u64)v * CF + f;
@@ -205,11 +210,6 @@ __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 
     mul_full(a, b, t);
     fold(t, x);
   }
-}
-
-__device__ __forceinline__ void copy(u32 (&x)[NL], const u32 (&a)[NL]) {
-#pragma unroll
-  for (int k = 0; k < NL; ++k) x[k] = a[k];
 }
 
 // x mod p for x < 2^n: x - p = x + c - 2^n when that carries out.
