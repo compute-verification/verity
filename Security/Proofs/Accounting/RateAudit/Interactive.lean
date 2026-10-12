@@ -16,6 +16,11 @@ relay device's. The bounds are then `RelayDevice.audit`'s, `RateAudit`'s, when t
 
 What the sends carry never enters the bounds, because the compression behind both encodes the bits the chip read, not
 what its sources hold: a source addressed by everything sent may be as large as it likes.
+
+The class is not vacuous: a `Device` is an interactive device that never sends (`Device.toInteractive`), with the same
+tags, ingress, footprint and compute, so every run that realizes `RateAudit`'s game realizes this one
+(`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/Accounting/Sanity.lean` applies it to
+its honest rate run.
 -/
 
 namespace Accounting.Rate
@@ -180,7 +185,144 @@ theorem toRelay_side (A : InteractiveDevice N b h ρ S L q) (hA : ∀ E R O O', 
 
 end InteractiveDevice
 
+/-! ## A device as an interactive device -/
+
+/-- The chip world an interactive world is after the chip has sent `v`. -/
+def IWorld.atSent {N b h ρ : ℕ} (w : IWorld N b h ρ) (v : List Bool) : World N b h ρ :=
+  ⟨w.oracle, w.mem, w.side v, w.stream, w.store⟩
+
+namespace Chip
+
+variable {N b h ρ : ℕ} {α : Type}
+
+/-- A chip as an interactive chip that never sends. -/
+def toIChip : Chip N b h ρ α → IChip N b h ρ α
+  | done a => IChip.done a
+  | tag x k => IChip.tag x fun y => (k y).toIChip
+  | ingress a k => IChip.ingress a fun β => (k β).toIChip
+  | side a k => IChip.side a fun β => (k β).toIChip
+  | stream i k => IChip.stream i fun β => (k β).toIChip
+  | rebuild j k => IChip.rebuild j fun x => (k x).toIChip
+
+theorem toIChip_run (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) :
+    c.toIChip.run w v = c.run (w.atSent v) := by
+  induction c with
+  | done a => rfl
+  | tag x k ih => exact ih _
+  | ingress a k ih => exact ih _
+  | side a k ih => exact ih _
+  | stream i k ih => exact ih _
+  | rebuild j k ih => exact ih _
+
+theorem toIChip_ingressBits (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) :
+    c.toIChip.ingressBits w v = c.ingressBits (w.atSent v) := by
+  induction c with
+  | done a => rfl
+  | tag x k ih => exact ih _
+  | ingress a k ih => exact congrArg (· + 1) (ih _)
+  | side a k ih => exact ih _
+  | stream i k ih => exact ih _
+  | rebuild j k ih => exact ih _
+
+theorem toIChip_addrs (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) :
+    c.toIChip.addrs w v = c.addrs (w.atSent v) := by
+  induction c with
+  | done a => rfl
+  | tag x k ih => exact ih _
+  | ingress a k ih => exact congrArg (insert a) (ih _)
+  | side a k ih => exact ih _
+  | stream i k ih => exact ih _
+  | rebuild j k ih => exact ih _
+
+theorem toIChip_linkBits (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) :
+    c.toIChip.linkBits w v = c.linkBits (w.atSent v) := by
+  induction c with
+  | done a => rfl
+  | tag x k ih => exact ih _
+  | ingress a k ih => exact ih _
+  | side a k ih => exact congrArg (· + 1) (ih _)
+  | stream i k ih => exact congrArg (· + 1) (ih _)
+  | rebuild j k ih => exact ih _
+
+theorem toIChip_rebuilds (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) :
+    c.toIChip.rebuilds w v = c.rebuilds (w.atSent v) := by
+  induction c with
+  | done a => rfl
+  | tag x k ih => exact ih _
+  | ingress a k ih => exact ih _
+  | side a k ih => exact ih _
+  | stream i k ih => exact ih _
+  | rebuild j k ih => exact congrArg (· + 1) (ih _)
+
+theorem toIChip_queries (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) :
+    c.toIChip.queries w v = c.queries (w.atSent v) := by
+  induction c with
+  | done a => rfl
+  | tag x k ih => exact congrArg (x :: ·) (ih _)
+  | ingress a k ih => exact ih _
+  | side a k ih => exact ih _
+  | stream i k ih => exact ih _
+  | rebuild j k ih => exact ih _
+
+end Chip
+
+namespace Device
+
+variable {N b h ρ S L q : ℕ}
+
+/-- A device as an interactive device that never sends: its side sources answer every read as the device's do. -/
+def toInteractive (A : Device N b h ρ S L q) : InteractiveDevice N b h ρ S L q where
+  state := A.state
+  mem := A.mem
+  side E _ _ _ := A.side E
+  chip st := (A.chip st).toIChip
+  bounded st w := by
+    rw [Chip.toIChip_linkBits, Chip.toIChip_queries]
+    exact A.bounded st (w.atSent [])
+
+theorem toInteractive_tags (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+    A.toInteractive.tags E R O = A.tags E R O :=
+  Chip.toIChip_run _ _ _
+
+theorem toInteractive_ingress (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+    A.toInteractive.ingress E R O = A.ingress E R O :=
+  Chip.toIChip_ingressBits _ _ _
+
+theorem toInteractive_compute (A : Device N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
+    (O : Oracle N b h ρ) : A.toInteractive.compute cTag cEnc E R O = A.compute cTag cEnc E R O := by
+  simp only [InteractiveDevice.compute, Device.compute, toInteractive, Chip.toIChip_queries, Chip.toIChip_rebuilds]
+  rfl
+
+theorem toInteractive_accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+    (I : Fin s → Fin N) : A.toInteractive.Accepts E R O I ↔ A.Accepts E R O I := by
+  simp only [InteractiveDevice.Accepts, Device.Accepts, toInteractive_tags]
+
+end Device
+
 end Accounting.Rate
+
+namespace Accounting
+
+open Accounting.Rate
+
+/-- A run that realizes `RateAudit`'s game realizes the game with interactive side sources, by devices that never send
+and whose side sources ignore the oracle. -/
+def RealizesRate.toInteractive {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
+    {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}
+    (real : RealizesRate p cTag cEnc r) : RealizesRateInteractive p cTag cEnc r where
+  dev z := (real.dev z).toInteractive
+  accepts_iff x y s' := (real.accepts_iff x y s').trans (Rate.Device.toInteractive_accepts _ _ _ _ _).symm
+  ingress_le x y s' := (Rate.Device.toInteractive_ingress _ _ _ _).trans_le (real.ingress_le x y s')
+  compute_le x y s' := (Rate.Device.toInteractive_compute _ _ _ _ _ _).trans_le (real.compute_le x y s')
+
+theorem RealizesRate.toInteractive_side {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
+    {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}
+    (real : RealizesRate p cTag cEnc r) :
+    ∀ (x : ΩW) (s' : ΩS) E R O O', (real.toInteractive.dev (x, s')).side E R O =
+      (real.toInteractive.dev (x, s')).side E R O' :=
+  fun _ _ _ _ _ _ => rfl
+
+end Accounting
 
 namespace Accounting.SecurityProofs
 
