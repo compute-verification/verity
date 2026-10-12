@@ -914,7 +914,7 @@ def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Seq
     the salts are ``salts``' where given, else `circuit.stage_salts`'. ``public_inputs`` (``{param: {"seed", "derivation"}}``):
     parameters that are public input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from
     public seeds), laid out as `unit_lowering`'s ``public``, ``rows[param]`` their words per instance. Writes ``circuit.txt``,
-    ``inst.bin`` and ``pub.bin``; returns META, the outputs per port and every row's salts."""
+    ``inst.bin`` and ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
     from verity.ml.circuits.evaluation import evaluate
 
@@ -983,7 +983,8 @@ def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Seq
     (out_dir / "circuit.txt").write_text(text)
     FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key, rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
              outs=outs, salts=salts, public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in public_inputs})
-    return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"], "circuit_sha512": FC.digest(text)}
+    return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"],
+            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_sha512": FC.digest(text)}
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
