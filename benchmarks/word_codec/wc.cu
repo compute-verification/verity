@@ -608,6 +608,53 @@ __device__ __forceinline__ void b3_lane_tag(const bw::Key3& key, uint64_t j, con
   }
 }
 
+// b3_lane_tag and decode_lane in one block of code: compression b over its words, still encoded, beside the decode of
+// compression b - 1's, which no later compression reads, so the scheduler can issue the tag's logic and the decode's
+// multiplies together. Compression b's message holds words max(0, 8 b - 1) .. 8 b + 6, each whole.
+template <int KR>
+__device__ __forceinline__ void tag_decode_lane(const bw::Key3& key, uint64_t j, uint64_t (&xw)[LANE_WORDS], uint64_t t,
+                                                uint64_t t32, uint32_t (&cv)[8]) {
+  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+  for (int b = 0; b <= BLOCKS; ++b) {
+    if (b < BLOCKS) {
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) {
+        const int u = 16 * b + i;
+        m[i] = u == 0   ? bw::bswap32((uint32_t)(j >> 32))
+               : u == 1 ? bw::bswap32((uint32_t)j)
+               : u < MSG ? (uint32_t)(xw[(u - 2) / 2] >> (32 * (u & 1)))
+                         : 0u;
+      }
+      const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+      const uint32_t flags =
+          bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+      bw::b3_compress(cv, m, 0, len, flags, cv);
+    }
+    if (b > 0) {
+      const int lo = b == 1 ? 0 : 8 * (b - 1) - 1, hi = 8 * (b - 1) + 6 < LANE_WORDS ? 8 * (b - 1) + 6 : LANE_WORDS - 1;
+#pragma unroll
+      for (int w0 = lo; w0 <= hi; w0 += WC_G) {
+        uint64_t nt[WC_G];
+#pragma unroll
+        for (int i = 0; i < WC_G; ++i) {
+          nt[i] = ~t;
+          if (w0 + i <= hi) t = addmod(t, t32);
+        }
+#pragma unroll
+        for (int r = KR - 1; r >= 0; --r) {
+#pragma unroll
+          for (int i = 0; i < WC_G; ++i)
+            if (w0 + i <= hi) xw[w0 + i] = dec_round(xw[w0 + i], nt[i], r);
+        }
+      }
+    }
+  }
+}
+
 // One leaf of bw::b3_leaves: tags 16 c .. 16 c + 15 of B (u64be c ‖ their 512 bytes, five compressions after the leaf
 // prefix's midstate).
 __device__ __forceinline__ void b3_leaf(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf, const bw::Mid& mid,
@@ -649,7 +696,8 @@ __host__ __device__ constexpr int ws_smem_bytes(int stages) {
   return stages * ws_stage_bytes<KR>() + NB8 * 8 * XS_STRIDE + 2 * stages * 8;
 }
 
-template <int KR, int NB8, bool PARTIALS, bool TAG>
+// TAG: 0 none, 1 the tag then the decode (tg.decode = 0: no decode), 2 tag_decode_lane.
+template <int KR, int NB8, bool PARTIALS, int TAG>
 __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* __restrict__ wstore,
                                                                    const uint8_t* __restrict__ x, float* __restrict__ y,
                                                                    int M, int N, int Kd, uint64_t base, int groups,
@@ -731,14 +779,16 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
       for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
-      if constexpr (TAG) {
+      const uint64_t t0 = mulmod(kTau, (base + q * TASK_WORDS + lane) % P);
+      if constexpr (TAG > 0) {
         uint32_t cv[8];
-        b3_lane_tag(tg.key, tg.jbase + q * LANES + lane, xw, cv);
+        if constexpr (TAG == 2) tag_decode_lane<KR>(tg.key, tg.jbase + q * LANES + lane, xw, t0, t32, cv);
+        else b3_lane_tag(tg.key, tg.jbase + q * LANES + lane, xw, cv);
         uint4* o = reinterpret_cast<uint4*>(tg.tags + 8 * (q * LANES + lane));
         o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
         o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
       }
-      if (tg.decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
+      if (TAG < 2 && tg.decode) decode_lane<KR>(xw, t0, t32);
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),
@@ -960,7 +1010,8 @@ static const WsTag& ws_tag_keys(const uint8_t* seed) {
 
 // The warp-specialized form with the tag and the commit: seed (32 bytes) or null for neither; tags (null: no tag) as in
 // WsTag, jbase the first block's index; committers > 0 warps hash the leaves of ctags (cblocks tags) into leaves;
-// decode = 0 skips the decode (the partial sums are then the encoded words', a timing arm only).
+// decode = 0 skips the decode (the partial sums are then the encoded words', a timing arm only), and with a tag decode = 2
+// interleaves it with the decode (tag_decode_lane).
 int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
                    int consumers, int per_consumer, int groups, int* launched, int decode, const uint8_t* seed,
                    uint64_t jbase, uint32_t* tags, int committers, const uint32_t* ctags, uint64_t cblocks,
@@ -996,9 +1047,9 @@ int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int 
     if (groups > nbs) groups = nbs; \
     kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer, tg); } while (0)
 #define GN(KR, T) do { if (nb8 == 1) G(KR, 1, T); else if (nb8 == 2) G(KR, 2, T); else G(KR, 4, T); } while (0)
-#define GK(KR) do { if (tags) GN(KR, true); else GN(KR, false); } while (0)
+#define GK(KR) do { if (!tags) GN(KR, 0); else if (decode == 2) GN(KR, 2); else GN(KR, 1); } while (0)
   switch (k) {
-    case 0: GN(0, false); break;
+    case 0: GN(0, 0); break;
     WC_CASES(GK)
     default: return 1;
   }

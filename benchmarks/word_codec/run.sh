@@ -32,7 +32,7 @@ done
 for lib in $LIBSET; do
   wait "${PIDS[$lib]}" || { tail -30 "$O/wc-$lib.ptxas"; exit 4; }
 done
-SASS_KEEP='chain_squareILi1E|chain_encodeILi1E|chain_b3ILi1E|decode_kernelILi[12]ELi0E|gemm_pipe_kernelILi[02]ELi1ELb0E|gemm_ws_kernelILi[03]ELi1ELb0ELb[01]E'
+SASS_KEEP='chain_squareILi1E|chain_encodeILi1E|chain_b3ILi1E|decode_kernelILi[12]ELi0E|gemm_pipe_kernelILi[02]ELi1ELb0E|gemm_ws_kernelILi[03]ELi1ELb0ELi[012]E'
 for lib in $LIBSET; do
   cuobjdump -sass "$B/wc-$lib.so" | awk -v keep="$SASS_KEEP" '/Function : /{p = ($0 ~ keep)} p' > "$O/wc-$lib.sass" 2>&1
 done

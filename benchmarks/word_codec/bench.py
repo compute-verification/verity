@@ -45,6 +45,7 @@ SEED = hashlib.sha256(b"verity/word-codec/bench/seed").digest()
 TAG_SEED = hashlib.sha256(b"verity/word-codec/bench/tag-seed").digest()
 B3_LANE_COMPRESSIONS = 5  # a lane block's message, 8 + 8 L bytes, at either packing
 WS_MAX_WARPS = 10         # wc.cu's: consumers, the producer and the committers
+TAG_MODES = ((1, ""), (2, "i"))  # wc_gemm_ws_tag's decode: the tag then the decode, or interleaved (a cfg's suffix)
 LAYERS = 32               # Llama-3.1-8B's, each with the four linears
 KMAX = 8
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
@@ -419,10 +420,10 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             raise ValueError(f"no warp left for a committer beside {ws_name(cfg)}")
         return c
 
-    def run_tag(k, wbuf, x, y, partials, cfg, slot=0, commit_from=None):
+    def run_tag(k, wbuf, x, y, partials, cfg, slot=0, commit_from=None, mode=1):
         c = n_committers(cfg) if commit_from is not None else 0
         lib.call("wc_gemm_ws_tag", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
-                 cfg[0], cfg[1], 0, None, 1, TAG_SEED, 0, cm[slot].tags, c, cm[commit_from].tags if c else None,
+                 cfg[0], cfg[1], 0, None, mode, TAG_SEED, 0, cm[slot].tags, c, cm[commit_from].tags if c else None,
                  blocks if c else 0, cm[commit_from].leaves if c else None, stream(torch))
 
     def run(k, wbuf, x, y, partials, pipe=False):
@@ -455,17 +456,17 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 run(k, plain if k == 0 else stores[k], x, pf, True, pipe)
                 entry[key][f"{k}_{ws_name(pipe)}" if isinstance(pipe, tuple) else k] = bool(torch.equal(pf, pp))
         for k in ks if tag_cfgs else ():
-            for cfg in tag_cfgs:
+            for cfg, (mode, sfx) in ((c, m) for c in tag_cfgs for m in TAG_MODES):
+                tc = f"{k}_{ws_name(cfg)}{sfx}"
                 pf = torch.zeros_like(pp)
-                run_tag(k, stores[k], x, pf, True, cfg)
-                entry.setdefault("dt_equal_plain", {})[f"{k}_{ws_name(cfg)}"] = bool(torch.equal(pf, pp))
+                run_tag(k, stores[k], x, pf, True, cfg, mode=mode)
+                entry.setdefault("dt_equal_plain", {})[tc] = bool(torch.equal(pf, pp))
                 if mb == batches[0]:
                     pf.zero_()
-                    run_tag(k, stores[k], x, pf, True, cfg, slot=1, commit_from=0)
-                    entry.setdefault("dtc_equal_plain", {})[f"{k}_{ws_name(cfg)}"] = bool(torch.equal(pf, pp))
+                    run_tag(k, stores[k], x, pf, True, cfg, slot=1, commit_from=0, mode=mode)
+                    entry.setdefault("dtc_equal_plain", {})[tc] = bool(torch.equal(pf, pp))
                     torch.cuda.synchronize()
-                    res.setdefault("tag_gate", {})[f"{k}_{ws_name(cfg)}"] = tag_gate(lib, torch, stores[k], cm, log,
-                                                                                    name, k)
+                    res.setdefault("tag_gate", {})[tc] = tag_gate(lib, torch, stores[k], cm, log, f"{name} {tc}", k)
         ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
         run(ks[-1], stores[ks[-1]], x, ya, False)
         entry["fused_atomic_vs_torch_rel"] = float(((ya - ref).abs() / scale).max())
@@ -618,9 +619,10 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 arms[f"w{k}_{ws_name(cfg)}"] = arm_ws(k, cfg)
             for cfg in tag_cfgs:
                 arms[f"t{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 0, False)
-                arms[f"dt{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 1, False)
-                arms[f"dtc{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 1, True)
-                arms[f"dtr{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 1, False, rung=True)
+                for mode, sfx in TAG_MODES:
+                    arms[f"dt{k}_{ws_name(cfg)}{sfx}"] = arm_tag(k, cfg, mode, False)
+                    arms[f"dtc{k}_{ws_name(cfg)}{sfx}"] = arm_tag(k, cfg, mode, True)
+                    arms[f"dtr{k}_{ws_name(cfg)}{sfx}"] = arm_tag(k, cfg, mode, False, rung=True)
         for cfg in tag_cfgs:
             arms[f"base_{ws_name(cfg)}"] = arm_tag(ks[0], cfg, 0, False, tag=False)
         if tag_cfgs:
@@ -650,14 +652,16 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                                             / med[a] / 1e9
                                             for a in med if a not in ("empty", "commit_leaves")}}
         for k in ks:
-            for cfg in tag_cfgs:
-                c = ws_name(cfg)
-                d, t, dt, dtc, dtr = (med[f"{a}{k}_{c}"] for a in ("w", "t", "dt", "dtc", "dtr"))
+            for cfg, (_, sfx) in ((c, m) for c in tag_cfgs for m in TAG_MODES):
+                cn = ws_name(cfg)
+                d, t, base = med[f"w{k}_{cn}"], med[f"t{k}_{cn}"], med[f"base_{cn}"]
+                c = cn + sfx
+                dt, dtc, dtr = (med[f"{a}{k}_{c}"] for a in ("dt", "dtc", "dtr"))
                 res["times"][mb].setdefault("stack", {})[f"{k}_{c}"] = {
-                    "native_s": native, "base_s": med[f"base_{c}"], "decode_s": d, "tag_only_s": t, "decode_tag_s": dt,
+                    "native_s": native, "base_s": base, "decode_s": d, "tag_only_s": t, "decode_tag_s": dt,
                     "decode_tag_commit_s": dtc, "decode_tag_held_s": dtr,
                     "commit_leaves_standalone_s": med["commit_leaves"]}
-                log(f"stack {name} M={mb} k={k} {c}: base {med[f'base_{c}'] / native:.3f}x, decode {d / native:.3f}x, "
+                log(f"stack {name} M={mb} k={k} {c}: base {base / native:.3f}x, decode {d / native:.3f}x, "
                     f"+tag {dt / native:.3f}x (held {dtr / native:.3f}x), "
                     f"+leaves {dtc / native:.3f}x (tag alone {t / native:.3f}x; standalone leaves "
                     f"{med['commit_leaves'] / native:.3f} of native)")
