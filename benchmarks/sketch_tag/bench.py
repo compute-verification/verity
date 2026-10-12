@@ -701,12 +701,18 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                     if c2[6:8] == c[6:8]:
                         c2[12] = lc.value // (c[7] // C.TASK_COLS)
 
-            def f():
+            def f(ev=None):
+                """ev: an event list, recorded before each call and after the last (each call's time)."""
                 rc = 0
-                for c in calls:
+                for i, c in enumerate(calls):
+                    if ev is not None:
+                        ev[i].record(torch.cuda.current_stream())
                     rc |= so.sk_gemm_deferred(*c)
+                if ev is not None:
+                    ev[len(calls)].record(torch.cuda.current_stream())
                 if rc:
                     raise RuntimeError(f"sequence {lay} {mode}: error {rc}")
+            f.calls = len(calls)
             return f
 
         # the deferred commit's tags and leaves are the separate kernels' over the same sketches
@@ -769,6 +775,26 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                                "ratio_vs_native_seq": {m: v / ns for m, v in med.items()}}
             log(f"sequence {lay} M={mb}: linears' native {native * 1e6:.1f} us a layer, in sequence {ns * 1e6:.1f} us; "
                 + ", ".join(f"{m} {v / ns:.3f}x" for m, v in med.items()))
+            # each call's time in the sequence (events between the calls, queued behind a spin), against its linear's
+            # time alone (`gemm`'s ring of one linear) under the same arm
+            per = {}
+            for m in ("base", "sk", "split"):
+                f, got = arms[m], {s: [] for s in SEQ}
+                for _ in range(3):
+                    ev = [torch.cuda.Event(enable_timing=True) for _ in range(f.calls + 1)]
+                    lib.call("wc_spin", WB.SPIN_CYCLES, st)
+                    f(ev)
+                    ev[-1].synchronize()
+                    for i in range(f.calls):
+                        got[SEQ[i % len(SEQ)]].append(ev[i].elapsed_time(ev[i + 1]) / 1e3)
+                arm = {"base": "base_plain" if lay == "plain" else "dec_enc", "sk": f"sk_{lay}_{ks}_{nt}",
+                       "split": f"sk_{lay}_{ks}_{nt}"}[m]
+                per[m] = {s: {"in_sequence_s": statistics.median(v),
+                              "alone_s": cases[s]["times"][mb]["best_s"].get(arm)} for s, v in got.items()}
+            lr["times"][mb]["per_call"] = per
+            log(f"sequence {lay} M={mb} per call (us, in sequence / alone): "
+                + "; ".join(f"{m} " + ", ".join(f"{s} {d['in_sequence_s'] * 1e6:.1f}/{(d['alone_s'] or 0) * 1e6:.1f}"
+                                                for s, d in p.items()) for m, p in per.items()))
         del ring, wring, fp8, rest, gu, crest, cgu, stores, sks
         torch.cuda.empty_cache()
     return res
