@@ -450,7 +450,7 @@ def native_70b(torch, batches, reps: int, log) -> dict:
     return out
 
 
-def model(res: dict, libs: list[Lib], batches, capacity: int) -> dict:
+def model(res: dict, libs: list[Lib], batches, contexts, capacity: int) -> dict:
     """The KV cache's codec in passes of E at Llama-3.1-70B: the step's new tokens' encode, and the decode inside
     attention, for batch × context. A configuration whose E + KV exceeds the card's memory is marked."""
     r_read = res["read"]["gbps"] * 1e9
@@ -467,7 +467,7 @@ def model(res: dict, libs: list[Lib], batches, capacity: int) -> dict:
             for b in batches:
                 enc_pass = b * K.token_words(f) / enc["per_s"] / e_pass
                 lat = lr["token"][k][b]["latency_s"] if b in lr["token"].get(k, {}) else None
-                for ctx in CONTEXTS:
+                for ctx in contexts:
                     kv = b * ctx * K.TOKEN_BYTES * stored_per_byte
                     read = kv / r_read / e_pass
                     rows[f"k{k}_b{b}_ctx{ctx}"] = {
@@ -536,6 +536,7 @@ def main() -> int:
     ap.add_argument("--ks", default="1,2,4,6")
     ap.add_argument("--attn-ks", default="1", help="the rounds `attention` decodes inside attention at (empty: none)")
     ap.add_argument("--batches", default="1,8,32")
+    ap.add_argument("--contexts", default=",".join(map(str, CONTEXTS)), help="the contexts `attention` and `model` take")
     ap.add_argument("--store-gib", type=float, default=2.0)
     ap.add_argument("--gate-ref", type=int, default=48)
     ap.add_argument("--gate-words", type=int, default=1 << 16)
@@ -557,6 +558,7 @@ def main() -> int:
     ks = [int(v) for v in a.ks.split(",")]
     attn_ks = [int(v) for v in a.attn_ks.split(",") if v]
     batches = [int(v) for v in a.batches.split(",")]
+    contexts = [int(v) for v in a.contexts.split(",")]
     libs = [Lib(*spec.split("=", 1)) for spec in a.lib]
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
@@ -586,13 +588,13 @@ def main() -> int:
             del store
             torch.cuda.empty_cache()
             lr["token"] = token_encode(lib, torch, ks, batches, a.reps, lr["rates"]["encode"], log)
-            lr["attention"] = {k: attention(lib, torch, batches, CONTEXTS, k, a.reps, sms, log) for k in attn_ks}
+            lr["attention"] = {k: attention(lib, torch, batches, contexts, k, a.reps, sms, log) for k in attn_ks}
             if not all(v["ok"] for v in lr["store"].values()) or not all(
                     c["gate"]["ok"] for cells in lr["attention"].values() for c in cells.values()):
                 res["ok"] = False
         if not a.no_native:
             res["native"] = native_70b(torch, batches, a.reps, log)
-        res["model"] = model(res, libs, batches, props.total_memory)
+        res["model"] = model(res, libs, batches, contexts, props.total_memory)
     (out_dir / "kv-codec.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, libs, out_dir)
     log("done" if res["ok"] else "FAILED")
