@@ -83,10 +83,10 @@ class WLib:
         so.ww_workspace_tags.argtypes = [v, q]
         so.ww_workspace_tags.restype = v
         so.ww_commit.argtypes = [v, q, v, v, v]
-        cs = (ctypes.c_int * 15)()
+        cs = (ctypes.c_int * 16)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,
-         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb) = list(cs)
+         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb, self.kw) = list(cs)
         self.field = W.field(self.bits)
         f = self.field
         if (self.limbs, self.payload, self.lane_words, lanes, tiles) != (f.limbs, f.payload, f.lane_words(), W.LANES,
@@ -717,7 +717,7 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
-             + ("/cc" if lib.cc else "") + ("/b3u2" if lib.b3u else "") + (f"/tb{lib.tb}" if lib.tb > 1 else ""))
+             + ("/cc" if lib.cc else "") + ("/b3u2" if lib.b3u else "") + (f"/tb{lib.tb}" if lib.tb > 1 else "") + (f"/kw{lib.kw}" if lib.kw > lib.tb else ""))
     out = []
 
     def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str) -> dict:

@@ -79,7 +79,7 @@ def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the
     import wide
     import wide_bench
 
-    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=0, b3u=0, tb=1, name="p521s1r")
+    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=0, b3u=0, tb=1, kw=1, name="p521s1r")
     fq = {1: {"x": 332.0, "delta": 0.9, "tau": 0.82, "mu_rebuild": 0.0005}}
     bd = {1: {1: {"y_total": 2.5, "y_decode": 0.5, "y_tag": 0.6, "y_commit": 0.4, "y_commit_linear": 0.9,
                   "y_base": 1.0}}, 32: {1: {"y_total": 2.6, "y_decode": 0.5, "y_tag": 0.7, "y_commit": 0.4,
@@ -90,9 +90,11 @@ def test_wide_bench_points_fit_the_schema_and_the_overlapped_commit_replaces_the
         (1, False), (1, True), (32, False)]
     assert pts[0]["y_total"] == pytest.approx(2.5) and pts[1]["y_total"] == pytest.approx(2.2)
     assert pts[1]["y_commit"] == pytest.approx(0.1) and pts[1]["label"].endswith("/commit-overlapped")
-    lib.tb, lib.cc, lib.b3u = 2, 1, 1
+    lib.tb, lib.kw, lib.cc, lib.b3u = 2, 2, 1, 1
     assert wide_bench.points(lib, fq, bd, "r", "gpu")[0]["arithmetic"] == (
         "cuda-int32/mersenne/sqr1/rolled/cc/b3u2/tb2")
+    lib.tb = 1
+    assert wide_bench.points(lib, fq, bd, "r", "gpu")[0]["arithmetic"].endswith("/b3u2/kw2")
 
 
 def test_mixed_k_keeps_the_assignments_no_other_beats_in_y_and_mean_k():
@@ -110,7 +112,7 @@ def test_mixed_k_keeps_the_assignments_no_other_beats_in_y_and_mean_k():
     rows = wide_bench.mixed(cases, [1], [1, 2], commit_s=0.0)[1]
     got = [(r["ks"], r["k_mean"], r["y_total"]) for r in rows]
     assert got == [({"a": 1, "b": 1}, 1.0, 2.0), ({"a": 2, "b": 1}, 1.75, 2.25), ({"a": 2, "b": 2}, 2.0, 3.0)]
-    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=1, b3u=1, tb=1, name="p521s1rcu")
+    lib = types.SimpleNamespace(field=wide.field(521), sqr=1, roll=1, occ=1, cc=1, b3u=1, tb=1, kw=1, name="p521s1rcu")
     fq = {k: {"x": 250.0 * k, "delta": 0.6 * k, "tau": 0.8, "mu_rebuild": 0.0} for k in (1, 2)}
     pts = F.check(wide_bench.points(lib, fq, {}, "r", "gpu", mx={1: rows}))
     assert len(pts) == 1 and pts[0]["arithmetic"].endswith("/mixed-k") and pts[0]["k"] == 1.75

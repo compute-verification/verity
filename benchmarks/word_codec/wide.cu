@@ -81,6 +81,13 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #if WW_TB != 1 && (WW_TB != 2 || !WW_ROLL)
 #error "WW_TB is 1, or 2 with WW_ROLL"
 #endif
+// WW_KW: the adjacent K-chunks a CTA of the fused GEMM covers (GEMM_WARPS / WW_KW row groups); WW_TB = 2 needs 2.
+#ifndef WW_KW
+#define WW_KW WW_TB
+#endif
+#if (WW_KW != 1 && WW_KW != 2) || WW_KW < WW_TB
+#error "WW_KW is 1 or 2, and at least WW_TB"
+#endif
 
 namespace ww {
 
@@ -112,13 +119,13 @@ constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES, TASK_CO
 constexpr int L = (8 * LANE_BYTES + PB - 1) / PB;  // words a lane a task
 constexpr int GEMM_WARPS = 4;
 constexpr int MSG = 2 + L * N;                     // a record's part of a message in u32: u64be j, then the words
-constexpr int TB = WW_TB;
+constexpr int TB = WW_TB, KW = WW_KW;
 constexpr int TAG_MSG = 2 + TB * L * N;            // a block's message: u64be j, then its TB records' words
 constexpr int TAG_BLOCKS = (4 * TAG_MSG + 63) / 64;
 constexpr int SPLIT = MSG / 16;                    // TB = 2: compressions 0 … SPLIT − 1 read only the first record,
 constexpr int TAIL = MSG - 16 * SPLIT;             // and compression SPLIT the first record's last TAIL words
 static_assert(TAIL > 0, "a record's message ends inside a compression");
-static_assert(GEMM_WARPS % TB == 0, "a CTA holds whole pairs");
+static_assert(GEMM_WARPS % KW == 0 && (TB == 1 || TB == KW), "a CTA holds whole pairs");
 static_assert(32 * N > M, "a spare bit above p");
 static_assert(C != 1 || (MB == N - 1 && MS > 0), "a Mersenne p's top bit is inside the last limb");
 
@@ -956,7 +963,7 @@ __device__ __forceinline__ void pair_sync() {
   asm volatile("bar.sync %0, 64;" ::"n"(ID) : "memory");
 }
 
-// One task (16 rows × 512 columns) a warp, four warps a CTA: GEMM_WARPS / TB row groups × TB adjacent K-chunks, the
+// One task (16 rows × 512 columns) a warp, four warps a CTA: GEMM_WARPS / KW row groups × KW adjacent K-chunks, the
 // CTA's chunks of x in shared memory. TAG: lane l's block j = jbase + 32qt + l (its L encoded words in each of the TB
 // tasks of its row group, `wide.block`) is hashed before they are decoded, and its tag written to tags[8 (32qt + l) …].
 // TB = 2: the even warp of a pair runs the first SPLIT compressions on its record and leaves the chaining value in the
@@ -969,19 +976,19 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
                                                                uint32_t* __restrict__ tags, int ahead) {
-  constexpr int RG = GEMM_WARPS / TB, UNITS = TASK_COLS / 16;
+  constexpr int RG = GEMM_WARPS / KW, UNITS = TASK_COLS / 16;
   static_assert(TB == 1 || RG == 2, "two warp pairs a CTA, named barriers 1 and 2");
-  __shared__ __align__(16) uint8_t xs[TB][NB8 * 8][TASK_COLS];  // row r's 16-byte unit c at c ^ (r mod 8): no conflicts
-  const int nchunks = Kd / TASK_COLS, nk = nchunks / TB;
-  const int warp = threadIdx.x / 32, h = warp % TB, pair = warp / TB;
-  const int kt = blockIdx.x % nk, kc = kt * TB + h;
+  __shared__ __align__(16) uint8_t xs[KW][NB8 * 8][TASK_COLS];  // row r's 16-byte unit c at c ^ (r mod 8): no conflicts
+  const int nchunks = Kd / TASK_COLS, nk = nchunks / KW;
+  const int warp = threadIdx.x / 32, h = warp % KW, pair = warp / KW;
+  const int kt = blockIdx.x % nk, kc = kt * KW + h;
   const int nb = (blockIdx.x / nk) * RG + pair;  // < Nn / 16: `ww_gemm`'s grid
   const int lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
-  const uint64_t q = (uint64_t)nb * nchunks + kc, qt = (uint64_t)nb * nk + kt;
-  for (int e = threadIdx.x; e < NB8 * 8 * TB * UNITS; e += GEMM_WARPS * 32) {
-    const int b = e / (TB * UNITS), c = e % (TB * UNITS);
+  const uint64_t q = (uint64_t)nb * nchunks + kc, qt = q / TB;
+  for (int e = threadIdx.x; e < NB8 * 8 * KW * UNITS; e += GEMM_WARPS * 32) {
+    const int b = e / (KW * UNITS), c = e % (KW * UNITS);
     uint4 v = make_uint4(0, 0, 0, 0);
-    if (b < Mb) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kt * TB * TASK_COLS) + c);
+    if (b < Mb) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kt * KW * TASK_COLS) + c);
     *reinterpret_cast<uint4*>(&xs[c / UNITS][b][16 * ((c % UNITS) ^ (b & 7))]) = v;
   }
   __syncthreads();
@@ -995,7 +1002,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
   if (ahead > 0) {
     const unsigned bx = blockIdx.x + (unsigned)ahead;
     const int nb2 = (int)(bx / nk) * RG + pair;
-    if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + (bx % nk) * TB + h) * (32ull * L * N);
+    if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + (bx % nk) * KW + h) * (32ull * L * N);
   }
 
   // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
@@ -1074,7 +1081,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
     }
   }
   if constexpr (TAG) {
-    if (h + 1 == TB) {
+    if (TB == 1 || h == 1) {
       slot[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
       slot[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
     }
@@ -1199,7 +1206,7 @@ extern "C" {
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
   out[7] = KMAX; out[8] = WW_SQR; out[9] = TAG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
-  out[13] = WW_B3U; out[14] = TB;
+  out[13] = WW_B3U; out[14] = TB; out[15] = KW;
   return 0;
 }
 
@@ -1289,12 +1296,12 @@ int ww_spin(long long cycles, cudaStream_t s) {
 // `ww_gemm_occupancy` × the SMs).
 int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn, int Kd, uint64_t wbase, int partials,
             const uint8_t* tag_seed, uint32_t* tags, int ahead, cudaStream_t s) {
-  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % (TB * TASK_COLS) || k < 0 || k > KMAX || ahead < 0) return 1;
+  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % (KW * TASK_COLS) || k < 0 || k > KMAX || ahead < 0) return 1;
   if (tag_seed && !tags) return 1;
   if (wbase % (32ull * L * TB)) return 1;
   const uint64_t jbase = wbase / (L * TB);
   const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
-  const int grid = (Nn / 16 / (GEMM_WARPS / TB)) * (Kd / TASK_COLS / TB);
+  const int grid = (Nn / 16 / (GEMM_WARPS / KW)) * (Kd / TASK_COLS / KW);
   bw::Key3 key = {};
   if (tag_seed) key = key_of(tag_seed);
 #define G(KR, NB, T)                                                                                             \
