@@ -530,6 +530,45 @@
    "assumptions": [],
    "type_hash": "8b09fdd4b0aadf8d320872ec1bd6365d9019b2ff1e5344640ca6dd86f9da4464"
   },
+  "Accounting.SecurityProofs.RateChain": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateChainPaid": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateChainPaidRO": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateChainPass": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateChainPassRO": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateChainRO": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateConservation": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateConservationCap": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateConservationCapRO": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateConservationRO": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateDisplacement": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateGrindPaid": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateGrindPaidRO": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateHonest": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateHonest : Accounting.Guarantees.RateHonest"],
@@ -553,6 +592,12 @@
    "signature": ["Accounting.SecurityProofs.RateOfAuditInteractiveRO : Accounting.Guarantees.RateOfAuditInteractiveRO"],
    "assumptions": [],
    "type_hash": "557c36bf12efa927b0be10968ca6e00daddaf5dc1327cb26728585418eb5aa97"
+  },
+  "Accounting.SecurityProofs.RatePaid": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RatePaidRO": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
