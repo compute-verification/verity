@@ -161,14 +161,15 @@ class Install:
                 lin = plain
             nch = kd // layout.TASK_COLS
             gen.manual_seed(1000 + idx)
+            bad = []
             for m in CAPTURE:
                 x8 = rand_fp8(m, kd, gen)
                 ref = plain.gemm(x8, K.Config(0))
                 for op in (plain, lin) if lin is not plain else (plain,):
                     for cfg in cands.setdefault((type(op).__name__, op.k, m, nch), op.candidates(m)):
                         if not bits_equal(op.gemm(x8, cfg), ref):
-                            raise RuntimeError(f"gate: {name} {type(op).__name__} k={op.k} {cfg.name} M={m}: partial sums "
-                                               "differ from plain simple")
+                            bad.append({"op": type(op).__name__, "config": cfg.name, "m": m,
+                                        **diagnose(op, x8, cfg, ref, w, ws)})
                         gates["configs_checked"] += 1
                 if m == 4:
                     exact = x8.float() @ w.float().t()
@@ -176,6 +177,9 @@ class Install:
                     gates["max_rel_err"] = max(gates["max_rel_err"], err)
                     if err > 1e-3:
                         raise RuntimeError(f"gate: {name}: fused sums are {err:.2e} off the float product")
+            if bad:
+                raise RuntimeError(f"gate: {name} k={lin.k} (word base {lin.base}): partial sums differ from plain simple: "
+                                   + json.dumps(bad))
             if args.tag:
                 gates["tags_checked"] += check_tags(lin, name, args.python_tags)
             if k or wide:
@@ -257,6 +261,26 @@ class Install:
                 log(f"select n={n} k={kd} m={m}: {best.name} {times[best]:.1f} us", {c.name: round(t, 1) for c, t in times.items()})
         torch.cuda.empty_cache()
         return out
+
+
+def diagnose(lin: K.Linear, x8: torch.Tensor, cfg: K.Config, ref: torch.Tensor, w: torch.Tensor,
+             ws: torch.Tensor) -> dict:
+    """A failing GEMM gate's sums: how many differ and in which chunks and 16-row blocks, whether two more launches
+    give the same sums, whether the store decodes to its payloads, and (tensor) whether the same payloads encoded at
+    word index 0 pass."""
+    got = lin.gemm(x8, cfg)
+    diff = got.view(torch.int32) != ref.view(torch.int32)
+    out = {"differ": int(diff.sum()), "of": diff.numel(),
+           "chunks": diff.any(2).any(1).nonzero().flatten()[:8].tolist(),
+           "row_blocks": torch.unique(diff.any(1).any(0).nonzero().flatten() // 16)[:8].tolist(),
+           "reruns_equal": bits_equal(lin.gemm(x8, cfg), got) and bits_equal(lin.gemm(x8, cfg), got)}
+    if getattr(lin, "payloads", None) is not None:
+        out["decodes"] = torch.equal(lin.decoded(), lin.payloads)
+    if isinstance(lin, K.TensorLinear):
+        z = K.TensorLinear(lin.lib, lin.tlib, w, ws, lin.k, 0, lin.tag_base)
+        out["at_base_0"] = bits_equal(z.gemm(x8, cfg), ref)
+        del z
+    return out
 
 
 def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
