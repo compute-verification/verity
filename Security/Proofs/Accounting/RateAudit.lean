@@ -6,6 +6,7 @@ import Proofs.Accounting.RateAudit.Relay
 import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Sketch
 import Proofs.Accounting.RateAudit.SketchHonest
+import Proofs.Accounting.RateAudit.SketchInteractive
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows
@@ -14,5 +15,6 @@ completeness (`Accounting.SecurityProofs.RateHonest`), its time average over win
 (`Accounting.SecurityProofs.RateAuditInteractiveRO` when they ignore the oracle, `RateAuditInteractive` with relayed
 tags, and `RateOfAuditInteractive` and `RateOfAuditInteractiveRO` in a joint run), and the sketch-then-hash variant for
 a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`, its completeness
-`Accounting.SecurityProofs.RateSketchHonest`,
+`Accounting.SecurityProofs.RateSketchHonest`, with interactive side sources that ignore the oracle
+`Accounting.SecurityProofs.RateAuditSketchInteractiveRO`,
 `Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`). -/

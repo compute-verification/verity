@@ -1,4 +1,5 @@
 import Definitions.Accounting.RateAuditSketch
+import Definitions.Accounting.RateAuditSketchInteractive
 
 /-!
 # The rate audit with a sketch-then-hash tag (trusted)
@@ -12,6 +13,8 @@ the claims registry carries the class to a deployed device (`rate-sketch-verbati
 * `RateAuditSketch`: in one window, for any digest, an accepted device's footprint reaches the floor except with
   probability `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.
 * `RateSketchHonest`: an honest device that reads every sector once is accepted on every coin, with footprint `N·m·w`.
+* `RateAuditSketchInteractiveRO`: `RateAuditSketch`'s bound when the chip may send and side sources answer whole
+  sectors at addresses picked from what it sent.
 * `SketchBinds`: signs that bind sectors make the tensor-core sketch's fiber `1`.
 * `RateAuditTensorSketch`: the two at the deployed tag, 32-byte sectors and INT8 sketches into INT32 accumulators.
 -/
@@ -57,6 +60,35 @@ the rate audit's code computes. -/
 def RateAuditSketch : Prop :=
   ∀ (N m ρ h S L q w s k F cTag cEnc g : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig]
     [Fintype Dg] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg) (A : RateSketch.Device N m ρ h S L q w X Sig Dg),
+    pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
+        A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
+          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : Sig => g < fib dig σ) +
+        ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
+
+/-- **The sketch rate audit with interactive side sources that ignore the oracle.** `RateAuditSketch`'s bound, at its
+floor and its error, for an `InteractiveDevice` (`Security/Definitions/Accounting/RateAuditSketchInteractive.lean`):
+its chip may send any number of bits, however they depend on the signs and on what it read, to side sources that answer
+each read with a whole sector of the store or of the certified stream, as it is, at an address picked from every bit
+sent so far. `L` bounds the sectors that came in over the side link (side sectors and stream sectors together, `w` bits
+each); sends are free.
+
+**The reading.** It is `RateAuditInteractiveRO`'s (`RateAudit.lean`) reading for the sketch tag: the rest of the prover
+may hold a copy of `E` and of the stream and serve the chip whatever sectors it asks for, keyed by what the chip sent,
+with no `2^e` factor. What it serves is still verbatim (`rate-sketch-verbatim`): a source that sends a sketch, or any
+function of several sectors, is outside the class, and that is the amplification the verbatim class excludes. The
+oracle-free form needs the oracle's seed to reach the chip on a path no side source reads: a source that holds the seed
+can compute tags and relay them, which this statement does not price (`RateAuditInteractive`'s relay term at tile
+granularity is not stated here).
+
+Proof: `Accounting.SecurityProofs.RateAuditSketchInteractiveRO`: an interactive device is a `RateSketch.Device` whose
+chip keeps what it sent and takes in, over the link, the sector at the address the sources would pick.
+
+Frozen (no-function, hash): as `RateAuditSketch`, a bound in the random-oracle model over an abstract chip program. -/
+def RateAuditSketchInteractiveRO : Prop :=
+  ∀ (N m ρ h S L q w s k F cTag cEnc g : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig]
+    [Fintype Dg] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg)
+    (A : RateSketch.InteractiveDevice N m ρ h S L q w X Sig Dg),
     pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
         A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
           A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
