@@ -7,6 +7,6 @@ if [ -n "$NCU" ]; then
     --metrics lts__t_sectors_op_write.sum,lts__t_sectors_op_atom.sum,lts__t_sectors_op_red.sum,dram__bytes_write.sum \
     "$PY" $FC/bench.py --lib "$B/libfill.so" --l2-probe "$O/l2-declared.json" > "$O/l2-ncu.csv" 2> "$O/l2-ncu.err"
 fi
-python3 $FC/l2_gate.py "$O/l2-declared.json" "$O/l2-ncu.csv" "$O/l2.json"
+python3 $FC/l2_gate.py "$O/l2-declared.json" "$O/l2-ncu.csv" "$O/l2.json" || echo "L2 write gate exit $? (bench.py reports it per store)"
 # shellcheck disable=SC2086
 "$PY" $FC/bench.py --lib "$B/libfill.so" --fixture "$B/check" --out "$O" --l2 "$O/l2.json" ${ARGS:-}

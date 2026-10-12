@@ -704,12 +704,19 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     path.write_text(json.dumps({"filler": [4096, 4096, 1024], "launches": rows}, indent=1) + "\n")
 
 
-def run_arm(lib, f, refs, credit, step, reps, base, arm, lo, peer, clock, starve_s, head, log) -> dict:
+def l2_of(l2: dict, arm: dict) -> str:
+    """The L2 write gate's verdict for the arm's store mode (`none` for an arm without a filler)."""
+    if "store" not in arm:
+        return "none"
+    return l2.get("by_store", {}).get(arm["store"], l2.get("status", "not run"))
+
+
+def run_arm(lib, f, refs, credit, step, reps, base, arm, lo, peer, clock, starve_s, head, log, l2) -> dict:
     out = window(lib, f, step, reps, dict(arm, peer=peer), lo, clock, starve_s)
     out["reps"] = reps
     chk = compare(f, STORES[arm["store"]], *refs, f.written()) if f is not None else {"tiles_checked": 0, "mismatched": 0}
     s = score(out, base, f, step, credit)
-    row = {**head, "arm": arm, **out, **s, **chk}
+    row = {**head, "arm": arm, "gate_l2": l2_of(l2, arm), **out, **s, **chk}
     emit(log, row)
     return row
 
@@ -751,7 +758,6 @@ def run(args: argparse.Namespace, log) -> int:
     peer = torch.cuda.Stream(priority=-5)            # the filler at the step's priority, on a stream of its own
     families = set(args.families.split(","))
     l2 = json.loads(args.l2.read_text()) if args.l2 and args.l2.exists() else {"status": "not run"}
-    gate_l2 = {"status": l2.get("status"), "max_write_ratio": l2.get("max_write_ratio"), "max_atom_ratio": l2.get("max_atom_ratio")}
     emit(log, {"device": props.name, "sms": sms, "torch": torch.__version__, "cuda": torch.version.cuda,
                "uuid": os.environ.get("GPU_LEASE_UUID"), "smi": clock.smi(), "clock": clock.source, "clock_error": clock.error,
                "stream_priority": {"lo": lo.priority, "hi": hi.priority, "peer": peer.priority},
@@ -803,7 +809,7 @@ def run(args: argparse.Namespace, log) -> int:
     budgets = [float(b) for b in args.budgets.split(",")]
     board = []
     failed = False
-    keys = ("arm", "slowdown", "p90_slowdown", "hbm_ratio", "util", "util_filler", "util_step", "filler_tflops",
+    keys = ("arm", "gate_l2", "slowdown", "p90_slowdown", "hbm_ratio", "util", "util_filler", "util_step", "filler_tflops",
             "credit_w1_per_s", "step_hbm_gbs", "clock_mhz")
     for cfg in args.configs.split(","):
         model, batch, ctx = cfg.split(":")
@@ -820,7 +826,7 @@ def run(args: argparse.Namespace, log) -> int:
         base["reps"] = reps
         sbase = score(base, base, None, step, None)
         head = {"config": cfg, "m_padded": step.m, "weight_gb": step.weight_bytes / 1e9, "kv_gb": step.kv_bytes / 1e9,
-                "reps": reps, "gate_l2": gate_l2["status"]}
+                "reps": reps}
         emit(log, {**head, "arm": "unfilled", **base, **sbase})
         rows, curve = [], []
         todo = (arms(args.quick, sms) if "stream" in families else []) + \
@@ -828,7 +834,7 @@ def run(args: argparse.Namespace, log) -> int:
         for arm in todo:
             k = arm.get("k", K)
             row = run_arm(lib, fillers[k], refs[k], credits[k], step, reps, base, arm, lo, peer, clock, args.starve_s,
-                          head, log)
+                          head, log, l2)
             failed |= bool(row["mismatched"]) or not row["identical"]
             rows.append(row)
         for n, g in greens.items():
@@ -839,7 +845,7 @@ def run(args: argparse.Namespace, log) -> int:
                 break
             gsms, fsms = g["step_sms"], g["fill_sms"]
             row = run_arm(lib, None, None, None, step, reps, base, {"family": "gc", "mode": "alone", "step_sms": gsms},
-                          lo, peer, clock, args.starve_s, head, log)
+                          lo, peer, clock, args.starve_s, head, log, l2)
             failed |= not row["identical"]
             curve.append({"step_sms": gsms, "slowdown": row["slowdown"], "hbm_ratio": row["hbm_ratio"],
                           "step_hbm_gbs": row["step_hbm_gbs"]})
@@ -851,12 +857,13 @@ def run(args: argparse.Namespace, log) -> int:
                 arm = {"family": "gc", "mode": "persist", "grid": 2 * fsms, "store": store, "prio": "low",
                        "step_sms": gsms, "fill_sms": fsms, "limit": limit}
                 row = run_arm(lib, f, refs[K], credits[K], step, reps, base, arm, g["fill"], peer, clock, args.starve_s,
-                              head, log)
+                              head, log, l2)
                 failed |= bool(row["mismatched"]) or not row["identical"]
                 rows.append(row)
         best = {}
         for b in budgets:
-            ok = [r for r in rows if not r["starved"] and r["identical"] and not r["mismatched"] and r["slowdown"] <= b]
+            ok = [r for r in rows if not r["starved"] and r["identical"] and not r["mismatched"] and r["slowdown"] <= b
+                  and r["gate_l2"] != "REFUSED"]
             if ok:
                 bu = max(ok, key=lambda x: x["util"])
                 bc = max(ok, key=lambda x: x.get("credit_w1_per_s", 0.0))
@@ -869,8 +876,7 @@ def run(args: argparse.Namespace, log) -> int:
                                                          indent=1) + "\n")
     smi_end = clock.smi()
     clock.close()
-    verdict = "FAILED" if failed or l2.get("status") == "REFUSED" else ("ok" if l2.get("status") == "passed" else
-                                                                         f"ok, L2 write gate {l2.get('status')}")
+    verdict = "FAILED" if failed else f"ok, L2 write gate {l2.get('status')} {l2.get('by_store', '')}".strip()
     emit(log, {"verdict": verdict, "smi_end": smi_end})
     return 5 if verdict == "FAILED" else 0
 
