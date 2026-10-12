@@ -541,6 +541,85 @@ def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_pat
     assert len(path.read_text().splitlines()) == 5
 
 
+# --- no window's samples are reused, across verifiers, tags and restarts ----------------------------------------------
+
+
+def _forge(store: audit.Store, tag: str, seed: bytes, known: set[int]) -> audit.TagCommitment:
+    """A prover that tags only the blocks in `known` (samples it learned elsewhere) and guesses the rest."""
+    return _Corrupt(store, tag, seed, lambda j: j not in known)
+
+
+def test_a_second_verifier_of_the_store_repeats_no_window(big_store, state_of) -> None:
+    """Two verifiers of one tag over one store, both counting from their first window, share the store's state, so
+    their windows draw different seeds and samples, and samples learned from one pass none of the other's windows; a
+    second state over the same file is refused while the first runs."""
+    store, vk = big_store
+    params = _params("ro-blake3/v1")
+    state = state_of(vk)
+    first, second = (big_store.verifier(params, state) for _ in range(2))
+    w1 = first.window()
+    c1 = audit.tag_pass(store, params.tag, w1.start())
+    drawn1 = w1.commit(c1.root)
+    assert w1.verdict([c1.open(i) for i in drawn1]).accepted
+    w2 = second.window()
+    seed2 = w2.start()
+    assert seed2 != c1.seed
+    forged = _forge(store, params.tag, seed2, set(drawn1))
+    drawn2 = w2.commit(forged.root)
+    assert drawn2 != drawn1 and not set(drawn2) <= set(drawn1)
+    assert w2.verdict([forged.open(i) for i in drawn2]).failure == "tag-mismatch"
+    with pytest.raises(audit.StateError, match="held"):
+        audit.ChallengerState(state.path, vk)
+
+
+def test_another_tags_window_reveals_no_samples(big_store, state_of) -> None:
+    """The fast check's window and the certified tag's window over one store, both the first of their verifiers, draw
+    different samples: the samples a `gf31-poly/v1` window reveals after its commitment pass no `ro-blake3/v1` window,
+    and a prover that tags only those blocks is rejected."""
+    store, vk = big_store
+    state = state_of(vk)
+    fast, certified = (big_store.verifier(_params(t), state) for t in ("gf31-poly/v1", "ro-blake3/v1"))
+    wf = fast.window()
+    cf = audit.tag_pass(store, "gf31-poly/v1", wf.start())
+    revealed = wf.commit(cf.root)
+    assert wf.verdict([cf.open(i) for i in revealed]).accepted
+    wc = certified.window()
+    forged = _forge(store, "ro-blake3/v1", wc.start(), set(revealed))
+    drawn = wc.commit(forged.root)
+    assert drawn != revealed and not set(drawn) <= set(revealed)
+    assert wc.verdict([forged.open(i) for i in drawn]).failure == "tag-mismatch"
+
+
+def test_a_restarted_challenger_repeats_no_window_and_refuses_a_replayed_root(big_store, tmp_path) -> None:
+    """After a restart the store's state holds every nonce drawn before it: a challenger whose randomness repeats one
+    opens no window, and a fresh window's seed and samples are new, so the root and openings of a window from before
+    the restart, replayed without reading the store, are refused: the replayed leaves are bound to the old seed, and the
+    old openings answer other samples."""
+    store, vk = big_store
+    params = _params("ro-blake3/v1")
+    path = tmp_path / "state"
+    audit.ChallengerState.create(path, vk)
+    with audit.ChallengerState(path, vk, nonces=_nonces(b"before")) as state:
+        w = big_store.verifier(params, state).window()
+        old = audit.tag_pass(store, params.tag, w.start())
+        old_drawn = w.commit(old.root)
+        assert w.verdict([old.open(i) for i in old_drawn]).accepted
+    with audit.ChallengerState(path, vk, nonces=_nonces(b"before")) as state:
+        with pytest.raises(audit.StateError, match="never drawn twice"):
+            big_store.verifier(params, state).window().start()
+    with audit.ChallengerState(path, vk, nonces=_nonces(b"after")) as state:
+        w = big_store.verifier(params, state).window()
+        assert w.start() != old.seed
+        drawn = w.commit(old.root)
+        assert drawn != old_drawn
+        assert w.verdict([old.open(i) for i in drawn]).failure == "tag-path"
+        w = big_store.verifier(params, state).window()
+        w.start()
+        assert w.commit(old.root) != old_drawn
+        assert w.verdict([old.open(i) for i in old_drawn]).failure == "malformed"
+    assert sum(r.startswith("open ") for r in path.read_text().splitlines()) == 3
+
+
 def test_params_refuse_a_window_that_fits_a_root() -> None:
     audit.Params("ro-sha512/v1", 1, 2 * ROOT_CALL_NS - 1)
     with pytest.raises(ValueError, match="rebuild floor"):

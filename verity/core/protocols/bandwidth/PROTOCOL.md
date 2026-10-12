@@ -99,7 +99,10 @@ incompressible except through `W`, and rebuilding it from `W` takes two roots in
    never a counter and never drawn twice for a store, so no two windows over a store share a key, whichever verifier,
    tag or restart opens them. A key fixed by a window number repeats in every verifier that counts from the same
    place: a window of the fast check reveals, after its commitment, the samples of the certified tag's window of the
-   same number, and a restarted verifier's window accepts a root replayed from before the restart.
+   same number, and a restarted verifier's window accepts a root replayed from before the restart. A second verifier
+   of the store, another tag's window and a restart each draw new samples, and a replayed root is refused
+   (`test_a_second_verifier_of_the_store_repeats_no_window`, `test_another_tags_window_reveals_no_samples`,
+   `test_a_restarted_challenger_repeats_no_window_and_refuses_a_replayed_root`).
 2. **Tags.** The prover computes `y_j = Tag(σ, j, E_j)` for every `j < N` (§4), packs them into leaves, and returns the
    RFC 6962 SHA-512 root of the leaves. The verifier stops its clock on the root (`Window.commit`); the root is on time
    iff the elapsed time is at most `T + RTT` (`Params.limit_ns`).
@@ -386,6 +389,7 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
   ids and salts, window seeds and samples over the first device's store, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
   (`gpu.py`: `Tagger.device()` is the GPU's id; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
-  `Opening` this verifier checks; `Prover.commit(window)` prepares, then takes `σ` and commits; `windows` runs every
-  window through it), its Python twins
+  `Opening` this verifier checks; `Prover(tagger, store, blocks, scrub)` is a store's one prover for every tag, and
+  `commit(window)` prepares, then takes `σ` and commits; `windows` runs every window of every tag through it and
+  through the store's one challenger state), its Python twins
   (`benchmarks/bandwidth/tests/test_tagger_twin.py`), and the runs of §6.
