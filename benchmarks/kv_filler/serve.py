@@ -12,6 +12,9 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
   idle      the top-up paused while the engine has work, running at full grid when it has none
   throttle  the idle policy, plus a CTA cap (`--throttle-ctas`) while the engine has work
   full      the top-up at full grid throughout (the interference bound)
+  gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
+            slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
+            sketch; once a run, like none)
 
 Each policy runs in each receipt mode of `--modes` (read, b3, sk16: `topup.cu`'s). A window's registered bytes are
 the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM head, and each
@@ -40,6 +43,7 @@ from bench import MODES, RUN_SEED, Topup  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
 CAPTURE = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128]
+GEMM_K, GEMM_SLICE, GEMM_GROUP = 4096, 64 << 20, 4
 
 
 def log(msg: str) -> None:
@@ -120,7 +124,7 @@ def main() -> int:
     ap.add_argument("--mem", type=float, default=0.85)
     ap.add_argument("--kv-gib", type=float, default=12.0)
     ap.add_argument("--headroom-gib", type=float, default=6.0)
-    ap.add_argument("--policies", type=lambda s: s.split(","), default=["none", "idle", "throttle", "full"])
+    ap.add_argument("--policies", type=lambda s: s.split(","), default=["none", "idle", "throttle", "full", "gemm"])
     ap.add_argument("--modes", type=lambda s: s.split(","), default=["sk16"])
     ap.add_argument("--throttle-ctas", type=int, default=32)
     ap.add_argument("--R", type=float, default=1540.0)
@@ -199,6 +203,29 @@ def main() -> int:
     least = max(least, _)
     vocab = eng.vllm_config.model_config.hf_config.vocab_size
 
+    # the GEMM reader: every contiguous tensor of the top-up's regions in FP8 slices of GEMM_K columns
+    gemm_tensors = [t for t in kv_tensors if t.is_contiguous()] + ([filler] if filler is not None else [])
+    slices = [(t, off) for t in gemm_tensors for off in range(0, t.numel() * t.element_size() - GEMM_SLICE + 1,
+                                                              GEMM_SLICE)]
+    gx = torch.zeros(16, GEMM_K, device="cuda", dtype=torch.float8_e4m3fn)
+    gone = torch.ones((), device="cuda", dtype=torch.float32)
+    gstream = torch.cuda.Stream()
+    gpos = [0]
+
+    def gemm_idle(until: float, out: list) -> None:
+        while until - time.perf_counter() > 0.002:
+            t0 = time.perf_counter()
+            with torch.cuda.stream(gstream):
+                for _ in range(GEMM_GROUP):
+                    t, off = slices[gpos[0] % len(slices)]
+                    gpos[0] += 1
+                    w = t.view(-1).view(torch.uint8)[off:off + GEMM_SLICE].view(torch.float8_e4m3fn)
+                    torch._scaled_mm(gx, w.view(-1, GEMM_K).t(), scale_a=gone, scale_b=gone, out_dtype=torch.bfloat16)
+            gstream.synchronize()
+            out.append((t0 * 1e3, time.perf_counter() * 1e3, GEMM_GROUP * GEMM_SLICE))
+
+    log(f"GEMM reader: {len(slices)} slices of {GEMM_SLICE >> 20} MiB over {len(gemm_tensors)} tensors")
+
     # the scheduler's view of each step
     cur: dict = {}
     orig = sched.update_from_output
@@ -237,14 +264,15 @@ def main() -> int:
     log(f"trace: {res['trace']}")
     for mode in a.modes:
         for policy in a.policies:
-            if policy == "none" and mode != a.modes[0]:
+            if policy in ("none", "gemm") and mode != a.modes[0]:
                 continue
             cur.clear()
             cur["steps"] = []
             # a step's interval runs from its engine.step call, or the previous step's update if later, to its update
             torch.cuda.synchronize()
             offset_ms = 0.0
-            if policy != "none":
+            grecs: list[tuple[float, float, int]] = []
+            if policy not in ("none", "gemm"):
                 tu.start(regions, MODES[mode], a.chunk_mib << 20, 3, least, RUN_SEED, ctas=0)
                 if policy in ("idle", "throttle"):
                     tu.so.tu_pause(1)
@@ -285,11 +313,14 @@ def main() -> int:
                         tu.so.tu_pause(0)
                     i0 = time.perf_counter()
                     nxt = pending[k]["t"] + t_start if k < len(pending) else i0
-                    time.sleep(max(0.0, min(0.05, nxt - i0)))
+                    if policy == "gemm":
+                        gemm_idle(min(i0 + 0.05, nxt), grecs)
+                    else:
+                        time.sleep(max(0.0, min(0.05, nxt - i0)))
                     idle.append((i0, time.perf_counter()))
             t_end = time.perf_counter()
-            recs = []
-            if policy != "none":
+            recs = grecs
+            if policy not in ("none", "gemm"):
                 tu.stop()
                 recs = tu.log()
             steps = cur["steps"]
