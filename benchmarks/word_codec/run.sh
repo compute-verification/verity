@@ -75,7 +75,7 @@ if [ "${KV:-0}" = 1 ]; then
         > "$o/ncu-kv.log" 2>&1 || { tail -20 "$o/ncu-kv.log"; exit 7; }
       "$ncu" --import "$o/ncu-kv.ncu-rep" --csv --page raw > "$o/ncu-kv.csv" 2>&1
       "$ncu" --import "$o/ncu-kv.ncu-rep" --csv --page source --print-source sass > "$o/ncu-kv-sass.csv" 2>&1
-      exit 0' "$NCU_BIN" "$O" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
+      exit 0' _ "$NCU_BIN" "$O" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
     exit $?
   fi
   # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI
