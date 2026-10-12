@@ -101,7 +101,8 @@ number of accepted windows below it is at most `n·ε`.
 **The reading.** At `m = 1`: the average footprint over the windows is at least `RateAudit`'s `(1 − μ)·|E|` except with
 probability `n·ε`. At `m = δ·n`: it is at least `(1 − δ)·(1 − μ)·|E|` except with probability `ε/δ`, whatever `n` is,
 so a time average at a slack of `δ` costs no union over the windows. Proof:
-`Accounting.SecurityProofs.RateAuditWindows`, from `RateAudit` at each window, at each value of the other windows' coins.
+`Accounting.SecurityProofs.RateAuditWindows`, from `RateAudit` at each window, at each value of the other windows'
+coins.
 
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditWindows : Prop :=

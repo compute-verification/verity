@@ -142,6 +142,19 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("bandwidth-instantiation", "assumption",
           "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
           "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
+    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Models/Accounting/Guarantees/RateAudit.lean): the
+    # bandwidth device with a certified stream on its side link and rebuilds paid in compute
+    Entry("rate-device", "model",
+          "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
+          "its side link in every window, after the layout and before the deadline, and every tag absorbing all of them, so "
+          "the link carries them and at most L - rho bits of anything else; a word the device neither holds nor reads it "
+          "rebuilds with the codec's inverse, whose ops are charged to accounts other than the compute account", "Rate device"),
+    # falsified by a faster rebuild on the stated device: k words of E, rebuilt from setup and the weights they encode, in
+    # less than k * c_enc of the compute account's units, by any schedule (one word alone, or many at once)
+    Entry("rate-codec-work", "assumption",
+          "Rate codec work: on the stated device, rebuilding k words of E that it neither holds nor reads, from setup and "
+          "the weights they encode, costs at least k * c_enc units of compute, with no amortization across words",
+          "Rate codec work", "measured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "

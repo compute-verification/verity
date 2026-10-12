@@ -413,7 +413,7 @@
   "Definitions.Accounting": {
    "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Pous.Game.Prob", "Definitions.Accounting"],
    "except": [],
-   "why": "the device model, a joint audit's run and the bandwidth audit's game are trusted text: they read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game, and import no assumption, guarantee or proof"
+   "why": "the device model, a joint audit's run and the bandwidth and rate audits' games are trusted text: they read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game, and import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": [
@@ -493,6 +493,18 @@
    "signature": ["Accounting.SecurityProofs.Joint : Accounting.Guarantees.Joint"],
    "assumptions": [],
    "type_hash": "2349616973612a78bdb833e74d98a7ec19326ddf536e89213964f9e18066707f"
+  },
+  "Accounting.SecurityProofs.RateAudit": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditWindows": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateHonest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateOfAudit": {
+   "owner": "@memory-accounting"
   },
   "Bandwidth.SecurityProofs.AuditRO": {
    "owner": "@memory-accounting",
@@ -3784,6 +3796,10 @@
    "Accounting.SecurityProofs.BandwidthOfAudit": "frozen (no-function,hash): It carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CapacityOfStateBound": "frozen (no-function): It carries an abstract state-bounded game's soundness, a hypothesis, to the capacity audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/Capacity.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.DerivedStateResidual": "frozen (no-function): Like CovertResidual, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Capacity.lean), and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.RateAudit": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags absorb a certified stream and whose rebuilt words are paid in compute (Security/Definitions/Accounting/RateAudit.lean), with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-device, bandwidth-instantiation and random-oracle carry it to a deployed device.",
+   "Accounting.SecurityProofs.RateAuditWindows": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAudit, it bounds acceptance of abstract chip programs in the random-oracle model, one per window and each any function of the other windows' coins (Security/Definitions/Accounting/RateAudit.lean), not the rate audit's code.",
+   "Accounting.SecurityProofs.RateHonest": "completeness: an honest device (no on-chip state or free side sources, a link carrying exactly the certified stream, N queries, nothing rebuilt) is accepted on every store, stream, oracle and sample with footprint and ingress exactly N * b and compute N * c_tag, so RateAudit's event is not vacuous and the gap between N * b and its floor is in the lock",
+   "Accounting.SecurityProofs.RateOfAudit": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAudit, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditJoint.lean), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks."
   },
