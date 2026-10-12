@@ -409,14 +409,20 @@
    "why": "a guarantee is a Prop over Mathlib, never over a proof"
   },
   "Definitions.Accounting": {
-   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting"],
+   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Pous", "Definitions.Accounting"],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), and they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), lemma M's vocabulary reads PoUS's audit game (Definitions.Pous.Model.Audit), and they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Accounting", "Models.Accounting.Guarantees"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous",
+    "Definitions.Accounting",
+    "Models.Pous.Assumptions",
+    "Models.Accounting.Guarantees"
+   ],
    "except": [],
-   "why": "a guarantee is stated over resource accounting's definitions, never over a proof"
+   "why": "a guarantee is stated over resource accounting's definitions, never over a proof; lemma M composes with PoUS's audit game (Definitions.Pous) and takes P2's named assumption P2RingAuditSecure (Models.Pous.Assumptions.P2) as a hypothesis"
   }
  },
  "reads_exempt": {
@@ -435,6 +441,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
+  "Accounting.SecurityProofs.Memory.Adds": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Memory.AddsOn": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Memory.AddsP2Ring": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Memory.Counting": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -3701,6 +3719,10 @@
    "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
     "function": "Accounting.Tag.unreadSum",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Memory.Counting": {
+    "function": "Accounting.Memory.fibre",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -4031,7 +4053,10 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p."
+   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
+   "Accounting.SecurityProofs.Memory.Adds": "frozen (no-function): It composes PoUS's own guarantee, AuditSecure over the abstract audit game (Security/Definitions/Pous/Model/Audit.lean) taken as a hypothesis, with the counting core: lemma M of the actual-circuit model, about no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsOn": "frozen (no-function): It composes PoUS's AuditSecureOn over the ring model (Security/Definitions/Pous/P2/Cost.lean), taken as a hypothesis, with the counting core: lemma M, about no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsP2Ring": "frozen (no-function): It is AddsOn at P2's deployed point (105 challenges), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
