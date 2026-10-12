@@ -197,16 +197,9 @@ open FlockSoundness.Discharge.Recursion in
 /-- **The model's `mReg`** where `ℓ` is in the class's range: `ν + pLog + tLog` at the template's `ℓ`. -/
 theorem mReg_holoAt {st : Flock.Stmt} {hp : HoloParams} (hell : hp.EllOk (execClassAt st).cls.kLog) :
     (holoAt st hp).cls.shape.mReg = hp.nu + (Nat.log2 (2 * hp.ell + 1) + 1) + hp.tLog := by
-  have hs : (holoAt st hp).cls.slotLog = hp.ell := by
-    first
-    | exact ite_eq_left hell
-    | (unfold holoAt HoloClass.ofExec; exact ite_eq_left hell)
-    | simp [holoAt, HoloClass.ofExec, hell]
-  first
-  | rw [show (holoAt st hp).cls.shape.mReg =
-      hp.nu + (Nat.log2 (2 * (holoAt st hp).cls.slotLog + 1) + 1) + hp.tLog from rfl, hs]
-  | simp only [holoAt, HoloClass.ofExec, HoloClass.shape, FlockSoundness.Model.SparseShape.mReg,
-      FlockSoundness.Model.SparseShape.pLog, ite_eq_left hell]
+  have hs : (holoAt st hp).cls.slotLog = hp.ell := ite_eq_left hell
+  rw [show (holoAt st hp).cls.shape.mReg =
+    hp.nu + (Nat.log2 (2 * (holoAt st hp).cls.slotLog + 1) + 1) + hp.tLog from rfl, hs]
 
 open FlockSoundness.Discharge.Recursion in
 /-- **The list's openings are at `max PAD_TO mReg`**: at `hp` the inner shape's `sparse` entry and `ℓ` in the class's
