@@ -64,7 +64,7 @@ class Topup:
         so.tu_root.argtypes = [i, v, q, v, v]
         so.tu_read.argtypes = [v, q, q, v, v]
         so.tu_sk_gate.argtypes = [v, q, v, v]
-        so.tu_sk_root.argtypes = [v, q, v, v]
+        so.tu_sk_root.argtypes = [v, q, v, v, v]
         so.bw_fill_test_store.argtypes = [v, q]
 
     def start(self, regions, mode: int, chunk: int, depth: int, priority: int, seed: bytes, tile: int = 1 << 16,
@@ -98,7 +98,8 @@ class Topup:
 
     def root(self, mode: int, store: int, blocks: int, seed: bytes) -> bytes:
         r = ctypes.create_string_buffer(64)
-        rc = self.so.tu_sk_root(store, blocks, seed, r) if mode == 3 else self.so.tu_root(mode, store, blocks, seed, r)
+        rc = (self.so.tu_sk_root(store, blocks, seed, RUN_SEED, r) if mode == 3
+              else self.so.tu_root(mode, store, blocks, seed, r))
         if rc:
             raise RuntimeError(f"tu_root error {rc}")
         return r.raw
@@ -422,11 +423,8 @@ def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int,
         rows.append({"phase": kind, "size": size, "ctx": ctx, "topup": None, "ctas": 0, **base, "slowdown": 0.0})
         for mode in args.throttle_modes:
             for ctas in args.throttle_ctas:
-                if mode == "read":
-                    tp = {"mode": -1, "chunk": 64 << 20, "depth": 2, "priority": least, "ctas": ctas}
-                else:
-                    tp = {"mode": MODES[mode], "chunk": ctas * (64 if mode == "b3" else 256) * BLOCK, "depth": 3,
-                          "priority": least, "ctas": 0}
+                tp = {"mode": MODES[mode], "chunk": 64 << 20, "depth": 2 if mode == "read" else 3, "priority": least,
+                      "ctas": ctas}
                 r = cell(tu, torch, fn, high, n, tp, filler, registered, R)
                 row = {"phase": kind, "size": size, "ctx": ctx, "topup": mode, "ctas": ctas, **r,
                        "slowdown": r["step_ms_median"] / base["step_ms_median"] - 1}

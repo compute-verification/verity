@@ -7,7 +7,8 @@
 //   mode  2  ro-blake3/v1 over 2,056-byte blocks, the bandwidth audit's certified receipt, with its leaves and tree
 //   mode  3  sk16: the cost of a sketch-then-hash receipt over the same blocks (ra-sketch-tag's shape, not its format):
 //            each block's 2,056 bytes as int8 against 16 rows of ±1 signs (dp4a), the 16 int32 sums hashed by one keyed
-//            BLAKE3 compression under the block's index, then ro-blake3/v1's leaves and tree over those 32-byte digests
+//            BLAKE3 compression under the block's index, then ro-blake3/v1's leaves and tree over those 32-byte digests;
+//            the signs are drawn once a run from its seed (a deployment draws them a pass, F29: the cost is the same)
 //
 // The receipts are the bandwidth audit's own kernels (`../bandwidth/tagger.cu`, included here): a chunk is one tag pass
 // over `chunk_bytes / 2056` blocks of a region under the chunk's seed (the run's seed with its first 8 bytes XORed with
@@ -194,7 +195,8 @@ static void sk_host(const uint8_t* Ej, uint64_t j, const uint32_t* signs, const 
 }
 
 struct State {
-  int device = 0, mode = MODE_READ, depth = 2, priority = 0, ctas = 0;
+  int device = 0, mode = MODE_READ, depth = 2, priority = 0;
+  std::atomic<int> ctas{0};
   uint64_t chunk_bytes = 1ull << 28, tile_bytes = 1ull << 16;
   std::vector<Region> regions;
   uint8_t seed[32];
@@ -243,15 +245,19 @@ static int finish(State& st, int i) {
 }
 
 // The next chunk's region and bytes, wrapping over the regions; blocks of 2,056 bytes for a receipt mode.
+// Under a CTA cap a receipt mode's chunk is at most the cap's CTAs of blocks (ro-blake3/v1 64 a CTA, the others 256).
 static void next_chunk(State& st, size_t& region, const uint8_t*& p, uint64_t& bytes) {
   const uint64_t unit = st.mode >= 0 ? bw::BLOCK_BYTES : 16;
+  uint64_t limit = st.chunk_bytes / unit * unit;
+  const int cap = st.ctas.load();
+  if (cap > 0 && st.mode >= 0) limit = std::min<uint64_t>(limit, (uint64_t)cap * (st.mode == bw::TAG_B3 ? 64 : 256) * unit);
   for (;;) {
     const Region& R = st.regions[st.r];
     const uint64_t usable = R.bytes / unit * unit;
     if (st.off + unit <= usable) {
       region = st.r;
       p = R.p + st.off;
-      bytes = std::min<uint64_t>(st.chunk_bytes / unit * unit, usable - st.off);
+      bytes = std::min<uint64_t>(limit, usable - st.off);
       st.off += bytes;
       return;
     }
@@ -269,7 +275,8 @@ static int launch(State& st, int i) {
   if (e != cudaSuccess) return (int)e;
   if (st.mode == MODE_READ) {
     const uint64_t n16 = bytes / 16, tile16 = st.tile_bytes / 16, tiles = (n16 + tile16 - 1) / tile16;
-    const uint64_t grid = st.ctas > 0 && (uint64_t)st.ctas < tiles ? (uint64_t)st.ctas : tiles;
+    const int cap = st.ctas.load();
+    const uint64_t grid = cap > 0 && (uint64_t)cap < tiles ? (uint64_t)cap : tiles;
     tile_read<<<(unsigned)grid, 256, 0, st.s>>>((const uint4*)p, n16, (uint32_t)tile16, st.xr);
   } else {
     const uint64_t blocks = bytes / bw::BLOCK_BYTES;
@@ -326,9 +333,8 @@ static void loop(State* sp) {
 extern "C" {
 
 // Starts the top-up on `device` over `n` regions (device pointers and byte counts).  `priority` is the stream's
-// (cudaDeviceGetStreamPriorityRange: 0 the least, negative greater).  `ctas` > 0 caps the read mode's grid (a receipt
-// mode's grid follows its chunk: ro-blake3/v1 runs a CTA per 64 blocks, gf31-poly/v1 one per 256).  Returns 0 or a
-// CUDA error.
+// (cudaDeviceGetStreamPriorityRange: 0 the least, negative greater).  `ctas` > 0 caps the grid: the read mode's CTAs, or
+// a receipt mode's chunk at that many CTAs of blocks.  Returns 0 or a CUDA error.
 int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int mode, uint64_t chunk_bytes,
              uint64_t tile_bytes, int depth, int priority, const uint8_t* seed, int ctas) {
   if (tu::S || n <= 0 || depth <= 0 ||
@@ -382,6 +388,11 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
 
 void tu_pause(int on) {
   if (tu::S) tu::S->paused = on;
+}
+
+// Sets the CTA cap from the next chunk on (0: none).
+void tu_throttle(int ctas) {
+  if (tu::S) tu::S->ctas = ctas;
 }
 
 // The start event's time on the GPU's clock, as an event recorded now on `stream` would read: lets a caller place its
@@ -494,10 +505,11 @@ int tu_sk_gate(const void* store, uint64_t blocks, const uint8_t* seed, uint8_t*
   return bad;
 }
 
-// One chunk's sk16 root, computed synchronously the way the thread computes it.
-int tu_sk_root(const void* store, uint64_t blocks, const uint8_t* seed, uint8_t* root) {
+// One chunk's sk16 root, computed synchronously the way the thread computes it: the chunk's `seed` keys the hash and
+// names the leaves, the run's `sign_seed` gives the signs (the thread draws them once, at its start).
+int tu_sk_root(const void* store, uint64_t blocks, const uint8_t* seed, const uint8_t* sign_seed, uint8_t* root) {
   std::vector<uint32_t> sg(tu::SK_WORDS * tu::SK_ROWS);
-  tu::sk_signs(seed, sg.data());
+  tu::sk_signs(sign_seed, sg.data());
   uint32_t* signs = nullptr;
   void* ws = nullptr;
   CK(cudaMalloc(&signs, sg.size() * 4));
