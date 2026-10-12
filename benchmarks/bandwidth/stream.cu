@@ -221,37 +221,46 @@ __global__ void fold_chunks(const uint4* __restrict__ p, uint64_t chunks, uint4*
   }
 }
 
+__device__ __forceinline__ uint32_t load_acquire_sys(const uint32_t* p) {
+  uint32_t v;
+  asm volatile("ld.acquire.sys.global.u32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  return v;
+}
+
 // fold_chunks over a stream the host is still writing: a warp reads a chunk group only once flags[slot] (mapped host
-// memory, one per slot_chunks chunks) holds this window's epoch.  slot_chunks is a multiple of 4.
+// memory, one per slot_chunks chunks) holds this window's epoch.  The next group's flag is read while this group's
+// loads are in flight, and the loads are weak and skip L1 (the read scrub between windows leaves no line of the
+// buffer in L2).  slot_chunks is a multiple of 4, and chunks of slot_chunks.
 __global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* __restrict__ out, const uint32_t* flags,
                           uint64_t slot_chunks, uint32_t epoch) {
   const uint32_t lane = threadIdx.x & 31;
   const uint64_t warp = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5;
   const uint64_t warps = ((uint64_t)gridDim.x * blockDim.x) >> 5;
+  uint32_t seen = 4 * warp < chunks ? load_acquire_sys(flags + 4 * warp / slot_chunks) : 0;
   for (uint64_t c0 = 4 * warp; c0 < chunks; c0 += 4 * warps) {
-    const uint32_t* f = flags + c0 / slot_chunks;
-    // bounded (about 16 s of polls), so that a lost flag fails the fold's check instead of hanging the run
-    for (uint32_t seen = 0, tries = 0; seen != epoch && ++tries < (1u << 24);)
-      asm volatile("ld.acquire.sys.global.u32 %0, [%1];" : "=r"(seen) : "l"(f));
-    uint4 v[4];
-#pragma unroll
-    for (int k = 0; k < 4; ++k) {
-      v[k] = make_uint4(0, 0, 0, 0);
-      if (c0 + k < chunks) {
-        const uint4 x = __ldcv(p + (c0 + k) * 64 + lane), y = __ldcv(p + (c0 + k) * 64 + 32 + lane);
-        v[k] = make_uint4(x.x ^ y.x, x.y ^ y.y, x.z ^ y.z, x.w ^ y.w);
-      }
+    // bounded (about 2 s of polls), so that a lost flag fails the fold's check instead of hanging the run
+    for (uint32_t tries = 0; seen != epoch && ++tries < (1u << 22);) {
+      __nanosleep(256);
+      seen = load_acquire_sys(flags + c0 / slot_chunks);
     }
+    uint4 x[4], y[4];
 #pragma unroll
     for (int k = 0; k < 4; ++k) {
+      x[k] = __ldcg(p + (c0 + k) * 64 + lane);
+      y[k] = __ldcg(p + (c0 + k) * 64 + 32 + lane);
+    }
+    if (c0 + 4 * warps < chunks) seen = load_acquire_sys(flags + (c0 + 4 * warps) / slot_chunks);
+#pragma unroll
+    for (int k = 0; k < 4; ++k) {
+      uint4 v = make_uint4(x[k].x ^ y[k].x, x[k].y ^ y[k].y, x[k].z ^ y[k].z, x[k].w ^ y[k].w);
 #pragma unroll
       for (int d = 16; d; d >>= 1) {
-        v[k].x ^= __shfl_xor_sync(0xffffffffu, v[k].x, d);
-        v[k].y ^= __shfl_xor_sync(0xffffffffu, v[k].y, d);
-        v[k].z ^= __shfl_xor_sync(0xffffffffu, v[k].z, d);
-        v[k].w ^= __shfl_xor_sync(0xffffffffu, v[k].w, d);
+        v.x ^= __shfl_xor_sync(0xffffffffu, v.x, d);
+        v.y ^= __shfl_xor_sync(0xffffffffu, v.y, d);
+        v.z ^= __shfl_xor_sync(0xffffffffu, v.z, d);
+        v.w ^= __shfl_xor_sync(0xffffffffu, v.w, d);
       }
-      if (lane == 0 && c0 + k < chunks) out[c0 + k] = v[k];
+      if (lane == 0) out[c0 + k] = v;
     }
   }
 }
