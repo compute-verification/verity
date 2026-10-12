@@ -44,6 +44,7 @@ class Shape:
     kv_heads: int
     head_dim: int
     vocab: int
+    lm_head_bytes: int = 2  # the FP8 checkpoints keep lm_head BF16; E holds it as BF16 words
 
     def linears(self) -> int:
         q = self.heads * self.head_dim
@@ -53,10 +54,10 @@ class Shape:
         return self.layers * per_layer
 
     def lm_head(self) -> int:
-        return self.vocab * self.hidden
+        return self.vocab * self.hidden * self.lm_head_bytes
 
     def weights_read(self) -> int:
-        """FP8 weights a decode step reads: the linears and lm_head (the embedding table is gathered, not read)."""
+        """Weight bytes a decode step reads: the FP8 linears and lm_head (the embedding table is gathered, not read)."""
         return self.linears() + self.lm_head()
 
     def kv_bytes_per_token(self, bytes_per_value: int = 2) -> int:

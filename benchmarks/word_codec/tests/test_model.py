@@ -43,16 +43,17 @@ def is_prime(n: int, rounds: int = 40) -> bool:
 
 
 def test_shapes():
-    assert G.LLAMA_8B.linears() == 6_979_321_856 and G.LLAMA_8B.lm_head() == 525_336_576
+    assert G.LLAMA_8B.linears() == 6_979_321_856 and G.LLAMA_8B.lm_head() == 2 * 525_336_576
     assert G.MISTRAL_24B.linears() == 22_229_811_200
     assert G.LLAMA_70B.linears() == 68_451_041_280
+    assert G.LLAMA_70B.lm_head() == 2_101_346_304 and replace(G.LLAMA_70B, lm_head_bytes=1).lm_head() == 1_050_673_152
     assert [s.kv_bytes_per_token() for s in G.SHAPES] == [128 << 10, 160 << 10, 320 << 10]
 
 
 def test_mu_chip_by_model():
     chip = [G.mu_chip(G.e_bytes(s, 60)) for s in G.SHAPES]
-    assert chip[0] == pytest.approx(0.0300, abs=5e-4)
-    assert chip[1] == pytest.approx(0.0098, abs=5e-4)
+    assert chip[0] == pytest.approx(0.0280, abs=5e-4)
+    assert chip[1] == pytest.approx(0.0095, abs=5e-4)
     assert chip[2] == pytest.approx(0.0032, abs=5e-4)
 
 
@@ -128,12 +129,12 @@ def test_s_word_per_codeword():
 
 def test_gamma_points():
     packed = G.Point(G.LLAMA_70B, 1, 4096, True, G.packed(G.MEASURED[3]), idle=0.10).terms()
-    assert packed["fits"] and packed["gamma_bw"] == pytest.approx(0.0238, abs=3e-4)
+    assert packed["fits"] and packed["gamma_bw"] == pytest.approx(0.0235, abs=3e-4)
     assert packed["gamma_decode_free"] > 2 * packed["gamma_bw"]
     unpacked = G.Point(G.LLAMA_70B, 1, 4096, True, G.MEASURED[3], idle=0.10).terms()
     assert unpacked["mu_slot"] - packed["mu_slot"] == pytest.approx(3 / 64)
     kv_open = G.Point(G.LLAMA_8B, 1, 4096, False, G.packed(G.MEASURED[3]), idle=0.37).terms()
-    assert kv_open["uncertified_reads"] == pytest.approx(0.066, abs=1e-3) and kv_open["gamma_bw"] > 0.09
+    assert kv_open["uncertified_reads"] == pytest.approx(0.0617, abs=1e-3) and kv_open["gamma_bw"] > 0.09
     assert not G.Point(G.LLAMA_70B, 32, 4096, True, G.MEASURED[3]).terms()["fits"]
 
 
