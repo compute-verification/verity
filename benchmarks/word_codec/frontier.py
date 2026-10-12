@@ -16,7 +16,9 @@ draws:
   plus `--idle`, the step's time outside the linears in passes of E (0.37 at 8B, 0.10 at 70B, the red team's), and x is
   the point's over `--boost`, the adversary's clock over the locked clock the points were timed at (1.16), unless the
   point's `x_boosted` says its x grants that already. x is the adversary's best encode at the point's width: the lowest
-  x per round any point of that width reports, whichever lane's library it came from (`--own-x`: the point's own);
+  x per round any point of that width reports, whichever lane's library it came from, or any `--rates` record gives
+  (`verity/codec-frontier-rates/v0`, ra-word-codec's measured roots at the max clock; `--floor` scales them to the pipes'
+  floor) (`--own-x`: the point's own); a point measured end to end (its `d`) has x* at that d;
   `--tau-cap` bounds τ by the cheapest tag the adversary knows;
 - y, fused decode-step time over native at `--model`'s linears (default Llama-3.1-70B; 8B's points are the reference),
   layer-weighted, as a stacked bar per point (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a
@@ -73,6 +75,10 @@ REQUIRED = ("b", "k", "arithmetic", "batch", "y_total", "y_decode", "y_tag", "y_
 IDLE_8B = 0.37  # the step outside Llama-3.1-8B's linears, in passes of E (red team, F1)
 IDLE = {"llama-3.1-8b": IDLE_8B, "llama-3.1-70b": 0.10}  # a point without `model` is 8B's
 BOOST = 1.16    # the RTX PRO 6000's boost clock over the locked 2,092 MHz (red team)
+RATES_SCHEMA = "verity/codec-frontier-rates/v0"
+# SM clocks a squaring at ra-codec-theory's pipe floor (`benchmarks/word_codec/model/frontier.py`'s `pipe_clocks`, as
+# ra-word-codec's rates table quotes them), for `--floor`
+PIPE_CLOCKS = {512: 3.99, 768: 7.77, 1024: 12.07, 1280: 17.23, 1536: 23.86}
 
 
 def model_of(p: dict) -> str:
@@ -186,9 +192,11 @@ def x_star_of(p: dict, budget: float, d: float | None = None, idle: float = IDLE
 
 
 def step(p: dict, d: float | None, idle: float = IDLE_8B) -> float:
-    """d, the step's time in passes of E: `--d`, else the point's own y_total plus the step's idle share (at least one
-    pass)."""
-    return max(1.0, p["y_total"] + idle) if d is None else d
+    """d, the step's time in passes of E: `--d`, else the point's own `d` when it was measured end to end, else its
+    y_total plus the step's idle share (at least one pass)."""
+    if d is not None:
+        return d
+    return p["d"] if p.get("d") is not None else max(1.0, p["y_total"] + idle)
 
 
 def x_eff(p: dict, boost: float = BOOST) -> float:
@@ -196,11 +204,33 @@ def x_eff(p: dict, boost: float = BOOST) -> float:
     return p["x"] if p.get("x_boosted") else p["x"] / boost
 
 
-def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = None) -> list[dict]:
+def load_rates(src: str) -> list[dict]:
+    """`verity/codec-frontier-rates/v0` records (ra-word-codec's measured root rates): a path or an art."""
+    path = Path(src) if not src.startswith("art:") else Path(research("data", "fetch", src).strip().splitlines()[-1])
+    recs = json.loads(path.read_text())
+    if any(r.get("schema") != RATES_SCHEMA for r in recs):
+        raise ValueError(f"{src}: a record not in {RATES_SCHEMA}")
+    return recs
+
+
+def rate_x(records: list[dict], boost: float = BOOST, floor: bool = False) -> dict[int, float]:
+    """The adversary's x a round per width from rates records: x_max_clock (else x ÷ boost) over k, the lowest of
+    the width's; floor: each scaled to the pipes' floor (`PIPE_CLOCKS`[b] over the record's clocks a squaring)."""
+    out = {}
+    for r in records:
+        x = (r.get("x_max_clock") or (r["x"] if r.get("x_boosted") else r["x"] / boost)) / r["k"]
+        if floor:
+            x *= PIPE_CLOCKS[r["b"]] / r["sm_clocks_per_squaring"]
+        out[r["b"]] = min(out.get(r["b"], float("inf")), x)
+    return out
+
+
+def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = None,
+              rates: dict[int, float] | None = None) -> list[dict]:
     """The points with x the adversary's best encode at b: the lowest x per round at its clock that any point of that
-    width reports (whichever lane's library encodes fastest), times k (x_boosted; the point's own x kept as x_own),
-    and τ at most tau_cap (the cheapest tag the adversary knows)."""
-    per_k = {}
+    width reports (whichever lane's library encodes fastest) or `rates` gives (`rate_x`), times k (x_boosted; the
+    point's own x kept as x_own), and τ at most tau_cap (the cheapest tag the adversary knows)."""
+    per_k = dict(rates or {})
     for p in points:
         if not p.get("reference"):
             per_k[p["b"]] = min(per_k.get(p["b"], float("inf")), x_eff(p, boost) / p["k"])
@@ -247,18 +277,18 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
 
 def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None, idle: float = IDLE_8B,
           boost: float = BOOST) -> str:
-    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | ingress | y_total | decode | tag | commit "
-             "| measured | source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | ingress | y_total | d | decode | tag | commit "
+             "| measured | source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     best = frontier(points, budget, d, idle, boost)
     for mb in batches:
         p = best.get(mb)
         if p is None:
-            lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | | |")
+            lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | | | |")
             continue
         dd, xe = step(p, d, idle), x_eff(p, boost)
         lines.append(f"| {mb} | {p['b']} | {p['k']:.3g} | {p['arithmetic']} | {xe:.0f} | {x_star_of(p, budget, d, idle):.0f} "
                      f"| {(dd - p['tau']) / xe * 100:.2f}% | {p.get('ingress', 0.0) * 100:.3f}% | {p['y_total']:.2f} "
-                     f"| {p['y_decode']:.2f} "
+                     f"| {dd:.2f}{' (end to end)' if p.get('d') is not None and d is None else ''} | {p['y_decode']:.2f} "
                      f"| {p['y_tag']:.2f} | {p['y_commit']:.2f} | {'yes' if p['measured'] else 'model'} "
                      f"| {p.get('art') or p.get('run') or p.get('lane')} |")
     return "\n".join(lines)
@@ -379,6 +409,9 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="draw every point, not the best of each configuration")
     ap.add_argument("--own-x", action="store_true",
                     help="each point's own x, not the best encode any point of its width reports (`adversary`)")
+    ap.add_argument("--rates", action="append", default=[],
+                    help=f"{RATES_SCHEMA} records (a path or art): their x pooled into the adversary's best per width")
+    ap.add_argument("--floor", action="store_true", help="with --rates: their x at the pipes' floor (`PIPE_CLOCKS`)")
     ap.add_argument("--tau-cap", type=float, help="τ at most this: the cheapest tag the adversary knows")
     ap.add_argument("--sketch", help="BATCH:Y,...: add each measured point's modelled twin with the sketch-then-hash "
                     "tag, Y its tag and commit at that batch (e.g. 1:0.073,32:0.150, ra-sketch-tag's plain store)")
@@ -407,7 +440,8 @@ def main() -> int:
         twins = sketch_twins(points, cost, a.sketch_tau)
         points = twins + [p for p in points if p.get("reference")] if a.only_sketch else points + twins
     if not a.own_x:
-        points = adversary(points, a.boost, a.tau_cap)
+        rates = rate_x([r for s in a.rates for r in load_rates(s)], a.boost, a.floor) if a.rates else None
+        points = adversary(points, a.boost, a.tau_cap, rates)
     elif a.tau_cap is not None:
         points = [{**p, "tau": min(p["tau"], a.tau_cap)} for p in points]
     points = [p for p in points if p.get("reference") or model_of(p) == a.model]

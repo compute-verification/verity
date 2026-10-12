@@ -208,3 +208,17 @@ def test_tau_counts_a_batched_tags_compressions_over_its_records():
     one = wide_bench.frontier_quantities(f, 4, 5, 1600.0, 1e9, {1: 1e9}, 4e10, [1])[1]
     two = wide_bench.frontier_quantities(f, 4, 9 / 2, 1600.0, 1e9, {1: 1e9}, 4e10, [1])[1]
     assert two["tau"] == pytest.approx(one["tau"] * 0.9) and two["x"] == one["x"]
+
+
+def test_rate_x_pools_the_lowest_round_at_the_max_clock_and_the_floor():
+    recs = [{"schema": F.RATES_SCHEMA, "b": 1536, "k": 1, "x": 1579.0, "x_max_clock": 1359.0,
+             "sm_clocks_per_squaring": 50.7},
+            {"schema": F.RATES_SCHEMA, "b": 1536, "k": 2, "x": 3156.0, "x_max_clock": 2717.0,
+             "sm_clocks_per_squaring": 50.7},
+            {"schema": F.RATES_SCHEMA, "b": 512, "k": 1, "x": 229.0, "sm_clocks_per_squaring": 7.16}]
+    r = F.rate_x(recs)
+    assert r[1536] == 1358.5 and abs(r[512] - 229 / F.BOOST) < 1e-9
+    assert abs(F.rate_x(recs, floor=True)[1536] - 1358.5 * 23.86 / 50.7) < 1e-9
+    p = {"b": 1536, "k": 1, "x": 2000.0, "batch": 1}
+    assert F.adversary([p], rates=r)[0]["x"] == 1358.5
+    assert F.step({"y_total": 2.0, "d": 2.5}, None, 0.1) == 2.5 and F.step({"y_total": 2.0}, None, 0.1) == 2.1
