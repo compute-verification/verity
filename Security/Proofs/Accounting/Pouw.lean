@@ -21,7 +21,7 @@ theorem ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw := by
   obtain ⟨⟨_, _, tix⟩⟩ := hne
   have hA : (real.adv o).Bounded U T (d.rate .oracle * (r.win .compute).len) := fun H s =>
     ⟨(real.cost_le (H, s, tix) o).trans (hwork (H, s, tix)),
-      (real.calls_le (H, s, tix) o).trans (Trace.ops_le (r.fits _) _ _ _)⟩
+      (real.calls_le (H, s, tix) o).trans (Schedule.ops_le (r.fits _) _ _ _)⟩
   exact (pr_mono fun x hx => ⟨(real.accepts_iff x o).1 hx.1, hx.2⟩).trans
     (Pouw.SecurityProofs.EndToEnd Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT U hU T hT _ hq (real.adv o) hA t εs hεs)
 
