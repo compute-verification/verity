@@ -67,7 +67,9 @@ rows = {"acc0": ports["acc"]} if "acc" in ports else {nm: x for nm, x in ports.i
 (c / "rec-rows.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": rows}))
 (c / "rec-bindings.json").write_text(json.dumps(RB.bindings(json.loads((c / "partition.json").read_text()),
                                                              json.loads((c / "program.json").read_text()))))
-print(f"--rec-inner {e}/rec-inner-c3.json --rec-part {names.index(unit)} --rec-bindings {c}/rec-bindings.json --rec-rows {c}/rec-rows.json")
+# RecSparse reads no rec-acc and shares no row: it takes no --rec-rows
+print(f"--rec-inner {e}/rec-inner-c3.json --rec-part {names.index(unit)} --rec-bindings {c}/rec-bindings.json"
+      + (f" --rec-rows {c}/rec-rows.json" if rows else ""))
 EOF
 }
 IN=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-registration $REG)
