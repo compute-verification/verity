@@ -102,6 +102,14 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
+  hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
+  the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
+  on its machines. So the bandwidth audit treats host memory over PCIe as a slower tier of the prover's memory and
+  prices relayed tags with `RateAuditInteractive`, instead of a trusted host challenger.
+- 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
+  displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
+  shape, then the properties provable under them.
 - 2026-10-11 (8:53 PM PDT, through his console): a part of `check` whose cold run takes more than about 10 minutes may
   run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
   reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
