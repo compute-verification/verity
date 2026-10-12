@@ -30,7 +30,10 @@ states no literal γ, fails the table (`TwinError`).
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
   python price_twins.py --repository-only                     re-read only the repository's pins, keeping the store's rows
 
-Stdlib only. The table is checked in beside this file (`price_twins.json`) and regenerated when a pin lands or moves.
+Stdlib only. The table is checked in beside this file (`price_twins.json`) and regenerated when a pin lands or moves. A
+store file's source records its sha256, the one record of what was read outside the tree. The repository's audit records
+none: the suite fails when the table isn't `refresh` of itself, so it changes only when a twin does, not with every
+landing that touches the lock.
 """
 
 from __future__ import annotations
@@ -245,7 +248,8 @@ def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
     for rel, path in files.items():
         raw = path.read_bytes()
         rows = extract(guarantees(json.loads(raw)), rel, pinned, defs)
-        sources.append({"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
+        sources.append({"path": rel, "twins": len(rows)} | ({} if rel == REPO_SOURCE else
+                                                             {"sha256": hashlib.sha256(raw).hexdigest()}))
         for r in rows:
             if _short(r["pin"]) not in seen:
                 seen.add(_short(r["pin"]))
@@ -266,7 +270,7 @@ def refresh(doc: dict, repo_audit: Path = REPO_AUDIT) -> dict:
     seen = {_short(t["pin"]) for t in kept}
     rows = extract(pins, REPO_SOURCE, pinned, lifted_definitions(json.loads(raw), repo_audit.parent))
     sources = [s for s in doc["sources"] if s["path"] != REPO_SOURCE]
-    sources.append({"path": REPO_SOURCE, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
+    sources.append({"path": REPO_SOURCE, "twins": len(rows)})
     return _table(sources, kept + [_jsonable(r) for r in rows if _short(r["pin"]) not in seen])
 
 

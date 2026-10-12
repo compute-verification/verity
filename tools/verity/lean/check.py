@@ -228,13 +228,22 @@ def cores() -> int:
     return n
 
 
+#: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
+ARTIFACTS: Path | None = None
+
+
 def lake_env() -> dict[str, str]:
-    """The environment of every `lake` and `setup.sh` the audit runs. The audit builds from source: Lake neither reads nor
-    writes its local artifact cache, and `setup.sh` restores nothing from the build cache (`cache.py`)."""
+    """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
+    (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
+    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
-    env["LAKE_ARTIFACT_CACHE"] = "false"
+    if ARTIFACTS:
+        env.pop("LAKE_ARTIFACT_CACHE", None)
+        env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
+    else:
+        env["LAKE_ARTIFACT_CACHE"] = "false"
     env["LEAN_CACHE"] = "off"
     return env
 
@@ -1672,9 +1681,10 @@ def writable(pkg: Path) -> list[Path]:
 
 
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the package's `writable` directories (``argv`` as is where there
-    is no sandbox)."""
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
+    (``argv`` as is where there is no sandbox)."""
+    ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -2173,7 +2183,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL
+    global TOOL, ARTIFACTS
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -2194,6 +2204,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
+    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
+                    "(`lake_env`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -2216,6 +2228,7 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
     lifts = None
     if a.lift:
         if a.update or a.all or a.name_instances or len(pkgs) != 1:

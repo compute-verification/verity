@@ -92,22 +92,28 @@ def _witness(*args: str) -> dict[str, dict]:
     return {c["check"]: c for c in checks}
 
 
+def _kept(once, name: str, run) -> dict[str, dict]:
+    """`run`'s checks, run once in the whole run (`once`) and read back by every worker."""
+    return json.loads((once(name, lambda d: (d / "w.json").write_text(json.dumps(run()))) / "w.json").read_text())
+
+
 @pytest.fixture(scope="module")
-def inner() -> dict[str, dict]:
+def inner(once) -> dict[str, dict]:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins`")
     _build()
     u = SET / "u" / "stage"
-    return _witness("inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"), "--partition",
-                    str(u / "partition.json"), "--record", str(SET / "inner-honest" / "session" / "session.json"))
+    return _kept(once, "witness-inner", functools.partial(
+        _witness, "inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"), "--partition",
+        str(u / "partition.json"), "--record", str(SET / "inner-honest" / "session" / "session.json")))
 
 
 @pytest.fixture(scope="module")
-def level(inner, tmp_path_factory) -> list[str]:
+def level(inner, once) -> list[str]:
     """`flock-witness session`'s files and session at the recorded level, its statement restaged."""
-    d = tmp_path_factory.mktemp("rec-witness")
-    S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
-            pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+    d = once("witness-level", lambda d: S.stage(
+        SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
+        pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin"))
     level = d / f"L{LEVEL}"
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
@@ -116,8 +122,8 @@ def level(inner, tmp_path_factory) -> list[str]:
 
 
 @pytest.fixture(scope="module")
-def outer(level) -> dict[str, dict]:
-    return _witness("session", "--statement", STATEMENT, *level)
+def outer(level, once) -> dict[str, dict]:
+    return _kept(once, "witness-outer", functools.partial(_witness, "session", "--statement", STATEMENT, *level))
 
 
 def test_lean_accepts_the_inner_statement(inner):
@@ -191,15 +197,17 @@ def _f1_file(dst: Path, line: str) -> str | None:
 
 
 @pytest.fixture(scope="module")
-def f1_gate(tmp_path_factory) -> Path:
+def f1_gate(once) -> Path:
     """The gate's files as the prover wrote them."""
     assert (F1 / "prover.sha256").is_file(), (
         f"{F1} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/f1-gate`")
-    g = tmp_path_factory.mktemp("f1-gate")
-    with cf.ThreadPoolExecutor(8) as ex:
-        bad = [r for r in ex.map(functools.partial(_f1_file, g), (F1 / "prover.sha256").read_text().splitlines()) if r]
-    assert not bad, f"not the prover's bytes: {bad}"
-    return g
+
+    def make(g):
+        with cf.ThreadPoolExecutor(8) as ex:
+            bad = [r for r in ex.map(functools.partial(_f1_file, g), (F1 / "prover.sha256").read_text().splitlines()) if r]
+        assert not bad, f"not the prover's bytes: {bad}"
+
+    return once("witness-f1-gate", make)
 
 
 def _f1_inner(g: Path, public: Path, *extra: str) -> dict[str, dict]:
@@ -275,45 +283,60 @@ def _f1_cheat(g: Path, dst: Path) -> Path:
 
 
 @pytest.fixture(scope="module")
-def f1_inner(f1_gate) -> dict[str, dict]:
+def f1_inner(f1_gate, once) -> dict[str, dict]:
     _build()
     g = f1_gate
-    return _f1_inner(g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s1" / "session" / "session.json"))
+    return _kept(once, "witness-f1-inner", functools.partial(
+        _f1_inner, g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s1" / "session" / "session.json")))
+
+
+class _Runs(dict):
+    """`f1`'s runs as futures: reading one waits for that run only."""
+
+    def __getitem__(self, k):
+        v = super().__getitem__(k)
+        return v.result() if isinstance(v, cf.Future) else v
 
 
 @pytest.fixture(scope="module")
-def f1(f1_gate, f1_inner, tmp_path_factory) -> dict:
+def f1(f1_gate, f1_inner, once):
     """Every other `flock-witness` run the gate's tests read, at once: the inner statement at the cheater's public file, and
     each of V*'s sessions as `verity/flock-circuit` with the verifier's own V* inputs (the inner shape `accepts_stmt` prints,
     which is `rec-inner`'s; `--rec-part` its unit's index in the printed statements; `rec_bindings` of its partition
-    object and program; the family's shared rows, the algebra parts' registered row ports)."""
-    g, d = f1_gate, tmp_path_factory.mktemp("f1-runs")
-    shape = d / "inner.json"
-    shape.write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
+    object and program; the family's shared rows, the algebra parts' registered row ports). Each run is made once in the
+    whole run (`once`), and a test waits only for the runs it reads."""
+    g = f1_gate
+
+    def inputs(d):
+        (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
+        ports: dict = {}
+        for part in F1_PARTS[4:]:
+            for nm, e in json.loads((g / "v" / part / "registered.json").read_text())["ports"].items():
+                if nm not in ("v", "out"):
+                    assert ports.setdefault(nm, e) == e, (part, nm)
+        (d / "rows.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+        _f1_cheat(g, d)
+        for part in F1_PARTS:
+            v = g / "v" / part
+            (d / f"bindings-{part.replace('/', '-')}.json").write_text(json.dumps(RB.bindings(
+                json.loads((v / "partition.json").read_text()), json.loads((v / "program.json").read_text()))))
+
+    d = once("witness-f1-inputs", inputs)
     names = f1_inner["accepts_stmt"]["statements"]
-    ports: dict = {}
-    for part in F1_PARTS[4:]:
-        for nm, e in json.loads((g / "v" / part / "registered.json").read_text())["ports"].items():
-            if nm not in ("v", "out"):
-                assert ports.setdefault(nm, e) == e, (part, nm)
-    rows = d / "rows.json"
-    rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
-    cheat = _f1_cheat(g, d)
-    jobs = {"cheat": functools.partial(_f1_inner, g, cheat)}
+    jobs = {"cheat": functools.partial(_f1_inner, g, d / "pub-2.bin")}
     for part in F1_PARTS:
         v, label = g / "v" / part, part.replace("/", "-")
-        b = d / f"bindings-{label}.json"
-        b.write_text(json.dumps(RB.bindings(json.loads((v / "partition.json").read_text()),
-                                            json.loads((v / "program.json").read_text()))))
         files = ["--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition", str(v / "partition.json"),
                  "--program", str(v / "program.json"), "--registered", str(v / "registered.json")]
         sess = ["--session", str(g / "v-sess" / label)]
         jobs[part, STATEMENT] = functools.partial(
-            _witness, "session", "--statement", STATEMENT, *files, "--rec-inner", str(shape), "--rec-part",
-            str(names.index(_unit(g, part))), "--rec-bindings", str(b), "--rec-rows", str(rows), *sess)
-    with cf.ThreadPoolExecutor(len(jobs)) as ex:
-        futs = {k: ex.submit(fn) for k, fn in jobs.items()}
-        return {k: f.result() for k, f in futs.items()} | {"cheat-file": cheat}
+            _witness, "session", "--statement", STATEMENT, *files, "--rec-inner", str(d / "inner.json"), "--rec-part",
+            str(names.index(_unit(g, part))), "--rec-bindings", str(d / f"bindings-{label}.json"), "--rec-rows",
+            str(d / "rows.json"), *sess)
+    ex = cf.ThreadPoolExecutor(len(jobs))
+    yield _Runs({k: ex.submit(_kept, once, "witness-f1-" + (k if k == "cheat" else k[0].replace("/", "-")), fn)
+                 for k, fn in jobs.items()}, **{"cheat-file": d / "pub-2.bin"})
+    ex.shutdown(wait=False)
 
 
 def test_f1_lean_builds_the_inner_statement_from_its_own_partition_object_and_program(f1_inner):
