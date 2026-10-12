@@ -122,7 +122,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
 - **Live coins only.** Fiat–Shamir is out. There are no retries: a failed proof is a visible failure, and a retry never
   redraws. Outer proofs go through the firewall one at a time.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
-  witness and never reaches the auditor in the clear. They run on Nebius, and trust in Nebius is a named assumption.
+  witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
+  doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
+  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted.
 - **Soundness is one theorem** (see Lean below).
 
 ## Tests
