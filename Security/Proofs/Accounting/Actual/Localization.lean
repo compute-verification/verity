@@ -10,8 +10,8 @@ import Proofs.Accounting.Actual.Confidence
 `Localization`, over strategies, is function composition. What the rest reads from outside before `u ≤ t₁`
 (`crossing_split`) is what it read before `t₀` (part of what it can tell at `t₀`), what `X` sent it during `[t₀, u)`,
 and what it heard from the leaves in neither during `W`, cut at `u`. With its inputs fixed, causality's global form
-(`global_of_admissible`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for
-each key, and the count is the image's. `memory_of_memoryOver`: memory over continuations bounds each run's state.
+(`global_of_causal`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for
+each key, and the count is the image's. `memory_of_mem`: memory per run on the state bounds the circuit's `state`.
 
 `localization_wires` is the per-run lemma (not the model's `e = 0`, which reads the strategy): under causality a gate
 downstream of `C` runs at or after `C`'s ticks (`le_t_of_downstream`), so one that `A[Y, W]` reads runs during `W`; and
@@ -114,36 +114,38 @@ theorem crossing_split {L : Type*} (R : Actual.Run L) {X Y : Finset L} (h : Disj
     · exact ⟨g, a, hr, fun hy => Finset.disjoint_left.1 h ha hy, hg, ht.2, rfl⟩
     · exact ⟨g, a, hr, fun hy => ha (Or.inr hy), hg, hlt, rfl⟩
 
-/-- Memory over continuations bounds each run's state: the per-run state is in the state over continuations. -/
-theorem memory_of_memoryOver {Ω L : Type*} {S : Ω → Actual.Run L} {𝒳 : Set (Finset L)} {M : Finset L → ℕ}
-    (h : MemoryOver S 𝒳 M) (r : Ω) : (S r).A.Memory 𝒳 M := by
+/-- Memory per run on the state bounds the circuit's `state`: its gates are in the run's state (in flight between
+`X`'s leaves, or held). -/
+theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M : Finset L → ℕ} (h : R.Memory 𝒳 M) :
+    R.A.Memory 𝒳 M := by
   classical
   intro X hX t
-  refine le_trans ?_ (h r X hX t)
-  unfold Placed.state Verity.Circuit.width
+  refine le_trans ?_ (h X hX t)
+  unfold Placed.state Actual.Run.mem Verity.Circuit.width
   refine Finset.sum_le_sum_of_subset fun a ha => ?_
   obtain ⟨hai, hx⟩ := Finset.mem_filter.1 ha
-  simp only [stateOver, Finset.mem_filter, Finset.mem_univ, true_and]
-  exact ⟨hx, ((mem_into _).1 hai).1, r, rfl, a, hai, rfl⟩
+  simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact Or.inr ⟨hai, hx⟩
 
 end Actual
 
 theorem Localization : Guarantees.Localization := by
-  intro L Ω S X Y t₀ t₁ hXY hA hh hv
+  intro L Ω S X Y t₀ t₁ hXY hc hh hv
   have hin : ∀ r r', (S r).inputs ↑Y = (S r').inputs ↑Y := fun r r' => congrArg Prod.fst (hh r r')
   have hpre : ∀ r r', (S r).crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) = (S r').crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) :=
     fun r r' => congrArg (fun p => p.2.2) (hh r r')
   have key : ∀ u ≤ t₁, ∀ r r', (S r).crossing ↑X ↑Y (Set.Ico t₀ u) = (S r').crossing ↑X ↑Y (Set.Ico t₀ u) →
       (S r).acts ↑Y (Set.Iio u) = (S r').acts ↑Y (Set.Iio u) := by
     intro u hu r r' hx
-    refine Actual.global_of_admissible hA Y hin u r r' ?_
+    refine Actual.global_of_causal hc Y hin u r r' ?_
     rw [Actual.crossing_split (S r) hXY hu, Actual.crossing_split (S r') hXY hu, hpre r r', hx, hv r r']
-  have table : ∀ u ≤ t₁, ∃ T : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ),
+  have table : ∀ u ≤ t₁, ∃ T : Set (ℕ × L × ℕ × L × ℕ × ℕ) →
+      Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ),
       ∀ r, (S r).acts ↑Y (Set.Iio u) = T ((S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := by
     intro u hu
     have hf : Function.FactorsThrough (fun r => (S r).acts ↑Y (Set.Iio u))
         (fun r => (S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := fun r r' h => key u hu r r' h
-    exact ⟨Function.extend _ _ fun _ => (∅, ∅), fun r => (hf.extend_apply _ r).symm⟩
+    exact ⟨Function.extend _ _ fun _ => (∅, ∅, ∅), fun r => (hf.extend_apply _ r).symm⟩
   refine ⟨table, fun e he => ?_⟩
   obtain ⟨T, hT⟩ := table t₁ le_rfl
   refine le_trans (Set.encard_le_encard ?_) ((Set.encard_image_le T _).trans he)
