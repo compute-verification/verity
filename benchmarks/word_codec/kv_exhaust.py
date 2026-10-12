@@ -70,7 +70,7 @@ FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-p
 PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6, 9: 8, 10: 3, 11: 3, 12: 3}
 RECEIPT = {10: 1, 11: 2}  # kv_attn's receipt forms and their rc (kv_receipt.NAMES)
 RC_SEED = hashlib.sha256(b"ra-word-codec/kv-receipt-seed").digest()
-SPLITS = (1, 2, 4, 8, 16)
+SPLITS = (1, 2, 4, 8, 16, 32)  # a receipt form's split is whole RT-tile blocks: 9,280 tokens at 16 fill only 10
 PERSISTENT = (8, 9)  # forms whose `splits` is the CTAs over the SMs' slots
 PERS_SPLITS = (1, 2, 4)
 RTOL = {0: 1e-3, 3: 8e-3, 6: 8e-3, 8: 8e-3}  # the tensor-core forms round P to bf16
@@ -272,11 +272,12 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
 
 
 def attn_occ(lib: B.Lib) -> dict:
-    a = (ctypes.c_int * 4)()
+    a = (ctypes.c_int * 5)()
     if lib.so.kv_attn_occ(ctypes.cast(a, ctypes.c_void_p)) != 0:
         return {}
     return {FORMS[5]: {"ctas_per_sm": a[0], "decoder_warps_per_sm": a[0] * a[1]},
-            FORMS[7]: {"ctas_per_sm": a[2], "decoder_warps_per_sm": a[2] * a[3]}}
+            FORMS[7]: {"ctas_per_sm": a[2], "decoder_warps_per_sm": a[2] * a[3]},
+            FORMS[10]: {"ctas_per_sm": a[4], "decoder_warps_per_sm": a[4] * a[1]}}
 
 
 def attn_call(lib, st, store, form, q, o, part, b, ctx, layers, layer, splits, k) -> None:

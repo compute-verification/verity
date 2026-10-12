@@ -1223,10 +1223,12 @@ static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's
 #endif
 constexpr int RT = KV_RT, RLAG = KV_RLAG, ZB = RLAG, ZW = MW * 8 * (GROUP / 2) * 32;
 static_assert(RLAG >= 1 && (ZW & (ZW - 1)) == 0 && ZW >= 512 && GROUP % 2 == 0, "B slots outlive their readers");
-constexpr int rc_smem(int rc) { return mws_smem() + (rc ? ZB * ZW * 4 + ZB * 8 : 0); }
-// RC = 1's B slot is a tile's RCW sign words at offset 0; RC = 2's z indexing assumes 512 of them (64-byte words).
+// RC = 1's B slot is a tile's RCW sign words; RC = 2's is ZW words, its z indexing assuming 512 sign words (64-byte
+// words). Sizing RC = 1's by RCW keeps two CTAs an SM at 70B's GROUP = 8 (ZW = 2048 words would take 16 KiB of slots).
 constexpr int RS = NL / 4, RCW = 128 * RS;
-constexpr bool RC1_OK = MMA_OK && RCW <= ZW, RC2_OK = MMA_OK && RS == 4;
+constexpr bool RC1_OK = MMA_OK, RC2_OK = MMA_OK && RS == 4;
+__host__ __device__ constexpr int rc_slot(int rc) { return rc == 2 ? ZW : RCW; }
+constexpr int rc_smem(int rc) { return mws_smem() + (rc ? ZB * rc_slot(rc) * 4 + ZB * 8 : 0); }
 __device__ uint4 kRcB[2][RT * RCW / 4];
 __constant__ uint32_t kRcKey[2][8];
 
@@ -1279,7 +1281,8 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
     u32 *td = reinterpret_cast<u32 *>(empty + MNB);
     u32 *bbuf = td + NL;
-    uint64_t *bfull = reinterpret_cast<uint64_t *>(bbuf + ZB * ZW);
+    constexpr int SLOT = rc_slot(RC);
+    uint64_t *bfull = reinterpret_cast<uint64_t *>(bbuf + ZB * SLOT);
     const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
     const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
     const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
@@ -1317,7 +1320,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
           if (t >= nt)
             for (int l = 0; l < NL; ++l) x[l] = 0u;
           mbar_wait(bfull + tile % ZB, (tile / ZB) & 1);
-          rc_sketch(x, acc, bbuf + tile % ZB * ZW + (RC == 2 ? 512 * i & (ZW - 1) : 0) + 4 * lane);
+          rc_sketch(x, acc, bbuf + tile % ZB * SLOT + (RC == 2 ? 512 * i & (ZW - 1) : 0) + 4 * lane);
           if (tile % RT == RT - 1 || tile == ntiles - 1) {
             const int nblk = (ctx + RT * MT - 1) / (RT * MT), blk = (t0 / MT + tile) / RT, gid = lane >> 2, t4 = lane & 3;
             int *vp = rc_sk + ((((size_t)seq * KV_HEADS + g) * nblk + blk) * MDW + i) * 16 * 16;
@@ -1346,7 +1349,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     const int rem = t1 - t0;
     if constexpr (RC > 0) {
       for (int jt = 0; jt < RLAG && jt * MT < rem; ++jt) {
-        rc_fill<RC>(bbuf + jt * ZW, jt, 32 * w + lane);
+        rc_fill<RC>(bbuf + jt * SLOT, jt, 32 * w + lane);
         mbar_arrive(bfull + jt);
       }
     }
@@ -1359,7 +1362,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
       if constexpr (RC > 0) {
         const int jt = tile + RLAG;
         const bool next = jt * MT < rem;
-        u32 *bs = bbuf + tile % ZB * ZW;
+        u32 *bs = bbuf + tile % ZB * SLOT;
         if (RC == 1 && next) rc_fill<1>(bs, jt, 32 * w + lane);
         if constexpr (RC == 2) {
           constexpr int ZL = GROUP / 2;
@@ -2077,6 +2080,8 @@ int kv_attn_occ(int *out) {
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(out + 2, kv::attn_occ_kernel<true>, kv::OWT, kv::occ_smem());
   out[1] = kv::MDW;
   out[3] = kv::ODW;
+  cudaFuncSetAttribute(kv::attn_mma_ws_kernel<1>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::rc_smem(1));
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(out + 4, kv::attn_mma_ws_kernel<1>, kv::MWT, kv::rc_smem(1));
   return launched();
 }
 
