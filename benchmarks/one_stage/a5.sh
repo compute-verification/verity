@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-stage audit, run A5, on a CPU machine: a served Commit's own window through registration, the verifier's Lean draw, M0's
-# prover and the Lean verifier of record (a5.py). The Commit is the CPU RoPE d64 fixture (integrations/vllm
-# tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and serving's window is
+# One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through registration, the verifier's Lean
+# draw, M0's prover and the Lean verifier of record (a5.py). The Commit is the CPU RoPE d64 fixture (integrations/vllm
+# tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and the window is
 # `verity-vllm serving-rows` on it. M0's flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   research run --on M --project verity --cwd clone --mem-gb 16 -- python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/one_stage/a5.sh

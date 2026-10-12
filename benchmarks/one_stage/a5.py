@@ -1,23 +1,26 @@
-"""One-stage audit, run A5: a served Commit's own window. The registration is over serving rows of the Commit's own values
-(read from its sealed replay bundle opened against its record), bound to its vllm-v1 run root, and the drawn units go to M0's
-prover and the Lean verifier of record. That the rows hold the values under the vllm-v1 roots is the committer's opening,
-not proved.
+"""One-stage audit, run A5: a deferred Commit's window, a stand-in. The registration is over serving rows of the Commit's own
+values, committed after serving from its sealed replay bundle opened against its record and bound to its vllm-v1 run root, and
+the drawn units go to M0's prover and the Lean verifier of record. Serving's commitment is the vllm-v1 roots, so the window is
+core's `stand-in`, its link to them provenance (`of`: the run root, the bundle's manifest digest and `verity-vllm serving-rows`):
+that the rows hold the values under the vllm-v1 roots is the committer's opening, not proved. It becomes `served` once serving's
+record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --partition F --window DIR --template-sets DIR \\
       --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
 
-* **Serving's files.** `--window DIR` is what `verity-vllm serving-rows` (or the in-Commit hook) wrote: `registration.json`
-  (core's v1 record, window kind `served`, its run the Commit's run root), `window.json`, and per member k `m<k>-public.bin`
-  and `m<k>-private.bin` (prover only). The prover wraps each member's bodies under the circuit for its template
-  (`serving_rows.flock_input_files`).
+* **Serving's files.** `--window DIR` is what `verity-vllm serving-rows` wrote: `registration.json` (core's v1 record, window
+  kind `stand-in`, its run the Commit's run root, its `of` and `link` `deferred_rows.stand_in`'s), `window.json`, and per member
+  k `m<k>-public.bin` and `m<k>-private.bin` (prover only). The prover wraps each member's bodies under the circuit for its
+  template (`serving_rows.flock_input_files`).
 * **The verifier's own copies.** `--bundle` and `--row-dir` are the deferred Commit's record and its Build's Programs of record;
   the verifier derives its window from them alone (`deferred_rows.window_of_record`): the population program and partition
   over the served Programs, the law, and the run root of record. It composes each member's circuit itself from an input set
   of its template under `--template-sets` (the lowering is all it reads; the values are never used), bound to its partition
   and program. It holds every public file to that circuit, its unit indices and classes, and the registered roots and served
   domains. Then R1-R7 run over the one registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`).
+  (`serving_rows.leaf_layer`), and the window is held to its own link (`source`: a stand-in whose run, `of` and `link` are
+  `deferred_rows.stand_in` over the run root of record and the digest of the bundle's manifest it opened).
 * **One draw** by the registered law (the partition file's `subset:k`) over the whole population, made by the verifier's
   Lean `flock-verify draw`. Each member's server
   serves its share (`serve --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw
@@ -27,6 +30,7 @@ not proved.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -43,6 +47,7 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R, verifier as V  # noqa: E402
 from verity_vllm.commit import serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
+from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 
 
 def template_sets(root: Path) -> dict[str, tuple[Path, object]]:
@@ -148,8 +153,13 @@ def main() -> int:
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer).to_json()
-    checks["source"] = {"ok": rec.get("window", {}).get("kind") == "served" and rec["window"].get("run") == mine.run,
-                        "codes": [], "detail": {"kind": rec.get("window", {}).get("kind"), "run": rec.get("window", {}).get("run")}}
+    w = rec.get("window", {})
+    mine_link = DRW.stand_in(mine.run, hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest())
+    src = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == mine_link["of"],
+           "link": w.get("link") == mine_link["link"]}
+    checks["source"] = {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
+                        "detail": {"kind": w.get("kind"), "run": w.get("run"), "of": w.get("of")}}
+    summary["source"] = w.get("kind")
     receipt = R.receipt(rec, "one-stage-e2e verifier (a5.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
@@ -233,7 +243,7 @@ def main() -> int:
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and all(summary["negatives"].values())
-    print("A5 " + json.dumps({x: summary[x] for x in ("audit", "draw", "draw_counts", "negatives")}, sort_keys=True, default=str))
+    print("A5 " + json.dumps({x: summary[x] for x in ("source", "audit", "draw", "draw_counts", "negatives")}, sort_keys=True, default=str))
     return 0 if ok else 1
 
 
