@@ -1,22 +1,25 @@
 import Definitions.Accounting.Actual
 import Mathlib.Basic.Real.Basic
 import Mathlib.Data.Set.Card
+import Mathlib.Data.Finset.Sort
 
 /-!
 # Runs, strategies and the confidence set (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.3), sections 2 ("Runs"), 4, 5 and 6. A *run*
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4), sections 2 ("Runs"), 4, 5 and 6. A *run*
 (`Actual.Run`) is an actual circuit with its gates' values, each computed gate's value its operation on the values it
 reads (faithfulness), and what each leaf holds at the start of each tick (`held`, constrained by `Placed.Holding`). A
 gate is seen as its tick, leaf, width and value (`Actual.Run.seen`), so runs of different circuits compare. The verifier
 at leaves `V` sees its gates (`view`). A location's *state* at `t` (`Run.state`, of width `Run.mem`) is what its leaves
-hold and what is in flight between them; `Run.Memory` bounds it per run. A *strategy* maps coins `r : Ω` to a run.
+hold and what is in flight between them; `Run.Memory` bounds it per run. Its *content* (`Run.content`) is its values
+as a bit string, in a fixed order of position (the leaves ordered by `L`'s order, then tick) with no position in it.
+A *strategy* maps coins `r : Ω` to a run.
 
 What crosses from one set of leaves to another, read during `I`, is `crossing` (arrival tick, reader's leaf, source as
 seen). What a location `X` does during `I` (`acts`) is its gates placed during `I`, what it sends from them (`sent`,
 keyed by the source's tick: the sender chooses what crosses, to whom and when) and what its leaves hold at the end of
 each tick of `I`. A strategy is *causal from every tick* (`CausalFrom`) when what `X` does during `[t, u)` is a function
-of its state at `t`, as seen, and of what it reads from outside during `[t, u)`; the state is the run's own, so fixing
+of its state's content at `t` and of what it reads from outside during `[t, u)`; the state is the run's own, so fixing
 coins keeps it. What `X` can tell at `t` (`history`: its inputs, its gates before `t` and what it read from outside
 before `t`) and links as alphabets (`Alphabet`, by `signal`) are further hypotheses on a strategy.
 
@@ -49,6 +52,17 @@ structure Actual.Run (L : Type*) where
   held : L → ℕ → Finset (Fin A.N)
   holding : A.Holding held
 
+/-- A value's `w` bits, least significant first. -/
+def Actual.bits (w v : ℕ) : List Bool := List.ofFn fun i : Fin w => v.testBit i
+
+/-- A gate as seen, keyed by position: leaf, then tick, then width and value. -/
+def Actual.position {L : Type*} (p : ℕ × L × ℕ × ℕ) : L ×ₗ ℕ ×ₗ ℕ ×ₗ ℕ :=
+  toLex (p.2.1, toLex (p.1, toLex (p.2.2.1, p.2.2.2)))
+
+/-- The bits of a gate keyed by position: its value at its width. -/
+def Actual.chunk {L : Type*} (p : L ×ₗ ℕ ×ₗ ℕ ×ₗ ℕ) : List Bool :=
+  Actual.bits (ofLex (ofLex (ofLex p).2).2).1 (ofLex (ofLex (ofLex p).2).2).2
+
 namespace Actual.Run
 
 variable {L : Type*} (R : Actual.Run L)
@@ -70,6 +84,12 @@ open Classical in
 the gates of `X` outside `A[X, [t, ∞)]` that `A[X, [t, ∞)]` reads. -/
 noncomputable def state (X : Finset L) (t : ℕ) : Finset (Fin R.A.N) :=
   univ.filter fun a => (∃ y ∈ X, a ∈ R.held y t) ∨ (a ∈ R.A.into (R.A.region X (Set.Ici t)) ∧ R.A.x a ∈ X)
+
+/-- **The content** of `X`'s state at `t` (v2.4): its values as a bit string, the state's gates as seen in order of
+position (leaf, then tick; width and value break ties) and their values concatenated at their widths. It says what `X`
+holds and not where: one bit held at any of `2^k` places is the same one-bit string. -/
+noncomputable def content [LinearOrder L] (X : Finset L) (t : ℕ) : List Bool :=
+  ((((R.state X t).image R.seen).image Actual.position).sort).flatMap Actual.chunk
 
 /-- `mem X t`: the width of `X`'s state at `t`. -/
 noncomputable def mem (X : Finset L) (t : ℕ) : ℕ := R.A.width (R.state X t)
@@ -109,11 +129,12 @@ def signal {E : Type*} (link : Fin R.A.N → Fin R.A.N → E) (e : E) (y : L) (u
 
 end Actual.Run
 
-/-- **Causality from every tick** (v2.3), in prefix form: in a strategy `S`, what each location `X` does during
-`[t, u)` is a function of its state at `t`, as seen, and of what it reads from outside during `[t, u)`, with arrival
-ticks. The state is the run's own, so a restriction of a strategy causal from every tick is too. -/
-def CausalFrom {Ω L : Type*} (S : Ω → Actual.Run L) : Prop :=
-  ∀ (X : Finset L) t u r r', (S r).seen '' ↑((S r).state X t) = (S r').seen '' ↑((S r').state X t) →
+/-- **Causality from every tick** (v2.4), in prefix form: in a strategy `S`, what each location `X` does during
+`[t, u)` is a function of its state's content at `t` (its values in order of position, not where they are held) and of
+what it reads from outside during `[t, u)`, with arrival ticks. The state is the run's own, so a restriction of a
+strategy causal from every tick is too. -/
+def CausalFrom {Ω L : Type*} [LinearOrder L] (S : Ω → Actual.Run L) : Prop :=
+  ∀ (X : Finset L) t u r r', (S r).content X t = (S r').content X t →
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico t u) = (S r').crossing (↑X)ᶜ ↑X (Set.Ico t u) →
     (S r).acts ↑X (Set.Ico t u) = (S r').acts ↑X (Set.Ico t u)
 
@@ -127,8 +148,8 @@ open Classical in
 /-- **`E` is sound at `δ`** against the feasible runs `𝓕`, for the verifier at `V` accepting on `acc` of its view with
 coins uniform over `Ω`: every strategy causal from every tick with runs in `𝓕` whose input gates off `V` don't depend on
 the coins has `Pr_r[acc ∧ ¬E] ≤ δ`. `E` reads the strategy and the coin. -/
-def Sound {L : Type*} (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
-    (E : (Ω → Actual.Run L) → Ω → Prop) (δ : ℝ) : Prop :=
+def Sound {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
+    (acc : Set (ℕ × L × ℕ × ℕ) → Prop) (E : (Ω → Actual.Run L) → Ω → Prop) (δ : ℝ) : Prop :=
   ∀ S : Ω → Actual.Run L, (∀ r, S r ∈ 𝓕) → CausalFrom S → (∀ r r', (S r).inputs (↑V)ᶜ = (S r').inputs (↑V)ᶜ) →
     ((univ.filter fun r => acc ((S r).view V) ∧ ¬E S r).card : ℝ) ≤ δ * Fintype.card Ω
 

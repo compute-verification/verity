@@ -15,6 +15,9 @@ and what it heard from the leaves in neither during `W`, cut at `u`. With its in
 each key, and the count is the image's. `memory_of_mem`: memory per run on the state bounds the circuit's `state`.
 `markov_mem`: memory accounting's `not_markov` circuit (a gate of `X` reading nothing, with the coin's value) has
 `mem X 2 ≥ 1` at some coin in every strategy causal from every tick, whatever it holds (`markov_holding`: it can).
+`zero_link_alphabet`: memory accounting's `zero_link` (a width-0 wire sent at the coin's tick) meets `Links` at
+capacity 0 (`zero_links`) and fails `Alphabet` there. `Recall` is `CausalFrom` read through a table, as `Localization`
+is, with the content's length bound (`content_length_le`).
 
 `localization_wires` is the per-run lemma (not the model's `e = 0`, which reads the strategy): under causality a gate
 downstream of `C` runs at or after `C`'s ticks (`le_t_of_downstream`), so one that `A[Y, W]` reads runs during `W`; and
@@ -175,7 +178,7 @@ theorem markov_mem (held : Bool → Bool → ℕ → Finset (Fin 4)) (h : ∀ b,
     intro g a ha hxa hxg hg
     fin_cases g <;> fin_cases a <;> simp_all
   have key := congrArg Prod.fst
-    (hc {false} 2 4 false true (by simp only [hs, coe_empty, Set.image_empty]) (by simp only [hx]))
+    (hc {false} 2 4 false true (by simp only [Actual.Run.content, hs, image_empty, sort_empty]) (by simp only [hx]))
   have : ((3 : ℕ), false, 1, 1) ∈ ((markovRun true (held true) (h true)).acts ↑({false} : Finset Bool)
       (Set.Ico 2 4)).1 := ⟨3, by simp, by simp, rfl⟩
   rw [← key] at this
@@ -192,10 +195,65 @@ theorem markov_holding (b : Bool) :
   · fin_cases a <;> simp_all
   · fin_cases g <;> fin_cases a <;> simp_all
 
+/-- The actual circuit of memory accounting's `zero_link` at coin `b`, over leaves `true` (the verifier) and `false`
+(`X`): the verifier's input `g0` at tick 0, `g1` at the verifier of width 0 at tick `b`, reading `g0`, and `g2` at `X`
+at tick 3, reading `g1`. Every gate is `b` at its width. -/
+abbrev zeroPlaced (b : Bool) : Placed Bool where
+  N := 3
+  w g := if g.val = 1 then 0 else 1
+  isInput g := decide (g = 0)
+  reads g := if g = 1 then {0} else if g = 2 then {1} else ∅
+  reads_lt g a ha := by fin_cases g <;> simp_all
+  input_reads g hg := by fin_cases g <;> simp_all
+  op g _ := BitVec.ofNat _ b.toNat
+  op_congr _ _ _ _ := rfl
+  outputs := ∅
+  x g := decide (g.val < 2)
+  t g := if g.val = 1 then b.toNat else if g.val = 2 then 3 else 0
+
+/-- Its run at coin `b`, with what each leaf holds given by `held`. -/
+abbrev zeroRun (b : Bool) (held : Bool → ℕ → Finset (Fin 3)) (h : (zeroPlaced b).Holding held) :
+    Actual.Run Bool where
+  A := zeroPlaced b
+  val _ := BitVec.ofNat _ b.toNat
+  faithful _ _ := rfl
+  held := held
+  holding := h
+
+/-- Its one link has capacity 0 and carries every wire between the leaves: `g1`'s width is 0. -/
+theorem zero_links (b : Bool) : (zeroPlaced b).Links (fun _ : Unit => (true, false)) (fun _ => 0) fun _ _ => () := by
+  have w0 : ∀ T : Finset (Fin 3), (∀ a ∈ T, a = 1) → ∀ n, (zeroPlaced b).width T ≤ 0 * n := fun T hT n => by
+    simp only [zero_mul, nonpos_iff_eq_zero, Verity.Circuit.width]
+    exact sum_eq_zero fun a ha => by rw [hT a ha]; rfl
+  refine ⟨fun g a ha hne => ?_, fun e y a c => ⟨w0 _ (fun z hz => ?_) _, w0 _ (fun z hz => ?_) _⟩⟩
+  · fin_cases g <;> fin_cases a <;> simp_all
+  · simp only [Placed.readOn, mem_filter, mem_univ, true_and] at hz
+    obtain ⟨g, hzg, hne, -⟩ := hz
+    fin_cases g <;> fin_cases z <;> simp_all
+  · simp only [Placed.sentOn, mem_filter, mem_univ, true_and] at hz
+    obtain ⟨-, g, hzg, hne, -⟩ := hz
+    fin_cases g <;> fin_cases z <;> simp_all
+
+/-- **`zero_link` fails `Alphabet` at `β = 0`** (memory accounting's counterexample to v2.1's links, "a link of
+capacity 0 carries a bit"): whatever its runs hold, the signal its link delivers to `X` at tick 3 is `g1` as seen, whose
+sender's tick is the coin, so the link takes two signals across the strategy where an alphabet of capacity 0 allows
+one. It meets `Links` at capacity 0 (`zero_links`); a bound that counts what crosses goes through `Alphabet`. -/
+theorem zero_link_alphabet (held : Bool → Bool → ℕ → Finset (Fin 3)) (h : ∀ b, (zeroPlaced b).Holding (held b)) :
+    ¬Alphabet (fun b => zeroRun b (held b) (h b)) (fun _ : Unit => 0) fun _ _ _ => () := by
+  intro hA
+  have hle : (Set.range fun b => (zeroRun b (held b) (h b)).signal (fun _ _ => ()) () false 3).encard ≤ 1 := by
+    simpa using hA () false 3
+  have h1 := Set.encard_le_one_iff.1 hle _ _ (Set.mem_range_self false) (Set.mem_range_self true)
+  have : ((0 : ℕ), true, 0, 0) ∈ (zeroRun false (held false) (h false)).signal (fun _ _ => ()) () false 3 :=
+    ⟨2, 1, by simp, by simp, rfl, by simp, by simp, rfl⟩
+  rw [h1] at this
+  obtain ⟨g, a, ha, -, -, hg, ht, he⟩ := this
+  fin_cases g <;> fin_cases a <;> simp_all [Actual.Run.seen]
+
 end Actual
 
 theorem Localization : Guarantees.Localization := by
-  intro L Ω S X Y t₀ t₁ hXY hc hh hv
+  intro L Ω _ S X Y t₀ t₁ hXY hc hh hv
   have hin : ∀ r r', (S r).inputs ↑Y = (S r').inputs ↑Y := fun r r' => congrArg Prod.fst (hh r r')
   have hpre : ∀ r r', (S r).crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) = (S r').crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) :=
     fun r r' => congrArg (fun p => p.2.2) (hh r r')
@@ -216,5 +274,12 @@ theorem Localization : Guarantees.Localization := by
   refine le_trans (Set.encard_le_encard ?_) ((Set.encard_image_le T _).trans he)
   rintro _ ⟨r, rfl⟩
   exact ⟨_, ⟨r, rfl⟩, (hT r).symm⟩
+
+theorem Recall : Guarantees.Recall := by
+  intro L Ω _ S X t u hc hx
+  have hf : Function.FactorsThrough (fun r => (S r).acts ↑X (Set.Ico t u)) (fun r => (S r).content X t) :=
+    fun r r' h => hc X t u r r' h (hx r r')
+  exact ⟨Function.extend _ _ fun _ => (∅, ∅, ∅), fun r =>
+    ⟨(hf.extend_apply _ r).symm, Actual.content_length_le _ _ _⟩⟩
 
 end Accounting.SecurityProofs

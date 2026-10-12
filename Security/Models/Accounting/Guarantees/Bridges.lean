@@ -23,7 +23,7 @@ open Finset
 /-- **B1** at an audit: the verifier at `V`, accepting on `acc`, with the seed released at `tₛ` and the response due at
 `t_d`, is sound at `(1 − ε)^K + η + ε_ks + ε_bind` against `𝓕` for the work at `π` of the prover's (off `V`) computed
 gates placed in `[tₛ + ℓ, t_d − ℓ)`, at least `(1 − γ)(1 − ε) W`. -/
-def B1 {L : Type*} (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
+def B1 {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
     (π : (R : Actual.Run L) → Fin R.A.N → ℕ) (tₛ t_d ℓ K : ℕ) (γ ε W η εks εbind : ℝ) : Prop :=
   open Classical in
   Sound Ω 𝓕 V acc (fun S r => (1 - γ) * (1 - ε) * W ≤ (S r).A.work (π (S r)) ((S r).A.computed.filter fun g =>
@@ -38,8 +38,8 @@ running the certifier (a wire out of `X` on a link with an end at a certifier is
 alphabets: what `O` does during `I = [a, b)` takes at most (the number of records) × `2^{res_out}` values, with
 `res_out = jitter · (buckets of I) + β°_X (b − a)`. -/
 def B4 : Prop :=
-  ∀ {L E Ω : Type*} [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ)
-    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec)
+  ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)
+    (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec)
     (record : ∀ r, Finset (Fin (S r).A.N)) (bucket : ℕ → ℕ) (jitter a b : ℕ),
     CausalFrom S → Alphabet S β link → Disjoint X cert →
     (∀ r r', (S r).history cert a = (S r').history cert a ∧

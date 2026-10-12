@@ -450,6 +450,9 @@
   "Accounting.SecurityProofs.Localization": {
    "owner": "@lean"
   },
+  "Accounting.SecurityProofs.Recall": {
+   "owner": "@lean"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -3724,6 +3727,7 @@
   "frozen": {
    "Accounting.SecurityProofs.Actual.Runtime": "falsified (conjecture,no-function): It is the runtime corollary of Accounting.SecurityProofs.Actual.Windows and UpdatedMatMulReads, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates them.",
    "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Recall": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what reaches the location during the window, fixed across the coins, as a hypothesis that is not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.Localization": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from a challenge's values to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what the rest of the prover can tell at the window's start and what it reads from the verifier during the window, fixed across the challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.Guarantees.B4": "unstated: the actual circuit model's obligation B4 (egress factoring across a location's secret inputs, over strategies causal from every tick), stated to be proved from causality, links as alphabets and the trusted devices; no theorem proves it yet (gap in note:console/20261012T0645Z-draft-actual-circuit-model's Lean plan).",
    "Accounting.SecurityProofs.Composition": "frozen (no-function): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick and each protocol's soundness alone, hypotheses about them rather than a Lean function's acceptance, and bounds a count of coins, not an event of shape.events.",

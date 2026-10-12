@@ -15,8 +15,9 @@ so feasible, still causal from every tick (the state is the run's own, `causalFr
 `V i` fixed; `E i` reads that slice. Averaging over the fixed coins (`card_filter_mul`: each run of coins is counted
 once for each value of coin `i`) gives `δ i`, and the union bound the sum. `global_of_causal` is the global form of
 causality: what the prover does before `t` depends on the coins only through what it reads from outside before `t`,
-when its inputs don't (causality from tick 0, where the state is the inputs, `state_zero`). `Fit` is additivity at the
-run that implements `P`.
+when its inputs don't (causality from tick 0, where the state is the inputs, `state_zero`, and the content a function
+of the state as seen, `content_congr`). A state's content has at most `mem` bits (`content_length_le`). `Fit` is
+additivity at the run that implements `P`.
 -/
 
 namespace Accounting.SecurityProofs
@@ -43,20 +44,36 @@ theorem state_zero {L : Type*} (R : Actual.Run L) (X : Finset L) : R.seen '' ↑
   · rintro ⟨a, hi, hx, rfl⟩
     exact ⟨a, Or.inl ⟨R.A.x a, hx, R.holding.2.1 a hi⟩, rfl⟩
 
+/-- Runs alike in a location's state as seen are alike in its content. -/
+theorem content_congr {L : Type*} [LinearOrder L] {R R' : Actual.Run L} {X : Finset L} {t : ℕ}
+    (h : R.seen '' ↑(R.state X t) = R'.seen '' ↑(R'.state X t)) : R.content X t = R'.content X t := by
+  have : (R.state X t).image R.seen = (R'.state X t).image R'.seen := coe_injective (by simpa only [coe_image] using h)
+  unfold Actual.Run.content
+  rw [this]
+
+/-- A state's content has at most `mem` bits (exactly `mem` when no two of its gates look alike). -/
+theorem content_length_le {L : Type*} [LinearOrder L] (R : Actual.Run L) (X : Finset L) (t : ℕ) :
+    (R.content X t).length ≤ R.mem X t := by
+  unfold Actual.Run.content Actual.Run.mem Verity.Circuit.width
+  rw [List.length_flatMap, ((sort_perm_toList _ _).map _).sum_eq, sum_map_toList]
+  refine (sum_image_le_of_nonneg fun _ _ => Nat.zero_le _).trans <|
+    (sum_image_le_of_nonneg fun _ _ => Nat.zero_le _).trans (le_of_eq (sum_congr rfl fun g _ => ?_))
+  simp [Actual.chunk, Actual.position, Actual.bits, Actual.Run.seen]
+
 /-- Causality from every tick passes to a restriction of the strategy: the state is the run's own. -/
-theorem causalFrom_comp {Ω Ω' L : Type*} {S : Ω → Actual.Run L} (h : CausalFrom S) (f : Ω' → Ω) :
+theorem causalFrom_comp {Ω Ω' L : Type*} [LinearOrder L] {S : Ω → Actual.Run L} (h : CausalFrom S) (f : Ω' → Ω) :
     CausalFrom fun x => S (f x) :=
   fun X t u r r' => h X t u (f r) (f r')
 
 /-- Causality's global form: when the prover's (at `P`) input gates don't depend on the coins, what it does before `t`
 (its gates, its sends and what it holds) depends on them only through what it reads from outside before `t`. -/
-theorem global_of_causal {Ω L : Type*} {S : Ω → Actual.Run L} (h : CausalFrom S) (P : Finset L)
+theorem global_of_causal {Ω L : Type*} [LinearOrder L] {S : Ω → Actual.Run L} (h : CausalFrom S) (P : Finset L)
     (hP : ∀ r r', (S r).inputs ↑P = (S r').inputs ↑P) (t : ℕ) (r r' : Ω)
     (hr : (S r).crossing (↑P)ᶜ ↑P (Set.Iio t) = (S r').crossing (↑P)ᶜ ↑P (Set.Iio t)) :
     (S r).acts ↑P (Set.Iio t) = (S r').acts ↑P (Set.Iio t) := by
   have hio : Set.Iio t = Set.Ico 0 t := by ext; simp
   rw [hio] at hr ⊢
-  exact h P 0 t r r' (by rw [state_zero, state_zero, hP r r']) hr
+  exact h P 0 t r r' (content_congr (by rw [state_zero, state_zero, hP r r'])) hr
 
 /-- Each run of the coins `r` is `update r' i x` for one `r'` per value `x`. -/
 theorem card_filter_mul {k : ℕ} {Ω : Fin k → Type} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)] (i : Fin k)
@@ -75,7 +92,7 @@ end Actual
 
 theorem Composition : Guarantees.Composition := by
   classical
-  intro L k Ω _ _ 𝓕 V acc E δ S hE h𝓕 hS hV
+  intro L _ k Ω _ _ 𝓕 V acc E δ S hE h𝓕 hS hV
   have bad : ∀ r, (∀ i, acc i ((S r).view (V i))) → ¬(∀ i, E i (fun x => S (Function.update r i x)) (r i)) →
       ∃ i, acc i ((S r).view (V i)) ∧ ¬E i (fun x => S (Function.update r i x)) (r i) := fun r ha hc => by
     push Not at hc
