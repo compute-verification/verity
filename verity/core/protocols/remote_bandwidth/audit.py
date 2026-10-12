@@ -30,8 +30,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    checks, and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
-   `ledger` turns it, with the node's measured capacities, into each γ term.  What an accepted window certifies, and on
-   what, is `PROTOCOL.md`.
+   `ledger` turns it, with the node's measured capacities, into each γ term, μ_sample read per window and pooled over
+   the session's horizon (`pooled`).  What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
 clear here, as the specification of what each zero-knowledge proof unit proves on the deployed path (`PROTOCOL.md` §8).
@@ -575,9 +575,11 @@ class Session:
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
               "flight at the session's ends, the chaining gaps, blocks a plan leaves out)",
-    "sample": "the record: each window's openings law, its bound on wrong receipts at delta",
+    "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
+              "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
-    "counting": "AuditRO's slack, queries_log2 bits a certified receipt and slack_log2 a pass",
+    "counting": "AuditRO's slack, queries_log2 bits a receipt (each certified one, whichever reading) and slack_log2 a "
+                "pass",
     "rebuild": "a model: re-encoding blocks from their payload with leftover compute (WorkHardness(p, k))",
     "host": "a model: the host tier's own shortfall and host DRAM bandwidth PCIe cannot carry",
     "link": "a model: relays meeting z and a block copy over a link",
@@ -586,7 +588,10 @@ LEDGER_SOURCES = {
 
 @dataclass(frozen=True, slots=True)
 class Ledger:
-    """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum."""
+    """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum.  μ_sample comes
+    both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
+    openings pooled over its windows at one δ (`pooled`).  `floor` is the hybrid claim's other half, from the same
+    pooled event: no window has more than that share of its receipts wrong."""
 
     timing: float
     sample: float
@@ -595,14 +600,46 @@ class Ledger:
     rebuild: float
     host: float
     link: float
+    horizon: float
+    floor: float
 
     @property
     def gamma(self) -> float:
+        """γ with the per-window μ_sample, except with probability `windows · delta`."""
         return sum(getattr(self, name) for name in LEDGER_SOURCES)
+
+    @property
+    def gamma_horizon(self) -> float:
+        """γ with the pooled μ_sample, except with probability `delta`, `floor` holding with it."""
+        return self.horizon + sum(getattr(self, name) for name in LEDGER_SOURCES if name != "sample")
 
     def to_json(self) -> dict:
         terms = {name: getattr(self, name) for name in LEDGER_SOURCES}
-        return {"gamma": self.gamma, "terms": terms}
+        return {"gamma": self.gamma, "horizon": {"floor": self.floor, "gamma": self.gamma_horizon, "sample": self.horizon},
+                "terms": terms}
+
+
+def pooled(record: Record) -> tuple[float, float]:
+    """The horizon reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
+    and at most a share `floor` of any window's, both except with probability δ together.
+
+    Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
+    land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
+    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
+    on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
+    except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
+    found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
+    min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states it for windows of one size; at unequal U_t it is the
+    same argument with each window's own."""
+    delta = record.windows[0].profile.delta
+    drawn = [w.profile.drawn["receipt"] for w in record.windows]
+    budget = -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
+    floor = max(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
+    wrong = 0.0
+    for w, s in sorted(zip(record.windows, drawn), key=lambda x: x[0].receipts / x[1], reverse=True):
+        f = min(1 - s / w.receipts, budget / s)
+        wrong, budget = wrong + f * w.receipts, max(0.0, budget - f * s)
+    return wrong, floor
 
 
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: float = 0.0, host: float = 0.0,
@@ -610,9 +647,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record certifies are at least `(1 − γ)·capacity·span`, except with probability
-    `windows · delta` (plus 2^-slack_log2 a pass).  `rebuild`, `host` and `link` are the models' fractions, passed
-    through: the record does not bound them.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`;
-    pass an approximation for a large store)."""
+    `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
+    pass).  `rebuild`, `host` and `link` are the models' fractions, passed through: the record does not bound them.
+    `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an approximation for a large
+    store)."""
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
     whole = capacity_bytes_per_s * record.span_ns / 1e9
@@ -621,9 +659,9 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     if reads > whole:
         raise ValueError(f"the record certifies {reads} bytes read, more than the capacity allows in its span: the "
                          "capacity is understated")
-    wrong_receipts = [math.ceil(wrong(w.profile)) for w in record.windows]
-    certified = [w.receipts - m for w, m in zip(record.windows, wrong_receipts)]
-    lam_bits = sum(queries_log2 * k + slack_log2 * w.passes for w, k in zip(record.windows, certified))
-    return Ledger(timing=1 - reads / whole, sample=sum(wrong_receipts) * b / whole,
+    wrong_receipts = sum(math.ceil(wrong(w.profile)) for w in record.windows)
+    horizon, floor = pooled(record)
+    lam_bits = queries_log2 * record.receipts + slack_log2 * record.passes
+    return Ledger(timing=1 - reads / whole, sample=wrong_receipts * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=rebuild, host=host,
-                  link=link)
+                  link=link, horizon=horizon * b / whole, floor=floor)
