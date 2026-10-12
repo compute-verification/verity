@@ -1184,14 +1184,14 @@ __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restric
   if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
 }
 
-// fused3p_kernel's probes, a kernel of their own so fused3p_kernel's code stays as timed: R rounds, or NE no chunk
-// ends (a sink, its xor into tags[0]), as fused3_kernel's.
-template <int NB8, int MODE, int R, bool NE>
+// fused3p_kernel's variants, a kernel of their own so fused3p_kernel's code stays as timed: PK the packed CTA finish
+// (f3_finish), R rounds, or NE no chunk ends (a sink, its xor into tags[0]), as fused3_kernel's; L 4, one quad ahead.
+template <int NB8, int MODE, int R, bool NE, bool PK = false>
 __global__ void __launch_bounds__(FW * 32) fused3q_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
                                                           int* done_ctr, unsigned long long* trace) {
-  fused3_body<1, 4, NB8, MODE, 1, false, false, false, R, NE>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
+  fused3_body<1, 4, NB8, MODE, 1, PK, false, false, R, NE>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
                                                                reinterpret_cast<unsigned int*>(tags), Tail{}, nullptr,
                                                                nullptr, wait_ctr, wait_n, done_ctr, trace);
   asm volatile("griddepcontrol.wait;" ::: "memory");
@@ -1705,12 +1705,13 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 // SM (dynamic shared memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd
 // some SMs; leave > 0: of the SM's shared memory less a leave-th, so one CTA of a launch capped at leave fits beside.
 // pd: quads of register prefetch, 1 or 2. probe (pd 1, lanes 4): 1 four-round BLAKE3 (tags, uncertified), 2 no chunk
-// ends (mode sink, its xor into tags[0]); 0 the certified tag. trace: null, or this launch's TR_WORDS words.
+// ends (mode sink, its xor into tags[0]), 3 the packed CTA finish (the certified tag); 0 fused3p_kernel. trace: null,
+// or this launch's TR_WORDS words.
 int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
                uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ, int leave, int probe,
                unsigned long long* trace, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || !done_ctr || pd < 1 || pd > 2 || leave < 0 || probe < 0 ||
-      probe > 2 || (probe ? pd != 1 || lanes != 4 || mode != (probe == 1 ? MODE_TAGS : MODE_SINK)
+      probe > 3 || (probe ? pd != 1 || lanes != 4 || mode != (probe == 2 ? MODE_SINK : MODE_TAGS)
                           : mode != MODE_GEMM && mode != MODE_TAGS))
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
@@ -1729,10 +1730,14 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
     kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 4, false>
            : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 4, false>
                       : fused3q_kernel<4, MODE_TAGS, 4, false>;
-  } else {
-    kern = nb8 == 1 ? fused3q_kernel<1, MODE_SINK, 7, true>
+  } else if (probe == 2) {
+    kern = nb8 == 1   ? fused3q_kernel<1, MODE_SINK, 7, true>
            : nb8 == 2 ? fused3q_kernel<2, MODE_SINK, 7, true>
                       : fused3q_kernel<4, MODE_SINK, 7, true>;
+  } else {
+    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, true>
+           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, true>
+                      : fused3q_kernel<4, MODE_TAGS, 7, false, true>;
   }
 #undef F3P
 #undef F3PD
@@ -1749,7 +1754,8 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
   cfg.gridDim = dim3((N / 16 / FW) * (Kd / CCOLS));
   cfg.blockDim = dim3(FW * 32);
   const int share = sm_smem - (leave > 0 ? sm_smem / leave : 0);
-  cfg.dynamicSmemBytes = std::max(M * CXS, occ > 0 ? std::min(share / occ - reserved, 99 * 1024) : 0);
+  cfg.dynamicSmemBytes = std::max({M * CXS, occ > 0 ? std::min(share / occ - reserved, 99 * 1024) : 0,
+                                   probe == 3 ? F3_FINISH_BYTES : 0});
   cfg.stream = st;
   cudaLaunchAttribute attr[1];
   attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;

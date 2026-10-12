@@ -737,7 +737,7 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
-PIPE_PLANS = ("px",)
+PIPE_PLANS = ("px", "pk")
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
 # one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones. So do two quads
 # of register prefetch on gate_up and down (r20261012-114545-aca3: 1.089 vs 1.065 at M = 1), letting the next launch
@@ -746,9 +746,12 @@ PIPE_PLANS = ("px",)
 # arguments alone slowed fused3p's loop (px 1.089 and 1.124), so tf.cu keeps neither.
 # o, and qkv, one CTA an SM more (py, pw) lose too (r20261012-120827-5b76: 1.093, 1.099 vs 1.066; o's CTAs then
 # double up beside qkv's).
-CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}, "pv": {"qkv": 0, "o": 0, "gate_up": 0}}
+# o leaving room for one gate_up CTA beside it (pv) is a wash (r20261012-122740-a072: 1.064 vs 1.065; gate_up's link
+# 1.7 µs shorter, down's 2.4 longer).
+CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}, "pk": {"qkv": 0, "o": 0, "gate_up": 0}}
 # Per plan, shapes whose padding leaves room for one CTA of the named next shape (its CTAs then start beside them).
-LEAVE_PLANS = {"pv": {"o": "gate_up"}}
+LEAVE_PLANS: dict[str, dict[str, str]] = {}
+PROBE_PLANS = {"pk": 3}  # tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 the packed CTA finish
 TRACE_BATCHES = (1, 8)
 
 
@@ -770,7 +773,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
              commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
              ceil(CTAs / SMs) + plan[shape] CTAs an SM
-At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
+At TRACE_BATCHES, nativepx, tagpx4 and tagpk4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
@@ -828,6 +831,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (glob
             ctr[q - 1] (and tracing into trace[q] if given); with CAP_PLANS[plan]'s shapes at most ceil(CTAs / SMs) + its
             value CTAs an SM, LEAVE_PLANS[plan]'s leaving room for one CTA of the next; probe 1 (g 4) four-round
             BLAKE3, 2 no chunk ends (a sink)."""
+            probe = PROBE_PLANS.get(plan, probe)
             leaves, plan = LEAVE_PLANS.get(plan, {}), CAP_PLANS[plan] if plan else {}
             tb = tbs[g] if g and tb is None else tb
             lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_SINK if probe == 2 else MODE_TAGS)
@@ -871,7 +875,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (glob
             return f
 
         arms = {"native": run(seq(lambda name: timing[name]["batches"][mb]["native_arm"]), "native"),
-                **{f"native{p}": run(seq_pdl(None, None, p), f"native{p}") for p in CAP_PLANS}}
+                **{f"native{p}": run(seq_pdl(None, None, p), f"native{p}") for p in CAP_PLANS if p not in PROBE_PLANS}}
         picks, gates = {}, {}
         for g in groups:
             picks[g] = {name: best(name, f"t{g}k") for name in names}
@@ -907,7 +911,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (glob
             torch.cuda.synchronize()
             want = tbs[g].clone()
             gates[g] = {}
-            steps = [(f"tag{p}", seq_pdl(g, None, p)) for p in CAP_PLANS]
+            steps = [(f"tag{p}", seq_pdl(g, None, p)) for p in CAP_PLANS if p not in PROBE_PLANS or g == 4]
             for what, fs in steps:
                 f = run(fs, f"{what}{g}")
                 tbs[g].zero_()
@@ -920,14 +924,14 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (glob
                 if ok:
                     arms[f"{what}{g}"] = f
             for p in CAP_PLANS:
-                if gates[g][f"tag{p}"]:
+                if gates[g].get(f"tag{p}"):
                     def commitp(f=arms[f"tag{p}{g}"], g=g):
                         f()
                         lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
                         lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
                     arms[f"commit{p}{g}"] = commitp
             for p in PIPE_PLANS:
-                if not gates[g][f"tag{p}"]:
+                if not gates[g].get(f"tag{p}"):
                     continue
                 other = run(seq_pdl(g, None, p, tbs2[g]), f"pipe{p}{g}")
                 tbs2[g].zero_()
@@ -960,7 +964,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (glob
         med = r["median_s"]
         if mb in TRACE_BATCHES:
             r["trace"] = {}
-            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpv4", 4, "pv")):
+            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpk4", 4, "pk")):
                 if arm not in arms:
                     continue
                 tr = torch.zeros(len(names) * layout.LAYERS, TR_WORDS, dtype=torch.int64, device="cuda")
