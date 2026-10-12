@@ -33,7 +33,11 @@ if [ "${1:-}" = leased ]; then
   BUS=$(nvidia-smi -i "$UUID" --query-gpu=pci.bus_id --format=csv,noheader | head -1 | tr 'A-F' 'a-f' | sed 's/^0000\(....\)/\1/')
   { nvidia-smi -i "$UUID" -q -d CLOCK,PERFORMANCE,POWER,MEMORY; nvidia-smi topo -m;
     for f in current_link_speed current_link_width max_link_speed max_link_width numa_node local_cpulist; do
-      echo "sysfs $f: $(cat /sys/bus/pci/devices/${BUS,,}/$f 2> /dev/null || echo '?')"; done; } > "$O/env.txt" 2>&1
+      echo "sysfs $f: $(cat /sys/bus/pci/devices/${BUS,,}/$f 2> /dev/null || echo '?')"; done
+    # the payload sizes bound the link's payload rate below its signalling rate: the GPU and the port above it
+    for d in "${BUS,,}" "$(basename "$(dirname "$(readlink -f "/sys/bus/pci/devices/${BUS,,}")")")"; do
+      echo "lspci $d:"; { sudo -n lspci -vvv -s "$d" 2> /dev/null || lspci -vvv -s "$d"; } |
+        grep -E 'MaxPayload|MaxReadReq|LnkCap:|LnkSta:|access denied'; done; } > "$O/env.txt" 2>&1
   nvidia-smi -i "$UUID" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu,utilization.memory,pcie.link.gen.current \
     --format=csv,nounits -lms 100 > "$O/smi.csv" &
   SMI=$!
@@ -63,10 +67,11 @@ if [ "${1:-}" = leased ]; then
     args=${e#*:}; args=${args//@MPS@/${MPSDIR:-}}
     # an MPS client names its GPU within the server's visible set, where the leased GPU is device 0
     cvd=$CUDA_VISIBLE_DEVICES; [[ $args == *--mps-dir* ]] && cvd=0
+    # each entry is gated on its own checks, so one that fails ends only itself; the run exits with the first failure
     CUDA_VISIBLE_DEVICES=$cvd "$S/bwstream" --mode window "${common[@]}" --suffix "${e%%:*}" $args ||
-      { rc=$?; echo "window ${e%%:*} exited $rc"; exit $rc; }
+      { r=$?; echo "window ${e%%:*} exited $r"; [ "$rc" = 0 ] && rc=$r; }
   done
-  exit 0
+  exit $rc
 fi
 
 NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
