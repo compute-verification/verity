@@ -94,6 +94,11 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #ifndef WW_SKEND
 #define WW_SKEND 0
 #endif
+// WW_SKU = 1: the sketch's two compressions a vector unrolled in a rolled build: one warp runs them at the CTA's end
+// (WW_SKEND), where their latency rather than the code's size counts.
+#ifndef WW_SKU
+#define WW_SKU 0
+#endif
 // WW_MAXREG: the fused GEMM's registers a thread (`__maxnreg__`, in place of WW_OCC's bounds), such as 160, at which
 // three CTAs an SM leave 4096 registers to the commit's kernels beside them.
 #ifndef WW_MAXREG
@@ -1027,7 +1032,7 @@ __device__ __forceinline__ void tag_compress(uint32_t (&cv)[8], uint32_t (&m)[16
 }
 
 __device__ __forceinline__ void sk_compress(uint32_t (&cv)[8], uint32_t (&m)[16], uint32_t len, uint32_t flags) {
-  if constexpr (WW_ROLL) b3_compress_rolled(cv, m, len, flags);
+  if constexpr (WW_ROLL && !WW_SKU) b3_compress_rolled(cv, m, len, flags);
   else bw::b3_compress(cv, m, 0, len, flags, cv);
 }
 
@@ -1466,6 +1471,7 @@ int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
   out[7] = KMAX; out[8] = WW_SQR; out[9] = TAG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
   out[13] = WW_B3U; out[14] = TB; out[15] = KW; out[16] = SK_M; out[17] = WW_SKEND; out[18] = SUB; out[19] = WW_MAXREG;
+  out[20] = WW_SKU;
   return 0;
 }
 

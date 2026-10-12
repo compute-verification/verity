@@ -11,9 +11,9 @@
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
 # r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3, and
-# trailing c, u, t, w, e and m WW_CC=1, WW_B3U=1, WW_TB=2, WW_KW=2, WW_SKEND=1 and WW_MAXREG=160, as in p521s1rcut) names
-# the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3) the largest k each
-# holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
+# trailing c, u, t, w, e, m and k WW_CC=1, WW_B3U=1, WW_TB=2, WW_KW=2, WW_SKEND=1, WW_MAXREG=160 and WW_SKU=1, as in
+# p521s1rcut) names the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3) the
+# largest k each holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
 # `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
 # out/profile-details.txt. L2PROBE=LAYERS runs, after the bench, wide_profile.py --l2 LAYERS (L2_ARGS, default 70B, M=1,
 # k=1) under ncu --cache-control none: each kernel's DRAM bytes and L2 read hits in out/l2probe.csv.
@@ -32,7 +32,8 @@ FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -
 declare -A PIDS=()
 for lib in $LIBSET; do
   bits=${lib:1:3} sqr=${lib:5:1} suf=${lib:6} defs=""
-  while [[ $suf == *[cutwem] ]]; do
+  while [[ $suf == *[cutwemk] ]]; do
+    [[ $suf == *k ]] && defs+=" -DWW_SKU=1"
     [[ $suf == *m ]] && defs+=" -DWW_MAXREG=160"
     [[ $suf == *e ]] && defs+=" -DWW_SKEND=1"
     [[ $suf == *c ]] && defs+=" -DWW_CC=1"
