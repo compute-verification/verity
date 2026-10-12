@@ -86,25 +86,25 @@ INPUTS: dict[str, Input] = {
                           "read-and-decode at 24 warps, c·k − 1 with c = 0.526 / 0.501 (r20261012-172911-1184); "
                           "below it a form exposes a share of c·k (mma-ws: 0.10)", "measured"),
     # The honest prover's codec costs, per pass over the bytes they cover.
-    "o_w": Input({2: ((8, 0.286), (16, 0.284), (32, 0.348)), 3: ((8, 0.806), (16, 0.814), (32, 0.884))},
-                 "per weight pass", "ra-codec-tensor 20:40Z: 70B's four linears over native, untagged, at 16 decoders "
-                 "in 20 warps (r20261012-194908-391b; in the step at B8, k = 2's o_W is 0.294, r20261012-194958-0f97)",
-                 "measured", {2: ((8, 0.20), (32, 0.20)), 3: ((8, 0.64), (32, 0.64))},
+    "o_w": Input({2: ((1, 0.344), (8, 0.300), (32, 0.384)), 3: ((1, 0.882), (8, 0.849), (32, 0.965))},
+                 "per weight pass", "ra-codec-tensor 21:35Z (e55995f5f, hbm-step-points/v0): the decode in the step, "
+                 "70B at M = 8 (r20261012-203305-7dfa) and M = 32 (r20261012-203315-5252, r20261012-212703-cb89), "
+                 "8B at M = 1 (r20261012-212713-6524)", "measured", {2: ((8, 0.20), (32, 0.20)), 3: ((8, 0.64), (32, 0.64))},
                  "the fused kernel at its decode alone (1.20 / 1.64 reads at k = 2 / 3, ra-codec-tensor §2)"),
-    "tau_w": Input({2: ((8, 0.114), (16, 0.132), (32, 0.138)), 3: ((8, 0.117), (16, 0.104), (32, 0.113))},
+    "tau_w": Input({2: ((8, 0.083), (32, 0.134)), 3: ((8, 0.074), (32, 0.079))},
                    "per weight pass, k_s = 16, n = 4 KiB",
-                   "ra-codec-tensor 20:40Z: the receipt re-keyed every pass on sketch warps of its own, +0.084 / "
-                   "+0.102 / +0.108 at k = 2 and +0.087 / +0.074 / +0.083 at k = 3 (M = 8 / 16 / 32, "
-                   "r20261012-194908-391b), plus its SHA-512 commit between passes, 0.030 a weight pass at 70B",
+                   "ra-codec-tensor 21:35Z (e55995f5f): the receipt re-keyed every pass in the step, its SHA-512 commit "
+                   "(0.030) included, 70B at M = 8 (r20261012-203305-7dfa) and M = 32 (r20261012-203315-5252); 8B at "
+                   "M = 1 pays 0.17, per-pass costs that don't shrink with the weights (inferred)",
                    "measured",
-                   {2: ((8, 0.094), (16, 0.112), (32, 0.118)), 3: ((8, 0.097), (16, 0.084), (32, 0.093))},
-                   "BLAKE3 leaves and tree for the commit (ra-codec-tensor Ask 1 (a): 0.030 → about 0.01)"),
-    "tau_kv": Input({2: 0.113, 3: 0.120}, "per KV pass, k_s = 16",
-                    "ra-word-codec 20:20Z: an unbound sketch inside mma-ws attention, then a receipt for each "
-                    "16-vector block, +0.270 / +0.766 against +0.157 / +0.646 unreceipted at k = 2 / 3 "
-                    "(r20261012-201014-31b3, art:0ef2da98)", "measured", {2: 0.085, 3: 0.092},
-                    "layer l's block receipts on a low-priority stream beside layer l + 1's attention, hiding most "
-                    "of their 0.031 (ra-word-codec, built at 15012d062, unmeasured)"),
+                   {2: ((8, 0.083), (32, 0.083)), 3: ((8, 0.074), (32, 0.079))},
+                   "a 21-warp kernel at M = 32 (ra-codec-tensor, estimate, not built); the commit stays SHA-512 "
+                   "(21:45Z), so BLAKE3's 0.02 is not a lever"),
+    "tau_kv": Input({2: 0.107, 3: 0.115}, "per KV pass, k_s = 16",
+                    "ra-word-codec 21:35Z: an unbound sketch inside mma-ws attention, then two receipts a block of 8 "
+                    "vectors each, +0.268 / +0.765 against +0.161 / +0.650 unreceipted at k = 2 / 3 "
+                    "(r20261012-212502-016a, art:96819a51); hiding the hash beside the next layer's attention "
+                    "measured no gain (r20261012-211626-0945)", "measured"),
     "ks_ratio": Input({8: 0.73, 12: 0.87, 16: 1.0, 32: 3.54}, "× the k_s = 16 receipt",
                       "ra-sketch-tag: encoded store M=1, +21.1 / +22.35 / +34.3% at k_s 8 / 16 / 32 over the codec's "
                       "17.65%", "measured"),
@@ -116,9 +116,9 @@ INPUTS: dict[str, Input] = {
     "tau_bind": Input(0.06, "per weight pass", "ra-bound-receipt (ro-bound-sketch-blake3/v0, B = R ⊕ M) on "
                       "Llama-3.1-70B's linears, against cuBLASLt FP8: the bound receipt over the unbound, +0.05–0.08 "
                       "at every mode and batch (r20261012-191645-25bd)", "measured"),
-    "tau_bind_kv": Input({2: 0.019, 3: 0.017}, "per KV pass", "ra-word-codec 20:20Z: the block receipt bound to "
-                         "attention's PV output two tiles back, +0.289 / +0.783 against the unbound +0.270 / +0.766 "
-                         "(r20261012-201014-31b3)", "measured"),
+    "tau_bind_kv": Input({2: 0.019, 3: 0.016}, "per KV pass", "ra-word-codec 21:35Z: the block receipts bound to "
+                         "attention's PV output two tiles back, +0.287 / +0.781 against the unbound +0.268 / +0.765 "
+                         "(r20261012-212502-016a)", "measured"),
     "o_kv": Input({2: ((32, 0.225), (40, 0.177), (80, 0.162), (160, 0.159)),
                    3: ((32, 0.761), (40, 0.670), (80, 0.651), (160, 0.649))}, "per KV pass",
                   "ra-word-codec mma-ws (r20261012-172911-1184, art:47c171ef) at B40–160; ra-codec-tensor at B32 "
@@ -142,11 +142,18 @@ INPUTS: dict[str, Input] = {
                       "the fused step's fixed reads kept on chip (GEMM inputs, Triton's and attention's partials: "
                       "estimate)"),
     "eph_write": Input({"8B": (900.0, 6.0), "70B": (700.0, 6.5), "405B": (900.0, 6.5)}, "B per layer·hidden",
-                       "ra-ephemeral's fused arm: DRAM writes (GEMM workspaces, split-KV partials, the activations' "
-                       "write-backs) are 0.6–0.8% of reads at 70B and 0.4–1.6% at 8B, here as bytes from those shares "
-                       "(r20261012-184939-520e)", "derived",
+                       "ra-ephemeral 21:40Z, stock kernels as the upper bound (21:50Z): DRAM writes are 0.6–0.8% of "
+                       "reads at 70B and 0.4–1.6% at 8B (r20261012-184939-520e), 92% of them the CUTLASS FP8 GEMM's "
+                       "and XQA's local-memory stores (2361 art:5c8baf5e, 6732 art:1d638a4b); with write bus time "
+                       "μ_eph is 0.58–0.66% at 70B and 0.32–1.30% at 8B; 405B the larger of each", "derived",
                        {"8B": (0.0, 6.0), "70B": (0.0, 6.5), "405B": (0.0, 6.5)},
-                       "no workspaces at decode, so a batch-1 step writes back only its activations (estimate)"),
+                       "the encoded GEMM and attention pass the 21:50Z gate (STACK:0, LOCAL:0, L2 writes no more than "
+                       "their outputs and declared partials), leaving the activations' write-backs: about 0.1% at 70B "
+                       "batch 1 (ra-ephemeral, estimate)"),
+    "eph_split": Input(0.0, "of the bytes divided across a step's cards", "ra-ephemeral: a card's rest barely splits "
+                       "(38 MB a graph at TP 2 against 41 MB at TP 1), and 70B at TP 2 writes 0.79–1.51% of a card's "
+                       "bus time (cd24 art:ccbe15a6), above even unsplit bytes here (0.36–1.16%); TP 4 and 8 are "
+                       "unmeasured", "measured"),
     "write_bus": Input(1.0, "read-times per written byte", "a DRAM write holds the bus as long as a read (turnaround "
                        "not counted)", "estimate"),
     # The verifier's sample (μ_sample) and the counting slack (λ).
@@ -170,25 +177,26 @@ INPUTS: dict[str, Input] = {
     "x_from_transcript": Input(False, "switch", "a bound receipt's opening carries its z; the verifier could take "
                                "z_{j−1} from PoUW's transcript instead", "estimate"),
     "receipt_bits": Input(512, "bits", "a SHA-512 receipt", "policy"),
-    # η, the share of R·T the honest engine leaves unread, by phase: stock vLLM 8B on ra-kv-filler's bursty trace 1
-    # (trace 2, decode-heavy, in each source).
+    # η, the share of R·T the honest engine leaves unread, by phase on the GPU's clock: stock vLLM 8B on ra-kv-filler's
+    # bursty trace 1 under async scheduling (trace 2, decode-heavy, in each source).
     "eta_counted": Input(True, "switch", "\"99%\" is against R·T (Daniel 20:55Z): γ adds the honest engine's "
                          "unread share by phase, which ra-fill-bandwidth and ra-fill-compute hill-climb", "policy"),
-    "eta_decode": Input(0.190, "of R·T", "ra-kv-filler §7: decode steps read at 0.75 R (trace 2: 0.80 R, 0.172), "
-                        "the step's own shortfall (r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)",
-                        "measured", 0.05,
-                        "a decode step that reads at 0.95 R throughout, as the fused sketch GEMM does (estimate; a "
-                        "side stream nets only 0.0075 R per 1% of step time, ra-kv-filler)"),
-    "eta_prefill": Input(0.092, "of R·T", "ra-kv-filler §7: prefill reads at 0.041 R (trace 2: 0.095 R, 0.033; "
-                         "r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured", 0.005,
+    "eta_decode": Input(0.223, "of R·T", "ra-kv-filler §7 on the GPU's clock: decode steps read at 0.72 R (trace 2: "
+                        "0.75 R, 0.234), the host's gaps between steps included, which async scheduling keeps GPU-busy "
+                        "(art:5448c72f); §8: the native decode step reads at 0.73–0.87 R of its span "
+                        "(r20261012-211642-4dbc, art:be9b8dfd)", "measured", 0.05,
+                        "every read native (0.79–0.88 R, §8) and the rest, 6–11% of the step (quantization, norms, "
+                        "rotary, sampling), fused into the GEMMs' and attention's prologues and epilogues: 0.95 R "
+                        "(estimate; a side stream nets only 0.0075 R per 1% of step time, ra-kv-filler)"),
+    "eta_prefill": Input(0.099, "of R·T", "ra-kv-filler §7 on the GPU's clock: prefill reads at 0.038 R (trace 2: "
+                         "0.085 R, 0.037; art:5448c72f)", "measured", 0.005,
                          "weights re-streamed and sketched beside the compute-bound prefill at 0.95 R, about +0.9% of "
                          "busy time (ra-kv-filler, estimate)"),
-    "eta_gaps": Input(0.040, "of R·T", "ra-kv-filler §7: the engine's host time between steps, median 0.38 ms a step "
-                      "(trace 2: 0.82 ms, 0.065; r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)",
-                      "measured", 0.0,
-                      "the next step queued on the GPU before the host's output work (the engine's job, estimate)"),
-    "eta_idle": Input(0.095, "of R·T", "ra-kv-filler §7: no request running (trace 2: 0.034; "
-                      "r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured", 0.005,
+    "eta_gaps": Input(0.0, "of R·T", "ra-kv-filler §7: under async scheduling the GPU runs the queued step through "
+                      "the host's gaps (0.040 of R·T on the host's clock, 0.065 on trace 2), so they are decode's and "
+                      "prefill's GPU time; synchronous scheduling would add 0.07 of idle (art:5448c72f)", "measured"),
+    "eta_idle": Input(0.095, "of R·T", "ra-kv-filler §7 on the GPU's clock: no request running (trace 2: 0.034; "
+                      "art:5448c72f)", "measured", 0.005,
                       "the idle top-up's plain read, which fills 0.88–0.95 of it at +0.1% TPOT (ra-kv-filler)"),
     # Chained passes (μ_timing): a pass is one step's plan, and its seed needs the previous pass's root.
     "t_gap": Input(100e-6, "s per pass", "ra-remote-driver: the root's reduction (an all-gather of the GPUs' subtree "
@@ -205,8 +213,10 @@ INPUTS: dict[str, Input] = {
     "n_session": Input(1000, "windows", "sessions of at least 1,000 chained windows, the default policy "
                        "(Daniel 20:55Z, this lane's Ask 2)", "policy"),
     "p_over_o": Input(0.47, "prompt tokens per output token", "ra-kv-filler's decode-heavy trace 2 (93,312 prompt and "
-                      "200,192 output tokens): each step also encodes P/O prompt tokens a sequence, k·x₁ a byte over "
-                      "the reads it gets; the prompt encode was +7.3% / +11.0% of busy time at k = 2 / 3 "
+                      "200,192 output tokens, every prompt token computed): each step also encodes P/O prompt tokens "
+                      "a sequence, k·x₁ a byte over the reads it gets, with P the tokens computed rather than served "
+                      "from a prefix cache (21:45Z; ra-kv-filler §6); the prompt encode was +7.3% / +11.0% of busy "
+                      "time at k = 2 / 3 "
                       "(r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured"),
 }
 
@@ -216,9 +226,11 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "o_w": ({2: ((8, 0.052), (32, 0.052)), 3: ((8, 0.505), (32, 0.505))},
             "the mma-ws decode floor with 24 warps (ra-word-codec r20261012-172911-1184) on the weights too"),
     "o_kv": ({2: ((32, 0.052), (160, 0.052)), 3: ((32, 0.505), (160, 0.505))}, "the same floor on the KV"),
-    "tau_w": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))},
-              "the sketch's cost on a store that is only read (ra-sketch-tag plain store M=32, +1.7..1.9%)"),
-    "tau_kv": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))}, "the same on the KV"),
+    "tau_w": ({2: ((8, 0.049), (32, 0.049)), 3: ((8, 0.049), (32, 0.049))},
+              "the sketch's cost on a store that is only read (ra-sketch-tag plain store M=32, +1.7..1.9%) and the "
+              "SHA-512 commit, which stays (0.030, ra-codec-tensor)"),
+    "tau_kv": ({2: ((8, 0.046), (32, 0.046)), 3: ((8, 0.046), (32, 0.046))},
+               "the same sketch on the KV and two 8-vector hashes a block (0.027, ra-word-codec)"),
     "eph_read": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte read from DRAM"),
     "eph_write": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte written to DRAM"),
     "eta_decode": (0.0, "every phase reads at R, as the frontier's step does"),

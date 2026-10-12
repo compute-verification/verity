@@ -12,8 +12,8 @@ is the optional PoUW join (``bound``).
 
 The step, per GPU (``step``):
 - plain: the linears take max(W·e_mem(m)/R, FLOPs/Φ), attention KV·e_attn/R, the ephemeral traffic (reads, and
-  writes at ``write_bus`` read-times a byte, measured by ra-ephemeral) its bytes/R, and a tensor-parallel step 2L
-  all-reduces over PCIe;
+  writes at ``write_bus`` read-times a byte, measured by ra-ephemeral, ``eph_split`` of it divided across a step's
+  cards) its bytes/R, and a tensor-parallel step 2L all-reduces over PCIe;
 - audited: the linears' CUDA-core work (decode o_w and receipt τ_w per weight pass, and binding τ_bind if ``bound``)
   is exposed except for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h
   read-times a byte, for the step's tokens and P/O prompt tokens a sequence) hides in what tensor slack is left;
@@ -37,7 +37,7 @@ The step, per GPU (``step``):
   pass)/(nT) + gap/pass, μ_sample = ln(1/δ)/(s·horizon) for the hybrid's s openings a window (each window's own
   sampling at most ``window_max``), μ_serve = the honest reads that serve them, λ = (N + log₂(1/δ))/(8nN) named (else
   (log₂q + log₂e − log₂N)/(8n)), μ_sketch = 2^-k_s, and against R·T (``eta_counted``) μ_eta = ra-kv-filler's phases
-  (decode, prefill, the engine's gaps, idle). ``eta_allowance`` is what the rest of γ leaves for η.
+  (decode, prefill, the engine's gaps, idle; on the GPU's clock). ``eta_allowance`` is what the rest of γ leaves for η.
 - ``pass`` (the design's and the red team's): μ_chip = S_chip/(W + KV), μ_rebuild = d·s·(1+h)/(k·x₁) with d = the
   audited step in read passes of W + KV, no μ_unreg, and the capacity left idle, the chaining gap's included,
   reported as ``residual`` = 1 − (1 − γ)/d (F9).
@@ -79,9 +79,9 @@ class Shape:
     def flops_per_token(self) -> float:
         return 2.0 * (self.linear_params + self.hidden * self.vocab)
 
-    def ephemeral(self, table: dict[str, tuple[float, float]], batch: int, tp: int) -> float:
+    def ephemeral(self, table: dict[str, tuple[float, float]], batch: int, tp: int, split: float) -> float:
         fixed, per_seq = table[self.name]
-        return self.layers * self.hidden * (fixed + per_seq * batch) / tp
+        return self.layers * self.hidden * (fixed + per_seq * batch) * ((1.0 - split) + split / tp)
 
 
 SHAPES = {
@@ -182,8 +182,8 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     R = v["R"] * 1e9
     W = s.weight_bytes / tp
     KV = m * w.ctx * s.kv_bytes_per_token / tp
-    act = s.ephemeral(v["eph_read"], m, tp)
-    wr = (s.ephemeral(v["eph_write"], m, tp) + m * s.kv_bytes_per_token / tp) * v["write_bus"]
+    act = s.ephemeral(v["eph_read"], m, tp, v["eph_split"])
+    wr = (s.ephemeral(v["eph_write"], m, tp, v["eph_split"]) + m * s.kv_bytes_per_token / tp) * v["write_bus"]
     e_mem = interp(v["e_mem"], m)
     t_rd = W * e_mem / R
     t_tc = s.flops_per_token * m / tp / v["phi"]

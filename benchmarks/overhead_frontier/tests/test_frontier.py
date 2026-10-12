@@ -22,27 +22,29 @@ def _eta0(inputs=I.INPUTS) -> dict:
 
 
 def _measured_step() -> dict:
-    """ra-codec-tensor's step at p512: one GPU, bf16 KV, no KV receipt, no ephemeral traffic, no prompt to encode, at
-    the weight path those runs measured (17:58Z and 19:05Z)."""
+    """ra-codec-tensor's step at p512: one GPU, bf16 KV, no KV receipt, no ephemeral traffic, no prompt to encode."""
     v = I.values()
-    v.update(P512, tau_kv={2: 0.0, 3: 0.0}, eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL, t_gap=0.0, p_over_o=0.0,
-             o_w={2: ((8, 0.36), (32, 0.73)), 3: ((8, 0.97), (32, 1.00))},
-             tau_w={2: ((8, 0.232), (32, 0.70)), 3: ((8, 0.22), (32, 0.71))})
+    v.update(P512, tau_kv={2: 0.0, 3: 0.0}, eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL, t_gap=0.0, p_over_o=0.0)
     return v
 
 
 @pytest.mark.parametrize("name, batch, ctx, k, measured", [
-    ("8B", 32, 20608, 2, 1.330),  # r20261012-175841-5578
-    ("8B", 32, 20608, 3, 1.834),
-    ("8B", 80, 8256, 2, 1.275),  # r20261012-175906-b479
-    ("70B", 8, 9280, 2, 1.484),  # r20261012-190554-dd7c, the receipt re-keyed every pass on sketch warps
-    ("70B", 8, 9280, 3, 2.030),
+    ("70B", 8, 9280, 2, 1.340),  # hbm-step-points/v0 at e55995f5f: r20261012-203305-7dfa
+    ("70B", 8, 9280, 3, 1.839),
+    ("70B", 32, 2304, 2, 1.463),  # r20261012-203315-5252
+    ("70B", 32, 2304, 3, 1.967),
+    ("70B", 64, 1152, 2, 1.499),  # r20261012-212703-cb89
+    ("70B", 64, 1152, 3, 2.022),
+    ("8B", 1, 661184, 2, 1.164),  # r20261012-212713-6524
+    ("8B", 1, 661184, 3, 1.639),
+    ("8B", 8, 82624, 2, 1.232),  # r20261012-213020-a792
+    ("8B", 8, 82624, 3, 1.744),
 ])
-def test_reproduces_the_measured_step(name, batch, ctx, k, measured):
+def test_reproduces_the_measured_step_from_above(name, batch, ctx, k, measured):
     s = SHAPES[name]
     bf16_kv = Shape(s.name, s.layers, s.hidden, s.inter, s.linear_params, kv_heads=2 * s.kv_heads)
     st = step(Workload(bf16_kv, batch, ctx, tp=1), Params(k, 4096, 16, 0), _measured_step())
-    assert st["cap"] / st["plain"] == pytest.approx(measured, abs=0.10)
+    assert measured - 0.02 <= st["cap"] / st["plain"] <= measured + 0.16
 
 
 def test_plain_step_is_the_measured_passes():
@@ -73,6 +75,23 @@ def test_the_unregistered_reads_are_ra_ephemerals_mu_eph():
     for name, batch, mu in (("70B", 16, 0.00061), ("8B", 64, 0.00162)):  # its worst timed fused points, at 2k
         st = step(Workload(SHAPES[name], batch, 2048, tp=1), Params(3, 4096, 16, 0), v)
         assert st["eph_read"] / (v["R"] * 1e9 * st["plain"]) == pytest.approx(mu, rel=0.35)
+
+
+def test_mu_eph_with_writes_is_the_stock_upper_bound():
+    """ra-ephemeral 21:40Z with write bus time: 0.66% at 70B and 1.30% at 8B a card, and 0.79–1.51% a card at TP 2,
+    where a card's bytes barely split."""
+    v = I.values()
+    p = Params(3, 4096, 16, 0)
+
+    def mu(name, batch, ctx, tp):
+        st = step(Workload(SHAPES[name], batch, ctx, tp=tp), p, v)
+        return st["t_act"] / st["plain"]
+
+    assert mu("70B", 16, 2048, 1) == pytest.approx(0.0066, rel=0.2)
+    assert mu("8B", 1, 2048, 1) == pytest.approx(0.0130, rel=0.2)
+    tp2 = [mu("70B", b, c, 2) for b in (1, 4, 16, 64) for c in (2048, 8192, 32768)]
+    assert 0.0079 <= max(tp2) <= 0.0151
+    assert mu("405B", 1, 2048, 8) > mu("70B", 1, 2048, 1)
 
 
 def test_the_stated_codec_is_masked_p1024_at_three_rounds_with_two_the_fallback():
@@ -243,7 +262,8 @@ def test_where_nothing_is_feasible_a_lever_is_scored_by_the_least_gamma():
     better = F.best(w, I.values(I.improved("eta_decode")), "cap", (3,))
     assert not today["feasible"] and today["gamma_least"] == today["gamma"]
     c = F.compare([today], [better])
-    assert c["median_gain"] == 0.0 and c["gamma_drop"] == pytest.approx(0.190 - 0.05)
+    drop = I.INPUTS["eta_decode"].value - I.INPUTS["eta_decode"].improved
+    assert c["median_gain"] == 0.0 and c["gamma_drop"] == pytest.approx(drop)
 
 
 def test_timing_is_the_drivers():
