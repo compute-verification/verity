@@ -203,7 +203,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
     def committers_of(c):
         return min(a.committers, WB.WS_MAX_WARPS - 1 - c[0])
 
-    focus_of = {lay: (lay, 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0])
+    focus_of = {lay: (lay, 16 if 16 in a.ks else a.ks[0], a.seq_n)
                 for lay in ("plain", "enc")}
     w = WB.fp8_weights(torch, n, kd, 100 + n + kd)
     wb = w.view(torch.uint8)
@@ -514,7 +514,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
 
         arms = {"cublas": arm_cublas, "plain_ws": arm_wc_ws(0, "plain"), "empty": arm_empty}
         for lay in layouts:
-            first = sks[(lay, a.ks[0], a.ns[a.ns.index(4096) if 4096 in a.ns else 0])]
+            first = sks[(lay, a.ks[0], a.seq_n)]
             arms[f"base_{lay}"] = arm_sk(lay, first, 0, decode=0)
             if lay == "enc":
                 arms["dec_enc"] = arm_sk(lay, first, 0, decode=1)
@@ -585,7 +585,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                         f" split {med[f'split_{lay}_{s.name()}'] / native:.3f}x"
                         f" side {med[f'side_{lay}_{s.name()}'] / native:.3f}x"
                         f" window {med[f'window_{lay}_{s.name()}'] / native:.3f}x"
-                        for (lay, ks, nt), s in sks.items() if s.name() == "16_4096")
+                        for (lay, ks, nt), s in sks.items() if (lay, ks, nt) == focus_of[lay])
             + (f"; dec_enc {med['dec_enc'] / native:.3f}x, dt_enc {med['dt_enc'] / native:.3f}x, "
                f"dtc_enc {med['dtc_enc'] / native:.3f}x" if "enc" in layouts else "")
             + f"; best stack {best}" + (" HOST-BOUND" if host_max > 0.8 * spin_s else ""))
@@ -613,7 +613,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log, ks: int) -> dict:
     committing call writes its tags' leaves) or split (gate_up writes the leaves of the previous down's tags, down those
     of its own gate_up's). Every call runs at its arm's fastest configuration in `cases`. The sketches and tags rotate
     over two slots, as a deployment's would (the commit zeroes a sketch behind it), the ring's layer count even."""
-    nt = 4096 if 4096 in a.ns else a.ns[0]
+    nt = a.seq_n
     res = {"k": ks, "n_target": nt, "cfg": "each call at its arm's fastest", "committers": a.committers,
            "layouts": {}, "ok": True}
 
@@ -960,7 +960,9 @@ def main() -> int:
     ap.add_argument("--ks", default="8,16,32")
     ap.add_argument("--ns", default="1024,4096,16384")
     ap.add_argument("--seq-ks", default="16",
-                    help="the layer sequence's k (the first is the report's), n ~ 4096, each swept over --cfgs")
+                    help="the layer sequence's k (the first is the report's), each swept over --cfgs at --seq-n")
+    ap.add_argument("--seq-n", type=int, default=4096,
+                    help="the n target of the layer sequence and of the configuration sweep (one of --ns)")
     ap.add_argument("--cfgs", default="6x1,4x2,8x1",
                     help="consumer warps x stages each: every arm at the first, base, decode, sketch and fused also at "
                          "the rest for k=16, n=4096 (each arm's fastest is the frontier's)")
@@ -976,6 +978,7 @@ def main() -> int:
     a.ks = [int(k) for k in a.ks.split(",")]
     a.ns = [int(v) for v in a.ns.split(",")]
     a.seq_ks = [int(k) for k in a.seq_ks.split(",") if int(k) in a.ks]
+    a.seq_n = a.seq_n if a.seq_n in a.ns else a.ns[0]
     a.cfgs = [tuple(int(v) for v in c.split("x")) for c in a.cfgs.split(",")]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
