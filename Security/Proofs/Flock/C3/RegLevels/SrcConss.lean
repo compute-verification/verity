@@ -114,7 +114,7 @@ theorem ligeritoRun_starts [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} 
   have hA0 : stA.conss = #[] := by rw [eA]
   rw [levelsLoop_starts hq _ _ _ _ _ st₄ _ _ _ _ (by omega) h₅, hc₄, Array.toList_push, hc₃, hc₂, hc₁, hA0,
     FlockVBridge.Family.Conss.range_eq_cons (n := sch.levels.size) (by omega)]
-  simp only [Array.toList_empty, List.nil_append, List.map_cons, List.map_nil, List.cons_append, hp, Nat.zero_add,
+  simp only [List.nil_append, List.map_cons, List.map_nil, List.cons_append, hp, Nat.zero_add,
     FlockVBridge.Family.Conss.getD_default]
 
 /-- **(n7's levels) R's run's contexts are its levels** (`ConssAt`): where V*'s Ligerito over F returns zero residuals
