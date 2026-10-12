@@ -172,7 +172,25 @@ theorem tape_c3DecOf {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (ℐ).r (c3DecOf zs dg N k Rw src own sel)
       (layers zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) =
       runSteps (src R ω t (layers zs dg N k Rw R ω t R₂ τ)) := by
-  sorry
+  obtain ⟨hleaf, hcoin, hread, htys, -⟩ := hs
+  have hr : (ℐ).r ≤ t.length := hleaf R ω t R₂ τ o h
+  have hc : (runSteps (src R ω t (layers zs dg N k Rw R ω t R₂ τ))).filterMap Sum.getRight? =
+      coinSteps CT 0 (t.map Prod.snd) := hcoin R ω t R₂ τ o h
+  have key : ∀ (ts : List Step) (dec : ℕ → List (SMsg T)) (cs : List ((k : Fin r) → CT k)), r + 1 ≤ cs.length →
+      (∀ i, roundMsgs T (dec i) = (PlaysCoin.cut (ts.map Exec.kindOf) (ts.filterMap Sum.getLeft?))[i]?.getD []) →
+      coinSteps CT 0 cs = ts.filterMap Sum.getRight? →
+      schedSteps T CT 0 (((List.range (r + 1)).map dec).zip cs) = ts := by
+    intro ts dec cs hcs hm hc'
+    have hlen : (PlaysCoin.cut (ts.map Exec.kindOf) (ts.filterMap Sum.getLeft?)).length = r + 1 := by
+      rw [FlockVBridge.Family.length_cut, ← hc', FlockVBridge.Family.length_coinSteps CT (Nat.le_of_succ_le hcs)]
+    refine FlockVBridge.Family.schedSteps_zip T CT ts _ cs (by rw [List.length_map, List.length_range]; exact hcs)
+      ?_ hc'
+    refine List.ext_getElem (by rw [List.length_map, List.length_map, List.length_range, hlen]) fun i _ hi => ?_
+    rw [List.getElem_map, List.getElem_map, List.getElem_range, hm i, List.getElem?_eq_getElem hi, Option.getD_some]
+  exact key (runSteps (src R ω t (layers zs dg N k Rw R ω t R₂ τ)))
+    (fun i => c3DecOf zs dg N k Rw src own sel i (maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R ω t R₂ τ)))
+    (t.map Prod.snd) (Nat.le_trans hr (Nat.le_of_eq (List.length_map _).symm))
+    (fun i => c3DecOf_spec hread htys h i) hc.symm
 
 end decoder
 
