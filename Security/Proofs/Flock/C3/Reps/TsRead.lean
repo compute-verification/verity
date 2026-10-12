@@ -77,7 +77,7 @@ def colsAt (Q : FlockSoundness.Discharge.Recursion.VStmt) (bits : Q.Bits) (u : F
   FlockVBridge.copyVal (FlockVBridge.keyInst Q.hU Q.nv (FlockSoundness.Discharge.Layout.outsOf Q.c Q.hU Q.nv) u) bits hj
 
 /-- **An opened row is its copy's row columns**: two layers whose copies agree on the row's `128 · LANES` columns
-open the same row there (`OpensAtL`'s `ColsHold`, `rowBytes_inj`'s bits). -/
+open the same row there (`OpensAtL`'s `ColsHold`, `getElem!_of_bitL`). -/
 theorem rows_congr {Q : FlockSoundness.Discharge.Recursion.VStmt} {bits bits' : Q.Bits} {u : Fin Q.nv} {j LANES : ℕ}
     {r r' a a' cf cf' A A' : Array F128}
     (h : FlockVBridge.Family.OpensAtL Q bits u j LANES r a cf A)
