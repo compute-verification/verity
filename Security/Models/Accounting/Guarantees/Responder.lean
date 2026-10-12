@@ -42,9 +42,8 @@ namespace Accounting.Guarantees
 
 open scoped ENNReal
 
-/-- **The coding lemma.** Two strings of at most `M` bits with the same `(M + 1)`-bit length code are equal. -/
-def LengthCode : Prop :=
-  ∀ (M : ℕ) (l l' : List Bool), l.length ≤ M → l'.length ≤ M → lengthCode M l = lengthCode M l' → l = l'
+/-- **The coding lemma.** The `(M + 1)`-bit length code is injective on the strings of at most `M` bits. -/
+def LengthCode : Prop := ∀ M : ℕ, Set.InjOn (lengthCode M) {l : List Bool | l.length ≤ M}
 
 /-- **B2.** For a ring-model scheme, `k` challenges at `W`, a strategy `S` causal from every tick over PoUS's outcomes,
 a location `X`, challenge ticks `t`, answers read off what `X` does in each window (`ans`) and a help `help` with at

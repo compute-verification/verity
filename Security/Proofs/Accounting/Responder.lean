@@ -35,7 +35,9 @@ theorem LengthCode : Guarantees.LengthCode := by
       simp [lengthCode, show ¬ l.length < l'.length by omega, show l.length ≠ l'.length by omega]
     rw [h] at h1
     exact absurd (h1.symm.trans h2) (by simp)
-  intro M l l' hl hl' h
+  intro M l hl l' hl' h
+  change l.length ≤ M at hl
+  change l'.length ≤ M at hl'
   have hlen : l.length = l'.length := le_antisymm (len M l l' hl h) (len M l' l hl' h.symm)
   refine List.ext_getElem hlen fun i hi hi' => ?_
   have := congrFun h ⟨i, by omega⟩
@@ -81,7 +83,7 @@ noncomputable def decodeLen (M : ℕ) (a : Pous.Bits (M + 1)) : List Bool :=
 theorem decodeLen_lengthCode {M : ℕ} {l : List Bool} (hl : l.length ≤ M) : decodeLen M (lengthCode M l) = l := by
   have h : ∃ l' : List Bool, l'.length ≤ M ∧ lengthCode M l' = lengthCode M l := ⟨l, hl, rfl⟩
   rw [decodeLen, dite_eq_left h]
-  exact LengthCode M _ _ (Classical.choose_spec h).1 hl (Classical.choose_spec h).2
+  exact LengthCode M (Classical.choose_spec h).1 hl (Classical.choose_spec h).2
 
 /-- A help with at most `2^H` values has an `H`-bit code, injective on them. -/
 theorem exists_code {β α : Type*} [Finite β] (help : β → α) {H : ℕ}
@@ -212,7 +214,7 @@ theorem out_spec (x : Pous.Outcome sch k) (j : ℕ) (hj : j < k) (hm : ((S x).co
       stateOf sch S X t help M H N c x' j = stateOf sch S X t help M H N c x j := ⟨x, rfl, hm, rfl⟩
   obtain ⟨hi, hl, hs⟩ := Classical.choose_spec h
   obtain ⟨h1, h2⟩ := pack_inj hN hs
-  have hcont := LengthCode M _ _ hl hm h1
+  have hcont := LengthCode M hl hm h1
   have hhelp := hcode ⟨_, rfl⟩ ⟨_, rfl⟩ h2
   have hx := hin _ _ ⟨j, hj⟩ hhelp hi
   have hacts := hc X (t j) (t (j + 1)) _ _ hcont hx
