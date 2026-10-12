@@ -364,7 +364,7 @@ _honest_salts = S.acc_salts
 
 def _unregistered(src: Path, dst: Path, port: str) -> Path:
     """Part `src` with `port` committed afresh: gone from its reads file and from `pub.bin`'s registered rows."""
-    shutil.copytree(src, dst)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("rec-bindings*"))  # `_own` writes them into `src` as it's copied
     r = json.loads((dst / "registered.json").read_text())
     del r["ports"][port]
     (dst / "registered.json").write_text(json.dumps(r))
