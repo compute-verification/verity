@@ -1,6 +1,6 @@
-"""The host CPUs' receipts (`receipt.cpp`) against their definitions in `reference.py`: the sketches and the leaf for both
-key widths, with SHA-256 portable and on the SHA extensions, SHA-256 itself across its padding cases, and the gate
-refusing a wrong sketch. The GPU's half is checked by loop.cu's gate on the node. Needs g++ and AVX-512 VNNI."""
+"""The host CPUs' receipts (`receipt.cpp`) against their definitions in `reference.py`: the sketches and the leaf for every
+key width, a group at a time and a 1 MiB chunk at a time (whose 16 groups must match), with SHA-256 portable and on the
+SHA extensions, SHA-256 itself across its padding cases, and the gate refusing a wrong sketch. The GPU's half is checked by loop.cu's gate on the node. Needs g++ and AVX-512 VNNI."""
 
 import hashlib
 import json
@@ -38,9 +38,11 @@ def gate_cpu(tmp_path_factory):
 
 @pytest.mark.parametrize("ks", [1, 2, 4, 16])
 @pytest.mark.parametrize("sha_ni", [0, 1])
-def test_cpu_receipts_match_the_reference(gate_cpu, tmp_path, ks, sha_ni):
+@pytest.mark.parametrize("path", ["group", "chunk"])
+def test_cpu_receipts_match_the_reference(gate_cpu, tmp_path, ks, sha_ni, path):
     gate = tmp_path / "gate.json"
-    gate.write_text(subprocess.run([str(gate_cpu), str(ks), str(sha_ni)], check=True, capture_output=True, text=True).stdout)
+    args = [str(gate_cpu), str(ks), str(sha_ni)] + (["chunk"] if path == "chunk" else [])
+    gate.write_text(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
     assert reference.main(str(gate)) == 0
 
 

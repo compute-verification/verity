@@ -137,6 +137,15 @@ static void four_streams(const uint8_t* x, const uint8_t* M, const int8_t* K, in
   }
 }
 
+static void leaf_of(uint64_t group, uint64_t zseq, const int32_t* sk, int ks, uint8_t leaf[32]) {
+  uint8_t msg[32 + 16 + 16 * 16 * 4];
+  memcpy(msg, SEED, 32);
+  memcpy(msg + 32, &group, 8);
+  memcpy(msg + 40, &zseq, 8);
+  memcpy(msg + 48, sk, 16 * ks * 4);
+  sha256(msg, 48 + 16 * ks * 4, leaf);
+}
+
 void cpu_group(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group, const int8_t* K, int ks,
                uint8_t leaf[32], int32_t* sk) {
   if (ks == 1) four_streams<1>(x, M, K, sk);
@@ -148,12 +157,29 @@ void cpu_group(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group
       int32_t* s[1] = {sk + 16 * b};
       sketch<16, 1>(xb, M, K, s);
     }
-  uint8_t msg[32 + 16 + 16 * 16 * 4];
-  memcpy(msg, SEED, 32);
-  memcpy(msg + 32, &group, 8);
-  memcpy(msg + 40, &zseq, 8);
-  memcpy(msg + 48, sk, 16 * ks * 4);
-  sha256(msg, 48 + 16 * ks * 4, leaf);
+  leaf_of(group, zseq, sk, ks, leaf);
+}
+
+template <int KS>
+static void long_streams(const uint8_t* x, const uint8_t* M, const int8_t* K, int32_t* sk) {
+  for (int p = 0; p < 64; ++p) {  // block p of each 256 KiB quarter, i.e. blocks p, 64 + p, 128 + p, 192 + p
+    const uint8_t* xb[4];
+    int32_t* s[4];
+    for (int st = 0; st < 4; ++st) xb[st] = x + 4096 * (64 * st + p), s[st] = sk + KS * (64 * st + p);
+    sketch<KS, 4>(xb, M, K, s);
+  }
+}
+
+void cpu_chunk(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group0, const int8_t* K, int ks,
+               uint8_t* leaves, int32_t* sk) {
+  if (ks == 1) long_streams<1>(x, M, K, sk);
+  else if (ks == 2) long_streams<2>(x, M, K, sk);
+  else if (ks == 4) long_streams<4>(x, M, K, sk);
+  else {
+    for (int g = 0; g < 16; ++g) cpu_group(x + 65536 * g, M, zseq, group0 + g, K, ks, leaves + 32 * g, sk + 256 * g);
+    return;
+  }
+  for (int g = 0; g < 16; ++g) leaf_of(group0 + g, zseq, sk + 16 * ks * g, ks, leaves + 32 * g);
 }
 
 uint64_t adv_chunk(const void* v, size_t n) {

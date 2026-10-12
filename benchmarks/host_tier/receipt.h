@@ -16,4 +16,8 @@ void cpu_mask(const uint32_t* z, uint8_t* M);
 // (block-major) and the group's leaf
 void cpu_group(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group, const int8_t* K, int ks,
                uint8_t leaf[32], int32_t* sk);
+// The same for the 16 groups group0 .. group0 + 15 at x (1 MiB), read as four 256 KiB streams: leaves[32 * 16] and
+// sk[256 * ks], each group's as cpu_group gives it
+void cpu_chunk(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group0, const int8_t* K, int ks,
+               uint8_t* leaves, int32_t* sk);
 uint64_t adv_chunk(const void* p, size_t lines);  // sum of `lines` 64-byte lines read as four streams

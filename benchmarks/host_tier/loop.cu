@@ -5,13 +5,15 @@
 // meanwhile: what they get is bandwidth the loop left over.
 //
 //   loop --seconds 5 --gpu-mib 4096 --grid 16 --cpus 52-95 --cpu-mib 512 --ks 16 [--adv-cpus L --adv-mib M]
-//        [--gpus N] [--gpu-node local|N] [--gpu-mode zc|dma] [--host-cpus L] [--sha c|ni] [--pf BYTES] [--go-file F]
-//        [--gate DIR] [--label S]
+//        [--gpus N] [--gpu-node local|N] [--gpu-mode zc|dma] [--chunk 0|1] [--host-cpus L] [--sha c|ni] [--pf BYTES]
+//        [--go-file F] [--gate DIR] [--label S]
 //
 // --gpus N streams from the first N visible GPUs only (0: the CPUs alone); GPU d's driver thread runs on the d-th CPU
 // of --host-cpus if given. CPU lists take lo-hi:step. --go-file F is created when the timed phase starts.
 // --gpu-mode dma: the copy engine stages each 64 MiB chunk in one of two HBM buffers and the receipts read it there,
 // instead of reading host memory directly (zc); the stage holds at most two chunks of the host tier at a time.
+// --chunk 1: a CPU thread takes 16 groups (1 MiB) at a time and reads them as four 256 KiB streams under one z
+// (receipt.h's cpu_chunk; the same sketches and leaves), instead of four groups one at a time as four 16 KiB streams.
 //
 // Receipts (measurement constructions, not certified ones; reference.py recomputes both). Both XOR the block with a
 // 4 KiB mask M expanded from all of z (receipt.h's cpu_mask), so that no precomputation smaller than the block answers
@@ -31,6 +33,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -206,7 +209,7 @@ int main(int argc, char** argv) {
   double seconds = 5;
   size_t gpu_bytes = 4096ull << 20, cpu_bytes = 512ull << 20, adv_bytes = 256ull << 20;
   int grid = 16, ks = 16, use_gpus = -1;
-  bool dma = false;
+  bool dma = false, chunk = false;
   std::string cpus, adv_cpus, host_cpus, gate_dir, go_file, label, gpu_node = "local";
   for (int i = 1; i + 1 < argc; i += 2) {
     std::string a = argv[i], v = argv[i + 1];
@@ -227,6 +230,7 @@ int main(int argc, char** argv) {
     else if (a == "--sha") sha_ni = v == "ni";
     else if (a == "--pf") pf_bytes = atoi(v.c_str());
     else if (a == "--gpu-mode") dma = v == "dma";
+    else if (a == "--chunk") chunk = atoi(v.c_str()) != 0;
     else {
       fprintf(stderr, "unknown flag %s\n", a.c_str());
       return 2;
@@ -391,13 +395,20 @@ int main(int argc, char** argv) {
       const size_t w = cpu_bytes / 8;
       uint64_t* xw = (uint64_t*)q.x;
       for (size_t i = rank[t] * w; i < (rank[t] + 1) * w; ++i) xw[i] = splitmix64(i ^ ((uint64_t)(1000 + q.node) << 48));
-      std::vector<int32_t> sk(16 * ks);
+      std::vector<int32_t> sk(256 * ks);
+      std::vector<uint8_t> leaves16(32 * 16);
       const ZSlot* slot = slots + (ngpu ? t % ngpu : 0);
       uint32_t z[16];
       alignas(64) uint8_t M[4096];
       uint64_t zseq = 0, last = UINT64_MAX, distinct = 0;
       if (gating) {
-        if (t == 0) cpu_mask(zinit, M), cpu_group(q.x, M, 0, 0, K, ks, gate_leaf, gate_sk.data()), gate_region = 1000 + q.node;
+        if (t == 0) {
+          cpu_mask(zinit, M);
+          if (chunk) cpu_chunk(q.x, M, 0, 0, K, ks, leaves16.data(), sk.data()), memcpy(gate_leaf, leaves16.data(), 32);
+          else cpu_group(q.x, M, 0, 0, K, ks, gate_leaf, sk.data());
+          std::copy(sk.begin(), sk.begin() + 16 * ks, gate_sk.begin());
+          gate_region = 1000 + q.node;
+        }
         pthread_barrier_wait(&ready);
         pthread_barrier_wait(&go);
         return;
@@ -406,6 +417,14 @@ int main(int argc, char** argv) {
       pthread_barrier_wait(&go);
       double bytes = 0;
       while (!stop.load(std::memory_order_relaxed)) {
+        if (chunk) {
+          const size_t g = q.next.fetch_add(16, std::memory_order_relaxed) % q.groups;
+          while (!read_z(slot, z, &zseq)) _mm_pause();
+          if (zseq != last) ++distinct, last = zseq, cpu_mask(z, M);
+          cpu_chunk(q.x + g * 65536, M, zseq, g, K, ks, &q.leaves[g * 32], sk.data());
+          bytes += 16 * 65536;
+          continue;
+        }
         const uint64_t g0 = q.next.fetch_add(4, std::memory_order_relaxed);
         for (uint64_t k = 0; k < 4; ++k) {
           const size_t g = (g0 + k) % q.groups;
@@ -481,9 +500,9 @@ int main(int argc, char** argv) {
   }
   for (size_t t = 0; t < ac.size(); ++t) a += adv_bytes_done[t] / el / 1e9;
   printf("{\"label\": \"%s\", \"seconds\": %.2f, \"gpus\": %d, \"gpu_mode\": \"%s\", \"grid\": %d, \"gpu_gb_per_s\": %.2f, \"cpu_threads\": %zu, "
-         "\"ks\": %d, \"sha_ni\": %d, \"pf\": %d, \"cpu_gb_per_s\": %.2f, \"cpu_thread_min\": %.2f, \"cpu_thread_max\": %.2f, \"cpu_z_distinct_min\": %llu, "
+         "\"ks\": %d, \"chunk\": %d, \"sha_ni\": %d, \"pf\": %d, \"cpu_gb_per_s\": %.2f, \"cpu_thread_min\": %.2f, \"cpu_thread_max\": %.2f, \"cpu_z_distinct_min\": %llu, "
          "\"adv_threads\": %zu, \"adv_gb_per_s\": %.2f, \"honest_gb_per_s\": %.2f, \"per_gpu\": %s}\n",
-         label.c_str(), el, ngpu, dma ? "dma" : "zc", grid, g, cc.size(), ks, sha_ni, pf_bytes, c, cc.empty() ? 0 : cmin, cmax,
+         label.c_str(), el, ngpu, dma ? "dma" : "zc", grid, g, cc.size(), ks, (int)chunk, sha_ni, pf_bytes, c, cc.empty() ? 0 : cmin, cmax,
          (unsigned long long)(cc.empty() ? 0 : zmin), ac.size(), a, g + c, per.c_str());
   return 0;
 }

@@ -6,17 +6,16 @@
 #     --declared-output 'out/*' -- env NGPU=1 taskset -c 48-95 bash benchmarks/host_tier/run_loop.sh
 #
 # Outside the lease: build loop.cu (+ receipt.cpp), pcie.cu and dram.c. Under `gpu-lease $NGPU --wait --on GPU_ON
-# --max-min 20` (GPU_ON: the GPUs of NUMA node GPU_NODE): the loop's gates against reference.py for KS 16, 4, 2, 1 and the
-# copy-engine path (a failed gate times nothing, exit 3); then, REPS times, the GPUs' receipts alone (zero copy; copy
-# engine at two grids), the CPUs' receipts alone on every worker CPU for KS 1, 2, 4, the adversary's CPU read alone and
-# beside the GPUs' receipts (zero copy, copy engine), the full loop (GPUs and CPUs: zero copy KS 4; copy engine at two
-# grids KS 4, and KS 2, 1), the loop on half the CPUs beside the adversary on the other half, and the adversary's CPU read
-# beside each GPU's copy engines and zero-copy reads (dram.c and pcie.cu, as run_pcie.sh); then hostproc.py alone and
-# beside the loop, the adversary, and the GPUs' receipts alone. CPU receipts hash their leaves on the SHA extensions
-# (SHA=ni) unless SHA=c.
+# --max-min 20` (GPU_ON: the GPUs of NUMA node GPU_NODE): the loop's gates against reference.py for KS 16, 4, 1, the
+# copy-engine path and the 1 MiB chunk path (a failed gate times nothing, exit 3); then, REPS times, the CPUs' receipts
+# alone on every worker CPU (KS 1 by groups; KS 1 and 4 by chunks; KS 1 by chunks prefetching twice as far), the
+# adversary's CPU read alone and beside the GPUs' copy engines (loop.cu), the full loop (copy engine: KS 4 by groups,
+# KS 1 and 4 by chunks; zero copy: KS 1 by chunks), and the adversary's CPU read timed with each GPU's copy engines
+# (dram.c and pcie.cu, as run_pcie.sh); then hostproc.py alone and beside the loop, the adversary, and the GPUs'
+# receipts alone. CPU receipts hash their leaves on the SHA extensions (SHA=ni) unless SHA=c.
 # All host-tier memory is on NUMA node GPU_NODE (0), the node of the worker CPUs: one socket's DRAM.
-# Env: NGPU (1), REPS (2), SECONDS_EACH (3), LOOP_GRID (32), WORKERS (52-95), HOST_CPUS (GPU driver threads, 48,49),
-#      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (3), GPU_NODE (0), GPU_ON, SHA (ni).
+# Env: NGPU (1), REPS (4), SECONDS_EACH (3), LOOP_GRID (32), WORKERS (52-95), HOST_CPUS (GPU driver threads, 48,49),
+#      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (2), GPU_NODE (0), GPU_ON, SHA (ni).
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate*/, gates.jsonl, loop.jsonl, pcie.jsonl, dram.jsonl,
 # hostproc.jsonl.
 set -uo pipefail
@@ -42,25 +41,22 @@ if [ "${1:-}" = leased ]; then
     python3 reference.py "$O/$1/gate.json" | sed "s/^{/{\"name\": \"$1\", /" | tee -a "$O/gates.jsonl"
     [ "${PIPESTATUS[0]}" = 0 ] || { echo "gate $1 failed"; exit 3; }
   }
-  for k in 16 4 2 1; do gate "gate$k" --ks "$k" --sha "$SHA"; done
+  for k in 16 4 1; do gate "gate$k" --ks "$k" --sha "$SHA"; done
   gate gate4-dma --ks 4 --sha "$SHA" --gpu-mode dma
-  first=${W%%[-,]*}; last=${W##*-}; half=$(( (first + last + 1) / 2 ))
-  for r in $(seq "${REPS:-2}"); do
-    one --label gpu --gpus "$N" --grid "$G"
-    for g in 4 "$G"; do one --label gpu --gpus "$N" --grid "$g" --gpu-mode dma; done
-    for k in 1 2 4; do one --label cpu --gpus 0 --cpus "$W" --ks "$k" --sha "$SHA"; done
+  for k in 4 1; do gate "gate$k-chunk" --ks "$k" --sha "$SHA" --chunk 1; done
+  for r in $(seq "${REPS:-4}"); do
+    one --label cpu --gpus 0 --cpus "$W" --ks 1 --sha "$SHA"
+    for k in 1 4; do one --label cpu --gpus 0 --cpus "$W" --ks "$k" --sha "$SHA" --chunk 1; done
+    one --label cpu --gpus 0 --cpus "$W" --ks 1 --sha "$SHA" --chunk 1 --pf 2048
     one --label adv --gpus 0 --adv-cpus "$W"
-    one --label gpu+adv --gpus "$N" --grid "$G" --adv-cpus "$W"
     one --label gpu+adv --gpus "$N" --grid 4 --gpu-mode dma --adv-cpus "$W"
-    one --label honest --gpus "$N" --grid "$G" --cpus "$W" --ks 4 --sha "$SHA"
-    one --label honest --gpus "$N" --grid 4 --gpu-mode dma --cpus "$W" --ks 4 --sha "$SHA"
-    for k in 4 2 1; do one --label honest --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$W" --ks "$k" --sha "$SHA"; done
-    one --label honest-half+adv --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$first-$((half - 1))" --adv-cpus "$half-$last" \
-      --ks 4 --sha "$SHA"
-    # the adversary's CPU read beside the GPUs' copy engines and zero-copy reads, timed together
+    one --label honest --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$W" --ks 4 --sha "$SHA"
+    for k in 1 4; do one --label honest --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$W" --ks "$k" --sha "$SHA" --chunk 1; done
+    one --label honest --gpus "$N" --grid "$G" --cpus "$W" --ks 1 --sha "$SHA" --chunk 1
+    # the adversary's CPU read beside the GPUs' copy engines, timed together
     D() { "$B/dram" --cpus "$W" --node "${GPU_NODE:-0}" --kernel multi --thp 1 --mib 256 --seconds "$S" "$@"; }
     D --label cpu-alone | tee -a "$O/dram.jsonl"
-    for m in h2d zcr; do
+    for m in h2d; do
       t=$(python3 -c 'import time; print(time.time() + 8)')
       D --label "cpu-with-$m" --start-at "$t" > "$B/d.json" &
       taskset -c "$H" "$B/pcie" --seconds "$S" --mib 1024 --host-node "${GPU_NODE:-0}" --modes "$m" --start-at "$t" \
@@ -69,9 +65,9 @@ if [ "${1:-}" = leased ]; then
     done
   done
   probe() { taskset -c "$PR" python3 hostproc.py --seconds "${PROBE_SECONDS:-5}" "$@" | tee -a "$O/hostproc.jsonl"; }
-  for r in $(seq "${PROBE_REPS:-3}"); do
+  for r in $(seq "${PROBE_REPS:-2}"); do
     probe --label alone
-    for spec in "honest:--gpus $N --grid $G --gpu-mode dma --cpus $W --ks 4 --sha $SHA" "adv:--gpus 0 --adv-cpus $W" \
+    for spec in "honest:--gpus $N --grid $G --gpu-mode dma --cpus $W --ks 1 --sha $SHA --chunk 1" "adv:--gpus 0 --adv-cpus $W" \
       "gpu:--gpus $N --grid $G --gpu-mode dma"; do
       rm -f "$B/go"
       # shellcheck disable=SC2086
