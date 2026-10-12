@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -426,7 +427,7 @@ def _c3(m: int, k: int, c: int, sparse: tuple, r: tuple) -> list[list]:
     from verity_flock import rec_outer as O
     from verity_flock import rec_sparse as SP
 
-    sh = A.Shape(*r, salt_len=0, opening_only=True)
+    sh = A.Shape(r[0], 6, r[1], salt_len=0, opening_only=True)
     return (_v_star(m, k, c) + [[SP.unit_name(SP.Shape(*sparse)), 2]]
             + [[O.stacked_name(1 << lv.lanes, lv.d - lv.cap), lv.q] for lv in sh.sched.levels]
             + [[f"rec-opening/m{r[0]}-c{r[1]}-p{j}", 1] for j in range(len(RR.parts(RR.spec(sh))))])
@@ -510,12 +511,18 @@ def test_r_levels_circuit_file_is_v_stars_under_its_own_name(l16_h1, tmp_path):
 
 def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
     """RecSparse at a small shape (NU 1, ELL 6, S_LOG 1), as `rec_sparse.statement` writes it over the two reps, is V*'s file
-    byte for byte as the sparse-only session's statement after V*'s, and its own port is `h` under the table's h round
+    byte for byte as the sparse-only session's statement after V*'s (its bindings `rec_bindings`' alone, which registers
+    RecSparse itself), and its own port is `h` under the table's h round
     (`rec-c38` at m 25, k_log 22) at both reps' rows; at an inner shape naming another RecSparse it is refused by the shape."""
     from verity_flock import rec_sparse as SP
 
     st = SP.statement(SP.Shape(1, 6, 1, 0), 2)
     own = _staged(tmp_path / "sparse", st.text, st.part, st.program)
+    fresh = subprocess.run([sys.executable, "-c", "import json, sys; from verity_flock import rec_bindings as RB; "
+                            "print(json.dumps(RB.bindings(*(json.load(open(f)) for f in sys.argv[1:]))))",
+                            str(tmp_path / "sparse" / "partition.json"), str(tmp_path / "sparse" / "program.json")],
+                           capture_output=True, text=True)
+    assert fresh.returncode == 0 and json.loads(fresh.stdout) == json.loads(own.read_text()), fresh.stderr
     j = len(_v_star(*C3))
     flags = ["--circuit", str(tmp_path / "sparse" / "circuit.txt"), "--instances", "2", "--rec-part", str(j),
              "--rec-bindings", str(own)]
@@ -532,7 +539,7 @@ def test_r_openings_circuit_file_is_v_stars(tmp_path):
     for byte as candidate 3's statement 10, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
     minutes and 2.2 GB (each side builds the opening's unit): no cheaper test writes Lean's opening unit, so none
     other catches its bytes drifting from the one the prover commits and the Lean verifier recomputes."""
-    sh = A.Shape(*R_SHAPE, salt_len=0, opening_only=True)
+    sh = A.Shape(R_SHAPE[0], 6, R_SHAPE[1], salt_len=0, opening_only=True)
     [p] = RR.parts(RR.spec(sh))
     st = RR.statement(p.S, "rec-opening/m23-c2-p0", 1)
     own = _staged(tmp_path / "open", st.text, st.part, st.program)

@@ -32,7 +32,6 @@ structure Shape where
   ell : Nat
   sLog : Nat
   tLog : Nat
-  deriving BEq, Repr
 
 namespace Shape
 
