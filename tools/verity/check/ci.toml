@@ -19,11 +19,14 @@ part = "circuits"
 group = 2
 halts_on = "error: could not compile"
 
+# circuit-check and lean-suites run on main after the landing (Daniel, 12 Oct; infra's measurements: about 48 and 22 min cold,
+# 15-20 min for circuit-check with every target reused), so the check a merge requires skips them (`after_landing`).
 [[job]]
 name = "circuit-check"
 owner = "circuits"
 part = "circuits"
 group = 2
+after_landing = true
 
 [[job]]
 name = "flock-rust-tests"
@@ -76,6 +79,7 @@ owner = "ci"
 part = "tests"
 group = 6
 after = "lean-build"
+after_landing = true
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the

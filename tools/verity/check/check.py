@@ -32,6 +32,9 @@
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record, added to the pack it gathers from the
                                                             newest recorded checks, and with --on that pack travels with the run
+    ... --after-landing                                     only ci.toml's `after_landing` jobs (circuit-check, lean-suites)
+                                                            and what they need, which the check a merge requires skips: the
+                                                            landing hook (`landed.py`) records it on main; no gate takes it
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
@@ -833,6 +836,9 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
+    late = "--after-landing" in rest
+    if late:
+        need = [s for s in need if s in DECLARATION.after_landing(JOBS)]
     cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
     env = dict(os.environ)
     if "lean-agreement" in need:
@@ -853,7 +859,7 @@ def record(argv: list[str]) -> int:
                 (d / f"{k}.tar.gz").symlink_to(f)
             env[AGREEMENT_DIR_ENV] = str(d)
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
-    audits = not combining and (parts is None or any(p.startswith("lean-audit:") for p in parts))
+    audits = not combining and not late and (parts is None or any(p.startswith("lean-audit:") for p in parts))
     if audits and (urls := lean_deps_url_file(d)):
         print(f"check: sending presigned URLs for {len(json.loads(urls.read_text()))} pinned Lean dependency bundle(s)")
         if on:
@@ -952,19 +958,26 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 #: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
 AFTER_LEAN = SUITES.AFTER_LEAN
+#: an `after_landing` job's step in the check a merge requires (Daniel, 12 Oct): the landing hook runs it on main (`landed.py`)
+LATE = "skipped: runs on main after the landing (ci.toml's after_landing; `check.py --after-landing`)"
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
-           only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+           only: list[str] | None = None, landing: str | None = "before") -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
-    circuit-check when the other isn't among them."""
+    circuit-check when the other isn't among them.  ``landing``: "before", the check a merge requires, skips ci.toml's
+    `after_landing` jobs (`LATE`), and pytest takes circuit-check's cores when it is one; "after" (`--after-landing`) runs just
+    those and what they need (`declaration.after_landing`); None, a check of parts, every job."""
     py = sys.executable
+    late = {j.name for j in JOBS if j.after_landing}
     a = max(1, n // 2)
     b = max(1, n - a)
     if only is not None:
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
+    elif landing == "before" and "circuit-check" in late:
+        a = n
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
@@ -992,6 +1005,10 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
     if undeclared := set(built) - {j.name for j in JOBS}:
         raise DECLARATION.DeclarationError(f"check.py builds {', '.join(sorted(undeclared))}, which ci.toml doesn't declare")
+    if landing == "before":
+        built |= {k: (k, LATE, ROOT) for k in late & set(built)}
+    elif landing == "after":
+        built = {k: v for k, v in built.items() if k in DECLARATION.after_landing(JOBS)}
     if only is not None:
         if unbuilt := sorted({p.partition(":")[0] for p in only} - set(built)):
             raise DECLARATION.DeclarationError(f"the shard runs {', '.join(unbuilt)}, which check.py doesn't build on this tree")
@@ -1426,7 +1443,7 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
-        only: list[str] | None = None) -> tuple[bool, list[dict]]:
+        only: list[str] | None = None, landing: str | None = "before") -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going)
@@ -1458,7 +1475,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
-            gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
+            gs = groups(out, n, cache, urls, only, landing)
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             with ThreadPoolExecutor(max_workers=max(1, len(gs))) as ex:
                 results += [r for rs in ex.map(group, gs) for r in rs]
@@ -1602,7 +1619,8 @@ def main(argv: list[str]) -> int:
         return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
     cache = "--no-cache" not in argv
     keep_going = "--keep-going" in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--keep-going")]
+    landing: str | None = "after" if "--after-landing" in argv else "before"
+    rest = [a for a in argv if a not in ("--no-cache", "--keep-going", "--after-landing")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -1619,7 +1637,11 @@ def main(argv: list[str]) -> int:
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
+    if landing == "after" and (picked or sharded):
+        print("check: --after-landing runs ci.toml's after_landing jobs whole, on main: not with parts or --shard", file=sys.stderr)
+        return 2
     if picked:
+        landing = None
         if sharded or os.environ.get("RESEARCH_RUN_ID"):
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
                   file=sys.stderr)
@@ -1646,7 +1668,9 @@ def main(argv: list[str]) -> int:
     verdicts = {"in": verdicts_in(pack, run_dir)} if pack and cache else {}
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
-    ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None)
+    if landing == "after":
+        print(f"check: --after-landing: {', '.join(j.name for j in JOBS if j.name in DECLARATION.after_landing(JOBS))}", flush=True)
+    ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, landing)
     bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
     for c in bad:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",

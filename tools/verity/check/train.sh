@@ -14,6 +14,9 @@
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
 # twin exits 75 (check.py's own exit 75), none of them ran: rerun the train.
 #
+# `--after-landing`: COMMIT, a landing on origin/main, gets `check.py --record --on MACHINE --keep-going --after-landing`, the
+# jobs ci.toml runs after a landing (`landed.py` launches it), in the next free check slot behind waiting train checks.
+#
 # `--against BASE`: the touched-suites run in place of the check, every suite the change from BASE (an ancestor of COMMIT, such
 # as the main a passed train was checked on) touches, slow tests included (`suites.py --changed BASE`, through the quick tier's
 # job `research/quick_tier.py`, with its Lean build first), in a priority slot of MACHINE (`auto` or a list: the machine
@@ -25,18 +28,20 @@
 # empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
 # doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() against=
+pass=() against= late=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
+    --after-landing) late=1 ;;
     --against) [ $# -ge 2 ] || { echo "train: --against needs BASE" >&2; exit 2; }; against=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement and --against BASE alone" >&2; exit 2 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --against BASE and --after-landing alone" >&2; exit 2 ;;
   esac
   shift
 done
 [ -z "$against" ] || [ ${#pass[@]} -eq 0 ] || { echo "train: --agreement refused with --against: a touched-suites run sends no build" >&2; exit 2; }
+[ -z "$late" ] || { [ -z "$against" ] && [ ${#pass[@]} -eq 0 ]; } || { echo "train: --after-landing takes no other flag" >&2; exit 2; }
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
@@ -66,6 +71,8 @@ git -C "$root" fetch -q origin 2>>"$why" || die "git fetch origin failed"
 if [ -n "$against" ]; then
   base=$(git -C "$root" rev-parse --verify "$against^{commit}" 2>>"$why") || die "--against $against: no such commit"
   git -C "$root" merge-base --is-ancestor "$base" "$sha" || die "--against ${base:0:12} is not an ancestor of ${sha:0:12}"
+elif [ -n "$late" ] && ! git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main; then
+  die "--after-landing: ${sha:0:12} isn't on origin/main"
 elif git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main; then
   base=$(git -C "$root" rev-parse -q --verify "$sha^1" || true)
 else
@@ -81,7 +88,9 @@ log="$tree.log"
 cd "$tree"
 echo "train: ${sha:0:12} on $machine; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
-if [ -z "$against" ]; then
+if [ -n "$late" ]; then
+  setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --keep-going --after-landing > "$log" 2>&1 < /dev/null &
+elif [ -z "$against" ]; then
   setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} > "$log" 2>&1 < /dev/null &
 else
   case $machine in

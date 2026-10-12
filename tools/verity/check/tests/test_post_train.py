@@ -60,7 +60,8 @@ def test_check_starts_it_after_each_landing():
     spec = importlib.util.spec_from_file_location("check_tool_under_test", ROOT / "tools" / "verity" / "check" / "tool.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.CHECK.after_land[-1] == "tools/verity/check/post_train.py" and (ROOT / mod.CHECK.after_land[-1]).is_file()
+    assert mod.CHECK.after_land[-1] == "tools/verity/check/landed.py" and (ROOT / mod.CHECK.after_land[-1]).is_file()
+    assert '"post_train.py"' in (ROOT / mod.CHECK.after_land[-1]).read_text(), "landed.py starts post_train.py"
 
 
 SHA = "f" * 40

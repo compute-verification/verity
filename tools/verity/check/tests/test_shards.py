@@ -153,11 +153,11 @@ def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 160)
 
     def jobs(n, k):
-        gs = CHECK.groups(tmp_path, 16, only=_resolved(n)[k - 1])
+        gs = CHECK.groups(tmp_path, 16, only=_resolved(n)[k - 1], landing=None)
         return {name: argv[argv.index("--jobs") + 1] for g in gs for name, argv, _ in g if name in ("pytest", "circuit-check")}
 
     assert jobs(5, 4) == {"pytest": "16"} and jobs(5, 5) == {"circuit-check": "16"} and jobs(3, 1) == {"pytest": "16"}
-    assert {name: argv[argv.index("--jobs") + 1] for g in CHECK.groups(tmp_path, 16) for name, argv, _ in g
+    assert {name: argv[argv.index("--jobs") + 1] for g in CHECK.groups(tmp_path, 16, landing=None) for name, argv, _ in g
             if name in ("pytest", "circuit-check")} == {"pytest": "8", "circuit-check": "8"}
 
 

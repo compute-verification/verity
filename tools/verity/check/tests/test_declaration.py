@@ -82,6 +82,9 @@ def test_a_well_formed_job_parses_with_its_defaults():
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nafter = "a"\n', "in its own group"),
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nafter = "c"\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n'
      '[[job]]\nname = "c"\nowner = "ci"\ngroup = 3\n', "which itself waits on 'c'"),
+    ('[[job]]\nname = "lean-audit"\nowner = "lean"\ngroup = 1\nafter_landing = true\n', "always runs before a landing"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nafter_landing = true\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n'
+     'after = "a"\n', "runs before a landing but needs a, which runs after it"),
 ])
 def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
     with pytest.raises(D.DeclarationError, match=why.replace("[", r"\[").replace("]", r"\]").replace("(", r"\(")):
@@ -115,7 +118,7 @@ def _run_two_groups(tmp_path, monkeypatch, first_status: str):
     monkeypatch.setattr(CHECK, "preflight", lambda: [])
     monkeypatch.setattr(CHECK, "take_lean_deps_urls", lambda out: None)
     monkeypatch.setattr(CHECK.subprocess, "run", lambda *a, **k: None)
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls, *_a: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
     monkeypatch.setattr(CHECK, "_step", step)
     ok, results = CHECK.run(tmp_path, 2)
     return started, {r["step"]: r for r in results}
@@ -155,7 +158,7 @@ def _main_parts(monkeypatch, argv):
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
-    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only: got.append(only) or (True, []))
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only, *_a: got.append(only) or (True, []))
     rc = CHECK.main(argv)
     return rc, got[0] if got else None
 
@@ -173,3 +176,22 @@ def test_a_check_of_parts_is_refused_with_a_shard_or_inside_a_recorded_run(monke
     monkeypatch.setattr(CHECK, "run", lambda *a: (_ for _ in ()).throw(AssertionError("ran")))
     assert CHECK.main(["tests"]) == 2
     assert "no gate takes part of a check" in capsys.readouterr().err
+
+
+def test_the_after_landing_jobs_are_declared_ones_and_what_they_wait_on():
+    jobs = _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nneeds = ["a"]\n'
+                  'after_landing = true\n[[job]]\nname = "c"\nowner = "ci"\ngroup = 2\n')
+    assert D.after_landing(jobs) == {"a", "b"} and [j.after_landing for j in jobs] == [False, True, False]
+    assert D.after_landing(D.load()) == {"circuit-check", "lean-build", "lean-suites"}
+
+
+def test_after_landing_runs_only_those_jobs_and_never_with_parts_or_a_shard(monkeypatch, capsys):
+    got = []
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only, landing: got.append((only, landing)) or (True, []))
+    assert CHECK.main(["--after-landing"]) == 0 and got == [(None, "after")]
+    assert CHECK.main([]) == 0 and got[-1] == (None, "before")
+    assert CHECK.main(["--after-landing", "tests"]) == 2 and CHECK.main(["--after-landing", "--shard", "1/3"]) == 2
+    assert len(got) == 2 and "not with parts or --shard" in capsys.readouterr().err

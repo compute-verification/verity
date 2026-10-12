@@ -16,10 +16,11 @@ spec.loader.exec_module(CHECK)
 def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
-    names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
+    names = [(n, argv if isinstance(argv, str) else argv[1:4]) for g in CHECK.groups(tmp_path, 1, landing=None) for n, argv, _cwd in g]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")])
     assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
+    assert [(n, a) for n, a, _ in CHECK.steps(tmp_path)][2] == ("circuit-check", CHECK.LATE), "the merge check leaves it to main"
     assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
     assert names[4] == ("lean", "skipped: verity/core/service/flock is not on this tree")
 
@@ -474,15 +475,15 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
-    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16, landing=None)[1][1][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16, landing=None)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "560", "a slot's mem= caps circuit-check's own budget"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
-    cold = CHECK.groups(tmp_path, 16, cache=False)
+    cold = CHECK.groups(tmp_path, 16, cache=False, landing=None)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
@@ -520,7 +521,7 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     verifier lean-build built, so they wait on it alone and run beside the agreement (r20261004-150518-b201: 1,254 s, then
     1,222 s)."""
     out, _ = _pinned(tmp_path, monkeypatch)
-    gs = CHECK.groups(out, 8)
+    gs = CHECK.groups(out, 8, landing=None)
     (_, pytest, _), = gs[0]
     lean = gs[2]
     assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
@@ -638,7 +639,7 @@ def _fake_run(monkeypatch, groups, pre=()):
     """`run` over the given groups and preflight, with nothing built first and no Lean URLs."""
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None, *_a: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
 
 
@@ -1274,3 +1275,17 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
     posted = (tmp_path / "posted").read_text()
     assert "registered no run (exit 137)" in posted and "exited 137 before launching a run" in posted, posted
     assert "check: verdicts: gathering" in posted, posted
+
+
+def test_the_merge_check_skips_the_after_landing_jobs_and_the_landing_hook_runs_just_them(tmp_path, monkeypatch):
+    """Daniel, 12 Oct: a part over about 10 min cold may run on main after the landing (circuit-check, lean-suites: infra's
+    measurements), the Lean audit never.  The merge check names each such step skipped, so its result still lists every job, and
+    gives pytest circuit-check's cores; `--after-landing` runs those jobs and what they wait on, nothing else."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+    before = {n: a for g in CHECK.groups(out, 8) for n, a, _ in g}
+    assert {n for n, a in before.items() if a == CHECK.LATE} == {"circuit-check", "lean-suites"}
+    assert before["lean-audit"] != CHECK.LATE and before["pytest"][before["pytest"].index("--jobs") + 1] == "8"
+    assert all(before["pytest"][before["pytest"].index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN), "nor in pytest"
+    after = [[n for n, _, _ in g] for g in CHECK.groups(out, 8, landing="after")]
+    assert after == [["circuit-check"], ["lean-build"], ["lean-suites"]]
+    assert set(before) == {n for g in CHECK.groups(out, 8, landing=None) for n, _, _ in g}

@@ -643,7 +643,8 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
                       (["bash", "-c", f"{shlex.join(cmd)} || true"], other), ([*slot, *cmd], other), ([*slot, "--priority", *cmd], other),
                       ([*cmd, "--preflight"], extra), ([*cmd, "--record"], extra), ([*cmd, "&&", "true"], extra),
                       ([*cmd, "--cores"], extra), ([*cmd, "--cores", "x"], extra), ([*cmd, "--cores", "2", "--cores", "2"], extra),
-                      ([*cmd, "--verdicts-in"], extra), ([*cmd, "--verdicts-in", "a", "--verdicts-in", "b"], extra)):
+                      ([*cmd, "--verdicts-in"], extra), ([*cmd, "--verdicts-in", "a", "--verdicts-in", "b"], extra),
+                      ([*cmd, "--keep-going", "--after-landing"], extra), ([*slot, "--", *cmd, "--after-landing"], extra)):
         assert why in (unlike(argv, cmd) or ""), argv
     assert unlike([*cmd], ()) == "the target's declaration of the tool names no command to hold it to"
 

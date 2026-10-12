@@ -161,6 +161,11 @@ multi-core CPU pod. It covers:
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
+A job that `ci.toml` marks `after_landing` (today `circuit-check` and the suites that use Lean) runs on `main` right after the
+landing instead: the check a merge requires skips it, and the landing hook (`tools/verity/check/landed.py`) records `check.py
+--after-landing` and posts a failure to the merge thread. A part qualifies when it takes over about 10 min cold; the Lean
+check never does (Daniel, 12 Oct).
+
 Landing, as Daniel set it (7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check is to stay
 fast by reusing a part's verdict whenever its inputs haven't changed. Each verdict is to be keyed on a hash of the part's
 declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and

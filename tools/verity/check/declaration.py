@@ -10,7 +10,10 @@ A job is a `[[job]]` table:
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
 - `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
   stopped if it fails. The job it names has no `after` of its own;
-- `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`).
+- `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`);
+- `after_landing`: optional, the job runs on main once its commit has landed (`check.py --after-landing`, which the landing
+  hook starts), and the check a merge requires skips it (Daniel, 12 Oct: a part over about 10 min cold may; never one of
+  `BEFORE_LANDING`, nor one that a job left before landing `needs` or runs `after`).
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
@@ -34,12 +37,14 @@ ROOT = Path(__file__).resolve().parents[3]
 PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
 FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
-          "after": str, "part": str}
+          "after": str, "part": str, "after_landing": bool}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json"}
 #: the parts a check runs alone (`check.py PART...`)
 PARTS = ("tests", "circuits", "lean")
+#: the jobs that always run before a landing (Daniel, 12 Oct: the Lean audit stays before landing)
+BEFORE_LANDING = ("lean-audit",)
 
 
 class DeclarationError(ValueError):
@@ -57,6 +62,7 @@ class Job:
     needs: tuple[str, ...] = ()
     after: str | None = None
     part: str | None = None
+    after_landing: bool = False
 
 
 def _toml(text: str, source: str) -> dict:
@@ -99,7 +105,8 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
         jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
-                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part")))
+                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part"),
+                        t.get("after_landing", False)))
     if not jobs:
         raise DeclarationError(f"{source}: declares no job")
     by = {j.name: j for j in jobs}
@@ -112,6 +119,11 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, in its own group, whose order already runs it first")
         if a.after is not None:
             raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, which itself waits on {a.after!r}")
+    for j in jobs:
+        if j.after_landing and j.name in BEFORE_LANDING:
+            raise DeclarationError(f"{source}: job {j.name}: after_landing, but {j.name} always runs before a landing")
+        if not j.after_landing and (late := [n for n in (*j.needs, *[j.after] * bool(j.after)) if by[n].after_landing]):
+            raise DeclarationError(f"{source}: job {j.name} runs before a landing but needs {', '.join(late)}, which runs after it")
     return jobs
 
 
@@ -177,6 +189,17 @@ def select(jobs: list[Job], parts: list[str]) -> set[str]:
         raise DeclarationError(f"ci.toml's {', '.join(loose)} declare no part, so a check of parts can't tell whether to run them")
     by = {j.name: j for j in jobs}
     todo, out = [j.name for j in jobs if j.part in parts], set()
+    while todo:
+        if (n := todo.pop()) not in out:
+            out.add(n)
+            todo += [*by[n].needs, *[by[n].after] * bool(by[n].after)]
+    return out
+
+
+def after_landing(jobs: list[Job]) -> set[str]:
+    """The jobs `check.py --after-landing` runs: each `after_landing` job, and every job it `needs` or runs `after`."""
+    by = {j.name: j for j in jobs}
+    todo, out = [j.name for j in jobs if j.after_landing], set()
     while todo:
         if (n := todo.pop()) not in out:
             out.add(n)
