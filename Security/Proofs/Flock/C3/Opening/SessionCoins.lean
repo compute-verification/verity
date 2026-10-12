@@ -279,6 +279,27 @@ theorem runLins_ren {sh : Shape} {lins : Array Lin}
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs
   exact hs.1.symm
 
+/-- `RecOpening.build`'s S is its passes' from `kappa` zero. -/
+theorem build_okO {sh : Shape} {lins : Array Lin} {S : GfS} (h : RecOpening.build sh lins = .ok S) :
+    ∃ res st, RecOpening.buildAll sh lins.toList 0 { kappa := kappa0 sh } = .ok (res, st) ∧
+      S = ⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ := by
+  unfold RecOpening.build at h
+  generalize hK : sh.sched.levels.map (fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))) = K
+    at h
+  generalize hc0 : (lins.toList.map slotsOf).sum = comb0 at h
+  simp only at h
+  cases hB : (RecOpening.buildAll sh lins.toList 0).run { kappa := K } with
+  | error e => rw [hB] at h; cases h
+  | ok p =>
+    obtain ⟨res, st⟩ := p
+    rw [hB] at h
+    simp only [bind, Except.bind] at h
+    split at h
+    · cases h
+    · cases h
+      subst hK
+      exact ⟨res, st, hB, rfl⟩
+
 /-- **The opening's S has its bits in range** (`structureOf_bitsOk` at `RecOpening.structureOf`): its symbolic
 residuals are good (`bump` fixes them), so every term the passes build is. -/
 theorem structureOf_bitsOkO {sh : Shape} {S : GfS} (h : RecOpening.structureOf sh = .ok S) : S.BitsOk := by
@@ -286,14 +307,8 @@ theorem structureOf_bitsOkO {sh : Shape} {S : GfS} (h : RecOpening.structureOf s
   obtain ⟨lins, hl, h⟩ := FlockVBridge.PartS.bind_ok h
   have hfix : lins.toList.map (Lin.ren bump) = lins.toList := by
     rw [← Array.toList_map, runLins_ren hl]
-  have h' : RecOpening.build sh lins = .ok S := h
-  unfold RecOpening.build at h'
-  obtain ⟨⟨res, st⟩, hB, h'⟩ := FlockVBridge.PartS.bind_ok h'
-  split at h'
-  · cases h'
-  · cases h'
-    have hB' : RecOpening.buildAll sh lins.toList 0 { kappa := kappa0 sh } = .ok (res, st) := hB
-    exact buildAll_bitsO lins.toList 0 _ _ _ hB' (fun _ h => by simp at h)
-      fun f hf => good_of_ren (fixed_of_map hfix f hf)
+  obtain ⟨res, st, hB, rfl⟩ := build_okO h
+  exact buildAll_bitsO lins.toList 0 _ _ _ hB (fun _ h => by simp at h)
+    fun f hf => good_of_ren (fixed_of_map hfix f hf)
 
 end FlockC3.Opening
