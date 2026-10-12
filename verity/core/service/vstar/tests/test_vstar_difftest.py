@@ -216,6 +216,22 @@ def _lowering(low: IL.Lowering) -> dict:
     return {"sha256": low.sha256, "bytes": len(low.text.encode()), "rows": low.layout.useful}
 
 
+def verifier_algebra(v) -> dict:
+    """`rec_residuals.spec` and `parts` at ``Shape(m, k_log, claims, holo=holo)``: the whole S's summary and each part's S,
+    residuals and v elements, with ``units`` each part's lowering under its `rec-residuals/…` name."""
+    o = _obj(v, ("m", "k_log", "claims", "holo", "units"))
+    if not isinstance(o["holo"], bool) or not isinstance(o["units"], bool):
+        raise D.Reject("holo and units are booleans")
+    sh = A.Shape(_nat(o["m"]), _nat(o["k_log"]), _nat(o["claims"]), holo=o["holo"])
+    S = _algebra(RR.spec, sh)
+    out = []
+    for j, p in enumerate(RR.parts(S)):
+        name = f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}"
+        out.append({"name": name, "S": _sha256(p.S), "res": p.res, "v": p.v,
+                    "unit": _lowering(RR.lowering(p.S, name)) if o["units"] else None})
+    return {"parts": out, **_gf_summary(S["gf"])}
+
+
 def _given(**_):
     raise TypeError("the bindings are given")
 
@@ -480,6 +496,31 @@ def test_the_verifiers_part_nets_are_vstars_units(server):
         assert D.replay(p, shape, server)[0] == "output", shape
 
 
+#: the smallest shape a holo part was refused at (m22-k10-c2), and candidate 3's inner shape, Shape(25, 22, 8)
+ALGEBRA = ({"m": 22, "k_log": 10, "claims": 2}, {"m": 25, "k_log": 22, "claims": 8})
+
+
+@pytest.mark.parametrize("holo", [False, True], ids=["plain", "holo"])
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_the_verifiers_algebra_is_rec_algebras(server, shape, holo):
+    """The Lean verifier's own algebra (`Flock.RecAlgebra.structureOf`, `Flock.RecResiduals.part`), from which it builds
+    the net a `rec-residuals/…` unit must be, is `rec_residuals.spec`'s and `parts`' byte for byte: the whole S, and each
+    part's S (row ports by name), residuals and v elements. A holo shape's h round is a row port after z_partial's, and the
+    comb's 64 operands read it (`[v comb_l, w h_l]`)."""
+    p = port("verifier_algebra", verifier_algebra, st.nothing())
+    assert D.replay(p, {**shape, "holo": holo, "units": False}, server)[0] == "output"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_the_verifiers_holo_part_nets_are_rec_residuals_units(server, shape):
+    """Each holo part's net, as `RecResiduals.check` builds it, is `rec_residuals.lowering`'s unit for that part: its text's
+    SHA-256, bytes and rows. V* has no holo statements yet, so `test_the_verifiers_part_nets_are_vstars_units` cannot
+    compare them; no cheaper test builds a holo part's net on both sides."""
+    p = port("verifier_algebra", verifier_algebra, st.nothing())
+    assert D.replay(p, {**shape, "holo": True, "units": True}, server)[0] == "output"
+
+
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
 #: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
@@ -491,8 +532,17 @@ REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
 
 @pytest.mark.slow
 def test_inner_unit_agrees(server):
-    stats = D.run(port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON), examples=40,
-                  seed=SEED, server=server)
+    """Drawn, and replayed on an S whose GfResiduals S is in range but whose row ports repeat a name (`checkRepS`'s refusal)
+    and on one whose ports are right but whose add term is past w (`checkS`'s): Lean's `residualForms` reads such a term as
+    zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
+    usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
+    p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
+    gf = lambda t: {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
+    good = {"S": {"gf": gf(["w", 1]), "ports": [["a", 2]]}, "name": "row0"}
+    assert D.replay(p, good, server)[0] == "output"
+    for S in ({"gf": gf(["w", 1]), "ports": [["a", 1], ["a", 1]]}, {"gf": gf(["w", 2]), "ports": [["a", 2]]}):
+        assert D.replay(p, {"S": S, "name": "row0"}, server)[0] == "reject", S
+    stats = D.run(p, examples=40, seed=SEED, server=server)
     assert stats.outputs >= 5 and stats.rejects >= 5, stats
 
 

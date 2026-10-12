@@ -371,3 +371,46 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     p = statement(tmp_path / "renamed.txt")
     why = "unit rec-residuals/small is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
     assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
+
+
+def _with_holo(text: str, holo: bool) -> str:
+    """``text`` with META's `RR.HOLO_KEY` as `RR.statement` writes it for ``holo`` (present only when true)."""
+    head, meta, rest = text.split("\n", 2)
+    m = {k: v for k, v in json.loads(meta[5:]).items() if k != RR.HOLO_KEY}
+    if holo:
+        m[RR.HOLO_KEY] = True
+    return f"{head}\nMETA {json.dumps(m, sort_keys=True, separators=(',', ':'))}\n{rest}"
+
+
+@pytest.mark.slow
+def test_the_statements_holo_selects_the_one_net_the_verifier_holds_a_part_to(tmp_path):
+    """At Shape(22, 10, 2), whose one part reads h when holo: the verifier holds the unit to the net META's `HOLO_KEY`
+    selects, so a holo statement on the plain part and a plain statement on the holo part are refused by name, and each
+    statement that says its part's shape passes the residuals check (stopping at the partition object it is not given).
+    Composing a part takes about two minutes; no cheaper test reaches `RecResiduals.check` with a real part's unit."""
+    if not BIN.exists():
+        pytest.skip("the Lean verifier is not built")
+    name = "rec-residuals/m22-k10-c2-p0"
+    (tmp_path / "pub.bin").write_bytes(b"")
+    texts = {holo: RR.statement(RR.parts(RR.spec(A.Shape(22, 10, 2, holo=holo)))[0].S, name, 2, holo=holo).text
+             for holo in (False, True)}
+    assert RR.HOLO_KEY not in json.loads(texts[False].split("\n", 2)[1][5:])
+    assert json.loads(texts[True].split("\n", 2)[1][5:])[RR.HOLO_KEY] is True and _with_holo(texts[True], True) == texts[True]
+
+    def statement(text):
+        (tmp_path / "circuit.txt").write_text(text)
+        p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin")], capture_output=True, text=True, check=False)
+        return p.returncode, p.stdout + p.stderr
+
+    bits = {False: 244736, True: 252928}
+    for part_holo in (False, True):
+        for says in (False, True):
+            rc, out = statement(_with_holo(texts[part_holo], says))
+            if says == part_holo:
+                assert rc == 1 and "the verifier's partition object is required" in out, out
+            else:
+                kind = "holo" if says else "plain"
+                why = (f"unit {name} has {bits[part_holo]} input and 2048 output bits, not its {kind} part's {bits[says]} and 2048 "
+                       f"(META {RR.HOLO_KEY}: {str(says).lower()})")
+                assert rc == 1 and why in out, out

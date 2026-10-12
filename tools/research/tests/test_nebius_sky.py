@@ -900,6 +900,36 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     assert r.returncode == 0 and "; src trees: not evicted, tool has no --src-dir; no store blob" in r.stdout
 
 
+def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tmp_path):
+    """Nothing pruned research's PYTHONPYCACHEPREFIX: 1.45M bytecode files of evicted source trees and uv build envs took node 1 to
+    63.5% inodes (11 Oct). The hourly pass removes each mirrored directory whose source no longer exists, and keeps the rest."""
+    import subprocess
+    assert "Environment=VY_EVICT_PYCACHE=/workspace/research/cache/pycache\n" in (SKY / "store_evict_src.conf").read_text()
+    tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
+    (tool / "research" / "store").mkdir(parents=True)
+    bin_dir.mkdir()
+    (tool / "research" / "__init__.py").write_text("")
+    (tool / "research" / "__main__.py").write_text(
+        "import json\nprint(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': True}, 'runs': {'evicted_bytes': 0}}))\n")
+    (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
+    (bin_dir / "df").chmod(0o755)
+    live, src = tmp_path / "src" / "live" / "pkg", tmp_path / "src"
+    live.mkdir(parents=True)
+    pyc = tmp_path / "pycache"
+    mirror = lambda p: pyc / str(p).lstrip("/")
+    for d, n in ((live, 2), (src / "gone" / "pkg", 3), (live / "removed", 1)):
+        mirror(d).mkdir(parents=True)
+        for i in range(n):
+            (mirror(d) / f"m{i}.cpython-312.pyc").write_bytes(b"x")
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "VY_EVICT_GIT": str(tmp_path / "no-git"),
+           "VY_EVICT_PYCACHE": str(pyc)}
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "; pycache: removed 2 dirs (4 files) whose source is gone (tool)" in r.stdout, r.stdout
+    assert sorted(p.name for p in mirror(live).iterdir()) == ["m0.cpython-312.pyc", "m1.cpython-312.pyc"]
+    assert not mirror(src / "gone").exists() and mirror(src / "live").is_dir()
+
+
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export lacked rec-coins (11 Oct), so the evictor passes the union of
     `fixtures/artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool

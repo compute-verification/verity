@@ -106,19 +106,31 @@ theorem shape?_claims {m k c : ℕ} {sh : Shape} (h : Flock.RecResiduals.shape? 
 
 /-! ## The inner coins, from the history -/
 
-/-- **The rounds' sizes `verifierRows` returns at**, at a shape (`verifierRows_schedule`). -/
+/-- **The rounds' sizes `verifierRows` returns at**, at a shape (`verifierRows_schedule`), none of them 0. -/
 noncomputable def roundSizes (sh : Shape) : List ℕ :=
-  Classical.epsilon fun ns : List ℕ => ∀ (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128),
-    (∃ x, verifierRows sh rounds extras comb = .ok x) ↔ rounds.toList.map Array.size = ns ∧ sh.claims = 2 + extras.size
-
-theorem roundSizes_spec {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf sh = .ok S)
-    (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128) :
-    (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
-      rounds.toList.map Array.size = roundSizes sh ∧ sh.claims = 2 + extras.size :=
-  Classical.epsilon_spec (p := fun ns : List ℕ => ∀ (rounds : Array (Array F128)) (extras : Array Claim)
+  Classical.epsilon fun ns : List ℕ => (∀ n ∈ ns, n ≠ 0) ∧ ∀ (rounds : Array (Array F128)) (extras : Array Claim)
     (comb : Array F128), (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
-      rounds.toList.map Array.size = ns ∧ sh.claims = 2 + extras.size)
-    (Flock.RecAlgebra.verifierRows_schedule hS) rounds extras comb
+      (rounds.filter (·.size ≠ 0)).toList.map Array.size = ns ∧ sh.claims = 2 + extras.size
+
+theorem roundSizes_spec' {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf sh = .ok S) :
+    (∀ n ∈ roundSizes sh, n ≠ 0) ∧ ∀ (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128),
+      (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
+        (rounds.filter (·.size ≠ 0)).toList.map Array.size = roundSizes sh ∧ sh.claims = 2 + extras.size :=
+  Classical.epsilon_spec (p := fun ns : List ℕ => (∀ n ∈ ns, n ≠ 0) ∧ ∀ (rounds : Array (Array F128))
+    (extras : Array Claim) (comb : Array F128), (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
+      (rounds.filter (·.size ≠ 0)).toList.map Array.size = ns ∧ sh.claims = 2 + extras.size)
+    (Flock.RecAlgebra.verifierRows_schedule hS)
+
+theorem roundSizes_ne {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf sh = .ok S) :
+    ∀ n ∈ roundSizes sh, n ≠ 0 :=
+  (roundSizes_spec' hS).1
+
+/-- `roundSizes`' property at a record with no round of no coins. -/
+theorem roundSizes_spec {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf sh = .ok S)
+    {rounds : Array (Array F128)} (hne : Flock.RecAlgebra.NoEmpty rounds) (extras : Array Claim) (comb : Array F128) :
+    (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
+      rounds.toList.map Array.size = roundSizes sh ∧ sh.claims = 2 + extras.size := by
+  rw [(roundSizes_spec' hS).2, Flock.RecAlgebra.filter_noEmpty hne]
 
 open Classical in
 /-- **A coin step as an array of `n` words**: the array of `n` words that `coinArr` reads as the step, zeros where there
@@ -206,12 +218,13 @@ def FoldsOk (st : Setup) (sh : Shape) : Prop :=
       .ok c ∧ c.size = 64
 
 /-- **`verifierRows`' rounds are the ones `verifyRep` draws** (Verify.lean:43-48, RecAlgebra.lean:824-829): the sizes
-`verifierRows` takes at `sh` have the counts `run_of_frames` draws (`CoinsShaped`), for `n` extra claims and at least as
-many Ligerito rounds as any proof's frames (`ligFrames`) chunk into. A fact of the two programs at the shape, as
-`ShapeIs` is. -/
+`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` draws (`CoinsShaped`), for `n` extra
+claims and at least as many Ligerito rounds as any proof's frames (`ligFrames`) chunk into. A fact of the two programs
+at the shape, as `ShapeIs` is. -/
 def CoinsAgree (st : Setup) (sh : Shape) (sch : Flock.Schedule) (n : ℕ) : Prop :=
   ∃ L₀, CoinsShaped st.m st.fold.kLog n L₀ (zeroRounds (roundSizes sh)) ∧
-    ∀ (T : F128) (cap : Array ByteArray) (lig : LigeritoProof), (chunks (ligFrames sch T cap lig)).1.length ≤ L₀
+    (∀ (T : F128) (cap : Array ByteArray) (lig : LigeritoProof), (chunks (ligFrames sch T cap lig)).1.length ≤ L₀) ∧
+    ∀ c ∈ roundSizes sh, c ≠ 0
 
 /-- `verifierRows` at a lincheck fold returns the fold `residualLins` gives. -/
 theorem residualLins_of_verifierRows {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim}
@@ -355,7 +368,9 @@ theorem hFit_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) {GS : 
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
     (hcl : F.ClaimsIs) : F.HFit dg N k Rw := by
   intro R ω t R₂ τ _ _ r
-  refine (roundSizes_spec hst.1 _ _ _).2 ⟨?_, ?_⟩
+  refine (roundSizes_spec hst.1 ?_ _ _).2 ⟨?_, ?_⟩
+  · rw [F.rep_rounds spec st cap lig hrep]
+    exact Flock.RecAlgebra.noEmpty_of_sizes (coinsOf_sizes CT F.sh _ r) (roundSizes_ne hst.1)
   · rw [F.rep_rounds spec st cap lig hrep]
     exact coinsOf_sizes CT F.sh _ r
   · rw [F.rep_extras spec st cap lig hrep, hcl R ω]
@@ -380,10 +395,13 @@ theorem coins_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) :
     (F.tableSrc spec st cap lig R ω t l).Coins := by
   intro r
-  obtain ⟨L₀, hL₀, hle⟩ := hco R ω
-  refine coinsShaped_of hL₀ (hle _ _ _) ?_
-  show _ = (F.rep R ω t l r).rounds.toList.map Array.size
-  rw [zeroRounds_sizes, F.rep_rounds spec st cap lig hrep, coinsOf_sizes]
+  obtain ⟨L₀, hL₀, hle, hnz⟩ := hco R ω
+  refine ⟨coinsShaped_of hL₀ (hle _ _ _) ?_, ?_⟩
+  · show _ = (F.rep R ω t l r).rounds.toList.map Array.size
+    rw [zeroRounds_sizes, F.rep_rounds spec st cap lig hrep, coinsOf_sizes]
+  · show Flock.RecAlgebra.NoEmpty (F.rep R ω t l r).rounds
+    rw [F.rep_rounds spec st cap lig hrep]
+    exact Flock.RecAlgebra.noEmpty_of_sizes (coinsOf_sizes CT F.sh _ r) hnz
 
 end VStarFamily
 

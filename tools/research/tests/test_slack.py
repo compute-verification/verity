@@ -27,7 +27,7 @@ ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
-HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting",
+HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
            "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
 
 
@@ -188,7 +188,7 @@ def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
-    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs"]
+    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs", "console"]
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
 
@@ -759,14 +759,14 @@ def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_i
 
 
 def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alone(fake, registry, routes_dirs, capsys):
-    add_route(routes_dirs[0], "console", "1.0", closed="2026-10-09T01:11Z", forward_to="top")
-    fake.groups = [{"id": "SCONSOLE", "name": "console", "handle": "console", "description": "", "date_delete": 0},
+    add_route(routes_dirs[0], "pr-captain", "1.0", closed="2026-10-09T01:11Z", forward_to="top")
+    fake.groups = [{"id": "SPRCAPTAIN", "name": "pr-captain", "handle": "pr-captain", "description": "", "date_delete": 0},
                    {"id": "SOTHER", "name": "design", "handle": "design", "description": "", "date_delete": 0}]
     rc, out, _ = run(capsys, "groups", "sync")
-    assert rc == 0 and "disable @console (SCONSOLE): retired, its inbox closed 2026-10-09T01:11Z and forwards to @top" in out
+    assert rc == 0 and "disable @pr-captain (SPRCAPTAIN): retired, its inbox closed 2026-10-09T01:11Z and forwards to @top" in out
     assert "design" not in out and all(not g["date_delete"] for g in fake.groups)
     assert run(capsys, "groups", "sync", "--apply")[0] == 0
-    assert {g["handle"]: bool(g["date_delete"]) for g in fake.groups if g["id"] in ("SCONSOLE", "SOTHER")} == {"console": True, "design": False}
+    assert {g["handle"]: bool(g["date_delete"]) for g in fake.groups if g["id"] in ("SPRCAPTAIN", "SOTHER")} == {"pr-captain": True, "design": False}
     rc, out, _ = run(capsys, "groups", "sync")
     assert "disable" not in out
 
@@ -1318,6 +1318,20 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
 
 
+def test_a_long_lived_routes_reads_the_routers_switch_back_to_cli(tmp_path, monkeypatch):
+    clock = [1700000000.0]
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(clock[0], timezone.utc))
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}
+    routes = slack.Routes(root=tmp_path, base="https://example.invalid/routes.d",
+                          get=lambda url: json.dumps(router).encode() if url.endswith("/router.json") else None)
+    assert routes.server_delivers()
+    router["mode"] = "cli"
+    clock[0] += slack.ROUTER_RECHECK_S - 1
+    assert routes.server_delivers()
+    clock[0] += 1
+    assert not routes.server_delivers(), "a relay that started in server mode would otherwise ring no one for good"
+
+
 def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_and_alerts_its_owner(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     status = [405]
@@ -1353,6 +1367,12 @@ def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_an
     assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang" in err
     assert len(bells(fake, box)) == 3 and len(bells(fake, top)) == 1
     srv.shutdown()
+
+
+def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, registry, routes_dirs, capsys):
+    add_route(routes_dirs[1], "circuits", "1.0", holder="bc-11111111")
+    rc, out, _ = run(capsys, "names", "list")
+    assert rc == 0 and out.startswith("@circuits") and "bc-11111111" in out and "open" in out
 
 
 def notes_clone(tmp_path) -> Path:

@@ -30,10 +30,11 @@ pytestmark = [pytest.mark.slow,
 SHAPES = [(25, 22, 8), (27, 22, 8)]
 
 
-def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None) -> Path:
-    """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points."""
+def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None) -> Path:
+    """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points;
+    ``holo``, when given, its `holo` key (`rec-inner --hide`)."""
     path.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": k, "claims": c,
-                                "regions": (c - 2) // 2 if regions is None else regions}))
+                                "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {})}))
     return path
 
 
@@ -225,7 +226,7 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
+def l16_h1(once) -> tuple[bytes, Path]:
     """`rec-open/l16-h1` (V*'s statement 2 at m = 23, its last level, over 142 openings) as `compose` writes it under its
     population program's partition, and the verifier's own bindings of it, from that partition object and program."""
     from verity.ml.circuits.codec import canonical_json, encode_program
@@ -234,15 +235,18 @@ def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
     from verity_flock import rec_open as R
     from verity_flock import rec_outer as O
 
-    tmp_path = tmp_path_factory.mktemp("l16-h1")
-    defn = R.definition(16, 1)
-    program = P.population_program(defn, 142)
-    part = P.partition(program, P.template_instance_query(defn))
-    honest = FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
-                        program=P.program_sha512(program)).encode()
-    (tmp_path / "partition.json").write_text(json.dumps(part))
-    (tmp_path / "program.json").write_bytes(canonical_json(encode_program(program)))
-    return honest, _bindings(tmp_path, tmp_path / "bindings.json")
+    def make(d):
+        defn = R.definition(16, 1)
+        program = P.population_program(defn, 142)
+        part = P.partition(program, P.template_instance_query(defn))
+        (d / "circuit.txt").write_bytes(FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
+                                                   program=P.program_sha512(program)).encode())
+        (d / "partition.json").write_text(json.dumps(part))
+        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+        _bindings(d, d / "bindings.json")
+
+    d = once("vstar-l16-h1", make)
+    return (d / "circuit.txt").read_bytes(), d / "bindings.json"
 
 
 def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(l16_h1, tmp_path):
@@ -368,3 +372,42 @@ def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_veri
     assert p.returncode == 1 and p.stdout.strip() == (
         f'setup: rec-open/l8-h1: META program_digests {{"{tid}":"{digest}"}}, the verifier\'s bindings\' '
         f'{{"{tid}":"{other}"}}'), p.stdout
+
+
+PRIVATE = "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
+
+
+def test_a_private_inner_session_is_refused_and_the_verdict_says_whether_the_circuit_is_private(staged, tmp_path):  # noqa: F811
+    """`rec-inner`'s `holo` (the verifier's own `--hide`) is the verdict's `private_circuit`, on every VERDICT line verified
+    with `--rec-inner` and on no other. V*'s circuit writer does not write holo parts yet, so a private inner session is
+    refused by name (`verify`, `statement` and `rec-statements`) however its circuit file reads; a `holo` that is not a
+    boolean is refused as the verifier's file reads."""
+    d = staged[0]
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-part", "0",
+             "--rec-bindings", str(_bindings(d, tmp_path / "bindings.json"))]
+    sess = tmp_path / "session"
+    sess.mkdir()
+    (sess / "session.json").write_text("{}")
+
+    def verdict(*flags):
+        p = subprocess.run([str(BIN), "verify", *files, *flags, "--session", str(sess)], capture_output=True, text=True)
+        [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+        return p.returncode, v
+
+    rc, v = verdict()
+    assert rc == 1 and "private_circuit" not in v, v
+    for holo in (None, False):
+        rc, v = verdict("--rec-inner", str(_inner(tmp_path / "plain.json", 25, 22, 8, holo=holo)))
+        assert rc == 1 and v["private_circuit"] is False and PRIVATE not in v["why"], v
+    hidden = _inner(tmp_path / "hidden.json", 25, 22, 8, holo=True)
+    rc, v = verdict("--rec-inner", str(hidden))
+    assert rc == 1 and v["private_circuit"] is True and v["why"] == f"setup: {PRIVATE}", v
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(hidden)], capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == f"setup: {PRIVATE}", p.stdout
+    rc, line = _statements(hidden)
+    assert rc == 1 and line["error"] == PRIVATE, line
+    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(_inner(tmp_path / "bad.json", 25, 22, 8, holo=1))],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and p.stderr.strip() == "rec-inner: holo is not a boolean", p.stderr

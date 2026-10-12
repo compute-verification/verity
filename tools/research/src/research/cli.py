@@ -98,6 +98,7 @@ import json
 import math
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import clone
@@ -364,6 +365,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
         a.cwd = str(run_dir)
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
+    _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     if ns.claimed and remote_info is not None:
         try:
@@ -721,6 +723,8 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env) is
     recorded as `params.env`, values redacted where the NAME matches SECRET_KEY; it is not part of the derivation (a Tool that
     depends on an environment variable declares it as a key param)."""
+    import tempfile
+
     from . import env as E
     from .store import attempt as A
     from .store import derivation as D
@@ -738,9 +742,11 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
-        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root, source_hint=hint)
+        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root,
+                             source_hint=hint, dirty_capture=capture)
         if tool is not None:
             conds.update(tool.tool_conditions(conds))
             params, key = tool.resolve_params(command, source_root)
@@ -784,7 +790,31 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         section = {"error": f"{type(e).__name__}: {e}", "tool": {"name": tool.name, "version": tool.version, "spec": tool.spec} if tool else None,
                    "campaign": ns.campaign}
         print(f"research run: store preparation failed ({section['error']}); running anyway, the attempt will be published from the records", file=sys.stderr)
-    return {"tool": tool, "conditions": conds, "section": section, "env": env_out}
+    return {"tool": tool, "conditions": conds, "section": section, "env": env_out, "dirty_capture": capture}
+
+
+def _place_dirty_capture(prep: dict, run_dir: Path) -> None:
+    """Move the dirty source's capture (env.DIRTY_CAPTURE) into the run dir, and name it in the store section with the digest it
+    reproduces; custody uploads it with the run's own files, and `evict_src` lets the tree go only once that record is preserved.
+    No capture (a clean source, `too-large`, any error) leaves the section without one, and the tree stays the run's source."""
+    import hashlib
+    import shutil
+
+    cap: Path = prep["dirty_capture"]
+    try:
+        conds = prep["section"].get("conditions") or {}
+        if cap.is_file() and conds.get("source.dirty"):
+            dest = run_dir / cap.name
+            shutil.move(cap, dest)
+            with open(dest, "rb") as f:
+                sha = hashlib.file_digest(f, "sha256").hexdigest()
+            prep["section"]["dirty_capture"] = {"path": cap.name, "bytes": dest.stat().st_size, "sha256": sha,
+                                                "dirty_digest": conds.get("source.dirty_digest")}
+    except OSError as e:
+        prep["section"].pop("dirty_capture", None)
+        print(f"research run: the dirty source was not captured ({type(e).__name__}: {e}); its tree stays its only copy", file=sys.stderr)
+    finally:
+        shutil.rmtree(cap.parent, ignore_errors=True)
 
 
 def _no_usable_remote() -> str | None:
@@ -1060,7 +1090,33 @@ def cmd_cancel(argv: list[str]) -> int:
         return 1
     print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
           f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
+    if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
+        print(f"research cancel: {run_dir.name} {ran}")
     return 0
+
+
+def _utc(text: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(text).astimezone(timezone.utc) if text else None
+    except ValueError:
+        return None
+
+
+def _ran_text(s: dict, now: datetime) -> str:
+    """How long a run ran, and how much of that its check waited for a check slot (runs.SLOT_FILE): its state reads `running` from
+    launch, so a check that waited 95 min for a slot and checked 12 was taken for 107 min in (af2d, 10 Oct)."""
+    if not (start := _utc(s.get("started_utc"))):
+        return ""
+    sl, mins = s.get("slot") or {}, lambda a, b: f"{max(0.0, (b - a).total_seconds()) / 60:.0f} min"
+    text = f"ran {mins(start, now)} since {start:%Y-%m-%dT%H:%MZ}"
+    since, took = _utc(sl.get("since")), _utc(sl.get("took"))
+    if sl.get("state") == "held" and since and took:
+        return f"{text}: waited {mins(since, took)} for a check slot, then checked {mins(took, now)} in slot {sl.get('slot')}"
+    if sl.get("state") == "waiting" and since:
+        return f"{text}: waiting for a check slot since {since:%H:%MZ} ({mins(since, now)}), so its check never started"
+    if sl.get("state") == "left":
+        return f"{text}: left the check line without a slot ({sl.get('why')}), so its check never started"
+    return text
 
 
 def cmd_compare(argv: list[str]) -> int:
@@ -1275,6 +1331,15 @@ def cmd_status(argv: list[str]) -> int:
     return 0
 
 
+def _slot_text(sl: dict) -> str:
+    """A run's check-slot record (runs.SLOT_FILE) in a line: waiting since when and why, the slot it took and when, or why it left."""
+    if sl.get("state") == "held":
+        return f"check slot {sl.get('slot')} (cores {sl.get('cores')}) taken {sl.get('took')}, after waiting in line since {sl.get('since')}"
+    if sl.get("state") == "left":
+        return f"left the check line at {sl.get('left')} without a slot, waiting since {sl.get('since')}: {sl.get('why')}"
+    return f"waiting in the check line since {sl.get('since')}, not started" + (f": {sl['why']}" if sl.get("why") else "")
+
+
 def _tool_line(tool: dict | None) -> str:
     if tool is None:
         return "unknown (v0.1 record: the harness alone wrote it)"
@@ -1341,6 +1406,8 @@ def cmd_inspect(argv: list[str]) -> int:
               + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
         if q := rr.get("queue"):
             print(f"queue     placed on {q.get('machine')} ({q.get('why')}); {q.get('phase')} phase")
+    if sl := s.get("slot"):
+        print(f"slot      {_slot_text(sl)}")
     if s["state"] in R.ACTIVE and (not s.get("remote_rec") or s["remote_rec"].get("remote_run_dir")):
         row = {**s, "id": Path(s["dir"]).name}
         _read_holds([row])
@@ -1366,7 +1433,7 @@ def _inspect_py_spy(run_dir: Path) -> int:
             print(f"research inspect: {run_dir.name}: {e}", file=sys.stderr)
             return 1
     else:
-        if (state := R.summarize(run_dir)["state"]) != "running":
+        if (state := R.summarize(run_dir)["state"]) not in ("running", "waiting"):
             print(f"research inspect: {run_dir.name} is {state}: no live workload to dump", file=sys.stderr)
             return 1
         results = pyspy.of_run(run_dir)

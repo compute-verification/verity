@@ -303,12 +303,31 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     listed targets go first, heaviest first.  The sum counts each process's copy of the task list, which they share, so the bound
     is conservative by that much per process.  An unlisted target that peaks well over `HEAVY_GB` can still break it: the process
     it gets killed in is reported as that target's failure (``circuit-check/killed``, with its peak), the other targets run on,
-    and its peak belongs in `HEAVY`."""
+    and its peak belongs in `HEAVY`.
+
+    The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
+    could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
+    Definition. Any other run builds the list."""
     tracing = cache is not None and CC.tracing()
+    listed = None
+    if tracing and everything and not specs:
+        TG.load_registries()
+        listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
+                         "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
+        if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
+            got = [CC.lookup(cache, k, REPO, moved=False) for k in hit[0]["keys"]]
+            if all(g is not None and not _errored(g[0]) for g in got):
+                rep = CK.report([{**g[0], "cache": {"hit": g[1]}} for g in got], opts)
+                rep["peaks"] = []
+                rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
+                return rep
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
     keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
         if tracing else []
+    if listed is not None and not CC.untraced():
+        reads = CC.task_list_reads([*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))])
+        CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
@@ -482,7 +501,8 @@ def main(argv: list[str] | None = None) -> int:
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
-              f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran")
+              f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran"
+              + ("; the task list reused, so no Definition was built" if c.get("task_list") else ""))
     if a.update_pins:
         update_pins(rep)
     s = rep["summary"]

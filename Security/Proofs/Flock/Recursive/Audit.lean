@@ -96,7 +96,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       exact hr _ _ _ _ j _ _ _ S' R'
   rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
-    Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
+    Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
       (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)

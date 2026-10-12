@@ -59,7 +59,7 @@ borrow_gpus = 2
 gpu_model = "rtx-pro-6000"
 owner = "pous"
 memory_gib = 1690
-stops_at = "2026-10-10T05:30:00Z"  # the VM's /etc/research/deadline
+stops_at = "2026-10-14T15:00:00Z"  # the VM's /etc/research/deadline
 numa = { 0 = "0-95", 1 = "96-191" }
 # GPUs 0-3 on NUMA 0 and 4-7 on NUMA 1, no NVLink, the NIC on NUMA 1 (node2-ops read it at 19:09Z, 30 Sep).
 gpus = [

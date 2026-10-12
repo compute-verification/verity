@@ -2,10 +2,13 @@
 statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the unmodified prover against
 ``verity_flock.rec_live``'s proxy and coin server.
 
-    python rec_inner.py stage --n N --sets DIR --out DIR [--plain-leaves]
+    python rec_inner.py stage --n N --sets DIR --out DIR [--plain-leaves] [--sparse SHAPE --stacked FLOCK_CIRCUIT [--forge cell]]
                                                              circuit.txt, inst-N.bin, pub-N.bin, and the verifier's partition.json
                                                              and program.json; prints the statement's shape
-                                                             (--plain-leaves: the trees' leaves plain SHA-512, circuit.LEAF_SCHEME_PLAIN)
+                                                             (--plain-leaves: the trees' leaves plain SHA-512, circuit.LEAF_SCHEME_PLAIN;
+                                                             --stacked: R registered at staging, rec_session.stage_stacked: the
+                                                             circuit registration META binds, circuit-registration.json, and the
+                                                             prover's R.bin, ROOT.json and circuit-registration-private.json)
     python rec_inner.py forge --what challenge|query --inner DIR
                                                              flips one coin of rep 0 in DIR's session.json and public.json
     python rec_inner.py forge --what top|unsalted --inner DIR
@@ -26,10 +29,13 @@ SEED = 20261004
 STREAM = "circuit/rep0"
 
 
-def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
+def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None, stacked: Path | None = None,
+          forge: str | None = None) -> dict:
     """The inner statement, bound to the `verity/partition/v1` object `Q_template_instance` v0 over `population_program` of
     the set's template at ``n`` (instance i is unit i), which every verifier of the inner statement holds (``--partition``,
-    ``--rec-inner-partition``), written beside it as ``partition.json`` with its program, ``program.json``."""
+    ``--rec-inner-partition``), written beside it as ``partition.json`` with its program, ``program.json``. ``stacked``
+    (flock-circuit, with ``sparse``, the bucket's `rec_sparse.Shape`): the stacked table R registered with it here
+    (`rec_session.stage_stacked`, ``forge`` ``cell`` its forgery), the circuit registration whose digest META binds."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_numerical.bench import templates as TM
@@ -45,6 +51,10 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
              leaf_scheme=FC.LEAF_SCHEME_PLAIN if plain_leaves else None)
     (out / "partition.json").write_text(json.dumps(part))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
+    if stacked is not None:
+        from verity_flock import rec_session as RS
+
+        RS.stage_stacked(out, stacked, sparse, program, part, forge)
     text = (out / "circuit.txt").read_text()
     meta = json.loads(text.split("\n", 2)[1][5:])
     G = meta["vus_per_block"]
@@ -54,7 +64,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False) -> dict:
             "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "blocks": blocks,
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "leaf_scheme": meta["leaf_scheme"]["id"],
             "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text), "partition_digest": P.digest(part),
-            "program_sha512": part["program"]}
+            "program_sha512": part["program"], **({"registration": meta["registration"]} if "registration" in meta else {})}
 
 
 def forge(what: str, inner: Path, level: int = 0) -> dict:
@@ -98,12 +108,24 @@ def main(argv=None) -> int:
     st.add_argument("--sets", required=True)
     st.add_argument("--out", required=True)
     st.add_argument("--plain-leaves", action="store_true")
+    st.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="--stacked: the bucket's RecSparse shape, R's")
+    st.add_argument("--stacked", metavar="FLOCK_CIRCUIT", help="register the stacked table R with the statement, by this build")
+    st.add_argument("--forge", choices=("cell",), help="--stacked: R registered with cell 0 flipped")
     fg = sp.add_parser("forge")
     fg.add_argument("--what", choices=("challenge", "query", "top", "unsalted"), required=True)
     fg.add_argument("--inner", required=True)
     fg.add_argument("--level", type=int, default=0)
     a = ap.parse_args(argv)
-    res = stage(a.n, Path(a.sets), Path(a.out), a.plain_leaves) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
+    if a.cmd == "stage":
+        if bool(a.stacked) != bool(a.sparse):
+            ap.error("--stacked and --sparse come together: R is the bucket's table")
+        sparse = None
+        if a.sparse:
+            from verity_flock.rec_sparse import Shape
+            sparse = Shape(*(int(v) for v in a.sparse.split(",")))
+        res = stage(a.n, Path(a.sets), Path(a.out), a.plain_leaves, sparse, a.stacked and Path(a.stacked), a.forge)
+    else:
+        res = forge(a.what, Path(a.inner), a.level)
     json.dump(res, sys.stdout, sort_keys=True)
     print()
     return 0

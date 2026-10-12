@@ -42,7 +42,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
                "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
                "pipeline", "kernel_outcome", "kernel_reason")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
-                     "grant", "ready", "lean_review", "commit_map", "custody")
+                     "grant", "ready", "lean_review", "commit_map", "custody", "source-lost")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype")
 APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites")

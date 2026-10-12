@@ -50,6 +50,14 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
+  "Pous.P2.Assumptions.P2RingAuditSecure": {
+   "owner": "@memory-accounting",
+   "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+  },
+  "Pous.P2.Assumptions.P2RingReducesToM1p": {
+   "owner": "@memory-accounting",
+   "digest": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
+  },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
    "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
@@ -225,7 +233,9 @@
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
   "Proofs.Flock.ZeroKnowledgeHidden",
-  "Proofs.Pouw.PearlC.FlockTile"
+  "Proofs.Pouw.PearlC.FlockTile",
+  "Definitions.Accounting",
+  "Models.Accounting.Guarantees"
  ],
  "layers": {
   "Definitions.Core": {
@@ -397,6 +407,22 @@
    "imports": ["Mathlib", "Models.Flock.Guarantees"],
    "except": [],
    "why": "a guarantee is a Prop over Mathlib, never over a proof"
+  },
+  "Definitions.Accounting": {
+   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting"],
+   "except": [],
+   "why": "resource accounting's definitions are trusted text: the device model and a joint audit's run read PoUW's uniform probability and, for the compute audit's embedding, its game; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); they import no assumption, guarantee or proof"
+  },
+  "Models.Accounting.Guarantees": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pouw",
+    "Models.Pouw.Assumptions",
+    "Definitions.Accounting",
+    "Models.Accounting.Guarantees"
+   ],
+   "except": [],
+   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and PoUW's named assumption TT as hypotheses, never over a proof"
   }
  },
  "reads_exempt": {
@@ -413,8 +439,106 @@
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
- "four_names": ["Nci", "NetTiming"],
+ "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
+  "Accounting.SecurityProofs.ComputeOfPouw": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw"],
+   "assumptions": [],
+   "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27"
+  },
+  "Accounting.SecurityProofs.CovertResidual": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.CovertResidual : Accounting.Guarantees.CovertResidual"],
+   "assumptions": [],
+   "type_hash": "89a050fbdfa6a718cc71e69413c2ea03e70e9cb47076c42b6531b9acf5047a64"
+  },
+  "Accounting.SecurityProofs.Joint": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Joint : Accounting.Guarantees.Joint"],
+   "assumptions": [],
+   "type_hash": "2349616973612a78bdb833e74d98a7ec19326ddf536e89213964f9e18066707f"
+  },
+  "Accounting.SecurityProofs.Sketch.CommitThenProject": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
+   "assumptions": [],
+   "type_hash": "60ef20fb730d1ceea94759327454412907affacffe8181611821b4f73c79af44"
+  },
+  "Accounting.SecurityProofs.Sketch.Exact": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.Exact : Accounting.Guarantees.Sketch.Exact"],
+   "assumptions": [],
+   "type_hash": "beb881ea782a3d7e26ad2b1b9d0486f244d86095ca1bcd33d14e2318fdf2e3c0"
+  },
+  "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.LittlewoodOfford : Accounting.Guarantees.Sketch.LittlewoodOfford"],
+   "assumptions": [],
+   "type_hash": "b7902f6672039ec6b46f39bfecb444653ed58702c49fb71b29f2cab6c83410fc"
+  },
+  "Accounting.SecurityProofs.Sketch.NonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.NonCollision : Accounting.Guarantees.Sketch.NonCollision"],
+   "assumptions": [],
+   "type_hash": "ed4b9d28cce0b4981cf2ed7a9416b8dd9f7991a3636c4b6b9f4b7f9edaefd7e6"
+  },
+  "Accounting.SecurityProofs.Sketch.SmallCode": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.SmallCode : Accounting.Guarantees.Sketch.SmallCode"],
+   "assumptions": [],
+   "type_hash": "14182e1b312345740fa40c111d5c05709686b6bd6988959fe200927f1675a6cf"
+  },
+  "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision : Accounting.Guarantees.Sketch.TensorCoreNonCollision"
+   ],
+   "assumptions": [],
+   "type_hash": "3826b46366b899e55a3083d468bae586354658a2e785f88f40dd75e38c0577e0"
+  },
+  "Accounting.SecurityProofs.Tag.DigestNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.DigestNonCollision : Accounting.Guarantees.Tag.DigestNonCollision"],
+   "assumptions": [],
+   "type_hash": "a5885b18cdc13950f3c4fc02f5c781a957dd2052abf4391c6b55a518ad2f19f5"
+  },
+  "Accounting.SecurityProofs.Tag.FoldNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.FoldNonCollision : Accounting.Guarantees.Tag.FoldNonCollision"],
+   "assumptions": [],
+   "type_hash": "79612cf8b8ff82de4c0a82bfddf5723de71efbdc8cb5219aec9a866c5fcb6876"
+  },
+  "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.HornerIsBlockHash : Accounting.Guarantees.Tag.HornerIsBlockHash"],
+   "assumptions": [],
+   "type_hash": "fad930b61c45eb758145c976bd5544c44efb5cba4dcc55342e5dfe5865f76b63"
+  },
+  "Accounting.SecurityProofs.Tag.PartialReadGuess": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PartialReadGuess : Accounting.Guarantees.Tag.PartialReadGuess"],
+   "assumptions": [],
+   "type_hash": "a699a385085916af1e166ba392545ca8d2ebe459f68e867c508db72f919f6803"
+  },
+  "Accounting.SecurityProofs.Tag.PolyNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollision : Accounting.Guarantees.Tag.PolyNonCollision"],
+   "assumptions": [],
+   "type_hash": "7b0f647827cedcc43c3c71d20282fe6947495ea846027d4268fddc1dfbc468f1"
+  },
+  "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed : Accounting.Guarantees.Tag.PolyNonCollisionKeyed"],
+   "assumptions": [],
+   "type_hash": "c6ca9b886962d17559eb99064498a277a8c46edf712e5c11a84d8542bbda4fee"
+  },
+  "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PolyUnpredictable : Accounting.Guarantees.Tag.PolyUnpredictable"],
+   "assumptions": [],
+   "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -2497,6 +2621,12 @@
    "assumptions": [],
    "type_hash": "19fea98f31d0c4fd87f36ee71e63c88b1f3d84b76c5ff3db77e73bc79e710f34"
   },
+  "Pous.SecurityProofs.P2RingAuditSecureOfReduces": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces : Pous.Guarantees.P2RingAuditSecureOfReduces"],
+   "assumptions": [],
+   "type_hash": "1430a42ac1ac32fb42666fe8becc5e5f1fad79c7219249f8261d1e361e311d55"
+  },
   "Pous.SecurityProofs.P2SlackB19Uncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2SlackB19Uncond : Pous.Guarantees.P2SlackB19Uncond"],
@@ -2923,6 +3053,51 @@
    "assumptions": [],
    "type_hash": "40f4869bd0926f30b0554264e13bf7864cf298ba62fb8a4fec20937a50551b1b"
   },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b"
+   ],
+   "assumptions": [],
+   "type_hash": "8d81db0f0ffebfe0060d0227d4465640d7725daa49251fd311d9895ede23fefb"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "5fdc8142267cec052df4d0c325b509187204a33bab151fbf7b5b5465a969a1fa"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336"
+   ],
+   "assumptions": [],
+   "type_hash": "822a369c013e0ddc3c8452dc58cdfcd3b06f418aca92d624e0895b6737734434"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "7f170ba21619e2e58830ce59a36760c350337a19aef292a3ba2739179d2b68ae"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "2b14a8e0f8e30bc5ad65b551f62301fcac4e1ca8e641c8c6025132392b1ce93f"
+  },
   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384": {
    "owner": "@compute-accounting",
    "signature": [
@@ -3017,6 +3192,51 @@
    ],
    "assumptions": [],
    "type_hash": "5fa5d962d2383d66f69be83a735cfe96234d83ea3f6668dfc1f33e5b0c472200"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
+   ],
+   "assumptions": [],
+   "type_hash": "861bd79cb959ffc3b6e70ef38568165e00d650cc59554d8bcaa509beedfe13d2"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "f096948f4b903d5c4660e1f491350cb9e2db42edf7fda3500d47b3963fbb9b09"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336"
+   ],
+   "assumptions": [],
+   "type_hash": "6937bdf0a9bf9449e343b9bcd3785f3b07db9696c3628408c334fc5b39498030"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "93a262f74183e5520f3429860e137fe6d1a2b49be7f7ca1487b56072a9789b21"
+  },
+  "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 :",
+    "  Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "3f64e4672e6cd8fdf0cf0eba23e61d191cb5b7f594a7e020221b494727ab49b7"
   },
   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384": {
    "owner": "@compute-accounting",
@@ -3218,6 +3438,51 @@
    "assumptions": [],
    "type_hash": "9c55eaa88f22bcf2bcbd8bbde06e6f5cbbc6936af2cb1e485e191c4dc51ed157"
   },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b"
+   ],
+   "assumptions": [],
+   "type_hash": "4dbaadf5675fe78d5abece33e130a677254e89a13f4588632d96220c037fa475"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "a3db30f394267822a48ede652f75eef4833faa9c10b2896d100fbffbe0b3c3df"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336"
+   ],
+   "assumptions": [],
+   "type_hash": "e511debc534a1674040606a19bbfa5ee6e9d4b556bfef3da7b9d9d3a91231bbd"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "829bfa6deda4df25e2b510a372a2eeb96bf32acff3101873401a6d2a68f7ee57"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "489ea2bac00b6b559776877f63177680c045a9d4a6dabf08d605e4f36a33a811"
+  },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384": {
    "owner": "@compute-accounting",
    "signature": [
@@ -3251,6 +3516,51 @@
    ],
    "assumptions": [],
    "type_hash": "3b22880a14d2152b7b97a013338e4ba53e6b71d25554dea4d94ea6c38eb61ad0"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
+   ],
+   "assumptions": [],
+   "type_hash": "3680f4ecce52bd15c7b2a7ac197321913ca0fdbe634f47bcab56eaf9250980bb"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "1e32e97d46c9c1b6fd6310f8822e6f50d10193ebd5e96dea0bb063cb59aeac2d"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336"
+   ],
+   "assumptions": [],
+   "type_hash": "4022c6a3eae927170a711ba5580228367139cf9c363527ec35c7d6a0484a5753"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "208a988808be01de2f4225fc84353b21527a9eed7112db207ed3ffa493a8a366"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 :",
+    "  Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096"
+   ],
+   "assumptions": [],
+   "type_hash": "c2df6796f22f1f0d3c9df987df0aef955adc4dbce1376980c702c1a69c16b1fc"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384": {
    "owner": "@compute-accounting",
@@ -3363,6 +3673,58 @@
    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
     "function": ["Flock.Stmt.setupTables", "Flock.verify", "Flock.Zk.verify", "Flock.ProvedScope.check"],
     "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.Tag.PolyNonCollision": {
+    "function": "Accounting.Tag.blockHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
+    "function": "Accounting.Tag.blockHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
+    "function": "Accounting.Tag.blockHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.PartialReadGuess": {
+    "function": "Accounting.Tag.wordGuess",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.FoldNonCollision": {
+    "function": "Accounting.Tag.fold",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
+    "function": "Accounting.Tag.digest",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
+    "function": "Accounting.Tag.hornerHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.NonCollision": {
+    "function": "Accounting.Tag.project",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.SmallCode": {
+    "function": "Accounting.Tag.smallCode",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.Exact": {
+    "function": "Accounting.Tag.sketchWord",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
+    "function": "Accounting.Tag.sketchWord",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
+    "function": "Accounting.Tag.signMatrix",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
+    "function": "Accounting.Tag.unreadSum",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -3672,7 +4034,31 @@
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
-   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list."
+   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list.",
+   "Accounting.SecurityProofs.Joint": "frozen (no-function): It composes the compute, bandwidth and capacity audits' guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.CovertResidual": "frozen (no-function): Like Joint, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.ComputeOfPouw": "frozen (conjecture,no-function,hash): It carries Pouw.SecurityProofs.EndToEnd, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -3682,11 +4068,173 @@
    "Nci.Assumptions.PartialSumsIncompressible": {
     "status": "falsified",
     "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
+   },
+   "Pous.P2.Assumptions.P2RingAuditSecure": {
+    "status": "open",
+    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
+    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k, and at L >= 2^30 for k <= 88, which its tests prove."
+   },
+   "Pous.P2.Assumptions.P2RingReducesToM1p": {
+    "status": "open",
+    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
+    "why": "Every ring-model responder against P2 at k = 105 is matched up to 2^-130 by an m1p responder with 128 more bits per block (P2-M1-SGI); open, and it implies P2RingAuditSecure, so a refutation of that is one of this."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Definitions.Accounting.Device": {
+   "digest": "315ed87db39c2b81bb280e3813cdda0f798fffb3daafa43f7c3300fa9d11b0cf",
+   "definitions": {
+    "Accounting.Device": "a62f7edbc9c41e2969ac61d8dd8ed68388e16e1ff9e0b88df1418a44c1bdde44",
+    "Accounting.Device.bw": "6076f565a748904859f15e8ea22b33289ebe2dc17822f47f1c81f6079f7a931b",
+    "Accounting.Device.cap": "d1b33e8908601a91b3b1686bf0646739981d58b3e44be461820ec0acb8504234",
+    "Accounting.Device.chip": "c3b67e69eaf69335df7b19fd0629dc3c62e5f02be4de0697db2934414183d994",
+    "Accounting.Device.mem": "a5f229da7a96a009cbcd48afd1caa296e8342f689faf6910ccc53cdfb9f83149",
+    "Accounting.Device.priced": "64f99531013bbfb39b810f88c7c9f5691c22080f8f8de41d9fad4350b1f39d93",
+    "Accounting.Device.rate": "58905498f07c4abbc169b0edbfcc334b16573f3ff66e48104ed6df9630abd064",
+    "Accounting.Op": "ab7cfff5d34fc34098b41ab931f64befaab4125b31a18df35a9adb592e871fa2",
+    "Accounting.Op.casesOn": "be4eb7f9599d3635b301817908fa10a591912f68d38527fc83eeb0adac5c61e6",
+    "Accounting.Op.ctorIdx": "5f327eec9d4f92127607fdb64835f6a9e63648c67b5f6dbeeb79382a1c122fbd",
+    "Accounting.Op.cuda": "b62d078d8484c50c384e13d4bcf7a5cbb6f1873ee29302fc75ed1de84e26de52",
+    "Accounting.Op.oracle": "6c0a7988cb4331f2c7b5c680e13bb8e0d9da41239c63e55b5de7a536e559b699",
+    "Accounting.Op.rec": "9816cead8423bc4e9342b2a46b588953ce1db5ec8513b289efc0b34573a30476",
+    "Accounting.Op.tc": "ad3c7db49220126d8118aa6c4da213430eaba2dddc453a002fa0e127514f2d86",
+    "Accounting.Price": "35763e7b0d8bfd28a279ba14165f8caf2e0a114f15cb6a1397b325291cecca4a",
+    "Accounting.Schedule": "8266f4df125ef6f7587938b529c4347bd547d48ac8a700764d44d6e8d873ad3d",
+    "Accounting.Schedule.Fits": "5d6bb8594c92eda81ac7b22bff939a1e28a875db86a82686a044749ae810348c",
+    "Accounting.Schedule.held": "070a142008da5ea91f6f62090dd107139fd7c508fe2541e7217ffd3aa7d9f9bc",
+    "Accounting.Schedule.ops": "f186c5305a2676cf269cf1b2d0acf722c5216de1471d6838c08fee60ef95b4ac",
+    "Accounting.Schedule.read": "26033023023349a7ca2d8347a2d89d6e0006efad958f6c276d930e85bbcfaea8",
+    "Accounting.Schedule.work": "a227ba3d117666a0e364d04e23731052712acedfe28040def5ec6d1a6e180886",
+    "Accounting.Step": "c70de300a1310535f1fcfc24f70722c04cb1dea738599102f77e26069108cfcf",
+    "Accounting.Step.Fits": "7e8b9774c825ea7cfb02b173ba2e4007c0b1c371f7c50224755eba5cbf62cbfe",
+    "Accounting.Step.chip": "85548f26b2a7c20fc6ec88aa82fa949f0ef75797a232687a9bdcb87a1e60be41",
+    "Accounting.Step.mem": "a70e775971ac1aabc671d3c32db9fc75367f688c2749f8186f170fb4be1da547",
+    "Accounting.Step.ops": "c5d53a840e319b2e765a762931eac4b08b030ced2ec7d5110d7a6a3bd74d0d27",
+    "Accounting.Step.read": "79ace3d3e8b0031e2efd5611bbb495e3ac82c1d07946ee25b1b44a3b8a46c34d",
+    "Accounting.Step.side": "1391cc0cdb5e723d0101f976b55166ebb6d8b476f48076cee2a35c484d4f3e7d",
+    "Accounting.Window": "50a5d286cabc70780af47a1912cdeb44f144e49bd7b339a9f7eee6934931f2b8",
+    "Accounting.Window.len": "f578b444a3747631248efdc6023c2ee07db832d59315e11e547b8a497453aa78",
+    "Accounting.Window.start": "6bc10dfceff8bad8ecee79fe3871d22507cc431f9f8c139866299481336a192f",
+    "Accounting.Window.ticks": "c361f40af35edc50725864af56fa88f98a73332059de22d1cdd53f262231d39e",
+    "Accounting.instDecidableEqOp": "0a450efe3fd7ca2bcafb64f0e28eed6f1fa72e7fd553ba78e1a6e2bb3477552e",
+    "Accounting.instFintypeOp": "215511804eac7984ffc432e02f18ff1db6a3ae8f96101691aa6f1d5338bddd4d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
+    "Accounting.SecurityProofs.CovertResidual",
+    "Accounting.SecurityProofs.Joint"
+   ]
+  },
+  "Definitions.Accounting.Joint": {
+   "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
+   "definitions": {
+    "Accounting.Resource": "7530c33f58e3b15a2b4059d106be86b3eeda5a1a0f1e8d935f285d9331bea41b",
+    "Accounting.Resource.bandwidth": "f7c11a2c44fdb5fc3ada31e561b9e8f3dec24a26e20288ca9a2442fb32589db5",
+    "Accounting.Resource.capacity": "e3be90efd096e8692c8448817d90ee74cdd5382eeb2ee950bda6c8b5da04c2e2",
+    "Accounting.Resource.compute": "721b8ee9555fa025b515871ac27b25d16e2194d13b7fce74991159b5443ad696",
+    "Accounting.Run": "5f7c9b30af33f2f8677ab7fc07414be5638d0835ba4023d251d5255440e104f2",
+    "Accounting.Run.Accepted": "79b94e8a2366d77715dab5b90eef96065fc0169c6145ae7a6ceae717172dda17",
+    "Accounting.Run.BandwidthCovert": "4ab47a389c759ca0d951c919b54300c02d53b9b6913883cd21a5e065345dabca",
+    "Accounting.Run.BandwidthShort": "5ace5b6362782966263eda8cb58793c5d36a35ca910f9312b547f39020d07795",
+    "Accounting.Run.BandwidthSound": "1ca231c74f820d68f3766267e543599428b88d7c62dbeb1e5eb5b95769c9df84",
+    "Accounting.Run.CapacityCovert": "b83c9a2a68ec53ff86381f80eca0afab0d0dd32dd94decd6ee4e3e0b01f8ea25",
+    "Accounting.Run.CapacityShort": "d83143db6499722c3668d48c8bf94a09f468a064535737ca0db7c1e55e7f4530",
+    "Accounting.Run.CapacitySound": "152221ae3efa080201994cd28f9f97120ca0c0f5a79bdad0880c3bebe1868540",
+    "Accounting.Run.ComputeCovert": "a98750285bf989e9cf0c569e8c67febd8aebfb891bbb40e0ce4a5dbedcce39e9",
+    "Accounting.Run.ComputeShort": "74d9697077083bdf5198997984fd59dd0fd004579d029dd98066189f29f621e4",
+    "Accounting.Run.ComputeSound": "1598be7dd7731694d00fbf35c71bdef8f94ab4bce72da8f08ece1ab41760719f",
+    "Accounting.Run.accepts": "f88da2328d0a94235239750e6c2e6f4e16eafb76b960d2bbbedfe7fd68e9e793",
+    "Accounting.Run.acct": "e55605901091c9e18ea3738239d62bda46563d792a6bd680477874b9fe28ce16",
+    "Accounting.Run.held": "40529ecfc35ccf7ca540199bdf6e06c8d8ac2086fe368a8f6a77011bef8feac5",
+    "Accounting.Run.othersHeld": "b81ac769a5110cd1470ab121ea8ff178cad4e11e55b445a53af53718173bc2d8",
+    "Accounting.Run.othersRead": "d724bc94f27f41acb50d9203f63ce2c80e50a5f5391e59d00d4e6b76626f9ca6",
+    "Accounting.Run.othersWork": "587fed1e2ab38f6ee40f657f073bc966d7916e0bc4f11682eef8176792bff238",
+    "Accounting.Run.read": "6c2559fe3a85a8bf9912a47924d28317d34a15ea120c439a218516c3bdb655b2",
+    "Accounting.Run.schedule": "3cc4364b697d8c373ca068df809a991641fa2800dbcc54948a1ec91bf4adf345",
+    "Accounting.Run.win": "a7a7fea487eecd6284cf70c9c5c9b99f9ff6a9b7fdc6aa4214af12f6ebe3c114",
+    "Accounting.Run.work": "f7355d9cb3b05981e6b5a216fe4acf8e16a103323aba84e3d17f16cc82fb6564"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
+    "Accounting.SecurityProofs.CovertResidual",
+    "Accounting.SecurityProofs.Joint"
+   ]
+  },
+  "Definitions.Accounting.Pouw": {
+   "digest": "e5e0c1fdb8d3ae83f5ebefcd1115b6e1b7c33676cc5c4dbbf2d4afd2dc1cf094",
+   "definitions": {
+    "Accounting.PouwCoins": "030b67f107579452dcdc948210a5b87d01300b88f6ce50924b66a095a3af27ea",
+    "Accounting.RealizesPouw": "922e85f67672e49cc3ca153073a7750044108844f7cae926d4b88c4c25ce9c1d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw"]
+  },
+  "Definitions.Accounting.Tag.PolyHash": {
+   "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
+   "definitions": {
+    "Accounting.Tag.Block": "496478e52aa53eb36c9f8e2f57505e61e0c042bcf2d7df89245964222bb23438",
+    "Accounting.Tag.P": "1e13f3806b340c3540c6539824653737b91897e76b4efef6d60b36f94cd96623",
+    "Accounting.Tag.Word": "1e46537a35242d3e7593eaf643bd8c90094a2654a54862103b3b0a6a872b4b6c",
+    "Accounting.Tag.blockHash": "a1051c68278216a1985f74236200d12e32a07e4eb3a11c5b55a54d100eaa0119",
+    "Accounting.Tag.consistent": "739a656a0f787e2a3fa4d3d31f739e2062075fb9089fd1cb80a7fa98cfd521a8",
+    "Accounting.Tag.digest": "b5c6a85a2422825ccc5a3aa915d4298e64a6d2b549b2a646d87bcaad87566483",
+    "Accounting.Tag.fold": "da2409922eb9770d78c929eda1f70ce47989610ee81461306cf0330a0f41b7bc",
+    "Accounting.Tag.hornerHash": "05406102fc52f3a9679bf83083f4dd84a12edbae2940ab945c48e67c9a2532d6",
+    "Accounting.Tag.partialRead": "75ccb99b3b8ac2301c59c40df979563444e2e9153d7f7322a8977353eba8c6f8",
+    "Accounting.Tag.residue": "35490ea3a9bc32d44807b5f8fe8b4b17f9a33a23aaa2ddd5bf256542543ab63c",
+    "Accounting.Tag.residues": "0d6ad4efaa2ffe38a6c68fcdfbcc4765237f6aff174b3b9205d14440d7de334e",
+    "Accounting.Tag.wordGuess": "af304f950eb6b98a49e10fd89cddb3c43e796d694eef306d0957c6fb3dc1ac7f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Tag.DigestNonCollision",
+    "Accounting.SecurityProofs.Tag.FoldNonCollision",
+    "Accounting.SecurityProofs.Tag.HornerIsBlockHash",
+    "Accounting.SecurityProofs.Tag.PartialReadGuess",
+    "Accounting.SecurityProofs.Tag.PolyNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
+    "Accounting.SecurityProofs.Tag.PolyUnpredictable"
+   ]
+  },
+  "Definitions.Accounting.Tag.Prob": {
+   "digest": "fd72301bac0a45de24b8b65047fad63158f5201c33a50da86c108b6fff9fe108",
+   "definitions": {
+    "Accounting.Tag.prob": "ed2c540751af0a6a113efc4d7a5e17342d51a00a17fdc1ef713432753e7f0c81"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Sketch.CommitThenProject",
+    "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
+    "Accounting.SecurityProofs.Sketch.NonCollision",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
+    "Accounting.SecurityProofs.Tag.DigestNonCollision",
+    "Accounting.SecurityProofs.Tag.FoldNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
+    "Accounting.SecurityProofs.Tag.PolyUnpredictable"
+   ]
+  },
+  "Definitions.Accounting.Tag.Sketch": {
+   "digest": "8062f83ebbb7833f79534999717b3fee1b2bd5b876cbc7fba3cfd2a39dce2c79",
+   "definitions": {
+    "Accounting.Tag.Signs": "1971a91db84b1282a20b09950149e48937f1b7c08b1440acf5d59597dbe21c25",
+    "Accounting.Tag.project": "9efbdb80d33169faff2c437cbc1ba434b4961a8eed9920408b12a3b33db0957e",
+    "Accounting.Tag.sgn": "2829107b4acabb55d30b6778c4cfbf6026d30340415d5a631d09629dd6af6703",
+    "Accounting.Tag.signCode": "eba5663bc8f9ab9e2c713dddce49a1898efe439401731cdaaa0e0a6ebf418d90",
+    "Accounting.Tag.signMatrix": "c9e26e4dd64153c880f93036eb160ffe50dbcb7d1dc2c48615eb66b4979b37c1",
+    "Accounting.Tag.sketchWord": "83e52c94bdf9cae9cb0c747f4a13849924aff8f5229097cb8e68ef23fff44a16",
+    "Accounting.Tag.smallCode": "61f9c1ce82b2cc8b818ef1f9adbb4c90f6e7d527ade134fbfeeb44290033dd76",
+    "Accounting.Tag.smallValue": "44d4978966d2179bc2a33cf705d1a187ac7dae77a1fac63144c2147c9bdc199e",
+    "Accounting.Tag.unreadSum": "1f8e83f1fa0da60f295e0e8589e62dcd3099e7d20aac633bad80388bb962172d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Sketch.CommitThenProject",
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
+    "Accounting.SecurityProofs.Sketch.NonCollision",
+    "Accounting.SecurityProofs.Sketch.SmallCode",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision"
+   ]
+  },
   "Definitions.Core.Circuit": {
    "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
    "definitions": {
@@ -4079,6 +4627,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4116,6 +4665,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4137,6 +4687,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4171,6 +4722,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4255,6 +4807,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4275,6 +4828,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4327,10 +4881,60 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
    ]
+  },
+  "Definitions.Pous.P2.Cost": {
+   "digest": "0f92c989cf95e0d319f2906b71aff0dde15a26ca302a18bc6a203caa57afe05f",
+   "definitions": {
+    "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
+    "Pous.KeyPart": "eb2c163914e5f40399b790ce38d8b0b48f7d0fad1e64fb11d449ca855d26baee",
+    "Pous.KeyPart.casesOn": "375a0d9e029bcfc70d9ac29ef48397c6cf38fd9549c752a66d2a47d19378d042",
+    "Pous.KeyPart.mask": "e048a8fb29b211cbb2adffb86ccedff56175199c02f0391c3d5a26d029558457",
+    "Pous.KeyPart.offset": "24de27e50b1f3edf5f685460cae0eb7c7157f767754d603d97afade22f953be9",
+    "Pous.KeyPart.rec": "5c2146a898b968eae1a4561b83f2740d6526a03be63296507ea86ab04996cabb",
+    "Pous.OddLabeling": "13c546c720dcea535ac7749b5929b317f1d34e052bed62248d7008b3e75df6a3",
+    "Pous.Prog.RingBounded": "52e3e55117db8dd0134cba49966e0ee7828c77124b6919be721584f1a9c93295",
+    "Pous.Prog.keyWork": "fca873b0cd0311e31091ce9f1d955fa525d941390b46d911d6570a98c57d1cca",
+    "Pous.Prog.mulDepth": "2d3f6426d2aa42f2f0b8ec83e165188fddc797b862ce0cc52ee55363491ac15a",
+    "Pous.Prog.ringWork": "a12afa7dcacf5e834d065f18e7cfd243eb42fe71e3102932a69239495519f09a",
+    "Pous.RingQry": "e3a429afd76b7fc7b7869b9090ef184bdf7e2cc617b8f307a613938eee9ab589",
+    "Pous.RingQry.add": "3d2987d195d620a4b1c7b8644da193d191d8734ad02b97d3d88fd2b65e812d56",
+    "Pous.RingQry.casesOn": "73c5693553d36d335d2f53b8f13b4c365aab8224a84a0bf8048fbc7fc6fab904",
+    "Pous.RingQry.ctorIdx": "3729880bfd662efeb5cbe8c0276ca0163add350c4b41a923242df9bcd68769b7",
+    "Pous.RingQry.isKey": "2051c13e4aa85364d8ac97ad6767de9e33e29c6c394bb74d681589308714b887",
+    "Pous.RingQry.isKey._sparseCasesOn_1": "9ec38fd29f7ad77a024a9c7354557467e0d6be50b6dfec05cc949402b448b755",
+    "Pous.RingQry.isMul": "e8a7ff3dc7a763a43e53e9822e3d08823d1bd0be202653188bbe2bfd3f2c0d7b",
+    "Pous.RingQry.isMul._sparseCasesOn_1": "ac5983789868e07dfdbcb487ef8577323350fb94376bc329b86c8002566076b3",
+    "Pous.RingQry.key": "89e2dbbc6c106e303a60100cbfe4cf53b43fb5934d62ea9a68b12c364a51db98",
+    "Pous.RingQry.mul": "cc97284a2a2b51d2e0acd983d424bb0f5fe16891de0895a766c992bdb0b8bd55",
+    "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
+    "Pous.RingQry.rec": "662150542c17dd3dfe6e2c8290691104cfa3810300966a3cee749d186b40f683",
+    "Pous.SeqResponderOn": "a3bc66a3ed2ab3aecba132b2032b5631acec15749aca42234627e50ebaea0057",
+    "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
+    "Pous.SimResponderOn": "c457aff17af43873e0491b82782d0fae10e963ff55d7987aa99ea4d2219e3a0b",
+    "Pous.SimResponderOn.prog": "5fbc08c1caef87dcc0ee147520ff272369887fcb366daab96043ee8d9ad9a514",
+    "Pous.decBlock": "52c9d55db46e0fd203f72e1aef72df7c6a353810d3092818fc5dd45148865f4c",
+    "Pous.eltD": "e0d35ad5a621d89317cedcaa1c472e5ca7089a6592f5e80abeed85a2296e66bb",
+    "Pous.encBlock": "ae8a61be28a1724696c809666cbac5784158a6c30d0d19a592ad6b029056045e",
+    "Pous.junkLabel": "1ae6b9885f6c078136edf78b23a90b027f3e84045d4b108ecc969c01ceeefe3c",
+    "Pous.lab": "14b0a991151c821344296df97e7f4e0b433675ba623a887f6baab8b3f3e80733",
+    "Pous.negL": "3178fe1b35681771e41c7545c6278c8dc2cd056b788bf50295dcdcfb2c97770b",
+    "Pous.nthAns": "731fb0d44de3615fef6e976a606836dc0504a2a585acc78fc0c209215c81767d",
+    "Pous.p2ring": "d7ea73b8c6aef42d803bca7a9822a090efc4bdab85d138a5dfb3f4013558d578",
+    "Pous.rhoE": "7b87742b079483bb4646a73b192b63783f6b444d89bddc24fa8e3fee71cd2b1e",
+    "Pous.ringOp": "952205b604d82d005be8e71d6bd28794a4698271744b39d5bbf4ebbc249a29b8",
+    "Pous.ringRO": "36e3e7e17100de2e8636562fbb7a41d0de57db072b605a8ea925994f7b4a6c43",
+    "Pous.seqAcceptsOn": "c8c26fb9cd30569149b52fbfb684d918763a29cbbbf51e2deea009ce7a66b3b5",
+    "Pous.sigmaK": "f5d0511f2e4b58ee2f3ee9ef90efece277371316e9c739685f2f14e419e26ac9",
+    "Pous.simAcceptsOn": "580aa02890e29c4aa2d17307ee9ce271349d1bd90105b0eec0869a5b419bc6e6",
+    "Pous.sqE": "3727f1863cf42a82d1b2940a9ca18c4ff59c2909e3b961c3a0d83c5def7eaaed",
+    "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
+   },
+   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces"]
   },
   "Definitions.Pouw.Barrier.Defs": {
    "digest": "9db794608d3a485fcf68f85932a09e917d482590427dd793fb32d9d1972fefa4",
@@ -4350,6 +4954,7 @@
     "Pouw.wrap32": "f2e71ec4f30a62b860aa526ab374d16f75c70eefc0e4ed3f59753dae4c9814db"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.Dimension.A2WordsIff",
@@ -4384,6 +4989,9 @@
     "Pouw.pr": "c72cdec579500ec37c510210e22769c63de3d3f4f7e39a9f243452a0b22e4134"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
+    "Accounting.SecurityProofs.CovertResidual",
+    "Accounting.SecurityProofs.Joint",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -4409,6 +5017,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -4420,6 +5033,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -4446,10 +5064,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -4478,6 +5106,7 @@
     "Pouw.QTree.rec": "cda87a871c92a8c68926a682943fa5cd235e4b952cdc34a307a129d1b3e17a07"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -4501,6 +5130,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -4512,6 +5146,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -4538,10 +5177,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -4643,6 +5292,8 @@
     "Pouw.Fp8Atom.toAdder": "7cca6dae786a59469327bc2aa6032363b2a1bdcd7511f2c4acbdf378ad2326cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -4658,6 +5309,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -4669,6 +5325,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -4695,10 +5356,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -4726,6 +5397,9 @@
     "Pouw.Fp8Atom.decode": "961a08fb469def3000eb6aa9d8ad0a30df4176a4259c48373aab4a8b40f4fe51"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.SmallCode",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -4741,6 +5415,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -4752,6 +5431,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -4778,10 +5462,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -4806,6 +5500,7 @@
     "Pouw.Fp8Atom.wordQ": "9ee27b990d0e72f11d265812837b74b8f725d76bc5731473248c43e952e65d1f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -4821,6 +5516,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -4832,6 +5532,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -4858,10 +5563,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -4934,6 +5649,7 @@
     "Pouw.totalWref": "3d8335db3ac54640710d963c0f384ba2b1873c754407a631506112891ea4f35a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -4955,10 +5671,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -4978,6 +5704,7 @@
     "Pouw.reductionGamma": "f4c4c8494ba03422caeca93740f2096e22be8f2cf1f7caafb253ef31a5e79560"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
@@ -5172,6 +5899,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -5183,6 +5915,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -5201,10 +5938,20 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -5285,6 +6032,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -5296,6 +6048,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -5322,10 +6079,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -5340,7 +6107,7 @@
    ]
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "5f110ea503460bce4e6708c24e25254156c197adda2269e63c8c9f275aee8a4c",
+   "digest": "9aa55079d9549a5b2b25c49ddb1d4cdf643f8efcbe30bbeb20b20aaeb1ab5e07",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -5363,8 +6130,11 @@
     "Pouw.PearlC.devH100": "5a43c1efe07cc2ac628095c95c6a205e1e584a4c451a1c7c0a8199510578dd0b",
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
     "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
+    "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
     "Pouw.PearlC.pearlCDomainDev": "efca9d83927acd176828923127fb955d5745e704f51b995db882f7e654426508",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
+    "Pouw.PearlC.pearlCDomainDevNK": "2653a120d87aafb7cd768ecc73e0d63a375fe6e07544f2c8a4c4acd087981bbf",
+    "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
     "Pouw.PearlC.pearlCProtocolDev": "db4659dcb7475e15f899edf4f1b866458a6152293660334714d9c8a8e97af9ff",
     "Pouw.PearlC.pearlCTilesDev": "0e25aa0c49d11e687cbf95864f1817864224d98d3442299d12ce99cab12b3698",
     "Pouw.PearlC.wrefDev": "122d664caedfadd83fb8bdb36749da7e283172c9bfb7c98db59652e72191d649"
@@ -5383,6 +6153,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -5394,6 +6169,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -5418,10 +6198,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -5611,6 +6401,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -5622,6 +6417,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
@@ -5634,10 +6434,20 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192"
    ]
@@ -5656,6 +6466,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -5673,6 +6488,11 @@
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -5701,6 +6521,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
@@ -5710,6 +6535,11 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192"
    ]
@@ -5741,6 +6571,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -5752,6 +6587,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -5763,10 +6603,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -5792,6 +6642,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -5803,6 +6658,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -5821,10 +6681,20 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6007,6 +6877,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6018,6 +6893,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6044,10 +6924,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6125,6 +7015,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6136,6 +7031,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6162,10 +7062,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6231,6 +7141,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6242,6 +7157,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6264,10 +7184,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6300,6 +7230,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6311,6 +7246,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6329,10 +7269,20 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6568,6 +7518,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6579,6 +7534,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6599,10 +7559,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6646,6 +7616,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6657,6 +7632,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6681,10 +7661,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6726,6 +7716,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6737,6 +7732,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6755,10 +7755,20 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6771,12 +7781,15 @@
    ]
   },
   "Definitions.Pouw.PearlC.Sm120": {
-   "digest": "707251e81ff9c998a15c96eae81fad181d5c68b018af5cea1518b2603ce4c976",
+   "digest": "637352112421c7ee2b6222521f5034a54bc2aabfdecc5f7a18e8e8ff24508eed",
    "definitions": {
     "Pouw.PearlC.sm120E4m3": "46fe445a03ea01e961de594d17fd2e537e12bfaf764f296745ced647bd757797",
-    "Pouw.PearlC.sm120E4m3K32": "313fc54181e0834aed11b24d2ec50dfa0b5a2bfbd2dce390c2c6660068845b0a"
+    "Pouw.PearlC.sm120E4m3K32": "313fc54181e0834aed11b24d2ec50dfa0b5a2bfbd2dce390c2c6660068845b0a",
+    "Pouw.PearlC.sm120Step": "4d41987d8760990c4db61e96d761db62a4ce809ae3308b0fb7126b80f4a24d2a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -6788,6 +7801,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -6799,6 +7817,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -6817,10 +7840,20 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -6872,10 +7905,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -8490,7 +9533,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "7eeefe24631671759b8ae12a25afc792314c604ad145e3aab81ad81c29d47c43",
+   "digest": "7ea69d88da4b2203e5514bfe55cdbbd8ece75be8a9dc3cc8c65d7bdea555051b",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -8626,7 +9669,7 @@
     "Flock.HmRow.zeroRowBc": "70914d394be7bc1eb39db8688cfc653ec4fa9eaa394b9a4e18acdce1feb9ea3f",
     "Flock.Stmt.setupH": "8984403d03339167cd3ce89c4dab49441b6de161bcef0de979d5cac8a905262d",
     "Flock.Stmt.setupH._sparseCasesOn_5": "d7fa2775d3f894d247b591b627dbe1dd5ebfde6070f3edf2d7aa1afbbfa0d77b",
-    "Flock.Stmt.setupHidden": "09025742a5b9c3f0543232b2b1a8aeb4f62c04900d4d9ba4d12a3ff8f1f91d8b",
+    "Flock.Stmt.setupHidden": "339f04e6728e64fd51e3f5790c8b3c0d1174079e54c5f29c86815fa44e8d8728",
     "Flock.Stmt.setupTables": "52f3ed50b801f5ba2656855481c8672ade2c9db182961b984b949f059e5adc2f",
     "Flock.Stmt.setupTables._sparseCasesOn_16": "56ea21fd4f73f92f1da9c2c4e69df2807862751397ac9b294c499a5db7357a11",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
@@ -8847,7 +9890,7 @@
    ]
   },
   "Flock.Ligerito": {
-   "digest": "769cd73e5a065d85a4bd2a14d8f19ff9af19a5ff0241fb5925e9886a6edc113a",
+   "digest": "bc621510e69156cc3af21e44092cfe3e9293dc86b64921d3b5bf28744ab6fa52",
    "definitions": {
     "Flock.ConsCtx": "ef9f64d4dcc204e02023f40dca69df4a759fa6068c3a52a7a4411bfa7dd6ab8d",
     "Flock.ConsCtx.alpha": "44bfa1ae7142108d488623ca7b00df72df44cbdb0e8de54af79c304ac7664691",
@@ -8884,7 +9927,7 @@
     "Flock.instInhabitedOodCtx": "ecb7c21a27673f820c67b470d531a595702b88f53ec9dcd9db139dc595f93ac6",
     "Flock.instInhabitedOodCtx.default": "b6cd19f23844aa84368f8b27db1b0eb4e978b66e4803b98452b7fd0839606b5c",
     "Flock.lift": "07edd65f904f965ee5977c46cf553e0e7c7046589b810709a7b0c5d132fca20f",
-    "Flock.ligerito": "1412cfc3682d61a568d4f8eea07fc65b6905ee86d47161afd8bfb0d77db356d6",
+    "Flock.ligerito": "6b039c9776bae0bc2b3f711a104026aa92f0546a6259af2421f29e758d537b1d",
     "Flock.nextMsg": "146e7eaaa79af51e927ca382cf2382bf187e30d3f645ec2317c3b258667e65b9",
     "Flock.nextOod": "d578ee43aad617f520ad23d03f607881209dd53e9b0f65a4baf0107e6c1f34fa",
     "Flock.nonceFrom": "498dee809e3a6a426b2f861c4107fffb88ecee9ce44122ae583e0bf24c70976f",
@@ -9166,7 +10209,7 @@
    ]
   },
   "Flock.Opening": {
-   "digest": "63f7cf1e3f5f8533392628015a10189af8c3b3e7cbdb55f371f78073c36707c8",
+   "digest": "a26e9c07defc927a95f0248ff4254c3223cddc33cb6776929c464f9e4cd648b8",
    "definitions": {
     "Flock.Switched": "ab51335d203312040bc05912a91f459319c734c08662a19e2d93f83e9be9f98c",
     "Flock.Switched.gamma": "a5ab9b996012f030de79f33fdfffa47fb701d9cdd706c7ecb70a7e394acef4ca",
@@ -9176,7 +10219,7 @@
     "Flock.basis": "ad0a979d975bb1072b95ee9e4c6daef5f09e4d29a5ce1fb2e43b43e9900aacd6",
     "Flock.basisForClaim": "be70df075c2d30d599136eded3db07fb38ea9f413620a0bbf5fcb6fb51f3c179",
     "Flock.mulColumns": "fb4f3f5d3674f617039ecbaf6b0f7a1b6a67a16b4eb67c8dc409e83b92eae6ef",
-    "Flock.ringSwitch": "87fa68afdd557e70b0e440edf5a58b49207c15bd8a8c6eb3013348a2af42e2a8"
+    "Flock.ringSwitch": "22d2cb107109365c4d8496a90b3d782f016cac1568bc5a0e0c73b4274da6ac8a"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -9302,7 +10345,7 @@
    ]
   },
   "Flock.Piop": {
-   "digest": "2c5fd2a61717ee8b02abf05a08c6b06af014a1845ee7a4571a6391f301f99f37",
+   "digest": "b14334ce89eeac63c39e85fdb72428ee52e3c30cd1c30132e10c98288dac92ee",
    "definitions": {
     "Flock.CircuitFold": "cd2a0b08e1118d5900b0b82b20b0ff8c5e04e5de67ed4aad06e56b8cca0d21ae",
     "Flock.CircuitFold.folded": "3a444a03c0d983775c0426c028b2f20d7398a6b39d2a251e157afd8d9c6f69c3",
@@ -9323,7 +10366,7 @@
     "Flock.ZcOut.vC": "1d8b7073c1c547d6a69647fafb45eb63c90d50c4304ee56ad545e7706df9abdd",
     "Flock.ZcOut.z": "2986d1b529c2be5d791d0c30f47409b8c28f4c2f29eb13c1fe67fb4a0efa9cd4",
     "Flock.abcClaims": "8b7297d7081a4bcac1ac16a6f07423a4ed57240c34254715ae72658d34c5281c",
-    "Flock.bindAndZerocheck": "1324da80397d873514a0077acaedd073ee2abb8ef243bcb41cdd296e8ba86f94",
+    "Flock.bindAndZerocheck": "0ea612906a239c108f374784953c6bb95578069768273ce9aef13dff6c49ff5d",
     "Flock.check": "c3802cb1180aa4e22b676e610e2efe4fc08cc121693099117ac4478f46214fcb",
     "Flock.combWeights": "ac23d879cbfd9d57cdb2dd4dcd3684fd1a27e4200c8360caaec094ae3d0c30d9",
     "Flock.den": "5e9ff29a813a8ce6d1691791f8ccf612d0d67f37b94a4b35e9255826f2c05f99",
@@ -9550,7 +10593,7 @@
    ]
   },
   "Flock.Proof": {
-   "digest": "a1fb2d448569b9cd840b9d541907b3adce577b09219c3ac9df185b8d747f9e9e",
+   "digest": "906995cb2d69317d3a2f58238d45e569d971ed7b640e319236b7a27689730033",
    "definitions": {
     "Flock.FinalProof": "5ec92b6c5d11500fc360636c7eca4148335c1cb2ff438ee228b01c8002e45887",
     "Flock.FinalProof.rows": "5a813b7afdefc006e6cc02012240ad1943e7a1961c6413ae633a70bc44439ff9",
@@ -9585,9 +10628,10 @@
     "Flock.Proof.params": "e5ee9f028ead5d93b84a40e122ff2cb39992975cce78acacdaa9fd11a5df6cd4",
     "Flock.Proof.ringSwitches": "545e4a78dc4c5ac3fd2434d96bc8e5f5ab163424ac0474096d237a1a1439fdc3",
     "Flock.Proof.zerocheck": "146ea23d52853450863d41cacfda846bf2c99172e4457a61f0b314f2fe9dee45",
-    "Flock.Shape": "ee171c40fa5d477ccd244da06d53269d983f8f119a77e14d0d9e51a03429d7d7",
+    "Flock.Shape": "4366646333bd343d9ba102e5b827d69167c1c2be12c62a7665e4765f2cd8134a",
     "Flock.Shape.claims": "776b121da1afbac2d7544144e0cd6f1f21ad64414d61d7f87e11eff2420b575e",
     "Flock.Shape.hashLen": "ffd1b599d3f6763d7b7132069b163e18a798dbca056ed0aac9efcd8fb356b915",
+    "Flock.Shape.holo": "f782d3498ae8b1fbcf9d8cac3f01b7358cdf86bb28af793d7176f0da5e4a4cc1",
     "Flock.Shape.kLog": "c9b0d9413663a0c21ee041c9448cf03ab20769a3091e98c24e4d81d6431eecfe",
     "Flock.Shape.m": "d0deb594707d65ba1f9024a0528b4dc047bd7cfa6b1bca59d8e11cd3853b7907",
     "Flock.Shape.saltLen": "1db9711fdcd5f9871a6f8df8f189aa9dbbca31a1176f459e6c4d1e9cd751232c",
@@ -9900,7 +10944,7 @@
    ]
   },
   "Flock.RecAlgebra": {
-   "digest": "8c123420280851a1c140fcba38a9cfca3a0ca8d371ccb120a7d8651839bc08e5",
+   "digest": "0b819122ed844511901f8a608aeabdc62a85bf6406dcd53fe736373020ce8160",
    "definitions": {
     "Flock.RecAlgebra.AClaim": "7a6a8bfd94bfba4c3f8270cddba7e25617db71beba75b1d4f2a2d9d9de6049a8",
     "Flock.RecAlgebra.AClaim.skip": "d34f9921c61aedb3f71c192f9bfa96add4579ee7271b5f76412e10ede9e60751",
@@ -9929,23 +10973,23 @@
     "Flock.RecAlgebra.KV": "c1b26f8093070308ff4182f6795ec5830f20cb80a26413ca24d5c90261b2882f",
     "Flock.RecAlgebra.Key": "e710142fb5773ec8c9e1a698470cb73948ff4c0b4ce2110b638f64b1cfde90b7",
     "Flock.RecAlgebra.Key.T": "643e3b7ab889768b58a096203632cf65deafdbb3e865d70e761ff12c77072910",
-    "Flock.RecAlgebra.Key.T.elim": "b9b4f488d341aeb7dd8adb0e693f32b79acafa4df386275ac6809ad9d47c975b",
+    "Flock.RecAlgebra.Key.T.elim": "7233f91be16b397ebdbc1bc436e0ee78cd0be144f0fd8639bc946a200892b4b4",
     "Flock.RecAlgebra.Key.ab": "5433a28561fa6205a6d63e1866d967431abef4179c7b75f144d4d3475958504f",
     "Flock.RecAlgebra.Key.ab.elim": "aa3a793aecc7fd1616410a635960456a68727fe455d4df4fd1c40aa259c6284b",
     "Flock.RecAlgebra.Key.acc0": "5b83f1f5b9b2c7e6a29f1da5ae8c02de0cded0f265fbcbfbb50ae3b0112fab1e",
-    "Flock.RecAlgebra.Key.acc0.elim": "640e6c67ba5f11bcea0de95f8fa55cfd2ce8accec685385eddbbd7f20648fd6b",
+    "Flock.RecAlgebra.Key.acc0.elim": "a0a308b3b29613681e3bc9af9f520c25fea133fd1ed579f0e351ad1d3fced22e",
     "Flock.RecAlgebra.Key.acc1": "caa6cc988cda007415b630524d909f97965517562292ef615027fce969b7c7aa",
-    "Flock.RecAlgebra.Key.acc1.elim": "161984053165ca1487779ab0374ff2c5a17342383bfdf85d363e6d4bca4d2b22",
+    "Flock.RecAlgebra.Key.acc1.elim": "77c340f2bde63585d1b3d8dfe1d238129ee371362ab56e14f9a73bc117e55be2",
     "Flock.RecAlgebra.Key.c": "277f89375f08a65d54f74e5ea5a6918b6b0855223fd5c5f29d0e5211aa9ce721",
     "Flock.RecAlgebra.Key.c.elim": "b598a0241e4e1c0d15dded0035d567daa7a33052988e1de30a688c351690cc36",
-    "Flock.RecAlgebra.Key.casesOn": "648a08f03541bb7ceedb33eecf90aa09f103297ed5200b069da1864536e3f0e4",
+    "Flock.RecAlgebra.Key.casesOn": "2fffaa01d2c3df7554bd50d8b92eba42040a889624fa0f0f38d0f5bba0198bd6",
     "Flock.RecAlgebra.Key.comb": "086e32711fc5a103f18fb3013a281681dca48a126bf4e97a4ebf93db3453a38f",
-    "Flock.RecAlgebra.Key.comb.elim": "213c4d712abd4c082cc3f6c0240e7b4fa0c3acfa7d3a3f96d46c10398d07b553",
+    "Flock.RecAlgebra.Key.comb.elim": "6c541ffe492aa250237e983c90258d1a4dcdd0adddba6aa28f5d5cd7c025d246",
     "Flock.RecAlgebra.Key.cons": "61dfba0ec9a05da6921562aee71f079d45e5226c263f3ea423c2c24bc15e740b",
-    "Flock.RecAlgebra.Key.cons.elim": "072d49ba23ed665f87e7e4aec88b3bffa5e6df011d841ed47eefc4a4dedac9e3",
-    "Flock.RecAlgebra.Key.ctorElim": "9fe010f6659de33f7e80213180d3f8d4e6f6720044e3d79c5d8e5d8b16da2b34",
-    "Flock.RecAlgebra.Key.ctorElimType": "37893298daa12631dc956383acd37ece6c7a7d46ee35c3a17129a7f9a8100277",
-    "Flock.RecAlgebra.Key.ctorIdx": "938b0de8d2ad388caec1d6ec911a29e61cd555e824e4a65362944eddd8d06f73",
+    "Flock.RecAlgebra.Key.cons.elim": "7c48768ffe937173cc42b813ba02c4b728e6e56700fc24f7915c940c73907c31",
+    "Flock.RecAlgebra.Key.ctorElim": "1c22c830bf10c8e0bcf8f1b5cd14e60b7fd416693a4f571298b506c4c34c573a",
+    "Flock.RecAlgebra.Key.ctorElimType": "a38a935101cc497bea9a13998c1625a1a4e67279cbde45a87fab41db8f788c1a",
+    "Flock.RecAlgebra.Key.ctorIdx": "ff5057e87f8d8d79ad031a65422dc30511b92ada4445a0b0f01af66e964331be",
     "Flock.RecAlgebra.Key.fa": "cb408b45921427b8c4a27929c01ecf948ff8a7c0bbb63b08ac5a0c2ecddf976a",
     "Flock.RecAlgebra.Key.fa.elim": "24c5e89730d77c4f54ca4cce77d0fd26114ecdf1ca9e0c0b1d6d481ef99c3b43",
     "Flock.RecAlgebra.Key.fb": "4fd4b0e742c7de73f8b3576a1e95092eead4c2c04839b1fb7d1c2218d971a4ae",
@@ -9954,25 +10998,27 @@
     "Flock.RecAlgebra.Key.g1.elim": "25cadc35f1c41a9bab16dda2cfc34b9fb76e85237b56d27dfefe5bd9154db2d9",
     "Flock.RecAlgebra.Key.ginf": "2ad46c5f4e703f6a23ef4dd802ef16b7a7d2210f57c9b73ec094d55ce0722e4e",
     "Flock.RecAlgebra.Key.ginf.elim": "eb199e5c237f54ca02c3b902271dfe03bec2ffe4a3748b209bf21d0465e6ab7d",
-    "Flock.RecAlgebra.Key.isCons": "0ec2d9473db1a9e714ef4b8648114a7e010ae35f9762d98358f8bddf0f623aae",
-    "Flock.RecAlgebra.Key.isCons._sparseCasesOn_1": "3bf8fccba7a8c07c744a4e26d2ab53af5f9dcad65b5b6035183cafcb3109ebcf",
-    "Flock.RecAlgebra.Key.match_on_same_ctor._@.Flock.RecAlgebra.1842282792._hygCtx._hyg.86": "e2652d445053c156eb47891fa3c1000bcd8ab483706e10bf6e68813ef62e6b1a",
-    "Flock.RecAlgebra.Key.match_on_same_ctor.het._@.Flock.RecAlgebra.1842282792._hygCtx._hyg.86": "3d9f68e183bea3f29447b0582b1f001d310dde46842e4fab8603e8b9ea7a1604",
+    "Flock.RecAlgebra.Key.h": "d012546c84698b34e73ab3f6788e449ce1b4fdca817f4cadda28cff804ec96b0",
+    "Flock.RecAlgebra.Key.h.elim": "0df9ed1a4556db74d735e3b96247d089d217d8fc357b49a34a539f708b5b81f0",
+    "Flock.RecAlgebra.Key.isCons": "a874b398ca0f2f3d80a002288e9fd9bf5f6058f7ab5f76a0d4192a8f6b8e7cf4",
+    "Flock.RecAlgebra.Key.isCons._sparseCasesOn_1": "07cd14efd3eadf536c5cc3fef9e745b3438efd8c6e4f5f8855d192de51140181",
+    "Flock.RecAlgebra.Key.match_on_same_ctor._@.Flock.RecAlgebra.1842282792._hygCtx._hyg.90": "c45f7bcba81b5ea7a8d4fa7cfba5fd2864c936b5c1d3055f612aedbc9e4ccbb6",
+    "Flock.RecAlgebra.Key.match_on_same_ctor.het._@.Flock.RecAlgebra.1842282792._hygCtx._hyg.90": "a742e9416f06f295533b7441f048c48d29996c6389569f9cfe8c7576ef54ea67",
     "Flock.RecAlgebra.Key.msg": "ec59d4b31d77a17af15fd863d2246acbbadede2c24a77fa6e2b3394405e2bf16",
-    "Flock.RecAlgebra.Key.msg.elim": "8d2236f48146972d8eb91f1ae1c543900674d61618a2a9ec3792c313025af2e9",
+    "Flock.RecAlgebra.Key.msg.elim": "c815d9cda8f3982f45f786c564aa624d241fd07c1c0c6c349f5f3058fcbe15e8",
     "Flock.RecAlgebra.Key.ood": "cda2123c13391d6692d484c95274275a837252015d56f5192d52fdec4b5c04a7",
-    "Flock.RecAlgebra.Key.ood.elim": "1ebeb4584fd4969019845f2b03ca581fc45a136d2aa364981eae6999c69a9645",
+    "Flock.RecAlgebra.Key.ood.elim": "782f5f26e643af1d71044b684a98ae438aee6c96a8f48eaccaf36738a3ec014b",
     "Flock.RecAlgebra.Key.q1": "311269c46c7479a08fbc1ec1247d086c7e0a5d40098ba1cd79f271287157d7b4",
     "Flock.RecAlgebra.Key.q1.elim": "b9621c9bf4dcb5ff9506a0dbd7b1184e9e4f5bf25200a9e5f7425bc8e77f3ded",
     "Flock.RecAlgebra.Key.qinf": "14e0784a147a3f6a78fbacd9584c18fb7e7da0fa906488f79daabbd6367ac5f0",
     "Flock.RecAlgebra.Key.qinf.elim": "6b1203cb2a5d38714800c15215adca549f403a61173e4c0b674ac197aa49a2be",
-    "Flock.RecAlgebra.Key.rec": "b20f4d181b56d740829f741714de9bd5b2642121be1cfadae34e1169cea9e687",
+    "Flock.RecAlgebra.Key.rec": "578777a5868d4413d2911d2759905148e8f16a14470581692839473d8e80912c",
     "Flock.RecAlgebra.Key.rs": "13fa896a730d930e9605b9a53270c6ad4b6c6c160d3945ce3643f4a516e235b9",
-    "Flock.RecAlgebra.Key.rs.elim": "40cedf62523785c53a2bf1e80d002de3236ebb2ddfb4a98c48e81b9376c765b5",
+    "Flock.RecAlgebra.Key.rs.elim": "2b5f8bca95b3718a11315657fd40836eaa0b5490c489db217c8807c9fbbe90af",
     "Flock.RecAlgebra.Key.rsT": "95ec2c02e2e7a8df3e07b80885c216f979b132cd8b0af097eedd88366a7f337e",
-    "Flock.RecAlgebra.Key.rsT.elim": "a60fae04f51787543d806df99b1ed096aa6fc54f4ea8cb53c6399a012458425c",
+    "Flock.RecAlgebra.Key.rsT.elim": "60afe6378f77f92624bc645759787a0b7b20dc93faa6acbaaba9ac2047f45228",
     "Flock.RecAlgebra.Key.yr": "ab0b017869033d74527bdbef3628feef3cecaa7dd904fcf18d4b336fceb4c638",
-    "Flock.RecAlgebra.Key.yr.elim": "45bbe0fcb52dac9e5918486c7a91dab58b87cf973165fb67595fda3d85b128b0",
+    "Flock.RecAlgebra.Key.yr.elim": "a500b7e371afddddff837cc96bf18f9fa69d41356488e5fb5e7c5994e588644a",
     "Flock.RecAlgebra.Key.zp": "52c258928b6c5b7e275bdfb5ae0cfc2cdbf22f8f9ca798209432ab64f1bb3b37",
     "Flock.RecAlgebra.Key.zp.elim": "a50f836d963d0b40ef533f021e280e7a06aaecdcf7df257e9c8acd1304eba8e5",
     "Flock.RecAlgebra.LM": "6d6428514788bfd3663a742278d715cc374748b7046e340780d1e97e4d3abd8c",
@@ -10050,8 +11096,11 @@
     "Flock.RecAlgebra.accTerms._sparseCasesOn_1": "51d86852b0e072d9ad48f162db8a76ab9c862b0c81729327d9bec3a19fc4fbbe",
     "Flock.RecAlgebra.addAt": "f322b56ccaa578c2c608008f5f49c62dc97886a3bcb84f39d95ece67d58520c2",
     "Flock.RecAlgebra.addScaled": "ba22cc7fffa066a7a48b27781c4a5f8b98ae2bef8a557f3b50ab2da8c3f30236",
-    "Flock.RecAlgebra.atomTerm": "e71ef0b69b412a9aa8f1a9e184705e1697933b2ec102867e66df4d1a96bce8b4",
-    "Flock.RecAlgebra.atomTerm._sparseCasesOn_3": "66117ee29f545a2ec105da1b0939de6a5d10c641ca1faa4536956df7bb58c552",
+    "Flock.RecAlgebra.atomOp": "b8c2c06a9cfb73b724916f6f4c56db21d5817b7579139b2e0846b75a06860446",
+    "Flock.RecAlgebra.atomOp._sparseCasesOn_1": "634ca57dfc6af84be56c83cf9498fb1c0e585d24116f168b70616ccc0cda3ff0",
+    "Flock.RecAlgebra.atomOp._sparseCasesOn_2": "bdf8462e62aac119e8e0cb37240f12984050464417a038cba2585c1fcb13d36f",
+    "Flock.RecAlgebra.atomTerm": "8212734827f08e1101161c45e4cebb74284d3d2eba764b97cfc95e5eefda9a42",
+    "Flock.RecAlgebra.atomTerm._sparseCasesOn_3": "e549dc96b7688f31717e3919031673e07d7672cc61c8bb03df4bb97bede3c593",
     "Flock.RecAlgebra.build": "69b566cfbea91d9759d52c52a0055fdc1be3bdec627a7b93b7df87fc65fbacf4",
     "Flock.RecAlgebra.buildAll": "855a0339b21aa7fd8647399985caea45e967c5373fb1c646ab831534db3029f3",
     "Flock.RecAlgebra.buildRes": "a2b680700fe4e1f0f8cc5f50dc158725d1bf46f872845229f710bc02299e4995",
@@ -10068,8 +11117,9 @@
     "Flock.RecAlgebra.extrasLike": "ad0ae6336ab245318cdef07b525a9097db4bed4d0fb88e373e1496c1876c6d2b",
     "Flock.RecAlgebra.finalWeights": "1aa45132d69f3f7ab8ff79db808aeb09044854f89f7b048b9f1574477297008e",
     "Flock.RecAlgebra.fk": "ccf68f0a8475f0fb4f9314596f585e0d4a16ff13366613162787b234f2e6aa5f",
+    "Flock.RecAlgebra.hRound": "8fce7a04e8aab7e606eb715fc37d865c34087c1dd5f5b168d6545cf8dbbe2683",
     "Flock.RecAlgebra.instDecidableEqKey": "a569a5eabac0551c484bc969d1fc17d27e0a66d4eae6adfa740ea101ec1d0e28",
-    "Flock.RecAlgebra.instDecidableEqKey.decEq": "b4dfb6b18047278bcd8514819909c7ddd72c04e6f8975a31884cb84c519bc0b5",
+    "Flock.RecAlgebra.instDecidableEqKey.decEq": "a0d506897b43665ab41e7f4a6a38de57cbe29c71b5a0b2ad2bd50f8896f1e35b",
     "Flock.RecAlgebra.instInhabitedRes": "e02986aca9b80464dedd1af3e3df3f109ccf87e29e9d58db2431a7d6af4cab8a",
     "Flock.RecAlgebra.instInhabitedRes.default": "bad7c5f3ceb955b9774c69542f9ac8282e3bfc14cfbe860283ca333c7c97b2f5",
     "Flock.RecAlgebra.instValLin": "c65efbc9c2938e51174f1ba3446ebb93c72107ca6aee43b7583fb8718b38c263",
@@ -10093,15 +11143,15 @@
     "Flock.RecAlgebra.nextOod": "d20f53684a147ac3a970fc5aa7129d8825d5fb85d42cac1aed97151ea06cb630",
     "Flock.RecAlgebra.ofMsg": "e2efd51df2253c50f3f41a1909730a5ee28da0a8aa24275a06a5080782b062a0",
     "Flock.RecAlgebra.oodIntro": "02a5659b3fca475d4e918ac129ee2015a0a1b6ec20e41656f3139ac6e38fdbba",
-    "Flock.RecAlgebra.order": "5fd35ba212f99ab88e0a8333ad8173d4a5bcc648a7d8bc5ff13214b15cf0873e",
-    "Flock.RecAlgebra.order._sparseCasesOn_1": "63b630407cee767d738b6c36bd3553701b84edd64e978ec0d6656ab58e0d5286",
+    "Flock.RecAlgebra.order": "bc1c69228a6c23e2d11a3adb9d2a9eb74a7fcede31c246c06a28f069b409f361",
+    "Flock.RecAlgebra.order._sparseCasesOn_1": "f49c4ffecc682980a0d6e36b81ba5cd2742d8fa27b519db3664efdf7eee69640",
     "Flock.RecAlgebra.orderOf": "d72bc4c994269ca7c9942b123a98fe3106b15dd326dbe1bfd8b7bddc4c316763",
     "Flock.RecAlgebra.prodOps": "a21507bbfec7362a010183d71b3f20702b216dfca1b3dff59601ba292b278389",
     "Flock.RecAlgebra.query": "23dc4a25ec662ba018a1a2f2fb3eaff29fab132cbed8409df73831dfdbd49868",
     "Flock.RecAlgebra.queryFold": "1815b55299f1ec907ea02894b328d802c1c7d6a58e6711d6f69335dce2e488e9",
     "Flock.RecAlgebra.residualLins": "05b5dda270f462b009a25838b7234e3782a04f2d76e266f6c120f7eee2b63996",
     "Flock.RecAlgebra.ringSwitch": "98d238a856454b2505bcb3b83eb179d50da7e7f107f3f15db7725861eec54b66",
-    "Flock.RecAlgebra.rounds": "9635b8387b4f653d840a2959efc7ea26d44947be7dcdd590f62ef8b4acc3f157",
+    "Flock.RecAlgebra.rounds": "1e6e84b77d32c94b01629ef89057a79b691abf7032123367768b02842fdf3513",
     "Flock.RecAlgebra.rsClaim": "d1ce8d20c1624bb1b7dcb729bbc857434906953ba1245dd12a9a0d3c3e1e7da1",
     "Flock.RecAlgebra.rsClaims": "4442264ecc9746e873da0bc508f3df793156f21c4a7d59074de42f40f9b192d1",
     "Flock.RecAlgebra.run": "97926f20e5bcf856dcdb38440ebfb7e0ff8f71920abd4ebb4a3bf8f9eeb187c2",
@@ -10109,7 +11159,7 @@
     "Flock.RecAlgebra.sortBy": "e5a45a91afd73b71bd3154ddc1657ce9c6ae702b6b9e9b88ed151ed377d996ad",
     "Flock.RecAlgebra.structureOf": "fca8ac7e7321a955f6d458e947ddc86db094a72ae07c5983cc4eba84073a288f",
     "Flock.RecAlgebra.symbolic": "7903700414bc7aa88a64ea224eb9701c9304f191c84e6d0eb27414e1b59000e4",
-    "Flock.RecAlgebra.varOp": "c980cc7bdf652dd8847df0020e55ee557fa7e6c5ad5640b3aad8789e70a327fb",
+    "Flock.RecAlgebra.varOp": "1d7828b025f3d568f472edadef6e12a710377536222c734a9f0c41619b87a7a7",
     "Flock.RecAlgebra.wNames": "725f700b9788ce07f347036131d74c1804b80db4d2358da80212e71f92c9d6b0",
     "Flock.RecAlgebra.wi": "21ce0bcc4ea0b004df401ce79d553aa178bef1a7ac9420c8747d5cecb0ae9f25",
     "Flock.RecAlgebra.zcRounds": "77718bb887867870548d432666be6072a32d3e31837dce8dbd3aa778c0206996",
@@ -10265,11 +11315,11 @@
    ]
   },
   "Flock.RecOpening": {
-   "digest": "30ec9858b351534974e4cbeccc3fd953145e1e7a16dd753901295b6d3db08370",
+   "digest": "38c88d9fffa0f2bf11255b4dfc0b203d5b91001b6619474f5b51a1cf78531976",
    "definitions": {
     "Flock.RecOpening.accTerms": "cf83e68f83f74ca25a9c5680b5fbbc9db61cf78eeb92268f6d5be87bc957af99",
-    "Flock.RecOpening.atomTerm": "f8703d9b775732e2b3366b864d312da1f9f30d7c614c662bb4748020c59aa5d3",
-    "Flock.RecOpening.atomTerm._sparseCasesOn_3": "14c03d2cd6c02990ae6364db418a5df62509a8c5a88ef2e37103d77cc134576e",
+    "Flock.RecOpening.atomTerm": "29c955bc5bef0dfce6a8fdda4ca7971fc7f4487ad03641e33d11a58c1f9d0061",
+    "Flock.RecOpening.atomTerm._sparseCasesOn_3": "1932d63e6609220c146d490b9754a8fdeaca3447d754f523f0b147da1163ab2b",
     "Flock.RecOpening.build": "1db2a971fc7e7002d4f3d28fdd76643aefdc6c2889f266dea0fc79174ef9b208",
     "Flock.RecOpening.buildAll": "63f8ff5f52e3c274e63c2c91795cb3f15fc10af84aa6b94775f43844a1cb74f0",
     "Flock.RecOpening.buildRes": "e501b31934d9ecef5e435154f8d9d82a788b5cb600abb07b9865f969fd34af45",
@@ -10278,8 +11328,8 @@
     "Flock.RecOpening.claimsLike": "3bb944a7f0e248c0a8614bbd2d150b16bc6f7710f78def235a4a6ec317de4225",
     "Flock.RecOpening.coefOps": "29682e62e6cd86d9827aa43e74077cc5c616183f3e344a3bd0541ec401690df4",
     "Flock.RecOpening.nw": "d8f1cf794711557a38602f1c986e1d737e36106ec38f4b65570659043cf85f01",
-    "Flock.RecOpening.order": "1e000e749830a2670d20dd913edf3fdd79176303b026aa563ce95fa5ea864018",
-    "Flock.RecOpening.order._sparseCasesOn_1": "0d6b6df71b88f322fc1abf8213c18fde0c3acc32a4a5bbb06baa2aaf89e64beb",
+    "Flock.RecOpening.order": "e110dd441debe875418e57d832c2a238dcecd97d192684dc8e4ffd85d8a1d1ba",
+    "Flock.RecOpening.order._sparseCasesOn_1": "49cc7a0c8d043d75be4a820f05bfd2d07820472209615e69bf84a975722f2a87",
     "Flock.RecOpening.orderOf": "6d5a18057472ccb4195c84b9c064af2131d59933f91d81072a6f2b1af1262d0c",
     "Flock.RecOpening.params": "5fc28999709e273f1f1f7914295855feee047183076af559575c541485c607d6",
     "Flock.RecOpening.params._sparseCasesOn_1": "013376909cd8cc09c6ca3d0af1c03e12f3ae17542961523045cef681dcd055c6",
@@ -10290,7 +11340,7 @@
     "Flock.RecOpening.prodOps": "91cc4e851801e757f7d593396c31337562a77b7b910018c18d7e503b64b9eeac",
     "Flock.RecOpening.rounds": "d0841cbea6891e5c1893068e9c6c40a2a127051e5a3f151d168f4331e36d9c35",
     "Flock.RecOpening.run": "db53ecffac8d52a9f11072c8da7c5db99a5ae9fcd034054353fffd35eae3aec2",
-    "Flock.RecOpening.shape?": "9ea9ae26b5b0c30dea1c97a5c1c3e2a04abf8c5a9fbb340a1b75e46fe9bc5916",
+    "Flock.RecOpening.shape?": "c37077854875ee1595da14d9360418aa769aeeb1626b459938fd58d1f64fc11d",
     "Flock.RecOpening.structureOf": "85f849a065144ab4b71d479808ab9553126b350b23c82f32d49147b1d3decf97",
     "Flock.RecOpening.unitName": "4c06905ddf8cacb442955795647f34c3f8a8c1fcd2cf98e55f292e9325c69978",
     "Flock.RecOpening.varOp": "efd35b4cce156ab4e26653d660553ba868160f46812a1b7a6d19baa6f490b077",
@@ -10336,16 +11386,19 @@
    ]
   },
   "Flock.RecResiduals": {
-   "digest": "d1cb358151c1e0276b1e3be23946171226ffa9b7718c36d02120cfa8bf99f388",
+   "digest": "c36af2142c763dd31b085c3893c27771a3b116c2f0dc5878894ec26ba8088f1f",
    "definitions": {
+    "Flock.RecResiduals.HOLO_KEY": "07c402bb05b1761f0ef42b063bb1a3565ed9e26efcbd22ee014f3704e8e2c301",
     "Flock.RecResiduals.MAX_LONE_SLOTS": "78ed009b946d1cc11acf34965c22b082cef00e74681185f289a7a88d29470fff",
     "Flock.RecResiduals.MAX_REGIONS": "f9593ff468c01d7c7c5b3836d119f7c7a7a66dd0cc29e6babbfd0048f7b95a4a",
     "Flock.RecResiduals.MAX_SLOTS": "894c81e69c7e8c28b0a886e4ba8e84efe82848604c571897eab57783163050f6",
     "Flock.RecResiduals.PER_SLOT": "2841b70e4a3c8022032eb27208bd938d8eabaa861ae9069852f2e56b0d8fc790",
     "Flock.RecResiduals.RES_OUT_WORDS": "c240e3cd935653015a23a51d3312cd1c6a19fd5555bb5844a3c5a8f0ac79dbf8",
-    "Flock.RecResiduals.check": "8a82116bf86d9141828eaead29599f2a727ba209d831726881d1036f39a7c43a",
+    "Flock.RecResiduals.check": "d3c72af2b671c877826d0c729ec5ad15caf353cb7408782df51e182d186229d8",
     "Flock.RecResiduals.comps": "af7eb2ccd3244abccd47b3a2cb3fe24a155f8c7468fe6acc00b36beb6c09273a",
     "Flock.RecResiduals.groups": "4c96c0d143863118822a61b35909187d682c1789e981f3d0700f6d9564ecf1dc",
+    "Flock.RecResiduals.holoOf": "bad19949401c86d385ab6921d20ea60f7a0989bd982c20071780a013e15f2b9e",
+    "Flock.RecResiduals.holoOf._sparseCasesOn_1": "0097c3501d5b580269f36433723497f4fd6f6b6d80a671a17a62d1c52759e87f",
     "Flock.RecResiduals.params": "c37698e67d4639f049e6d04c38c028266df4101651c4310fea85c7ce5e3b6ae6",
     "Flock.RecResiduals.params._sparseCasesOn_1": "a41a836e2c080a5118afe867d6f260b3e51a0cbf2d7dc0bbd3f14ae901751356",
     "Flock.RecResiduals.params._sparseCasesOn_4": "b5af4711b774a767371b20bb6fa7008044cb0604832d7cb7032e17943c95a40b",
@@ -10361,7 +11414,7 @@
     "Flock.RecResiduals.residualA": "af8ee1805711d778f47eb200dbe724966f67d3c5fff85366f5bbdc30ba034506",
     "Flock.RecResiduals.residualFormsA": "b75fabfcfd306145de547a790fc5bf87e76143aec13d5ac380906b40bb0f5fc0",
     "Flock.RecResiduals.residualsGoA": "011378bcd0d2e36c524f0d87db0d48f5359b03eec2a8067e958a13e9505c283a",
-    "Flock.RecResiduals.shape?": "f5bda9ecafd20977b0637d041e50c96055451e0e26c94652b2ce9d7ce49edf63",
+    "Flock.RecResiduals.shape?": "25cf7c63ca10b37fc27bdbe86a963eddc9ebeddc8b1cd19b8e0696caaf2c2985",
     "Flock.RecResiduals.slices": "bfbac7a7d3453e744e9073c93650ffce2598f6701c3d5587f5429651ee8ca9fd",
     "Flock.RecResiduals.slots": "9e48a28390c1aed3965c2df07b83659f9b4db0ee9c8a629b23af8776f6a8ce82",
     "Flock.RecResiduals.sortDedup": "5034b53e06220e4c75db3e5a3cca1c66f95b208733bb4e49fdf9e9cebe58c22c",
@@ -10505,11 +11558,12 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "c4e8fb83d9c8def8c574e02d4051e74d3dfd6b3d7d7bf5be0b26863b51c86964",
+   "digest": "15a354200a740ec5be9f109fe1c3736bb1f283325ece044fb1b8a391f2008a17",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
-    "Flock.RecVStar.Inner": "d99f0be75488c1896919f4ba2f8db829774c9322be93ebe92b28236a02b120d0",
+    "Flock.RecVStar.Inner": "489744c7fb9b4b9fe53cd1607cdaef7d04e3e74a7b7c59746ba30c5430b204bb",
     "Flock.RecVStar.Inner.claims": "83cd212a25ec99d0838727a5d95e52a899638963b1dce33cf65e71ad62223096",
+    "Flock.RecVStar.Inner.holo": "391d10ec1282d141a830d2dfc4aa47306aa80e11ab732cf5cf44cad5e84a51ca",
     "Flock.RecVStar.Inner.kLog": "3d931debeeb9a5a6c14ff188e2c13d814be643ad25c96aef052a32215fe27acf",
     "Flock.RecVStar.Inner.m": "5e2a9dc0c3410c24a777c86a46f6db6007f37911248cb05cfef7813e37af4f51",
     "Flock.RecVStar.Inner.regions": "815dd887f0c4073fd47e0aaa65da9abcdc04bdafbb57acc1f4d405f0bd5fc8d9",
@@ -10540,7 +11594,7 @@
     "Flock.RecVStar.rowPorts": "1167696d89bf646284193ed1ad45fc689a6f04029b5d53583241bdf201ce0931",
     "Flock.RecVStar.showPort": "d69b99beea1be78574295a455a98f21432097de3fb4b597f321569edfeed48b3",
     "Flock.RecVStar.showReads": "cd51ce985366a0d5ad559fe14f0d581122583decf5d8d32572dbaba88eb920d2",
-    "Flock.RecVStar.statements": "4409ced2ae8ed749efe66278f0b6ef371c7a2eb4cce48fc0acb08e29d72db7f2"
+    "Flock.RecVStar.statements": "70da04021e6b4857223c41f89af55ffc4695ae2cb342e9d099f053394786416c"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
@@ -11234,7 +12288,7 @@
    ]
   },
   "Flock.Verify": {
-   "digest": "06d5f0f3ed3f7e6ef7b8a87ca50203fd5e0f8dcdcc57f11aef7aad439d6e46d6",
+   "digest": "be71751e16db3c245e981999113870c2e997784d3aabd7579d5101c1a6a4293e",
    "definitions": {
     "Flock.Setup": "d2a3501d253e96d60f3a3d9ed6996b2d651e7311830ab69bab285a6540d4ddc4",
     "Flock.Setup.digest": "2c5aef9c9a030b9fe1e816f93568a87c3877fa6148511592758b14752e7bcab2",
@@ -11250,7 +12304,7 @@
     "Flock.instInhabitedSetup.default": "888fa22c942acaabd25fe05477261fc1201b6560e8881042d401f70cf12d2a5a",
     "Flock.pcsParams": "53349e4759eeab7fe4cde94ffeb46863b703ae2f9d7293993c20e39cb8f12c84",
     "Flock.verify": "cc1d6aa90406cd3e1698fcbf635d7a6960110b4c10915d554bb7dff037fe4aa9",
-    "Flock.verifyRep": "aad307d3cd5cdf5bea0958c64901dd898c92eb41dcadcc5757d971fdd7c76a17",
+    "Flock.verifyRep": "f9cf59ba9a64e389bf6911db64404819c2b388a2fff11fe14353bcc588b298f9",
     "Flock.verifyRep._sparseCasesOn_5": "9f6ace488738f8b16e5145d32a158bb73b2d0e199b69a5e957f5ba9da82d89f2"
    },
    "guarantees": [
@@ -11285,7 +12339,7 @@
    ]
   },
   "Flock.Zk": {
-   "digest": "6b4aa2c38b29b1194c128ffa3fa50fa1dc8f8e1f6d3a0e2f29ebbbd2b27e1d59",
+   "digest": "f3f3956edb6d0142ba27acf9c240de5c7b15f0d52816c9c9f49b33de700f3259",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -11347,7 +12401,7 @@
     "Flock.Zk.maskFree": "bcd343334ab0a8050522df501fc6f5585073e747331effbcd0daa963a4d3b878",
     "Flock.Zk.maskLogOf": "cd6429bdf075745f6c86c5b4269f2290898422aed0f69d91593df33a0a080c48",
     "Flock.Zk.queries0": "c55928b4016b2825017ee1cab096ae6902ef0487327b2514e3cfa11488a5b338",
-    "Flock.Zk.replay": "4ffe060b9e822a16618b6cfaafff8b0ead2e83055513eec7caade761bbdd9b09",
+    "Flock.Zk.replay": "54411fb0a40fb1107ffe88ed19360c4aee12ca27492a4883deca8e9deb96ea02",
     "Flock.Zk.schedule": "83fa9c4b25bc7d08d35755b385cbad2f614d24335758bc1164b3b89bf8963829",
     "Flock.Zk.schedule._sparseCasesOn_1": "ea9dcf3ca747ac78c64b1586828bd6055a721eb75d905bf577cf8a9d74465a43",
     "Flock.Zk.shapeOk": "07caba7ec94f66835f204e211932b15b09f04a654a7202c9bc184a2459433d08",
@@ -11356,7 +12410,7 @@
     "Flock.Zk.triple": "d0e0c9fc6e6663a70f566a55608b593a802795563221b2b525b836e426af920b",
     "Flock.Zk.verify": "9b0b21639658ade6d63d5c014e72e6c43fece38a745eefa6e5e3491f6a4ac2f3",
     "Flock.Zk.verifyInner": "42aa357285f2fe08e5d5890f78cf725814a38b7cd3bd658315634b4bd2880de8",
-    "Flock.Zk.verifyRep": "578d6cc6768e810d13230d9c6ae137f0852f01c653916c1b10cad1891207ffbb",
+    "Flock.Zk.verifyRep": "a48a0d496c2af3a3bdb79ac6ddc4851f97320a544f5f0786ac114b31f55c0b0d",
     "_private.Flock.Zk.0.Flock.Zk.s": "328fbfec598bc6d2a7439596efe2435ec8d78dbb84f23880e4b0b104a2453b1f"
    },
    "guarantees": [
@@ -11397,7 +12451,7 @@
    ]
   },
   "Flock.ZkLigerito": {
-   "digest": "beeb28e707b2dc87402f1fb83da7909133aa0b368ef596cb92266d97dd5e31df",
+   "digest": "333218414065134a1a161c0b96622024a3d43e4646af6f0d3bda34e802ebc0ed",
    "definitions": {
     "Flock.Zk.L0Rec": "a55992d6990c752203c160d13c94e93ad6c2cefeaf6e38fd996b8053db5ddfc7",
     "Flock.Zk.L0Rec.challenges": "d42735346186052423256477d612db8fba9b77bbcdd3862a1d79ea52290ef383",
@@ -11411,7 +12465,7 @@
     "Flock.Zk.Level0.rep": "48f57b5329409d4e929e1a08d77f8ec04485b80e1c014d113a124ce415b2de77",
     "Flock.Zk.Level0.tPad": "85f6618b17c339a7ee74831212c55255d3eb3e09c1fd2ccbd032de573a8add82",
     "Flock.Zk.PAD_C": "c91fc396867c1d0308d1eb504178090a6fe798b1ba0e34f69905c0be421af17f",
-    "Flock.Zk.ligerito": "aa22b823da80636fe4b4fdf7a74c965cc06121bda9e9debceb98873122198575",
+    "Flock.Zk.ligerito": "81f24a356923968187440d3c36d7563825f8ee4cfc878462c80997db63c7c60c",
     "Flock.Zk.padAt": "dc49bc56483ac20edda8453d1a3f5757e19819425aac724a8b9c6c1a15af0382",
     "Flock.Zk.queryLevel0": "b400a0ddf6f391825b32843082e24ee3330d4a3085b635d97020e9d57b8c06c2",
     "Flock.Zk.rhoIndependent": "f0006095b61ed91fc31bc4b8c47e4a75adcb8d2889f72daecc4e1e9c2e883868"
@@ -11512,6 +12566,61 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+   ]
+  },
+  "Models.Accounting.Guarantees.Joint": {
+   "digest": "6c3005740d08578ac0e0fda861dbe77c578ceb28314b3b026ad572fb9ffd9837",
+   "definitions": {
+    "Accounting.Guarantees.CovertResidual": "da10a1db22f50d9c54fe4dcf1d12b70ac43f408301617c570da38f8165ae2581",
+    "Accounting.Guarantees.Joint": "994a9f616574f737ac1bb98ceeb5051f135976d5bf3d90328dece5cffa401887"
+   },
+   "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
+  },
+  "Models.Accounting.Guarantees.Pouw": {
+   "digest": "60db4b0366633bf9a7085c4649612f3bb3ba763a182bb92eace3a237353e01a0",
+   "definitions": {
+    "Accounting.Guarantees.ComputeOfPouw": "5fc05a0bf3cecc92f48c9ad1985ea4e909913f1c540c7fb9568999ce197a23fc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw"]
+  },
+  "Models.Accounting.Guarantees.Sketch": {
+   "digest": "b0f902b6c4a59615f713c7b8e4761a2b41f6505fa1f9612ea7aa985b9b450a0c",
+   "definitions": {
+    "Accounting.Guarantees.Sketch.CommitThenProject": "54f22d9cbc22d9aa62abe469ac39b6bc010fd743894ec7a3dcca86081df00a0a",
+    "Accounting.Guarantees.Sketch.Exact": "a3ccc6c5611d7e7810cf6af35ccf38d8b4cc1f2c2e8eb398467c02dc83dd6e17",
+    "Accounting.Guarantees.Sketch.LittlewoodOfford": "b81210eab2788abfdc3365f610d43d067c2e9170d12674843aa410d4a711c1b4",
+    "Accounting.Guarantees.Sketch.NonCollision": "0cb63484681d03e2d97a53ab0c7b27f3617141002637323b33111970b0f5cf7b",
+    "Accounting.Guarantees.Sketch.SmallCode": "9b60072c680f33c72abeea3b5d6ecd41ea315c3d750bd5af2b30c8478c7dda8d",
+    "Accounting.Guarantees.Sketch.TensorCoreNonCollision": "a144f14393abe87c5fad5674adccd5e2cb088fe8afebcd7ea7cc4f2ebfddd05e"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Sketch.CommitThenProject",
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
+    "Accounting.SecurityProofs.Sketch.NonCollision",
+    "Accounting.SecurityProofs.Sketch.SmallCode",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision"
+   ]
+  },
+  "Models.Accounting.Guarantees.Tag": {
+   "digest": "14098591f75c2d59cf79e1a6f0a0f25d72916b5094145f8fb5c477854f9c924d",
+   "definitions": {
+    "Accounting.Guarantees.Tag.DigestNonCollision": "994d80a9a8aa02abe529198230054de987b196fc2dd1d3074134cdc85e6782b4",
+    "Accounting.Guarantees.Tag.FoldNonCollision": "4077e6860268f3f7963a8b0b2f4ba65556740b2f7aee6aa3da12daa1825c3f12",
+    "Accounting.Guarantees.Tag.HornerIsBlockHash": "04fbe390bc43edeea67f7d0ff3885bb187b21faaa4bc4d1577a6ec57cca6e475",
+    "Accounting.Guarantees.Tag.PartialReadGuess": "97d99a8e201e8a4a3b0cbc6bf91690583ae2aafae28f476c7acfec8f86df4162",
+    "Accounting.Guarantees.Tag.PolyNonCollision": "6dd88144840a2cf07a065710c054bd4fae574c5c4043632d9f2b04f9b04e2fd7",
+    "Accounting.Guarantees.Tag.PolyNonCollisionKeyed": "a1c0f18fd7ac138d31219457e785136949367f1ba9f88366f8e316036d988780",
+    "Accounting.Guarantees.Tag.PolyUnpredictable": "fc091e1a1dbddec242b99deba404ec5a8eed66facffff4694815df976ea144f8"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Tag.DigestNonCollision",
+    "Accounting.SecurityProofs.Tag.FoldNonCollision",
+    "Accounting.SecurityProofs.Tag.HornerIsBlockHash",
+    "Accounting.SecurityProofs.Tag.PartialReadGuess",
+    "Accounting.SecurityProofs.Tag.PolyNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
+    "Accounting.SecurityProofs.Tag.PolyUnpredictable"
    ]
   },
   "Models.Flock.Guarantees.Audit": {
@@ -11630,6 +12739,14 @@
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
+  "Models.Pous.Assumptions.P2": {
+   "digest": "edba88c5e0e4185e34be487567a74f82b5f676c52926dbcee0ac012da4524803",
+   "definitions": {
+    "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
+    "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
+   },
+   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces"]
+  },
   "Models.Pous.Guarantees": {
    "digest": "f1a77f429299b9f5cbcf96b9d6752b0fbec28b9e95250bdc3e5479427df7e940",
    "definitions": {
@@ -11648,12 +12765,13 @@
    ]
   },
   "Models.Pous.Guarantees.P2": {
-   "digest": "cfff33772a4ed5c146551f9a1c31e013382c22fd45fe7317b806bb633d70816e",
+   "digest": "d66f9220f1b6f770ce28fe6b5df70bc9377d40a2899375044e634ead2791c886",
    "definitions": {
     "Pous.Guarantees.P2ErrorSplitB19Uncond": "33dbfe54712b1673b846f461fba5102a07cc39e17bebd04c496626e5e20f0ce8",
     "Pous.Guarantees.P2MeetsM1pB19Uncond": "5e6b9f544f812c9cf559bc3393bb707c226713af948f5fcec94709ca6d0c7df1",
     "Pous.Guarantees.P2MeetsM1pFamilyUncond": "5f4e1f3cf63263edb6acb56a5da36ca73d16667357cbb6ba17fabda31cb67754",
     "Pous.Guarantees.P2MeetsM1pW8192Uncond": "87ff711708725424195e0b6b38057a66fa3e21dd18c34471574dfd3ad74e05c7",
+    "Pous.Guarantees.P2RingAuditSecureOfReduces": "30d2bf23a3e55e003e53b14f82cdf917bb6422b70be6a005ff1b8a777a669ba7",
     "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
     "Pous.Guarantees.P2SlackFamilyFreeBlocks": "902a58831f71201cb27e6cdd2eb12899621d32c867c0fe282ce1ef3aee9f3198",
     "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
@@ -11663,6 +12781,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -11715,7 +12834,11 @@
    "definitions": {
     "Pouw.Assumptions.TT": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
    },
-   "guarantees": ["Pouw.SecurityProofs.EndToEnd", "Pouw.SecurityProofs.GammaFromTT"]
+   "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPouw",
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.GammaFromTT"
+   ]
   },
   "Models.Pouw.Assumptions.NCP.Assumptions": {
    "digest": "9a12ed69cd26eb69cee7d01f81dd6439d834165f3fb2ef9089fe4a0fddd837af",
@@ -11809,6 +12932,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -11820,6 +12948,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -11844,10 +12977,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -11909,6 +13052,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -11918,6 +13066,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -11927,10 +13080,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -12079,7 +13242,7 @@
    ]
   },
   "Models.Pouw.Guarantees.PearlC": {
-   "digest": "154ae77235f5e339372f95bb1fc716ea4a711ff823657854cc210e7461a43aab",
+   "digest": "7369448fd234c472e25248dc2219cd29a7d4b3479678fd4b93b7a4d2dd8bbba6",
    "definitions": {
     "Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": "24bab8a60bd37f1419bed2a8f2cb96a48d1477976413a0d86f5e431ed188876b",
     "Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192": "1a736a9e4f153f255fff5be1a3504d81be9ce273d97f4e94089f3e1f0aff541b",
@@ -12097,6 +13260,11 @@
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "1ae16c944c1bc57c26164646ae527e5b8e4c6993dec28bbdc87adbfe24637936",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384": "68ffcab7459967a7d734e08f7dc5e9bb6ebeb3ec3134dd6a4f6b3fb8d7aa22ff",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192": "46828088d94195d64ca421f307af66cf090a2cf6c9f5a04ab918ab2468f6f33d",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b": "349643feda7357baa6ab195342815170f0f09a5dd2c240d311c2cb1b0994ef28",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096": "2c77779e4d71e918150f97ab91c1cdee23693dee38a312d470069ef5d0000b19",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336": "8a3ef78e64d1b1451dfebb958e1c619d6e163282a5658cd81964cc7a4c4174a5",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096": "4948bbfae24ff888e82b45a7cb9d62bc7ae0304d3f6fcc444bc82fe9df96be90",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096": "7c05e2ce16682ba30b693318893bc3d63140f707c7ee146463860488f47b2275",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_16384": "aa79eb3499d5c6f74275760034eb46e1cdba0d10bf89c014f4a7b27b50d102ad",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_8192": "0eb05c01d90aa967ee2da2a6c84f2561961ac872dea6e1b4dae739b3f2023eef",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast16Rev1_8192": "948db1ce6a77d8b3ae76b2c86b529e5eb554342a91d36d6ad587b738a138198d",
@@ -12108,6 +13276,11 @@
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400": "e39a6a74320bccfdeb75cfe4bb9ae292e60828c7db1f06b4fe613229728b458b",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192": "e61acf6713943170104b786def9fd0d26d271a21148316b783df9eb3153762d0",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400": "9a9efcdca3bcbe6227f7d401f15624cd7d4193b770b4b88c8fa48d6e7e46d43c",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "bd4328d16333b98cbcadc2b55351d0616da4c20e62572275e1415e869b5bd7e3",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": "65ab1c09398cb54cfa86af429824d5dc3bdada7737789146f6d811b5b7eb919e",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": "2c1c60245deb12b6c6d2e23d7f6dbe23b7927473f9c37e0c823be25f0c8d5f06",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": "61abdb7161de29dd9e1cfe9a482727fd52547bb119e4b86e259e38f7cc17b6e9",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": "6617f2a72489d047adf0a098e25ede8c0f172189f718e018f812d7943d0f8b48",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1_16384": "84ad69a2fe83c17330ec5e13ee1dfcaad331080135929654c5b56394586ab8ff",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1_8192": "81b813d955c897a3971dc2afcd7226636de256a673e36ec398dcd6c52e5f455c",
     "Pouw.Guarantees.PearlC.GammaSm120v1Rev1_16384": "c66cd8f6309b7cae0977373cbc0759277164b78bd9ec323dbb46ab53b0f30adb",
@@ -12133,10 +13306,20 @@
     "Pouw.Guarantees.PearlC.SampledH100Rev1_8192": "a8ddf64e845526753c5aac5a3c91db9a5d6c96542d738adb162de4f2f1aa9cc5",
     "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384": "aa3fea089124d19c6b8c3de79e36bb1444b87a01b0652318057f29a345159468",
     "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192": "356c9ba66b77edb51d099fd536588cc30582b3cb023fde4b1ed44c1a722d6310",
+    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "4c8af7bde413fdc348bfe834e1eb6bd5f397acb89b2d169379a7761eef0b390a",
+    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "bf04204ba7c1e22bc32f8bd227c052b170a0a5a8b3f9884fc8d3d2ece1d3f41f",
+    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "0d0e16c72f41d63a88354c809ee0d354884605a5942bba0f3076165ce7040b1f",
+    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096": "fd8f9851243eb6e965d8b0380dc8a7ceff888d2b6ad2deedbf27a873a46ce791",
+    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096": "c86c1c6529e028b72f2b70d0a7c735ea649cf8e60dfdef8c8d9b25d2fb654278",
     "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_16384": "bd07607cf187e42875ebd0478371e5140491c0ce7fbfa7fe08bbd1a2880bd5e9",
     "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_8192": "cd65700fb491e0480f3ead26c77adeaee76c3ae4a7f04cb85f3dfc16ff48e1b6",
     "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384": "e57e7e1530862a03eb93fc624666b1417d73779b5710a5d1d24aa77c35708def",
     "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192": "61513a45f2183218c5d63d6702b738ebc307b89353581380cbca6dafc086100f",
+    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "0f7d579c9dd6e6c013c9cd3904e72feb72f120ab10b1b1c109bb95a62940d178",
+    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": "16bd08750dc16bd165c0e82bf361c86075062d4f73ae20fb438c96b7d4f5113c",
+    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": "db14e62d3977805b7ce70a785fa734f91d2ed39c22ec959fc2ce4be76652ab34",
+    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": "26fa0e784bc4dc78ee53eb448475544b742783f799a8d55c396e84ea6cdcb19f",
+    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": "f5f76bf9b660a0a548d7bb4b17a110ff5760ee484bc91233b4b09fc6c25937da",
     "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_16384": "316bb0dd6e73be17caee62324829dc054a831fe276f1415ee4dbcd4075e18d3b",
     "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_8192": "82eefbc759a94af3b478801f8e6af6322a0acbd3475f60575f34fe252cbe5bbc",
     "Pouw.Guarantees.PearlC.SampledSm120v1Rev1_16384": "b3025fac47933e2d22379bdffa8e973339ab7c842225514c13bb889501d3083c",
@@ -12164,6 +13347,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
@@ -12175,6 +13363,11 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
@@ -12200,10 +13393,20 @@
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
@@ -12787,13 +13990,13 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "Proofs.Flock.Recursive.Property": {
-   "digest": "f9291b267d80ae0fefffb22bad449e3ee2603f129ee7d07e023e348c6de8cd59",
+   "digest": "681c63e29d5f57b3ebee70032541fee2c6e812e35968912a723838f89f76e51f",
    "definitions": {
     "Flock.Guarantees.VerifiesVStar": "5e93fd87e13036911bc463dfa5c888c0638ee858878a4c9bf19c80aa5f7530b5",
     "Flock.Guarantees.custodied": "4146cf5783d9a41397664f1d218b84e335c005940e069d0816a2afe4c0c641c7",
     "Flock.Guarantees.drawLaw": "e4b3fb8b710174f2424dd41ae286c1c7eaa433fbec728a2b179b6d24bf9f2c2c",
     "Flock.Guarantees.innerAt": "0edea11218d4de94176fef521c51a0621f0b4981be113153cd35114b14f117de",
-    "Flock.Guarantees.innerExec": "3f82d6ada6d0422dddc8be75a013943a0f0718686d1707d68ec68dd0d37f626e",
+    "Flock.Guarantees.innerExec": "f03b32553873cc0363f4011be843e3d623d8d78934643000f42653c5d4187310",
     "Flock.Guarantees.outerParts": "07e710ddd9e3e12fc73dfff3f9734751033b19267114813817d0f30a4e2fe243",
     "Flock.Guarantees.outerStatements": "c67e0bf66d61e8f9c87068edd46ed3c4a2dd97a0a49236785d20935e87921836",
     "Flock.Guarantees.outerStatementsAt": "6dd572846dfcdd3800aa27323228f40517a99a279ff259d83876fc61b99a60b5",
@@ -12802,10 +14005,10 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "Proofs.Flock.Recursive.PublicAudit": {
-   "digest": "0d260b2ec01b6304693c53a97af6cb5890d38be23dae0df647f366c2baaa331d",
+   "digest": "b294dea4695f3722836f3c32665a13721f19ecebad3751c0d591832dbd32a8d1",
    "definitions": {
     "Flock.Guarantees.AcceptsPublic": "0c16e0d24e52c09fa3fd3b0c70991e0ce7f77c6b42b255cd2678ad6aa8fc22da",
-    "Flock.Guarantees.PublicAudit": "823822d28a989f01a5725c58fb55d203e0bfe13836e07c63fcf7c6b2434b926b",
+    "Flock.Guarantees.PublicAudit": "92ab0e7df25bc645537e1423a5b439e60fb2de682bb3f5facde2b0527fc23434",
     "Flock.Guarantees.publicHidden": "dc2d1ec9cc575620aa5285ed98f211af9345f59f698c59fe2009ee4bc3c54b99"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
@@ -16260,7 +17463,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements": {
-   "digest": "5a15c3ccfb68ac46229442132ca3c8a562f2f1e1c34e91d4096651cb66c4e161",
+   "digest": "b4b0b1c0600085c55ace7f9ca94bf437a31aeaf2beb8f66daa2558f5d12ff0c1",
    "definitions": {
     "FlockSoundness.Discharge.ZkExec.digInhabitedZ": "ab32011c91f48270850ee13d18bc056618e6c260266e75f31a5009782643691f",
     "FlockSoundness.Discharge.ZkExec.encPair": "11d061a538f8b8bb6c66710e09ee2120364eaea003c3d19f1da11e4f5c97ab61",
@@ -16268,7 +17471,7 @@
     "FlockSoundness.Discharge.ZkExec.hs512": "02a7a0438f191cb758d9a8942e8fbcaf102401c6127c58f7b8ce420ba3037d5d",
     "FlockSoundness.Discharge.ZkExec.innerOpensOf": "0ab4cfbbc6dc7739832008b6f78f77da4bc7c66b83b91c63c58527df64402ad4",
     "FlockSoundness.Discharge.ZkExec.opnZ": "d9c5014dd918a74adfdbbadef2747e580424f680edf6995eda848c45d770117a",
-    "FlockSoundness.Discharge.ZkExec.shapeZKn": "581edce8533752cbd63acd51ae3d38630cd0911bb182016c2ee7bb1f668f1f77"
+    "FlockSoundness.Discharge.ZkExec.shapeZKn": "910e3d5381918aa0ae184cb7cb07b655cb4b17b17d41bfdfd29bc9d6765dc42f"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -18377,13 +19580,14 @@
    ]
   },
   "Proofs.Flock.Soundness.Refine.Paths": {
-   "digest": "261687745439b58144738bd219bb24564490cc999486b7eb0afd941f830bee3b",
+   "digest": "b9554a6bf423fc0393dda2d6407696af8122641ea7cb1c3e6e489e625cb2bdc9",
    "definitions": {
     "FlockSoundness.Refine.Dig": "3b7c6962c224f1df4260d88c13206bbe516a1aa9ddf7590cafedf59da73ecfd0",
     "FlockSoundness.Refine.H512": "2e38d3e05ff42dc0230cf3a01d174d1ee8e2131cf694e7e1f278980f4d39af00",
     "FlockSoundness.Refine.capDig": "fe000accac7d2ce326e5992773208f742eb490fb98e1bb12f71697e51b3bcded",
     "FlockSoundness.Refine.colBytes": "369353b8a1d43faa1b6bee759aee90522bb6285d7f8b13e2da745c1e773a2871",
     "FlockSoundness.Refine.enc512": "74e1b261764cf023a15fa68b559e8e21760fd62b938c933cabeb9c08e30b2b10",
+    "FlockSoundness.Refine.leafPlain": "504e839b63fd0ccc8d9888c3ea824298b8afd10ce39899b7f58b79591d815d48",
     "FlockSoundness.Refine.openRow": "1fe0a0847cc36927b8a4bd5b4277e951e43c898d81c68d96597f8880fd9315e3",
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
@@ -18439,9 +19643,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Refine.Rep": {
-   "digest": "a03a2a29cf307c234f330eda4055a15e5cab64cff21478ed00b2e3502130f494",
+   "digest": "5b6d90d168b467eb1df9e0c5d72b0007a4e94a095750e9a3a44e7202b3917aa0",
    "definitions": {
-    "FlockSoundness.Refine.shapeOf": "36884f888e3a0f63ecb870a6436041d9df0f79eeb0a6af670dc1b74e673d4338"
+    "FlockSoundness.Refine.shapeOf": "170cdc90306ae894e9ec121dc2b40ae8d90135811de45d4a11803935c4f03924"
    },
    "guarantees": [
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19414,7 +20618,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "VStar.Parts": {
-   "digest": "7a0c750ec7b4c0cfc319ac2670784f60d3b6fc00f29f2b76497257f107db9585",
+   "digest": "b63e8fbd7976118f61d561dea5920e5fada99d70002d6cca2ed3041bd5ec84ef",
    "definitions": {
     "VStar.MAX_LONE_SLOTS": "a7960e5a1459bccc9608de6e5dd0a46d717cbab6daa85fba0dfda7710a596dd9",
     "VStar.MAX_REGIONS": "f7d26ff7ba89d9b94e279fc032f65a4f9b023fff56301635fc251c5603673770",
@@ -19423,7 +20627,7 @@
     "VStar.Part.S": "8e50cf67eaa2c657dc0e8e5b236a5bc339878d0f4ec124a7398656ee8ffd36ce",
     "VStar.instInhabitedPart": "e215d87b2f9955d3c1d7abd933aab7d2565dfebf0b840db02a37ed223f6fbbdf",
     "VStar.instInhabitedPart.default": "7e2dd574d56b8214b3c154f5cdfac76851187843ea96a7b4609d753eebe4d0d2",
-    "VStar.parts": "7bba29fd478cb1f408dea084e4cfd9a88aa0721a205be4a97ba7fd26df22013e",
+    "VStar.parts": "808e4bb82f2fb5c4296d7635c699ca21e51d92cc0d1e620a9a6ad7be919ceedc",
     "VStar.regions": "d3e6d856b09e45cf9ce725eda871f594bef063a7557f844032c01c5b826b1590",
     "VStar.slots": "d5f486d42a0dd4b18e887e8e87610de9f7bfb3753ca18f48c182809f49adcc4d",
     "VStar.sortDedup": "4853310772e8f8c5eee009c13fa239720ca67086fedd3606cf04d40abe4bb872",
@@ -19598,9 +20802,9 @@
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "50a8792e71531b731845e9ef9041c7aef3d5f57da8e8469363f8264ed4ec52e8",
+  "mathlib": "a6d8a20d22b4bb1b26e538dd2ecdeb61c6bd65122c64cf013539ac3673a858a8",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
-  "toolchain": "d95e8a4c480ea108924167135008bc1409c650e2ac659cc2acb8bd8db870d011"
+  "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"
  }
 }
