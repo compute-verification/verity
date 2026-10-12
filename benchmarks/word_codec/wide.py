@@ -290,7 +290,7 @@ def store_bytes(words: list[list[int]], f: Field) -> bytes:
 
 def block(words: list[list[int]], j: int, f: Field, tb: int = 1) -> bytes:
     """E_j: lane j mod 32's words of tasks tb·(j div 32) … tb·(j div 32) + tb − 1 (tb adjacent K-chunks of the same
-    rows, which one warp of the fused GEMM steps through)."""
+    rows, one warp of the fused GEMM each)."""
     q, lane = divmod(j, LANES)
     return b"".join(word_bytes(y, f) for t in range(tb) for y in words[LANES * (tb * q + t) + lane])
 
