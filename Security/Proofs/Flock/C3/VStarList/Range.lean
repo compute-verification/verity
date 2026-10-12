@@ -47,9 +47,12 @@ theorem ellOk_of_sparseRange {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} {hp 
     (h : SparseRangeOk ish st) (hsp : SparseIs ish hp) : hp.EllOk (execClassAt st).cls.kLog := by
   obtain ⟨hv, hs, -⟩ := h _ hsp
   have h6 := (execClassAt st).cls.hk6
-  simp only [Flock.RecSparse.Shape.valid, Flock.RecSparse.PRE_ROUNDS, Bool.and_eq_true, decide_eq_true_eq] at hv
-  simp only [Array.size_replicate, Flock.RecSparse.PRE_ROUNDS] at hs
-  refine ⟨?_, ?_⟩ <;> omega
+  have hv' : (decide (1 ≤ hp.nu) && decide (6 ≤ hp.ell) && decide (hp.tLog ≤ 16)) = true := hv
+  have hs' : ¬ (execClassAt st).cls.kLog - 6 < hp.ell - 6 := by
+    rw [Array.size_replicate] at hs
+    exact hs
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at hv'
+  exact ⟨hv'.1.2, by omega⟩
 
 /-- **The class keeps the slots' units**: at the unit range's units (`UnitsOf`), every slot's unit is inside the block,
 so `HoloClass.ofExec`'s filter is the identity. -/

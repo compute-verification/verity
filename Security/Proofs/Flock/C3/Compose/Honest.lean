@@ -32,7 +32,7 @@ theorem seven_le_mReg (sh : SparseShape) : 7 ≤ sh.mReg :=
   show 7 ≤ max SparseShape.padTo _ from le_trans (by decide) (le_max_left _ _)
 
 /-- **The default run**: zeros, empty steps and rejecting pending results. -/
-def c3Default (e : ExecHolo) : C3Run e :=
+noncomputable def c3Default (e : ExecHolo) : C3Run e :=
   ⟨fun _ => H512 [], fun _ _ => 0, fun _ => [],
     fun _ => (⟨0, fun _ => 0, fun _ => 0, 0, 0, 0⟩, ⟨⟨0, fun _ => 0, fun _ => 0⟩, 0, fun _ => 0, fun _ => 0⟩),
     fun _ => PendL.reject, fun _ => [], fun _ => ⟨0, fun _ => 0, fun _ => 0, fun _ => 0⟩, [], ⟨0, fun _ => 0⟩, [],

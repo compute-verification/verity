@@ -12,7 +12,7 @@ stream's first top is the registered top's commit strings, and a cap whose commi
 
 namespace FlockC3.RegLevels
 
-open FlockSoundness FlockSoundness.Discharge.Recursion
+open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Model Accounting Exec StrictCR
 
 /-- **The binding round's top is R's registered top** (gap t0): where the verifier holds the inner transcript, R's
