@@ -10,7 +10,8 @@ The step, per GPU (``step``):
 - audited: the linears' CUDA-core work (decode o_w, receipt τ_w, binding τ_bind, per weight pass) is exposed except
   for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h read-times a byte) hides
   in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind a KV pass; the host tier slows the step by
-  τ_host per b_zero_copy of host stream per GPU, and its PCIe traffic slows the all-reduce.
+  τ_host per b_zero_copy of host stream per GPU, and the all-reduce gets what the host stream leaves of each GPU's
+  PCIe receive side, min(b_p2p, b_pcie − stream).
 - under ``cap``, memory left idle is filled with receipt-only reads of the store (τ_fill a pass, no decode: top-up),
   and the step may be padded with more of them (``pad``) when its activation traffic is too large a share of it;
   under ``pass`` neither: the pass is the step's own reads, W + KV.
@@ -164,7 +165,7 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
 
     r_h = min(p.host_share * v["b_host"] / v["gpus"], v["b_zero_copy"])
     host = v["tau_host"] * r_h / v["b_zero_copy"]
-    t_ar = _allreduce(w, tp, v["b_p2p"] * max(0.2, 1.0 - r_h / v["b_pcie"]), v)
+    t_ar = _allreduce(w, tp, max(1.0, min(v["b_p2p"], v["b_pcie"] - r_h)), v)
 
     core = lin + enc + attn + t_act + t_ar
     busy = t_rd + t_kv + t_act
