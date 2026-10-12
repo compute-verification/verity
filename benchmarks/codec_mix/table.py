@@ -18,8 +18,9 @@ projections, and the frontier is given over built rows and over all. A tensor-co
 256-byte head to whole words, charged as pad·(f_KV + A), f_KV the KV's share of the plain step.
 
 γ_codec = μ_chip 0.28 + μ_sample 0.10 + μ_rebuild + risk, before μ_host, μ_link and λ (`room` is what 1% leaves them):
-μ_rebuild = 100·d/(k·x₁,adv), x₁,adv = 175 at p512 (the red team's) scaled by root bytes a second, at the measured
-squaring and at the red team's 1.2× and 1.45× ceilings; risk = μ_rebuild·(1/m − 1) at the margin's low end m < 1.
+μ_rebuild = 100·d/(k·x₁,adv), x₁,adv = 175 at p512 and 5.13e10 squarings/s (the red team's) scaled by root bytes a
+second at each width and divided by each adversary's speed-up (`ADVERSARIES`); risk = μ_rebuild·(1/m − 1) at the
+margin's low end m < 1.
 
 `python table.py --attack A.jsonl --rates kv-codec.json --exhaust kv-exhaust.json [--exhaust ...] [--json OUT]`
 """
@@ -32,7 +33,11 @@ import sys
 
 MU_FIXED = 0.28 + 0.10
 X1_P512 = 175.0
-CEILINGS = (1.0, 1.2, 1.45)
+#: The adversary's rebuild over x₁,adv = 175's, its squaring times the host's share (ra-squaring-ceiling, STEERING
+#: 19:25Z): FOLD 5 as measured, 6.53e10/s, with the host's IFMA at 7.6%; and the stated ceiling, 1.38× with the host
+#: at 13%. Taken as the same at every width: nobody has looked for a faster squaring at 768 or 1,024 bits.
+FOLD5 = 6.53 / 5.13
+ADVERSARIES = (("FOLD 5, host 7.6%", FOLD5 * 1.076), ("1.38×, host 13%", 1.38 * 1.13))
 #: μ_host + μ_link + λ (+ μ_timing): none, the red team's fix (b) at 0.1% and at 0.26%, and ra-remote-driver's λ
 #: 0.195% with μ_timing at 50 ms passes, 0.20% (0.04–0.12% with on-chip prefetching).
 ALLOWANCES = (0.0, 0.1, 0.26, 0.4)
@@ -112,10 +117,10 @@ def row(name, b, k, *, fr, lib=None, kappa=None, x1=None, margin, note, attn=Non
         a = scale * interp(s["A"], kappa)
         d = base + interp(s["W"], kappa) + a + e + pad * (s["f_kv"] + a)
         g = {}
-        for c in CEILINGS:
+        for adv, c in ADVERSARIES:
             mu = 100 * d / (k * x1 / c)
             risk = mu * (1 / m_low - 1) if m_low is not None and m_low < 1 else 0.0
-            g[c] = {"mu_rebuild": mu, "risk": risk, "gamma": MU_FIXED + mu + risk, "room": 1 - (MU_FIXED + mu + risk)}
+            g[adv] = {"mu_rebuild": mu, "risk": risk, "gamma": MU_FIXED + mu + risk, "room": 1 - (MU_FIXED + mu + risk)}
         out["points"][p] = {"d": d, "gamma": g}
     return out
 
@@ -209,31 +214,34 @@ def build(attack: list[dict], rates: dict, exhausts: list[dict]) -> dict:
 
 def render(t: dict) -> str:
     pts = list(STEP)
-    head = ["codec", "κ", "decode GB/s", "attn /KV B, measured (projected)", "encode % floor", "x₁,adv",
+    head = ["codec", "κ", "decode GB/s", "attn /KV B, measured (projected)", "encode % floor", "x₁ at FOLD 5",
             "margin (low)"]
+    advs = [a for a, _ in ADVERSARIES]
     for p in pts:
-        head += [f"d {p}", f"γ {p} (1× / 1.2× / 1.45×)"]
+        head += [f"d {p}", f"γ {p} ({' / '.join(advs)})"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for r in t["rows"]:
         mg = "—" if not r["margin"] else f"{r['margin'][0]:.2f} ({r['margin'][1]:.2f})"
         cells = [r["codec"], f"{r['kappa']:.2f}", f"{r['decode_gbps']:.0f}" if "decode_gbps" in r else "—",
                  (lambda a: f"{a['measured']:+.3f} {a['form']} ({a['projected']:+.3f})")(r["attn_b160_4k"])
                  if "attn_b160_4k" in r else "—",
-                 f"{100 * r['encode_over_floor']:.0f}" if "encode_over_floor" in r else "—", f"{r['x1_adv']:.0f}", mg]
+                 f"{100 * r['encode_over_floor']:.0f}" if "encode_over_floor" in r else "—",
+                 f"{r['x1_adv'] / FOLD5:.0f}", mg]
         for p in pts:
             q = r["points"][p]
-            cells += [f"{q['d']:.3f}", " / ".join(f"{q['gamma'][c]['gamma']:.2f}" for c in CEILINGS)]
+            cells += [f"{q['d']:.3f}", " / ".join(f"{q['gamma'][a]['gamma']:.2f}" for a in advs)]
         lines.append("| " + " | ".join(cells) + " |")
     priced = [r for r in t["rows"] if r["margin"]]
     for title, rows in (("built (attention measured)", [r for r in priced if r["built"]]),
                         ("counting the projected rows", priced)):
         lines += ["", f"The fastest codec (least d) within 1% with a priced margin, {title}, given an allowance for "
-                  "μ_host + μ_link + λ:", "", "| point | allowance | 1× | 1.2× | 1.45× |", "|---|---|---|---|---|"]
+                  "μ_host + μ_link + λ:", "", "| point | allowance | " + " | ".join(advs) + " |",
+                  "|---|---|" + "---|" * len(advs)]
         for p in pts:
             for allow in ALLOWANCES:
                 cells = []
-                for c in CEILINGS:
-                    ok = [r for r in rows if r["points"][p]["gamma"][c]["gamma"] + allow <= 1.0]
+                for a in advs:
+                    ok = [r for r in rows if r["points"][p]["gamma"][a]["gamma"] + allow <= 1.0]
                     best = min(ok, key=lambda r: r["points"][p]["d"], default=None)
                     cells.append("none" if best is None else f"{best['codec']} (d {best['points'][p]['d']:.3f})")
                 lines.append(f"| {p} | {allow:.2f} | " + " | ".join(cells) + " |")
