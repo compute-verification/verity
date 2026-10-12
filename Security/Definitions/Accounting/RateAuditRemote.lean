@@ -31,11 +31,11 @@ program) and the root it is seeded at are any function of the store and of the e
 their oracle families at every root and their samples), and of nothing of its own pass or later. `Chain.oracle` is pass
 `j`'s oracle at that root. Each pass draws its own sample of `s` words after its output.
 
-**Live coins.** A challenger that streams a fresh coin for each pass on a fixed schedule, in place of the hash-chained
-seed, gives pass `j` an oracle that is fresh whatever the prover committed: that is `Chain` at `r = 0`, whose one root
-makes each pass's family a single uniform oracle. Its pass boundary is coin `j`'s release, and the challenger must
-refuse a `root_{j−1}` that arrives later than that release plus the least round trip, so that pass `j − 1`'s receipts
-were fixed before coin `j` could be seen, as `Chain` has them.
+**Grinding.** The seed is Fiat–Shamir, so a prover may hash candidate roots with pass `j`'s seed before it commits one,
+and keep the root whose oracle it likes. `GrindChain` gives it `G` candidates, fixed by the earlier passes' coins and
+the store, and lets it pick one as any function of pass `j`'s whole oracle family; pass `j`'s device may depend on the
+pick. Keeping one candidate at every pass is a `Chain` (`GrindChain.atCand`), so grinding costs at most a factor `G`
+in each pass's error.
 -/
 
 namespace Accounting.Rate
@@ -113,5 +113,40 @@ def oracle (A : Chain P N b h ρ S L q r s) (j : Fin P) (E : Store N b) (ω : Fi
   (ω j).2.1 (A.root j (fun i => ω i.1) E)
 
 end Chain
+
+/-- A chained prover that grinds its roots: pass `j`'s root is one of `G` candidates, which the earlier passes' coins
+and the store fix, picked as any function of pass `j`'s whole oracle family; pass `j`'s device may depend on the pick
+too. -/
+structure GrindChain (P N b h ρ S L q r s G : ℕ) where
+  device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → InteractiveDevice N b h ρ S L q
+  cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Fin G → Bits r
+  pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → (Bits r → Oracle N b h ρ) →
+    Fin G
+
+namespace GrindChain
+
+variable {P N b h ρ S L q r s G : ℕ}
+
+/-- The candidate pass `j` keeps at the window's coins `ω`. -/
+def kept (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+    Fin G :=
+  A.pick j (fun i => ω i.1) E (ω j).2.1
+
+/-- Pass `j`'s device at the window's coins `ω`, at the candidate it kept. -/
+def dev (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+    InteractiveDevice N b h ρ S L q :=
+  A.device j (fun i => ω i.1) (A.kept j E ω)
+
+/-- Pass `j`'s oracle: its family at the kept candidate root. -/
+def oracle (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+    Oracle N b h ρ :=
+  (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
+
+/-- The chained prover that keeps candidate `c` at every pass. -/
+def atCand (A : GrindChain P N b h ρ S L q r s G) (c : Fin G) : Chain P N b h ρ S L q r s where
+  device j η := A.device j η c
+  root j η E := A.cand j η E c
+
+end GrindChain
 
 end Accounting.Rate

@@ -22,6 +22,7 @@ node (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the nod
 * `RateChainRO`, `RateChain`: a window of chained passes certifies the sum over its passes.
 * `RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`: conservation at every count of correct receipts, for a
   pass and summed over a window's passes, with no sample: the remote audit's route `Paid`.
+* `RateGrindPaidRO`, `RateGrindPaid`: the same for a prover that grinds its roots against the Fiat–Shamir seed.
 -/
 
 namespace Accounting.Guarantees
@@ -320,5 +321,42 @@ def RateChainPaid : Prop :=
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
       ≤ (P : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
+
+/-- **Grinding roots costs a factor `G`, with side sources that ignore the oracle.** For every chained prover that
+grinds its roots (`Rate.GrindChain`: pass `j`'s root is one of `G` candidates the earlier passes' coins and the store
+fix, picked as any function of pass `j`'s whole oracle family, and pass `j`'s device may depend on the pick) whose
+devices' side sources ignore the oracle: the probability of `RateChainPaidRO`'s event is at most
+`P·G·(N/2^h + 2^q/2^λ)`.
+
+**The reading.** The pass seed is Fiat–Shamir, so a prover may hash `G` candidate roots for pass `j − 1` with pass
+`j`'s seed and keep the root whose oracle suits it: the window's correct receipts are still paid for pass by pass, at
+`G` times the error. The pick here sees the whole family, values the prover never queried among them, so the factor
+reaches the guessing term too; a pick that sees only queried values would leave `N/2^h` alone (not stated).
+
+Proof: `Accounting.SecurityProofs.RateGrindPaidRO`, `RatePaidRO` at each pass of the chain that keeps each candidate,
+and a union bound over the passes and the candidates.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateGrindPaidRO : Prop :=
+  ∀ (P N b h ρ S L q r s G lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.GrindChain P N b h ρ S L q r s G),
+    (∀ j η c E R O O', (A.device j η c).side E R O = (A.device j η c).side E R O') →
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
+          ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
+      ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam))
+
+/-- **Grinding roots costs a factor `G`, with any side sources.** `RateGrindPaidRO` for devices whose side sources
+may relay receipts: with `m` words a pass added to the slack, the probability is at most
+`P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateGrindPaid`, from `RatePaid`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateGrindPaid : Prop :=
+  ∀ (P N b h ρ S L q r s G m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.GrindChain P N b h ρ S L q r s G),
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
+          ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
+      ≤ (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam))
 
 end Accounting.Guarantees

@@ -23,6 +23,10 @@ budget leave at least `c` passes short (`Chain.le_card_short`), and Markov's ine
 some pass unpaid (`Chain.exists_unpaid`); each pass is unpaid with at most `RatePaidRO`'s or `RatePaid`'s error by
 sequencing (`Chain.pr_pass_le`, with no sample: `pr_coins_le`), and a union bound over the passes gives `P` times it
 (`Chain.pr_unpaid_le`).
+
+**Grinding.** A pass unpaid at the candidate it kept is unpaid in the chain that keeps that candidate at every pass
+(`GrindChain.exists_unpaid`), and each such chain's pass is bounded by sequencing (`Chain.pr_unpaid_pass_le`): a union
+bound over the passes and the `G` candidates gives `P·G` times the per-pass error (`GrindChain.pr_unpaid_le`).
 -/
 
 namespace Accounting.Rate
@@ -149,6 +153,18 @@ theorem exists_unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ �
   rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul] at hle
   omega
 
+/-- **Sequencing**: pass `j` is unpaid with at most the game's error for the devices the earlier passes' coins pick. -/
+theorem pr_unpaid_pass_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
+    (j : Fin P)
+    (hε : ∀ η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
+          ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+    pr (Unpaid A tier slack j) ≤ ε :=
+  pr_pass_le A (fun D y => ∑ t, D.tierReads tier t y.1 y.2.1 y.2.2.1 + D.rebuilt y.1 y.2.1 y.2.2.1 * b + slack <
+    (D.correct y.1 y.2.1 y.2.2.1).card * b) ε j (fun η => pr_coins_le (fun z =>
+      ∑ t, (A.device j η).tierReads tier t z.1 z.2.1 z.2.2 + (A.device j η).rebuilt z.1 z.2.1 z.2.2 * b + slack <
+        ((A.device j η).correct z.1 z.2.1 z.2.2).card * b) ε (hε η))
+
 /-- A window's unpaid words from a per-pass bound: the probability that the words summed over the passes exceed their
 reads, rebuilt words and `P` slacks is at most `P·ε`. -/
 theorem pr_unpaid_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
@@ -163,11 +179,7 @@ theorem pr_unpaid_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ →
   classical
   calc _ ≤ pr (fun x => ∃ j, Unpaid A tier slack j x) := Bandwidth.pr_mono (exists_unpaid A tier slack)
     _ ≤ ∑ j, pr (Unpaid A tier slack j) := Bandwidth.pr_exists_le _
-    _ ≤ ∑ _j : Fin P, ε := Finset.sum_le_sum (fun j _ =>
-        pr_pass_le A (fun D y => ∑ t, D.tierReads tier t y.1 y.2.1 y.2.2.1 + D.rebuilt y.1 y.2.1 y.2.2.1 * b + slack <
-          (D.correct y.1 y.2.1 y.2.2.1).card * b) ε j (fun η => pr_coins_le (fun z =>
-            ∑ t, (A.device j η).tierReads tier t z.1 z.2.1 z.2.2 + (A.device j η).rebuilt z.1 z.2.1 z.2.2 * b + slack <
-              ((A.device j η).correct z.1 z.2.1 z.2.2).card * b) ε (hε j η)))
+    _ ≤ ∑ _j : Fin P, ε := Finset.sum_le_sum (fun j _ => pr_unpaid_pass_le A tier slack ε j (hε j))
     _ = (P : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 open Classical in
@@ -221,6 +233,52 @@ theorem mul_pr_sum_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl c : ℕ) 
 
 end Chain
 
+namespace GrindChain
+
+variable {P S L q G : ℕ}
+
+/-- Words summed over the passes beyond their reads, rebuilt words and `P` slacks leave some pass unpaid in the chain
+that keeps, at every pass, the candidate that pass kept. -/
+theorem exists_unpaid {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (slack : ℕ)
+    (x : Store N b × (Fin P → PassCoins N b h ρ r s))
+    (hx : ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+        (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
+      ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b) :
+    ∃ j c, Chain.Unpaid (A.atCand c) tier slack j x := by
+  by_contra hno
+  push Not at hno
+  have hle := Finset.sum_le_sum (fun j (_ : j ∈ Finset.univ) => (not_lt.1 (hno j (A.kept j x.1 x.2)) :
+    ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b ≤
+      ∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+        (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b + slack))
+  rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul] at hle
+  omega
+
+/-- A grinding window's unpaid words from a per-pass bound: the probability that the words summed over the passes
+exceed their reads, rebuilt words and `P` slacks is at most `P·G·ε`. -/
+theorem pr_unpaid_le {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
+    (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, (A.device j η c).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η c).rebuilt x.1 x.2.1 x.2.2 * b + slack <
+          ((A.device j η c).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
+          ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
+      ≤ (P : ℝ≥0∞) * (G * ε) := by
+  classical
+  calc _ ≤ pr (fun x => ∃ j c, Chain.Unpaid (A.atCand c) tier slack j x) :=
+        Bandwidth.pr_mono (exists_unpaid A tier slack)
+    _ ≤ ∑ j, pr (fun x => ∃ c, Chain.Unpaid (A.atCand c) tier slack j x) := Bandwidth.pr_exists_le _
+    _ ≤ ∑ j, ∑ c, pr (Chain.Unpaid (A.atCand c) tier slack j) :=
+        Finset.sum_le_sum (fun j _ => Bandwidth.pr_exists_le _)
+    _ ≤ ∑ _j : Fin P, ∑ _c : Fin G, ε := Finset.sum_le_sum (fun j _ => Finset.sum_le_sum (fun c _ =>
+        Chain.pr_unpaid_pass_le (A.atCand c) tier slack ε j (fun η => hε j η c)))
+    _ = (P : ℝ≥0∞) * (G * ε) := by
+        rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, Finset.sum_const, Finset.card_univ,
+          Fintype.card_fin, nsmul_eq_mul]
+
+end GrindChain
+
 end Accounting.Rate
 
 namespace Accounting.SecurityProofs
@@ -269,5 +327,19 @@ theorem RateChainPaid : Accounting.Guarantees.RateChainPaid := by
   intro P N b h ρ S L q r s m lam τ tier A
   exact Chain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun j η =>
     (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaid N b h ρ S L q m lam τ tier (A.device j η)))
+
+/-- **Grinding roots costs a factor `G`, with side sources that ignore the oracle**
+(`Accounting.Guarantees.RateGrindPaidRO`). -/
+theorem RateGrindPaidRO : Accounting.Guarantees.RateGrindPaidRO := by
+  intro P N b h ρ S L q r s G lam τ tier A hA
+  exact GrindChain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η c =>
+    (Bandwidth.pr_mono (fun _ hx => by omega)).trans
+      (RatePaidRO N b h ρ S L q lam τ tier (A.device j η c) (hA j η c)))
+
+/-- **Grinding roots costs a factor `G`, with any side sources** (`Accounting.Guarantees.RateGrindPaid`). -/
+theorem RateGrindPaid : Accounting.Guarantees.RateGrindPaid := by
+  intro P N b h ρ S L q r s G m lam τ tier A
+  exact GrindChain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun j η c =>
+    (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaid N b h ρ S L q m lam τ tier (A.device j η c)))
 
 end Accounting.SecurityProofs

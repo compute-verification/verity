@@ -20,4 +20,5 @@ conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateCo
 `RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`), chained passes
 (`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every
 count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`,
-`RateChainPaid`). -/
+`RateChainPaid`), and for a window whose roots are ground against the Fiat–Shamir seed
+(`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`). -/
