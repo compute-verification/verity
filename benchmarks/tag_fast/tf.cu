@@ -883,13 +883,89 @@ struct Pf {
   int q;
 };
 
+// ChunkTag::finish for a whole fused3 CTA (FW warps, NB = 32 FW / L blocks, tags c0 .. c0 + NB - 1): the chunk CVs and
+// each block's tail bytes into shared memory, then level 0 (the NB L / 2 parents of chunk pairs and the NB tail chunks),
+// the further parent levels down to NB, and the NB roots, each level on only the threads it needs (rotated by bid + level
+// so the CTAs of an SM load different SMSPs). 5 warp-compressions a CTA at L = 4 instead of 12.
+constexpr int F3_FINISH_BYTES = FW * 32 * 8 * 4 + FW * 32 * 8 * 4 + FW * 32 * 2 * 4;
+
+template <int V, int L>
+__device__ __forceinline__ void f3_finish(uint32_t* sh, const ChunkTag<V, L>& ct, int pos, int bid, uint32_t* tags,
+                                          uint64_t c0, const Mul& k) {
+  static_assert(L >= 2, "at L = 1 every lane's finish (its tail and root) is already whole");
+  constexpr int T = FW * 32, NB = T / L;
+  uint32_t* tls = sh + T * 8;
+  uint32_t* ds = tls + T * 8;
+  const int t = threadIdx.x;
+  uint32_t key[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) key[i] = kKey[i];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) sh[t * 8 + i] = ct.cv[i];
+  if (pos == L - 1) {
+    ds[(t / L) * 2] = ct.d0;
+    ds[(t / L) * 2 + 1] = ct.d1;
+  }
+  __syncthreads();
+  int lv = bid;
+  {
+    const int r = (t + 32 * (lv % FW)) % T, np = NB * L / 2;
+    uint32_t o[8];
+    if (r < np + NB) {
+      uint32_t m[16];
+      const bool tl = r >= np;
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = tl ? (i < 2 ? ds[(r - np) * 2 + i] : 0u) : sh[r * 16 + i];
+      b3<V>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT), o, k);
+    }
+    __syncthreads();
+    if (r < np + NB) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) (r < np ? sh[r * 8 + i] : tls[(r - np) * 8 + i]) = o[i];
+    }
+    __syncthreads();
+    ++lv;
+  }
+#pragma unroll
+  for (int n = NB * L / 4; n >= NB; n /= 2, ++lv) {
+    const int r = (t + 32 * (lv % FW)) % T;
+    uint32_t o[8];
+    if (r < n) {
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = sh[r * 16 + i];
+      b3<V>(key, m, 0u, 64u, KEYED | PARENT, o, k);
+    }
+    __syncthreads();
+    if (r < n) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) sh[r * 8 + i] = o[i];
+    }
+    __syncthreads();
+  }
+  const int r = (t + 32 * (lv % FW)) % T;
+  if (r < NB) {
+    uint32_t m[16], o[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      m[i] = sh[r * 8 + i];
+      m[8 + i] = tls[r * 8 + i];
+    }
+    b3<V>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
+    uint4* out = reinterpret_cast<uint4*>(tags + (c0 + r) * 8);
+    out[0] = make_uint4(o[0], o[1], o[2], o[3]);
+    out[1] = make_uint4(o[4], o[5], o[6], o[7]);
+  }
+}
+
 // fused2's chunk-block map in fused_kernel's shape: FW warps a CTA on one span s of consecutive row blocks (spans fastest
 // in the grid), each lane's chunk loaded into registers PD quads ahead (no ring, no cp.async), x's M rows of the span in
 // shared memory. Tags and modes as fused2_kernel's; bid is the CTA's index in the GEMM's grid. PF: the weights stream
 // evict-first, and once a warp's loads are done it prefetches its share of the last pf.q quads of every unit of the next
 // launch's store into L2 (evict-last), so DRAM stays busy through this launch's finish and the next one's last quads hit
-// L2 (the hashing tail then overlaps the prefetch for the launch after).
-template <int V, int L, int NB8, int MODE, int PD, bool PF = false>
+// L2 (the hashing tail then overlaps the prefetch for the launch after). PK: f3_finish (MODE_TAGS, L >= 2; its shared
+// memory after x's rows).
+template <int V, int L, int NB8, int MODE, int PD, bool PF = false, bool PK = false>
 __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                             float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N, int Kd,
                                             uint64_t jbase, unsigned int* __restrict__ xr, Pf pf = {}) {
@@ -976,7 +1052,11 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
       }
     }
   }
-  if constexpr (TAG) {
+  if constexpr (PK) {
+    static_assert(MODE == MODE_TAGS, "the packed finish writes tags");
+    f3_finish<V, L>(reinterpret_cast<uint32_t*>(xs + M * CXS), ct, pos, bid, tags,
+                    ((uint64_t)s * rts + (uint64_t)(bid / nspans) * FW) * (32 / L), k);
+  } else if constexpr (TAG) {
     uint32_t t[8];
     ct.finish(t, pos, k);
     if constexpr (MODE == MODE_SINK) {
@@ -999,12 +1079,12 @@ __global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict
   fused3_body<V, L, NB8, MODE, PD>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr);
 }
 
-template <int V, int L, int NB8, int MODE, int PD>
+template <int V, int L, int NB8, int MODE, int PD, bool PK>
 __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr,
                                                           Pf pf) {
-  fused3_body<V, L, NB8, MODE, PD, true>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr, pf);
+  fused3_body<V, L, NB8, MODE, PD, true, PK>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr, pf);
 }
 
 // An earlier launch's CTAs bid0 .. bid0 + blocks - 1, which it ran GEMM-only, as tags only.
@@ -1482,20 +1562,27 @@ int tf_fused3(int lanes, int mode, int pd, const void* w, const uint8_t* x, floa
 }
 
 // tf_fused3 at one quad ahead in fused3p_kernel: the weights stream evict-first, and each warp, its loads done,
-// prefetches its share of the last pfq quads of each of the pfunits 32 KiB units at pfw (the next launch's store) into L2.
-int tf_fused3p(int lanes, int mode, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
-               uint64_t jbase, unsigned int* xr, const void* pfw, uint32_t pfunits, int pfq, cudaStream_t st) {
+// prefetches its share of the last pfq quads of each of the pfunits 32 KiB units at pfw (the next launch's store) into L2
+// (pfq 0: none); pk: the packed CTA finish (tags, lanes 4 or 8).
+int tf_fused3p(int lanes, int mode, int pk, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
+               int Kd, uint64_t jbase, unsigned int* xr, const void* pfw, uint32_t pfunits, int pfq, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || pfq < 0 ||
-      pfq > CHUNK_TILES / 4 || (pfq && !pfw))
+      pfq > CHUNK_TILES / 4 || (pfq && !pfw) || (pk && mode != MODE_TAGS))
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, pd = 1;
   if (mode == MODE_GEMM) lanes = 1;
   void (*kern)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*, Pf) = nullptr;
-  F3(fused3p_kernel, 1, 0, 1) F3(fused3p_kernel, 1, 1, 1) F3(fused3p_kernel, 4, 1, 1) F3(fused3p_kernel, 8, 1, 1)
+#define F3P(L, MODE, PK)                                                                                               \
+  if (lanes == L && mode == MODE && pk == PK)                                                                          \
+    kern = nb8 == 1 ? fused3p_kernel<1, L, 1, MODE, 1, PK>                                                             \
+                    : nb8 == 2 ? fused3p_kernel<1, L, 2, MODE, 1, PK> : fused3p_kernel<1, L, 4, MODE, 1, PK>;
+  F3P(1, 0, false) F3P(1, 1, false) F3P(4, 1, false) F3P(8, 1, false) F3P(4, 1, true) F3P(8, 1, true)
+#undef F3P
   if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
   const Pf pf{(const uint4*)pfw, pfunits, pfq};
-  kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, M * CXS, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr, pf);
+  const int smem = M * CXS + (pk ? F3_FINISH_BYTES : 0);
+  kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr, pf);
   return cudaGetLastError() ? 2 : 0;
 }
 
