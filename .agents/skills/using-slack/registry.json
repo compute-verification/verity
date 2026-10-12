@@ -93,6 +93,7 @@
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
+        "benchmarks/kimi_k3/",
         "verity/ml/circuits/ops/"
       ]
     },
