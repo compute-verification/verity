@@ -10,6 +10,10 @@
    "owner": "@proofs",
    "digest": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae"
   },
+  "FlockSoundness.Assumptions.InnerRecordCustody": {
+   "owner": "@proofs",
+   "digest": "0fa1bc487add939198bdbd17d3376409a02c8885420a00205cd835f829084e08"
+  },
   "FlockSoundness.Assumptions.SHA512CRExpected": {
    "owner": "@proofs",
    "digest": "cc74806f2a9d7c607d51ff5d06ac12d9f6b7c02c115f3393ef78c692014dbd64"
@@ -4048,7 +4052,7 @@
    "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check.",
    "Flock.SecurityProofs.PublicAudit": "restatable: (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, and the obligations _hob (VStarParses) and _hF (TagsFound), none a premise; it fits once the recursive model's inputs and count curve, and those two obligations, are restated as premises (constants of Proofs.Flock.Recursive.Premises).",
    "Flock.SecurityProofs.RanRegisteredRun": "frozen (obligation,no-function): It is about an abstract session (a game G and its acceptance acc) rather than a Lean function, and takes that session's soundness bound (prob (acc ∧ Q) ≤ B) as an open obligation, beside the commitment's binding (com.Binding, an extractor's pair, no hash assumed) and the registrant's opening. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, the registrant's openings (_hreg) and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
+   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4. Vacuous today: statements_holo refuses every holo inner shape; #1896.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4. Vacuous today: statements_holo refuses every holo inner shape; #1896.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4. Vacuous today: statements_holo refuses every holo inner shape; #1896.",
@@ -14071,14 +14075,15 @@
    ]
   },
   "Proofs.Flock.Recursive.AuditC3": {
-   "digest": "6dfdd211fd6f214f20185ee1cb0c1fff88d4def175925949528cc249e76e3130",
+   "digest": "de77f0a787135e5a2bdf47824579f31abeb582544b38ba8d20dc6d8a5a0a94b1",
    "definitions": {
     "Flock.Guarantees.ChecksC3": "a1184410f4250dc5523c6c19d2d5244c96513959daf238940d3d84f3dcf2715d",
     "Flock.Guarantees.ChecksVR": "91d4d45c655b92406ae93ab759d14b8488eee77108c5d38a2ff647a11312df12",
-    "Flock.Guarantees.RecursiveAuditC3": "58298edeabfd4f317eac82c1f96bf1d102391f31e70aa4e62a7b1edacc560e93",
+    "Flock.Guarantees.RecursiveAuditC3": "ece45330231e876b754a847bc351cee158e8f41a2e3cd8ca6e1467c538f7ad0e",
     "Flock.Guarantees.c3Of": "7a387edb360170506c4d9fe694a6badb5d15ffef124c97ec1b1350e75cbd2465",
-    "Flock.Guarantees.checkedC3": "9862dc6653ce3f1f9708882577d086e8f80f99d9b42f7e202562590a3a9e1e9a",
-    "Flock.Guarantees.checkedT": "3ee0f07624cdbf4c982ea87d51e6bb59c561dbbb9413a00cca094b7fc4bf90ae",
+    "Flock.Guarantees.checkedC3": "484710ae525294bcf9048eb3d726f25330e38d02e3e0000642eb08e508042213",
+    "Flock.Guarantees.checkedT": "ba8a2432eed14b144674eca54f42d10ac967025922e950bd69273a6c04435f5f",
+    "Flock.Guarantees.innerHeld": "59756bdff95a6d88b1ae5aa81032d276361b612d58e6c8e6ccafc2dca8975e3a",
     "Flock.Guarantees.keepOwn": "a9d0b9aa4a4dc873412d5eeae9ad7a1e3f5fd228b43b93d28d3bc2defbaa6bad"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
@@ -14362,8 +14367,9 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Premises": {
-   "digest": "8d21f6d713422db49d31ed01553ec38e2c80f4c9978c802beec911bb3f835b73",
+   "digest": "968fbb70fde291a1c863c8e2cd99eecbdfefd5d0272f46c5e9c30b0526846507",
    "definitions": {
+    "Flock.Premises.InnerRecordCustody": "2afabb4d9e1746d428a44b6c1cc048df05c0450b7e53714d48b9c3f43a605c18",
     "Flock.Premises.RecordCustody": "5cc22f72232e075941f6d919bace45466b731ef8e3da4aea701c4b607180b328",
     "Flock.Premises.UniformRandomBytes": "10dd4f26d2074bc44191e45cdff4bcb3e1726dacf0cca34843cc954b3581cd8a",
     "Flock.Premises.VBridgeC": "c56f32cc02f564bfa3322b1e67ef9a244a61bad23901e49ea7c26534a233bb6f"
@@ -14939,6 +14945,23 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
+  },
+  "Proofs.Flock.Soundness.Assumptions.Inner": {
+   "digest": "2c197fa5e0c1672a868310b12b12c1f4fe1c0848a01af55703915a83ac30b5fb",
+   "definitions": {
+    "FlockSoundness.Assumptions.InnerRecordCustody": "0fa1bc487add939198bdbd17d3376409a02c8885420a00205cd835f829084e08",
+    "FlockSoundness.Assumptions.InnerRecordMap": "b10f8ce11392434de7e5f24b142eb4ee0b1c6d9abbd517d465b7e16b68c6b807",
+    "FlockSoundness.Assumptions.InnerRecordMap.bc": "313d685aa17b98c29ec6d7e5cdc9a06b3f6143233ad6ac3f3597f1907776ca2e",
+    "FlockSoundness.Assumptions.InnerRecordMap.coin": "0440000b8b853fcbe23119d113e71546ee0827c694db337e8c5668681220901a",
+    "FlockSoundness.Assumptions.InnerRecordMap.points": "d500444251e3a53d9bf5afabda916a3dc200fe38a0ecf24dba368f2161b33d55",
+    "FlockSoundness.Assumptions.InnerRecordMap.sel": "6ac71905c2e122085200102a31ba65efb71ba806d5f4bc295cf2fd9ee508af97",
+    "FlockSoundness.Assumptions.InnerRecordMap.selC": "2bf3c14ae46645f6299ce9fc7e4511f0775ce8df7ead6595c67781ae299862c5",
+    "FlockSoundness.Assumptions.heldCoins": "a9a26166c79911321e958d31237ce2ff06a9df0aa5a74fadc8260d00f7eee177",
+    "FlockSoundness.Assumptions.heldRow": "dd7ca1802cab0e5a33f89a5399081e8e9b0fbccdd125b49563645b5159910801",
+    "FlockSoundness.Assumptions.heldRow._sparseCasesOn_1": "ab8646430ade99be4971d318182ff1ef1f5b594f0b187e077129e41d88048803",
+    "FlockSoundness.Assumptions.heldRow._sparseCasesOn_2": "000331b23edaf298c64b84f54d9c898ee97231e8cd9fe2fdfa0b02100bb9f6a0"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.Assumptions.Recursive": {
    "digest": "d815dfaf6009a03001eb778062e89664a0e0143a183c185568b6d95d31067fe6",

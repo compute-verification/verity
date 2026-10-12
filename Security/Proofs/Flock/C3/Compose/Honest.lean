@@ -93,15 +93,7 @@ noncomputable def decodeRun (e : ExecHolo) (l : List Step) : C3Run e :=
   ⟨cap₀, pts, ![rs.1, rs.2.2.1], rep, ![rs.2.1.2, rs.2.2.2.2], ![sp₀.1, sp₁.1], claim, op.1, opened, lg.1, lg.2,
     proverAt (Opens GF128 Dig × Salts (List UInt8)) (l₅.drop lg.1.length)[0]? d.os⟩
 
-/-- **The `b ‖ c` the verifier holds at a registered value's row**: `RecVStar.fixedRow` at its hold of the inner
-transcript `cs`, by the value's prefix, at the inner shape's sparse entry; none where it holds none. -/
-def heldRow (cs : Except String RecVStar.InnerCommits) (sparse : Option RecSparse.Shape) (value : String) (x : ℕ) :
-    Option (List UInt8) :=
-  match cs with
-  | .ok cs => match RecVStar.fixedRow cs value x sparse with
-    | some (.ok (_, c)) => some c.toList
-    | _ => none
-  | .error _ => none
+export FlockSoundness.Assumptions (heldRow)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
@@ -149,7 +141,7 @@ noncomputable abbrev C3Family.checked (ish : RecVStar.Inner) {ss : Array VStar.S
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (tr : Lean.Json) (record : String) (reg : Lean.Json) : C3Family T CT st hp xR L Reg Cm Reg' Reg₂ :=
   C3Family.honest ish hss bind hob
-    (Flock.Guarantees.checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust h) own sel bc
-    dec tr record reg
+    (Flock.Guarantees.checkedC3 ish (fun _ => (innerCommitsAt tr record st reg).toOption) (fun _ => coins) bind rows zr
+      hCust h) own sel bc dec tr record reg
 
 end FlockC3.Compose
