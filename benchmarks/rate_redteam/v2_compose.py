@@ -49,10 +49,12 @@ def host_tier_table() -> None:
                 ratio = 4 * m / width
                 # Host CPUs receipt the gap's blocks: they hold E, need z. Two ways to co-locate:
                 #  (i) ship z down in full (host does the hash): gap * ratio GB/s down PCIe;
-                #  (ii) ship the host's digest up and let the GPU finish (min crossing, gap * min(ratio,1)),
-                #       which puts the final hash back on the GPU and defeats offloading to the host.
+                #  (ii) ship the host's digest up and let the GPU finish (gap * min(ratio,1) up). But the gap is by
+                #       definition the DRAM bandwidth PCIe-up can't carry -- PCIe-up already carries the GPUs'
+                #       451 GB/s stream -- so (ii) needs up-capacity that isn't there. Only (i) can bind the gap.
                 z_down_full = gap * ratio
                 crossing_min = gap * min(ratio, 1.0)
+                up_needed_route_ii = PCIE + crossing_min
                 print(json.dumps({
                     "part": "c", "ddr5": tag, "ddr5_gbps": ddr5, "pcie_up_gbps": PCIE,
                     "cpu_receipt_gap_gbps": round(gap, 1),
@@ -61,8 +63,16 @@ def host_tier_table() -> None:
                     "z_down_full_over_pcie_down": round(z_down_full / PCIE_DOWN, 3),
                     "host_receipt_feasible": z_down_full <= PCIE_DOWN,
                     "crossing_min_gbps": round(crossing_min, 1),
-                    "min_route_puts_hash_on_gpu": ratio >= 1.0,
+                    "route_ii_up_needed_gbps": round(up_needed_route_ii, 1),
+                    "route_ii_feasible": gap == 0 or up_needed_route_ii <= PCIE,
                 }))
+
+    # The batch at which binding the gap by route (i) stops fitting PCIe-down, for k-slice width k_s.
+    gap = max(0.0, DDR5_SPEC - PCIE)
+    for k_s in (16, 32):
+        m_max = PCIE_DOWN * k_s / (4 * gap)   # gap * 4m/k_s <= PCIE_DOWN
+        print(json.dumps({"part": "c", "ddr5": "spec", "binding": f"k-slice k_s={k_s}",
+                          "max_batch_host_tier_bindable": round(m_max, 1)}))
 
 
 if __name__ == "__main__":
