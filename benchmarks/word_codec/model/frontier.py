@@ -1,7 +1,8 @@
 """γ_bw at the squaring floor (the red team's F17): the frontier and the operating point of the design note.
 
 `python -m model.frontier [OPS] [BATCH] [MODEL]` from `benchmarks/word_codec` prints, for each E codec, γ_bw with W
-registered / with no assumption on W, the step slowdown and the served one, with the KV option the 5% rule picks.
+registered / with no assumption on W, the step slowdown and the served one, with the KV option the 5% rule picks;
+1023 bits at 6.58x the issue bound is the measured thread-per-word kernel, 1536 and 2048 need a kernel not yet built.
 OPS multiplies the issue-bound instruction count (1.0 the issue bound, 1.67 IMAD.WIDE at half rate). Costs are in
 passes at the locked clock, as measured; the adversary runs at the max clock (κ = KAPPA), the honest at either.
 """
@@ -18,13 +19,16 @@ IDLE = {"Llama-3.1-8B": 0.37, "Mistral-Small-24B": 0.15, "Llama-3.1-70B": 0.10}
 SHAPES = {"70": g.LLAMA_70B, "24": g.MISTRAL_24B, "8": g.LLAMA_8B}
 OUT_TOKENS = 512
 TAG = 0.227  # ra-sketch-tag's sketch (0.117) and its layer sequence (0.11), on top of the fused decode
-# ra-codec-tensor's 2^768 − 825 decode fused into the 70B layer at k = 1 (r20261012-095837-c1eb), tag not included;
-# 2^512 − 569 in the same run: 1.051 / 1.445.
+# ra-codec-tensor's decodes fused into the 70B layer at k = 1 (r20261012-095837-c1eb), tag not included, batch 1 / 32:
+# 2^768 − 825 1.159 / 1.386, 2^512 − 569 1.051 / 1.445, 2^1023 − 361 2.025 / 1.961 (thread-per-word throughout).
 FUSED_768_Y = 1.159
 FUSED_768_Y32 = 1.386
 FUSED_512_Y = 1.051
-# How far today's squaring kernels sit above the issue bound (61, 255, 521, 768 bits: 1.9, 3.3, 3.0, 2.3).
-OFF_ISSUE = (2.3, 3.3)
+FUSED_1023_Y = 2.025
+# The fused decode's ALU over the issue bound, ε / sq(bits): 4.42 at 768 bits (the best measured), 5.17 at 512, 6.58
+# at 1023, where 32 limbs a thread leave room for 6 decode warps against 768's 10. Wider fields are bracketed by the
+# best and the worst measured; past 1023 bits a thread per word is outside the bracket.
+OFF_ISSUE = (4.42, 6.58)
 KAPPA = g.CLOCK_MAX_MHZ / g.CLOCK_LOCKED_MHZ  # Φ_cores is declared at the max clock
 
 
@@ -34,19 +38,17 @@ def sq(bits: int, ops: float = 1.0) -> float:
 
 
 def decode_eps(bits: int, off: float, clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> float:
-    """The fused decode's ALU in passes: the 768-bit kernel's (ε = 0.98 standalone) with each further squaring at
-    `off` times the issue bound [estimate]; at 512 bits it gives 0.844 against the measured 0.84."""
-    eps768 = g.WIDE["p767"].eps
-    return (eps768 + off * (sq(bits) - sq(768))) * g.CLOCK_LOCKED_MHZ / clock_mhz
+    """The fused decode's ALU in passes, `off` times the issue bound [estimate past 1023 bits]."""
+    return off * sq(bits) * g.CLOCK_LOCKED_MHZ / clock_mhz
 
 
 def y_of_eps(eps: float, batch: int) -> float:
-    """The fused step against its decode's ALU, through the measured 512- and 768-bit points (ε 0.84 → 1.051,
-    0.98 → 1.159 at batch 1); past 0.98 the decode is at the edge of the read and each further pass is a pass of
-    step. At batch 32 the measured points don't order (1.445, 1.386), so 768's stands below the edge."""
+    """The fused step against its decode's ALU, through the measured points (ε 0.84 → 1.051, 0.98 → 1.159, 1.85 →
+    2.025 at batch 1): past 0.98 the decode is at the edge of the read and each further pass is a pass of step. At
+    batch 32 the GEMM's own floor (768's 1.386) or the batch-1 step, whichever is larger: 1023 bits measured 1.961."""
     e512, e768 = g.WIDE["p511"].eps, g.WIDE["p767"].eps
     if batch >= 32:
-        return FUSED_768_Y32 + max(0.0, eps - e768)
+        return max(FUSED_768_Y32, y_of_eps(eps, 1))
     if eps >= e768:
         return FUSED_768_Y + eps - e768
     return FUSED_512_Y + max(0.0, eps - e512) * (FUSED_768_Y - FUSED_512_Y) / (e768 - e512)
@@ -65,15 +67,18 @@ def e_codec(bits: int, batch: int, off: float, clock_mhz: float = g.CLOCK_LOCKED
     return replace(c, y=fused_y(bits, batch, off, clock_mhz))
 
 
-def kv_codec(bits: int, batch: int) -> g.Codec:
-    c = replace(g.extrapolated(bits), tau=0.011)
+def kv_codec(bits: int, batch: int, off: float = OFF_ISSUE[0]) -> g.Codec:
+    """A KV prime decoded beside attention: p767's unfused step with ε at `off` times the issue bound."""
+    p767 = g.WIDE["p767"]
+    eps = decode_eps(bits, off)
+    c = replace(g.extrapolated(bits), eps=eps, y=p767.y + eps - p767.eps, tau=0.011)
     return replace(c, y=c.y + 0.04) if batch >= 32 else c
 
 
-def options(shape: g.Shape, batch: int, c: g.Codec, ops: float, kv_widths=(1536, 2048), kappa: float = KAPPA
-            ) -> dict[str, dict]:
-    """Every KV option at E's codec `c` (its own prime at k_KV rounds, or a wider KV prime at one), the adversary
-    at the floor on both."""
+def options(shape: g.Shape, batch: int, c: g.Codec, ops: float, kv_widths=(1536, 2048), kappa: float = KAPPA,
+            off: float = OFF_ISSUE[0]) -> dict[str, dict]:
+    """Every KV option at E's codec `c` (its own prime at k_KV rounds, or a wider KV prime at one, its kernel `off`
+    times the issue bound), the adversary at the floor on both."""
     bits = math.ceil(c.p_bits)
     adv = g.at_floor(c, sq(bits, ops))
     c = replace(c, y=c.y + TAG)
@@ -81,7 +86,7 @@ def options(shape: g.Shape, batch: int, c: g.Codec, ops: float, kv_widths=(1536,
                   kappa=kappa)
     out = {f"k{kr}": g.Point(shape, batch, 4096, True, c, kv_rounds=kr, **common).terms() for kr in (1, 2, 4)}
     for n in kv_widths:
-        kc = kv_codec(n, batch)
+        kc = kv_codec(n, batch, off)
         out[f"w{n}"] = g.Point(shape, batch, 4096, True, c, kv_codec=kc, kv_adversary=g.at_floor(kc, sq(n, ops)),
                                **common).terms()
     return out
@@ -110,21 +115,27 @@ def main(argv: list[str]) -> None:
         print(f" the honest at {clock} MHz")
         c = e_codec(768, batch, OFF_ISSUE[0], clock)
         k, t = pick(options(shape, batch, c, ops), allowed=("k1", "k2", "k4"))
-        print(f"  768 fused, y {c.y:.2f} (measured at the locked clock), KV {k}: {row(t)}")
-        for bits in (1536, 2048):
+        print(f"  768 fused (the point), y {c.y:.2f} (measured at the locked clock), KV {k}: {row(t)}")
+        for bits in (1023, 1536, 2048):
             for off in OFF_ISSUE:
                 c = e_codec(bits, batch, off, clock)
-                k, t = pick(options(shape, batch, c, ops))
+                k, t = pick(options(shape, batch, c, ops, off=off))
                 print(f"  {bits}, y {c.y:.2f} (kernel {off}x the issue bound), KV {k}: {row(t)}")
-        for off in OFF_ISSUE:
-            print(f"  point, kernel {off}x the issue bound: {row(point(shape, batch, ops, off, clock))}")
 
 
-def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0, off: float = OFF_ISSUE[0],
+def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0,
           clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
-    """The operating point: E on 2^1536 − 3453 and the KV cache on 2^2048 − 1557 (one head's BF16 K or V row a
-    word), both at k = 1."""
-    return options(shape, batch, e_codec(1536, batch, off, clock_mhz), ops, kv_widths=(2048,))["w2048"]
+    """The operating point: E on 2^768 − 825 fused at k = 1, the KV cache on the same prime at the 5% rule's rounds
+    (4 at batch 1)."""
+    c = e_codec(768, batch, OFF_ISSUE[0], clock_mhz)
+    return pick(options(shape, batch, c, ops), allowed=("k1", "k2", "k4"))[1]
+
+
+def wide_point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0, off: float = OFF_ISSUE[0],
+               clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
+    """The option with no assumption on W: E on 2^1536 − 3453 at k = 1, its kernel `off` times the issue bound, the KV
+    cache at the 5% rule's pick."""
+    return pick(options(shape, batch, e_codec(1536, batch, off, clock_mhz), ops, off=off))[1]
 
 
 if __name__ == "__main__":
