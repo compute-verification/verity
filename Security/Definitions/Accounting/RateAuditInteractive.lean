@@ -5,7 +5,9 @@ import Definitions.Accounting.RateAuditJoint
 # The rate audit with interactive side sources (trusted)
 
 `RateAudit.lean`'s game, except that the chip may also send bits to the side sources, and a side source answers each
-read as a function of the store, the certified stream, the oracle and every bit the chip has sent so far. This is the
+read as a function of the store, the certified stream, the oracle and every bit the chip has sent so far.
+`RateAudit.lean`'s side source already answers any function of the store and of what the chip sent, through the address
+the chip picks; what this game adds is answers that also depend on the certified stream and the oracle. This is the
 rest of the prover as the chip sees it in the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`,
 section 6): a peer, the host or a network that sees what the chip sends (the seed, partial tags, which words it wants)
 and answers adaptively, as the table localization lays out, read bit by bit. Sends are not bounded, so the chip may send
