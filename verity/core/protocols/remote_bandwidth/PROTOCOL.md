@@ -74,7 +74,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `samples` | \(s\), the openings per window |
 | `delta` | δ of each window's profile |
 | `min_passes` | the fewest passes a window may certify |
-| `rounds` | the codec's \(k \ge 2\) |
+| `codec` | the store's codec, the one its registration names (§3): `p1024/k3/masked` unless another is named |
 
 The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by window. It is not a parameter.
 
@@ -88,14 +88,40 @@ The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by
    `CommitmentDomain(SHA512("verity/remote-bandwidth/payload/v0\0" ‖ frame(node)), 0, positions 0 … N − 1, "sha512")`.
    `node` is the node's id, 1 to 64 bytes. This is the leaf PoUS's answer circuit proves over a block.
 2. Only after the payload root has arrived does the verifier draw the codec seed from its own secret and a fresh
-   32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, nonce}).stream("codec", 32)`.
-3. The prover encodes every block under that seed (`codec.py`): \(E_j = \text{encode}(\text{payload}_j)\), Sloth over
-   \(p = 2^{512} - 569\) at \(k\) rounds, word \(w\) of block \(j\) at store index \(64j + w\). This is byte-exact with
-   `verity/word-codec/kv/v0` at `p512`, the KV kernel's codec. For \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\),
-   it is that codec's token-layer layout.
+   32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
+   32)`, `codec` the name of the codec the registration names.
+3. The prover encodes every block under that seed with that codec (`codec.py`, below):
+   \(E_j = \text{encode}(\text{payload}_j)\).
 4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
-   codec seed ‖ u8 k)`. A record cites this digest, each session's coin commitment binds it, and each session's chain
-   starts from it.
+   codec seed ‖ frame(codec name))`, `frame` being `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8).
+   A record cites this digest, each session's coin commitment binds it, and each session's chain starts from it.
+
+**The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
+`codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
+The prime is kv/v0's at 1,024 bits and the one ra-squaring-ceiling measured. \(p = 2^{512} - 569\) unmasked (`p512/k2`)
+stays available as the upgrade path. A registration may name any of them (or more rounds), and the session's `Params`
+must name the same. Each is byte-exact with `verity/word-codec/kv/v0`, the KV kernel's codec (ra-codec-mix's `kv.py`,
+#1894, `key(..., mask=True)`), and the tests pin `kv.py`'s vectors at k = 2 and k = 3 masked and at `p512/k2`:
+
+~~~text
+word        128 bytes, little-endian, canonical (< p); a 4 KiB block is 32 words, word w of block j at store index
+            i = 32j + w, j below 2^59 so every i fits a u64 (at p512: 64 words of 64 bytes, i = 64j + w, j below 2^58)
+ρ(a)        s = a^((p+1)/4); if s² = a the even one of {s, p − s}, else (s² = −a) the odd one
+ρ⁻¹(y)      y² if y is even, p − y² if y is odd
+XOF(m)      SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ …
+c_r         LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be r)[0 : 136]) mod p, r = 0 … k − 1, D = "verity/word-codec/kv/v0\0"
+τ           the same at r = 2^32 − 1, and 1 in place of 0;  t(i) = τ · i mod p
+K           LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be 2^32 − 2)[0 : 128]): 1,024 bits, not reduced mod p
+σ_K(x)      x ⊕ K if that is below p, else x: an involution on [0, p)
+encode      from the payload word, for r = 0 … k − 1: x ↦ σ_K(x) if r ≥ 1, then x ↦ ρ(x + c_r + t(i))
+decode      for r = k − 1 … 0: x ↦ ρ⁻¹(x) − c_r − t(i), then x ↦ σ_K(x) if r ≥ 1
+~~~
+
+For \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) a block is kv/v0's token-layer: a token's keys and values in
+one layer, 4,096 bytes, are 32 words at 1,024 bits. Encoding a block costs \(32k\) square roots of 1,021 squarings each,
+96 at the default, and decoding it \(32k\) squarings and \(32(k-1)\) masks. A payload word at or above \(p\) is refused:
+its top 16 bits are all ones, a bf16 NaN (and its top byte 0xFF, an E4M3 NaN), so every block of finite values encodes.
+\(k = 1\) is refused, because a word can then be partly kept and completed for less than an encode (red team F27).
 
 Three properties of registration matter:
 
@@ -103,8 +129,8 @@ Three properties of registration matter:
   \(\text{payload}_j = \text{decode}(0)\) and hold a store of zeros. Drawn after, each \(E_j\) costs \(k\) square roots
   a word to produce, whatever the payload, all-zero weights included. That is the only rebuild bound: no
   incompressibility is assumed, and every bound is decode-free.
-- **No commitment to \(E\) is needed.** ρ permutes the canonical words, so `decode` is a bijection from canonical
-  blocks to payloads, and the payload root plus the codec seed fix \(E\). An opened block that isn't canonical fails
+- **No commitment to \(E\) is needed.** ρ and \(\sigma_K\) permute the canonical words, so `decode` is a bijection from
+  canonical blocks to payloads, and the payload root plus the codec seed fix \(E\). An opened block that isn't canonical fails
   (`codec`).
 - **The node is in the codec seed.** Two nodes registering the same weights hold different stores, and the tweak
   \(\tau i\) separates every word of one store.
@@ -280,10 +306,19 @@ The verifier checks each opening in order (`Session.verify`):
 2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\sigma_t\), \(i\) and the root received before
    \(\text{root}_{(t,i)}\)), the plan received with the root and the leaf's salt, has its path to
    \(\text{root}_{(t,i)}\) (`receipt-path`);
-3. the block's words are canonical (`codec`), and their decoding's leaf under the payload salt has its path to the
-   payload root at \(j\) (`payload-path`);
+3. the block, read as the registered codec's words, has every word below \(p\) (`codec`), and its decoding's leaf under
+   the payload salt has its path to the payload root at \(j\) (`payload-path`);
 4. PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
 5. \(y_{(i,p)}\), recomputed from \(j\), the block and \(z\), is the leaf's receipt at \(p\) (`receipt`).
+
+**What the codec changes in check 3.** Under `p512/k2` a block was 64 words of 64 bytes, each below \(2^{512} - 569\),
+and each word's decode two squarings. Under the default it is 32 words of 128 bytes, each below \(2^{1024} - 105\): a
+word is refused if it is one of the 105 values from \(p\) to \(2^{1024} - 1\). Word \(w\)'s index is \(32j + w\), and
+its decode is three inverted rounds, each a squaring with the sign rule less \(c_r + t(i)\), with \(\sigma_K\) after the
+rounds \(r = 2\) and \(r = 1\) (XOR with \(K\), kept only if the result is below \(p\)). A block is then 96 squarings mod
+a 1,024-bit prime and 64 masks, where it was 128 mod a 512-bit prime. In the proof unit (§8), where a product's cost
+grows about as the square of its width, that is about three times the decode check's multiplications; the fallback is
+64 squarings and 32 masks, about twice. The opening is the same size: a block is 4,096 bytes under every codec.
 
 A window is accepted only if every opening checks. A rejected window ends its session: every later call is refused,
 and nothing of the session is recorded. A pass whose seed is not the chain's (passes of a window run at once, a window
