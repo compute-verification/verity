@@ -27,6 +27,16 @@ def _ticks(step: int):
     return lambda: next(counter)
 
 
+class _Clock:
+    """A clock the test sets: every reading is `now`."""
+
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
 def _params(tag: str, samples: int = 8, deadline_ns: int = 1_000_000) -> audit.Params:
     return audit.Params(tag, samples, deadline_ns, rtt_allowance_ns=100_000)
 
@@ -43,18 +53,22 @@ def _run(store: audit.Store, vk, params: audit.Params, *, step: int = 1_000, win
     return w.verdict([commitment.open(i) for i in drawn]), drawn
 
 
-@pytest.fixture(scope="module")
-def p2_store():
-    """A real P2 store: W encoded under the setup's salt, and the verifier's `vk` from the public-encoder setup."""
+def _p2_setup(device: str) -> tuple[audit.Store, object]:
+    """A real P2 store: one W encoded under `device`'s salt, and the verifier's `vk` from the public-encoder setup."""
     sch = schemes.P2(P2Params(128, 173, 8, 2))
     w = bytes(range(256))[: sch.params.w_bytes]
     com = protocol.commit(sch, w)
-    salt = protocol.draw_salt(b"setup secret", com)
+    salt = audit.draw_salt(b"setup secret", com, device)
     encoded = protocol.encode(sch, w, salt)
     vk = protocol.verifier_key(sch, com, salt, mode=protocol.PUBLIC, encoded=encoded)
     store = audit.Store.from_segments(sch.params, salt, encoded)
     assert store.root == vk.root
     return store, vk
+
+
+@pytest.fixture(scope="module")
+def p2_store():
+    return _p2_setup("GPU-a")
 
 
 @pytest.fixture(scope="module")
@@ -301,6 +315,70 @@ def test_a_window_runs_once(big_store) -> None:
     assert first.accepted and w.verdict([]) is first
 
 
+def test_one_window_over_a_store_is_open_at_a_time(big_store) -> None:
+    """While one window over a store is open the verifier refuses to start another, which stays unstarted and starts
+    once the first has its commitment: one read of each block never answers two windows."""
+    store, vk = big_store
+    params = _params("ro-blake3/v1")
+    clock = _Clock()
+    verifier = audit.Verifier(vk, params, b"s", clock=clock)
+    first, second = verifier.window(0), verifier.window(1)
+    c1 = audit.tag_pass(store, params.tag, first.start())
+    with pytest.raises(RuntimeError, match="open"):
+        second.start()
+    clock.now = params.limit_ns
+    with pytest.raises(RuntimeError, match="open"):
+        second.start()
+    drawn = first.commit(c1.root)
+    assert first.verdict([c1.open(i) for i in drawn]).accepted
+    c2 = audit.tag_pass(store, params.tag, second.start())
+    clock.now += params.limit_ns
+    assert second.verdict([c2.open(i) for i in second.commit(c2.root)]).accepted
+    third = verifier.window(2)
+    third.start()
+    third.commit(b"short")
+    verifier.window(3).start()
+
+
+def test_one_devices_commitment_fails_anothers_window(p2_store) -> None:
+    """Two devices holding one `W` under one setup secret hold different stores, seeds and tags: device a's
+    commitment, or its store tagged under b's seed, fails b's window, while each device passes its own, both open."""
+    store_a, vk_a = p2_store
+    store_b, vk_b = _p2_setup("GPU-b")
+    assert store_a.salt != store_b.salt and store_a.blocks != store_b.blocks and vk_a.root != vk_b.root
+    params = _params("ro-blake3/v1")
+    va, vb = (audit.Verifier(vk, params, b"window secret", clock=_ticks(1)) for vk in (vk_a, vk_b))
+    win_a, win_b = va.window(0), vb.window(0)
+    seed_a, seed_b = win_a.start(), win_b.start()
+    assert seed_a != seed_b
+    ca = audit.tag_pass(store_a, params.tag, seed_a)
+    assert win_a.verdict([ca.open(i) for i in win_a.commit(ca.root)]).accepted
+    assert win_b.verdict([ca.open(i) for i in win_b.commit(ca.root)]).failure == "store-path"
+    win_b = vb.window(1)
+    forged = audit.tag_pass(store_a, params.tag, win_b.start())
+    assert win_b.verdict([forged.open(i) for i in win_b.commit(forged.root)]).failure == "store-path"
+    win_b = vb.window(2)
+    cb = audit.tag_pass(store_b, params.tag, win_b.start())
+    assert win_b.verdict([cb.open(i) for i in win_b.commit(cb.root)]).accepted
+    with pytest.raises(ValueError):
+        audit.draw_salt(b"setup secret", bytes(64), "")
+
+
+def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store) -> None:
+    store, vk = big_store
+    params = _params("ro-blake3/v1")
+    clock = _Clock()
+    verifier = audit.Verifier(vk, params, b"s", clock=clock)
+    first, second = verifier.window(0), verifier.window(1)
+    s1 = first.start()
+    clock.now = params.limit_ns + 1
+    s2 = second.start()
+    c1 = audit.tag_pass(store, params.tag, s1)
+    assert first.commit(c1.root) == () and first.verdict().failure == "late"
+    c2 = audit.tag_pass(store, params.tag, s2)
+    assert second.verdict([c2.open(i) for i in second.commit(c2.root)]).accepted
+
+
 def test_params_refuse_a_window_that_fits_a_root() -> None:
     audit.Params("ro-sha512/v1", 1, 2 * ROOT_CALL_NS - 1)
     with pytest.raises(ValueError, match="rebuild floor"):
@@ -334,8 +412,8 @@ def test_bound_is_the_guarantee_at_the_proofs_point(name: str) -> None:
     params = audit.Params(name, audit.SAMPLES, 1_000_000, rtt_allowance_ns=100_000)
     b = audit.bound(params, 1 << 19, 2056, chip_bytes=208_000_000, side_bytes_per_s=63e9)
     k = 516_096
-    assert b.side_bytes == 69_300_000 and b.slack_bits == 40 * k + 41
-    assert b.ingress_bytes == (k * 2056 * 8 - 8 * 208_000_000 - 8 * 69_300_000 - (40 * k + 41)) // 8
+    assert audit.QUERIES_LOG2 == 64 and b.side_bytes == 69_300_000 and b.slack_bits == 64 * k + 41
+    assert b.ingress_bytes == (k * 2056 * 8 - 8 * 208_000_000 - 8 * 69_300_000 - (64 * k + 41)) // 8
     assert b.error_compression_log2 == -41 and b.error_guess <= 1849 * 2.0 ** -256
     assert b.error < 2.0 ** -40 and 0.7e9 < b.ingress_bytes < (1 << 19) * 2056
 

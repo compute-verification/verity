@@ -1,4 +1,5 @@
-"""The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.
+"""The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
+a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold different stores.
 
 1. The verifier derives the window's key from its own secret, bound to `vk` and the window's number, and sends the
    seed `σ` (`Window.start`, which starts its clock).
@@ -11,7 +12,8 @@
    Openings are not timed: the commitment already binds every tag.
 
 A window is used once: a second start or commitment, or a window number used before, is refused, and nothing is redrawn.
-The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
+One window over a store is open at a time, from its seed to its commitment or until `T + RTT` has passed without one:
+the verifier refuses to start another before then, so no read serves two windows' ingress.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
 (SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it, for a certified tag
 only (`tags.Tag.certified`).
@@ -26,6 +28,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from verity.core.protocols.pous.codec import Geometry
+from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash, verify_path
 from verity.ml.randomness import Key, derive
@@ -34,6 +37,7 @@ from . import tags
 from .tags import SEED_BYTES
 
 WINDOW_DOMAIN = "verity/bandwidth/window/v1"
+SALT_DOMAIN = "verity/bandwidth/salt/v1"
 
 REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
@@ -68,6 +72,15 @@ class Params:
     def limit_ns(self) -> int:
         """`T` plus the round-trip allowance: the longest a prover may take, which the bound charges it with."""
         return self.deadline_ns + self.rtt_allowance_ns
+
+
+def draw_salt(source: bytes, commitment: bytes, device: str) -> bytes:
+    """The salt of `device`'s store, which PoUS's setup (`pous.setup`) takes in place of its own `draw_salt`: drawn after
+    the commitment to `W` from the verifier's secret (or a later beacon round) as PoUS's is, with the identity the
+    device attests bound in.  Devices holding one `W` then hold different stores, so their `vk`, seeds and tags differ."""
+    if type(device) is not str or not device:
+        raise ValueError("a device's identity is a nonempty str")
+    return derive(source, SALT_DOMAIN, {"w": commitment, "device": device}).stream("salt", SALT_BITS // 8)
 
 
 def window_key(source: bytes, vk: VerifierKey, window: int) -> Key:
@@ -159,13 +172,20 @@ class Verdict:
 
 
 class Verifier:
-    """The verifier of one store `vk`: it opens each window once, from its own secret `source`."""
+    """The verifier of one store `vk`: it opens each window once, from its own secret `source`, and one at a time."""
 
     def __init__(self, vk: VerifierKey, params: Params, source: bytes,
                  clock: Callable[[], int] = time.perf_counter_ns) -> None:
         tags.get(params.tag).check_block(vk.params.block_bytes)
         self.vk, self.params, self.source, self.clock = vk, params, source, clock
         self._used: set[int] = set()
+        self._open: Window | None = None
+
+    def _claim(self, w: Window) -> None:
+        o = self._open
+        if o is not None and o._elapsed is None and self.clock() - o._started <= self.params.limit_ns:
+            raise RuntimeError("another window over this store is open: it closes at its commitment or at T + RTT")
+        self._open = w
 
     def window(self, n: int) -> Window:
         if type(n) is not int or n < 0:
@@ -189,8 +209,10 @@ class Window:
         self._verdict: Verdict | None = None
 
     def start(self) -> bytes:
+        """`σ`, and the clock starts; refused, and the window left unstarted, while another over the store is open."""
         if self._started is not None:
             raise RuntimeError("the window has started")
+        self._v._claim(self)
         s = seed(self._key)
         self._started = self._v.clock()
         return s
@@ -246,10 +268,11 @@ class Window:
 
 EPSILON = Fraction(1, 64)
 SAMPLES = 1849
-QUERIES_LOG2 = 40
+QUERIES_LOG2 = 64
 SLACK_LOG2 = 41
-"""The proof's deployed point: `ε_s = 1/64`, `s = 1,849`, at most `2^40` oracle queries in a window, and
-`λ = 40·k + 41`, which together keep the error under `2^-40` at `N = 2^19`."""
+"""The proof's deployed point: `ε_s = 1/64`, `s = 1,849`, at most `2^64` oracle queries in a window, and
+`λ = 64·k + 41`, which together keep the error under `2^-40` at `N = 2^19`.  `2^64` is past what any fleet computes in
+a window (an RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms), so the query bound needs no assumption."""
 
 
 def certified_blocks(blocks: int, epsilon: Fraction = EPSILON) -> int:

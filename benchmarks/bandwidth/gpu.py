@@ -16,12 +16,12 @@
 
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
 `--deadline-ns` (default the largest `audit.Params` allows), negative controls that tag only part of the store, and one
-window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.  Before
-each timed window the prover reads `--scrub-mib` of another buffer (untimed, before the seed), so the window starts with
-L2 clean and holding no part of the store.  Before that it runs one untimed pass under a throwaway seed (`--warm-pass`,
-the default); without it, the last window's openings and verdict (seconds of Python for `ro-blake3/v1`) leave up to
-0.2 ms of host time inside the next window, outside the device's pass.  Each window records the pass's device time and
-the host call's beside the verifier's.
+window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.  Every
+window goes through `Prover`, which prepares before it asks for the seed: one untimed pass under a throwaway seed, then
+a read of `SCRUB_BYTES` of another buffer, so the window starts with its launch path warm and L2 clean and holding no
+part of the store.  Without the pass, the last window's openings and verdict (seconds of Python for `ro-blake3/v1`)
+leave up to 0.2 ms of host time inside the next window; without the read, L2's dirty lines cost the pass 0.6 ms.  Each
+window records the pass's device time and the host call's beside the verifier's.
 """
 
 from __future__ import annotations
@@ -41,6 +41,8 @@ TAG_IDS = {"gf31-poly/v1": 0, "ro-sha512/v1": 1, "ro-blake3/v1": 2}
 BLOCK_BYTES = 2056
 MAX_LEVELS = 65
 LOOSE_NS = 100_000_000
+SCRUB_BYTES = 512 << 20
+"""The read before each window: four times the RTX PRO 6000's 128 MiB of L2."""
 
 
 def bottom_up(leaves: Sequence[bytes], node: Callable[[bytes, bytes], bytes]) -> list[list[bytes]]:
@@ -188,6 +190,33 @@ class Commitment:
                              path(self.sizes, self.node, c))
 
 
+class Prover:
+    """The honest prover of one tag over a store in device memory.  `commit(window)` always prepares before it asks for
+    `σ`: one untimed pass under a throwaway seed, then a read of `SCRUB_BYTES` of its own buffer, so the window starts
+    with the launch path warm and L2 clean and holding no part of the store.  The bound holds for any state before `σ`,
+    so the preparation is the prover's liveness, not the verifier's concern."""
+
+    def __init__(self, tagger: Tagger, tag: str, store: int, blocks: int, workspace: int, scrub: int) -> None:
+        self.tagger, self.tag, self.store, self.blocks, self.workspace, self.scrub = (tagger, tag, store, blocks,
+                                                                                      workspace, scrub)
+
+    def commit(self, window: audit.Window, tagged: int | None = None) -> tuple[Commitment, tuple[int, ...], float]:
+        """One window: prepare, take `σ` (`window.start`), run the pass and commit its root.  Returns the commitment,
+        the samples and the host call's time in ms.  `tagged` below the store's blocks is a negative control that tags
+        only blocks `0..tagged-1` over a poisoned workspace."""
+        t, tagged = self.tagger, self.blocks if tagged is None else tagged
+        t.tag_pass(self.tag, self.store, self.blocks, bytes(tags.SEED_BYTES), self.workspace)
+        if tagged < self.blocks:
+            t.memset(self.workspace, 0xA5, t.workspace_bytes(self.tag, self.blocks))
+        t.read_scrub(self.scrub, SCRUB_BYTES)
+        seed = window.start()
+        c0 = time.perf_counter_ns()
+        commitment = (t.tag_pass(self.tag, self.store, self.blocks, seed, self.workspace) if tagged == self.blocks
+                      else t.tag_pass_prefix(self.tag, self.store, self.blocks, tagged, seed, self.workspace))
+        c1 = time.perf_counter_ns()
+        return commitment, window.commit(commitment.root), (c1 - c0) / 1e6
+
+
 def _windows(a: argparse.Namespace) -> dict:
     params = geometry(a.blocks)
     raw = a.leaves.read_bytes()
@@ -197,33 +226,20 @@ def _windows(a: argparse.Namespace) -> dict:
     t = Tagger(a.lib)
     store = t.alloc(a.blocks * BLOCK_BYTES)
     t.fill_test_store(store, a.blocks)
-    scrub_bytes = a.scrub_mib << 20
-    scrub = t.alloc(scrub_bytes) if scrub_bytes else 0
-    if scrub:
-        t.memset(scrub, 0, scrub_bytes)
+    scrub = t.alloc(SCRUB_BYTES)
+    t.memset(scrub, 0, SCRUB_BYTES)
     source = bytes.fromhex(a.source)
-    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "scrub_mib": a.scrub_mib,
-                 "warm_pass": a.warm_pass, "results": [], "openings_check": []}
+    out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "scrub_mib": SCRUB_BYTES >> 20,
+                 "results": [], "openings_check": []}
     for name in a.tags:
         ws = t.alloc(t.workspace_bytes(name, a.blocks))
-        t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)  # loads the kernels, untimed
+        prover = Prover(t, name, store, a.blocks, ws, scrub)
         p = audit.Params(name, a.samples, a.deadline_ns)
         verifier = audit.Verifier(vk, p, source)
         for n, f in enumerate([0.0] * a.windows + a.skip):
             w = verifier.window(n)
             tagged = a.blocks - round(f * a.blocks)
-            if a.warm_pass:
-                t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)
-            if f:
-                t.memset(ws, 0xA5, t.workspace_bytes(name, a.blocks))
-            if scrub:
-                t.read_scrub(scrub, scrub_bytes)
-            seed = w.start()
-            c0 = time.perf_counter_ns()
-            commitment = (t.tag_pass(name, store, a.blocks, seed, ws) if not f
-                          else t.tag_pass_prefix(name, store, a.blocks, tagged, seed, ws))
-            c1 = time.perf_counter_ns()
-            drawn = w.commit(commitment.root)
+            commitment, drawn, call_ms = prover.commit(w, tagged)
             tags_ms, pass_ms = t.last_pass_ms()
             o0 = time.perf_counter_ns()
             openings = [commitment.open(j, store_tree) for j in drawn]
@@ -233,20 +249,19 @@ def _windows(a: argparse.Namespace) -> dict:
             out["results"].append({"tag": name, "window": n, "skipped_fraction": f, "tagged": tagged,
                                    "deadline_ns": p.deadline_ns, "elapsed_ns": v.elapsed_ns, "accepted": v.accepted,
                                    "failure": v.failure, "index": v.index, "device_tags_ms": tags_ms,
-                                   "device_pass_ms": pass_ms, "call_ms": (c1 - c0) / 1e6, "open_ms": (o1 - o0) / 1e6,
+                                   "device_pass_ms": pass_ms, "call_ms": call_ms, "open_ms": (o1 - o0) / 1e6,
                                    "verdict_ms": (o2 - o1) / 1e6})
         # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
         # honest pass is late still has its openings checked by the verifier.
         loose = audit.Params(name, a.samples, LOOSE_NS, regen_floor_ns=LOOSE_NS + 1)
         w = audit.Verifier(vk, loose, source + b"/openings-check").window(0)
-        commitment = t.tag_pass(name, store, a.blocks, w.start(), ws)
-        v = w.verdict([commitment.open(j, store_tree) for j in w.commit(commitment.root)])
+        commitment, drawn, _ = prover.commit(w)
+        v = w.verdict([commitment.open(j, store_tree) for j in drawn])
         out["openings_check"].append({"tag": name, "deadline_ns": LOOSE_NS, "certificate": False,
                                       "elapsed_ns": v.elapsed_ns, "accepted": v.accepted, "failure": v.failure})
         t.free(ws)
     t.free(store)
-    if scrub:
-        t.free(scrub)
+    t.free(scrub)
     return out
 
 
@@ -259,9 +274,6 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--blocks", type=int, required=True)
     w.add_argument("--samples", type=int, default=audit.SAMPLES)
     w.add_argument("--deadline-ns", type=int, default=audit.REGEN_FLOOR_NS - 1)
-    w.add_argument("--scrub-mib", type=int, default=512, help="read this much of another buffer before each window")
-    w.add_argument("--warm-pass", action=argparse.BooleanOptionalAction, default=True,
-                   help="run one untimed pass under a throwaway seed before each window's scrub")
     w.add_argument("--windows", type=int, default=20)
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))

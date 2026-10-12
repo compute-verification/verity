@@ -18,6 +18,23 @@ SHORT = {"gf31": "gf31-poly/v1", "ro": "ro-sha512/v1", "b3": "ro-blake3/v1"}
 PCIE_GEN5_X16 = 32e9 * 16 / 8 * 128 / 130
 """The side paths' cap: the link's raw rate (32 GT/s on 16 lanes, 128b/130b), an upper bound the measured rates
 approach."""
+L1_SMEM_BYTES = 128 * 1024
+"""Each SM's unified L1 and shared memory on sm_120."""
+SM_OTHER_BYTES = 160 * 1024
+"""Each SM's other stores a resident kernel can hold data in across `σ`, at their raw capacity: the instruction caches
+(about 4 KB of L0 per SMSP and 64 KB of L1 per SM, measured on an RTX PRO 5000, GB202 like the RTX PRO 6000:
+zartbot.github.io/micro_arch/nvidia/sm_120, chapter 7), the constant caches, the uniform registers (256 bytes a warp)
+and the TLB.  The allowance is the red team's (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6);
+sm_120 has no Tensor Memory (chapter 14), so there is no term for it."""
+CHIP_OTHER_BYTES = 1 << 20
+"""The chip's stores outside the SMs and L2: copy-engine, PCIe and memory-controller buffers and the video engines."""
+S_CHIP_FORMULA = "l2 + sms * (regs_per_sm * 4 + 128 KiB + 160 KiB) + 1 MiB"
+
+
+def s_chip_bytes(device: dict) -> int:
+    """`S`, the bits the chip can hold when `σ` arrives, in bytes, from the device's properties (`S_CHIP_FORMULA`)."""
+    sm = device["regs_per_sm"] * 4 + L1_SMEM_BYTES + SM_OTHER_BYTES
+    return device["l2_bytes"] + device["sms"] * sm + CHIP_OTHER_BYTES
 
 
 def _load(out: Path, name: str):
@@ -29,7 +46,8 @@ def summarize(out: Path) -> dict:
     device, validation, timing, windows = (_load(out, n) for n in ("device.json", "validation.json", "timing.json",
                                                                     "windows.json"))
     s: dict = {"format": "verity-bandwidth/gpu-summary/v1", "device": device and {
-        k: device[k] for k in ("name", "uuid_hex", "sms", "l2_bytes", "s_chip_bytes", "s_chip_formula")}}
+        **{k: device[k] for k in ("name", "uuid_hex", "sms", "l2_bytes", "regs_per_sm")},
+        "s_chip_bytes": s_chip_bytes(device), "s_chip_formula": S_CHIP_FORMULA}}
     s["gates_ok"] = bool(validation and validation["all_ok"])
     if not s["gates_ok"] or not timing:
         return s
@@ -75,7 +93,7 @@ def summarize(out: Path) -> dict:
                 bounds[label] = {"deadline_ns": deadline, "refused": "at or past the rebuild floor"}
                 continue
             p = audit.Params(name, audit.SAMPLES, deadline)
-            b = audit.bound(p, timing["blocks"], 2056, chip_bytes=int(device["s_chip_bytes"]), side_bytes_per_s=side)
+            b = audit.bound(p, timing["blocks"], 2056, chip_bytes=s_chip_bytes(device), side_bytes_per_s=side)
             bounds[label] = {"deadline_ns": deadline, "samples": p.samples, "certified_blocks": b.certified_blocks,
                              "side_bytes": b.side_bytes, "slack_bits": b.slack_bits, "ingress_bytes": b.ingress_bytes,
                              "ingress_over_store": b.ingress_bytes / store,
@@ -103,7 +121,7 @@ def _windows(windows: dict, name: str) -> dict:
     return {"honest": len(honest), "accepted": sum(r["accepted"] for r in honest),
             "elapsed_ns_p50": el[0], "elapsed_ns_max": el[1], "device_pass_ms_p50": dev[0],
             "device_pass_ms_max": dev[1], "call_ms_p50": call[0], "call_ms_max": call[1],
-            "samples": windows.get("samples"), "warm_pass": windows.get("warm_pass", False),
+            "samples": windows.get("samples"),
             "deadline_ns": honest[0]["deadline_ns"] if honest else None,
             "failures": sorted({r["failure"] for r in honest if r["failure"]}),
             "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}

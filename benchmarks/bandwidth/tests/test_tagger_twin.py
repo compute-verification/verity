@@ -22,6 +22,7 @@ sys.path.insert(0, str(HERE))
 
 import gpu  # noqa: E402
 import reference  # noqa: E402
+import summarize  # noqa: E402
 from verity.core.protocols.bandwidth import audit, tags  # noqa: E402
 from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E402
 from verity.ml.crypto import blake3  # noqa: E402
@@ -497,6 +498,15 @@ def test_reference_roots_across_chunks(monkeypatch, tmp_path):
     store = audit.Store(reference.geometry(70), reference.SALT, [reference.block(j) for j in range(70)])
     assert got == {name: audit.tag_pass(store, name, SEED).root.hex() for name in tags.TAGS}
     assert leaves_out.read_bytes() == b"".join(store.tree.leaves)
+
+
+def test_s_chip_counts_every_on_chip_store():
+    """`S` on the RTX PRO 6000 (`device.json` of run r20261012-001813-b2be): 128 MiB of L2, and for each of 188 SMs its
+    256 KiB of registers, 128 KiB of L1 and shared memory and 160 KiB of other stores, then 1 MiB at the chip level."""
+    device = {"l2_bytes": 134_217_728, "sms": 188, "regs_per_sm": 65_536}
+    assert summarize.s_chip_bytes(device) == 208_142_336 + 188 * 160 * 1024 + (1 << 20) == 239_992_832
+    printed = CU[CU.index('open_out(dir, "device.json")'):]
+    assert all(f'\\"{k}\\"' in printed[:printed.index("fclose")] for k in device)
 
 
 def test_geometry():
