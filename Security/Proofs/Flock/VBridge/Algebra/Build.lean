@@ -328,7 +328,7 @@ theorem atom_val {k : Key} {t : Term} (V : Array F128) (ha : atomTerm sh comb0 k
   cases k
   case comb l => exact absurd rfl (hk l)
   all_goals clear hk
-  all_goals simp only [atomTerm, valOf] at ha ⊢ <;> (try split at ha) <;> (try cases ha) <;> (try simp_all [termValue])
+  all_goals (simp only [atomTerm, valOf] at ha ⊢; (try split at ha) <;> (try cases ha) <;> (try simp_all [termValue]))
 
 /-- A message element's operand sums to its value, at either shape. -/
 theorem atomOp_val {k : Key} {op : Array Term} {V : Array F128} (h : atomOp sh comb0 k = .ok op)
