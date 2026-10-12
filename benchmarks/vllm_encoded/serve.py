@@ -1,5 +1,5 @@
-"""One arm of the encoded-weights decode benchmark: Llama-3.1-8B served by vLLM (in process, FP8 online quantization, full
-CUDA graphs for decode), timed at each decode batch and context length.
+"""One arm of the encoded-weights decode benchmark: Llama-3.1-8B or 70B served by vLLM on one GPU (in process, FP8 online
+quantization, full CUDA graphs for decode), timed at each decode batch and context length the KV cache holds.
 
 Arms:
   stock     vLLM's own FP8 linears (CUTLASS on sm_120), same engine settings

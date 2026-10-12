@@ -231,7 +231,7 @@ class TensorLib:
         them tagging from the start instead (every other warp tags once its own work is done).  Not 4 or 6: with that
         many tag warps gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc and
         r20261012-092945-296e)."""
-        smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (self.sb + 32)
+        smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (self.sb + 40)
         dmax = self.fused_warps - 2
 
         def need(d: int) -> int:

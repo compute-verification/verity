@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Llama-3.1-8B decode in vLLM with its linear weights stored only encoded, against the same engine with plain FP8 weights
+# Llama-3.1-8B or 70B decode in vLLM on one GPU with its linear weights stored only encoded, against the same engine with plain FP8 weights
 # (cwd = the source tree).  Builds ve.cu outside the lease, runs the layout tests, then under one gpu-lease 1 --wait
 # --max-min MAXMIN (default 25) one serve.py process per arm, and compare.py's gates and points.  Results go to
 # $RESEARCH_RUN_DIR/out.
@@ -12,11 +12,15 @@
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
 # ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
 # ro-blake3/v1 tag of every block read, as decode runs), ra-codec-tensor's as tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
-# 255, 511, 521, 767, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1; tag: its tag warps tag the
+# 255, 511, 512, 521, 767, 768, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1, 512 and 768 being
+# full-slot fields at K = 1; tag: its tag warps tag the
 # store's 4,088-byte blocks), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); a last /g makes an arm its gates and one
-# point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
+# point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
+# MODEL (default the e2e's Llama-3.1-8B-Instruct; for 70B the hub snapshot of unsloth/Meta-Llama-3.1-70B with SERVE_ARGS
+# "--mem 0.93") is read into the page cache before the lease, so each arm loads it from memory if the run's --mem-gb holds
+# it (192 for 70B's 132 GB of BF16).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
 # MODE=profile runs the arms (default "stock enc:2") under Nsight Compute, each point's profiler window over two decode
@@ -49,6 +53,7 @@ TENSOR=$(for a in $ARMS; do case $a in tensor:*) a=${a#tensor:}; echo "${a%%:*}"
 for n in $TENSOR; do
   nvcc "${CU[@]}" -DWT_FIELD="$n" -o "$B/wt-$n.so" benchmarks/codec_tensor/wt.cu > "$O/wt-$n.ptxas" 2>&1 &
 done
+cat "$MODEL"/*.safetensors > /dev/null &
 wait || true
 for lib in ${LIBSET:-pb56 pb60}; do [ -e "$B/ve-$lib.so" ] || { tail -30 "$O/ve-$lib.ptxas"; exit 4; }; done
 for bits in $WIDE; do [ -e "$B/ww-p$bits.so" ] || { tail -30 "$O/ww-p$bits.ptxas"; exit 4; }; done

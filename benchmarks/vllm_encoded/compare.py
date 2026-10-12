@@ -12,8 +12,9 @@ HBM and the chip if nothing is reused from L2 (the encoded weights; the KV cache
 fused kernel's chunk partial sums, written and read once; the BF16 LM head, which no arm encodes).
 
 Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`, ra-codec-wide's
-`benchmarks/word_codec/frontier.py`), with ``end_to_end: true`` and the context: y over stock vLLM compiled (the decode
-headline's baseline; only arms compiled the same way), split by the run's own arms into base (the arm's kernel on plain payloads: `plain`, or the wide
+`benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context and the model: y over stock vLLM compiled (the
+decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
+little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
 kernel at k = 0), decode (over base) and tag (the tagged arm over the same arm untagged); the step runs no commit, so
 y_commit is 0.  x, Δ (and τ for a tagged arm) are the codec lanes' measurements for the same field, k and packing (`CODEC`;
 `TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime).
@@ -59,7 +60,19 @@ TENSOR_CODEC = {
     ("p1023", 1): (531.0, 1.15, 0.48, TENSOR_POINTS),
     ("m1279", 1): (794.0, 1.29, 0.48, TENSOR_POINTS),
 }
+#: the full-slot fields at the x, Δ and τ measured for the field of their width (16 and 24 limbs), as ra-codec-theory
+#: prices 2^768 − 825 at p767's costs: no rates of their own yet
+TENSOR_CODEC |= {("p512", 1): TENSOR_CODEC[("p511", 1)], ("p768", 1): TENSOR_CODEC[("p767", 1)]}
 ENCODED = ("enc", "wide", "tensor")
+#: frontier.py's `model`, by (layers, hidden)
+MODELS = {(32, 4096): "llama-3.1-8b", (80, 8192): "llama-3.1-70b"}
+
+
+def checkpoint(path: str) -> str:
+    """The checkpoint's name: the hub repo of a hub snapshot path, else the directory's name."""
+    if "models--" in path:
+        return path.split("models--", 1)[1].split("/", 1)[0].replace("--", "/")
+    return Path(path).name
 
 
 def load(out: Path) -> list[dict]:
@@ -183,6 +196,7 @@ def main() -> int:
         if a["arm"] not in ENCODED:
             continue
         ms, inst, md = a["model_shape"], a["install"], mode(a)
+        model = MODELS.get((ms["layers"], ms["hidden"]), f"{ms['layers']}x{ms['hidden']}")
         cod = inst.get("codec") or {"field": "p61", "word_bits": 61, "payload_bits": inst["bits"], "tag": None}
         wide, tensor = a["arm"] == "wide", a["arm"] == "tensor"
         stock, plain, compiled = by.get("stock" + md, []), by.get("plain" + md, []), by.get("stock-c", [])
@@ -199,7 +213,8 @@ def main() -> int:
             ws = working_set(ms, b, mean_ctx, inst["store_bytes"], True, tag_bytes)
             ws_stock = working_set(ms, b, mean_ctx, inst["plain_bytes"], False)
             point = {
-                "lane": "ra-vllm-encoded", "end_to_end": True, "workload": "llama-3.1-8b-instruct decode",
+                "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
+                "workload": f"{checkpoint(a['model'])} decode",
                 "engine": f"vLLM {a['vllm']}, FP8 online, full decode CUDA graphs, "
                           + {"": "mode 0 (no torch.compile)", "-c": "torch.compile (vLLM's default)",
                              "-d": "torch.compile without inductor's autotuning"}[md],
@@ -221,7 +236,7 @@ def main() -> int:
             ref = (TENSOR_CODEC.get((cod["field"], a["k"])) if tensor else
                    CODEC.get((cod["word_bits"], cod["payload_bits"], a["k"])))
             bs, un = tps(base, b, ctx), tps(untagged, b, ctx)
-            if md != "-c" or sc is None or bs is None or ref is None or not encoded(a):
+            if md not in ("-c", "-d") or sc is None or bs is None or ref is None or not encoded(a):
                 continue
             y_total, y_base = sc / e, sc / bs
             y_tag = sc / e - sc / un if un else 0.0
@@ -229,7 +244,8 @@ def main() -> int:
             pass_ms = native_pass.get(b)
             d = b / e * 1e3 / pass_ms if pass_ms else None
             frontier.append({
-                "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "b": cod["word_bits"], "k": a["k"],
+                "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
+                "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
                                "cuda-int32/mersenne61/pb56/ve.cu") + ("/tag" if cod.get("tag") else ""),
                 "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
