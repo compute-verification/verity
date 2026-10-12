@@ -78,4 +78,45 @@ def AuditRelay : Prop :=
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
+/-- **The bandwidth audit v0 over a co-audited set, in the random-oracle model.** `d` devices run simultaneous windows
+over pairwise-distinct stores of `N` blocks of `b` bits, and the verifier samples `s` blocks of each store
+(`Security/Definitions/Accounting/Bandwidth/Set.lean`). Every device that could hold a copy of a store is in the set or
+isolated, so the set's side sources are only its external links. The set is one `Device` over the `d·N` blocks: `S` is
+its members' on-chip state summed, `c` the bits its external links deliver, `G` its regenerations summed and `q` its
+oracle queries summed. The probability that the verifier accepts every member while the set's ingress, plus
+`S + c + G·b + λ`, falls short of `d` stores' `k·b` is at most
+
+  `d·(((k − 1)/N)^s + s/2^h) + C(q, d·k)/2^λ`.
+
+Read with `k = ⌈(1 − ε_s)·N⌉` and `S`, `G`, `λ` the members' `S_i`, `G_i`, `λ_i` summed: the set's ingress is at least
+the sum of the members' floors `k·b − S_i − G_i·b − λ_i` (`AuditRO`'s, with no side sources of their own) minus the
+external side budget `c`, except with the members' sample and guess terms summed plus the set's compression term. Tags
+relayed between members are internal: a member that computes another's tags reads those blocks from device memory, and
+the set's ingress counts that read, so the members' ingress adds up although no member's own ingress is bounded alone.
+Since `C(q, d·k) ≤ (e·q/(d·k))^(d·k)`, the slack `λ = d·k·log₂(e·q/(d·k)) + μ` makes the last term at most `2^-μ`: per
+member, the `k·log₂(e·q/(d·k))` bits one device making the members' mean number of queries would be charged. Proof:
+`Bandwidth.SecurityProofs.AuditSet`. Its completeness is `SetHonestPasses`: an honest set is accepted on every store,
+oracle and sample with ingress exactly `d·N·b`.
+
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the bandwidth audit's code computes. -/
+def AuditSet : Prop :=
+  ∀ (d N b h S c G q s k lam : ℕ) (A : Device (d * N) b h S c G q),
+    pr (fun x : Store (d * N) b × Oracle (d * N) b h × (Fin d → Fin s → Fin N) =>
+        SetAccepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < d * (k * b))
+      ≤ (d : ℝ≥0∞) * ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h)
+        + ((q.choose (d * k) : ℕ) : ℝ≥0∞) / 2 ^ lam
+
+/-- **Completeness of `AuditSet`: an honest set is accepted, and its ingress is exactly its stores.** For every `d`,
+`N`, `b` and `h` there is a set of `d` devices with no on-chip state, no side sources and no regeneration that makes
+`d·N` oracle queries (a `Device (d * N) b h 0 0 0 (d * N)`), whose tags are accepted for every member on every store,
+oracle and samples, and whose ingress is exactly `d·N·b` bits: every member reads its own store once, from its own
+device memory, and queries the oracle at each block. Against `AuditSet` at `S = c = G = 0` and `q = d·N`, the honest
+`d·N·b` sits above the floor `d·k·b − λ` by the samples' slack `d·(N − k)·b` plus `λ`. Proof:
+`Bandwidth.SecurityProofs.SetHonestPasses`. -/
+def SetHonestPasses : Prop :=
+  ∀ d N b h : ℕ, ∃ A : Device (d * N) b h 0 0 0 (d * N),
+    ∀ (E : Store (d * N) b) (O : Oracle (d * N) b h) (s : ℕ) (I : Fin d → Fin s → Fin N),
+      SetAccepts A E O I ∧ A.ingress E O = d * (N * b)
+
 end Bandwidth.Guarantees
