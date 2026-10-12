@@ -438,11 +438,60 @@ __device__ __forceinline__ void reduce(uint32_t (&r)[N], const uint32_t (&t)[T])
   }
 }
 
+#if WW_BITS == 1536 && WW_SQR == 1 && !defined(WW_HOST)
+// p1536: ra-word-codec's streaming square (`kv.cu`, cursor/ra-word-codec-10bf): column by column, each pair once and
+// doubled, each high column folded into the low limbs as it is produced (2^1536 ≡ C), so the 96-limb product is never
+// held; then the carry word f·C and C once more if that carried out. Lazy, below 2^1536.
+__device__ __forceinline__ void mac3(uint32_t* r, uint32_t a, uint32_t b) {
+  asm("mad.lo.cc.u32 %0, %3, %4, %0;\n\tmadc.hi.cc.u32 %1, %3, %4, %1;\n\taddc.u32 %2, %2, 0;"
+      : "+r"(r[0]), "+r"(r[1]), "+r"(r[2]) : "r"(a), "r"(b));
+}
+__device__ __forceinline__ void add3(uint32_t* r, uint32_t a, uint32_t b) {
+  asm("add.cc.u32 %0, %0, %3;\n\taddc.cc.u32 %1, %1, %4;\n\taddc.u32 %2, %2, 0;" : "+r"(r[0]), "+r"(r[1]), "+r"(r[2])
+      : "r"(a), "r"(b));
+}
+__device__ __forceinline__ uint32_t add_small(uint32_t (&x)[N], uint32_t a) {
+  x[0] = add_cc(x[0], a);
+#pragma unroll
+  for (int k = 1; k < N; ++k) x[k] = addc_cc(x[k], 0u);
+  return addc0(0u);
+}
+__device__ __forceinline__ void sqr(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  uint32_t y[N];
+  uint32_t c0 = 0, c1 = 0, f = 0;
+#pragma unroll
+  for (int m = 0; m < 2 * N - 1; ++m) {
+    uint32_t t[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac3(t, a[i], a[m - i]);
+    t[2] = (t[2] << 1) | (t[1] >> 31);
+    t[1] = (t[1] << 1) | (t[0] >> 31);
+    t[0] <<= 1;
+    if ((m & 1) == 0) mac3(t, a[m / 2], a[m / 2]);
+    add3(t, c0, c1);
+    if (m < N) {
+      y[m] = t[0];
+    } else {
+      const uint64_t v = (uint64_t)y[m - N] + (uint64_t)t[0] * C + f;
+      y[m - N] = (uint32_t)v;
+      f = (uint32_t)(v >> 32);
+    }
+    c0 = t[1];
+    c1 = t[2];
+  }
+  const uint64_t v = (uint64_t)y[N - 1] + (uint64_t)c0 * C + f;
+  y[N - 1] = (uint32_t)v;
+  if (add_small(y, (uint32_t)(v >> 32) * C)) add_small(y, C);
+#pragma unroll
+  for (int e = 0; e < N; ++e) r[e] = y[e];
+}
+#else
 __device__ __forceinline__ void sqr(uint32_t (&r)[N], const uint32_t (&a)[N]) {
   uint32_t t[2 * N];
   sqr_full(t, a);
   reduce<2 * N>(r, t);
 }
+#endif
 
 __device__ __forceinline__ void mul(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
   uint32_t t[2 * N];
