@@ -16,8 +16,9 @@ certifies beside what it did.
   the larger of the two prices, at each Llama linear's (n, k) and the cube, #1809), W_cert = (1 − γ)(1 − εs)·ΣWref
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
   form (worst case over each audit's own coins; the per-run form is not proved yet). S_cert is the PoUS arm's storage
-  profile when it is certified (`storage`); Q_cert is pending until the red team has reviewed the bandwidth protocol's
-  parameters, and `chip` and `window_params` are the device inputs it will take (S_chip as the bandwidth harness counts
+  profile when it is certified (`storage`); Q_cert is pending until the windows run the protocol the red team granted
+  (#1805 at 5761861fd, whose verifier refuses a store under PoUS's own salt: the PoUS harness must set the store up under
+  `bandwidth.audit.draw_salt`'s device-bound salt), and `chip` and `window_params` are the device inputs it will take (S_chip as the bandwidth harness counts
   it, `summarize.s_chip_bytes`, with the caches beside L2 and the SMs' registers and memory; the RTT at P2's cap inside
   the window).
 - `joint.py`: the bandwidth audit's arms inside the PoUS harness's process: (d), the tag pass over the PoUS store as

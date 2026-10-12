@@ -117,7 +117,9 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     md, doc_no_regs = R.markdown(_doc(), {"pass": "ACCEPT x"}, "fixture"), _doc()
     assert "| cube8192 B=32 L=32 | pearl-c | whole |" in md and "failed or skipped" in md
     assert f"| compute {C.RESIDUAL} (honest + slack) | Q_cert | S_cert |" in md and "| pending | none |" in md
-    assert "Q_cert: pending: parameters not reviewed (Bandwidth.SecurityProofs.AuditRO is proved" in md
+    assert ("Q_cert: pending: not the granted protocol (Bandwidth.SecurityProofs.AuditRO is proved and the red team granted "
+            "the protocol at #1805's 5761861fd with conditions, but these windows ran the verifier from before it over the "
+            "PoUS store under PoUS's own salt") in md
     assert ("S_chip 239,992,832 bytes = l2 + sms * (regs_per_sm * 4 + 128 KiB + 160 KiB) + 1 MiB, the bandwidth harness's "
             "count with the constant and instruction caches") in md
     del doc_no_regs["identity"]["regs_per_sm"]

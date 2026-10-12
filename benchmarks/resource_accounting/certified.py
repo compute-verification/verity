@@ -10,9 +10,11 @@
   every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
-* **Q_cert, bandwidth**: pending.  The guarantee is ``Bandwidth.SecurityProofs.AuditRO``, but no certified bandwidth rate is
-  cited until the red team has re-read the bandwidth protocol's parameters at the BLAKE3 head, so only times and raw rates
-  are reported.  The device inputs it will take (`chip`, `window_params`) carry the red team's conditions already: S_chip is
+* **Q_cert, bandwidth**: pending.  The guarantee is ``Bandwidth.SecurityProofs.AuditRO``, and the red team granted the
+  bandwidth protocol at #1805's 5761861fd with conditions (`Q_GRANT`), but this tree's windows run the verifier from before
+  the grant over the PoUS store under PoUS's own salt, which the granted verifier refuses: the store must be set up under
+  `bandwidth.audit.draw_salt`'s device-bound salt (the PoUS harness's setup), so only times and raw rates are reported.
+  The device inputs it will take (`chip`, `window_params`) carry the red team's conditions already: S_chip is
   the bandwidth harness's count, which holds the constant and instruction caches beside L2, registers, L1 and shared
   memory, and a window's `T + RTT` holds the RTT at P2's cap (`RTT_ALLOWANCE_CAP_NS`) under the rebuild floor.
 * **S_cert, capacity**: the PoUS arm's storage profile (`storage`), when the harness issued one and it is certified: a
@@ -46,7 +48,9 @@ DELTA = Fraction(1, 2 ** 40)
 GAMMA_PIN = "#1809"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
-PENDING_Q = "pending: parameters not reviewed"
+PENDING_Q = "pending: not the granted protocol"
+#: the bandwidth protocol's red-team grant (pr:1805's label, with conditions), whose verifier refuses a store under PoUS's salt
+Q_GRANT = "#1805's 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 RESIDUAL = "residual, worst case over the audit's coins; per-run form pending"
 S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "
