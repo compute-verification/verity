@@ -40,7 +40,7 @@ VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
 GATE_SEED = bytes(range(32))
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
 BLOCK = 2056
-MODES = {"read": -1, "gf31": 0, "b3": 2}
+MODES = {"read": -1, "gf31": 0, "b3": 2, "sk16": 3}
 TAG_NAMES = {0: "gf31-poly/v1", 2: "ro-blake3/v1"}
 # Llama-3.1-8B: 32 layers, hidden 4,096, 32 query heads on 8 KV heads of 128, MLP 14,336.
 LAYERS, HIDDEN, HEADS, KV_HEADS, HEAD_DIM, MLP = 32, 4096, 32, 8, 128, 14336
@@ -63,6 +63,8 @@ class Topup:
         so.tu_log.argtypes = [q, v, i]
         so.tu_root.argtypes = [i, v, q, v, v]
         so.tu_read.argtypes = [v, q, q, v, v]
+        so.tu_sk_gate.argtypes = [v, q, v, v]
+        so.tu_sk_root.argtypes = [v, q, v, v]
         so.bw_fill_test_store.argtypes = [v, q]
 
     def start(self, regions, mode: int, chunk: int, depth: int, priority: int, seed: bytes, tile: int = 1 << 16,
@@ -96,7 +98,7 @@ class Topup:
 
     def root(self, mode: int, store: int, blocks: int, seed: bytes) -> bytes:
         r = ctypes.create_string_buffer(64)
-        rc = self.so.tu_root(mode, store, blocks, seed, r)
+        rc = self.so.tu_sk_root(store, blocks, seed, r) if mode == 3 else self.so.tu_root(mode, store, blocks, seed, r)
         if rc:
             raise RuntimeError(f"tu_root error {rc}")
         return r.raw
@@ -172,6 +174,28 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
             bad.append(c)
     out["thread_chunks"] = len(recs)
     out["thread_receipts"] = not bad and len(recs) >= 10
+    # sk16, the sketch receipt's cost proxy: device digests equal the host's over 600 blocks (two CTAs and a partial
+    # warp), and the thread's chunks equal tu_sk_root's
+    root = ctypes.create_string_buffer(64)
+    out["sk16_digests_mismatch"] = tu.so.tu_sk_gate(store.data_ptr(), 600, RUN_SEED, root)
+    tu.start(regions, 3, 1024 * BLOCK, 2, 0, RUN_SEED)
+    while True:
+        prog = (ctypes.c_uint64 * 2)()
+        tu.so.tu_progress(prog)
+        if prog[1] >= 10:
+            break
+        time.sleep(0.01)
+    tu.stop()
+    bad = []
+    for _, _, n, region, root4, c in tu.log():
+        seed = bytearray(RUN_SEED)
+        for j in range(8):
+            seed[j] ^= (c >> (8 * j)) & 0xFF
+        lo = ((c // 2) % 2) * half + (c % 2) * 1024 * BLOCK
+        want = tu.root(3, store.data_ptr() + lo, 1024, bytes(seed))
+        if int(n) != 1024 * BLOCK or region != (c // 2) % 2 or root4 != int.from_bytes(want[:4], "big"):
+            bad.append(c)
+    out["sk16_thread_receipts"] = not bad and out["sk16_digests_mismatch"] == 0
     # the codec
     f = codec.field
     key = K.key("p512", RUN_SEED, 2)
@@ -189,7 +213,7 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
         enc_bad += [base + i for i, v in enumerate(payloads)
                     if int.from_bytes(raw[64 * i:64 * i + 64], "little") != K.encode_word(v, base + i, key)]
     out["kv_encode_p512_k2"] = not enc_bad
-    out["ok"] = all(v for k, v in out.items() if k != "thread_chunks")
+    out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch"))
     log(f"gate: {out}")
     return out
 
@@ -437,32 +461,66 @@ def encode_cells(codec: Codec, torch, model: Model, args, least: int, greatest: 
     out["alone_GBps"] = words * 64 / (a.elapsed_time(b) / 1e3) / 1e9
     log(f"encode p512 k=2 alone: {out['alone_GBps']:.2f} GB/s")
     beside = []
+    sms = torch.cuda.get_device_properties(0).multi_processor_count
     for batch, ctx in args.decode:
         model.cache(batch, ctx)
         x = torch.randn(max(16, -(-batch // 16) * 16), HIDDEN, device="cuda", dtype=torch.bfloat16)
-        fn = lambda x=x, b=batch: model.decode(x, b)  # noqa: E731
-        with torch.cuda.stream(high):
-            fn()
+        g, gs = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+        with torch.cuda.stream(gs):
+            model.decode(x, batch)
         torch.cuda.synchronize()
-        base = statistics.median(step_times(torch, fn, high, args.steps))
-        # encode chunks of 8 MiB queued on the low stream, enough to outlast the steps
+        with torch.cuda.graph(g, stream=gs):
+            model.decode(x, batch)
+        base = statistics.median(step_times(torch, g.replay, high, args.steps))
+        # the steady state: each step's B new tokens (B × 128 KiB of KV, 2,048 words a token) encoded on the low
+        # stream as the step runs, at a capped grid
+        tok_words = batch * KV_TOKEN_BYTES // 64
+        for grid in [0] + args.encode_grids:
+            evs = []
+            ts = []
+            for i in range(args.steps):
+                e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                with torch.cuda.stream(low):
+                    e0.record()
+                    codec.encode(src.data_ptr(), dst.data_ptr(), tok_words, i * tok_words, 2, low.cuda_stream, grid)
+                    e1.record()
+                evs.append((e0, e1))
+                ts += step_times(torch, g.replay, high, 1)
+            torch.cuda.synchronize()
+            enc = [a.elapsed_time(b) for a, b in evs]
+            r = {"batch": batch, "ctx": ctx, "form": "per-step tokens", "grid": grid or "a thread a word",
+                 "step_ms_alone": base, "step_ms_beside": statistics.median(ts),
+                 "slowdown": statistics.median(ts) / base - 1, "encode_ms_median": statistics.median(enc),
+                 "encode_lag_steps": statistics.median(enc) / statistics.median(ts)}
+            beside.append(r)
+            log(f"encode per step {batch}x{ctx} grid={r['grid']}: step {base:.3f} -> {r['step_ms_beside']:.3f} ms "
+                f"({r['slowdown']:+.2%}), the step's {tok_words * 64 / 1e6:.1f} MB encoded in "
+                f"{r['encode_ms_median']:.2f} ms")
+        # a backlog (a prefill burst's KV) drained beside decode: 8 MiB launches at each capped grid
         per = (8 << 20) // 64
-        launches = max(1, int(base / 1e3 * args.steps * out["alone_GBps"] * 1e9 * 1.5 / (per * 64)))
-        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        with torch.cuda.stream(low):
-            e0.record()
-            for i in range(launches):
-                off = (i * per) % max(per, words - per)
-                codec.encode(src.data_ptr() + off * 64, dst.data_ptr() + off * 64, per, off, 2, low.cuda_stream)
-            e1.record()
-        ts = step_times(torch, fn, high, args.steps)
-        e1.synchronize()
-        enc_s = e0.elapsed_time(e1) / 1e3
-        r = {"batch": batch, "ctx": ctx, "step_ms_alone": base, "step_ms_beside": statistics.median(ts),
-             "slowdown": statistics.median(ts) / base - 1, "encode_GBps_overall": launches * per * 64 / enc_s / 1e9}
-        beside.append(r)
-        log(f"encode beside decode {batch}x{ctx}: step {base:.3f} -> {r['step_ms_beside']:.3f} ms "
-            f"({r['slowdown']:+.2%}), encode overall {r['encode_GBps_overall']:.2f} GB/s")
+        for grid in args.encode_grids + [sms * 8]:
+            launches = 64
+            e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            with torch.cuda.stream(low):
+                e0.record()
+                for i in range(launches):
+                    off = (i * per) % max(per, words - per)
+                    codec.encode(src.data_ptr() + off * 64, dst.data_ptr() + off * 64, per, off, 2, low.cuda_stream,
+                                 grid)
+                e1.record()
+            ts = []
+            while not e1.query():
+                ts += step_times(torch, g.replay, high, 1)
+            e1.synchronize()
+            enc_s = e0.elapsed_time(e1) / 1e3
+            r = {"batch": batch, "ctx": ctx, "form": "backlog", "grid": grid, "step_ms_alone": base,
+                 "step_ms_beside": statistics.median(ts) if ts else None, "steps_beside": len(ts),
+                 "slowdown": statistics.median(ts) / base - 1 if ts else None,
+                 "encode_GBps": launches * per * 64 / enc_s / 1e9}
+            beside.append(r)
+            log(f"encode backlog beside decode {batch}x{ctx} grid={grid}: {r['encode_GBps']:.2f} GB/s, step "
+                f"{base:.3f} -> {r['step_ms_beside'] or 0:.3f} ms ({(r['slowdown'] or 0):+.2%}, {len(ts)} steps)")
+        del g
     out["beside_decode"] = beside
     model.kv = None
     torch.cuda.empty_cache()
@@ -485,12 +543,13 @@ def main() -> int:
     ap.add_argument("--decode", type=pairs, default=pairs("8x4096,64x2048"))
     ap.add_argument("--prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[1024, 4096])
     ap.add_argument("--steps", type=int, default=24)
-    ap.add_argument("--topup-modes", type=lambda s: s.split(","), default=["read", "b3"])
+    ap.add_argument("--topup-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
     ap.add_argument("--graphs", type=int, default=1)
     ap.add_argument("--encode-mib", type=int, default=512)
+    ap.add_argument("--encode-grids", type=lambda s: [int(v) for v in s.split(",") if v], default=[16, 32, 64, 128])
     ap.add_argument("--throttle-decode", type=pairs, default=pairs("64x2048"))
     ap.add_argument("--throttle-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
-    ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3"])
+    ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
     ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
