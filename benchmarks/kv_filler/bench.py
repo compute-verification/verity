@@ -222,7 +222,7 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
     out["sk16_thread_receipts"] = not bad and out["sk16_digests_mismatch"] == 0
     out.update(fill_gate(tu, torch))
     out.update(codec_gate(codec, torch, ENCODE_K))
-    out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch"))
+    out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch", "fill_cut_chunks"))
     log(f"gate: {out}")
     return out
 
