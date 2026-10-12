@@ -467,7 +467,13 @@
   "Accounting.SecurityProofs.BoundReceiptLink": {
    "owner": "@memory-accounting"
   },
+  "Accounting.SecurityProofs.BoundReceiptLinkInteractive": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.BoundReceiptShare": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.BoundSketchRelay": {
    "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.CapacityOfStateBound": {
@@ -496,6 +502,9 @@
    "signature": ["Accounting.SecurityProofs.DerivedStateResidual : Accounting.Guarantees.DerivedStateResidual"],
    "assumptions": [],
    "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619"
+  },
+  "Accounting.SecurityProofs.InnerProductRelay": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Joint": {
    "owner": "@memory-accounting",
@@ -663,10 +672,16 @@
    "assumptions": [],
    "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035"
   },
+  "Accounting.SecurityProofs.TileUnpredictableMono": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.TileUnpredictableOfNCPU": {
    "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.TileUnpredictableOfTT": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": {
    "owner": "@memory-accounting"
   },
   "Bandwidth.SecurityProofs.AuditInteractive": {
@@ -4196,6 +4211,7 @@
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list.",
+   "Accounting.SecurityProofs.InnerProductRelay": "frozen (no-function): It bounds, over abstract deterministic two-party protocols (Security/Definitions/Accounting/BoundSketch.lean), the chance that a protocol of c bits ends knowing the inner product over F_p^n of two independent inputs, about no Lean function of the remote protocol's code.",
    "Accounting.SecurityProofs.Joint": "frozen (no-function): It composes the compute, bandwidth and capacity audits' guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CovertResidual": "frozen (no-function): Like Joint, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Colocation": "frozen (no-function,hash): It bounds, in the generic-mix model (the receipt a random oracle of the block, its contents and the tile output it binds), the chance that an abstract chip program at either of two locations (Security/Definitions/Accounting/BoundReceipt.lean) commits a right receipt it never queried, with the locations' bounds as fields of the Node it ranges over, not the remote protocol's code; the answers between the locations ignore the mix.",
@@ -4203,7 +4219,9 @@
    "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.BandwidthOfAudit": "frozen (no-function,hash): It carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.BoundReceiptLink": "frozen (no-function,hash): As Accounting.SecurityProofs.Colocation, a bound in the generic-mix model over abstract chip programs at two locations: the GPU's HBM footprint at RateAudit's floor at k - m blocks, with m the blocks the rest's link from the GPU and its tile work cover, not the remote protocol's code.",
+   "Accounting.SecurityProofs.BoundReceiptLinkInteractive": "frozen (no-function,hash): As Accounting.SecurityProofs.BoundReceiptLink, a bound in the generic-mix model over abstract chip programs at two locations whose answers to each other may depend on the mix through the node's queries (InteractiveNode.QueryDetermined), not the remote protocol's code.",
    "Accounting.SecurityProofs.BoundReceiptShare": "frozen (no-function): An arithmetic fact about the blocks the rest's link and tile work cover (Accounting.BoundReceipt.covered), about no function of the remote protocol's code.",
+   "Accounting.SecurityProofs.BoundSketchRelay": "frozen (no-function): As InnerProductRelay, for the deployed bound receipt's sketch of a tile (Accounting.BoundSketch.sketch), whose trace is that inner product.",
    "Accounting.SecurityProofs.CapacityOfStateBound": "frozen (no-function): It carries an abstract state-bounded game's soundness, a hypothesis, to the capacity audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/Capacity.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.DerivedStateResidual": "frozen (no-function): Like CovertResidual, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Capacity.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.RateAudit": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags absorb a certified stream and whose rebuilt words are paid in compute (Security/Definitions/Accounting/RateAudit.lean), with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-device, bandwidth-instantiation and random-oracle carry it to a deployed device.",
@@ -4237,8 +4255,10 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Accounting.SecurityProofs.TileUnpredictableMono": "frozen (no-function,hash): An implication between two instances of the hypothesis Accounting.Guarantees.TileUnpredictable over PoUW's game with a uniform oracle, for protocols with equal checked values and nested compared entries, about no Lean function of the protocol's code.",
    "Accounting.SecurityProofs.TileUnpredictableOfNCPU": "frozen (conjecture,no-function,hash): As Accounting.SecurityProofs.TileUnpredictableOfTT, for NCP's named conjecture TT_NCP_U on route U.",
    "Accounting.SecurityProofs.TileUnpredictableOfTT": "frozen (conjecture,no-function,hash): It carries the named open conjecture TT over PoUW's game with a uniform oracle to one unit's checked values (Accounting.Guarantees.TileUnpredictable), about no Lean function of the protocol's code.",
+   "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": "frozen (conjecture,no-function,hash): It carries an assumption of the named open conjecture TT_OUT's shape, at any Pearl-C protocol, over Pearl-C's game with a uniform oracle to one unit's correctness (Accounting.Guarantees.TileUnpredictablePearlC), about no Lean function of the protocol's code.",
    "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
    "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound.",
    "Accounting.SecurityProofs.RateAuditInteractiveRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the certified stream and what was sent, but not of the oracle (Security/Definitions/Accounting/RateAuditInteractive.lean), at RateAudit's floor and error, with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the InteractiveDevice it ranges over, not the rate audit's code; sends are unbounded and free.",
