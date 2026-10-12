@@ -13,8 +13,8 @@ registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conju
   empty, or the sessions type and there is a registrant fork, a round fork, a session fork or an inner fork of the
   prover's own runs whose decoded transcripts play candidate 3's table to outcomes that clash (`clashPickHL`), or
   Lean's verifier accepts `st`, builds V*'s statement list and accepts every session as V*'s statement of its index while
-  no table near the registered word has a satisfiable hidden statement, with probability at most `RecursiveSound`'s
-  bound with candidate 3's error (`holoError`) as its inner term;
+  no table near the word the prover's own runs open at R's level 0 (`regStmt`) has a satisfiable hidden statement, with
+  probability at most `RecursiveSound`'s bound with candidate 3's error (`holoError`) as its inner term;
 * (ii) zero knowledge: `RecursiveFirewallPrivate`, as in `PublicAudit`.
 
 What it takes, against `PublicAudit`:
@@ -26,11 +26,12 @@ What it takes, against `PublicAudit`:
 * R's registration, which says which table the audit is about, as `RecursiveAudit`'s `p`, `path₀` and `_hreg` say which
   private circuit: the record `reg`, the verifier of record's `--rec-inner-registration`, which `st`'s META binds by
   its digest (`metaRegistration st`, as the verifier reads it off `--rec-inner-circuit`, the file `st` is set up from),
-  the registered word and cap `xR`, the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`) and
-  the cap the record's `stacked` entry (`_hstk`, `StackedTop`): `xR` is the table `reg` registers, a relation between
-  public objects a user can check, so `st` fixes the cap up to a collision. The word's closeness to a codeword is no
-  hypothesis: the statement holds only when some table within the unique-decoding radius of the word has a satisfiable
-  hidden statement, so a far word is a false statement that the bound covers;
+  and R's cap `cap`, the record's `stacked` entry (`_hstk`, `StackedTop`), a relation between public objects a user can
+  check, so `st` fixes the cap up to a collision. No registrant's openings are taken: the word is the one the prover's
+  own runs open at R's level 0 against `cap` at each draw (`regWord`, the knowledge form of `note:41519fce`), on which
+  two runs disagree only by a collision, read as an inner fork. The word's closeness to a codeword is no hypothesis: the
+  statement holds only when some table within the unique-decoding radius of the word has a satisfiable hidden
+  statement, so a far word is a false statement that the bound covers;
 * the coin server's records of the inner session as a function of the history (`wr`: the inner transcript and session
   record it writes at each history, `--rec-inner-transcript` and `--rec-inner-session`), in place of fixed records: the
   event reads the records written at the outcome's history, and their custody (`_hIC`,
@@ -57,8 +58,9 @@ What it takes, against `PublicAudit`:
 * V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; #1847's
   `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
-Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from piece (a)
-(`FlockC3.Fork.holoForkSound_holoAt`). Its non-vacuity needs VBridgeC at candidate 3 (piece (b), `FlockC3.Compose`) and
+Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
+word the runs open (`Recursive/RegExtract.lean`), which reads piece (a)'s runs (`FlockC3.Fork.holo_runs_sound`). Its
+non-vacuity needs VBridgeC at candidate 3 (piece (b), `FlockC3.Compose`) and
 V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
 `rec-open`, `rec-residuals`, `rec-sparse`, R's levels (`rec-open-stacked`) and `rec-opening` at META's `stacked`.
 -/
@@ -155,28 +157,74 @@ noncomputable def checkedT {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : 
     Strategy (recGame L Reg I Cm fun R ω t => outerV (checkedC3 ish cs coins bind rows zr hC h R ω t) dg N) :=
   transported zr hC h σ
 
+/-- **A run of the prover opens a position of R's level 0**: at the draw `ω`, some outcome `σ` reaches (an inner
+transcript and V*'s outer proof at its leaf) decodes (`decodedV`) to an inner transcript whose steps play candidate 3's
+table at the cap `cap` (`outHL`, which reads only its statement's cap) to an outcome with an opening of R's level-0
+position `pos` to the row `col` that verifies against `cap`. -/
+def RunOpensReg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+    (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type}
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
+    (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (cap : Cap Refine.Dig) (ω : L.Ω) (pos : ℕ) (col : List FlockLevel3.GF128) : Prop :=
+  ∃ o : Reg × L.Ω × List (Cm × (holoInnerAt T CT st hp).Coin) × (Reg₂ × VRec Vs Reg' dg N),
+    Game.Outcome (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
+    o.2.1 = ω ∧ ∃ out : OutHL FlockLevel3.GF128 Refine.Dig (List UInt8),
+      outHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)
+          (HoloReg.mk (fun _ _ => 0) cap) (decodedV zs dg N k Rw wmsg o.1 o.2.1 o.2.2.1 o.2.2.2) = some out ∧
+        ∃ y ∈ slotOpensL (out.reg cap) 0 0 (holoAt st hp).rsch.sch.level₀.queries, y.1 = pos ∧
+          VerifiedL Refine.H512 Refine.enc512 Refine.leafPlain cap (holoAt st hp).rsch.sch.level₀.lanes
+            (pathLen (holoAt st hp).rsch.sch.level₀) y ∧ y.2.1 = col
+
+open Classical in
+/-- **The word the prover's runs open at R's level 0** at the draw `ω`: at each position, lane by lane, the row some
+run opens there against `cap` (`RunOpensReg`), one row for all lanes, and zero where no run opens the position. Two
+runs that open one position to different rows against one cap are a collision of SHA-512, so every run opens this
+word, up to an inner fork. -/
+noncomputable def regWord {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
+    [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ}
+    {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
+    (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (cap : Cap Refine.Dig) (ω : L.Ω) : Oracle FlockLevel3.GF128 := fun ℓ pos =>
+  if h : ∃ col, RunOpensReg T CT st hp zs dg N k Rw wmsg σ cap ω pos col then h.choose.getD ℓ 0 else 0
+
+/-- **The inner statement the prover's runs make**: at each draw, the word they open at R's level 0 (`regWord`) and
+R's cap. -/
+noncomputable def regStmt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
+    [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ}
+    {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
+    (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (cap : Cap Refine.Dig) : Reg → L.Ω → HoloReg FlockLevel3.GF128 Refine.Dig :=
+  fun _ ω => HoloReg.mk (regWord T CT st hp zs dg N k Rw wmsg σ cap ω) cap
+
 /-- **The recursive audit at candidate 3.**
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
-parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, the
-registered word and cap `xR` with the registrant's openings `_hreg`, its cap the record's `stacked` entry `_hstk`), the
-coin server's records of the inner session at each history (`wr`), check 5's source at the session record (`coins`) and
-the inner shape `ish`, and every prover `σ` of the recursive audit with candidate 3's compiled table as its inner
-protocol (`holoInnerAt`), at the law of the registration's draws (`drawLaw`): V*'s statements `Vs`, one for each of the
-verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their
-records' custody `_hCust`, where each round's commitment and coins go in the inner session's records (`im`) and those
-records' custody `_hIC`, the verifier of record's own inputs (V*'s bindings `bind` and the shared rows `rows`; session
-`j` runs as V*'s statement `j`), at which V*'s statements' files, where they parse into scope as the verifier's
-acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs carrying the tags their name names
-(`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`). Taken: A3
-(`_hA3`).
+parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, and R's
+cap `cap`, the record's `stacked` entry `_hstk`), the coin server's records of the inner session at each history (`wr`),
+check 5's source at the session record (`coins`) and the inner shape `ish`, and every prover `σ` of the recursive audit
+with candidate 3's compiled table as its inner protocol (`holoInnerAt`), at the law of the registration's draws
+(`drawLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
+as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, where each round's commitment and coins go in
+the inner session's records (`im`) and those records' custody `_hIC`, the verifier of record's own inputs (V*'s bindings
+`bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files, where they
+parse into scope as the verifier's acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs
+carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
+`Sk`, `cmt`, `msg`). Taken: A3 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
 V*'s circuits compute candidate 3's inner verifier at the checked sessions (`checkedC3`: the typed sessions at a whole
-history where the verifier's checks at candidate 3 pass) and R's registration, at the rounds before the last (VBridge
-at the committed rounds, `Flock.Premises.VBridgeC`): the event below, at the records written at the outcome's history,
-is empty;
+history where the verifier's checks at candidate 3 pass) and the word the transported prover's runs open at R's level 0
+against `cap` (`regStmt`), at the rounds before the last (VBridge at the committed rounds, `Flock.Premises.VBridgeC`):
+Lean's verifier, at the records written at the outcome's history, never builds `st`, accepts its inputs at candidate 3
+and accepts every session as V*'s statement of its index with its checks at candidate 3;
 or the sessions type and there is a registrant fork, a round fork, a session fork, or an inner fork of the transported
-prover's own runs at the checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash; or
+prover's own runs at the checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash
+against each other (`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`),
 $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
   verifies as V*'s statement of its index and passes its checks at candidate 3} \wedge \neg\,\exists R \text{ near } w,\
   R\text{'s hidden statement holds}]$$
@@ -200,10 +248,8 @@ def RecursiveAuditC3 : Prop :=
     -- check 5's source at the inner session's record (`--rec-inner-coins` with it, or the inner session's files), the
     -- verifier's own
     (coins : String → Option Flock.RecCoins.Source)
-    -- the registered word and cap, the registrant's openings and the record's `stacked` entry
-    (xR : HoloReg FlockLevel3.GF128 Refine.Dig)
-    (_hreg : xR.Opens Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp).rsch.sch.level₀)
-    (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg xR.cap)
+    -- R's cap, the record's `stacked` entry
+    (cap : Cap Refine.Dig) (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg cap)
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
@@ -239,14 +285,15 @@ def RecursiveAuditC3 : Prop :=
       (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- VBridge at the committed rounds, a premise: V*'s circuits compute candidate 3's inner verifier at the rounds
-    -- before the last, which it does not commit, at the checked sessions and R's registration
+    -- before the last, which it does not commit, at the checked sessions and the word the prover's runs open
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridgeC (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg
-        N k Rw (fun _ _ => Subtype.mk xR _hreg) wmsg Sk cmt msg),
+        N k Rw (regStmt T CT st hp (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
+          dg N k Rw wmsg (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
+        wmsg Sk cmt msg),
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-          ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-          ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR _hreg))
+          ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
         (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       (regFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
@@ -257,13 +304,17 @@ def RecursiveAuditC3 : Prop :=
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) ∨
       InnerForkRec (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)
-        (fun _ _ => Subtype.mk xR _hreg)
+        (regStmt T CT st hp (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k
+          Rw wmsg (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
         wmsg Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
       prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1)
               o.2.2.2 ∧
-            ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR _hreg))
+            ¬ (holoInnerAt T CT st hp).holds
+              (regStmt T CT st hp (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
+                dg N k Rw wmsg (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)
+                cap o.1 o.2.1))
           (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
             sumV (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t) dg N
