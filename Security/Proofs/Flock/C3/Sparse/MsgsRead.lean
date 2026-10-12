@@ -33,14 +33,14 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## A weave's rounds -/
 
 /-- The round of message `m` along the kinds `σ`: the coins before it. -/
-def roundOf : List Kind → ℕ → ℕ
+def roundOf : List Exec.Kind → ℕ → ℕ
   | [], _ => 0
   | .msg _ :: _, 0 => 0
   | .msg _ :: σ, m + 1 => roundOf σ m
   | .coin _ :: σ, m => roundOf σ m + 1
 
 /-- **A weave's coins are fixed by its lengths.** -/
-theorem nCoins_weave : ∀ (σ : List Kind) {ms ms' cs cs' : List Msg}, ms.length = ms'.length →
+theorem nCoins_weave : ∀ (σ : List Exec.Kind) {ms ms' cs cs' : List Msg}, ms.length = ms'.length →
     cs.length = cs'.length → nCoins (weave σ ms cs) = nCoins (weave σ ms' cs')
   | [], _, _, _, _, _, _ => rfl
   | .msg _ :: _, [], [], _, _, _, _ => rfl
@@ -54,7 +54,7 @@ theorem nCoins_weave : ∀ (σ : List Kind) {ms ms' cs cs' : List Msg}, ms.lengt
 
 /-- **A weave's round is its messages of that round**: two weaves along `σ` of messages and coins of the same lengths
 have the same round `j` where their messages of round `j` agree. -/
-theorem groups_weave : ∀ (σ : List Kind) {ms ms' cs cs' : List Msg} (j : ℕ), ms.length = ms'.length →
+theorem groups_weave : ∀ (σ : List Exec.Kind) {ms ms' cs cs' : List Msg} (j : ℕ), ms.length = ms'.length →
     cs.length = cs'.length → (∀ m, roundOf σ m = j → ms[m]? = ms'[m]?) →
     (groups (weave σ ms cs))[j]? = (groups (weave σ ms' cs'))[j]?
   | [], _, _, _, _, _, _, _, _ => rfl
