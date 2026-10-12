@@ -56,4 +56,27 @@ for d in $(find $S/v-claim -name circuit.txt -printf '%h\n' | sort); do
   echo "$u exit $rc $(grep -ho '"why":"[^"]*"' $O2/cv-${u//\//_}.out)" >> $O2/claim-verify.txt
   echo "verify claim $u exit $rc (1: refused)" | tee -a $X
 done
+# gap 4 at verify on RecSparse's own proof: the forged RecSparse proved under its own draw, so verify reaches its rec-pub
+CS=$(find $S/v-claim -name circuit.txt -printf '%h\n' | while read d; do head -1 $d/circuit.txt | grep -q ' rec-sparse/' && echo $d; done | head -1)
+D=$O2/prove-claim-sparse; mkdir -p $D
+NI=$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $CS/pub.bin)
+PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+PIN=$(sha512sum $CS/circuit.txt | cut -d' ' -f1)
+$B serve --zk --listen 127.0.0.1:$PORT --out $D/sessions --instances $CS/pub.bin --circuit $CS/circuit.txt --pin $PIN --draw subset:$NI \
+  --operator loopback > $D/serve.log 2>&1 &
+SP=$!
+for i in $(seq 1800); do grep -q SERVING $D/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
+$B prove --zk --verifier 127.0.0.1:$PORT --instances $CS/inst.bin --circuit $CS/circuit.txt --warm 0 --runs 1 > $D/prove.txt 2> $D/prove.err
+echo "prove forged claim rec-sparse exit $?" | tee -a $X
+kill $SP; wait $SP 2>/dev/null
+CSESS=$(find $D/sessions -name session.json -printf '%h\n' | sort | head -1)
+if [ -n "$CSESS" ]; then
+  $B replay --zk --instances $CS/pub.bin --circuit $CS/circuit.txt --sessions $CSESS > $D/replay.txt 2>&1; echo "replay forged claim rec-sparse exit $?" | tee -a $X
+  $LEAN_BIN verify --zk $(files $CS) $(own $CS) "${IN[@]}" --rec-inner-session $H/inner/prover \
+    --rec-inner-transcript $H/inner/public.json --session $CSESS > $D/lean.out 2> $D/lean.err
+  echo "verify forged claim rec-sparse on its own proof exit $? (1: refused)" | tee -a $X
+  grep -ho '"why":"[^"]*"' $D/lean.out | tee -a $O2/claim-verify.txt
+else
+  tail -20 $D/serve.log $D/prove.err
+fi
 cat $X $O2/claim-verify.txt
