@@ -306,7 +306,7 @@ theorem openTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s :
     ⟨sess p, un p, cp p, p, k₀, _, hj, hp, S', ns, nv, hz p hp, hpart, fun t => ⟨_, hk₀ t t.isLt,
       wiO_rs sh hi t.isLt, fun b hb => by
         obtain ⟨hk, hke⟩ := Array.getElem?_eq_some_iff.mp (hk₀ t t.isLt)
-        rw [fill_rowCol (zs (sess p)) (hz p hp) hj hS hg hp hpart hk hb, hke, RecAlgebra.getElem!_el]⟩⟩
+        rw [fill_rowCol (zs (sess p)) (hz p hp) hj hS hg hp hpart hk hb, hke, ← RecAlgebra.getElem!_el]⟩⟩
   rw [← hx S gs hS hg i _ hR]
   exact hR
 
