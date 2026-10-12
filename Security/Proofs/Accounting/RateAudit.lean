@@ -17,5 +17,7 @@ tags, and `RateOfAuditInteractive` and `RateOfAuditInteractiveRO` in a joint run
 a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`,
 `Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`), and the remote protocol's
 conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateConservation`, their capacity forms
-`RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`) and chained passes
-(`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`). -/
+`RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`), chained passes
+(`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every
+count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`,
+`RateChainPaid`). -/

@@ -1,5 +1,6 @@
 import Mathlib
 import Models.Accounting.Guarantees.RateAuditRemote
+import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Windows
 
@@ -17,6 +18,11 @@ the other passes' coins (`Chain.pr_short_le`).
 **The window.** As `RateAuditWindows`': footprints summed short of `P + 1 − c` floors in passes all accepted within the
 budget leave at least `c` passes short (`Chain.le_card_short`), and Markov's inequality over the count of short passes
 (`mul_pr_le_sum`) gives `P` times the per-pass error.
+
+**Paid, summed over the passes.** Words summed over the passes beyond their reads, rebuilt words and `P` slacks leave
+some pass unpaid (`Chain.exists_unpaid`); each pass is unpaid with at most `RatePaidRO`'s or `RatePaid`'s error by
+sequencing (`Chain.pr_pass_le`, with no sample: `pr_coins_le`), and a union bound over the passes gives `P` times it
+(`Chain.pr_unpaid_le`).
 -/
 
 namespace Accounting.Rate
@@ -61,6 +67,15 @@ theorem pr_root_le (rt : Store N b → Bits r) (Q : Store N b × Coins N b h ρ 
   change Q (y.1, y.2.1, (atRoot _ (rt y.1)).symm (y.2.2.1, g) (rt y.1), y.2.2.2) = Q y
   rw [atRoot_symm_apply]
 
+/-- An event that ignores the sample has its bound over the game's coins. -/
+theorem pr_coins_le (Q : Store N b × Bits ρ × Oracle N b h ρ → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
+    pr (fun y : Store N b × Coins N b h ρ s => Q (y.1, y.2.1, y.2.2.1)) ≤ ε := by
+  classical
+  let e : Store N b × Coins N b h ρ s ≃ (Store N b × Bits ρ × Oracle N b h ρ) × (Fin s → Fin N) :=
+    ((Equiv.refl _).prodCongr (Equiv.prodAssoc _ _ _).symm).trans (Equiv.prodAssoc _ _ _).symm
+  rw [pr_equiv e]
+  exact pr_le_of_fiber _ _ (fun _ => hQ)
+
 namespace Chain
 
 variable {P S L q : ℕ}
@@ -72,13 +87,13 @@ def Short (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (j : Fin P)
     (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F ∧
     (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc < fl
 
-/-- **Sequencing**: pass `j` is accepted short with at most the game's error for the devices the earlier passes' coins
-pick. -/
-theorem pr_short_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (ε : ℝ≥0∞) (j : Fin P)
-    (hε : ∀ η, pr (fun x : Store N b × Coins N b h ρ s =>
-        (A.device j η).Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ (A.device j η).compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          (A.device j η).footprint x.1 x.2.1 x.2.2.1 * cEnc < fl) ≤ ε) :
-    pr (Short A cTag cEnc F fl j) ≤ ε := by
+/-- **Sequencing**: an event of pass `j`'s device and its game's coins has at most the game's error for the devices
+the earlier passes' coins pick. -/
+theorem pr_pass_le (A : Chain P N b h ρ S L q r s)
+    (Q : InteractiveDevice N b h ρ S L q → Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (j : Fin P)
+    (hε : ∀ η, pr (Q (A.device j η)) ≤ ε) :
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+      Q (A.dev j x.2) (x.1, (x.2 j).1, A.oracle j x.1 x.2, (x.2 j).2.2)) ≤ ε := by
   classical
   let e : Store N b × (Fin P → PassCoins N b h ρ r s) ≃
       (Store N b × PassCoins N b h ρ r s) × ({i : Fin P // i ≠ j} → PassCoins N b h ρ r s) :=
@@ -99,7 +114,61 @@ theorem pr_short_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (ε 
       x.2.2.1 (A.root j η x.1) := by
     simp only [Chain.oracle]
     rw [hη, hω]
-  simpa [e, Short, hω, hd, ho] using hx
+  simpa [e, hω, hd, ho] using hx
+
+/-- **Sequencing**: pass `j` is accepted short with at most the game's error for the devices the earlier passes' coins
+pick. -/
+theorem pr_short_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (ε : ℝ≥0∞) (j : Fin P)
+    (hε : ∀ η, pr (fun x : Store N b × Coins N b h ρ s =>
+        (A.device j η).Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ (A.device j η).compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
+          (A.device j η).footprint x.1 x.2.1 x.2.2.1 * cEnc < fl) ≤ ε) :
+    pr (Short A cTag cEnc F fl j) ≤ ε :=
+  pr_pass_le A (fun D x => D.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ D.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
+    D.footprint x.1 x.2.1 x.2.2.1 * cEnc < fl) ε j hε
+
+/-- Pass `j`'s correct receipts' words exceed its reads of every tier, its rebuilt words and `slack`. -/
+def Unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (j : Fin P)
+    (x : Store N b × (Fin P → PassCoins N b h ρ r s)) : Prop :=
+  ∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+      (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b + slack <
+    ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b
+
+/-- Words summed over the passes beyond their reads, rebuilt words and `P` slacks leave some pass unpaid. -/
+theorem exists_unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ)
+    (x : Store N b × (Fin P → PassCoins N b h ρ r s))
+    (hx : ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+        (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
+      ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b) :
+    ∃ j, Unpaid A tier slack j x := by
+  by_contra hno
+  push Not at hno
+  have hle := Finset.sum_le_sum (fun j (_ : j ∈ Finset.univ) => (not_lt.1 (hno j) :
+    ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b ≤
+      ∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+        (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b + slack))
+  rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul] at hle
+  omega
+
+/-- A window's unpaid words from a per-pass bound: the probability that the words summed over the passes exceed their
+reads, rebuilt words and `P` slacks is at most `P·ε`. -/
+theorem pr_unpaid_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
+    (hε : ∀ j η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
+          ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
+          ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
+      ≤ (P : ℝ≥0∞) * ε := by
+  classical
+  calc _ ≤ pr (fun x => ∃ j, Unpaid A tier slack j x) := Bandwidth.pr_mono (exists_unpaid A tier slack)
+    _ ≤ ∑ j, pr (Unpaid A tier slack j) := Bandwidth.pr_exists_le _
+    _ ≤ ∑ _j : Fin P, ε := Finset.sum_le_sum (fun j _ =>
+        pr_pass_le A (fun D y => ∑ t, D.tierReads tier t y.1 y.2.1 y.2.2.1 + D.rebuilt y.1 y.2.1 y.2.2.1 * b + slack <
+          (D.correct y.1 y.2.1 y.2.2.1).card * b) ε j (fun η => pr_coins_le (fun z =>
+            ∑ t, (A.device j η).tierReads tier t z.1 z.2.1 z.2.2 + (A.device j η).rebuilt z.1 z.2.1 z.2.2 * b + slack <
+              ((A.device j η).correct z.1 z.2.1 z.2.2).card * b) ε (hε j η)))
+    _ = (P : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 open Classical in
 /-- Footprints summing short of `P + 1 − c` floors, in passes all accepted within the budget, leave at least `c`
@@ -186,5 +255,19 @@ theorem RateChain : Accounting.Guarantees.RateChain := by
   intro P N b h ρ S L q r s k m F cTag cEnc lam c A
   exact Chain.mul_pr_sum_le A cTag cEnc F _ c _ (fun j =>
     RateChainPass P N b h ρ S L q r s k m F cTag cEnc lam A j)
+
+/-- **A window's correct receipts are paid for pass by pass, with side sources that ignore the oracle**
+(`Accounting.Guarantees.RateChainPaidRO`). -/
+theorem RateChainPaidRO : Accounting.Guarantees.RateChainPaidRO := by
+  intro P N b h ρ S L q r s lam τ tier A hA
+  exact Chain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η =>
+    (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaidRO N b h ρ S L q lam τ tier (A.device j η) (hA j η)))
+
+/-- **A window's correct receipts are paid for pass by pass, with any side sources**
+(`Accounting.Guarantees.RateChainPaid`). -/
+theorem RateChainPaid : Accounting.Guarantees.RateChainPaid := by
+  intro P N b h ρ S L q r s m lam τ tier A
+  exact Chain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun j η =>
+    (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaid N b h ρ S L q m lam τ tier (A.device j η)))
 
 end Accounting.SecurityProofs

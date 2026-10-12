@@ -20,6 +20,8 @@ node (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the nod
 * `RateChainPassRO`, `RateChainPass`: a chained pass is `RateAudit`'s game at its own seed, whatever the earlier passes
   did and whatever root they committed.
 * `RateChainRO`, `RateChain`: a window of chained passes certifies the sum over its passes.
+* `RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`: conservation at every count of correct receipts, for a
+  pass and summed over a window's passes, with no sample: the remote audit's route `Paid`.
 -/
 
 namespace Accounting.Guarantees
@@ -234,5 +236,89 @@ def RateChain : Prop :=
           (P + 1 - c) * floor b ρ S L F cTag cEnc (k - m) lam)
       ≤ (P : ℝ≥0∞) * ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam)
+
+/-- **Correct receipts are paid for, at every count, with side sources that ignore the oracle.** For every device of
+`RateConservationRO`'s class and every split of its device memory into `τ` tiers: the probability that the correct
+receipts' words exceed the run's reads of every tier, its rebuilt words, its on-chip state, the link's free bits and
+`λ`,
+
+  `∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ < #correct·b`,
+
+is at most `N/2^h + 2^q/2^λ`.
+
+**The reading.** `RateConservationRO` with no threshold: whatever number of correct receipts the run made, except with
+that probability `#correct·b ≤ ∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ`. This is the route `Paid` of the remote audit
+for one pass, `correct·b ≤ paid + λ`. `2^q` counts every set of the run's `q` oracle queries the correct words could
+be; `λ = q + 40` makes the term `2^-40` for about `q/b` words of slack, negligible beside the store.
+
+Proof: `Accounting.SecurityProofs.RatePaidRO`, `RateConservationRO`'s guessing and its compression at each count
+`k ≤ q`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RatePaidRO : Prop :=
+  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+    (∀ E R O O', A.side E R O = A.side E R O') →
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
+          (A.correct x.1 x.2.1 x.2.2).card * b)
+      ≤ (N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam
+
+/-- **Correct receipts are paid for, at every count, with any side sources.** `RatePaidRO` for side sources that may
+relay receipts: for every `m`, the probability that the correct receipts' words exceed the reads, rebuilt words, state,
+free link bits, `λ` and `m` words,
+
+  `∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ + m·b < #correct·b`,
+
+is at most `C(N, m)·2^L/2^(h·m) + 2^q/2^λ`: `m` relayed receipts, about `L/h`, are free. Proof:
+`Accounting.SecurityProofs.RatePaid`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RatePaid : Prop :=
+  ∀ (N b h ρ S L q m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam + m * b <
+          (A.correct x.1 x.2.1 x.2.2).card * b)
+      ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam
+
+/-- **A window's correct receipts are paid for pass by pass, with side sources that ignore the oracle.** For every
+chained prover of `RateChainPassRO`'s class and every split into tiers: the probability that the correct receipts'
+words, summed over the passes, exceed the passes' reads of every tier and rebuilt words plus each pass's on-chip state,
+free link bits and `λ`,
+
+  `∑ⱼ (∑ᵢ readsⱼᵢ + rebuiltⱼ·b) + P·(S + (L − ρ) + λ) < ∑ⱼ #correctⱼ·b`,
+
+is at most `P·(N/2^h + 2^q/2^λ)`.
+
+**The reading.** The route `Paid` of the remote audit for a window, `correct·b ≤ paid + P·λ`: the reads summed over
+passes and tiers, the rebuilt words, state `S` and link bits `L − ρ` at each pass boundary, and `λ` a pass; nothing
+outside the node, whose side sources cannot query the oracle. No sample is drawn, so it holds with the window-wide
+sample, which the route `Sampled` prices. A word read in pass `j − 1` serves pass `j` only through the `S` bits on chip
+when `root_{j−1}` is fixed, because pass `j`'s oracle is fresh at that root.
+
+Proof: `Accounting.SecurityProofs.RateChainPaidRO`, `RatePaidRO` at each pass at every value of the other passes'
+coins, and a union bound over the passes.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateChainPaidRO : Prop :=
+  ∀ (P N b h ρ S L q r s lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
+    (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
+          ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
+      ≤ (P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
+
+/-- **A window's correct receipts are paid for pass by pass, with any side sources.** `RateChainPaidRO` for devices
+whose side sources may relay receipts: for every `m`, with `m` words a pass added to the slack, the probability is at
+most `P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateChainPaid`, from `RatePaid`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateChainPaid : Prop :=
+  ∀ (P N b h ρ S L q r s m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
+    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
+          ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
+      ≤ (P : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
 
 end Accounting.Guarantees

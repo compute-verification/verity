@@ -17,6 +17,8 @@ Every ingress step reads one address, of one tier, so the reads summed over the 
   `C(q, k)·2^-λ`.
 
 No sample is drawn: these are `RateAudit`'s and `RateAuditInteractive`'s arguments on the correct receipts themselves.
+At every count at once (`RatePaidRO`, `RatePaid`), the compression is taken at each `k ≤ q`, the most the run can have
+queried, and `∑ₖ C(q, k) = 2^q` (`RelayDevice.pr_compress_any_le`).
 -/
 
 namespace Accounting.Rate
@@ -100,6 +102,62 @@ namespace RelayDevice
 
 variable {N b h ρ S L q : ℕ}
 
+/-- With side sources that ignore the oracle, a correct receipt for a word never queried has probability at most
+`N/2^h`. -/
+theorem pr_guess_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∃ j, j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j))
+      ≤ (N : ℝ≥0∞) / 2 ^ h := by
+  classical
+  refine (pr_exists_le _).trans ?_
+  have hj : ∀ j : Fin N, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+      j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j)) ≤
+      ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun j =>
+    pr_le_of_card _ (2 ^ h) 1 (by positivity) (by
+      rw [one_mul, Fintype.card_prod, Fintype.card_prod]
+      refine card_filter_prod_le _ _ (Fintype.card (Bits ρ) * Fintype.card (Oracle N b h ρ)) (fun E => ?_)
+      refine card_filter_prod_le _ _ _ (fun R => ?_)
+      exact card_guess_le A E R j (hA E R))
+  refine (Finset.sum_le_sum (fun j _ => hj j)).trans (le_of_eq ?_)
+  simp [div_eq_mul_inv]
+
+/-- `k` queried words and too little else have probability at most `C(q, k)/2^λ`. -/
+theorem pr_compress_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < k) :
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        k ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k * b + ρ)
+      ≤ (q.choose k : ℝ≥0∞) / 2 ^ lam := by
+  classical
+  refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
+    rw [card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ)).symm]
+    refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits ρ)) (fun O => ?_)).trans
+      (le_of_eq (by simp only [Fintype.card_prod]; ring))
+    exact card_compress_le A O k lam hk)).trans (le_of_eq ?_)
+  push_cast
+  rfl
+
+/-- At some count `k ≤ q`, `k` queried words and too little else: probability at most `∑ₖ C(q, k)/2^λ = 2^q/2^λ`. -/
+theorem pr_compress_any_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (q + 1),
+        0 < k.1 ∧ k.1 ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ)
+      ≤ (2 ^ q : ℝ≥0∞) / 2 ^ lam := by
+  classical
+  refine (pr_exists_le _).trans ?_
+  calc ∑ k : Fin (q + 1), pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+          0 < k.1 ∧ k.1 ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ)
+      ≤ ∑ k : Fin (q + 1), (q.choose k.1 : ℝ≥0∞) / 2 ^ lam := by
+        refine Finset.sum_le_sum (fun k _ => ?_)
+        rcases Nat.eq_zero_or_pos k.1 with hk | hk
+        · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
+          rw [Finset.filter_false_of_mem (fun x _ hx => absurd hx.1 (by omega)), Finset.card_empty, zero_mul,
+            zero_mul]
+        · exact (pr_mono (fun x hx => hx.2)).trans (pr_compress_le A k.1 lam hk)
+    _ = (2 ^ q : ℝ≥0∞) / 2 ^ lam := by
+        rw [← ENNReal.sum_div]
+        congr 1
+        rw [← Nat.cast_sum, Fin.sum_univ_eq_sum_range (fun k => q.choose k), Nat.sum_range_choose]
+        push_cast
+        rfl
+
 /-- With side sources that ignore the oracle: a guessed receipt, or `k` queried words and too little else, with
 probability at most `N/2^h + C(q, k)/2^λ`. -/
 theorem pr_guess_or_compress (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O')
@@ -107,27 +165,23 @@ theorem pr_guess_or_compress (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O'
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         (∃ j, j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j)) ∨
           (k ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k * b + ρ))
-      ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by
+      ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam :=
+  (pr_or_le _ _).trans (add_le_add (pr_guess_le A hA) (pr_compress_le A k lam hk))
+
+/-- With any side sources, `m` relayed receipts have probability at most `C(N, m)·2^L/2^(h·m)`. -/
+theorem pr_relay_le (A : RelayDevice N b h ρ S L q) (m : ℕ) :
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => m ≤ (A.relayed x.1 x.2.1 x.2.2).card)
+      ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) := by
   classical
-  refine (pr_or_le _ _).trans (add_le_add ?_ ?_)
-  · refine (pr_exists_le _).trans ?_
-    have hj : ∀ j : Fin N, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
-        j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j)) ≤
-        ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun j =>
-      pr_le_of_card _ (2 ^ h) 1 (by positivity) (by
-        rw [one_mul, Fintype.card_prod, Fintype.card_prod]
-        refine card_filter_prod_le _ _ (Fintype.card (Bits ρ) * Fintype.card (Oracle N b h ρ)) (fun E => ?_)
-        refine card_filter_prod_le _ _ _ (fun R => ?_)
-        exact card_guess_le A E R j (hA E R))
-    refine (Finset.sum_le_sum (fun j _ => hj j)).trans (le_of_eq ?_)
-    simp [div_eq_mul_inv]
-  · refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
-      rw [card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ)).symm]
-      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits ρ)) (fun O => ?_)).trans
-        (le_of_eq (by simp only [Fintype.card_prod]; ring))
-      exact card_compress_le A O k lam hk)).trans (le_of_eq ?_)
-    push_cast
-    rfl
+  refine (pr_le_of_card _ (2 ^ (h * m)) (N.choose m * 2 ^ L) (by positivity) (by
+    rw [Fintype.card_prod, Fintype.card_prod]
+    refine (card_filter_prod_le _ _
+      (Fintype.card (Bits ρ) * (N.choose m * 2 ^ L * Fintype.card (Oracle N b h ρ))) (fun E => ?_)).trans
+      (le_of_eq (by ring))
+    refine card_filter_prod_le _ _ _ (fun R => ?_)
+    exact card_relay_le A E R m)).trans (le_of_eq ?_)
+  push_cast
+  rfl
 
 /-- With any side sources: `m` relayed receipts, or `k − m` queried words and too little else, with probability at
 most `C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
@@ -135,25 +189,8 @@ theorem pr_relay_or_compress (A : RelayDevice N b h ρ S L q) (k m lam : ℕ) (h
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         m ≤ (A.relayed x.1 x.2.1 x.2.2).card ∨
           (k - m ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < (k - m) * b + ρ))
-      ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam := by
-  classical
-  refine (pr_or_le _ _).trans (add_le_add ?_ ?_)
-  · refine (pr_le_of_card _ (2 ^ (h * m)) (N.choose m * 2 ^ L) (by positivity) (by
-      rw [Fintype.card_prod, Fintype.card_prod]
-      refine (card_filter_prod_le _ _
-        (Fintype.card (Bits ρ) * (N.choose m * 2 ^ L * Fintype.card (Oracle N b h ρ))) (fun E => ?_)).trans
-        (le_of_eq (by ring))
-      refine card_filter_prod_le _ _ _ (fun R => ?_)
-      exact card_relay_le A E R m)).trans (le_of_eq ?_)
-    push_cast
-    rfl
-  · refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
-      rw [card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ)).symm]
-      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b × Bits ρ)) (fun O => ?_)).trans
-        (le_of_eq (by simp only [Fintype.card_prod]; ring))
-      exact card_compress_le A O (k - m) lam hk)).trans (le_of_eq ?_)
-    push_cast
-    rfl
+      ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam :=
+  (pr_or_le _ _).trans (add_le_add (pr_relay_le A m) (pr_compress_le A (k - m) lam hk))
 
 end RelayDevice
 
@@ -164,7 +201,7 @@ namespace Accounting.SecurityProofs
 open Accounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
-open Bandwidth (pr_le_of_card pr_mono)
+open Bandwidth (pr_le_of_card pr_mono pr_or_le)
 
 /-- **Conservation over tiers, with side sources that ignore the oracle**
 (`Accounting.Guarantees.RateConservationRO`). -/
@@ -247,5 +284,36 @@ theorem RateDisplacement : Accounting.Guarantees.RateDisplacement := by
   obtain ⟨hc, h1, h2⟩ := hx
   have e := Finset.add_sum_erase Finset.univ (fun t => A.tierReads tier t x.1 x.2.1 x.2.2) (Finset.mem_univ t₀)
   exact ⟨hc, by omega⟩
+
+/-- **Correct receipts are paid for, at every count, with side sources that ignore the oracle**
+(`Accounting.Guarantees.RatePaidRO`). -/
+theorem RatePaidRO : Accounting.Guarantees.RatePaidRO := by
+  classical
+  intro N b h ρ S L q lam τ tier A hA
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
+    (A.toRelay.pr_guess_le (InteractiveDevice.toRelay_side A hA)) (A.toRelay.pr_compress_any_le lam)))
+  rcases InteractiveDevice.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
+  · exact Or.inl hg
+  · have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+    have hQ := (card_queried_le A.toRelay x.1 x.2.1 x.2.2).trans (A.toRelay.bounded _ _).2
+    have hk : 0 < (A.correct x.1 x.2.1 x.2.2).card :=
+      Nat.pos_of_ne_zero (fun h0 => by rw [h0, zero_mul] at hx; omega)
+    refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card, by omega⟩, ?_, ?_, ?_⟩ <;> dsimp only <;> omega
+
+/-- **Correct receipts are paid for, at every count, with any side sources** (`Accounting.Guarantees.RatePaid`). -/
+theorem RatePaid : Accounting.Guarantees.RatePaid := by
+  classical
+  intro N b h ρ S L q m lam τ tier A
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
+    (A.toRelay.pr_relay_le m) (A.toRelay.pr_compress_any_le lam)))
+  by_cases hm : m ≤ (A.toRelay.relayed x.1 x.2.1 x.2.2).card
+  · exact Or.inl hm
+  · have h1 := InteractiveDevice.correct_le_relayed A x.1 x.2.1 x.2.2
+    have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+    have hQ := (card_queried_le A.toRelay x.1 x.2.1 x.2.2).trans (A.toRelay.bounded _ _).2
+    have hcm : m < (A.correct x.1 x.2.1 x.2.2).card := Nat.lt_of_mul_lt_mul_right (a := b) (by omega)
+    have e := Nat.sub_mul (A.correct x.1 x.2.1 x.2.2).card m b
+    have hmb := Nat.mul_le_mul_right b hcm.le
+    refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card - m, by omega⟩, ?_, ?_, ?_⟩ <;> dsimp only <;> omega
 
 end Accounting.SecurityProofs
