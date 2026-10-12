@@ -18,10 +18,11 @@ Section 8 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4). No
   most `T` at every oracle and salt is accepted while `T < (1 − γ)(1 − ε_s)·W` with probability at most
   `(1 − ε_s)^t + ε(q, N)`.
 * `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: over strategies that vary only them,
-  under causality, links as alphabets and the trusted devices across the strategy (v2.6: the certifiers' sends during
-  `[a, b)` a function of their record before `b`, their gates in declared record cells, and a jitter word), what the
-  outside does during `I` takes at most (the number of records placed in `I`) × `2^{res_out}` values, `res_out` being
-  `log₂ χ` bits a bucket plus `β°_X |I|`. Per run, a width bound misses when a send leaves, which signals by its tick.
+  under causality, links as alphabets and the trusted devices across the strategy (v2.8: each certifier's sends during
+  `[a, b)` a function of its own record before `b`, its gates in declared record cells, and of its own jitter word),
+  what the outside does during `I` takes at most (the number of records placed in `I`) × `2^{res_out}` values,
+  `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound misses when a send
+  leaves, which signals by its tick.
 -/
 
 namespace Accounting.Guarantees
@@ -67,8 +68,11 @@ from the certifiers `cert` (what the certifiers and the outside `O = (X ∪ cert
 the coins; the certifiers' record placed before `a` is part of the former), whose runs meet causality and links, whose
 links are alphabets and whose trusted devices are trusted across it (record cells `record`, `TrustedUnits`): what `O`
 does during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{res_out}` values, with
-`res_out = jitter · (buckets of I) + β°_X (b − a)`. A wire from `X` to a certifier runs on a certified link and one
-from `X` to `O` on an uncertified one, by `Links`. -/
+`res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier (v2.8). A wire from `X` to a
+certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. v2.8 ranges the secrets
+over those whose runs accept every window and meet integrity: that is `B4` at the strategy restricted to them (`Ω` a
+subtype), whose hypotheses restrict (`CausalFrom` by `Accounting.SecurityProofs.Actual.causalFrom_comp`, the others
+pointwise or by shrinking a range), so it needs no statement of its own. -/
 def B4 : Prop :=
   ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)
     (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec)
@@ -80,6 +84,7 @@ def B4 : Prop :=
     (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       (Set.range fun r =>
         (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
-        ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card + uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
+        ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card +
+          uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 
 end Accounting.Guarantees
