@@ -2,7 +2,8 @@
 
 `python -m model.frontier [OPS] [BATCH] [MODEL]` from `benchmarks/word_codec` prints, for each E codec, γ_bw with W
 registered / with no assumption on W, the step slowdown and the served one, with the KV option the 5% rule picks;
-1023 bits at 6.58x the issue bound is the measured thread-per-word kernel, 1536 and 2048 need a kernel not yet built.
+1023 bits at 6.58x the issue bound is the measured thread-per-word kernel; 1536 and 2048 need a kernel not yet built,
+fused thread-per-word (extrapolated, past the measured bracket) or with its decode apart (from measured squarings).
 OPS multiplies the issue-bound instruction count (1.0 the issue bound, 1.67 IMAD.WIDE at half rate). Costs are in
 passes at the locked clock, as measured; the adversary runs at the max clock (κ = KAPPA), the honest at either.
 """
@@ -29,12 +30,24 @@ FUSED_1023_Y = 2.025
 # at 1023, where 32 limbs a thread leave room for 6 decode warps against 768's 10. Wider fields are bracketed by the
 # best and the worst measured; past 1023 bits a thread per word is outside the bracket.
 OFF_ISSUE = (4.42, 6.58)
+# Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits ra-word-codec's 2.81e10/s,
+# 1,536 and 2,048 the red team's F22 (r20261012-102430-ee3a: 8.3e9/s, 5.05e9/s with one level of Karatsuba).
+SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 5.05e9)}
 KAPPA = g.CLOCK_MAX_MHZ / g.CLOCK_LOCKED_MHZ  # Φ_cores is declared at the max clock
 
 
 def sq(bits: int, ops: float = 1.0) -> float:
     limbs = bits / 32
     return g.sq_floor(bits, ops=ops * (limbs * (limbs + 1) + 5 * limbs))
+
+
+def apart_off(bits: int) -> tuple[float, float]:
+    """`off` for a decode that keeps a standalone squaring's registers (several threads a word, or decode warps that
+    don't share the GEMM's register file) [estimate]: 768's fused decode with its squaring replaced by the measured
+    one at `bits`, the rest of its ALU a byte held (low) or scaled with the squaring (high)."""
+    e768 = g.WIDE["p767"].eps
+    low = SQUARING[bits] + e768 - SQUARING[768]
+    return low / sq(bits), e768 * SQUARING[bits] / SQUARING[768] / sq(bits)
 
 
 def decode_eps(bits: int, off: float, clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> float:
@@ -115,26 +128,30 @@ def main(argv: list[str]) -> None:
         print(f" the honest at {clock} MHz")
         c = e_codec(768, batch, OFF_ISSUE[0], clock)
         k, t = pick(options(shape, batch, c, ops), allowed=("k1", "k2", "k4"))
-        print(f"  768 fused (the point), y {c.y:.2f} (measured at the locked clock), KV {k}: {row(t)}")
+        print(f"  768 fused (runs today), y {c.y:.2f} (measured at the locked clock), KV {k}: {row(t)}")
         for bits in (1023, 1536, 2048):
-            for off in OFF_ISSUE:
+            offs = [(off, "thread-per-word fused") for off in OFF_ISSUE]
+            if bits in SQUARING:
+                offs += [(off, "decode apart") for off in apart_off(bits)]
+            for off, design in offs:
                 c = e_codec(bits, batch, off, clock)
                 k, t = pick(options(shape, batch, c, ops, off=off))
-                print(f"  {bits}, y {c.y:.2f} (kernel {off}x the issue bound), KV {k}: {row(t)}")
+                print(f"  {bits} {design}, y {c.y:.2f} ({off:.2f}x the issue bound), KV {k}: {row(t)}")
 
 
-def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0,
+def today(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0,
           clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
-    """The operating point: E on 2^768 − 825 fused at k = 1, the KV cache on the same prime at the 5% rule's rounds
-    (4 at batch 1)."""
+    """What runs today: E on 2^768 − 825 fused at k = 1, the KV cache on the same prime at the 5% rule's rounds (4 at
+    batch 1)."""
     c = e_codec(768, batch, OFF_ISSUE[0], clock_mhz)
     return pick(options(shape, batch, c, ops), allowed=("k1", "k2", "k4"))[1]
 
 
-def wide_point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0, off: float = OFF_ISSUE[0],
-               clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
-    """The option with no assumption on W: E on 2^1536 − 3453 at k = 1, its kernel `off` times the issue bound, the KV
-    cache at the 5% rule's pick."""
+def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0, off: float | None = None,
+          clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
+    """The operating point: E on 2^1536 − 3453 at k = 1, its decode `off` times the issue bound (by default the low
+    end of `apart_off`), the KV cache at the 5% rule's pick."""
+    off = apart_off(1536)[0] if off is None else off
     return pick(options(shape, batch, e_codec(1536, batch, off, clock_mhz), ops, off=off))[1]
 
 
