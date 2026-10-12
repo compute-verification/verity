@@ -19,6 +19,8 @@ import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.Opening.Rows
 import Proofs.Flock.C3.HoloValues.Read
 import Proofs.Flock.C3.Reps.Tie
+import Proofs.Flock.C3.HoloValues.Frames
+import Proofs.Flock.C3.HoloValues.Runs
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
 import Proofs.Flock.C3.Opening.ClaimTie
