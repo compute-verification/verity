@@ -772,7 +772,8 @@ def inside(a, name: str, bench: Path, argv: list[str], out: Path, group: list[S.
                 rec["alone"], state["joint"] = J.setup(a.tagger, c, fr, done, gap_s=a.window_gap_s)
             elif name == "joint-v1":
                 chains = {key: Issued(nat, stream) for key, nat in turns.natives.items()}
-                rec["pause_setup"], state["pause"] = J.setup_pause(a.tagger, c, fr, chains, every=a.pause_every,
+                rec["pause_setup"], state["pause"] = J.setup_pause(a.tagger, c, fr, chains,
+                                                                   every=[J.Every.parse(x) for x in a.pause_every],
                                                                    seconds=a.pause_segment_s)
         except Exception:  # noqa: BLE001 - recorded; the round runs as inproc
             rec["alone_error" if name == "joint" else "pause_error"] = traceback.format_exc(limit=8)
@@ -927,17 +928,19 @@ def main(argv: list[str] | None = None) -> int:
         if "joint-v1" in a.rounds:
             import joint as J
             try:
-                a.pause_every = [J.Every.parse(x) for x in a.pause_every.split(",") if x]
+                a.pause_every = [x for x in a.pause_every.split(",") if x]
+                [J.Every.parse(x) for x in a.pause_every]
             except ValueError as ex:
                 ap.error(str(ex))
     arms = tuple(x for x in a.arms.split(",") if x)
     if set(arms) - set(S.ARMS):
         ap.error(f"unknown arms {sorted(set(arms) - set(S.ARMS))}")
     shapes, batches, lengths = S.parse_shapes(a.shapes), S.parse_ints(a.batches), S.parse_ints(a.lengths)
+    args = {k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()}
     if a.plan:
         pts = S.points(shapes, batches, lengths, a.l2_bytes, arms)
         lens = {(p.shape, p.length) for p in pts}
-        print(json.dumps({"points": [p.key for p in pts],
+        print(json.dumps({"points": [p.key for p in pts], "args": args,
                           "weight_bytes": {f"{s}-L{n}": S.weight_bytes(*shapes[s], n, arms) for s, n in sorted(lens)}}, indent=1))
         return 0
     if a.out is None:
@@ -951,7 +954,7 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     pts = S.points(shapes, batches, lengths, ident["l2_bytes"], arms)
     doc = {"schema": SCHEMA, "run": os.environ.get("RESEARCH_RUN_ID"), "scheme": SCHEME, "identity": ident,
-           "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()}, "item_s": ITEM_S,
+           "args": args, "item_s": ITEM_S,
            "points": [], "shapes": {}, "verify": None, "status": "running"}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     clocks = Clocks(uuid)

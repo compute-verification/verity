@@ -192,6 +192,9 @@ def test_the_plan_needs_no_gpu(capsys):
     assert plan["points"] == ["o-n4096-k4096-b1-L32", "o-n4096-k4096-b2048-L32", "gate_up-n28672-k4096-b1-L32",
                               "gate_up-n28672-k4096-b2048-L32"]
     assert plan["weight_bytes"]["gate_up-L32"] == 7 * 28672 * 4096 * 32
+    assert CHAIN.main(["--plan", "--rounds", "joint-v1,separate", "--tagger", "t.so", "--pause-every", "none,10-noprep",
+                       "--host-bench", "bench.py", "--audits", "2"]) == 0
+    assert json.loads(capsys.readouterr().out)["args"]["pause_every"] == ["none", "10-noprep"]
 
 
 def test_the_hosted_harness_s_argv_has_its_out_replaced():
