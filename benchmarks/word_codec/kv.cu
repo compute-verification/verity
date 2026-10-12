@@ -1166,7 +1166,13 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
 // The ring of MNB tiles is unpadded and swizzled (mma_chunk's SW), so two CTAs' rings fit an SM. Each MMA warp folds
 // every chunk of 16 tokens into OMT of the 8 blocks of 16 dims (both compute the scores; the dims split keeps their
 // registers within 72), so a CTA leaves one split's partials. Its plain form (ENC = false) stores the words undecoded,
-// so the two agree bit for bit.
+// so the two agree bit for bit. The ring keeps a CTA's decoder warps within a tile of each other, so they wait on their
+// loads together; with KV_OCC_PF (default 1) the first lane of each run of a token's K or V words prefetches the next
+// tile's run into the L2, which holds no registers.
+#ifndef KV_OCC_PF
+#define KV_OCC_PF 1
+#endif
+constexpr bool OPF = KV_OCC_PF;
 constexpr int ODW = 12, OT = MMA_OK ? 32 * ODW / HW : 16, OC = OT / 16, OWT = 32 * (ODW + MW), OMT = 8 / MW;
 constexpr int occ_smem() { return MNB * OT * 2 * HB + 2 * MNB * 8 + NL * 4; }
 static_assert(!MMA_OK || (OT % 16 == 0 && WB % 16 == 0), "whole chunks, 16-byte stores");
@@ -1213,6 +1219,8 @@ __global__ void __launch_bounds__(OWT, 2) attn_occ_kernel(const uint8_t *__restr
         if (ENC && tile) tweak_step(tw, td);
         if (t < nt) {
           ldg_word(src, x);
+          if (OPF && (j & (HW / 2 - 1)) == 0 && t < t1 - t0 - (tile + 1) * OT)
+            asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(src + step), "n"(HB) : "memory");
           if (ENC) decode_word_t(x, tw, k);
         } else {
 #pragma unroll
