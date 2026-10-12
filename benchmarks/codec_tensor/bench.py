@@ -463,6 +463,15 @@ def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int) -> dict:
     return {"leaves": nleaves, "leaves_ok": got == want, "root_ok": root == TG.root(want), "root": root.hex()}
 
 
+def mismatch(pf, pp, nch: int, mb: int, n: int, groups: int) -> dict:
+    """Where a fused run's partial sums differ from the plain kernel's: the tasks (K chunk kc, row block g; the CTA
+    (kc, g mod groups) takes it as its task g // groups) and how many of their elements."""
+    d = (pf.view(nch, mb, n) != pp.view(nch, mb, n)).any(1).view(nch, n // 16, 16).sum(2)
+    idx = d.nonzero().tolist()
+    tasks = [{"kc": kc, "g": g, "cta_g0": g % groups, "i": g // groups, "cols": int(d[kc, g])} for kc, g in idx[:12]]
+    return {"tasks": len(idx), "elements": int((pf != pp).sum()), "first": tasks}
+
+
 def commit_time(lib: Lib, torch, nblk: int, reps: int) -> dict:
     """A decode step's commit, timed: the leaves over nblk tags (E's, all layers) in one launch, then the tree."""
     n = -(-nblk // TG.PER_LEAF)
@@ -476,7 +485,7 @@ def commit_time(lib: Lib, torch, nblk: int, reps: int) -> dict:
 
 
 def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, cfgs, fused_cfgs,
-              mma_knobs, imad_knobs) -> dict:
+              mma_knobs, imad_knobs, gate_reps: int = 1) -> dict:
     g = torch.Generator(device="cuda").manual_seed(100 + n + kd)
     w = (torch.randn(n, kd, device="cuda", generator=g) * 0.25).to(torch.float8_e4m3fn)
     plain = plain_layout(w.view(torch.uint8))
@@ -544,10 +553,19 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             set_key(lib, torch, keys[k])
             for cfg in fused_cfgs:
                 gr, sp = steps_for(k, mb, cfg)
-                pf = torch.zeros_like(pp)
-                tags_dev.fill_(0xFF)
-                call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
-                entry["equal_plain"][fused_name(k, cfg)] = bool(torch.equal(pf, pp))
+                bad = []
+                for _ in range(gate_reps):
+                    pf = torch.zeros_like(pp)
+                    tags_dev.fill_(0xFF)
+                    call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
+                    if not torch.equal(pf, pp):
+                        bad.append(mismatch(pf, pp, nch, mb, n, gr))
+                entry["equal_plain"][fused_name(k, cfg)] = not bad
+                if bad:
+                    entry.setdefault("mismatch", {})[fused_name(k, cfg)] = {"failed": len(bad), "of": gate_reps,
+                                                                            "first": bad[:3]}
+                    log(f"mismatch {lib.name} {name} M={mb} {fused_name(k, cfg)}: {len(bad)}/{gate_reps} runs, "
+                        f"first {bad[0]}")
                 if cfg[2] >= 0:
                     torch.cuda.synchronize()
                     entry["tags"][fused_name(k, cfg)] = tags_ok(host_bytes(tags_dev), refs[k])
@@ -571,8 +589,10 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                                            if not v})))
         if not entry["ok"]:
             res["ok"] = False
-            return res
-    res["ok"] = True
+            if gate_reps == 1:
+                return res
+    if res.setdefault("ok", True) is False:
+        return res
 
     copies = max(2, -(-L2_DEFEAT_BYTES // res["store_bytes"]))
     ring = {"plain": [plain] + [plain.clone() for _ in range(copies - 1)]}
@@ -716,6 +736,8 @@ def main() -> int:
     ap.add_argument("--store-gib", type=float, default=2.0)
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--gate-words", type=int, default=256)
+    ap.add_argument("--gate-reps", type=int, default=1,
+                    help="runs of each fused gate; above 1, every batch is gated and a failure logs where it differs")
     ap.add_argument("--shapes", default=",".join(SHAPES))
     ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
     ap.add_argument("--gemm-libs", default="", help="field names the GEMM runs with (default: all)")
@@ -820,7 +842,7 @@ def main() -> int:
             for name in a.shapes.split(","):
                 n, kd = SHAPES[name]
                 g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain),
-                              fused_cfgs(lib, a.fused), *knobs)
+                              fused_cfgs(lib, a.fused), *knobs, gate_reps=a.gate_reps)
                 e["gemm"][name] = g
                 res["ok"] &= g.get("ok", False)
                 save()
