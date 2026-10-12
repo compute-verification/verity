@@ -735,6 +735,7 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
+PIPE_PLANS = ("po", "px")
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped).
 CAP_PLANS = {"p": {}, "po": {"qkv": 0, "o": 0, "gate_up": 0, "down": 0}, "px": {"qkv": 0, "o": 0, "gate_up": 0},
              "py": {"qkv": 0, "o": 0, "gate_up": 0, "down": 1}}
@@ -755,6 +756,8 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     tagpL    tagrL as such a chain: each launch's chunk ends overlap the next launch's loads; its tags must equal
              tagrL's, or it is dropped
     commitpL tagpL, then commitsL's leaves and tree
+    pipePL   tagPL (P in PIPE_PLANS) with the step before's leaves and tree on a low-priority stream beside it (the
+             commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
              ceil(CTAs / SMs) + plan[shape] CTAs an SM (nativepy not run)
 At TRACE_BATCHES, nativepo, tagpo4, tagpx4 and tagpy4 once more with tf.cu's trace (globaltimer stamps a launch),
@@ -772,9 +775,11 @@ summarized per shape.
         copies[name] = [(plain.clone(), wf.clone()) for _ in range(layout.LAYERS)]
         del plain
     hp = torch.cuda.Stream(priority=-1)
+    side = torch.cuda.Stream(priority=0)
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     xr = torch.zeros(1, dtype=torch.int32, device="cuda")
     tbs = {g: torch.empty(layout.store_chunk_blocks(g) * 32, dtype=torch.uint8, device="cuda") for g in groups}
+    tbs2 = {g: torch.empty_like(tbs[g]) for g in groups}
     nleaves = {g: layout.store_chunk_blocks(g) // 16 for g in groups}
     nodes = {g: torch.zeros(int(lib.so.tf_tree_nodes(nleaves[g])) * 8, dtype=torch.int64, device="cuda")
              for g in groups}
@@ -808,17 +813,19 @@ summarized per shape.
 
         ctr = torch.zeros(len(names) * layout.LAYERS, dtype=torch.int32, device="cuda")
 
-        def seq_pdl(g=None, trace=None, plan=None):
-            """g0kr1 (g None) or tagr's launches through tf_fused3p, launch q waiting on ctr[q - 1] (and tracing into
-            trace[q] if given); each shape in plan at most ceil(CTAs / SMs) + plan[name] CTAs an SM."""
+        def seq_pdl(g=None, trace=None, plan=None, tb=None):
+            """g0kr1 (g None) or tagr's launches through tf_fused3p, tags into tb (tbs[g] if None), launch q waiting on
+            ctr[q - 1] (and tracing into trace[q] if given); each shape in plan at most ceil(CTAs / SMs) + plan[name]
+            CTAs an SM."""
             plan = plan or {}
+            tb = tbs[g] if g and tb is None else tb
             lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_TAGS)
             fs, off, prev = [lambda: (ctr.zero_(), 0)[1]], 0, 0
             order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
             for q, (layer, name) in enumerate(order):
                 n, k, _ = weights[name]
                 pl = copies[name][layer][0]
-                tp = ptr(tbs[g]) + 32 * off if g else 0
+                tp = ptr(tb) + 32 * off if g else 0
                 wc = ptr(ctr) + 4 * (q - 1) if q else 0
                 tr = ptr(trace) + 8 * TR_WORDS * q if trace is not None else 0
                 grid = (n // 16 // 4) * (k // (layout.TILE_COLS * layout.CHUNK_TILES))
@@ -901,6 +908,30 @@ summarized per shape.
                         lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
                         lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
                     arms[f"commit{p}{g}"] = commitp
+            for p in PIPE_PLANS:
+                if not gates[g][f"tag{p}"]:
+                    continue
+                other = run(seq_pdl(g, None, CAP_PLANS[p], tbs2[g]), f"pipe{p}{g}")
+                tbs2[g].zero_()
+                other()
+                torch.cuda.synchronize()
+                ok = bool(torch.equal(tbs2[g], want))
+                log(f"gate step M={mb} pipe{p}{g}: {'ok' if ok else 'FAIL'} (the second buffer's tags)")
+                if not ok:
+                    continue
+                state = [0]
+
+                def pipe(chains=(other, arms[f"tag{p}{g}"]), g=g, state=state):
+                    k = state[0]
+                    state[0] ^= 1
+                    cur = torch.cuda.current_stream()
+                    side.wait_stream(cur)
+                    lib.call("tf_leaves", ptr(tbs[g] if k == 0 else tbs2[g]), nleaves[g] * 16, 0, ptr(nodes[g]),
+                             side.cuda_stream)
+                    lib.call("tf_tree", ptr(nodes[g]), nleaves[g], side.cuda_stream)
+                    chains[k]()
+                    cur.wait_stream(side)
+                arms[f"pipe{p}{g}"] = pipe
         if 4 in groups:
             arms["prober4"] = run(seq(lambda name: "u4kr1", 4), "prober4")
             arms["noend4"] = run(seq(lambda name: "n4kr1"), "noend4")
@@ -1007,7 +1038,8 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
             if what.startswith("native"):
                 continue
             stage = ("tag without chunk ends (diagnostic)" if what == "noend" else
-                     "tag+commit" if what.startswith("commit") else "tag")
+                     "tag+commit" if what.startswith("commit") else
+                     "tag+commit (the step before's, pipelined)" if what.startswith("pipe") else "tag")
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": stage,
                         **({"certified": False, "rounds": PROBE_ROUNDS} if what == "prober" else {}),
@@ -1021,7 +1053,8 @@ STAGE_PAIRS = (("tag", "commit"), ("tag", "commits"), *((f"tag{p}", f"commit{p}"
 def stage_points(res: dict, batches, run: str | None) -> list[dict]:
     """The tag stage as a drop-in for the codec lanes' frontier (`verity/tag-stage-point/v0`, one per block size and
     batch): of the step's tag arms with a commit arm after them, the one with the least tag + commit, y over the fastest
-    native arm (native or a nativeP chain); y_commit the commit arm's increment over its tag arm; tau the tag's
+    native arm (native or a nativeP chain); y_commit the commit arm's increment over its tag arm; y_total_pipelined the
+    fastest pipeP arm (tags with the step before's commit beside them) over that native step; tau the tag's
     compressions per step at the V1 chain rate over that native step."""
     rate = res["chains"]["b3_v1_r7"]["compressions_per_s"]
     out = []
@@ -1035,11 +1068,14 @@ def stage_points(res: dict, batches, run: str | None) -> list[dict]:
                 continue
             t, c = min(pairs, key=lambda p: med[p[1]])
             tau = layout.store_chunk_blocks(g) * (17 * g + 1) / rate / base
+            pipes = [f"pipe{p}{g}" for p in PIPE_PLANS if f"pipe{p}{g}" in med]
+            pipe = min(pipes, key=lambda a: med[a]) if pipes else None
             out.append({"schema": "verity/tag-stage-point/v0", "lane": "ra-tag-fast", "model": "llama-3.1-8b",
                         "tag": "ro-blake3/v1", "certified": True, "block_bytes": 1024 * g, "batch": mb,
                         "y_tag": med[t] / base - 1, "y_commit": (med[c] - med[t]) / base, "y_total": med[c] / base,
                         "tag_arm": t, "commit_arm": c, "native_s": base,
                         "native_arm": native_arm, "tau": tau, "measured": True,
+                        **({"y_total_pipelined": med[pipe] / base, "pipe_arm": pipe} if pipe else {}),
                         "run": run, "sm_hz": res.get("clock_hz")})
     return out
 
