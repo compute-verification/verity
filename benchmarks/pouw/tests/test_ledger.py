@@ -435,9 +435,7 @@ def test_a_repository_only_refresh_keeps_the_store_s_rows_and_rereads_the_reposi
     """`--repository-only` is `build` when only the repository's audit changed: the store's rows as checked in, the
     repository's re-read."""
     doc = json.loads(P.TABLE.read_text())
-    new = P.refresh(doc)
-    assert new["twins"] == doc["twins"]
-    assert [s for s in new["sources"] if s["path"] != P.REPO_SOURCE] == [s for s in doc["sources"] if s["path"] != P.REPO_SOURCE]
+    assert P.refresh(doc) == doc, "price_twins.json is stale: run python benchmarks/pouw/harness/price_twins.py --repository-only"
     audit = json.loads(P.REPO_AUDIT.read_text())
     gone = next(t["pin"] for t in doc["twins"] if t["source"] == P.REPO_SOURCE)
     del audit["guarantees"][gone]
