@@ -586,7 +586,10 @@
    "type_hash": "773fffc72e9e6aec423289610c8d2f368e2cf0ba69e5815cab71804d2d9c1077"
   },
   "Bandwidth.SecurityProofs.AuditJoint": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.AuditJoint : Bandwidth.Guarantees.AuditJoint"],
+   "assumptions": [],
+   "type_hash": "2fd703e87c9dd8656f589273f5e3105b34eefdf94bc6223dceb6625d95507a1b"
   },
   "Bandwidth.SecurityProofs.AuditRO": {
    "owner": "@memory-accounting",
@@ -4229,6 +4232,7 @@
    "guarantees": [
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
+    "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses"
@@ -4270,6 +4274,22 @@
     "Bandwidth.InteractiveDevice.world": "c1b30e862e1ed821fbf2a3f72ac9f5c462c204a3548b5533d3daa0956759e9cf"
    },
    "guarantees": ["Bandwidth.SecurityProofs.AuditInteractive", "Bandwidth.SecurityProofs.AuditInteractiveRO"]
+  },
+  "Definitions.Accounting.Bandwidth.Joint": {
+   "digest": "32e017aa8fdcc4ac681238e73408773e76783b133aef92526013631f2c617dd5",
+   "definitions": {
+    "Bandwidth.JointDevice": "db6d939d290f655627003a3ed1d6487d7a71bc75a4c64b389d1536c0c680819d",
+    "Bandwidth.JointDevice.Accepts": "2ed9ccae763651bbd748b3696f59953652ffeb28a9b45d8d7e60165ead3b6765",
+    "Bandwidth.JointDevice.Recovers": "70b18d26e566078c942d0c7457487641c461b7495a4fba07c571b4701d617330",
+    "Bandwidth.JointDevice.chip": "de825eff9269aed95b905c90f38e376e304d5321e9da9c111bcce9ed5600f0a3",
+    "Bandwidth.JointDevice.ingress": "9cf8f9ff4e59cb7a4bd3106cc63ae6b92eba847b9d152a2784175e65a73a7bdd",
+    "Bandwidth.JointDevice.mem": "c5238e8ec6114370c51dc13f3b952dd63781e6bcab35390dac51dd664c072218",
+    "Bandwidth.JointDevice.out": "b4f637ae140cd8d1e0cd227f36aa7d0e62c272fffa06d0eb33ac7b6447f5e72f",
+    "Bandwidth.JointDevice.side": "213dc2df43b5124e6c26bd5e202b71f305bd611458e17a72a23e8aed6f5d79b5",
+    "Bandwidth.JointDevice.state": "b61914ee465f7508faf1f77012d8d8ea1c197fa9ce0234b3424c25743692b8c3",
+    "Bandwidth.JointDevice.world": "2e9a891086d5b0c0865419d501c814f7df0d7dabfd33cab235c4cda2700a6951"
+   },
+   "guarantees": ["Bandwidth.SecurityProofs.AuditJoint"]
   },
   "Definitions.Accounting.Bandwidth.Relay": {
    "digest": "768e53f0dd6fc6ed9b3fca0c18075a70e938e754107f6063d01a47ba9e4062f3",
@@ -4868,6 +4888,7 @@
    "guarantees": [
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
+    "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses",
@@ -12763,10 +12784,11 @@
    "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Accounting.SecurityProofs.Actual.Windows"]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
-   "digest": "51e47702377535617d6bc3c047b562b6a52d17cbf5cebb3d01d1f5d6318d9aaf",
+   "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
    "definitions": {
     "Bandwidth.Guarantees.AuditInteractive": "88c232fe1a99541d794dbda074c79d85e02793e42882609a11f3dfcfecac6573",
     "Bandwidth.Guarantees.AuditInteractiveRO": "0adfab2ceb5337aeca9609347520057420daa4fb968411e0bb30f78818282a9d",
+    "Bandwidth.Guarantees.AuditJoint": "fb08920344c3579785fb15cff191687b1480334351ea3f19a50436a485808d3d",
     "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20",
     "Bandwidth.Guarantees.AuditRelay": "d79eb32b815f2d9722200c33e7a91ea3372fa9dc0133873016ea7e2a1750fe37",
     "Bandwidth.Guarantees.HonestPasses": "ea463a38fea8188b52f9b1c359364c3adc9256df140c00493c7e612ffe2f8f2d"
@@ -12774,6 +12796,7 @@
    "guarantees": [
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
+    "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses"
