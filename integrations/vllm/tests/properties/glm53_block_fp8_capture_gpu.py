@@ -39,10 +39,11 @@ instead.  A phase that raises records its error and fails the verdict without st
 The Programs model the k32 wgmma step only.  vLLM's tuned H200 config for GLM-5.3's TP8 expert shard (fused_moe/configs/`E=256,N=256,
 device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json`, looked up at the nearest batch size, fused_moe.py:1442-1447)
 gives M <= 3 (every decode step of a batch of one) BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, which SWAP_AB does not take (BLOCK_SIZE_N < 64)
-and wgmma cannot run (the dot's M is not a multiple of 64): that launch fails `wgmma_tile` and the PTX scan.  `--wgmma-configs` writes those
-configs with every such entry widened to BLOCK_SIZE_N 64, the shape the same file gives M = 4 (`widen_for_wgmma`), to
-`<out>/moe_configs/`, and runs with `VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the
-same tiles.
+and wgmma cannot run (the dot's M is not a multiple of 64), and M in 4..6 BLOCK_SIZE_M 8 x BLOCK_SIZE_N 64, which SWAP_AB takes with
+the dot's N = 8, which Triton 3.7.1 does not lower to wgmma either (both took `mma.sync.m16n8k16` on f16 on the H200, run
+r20261012-215811-1ef7): those launches fail `wgmma_tile` and the PTX scan.  `--wgmma-configs` writes those configs with every such
+entry widened to BLOCK_SIZE_M 16 x BLOCK_SIZE_N 64, the shape the same file gives M = 8 (`widen_for_wgmma`), to `<out>/moe_configs/`,
+and runs with `VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the same tiles.
 
 GO needs 0 mismatches and 0 unresolved words (a twin flags a word it cannot claim: a non-finite accumulator; these operands are finite
 and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns, every expert launch on a wgmma
@@ -121,21 +122,23 @@ def environment(batch_invariant: bool, triton_cache: Path) -> dict[str, str]:
 
 def wgmma_tile(config: dict[str, Any], swap: bool) -> bool:
     """Whether Triton can lower a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Programs model: the
-    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
-    smaller tile takes `mma.sync` or FMA, which no Program models; the PTX scan checks the compiled kernels either way."""
+    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8 and
+    at least 16 (Triton 3.7.1 on the H200 lowered the e4m3 dot at N = 8 to `mma.sync.m16n8k16` and at N = 16 to `wgmma.m64n16k32`,
+    run r20261012-215811-1ef7).  A smaller tile takes `mma.sync` or FMA, which no Program models; the PTX scan checks the compiled
+    kernels either way."""
     m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
+    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0 and n >= 16
 
 
 def widen_for_wgmma(configs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list]]:
     """A tuned-config file (batch size -> config) with every entry `wgmma_tile` refuses widened to BLOCK_SIZE_N 64, so SWAP_AB
-    (`enable_swap_ab` on cc 9.0: BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) makes it the dot's M; the
-    changed entries, (before, after)."""
+    (`enable_swap_ab` on cc 9.0: BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) makes it the dot's M, and to
+    BLOCK_SIZE_M 16, the dot's N under SWAP_AB; the changed entries, (before, after)."""
     out, changed = dict(configs), {}
     for m, c in configs.items():
         if not isinstance(c, dict) or wgmma_tile(c, c["BLOCK_SIZE_M"] < 64 and c["BLOCK_SIZE_N"] >= 64):
             continue
-        wide = {**c, "BLOCK_SIZE_N": max(64, c["BLOCK_SIZE_N"])}
+        wide = {**c, "BLOCK_SIZE_M": max(16, c["BLOCK_SIZE_M"]), "BLOCK_SIZE_N": max(64, c["BLOCK_SIZE_N"])}
         if wide["BLOCK_SIZE_M"] < 64 and wgmma_tile(wide, True):
             out[m] = wide
             changed[m] = [c, wide]
