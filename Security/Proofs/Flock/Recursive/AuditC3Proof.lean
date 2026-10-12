@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.C3.Fork.Sound
+import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit at candidate 3: its proof
@@ -22,9 +23,13 @@ In (i), as in `PublicAudit`'s:
   (`acceptsV_checked`);
 * `_hob` is read where the event parses a session's file into scope (`loads_of_verifiesV`, `scope_of_accepts`).
 
-`_hstk` is not read here: VBridge is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
-(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`), which gives VBridge at the typed sessions and so at the checked ones
-(`vbridge_checked`).
+Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
+gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerC`).
+
+`_hstk` is not read here: VBridgeC is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
+(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`, which gives VBridge at the checked sessions, and VBridgeC through
+`Flock.Assumptions.vbridgeC_of_vbridge`); `vbridge_checked` and `vbridgeC_checked` carry either from the typed sessions
+to the checked ones.
 
 (ii) is `RecursiveFirewallPrivate`.
 -/
@@ -114,6 +119,30 @@ theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Typ
       (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish cs coins j (bind j) rows J own tr) htr⟩,
     hdec, hfull⟩
 
+/-- **VBridgeC at the typed sessions gives it at the checked sessions**, as `vbridge_checked`. -/
+theorem vbridgeC_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
+    {coins : Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
+    {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg}
+    {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg}
+    (hb : Flock.Premises.VBridgeC (Flock.Guarantees.custodied zr hC h) dg N k Rw x wmsg Sk cmt msg) :
+    Flock.Premises.VBridgeC (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h) dg N k Rw x wmsg Sk cmt
+      msg := by
+  obtain ⟨hoff, hcm, hdec, hfull⟩ := hb
+  refine ⟨fun R ω t R₂ hbad τ o ho => hoff R ω t R₂ hbad τ o fun j =>
+      ⟨acceptsZKR_of_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
+        (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish cs coins j (bind j) rows J own tr)
+        (ho j).1, (ho j).2⟩,
+    fun i R ω t e he R₂ j ⟨tr, htr⟩ => hcm i R ω t e he R₂ j ⟨tr, acceptsZKR_of_keepOwn
+      (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
+      (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish cs coins j (bind j) rows J own tr) htr⟩,
+    hdec, hfull⟩
+
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
 theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
@@ -146,11 +175,13 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_inner hA3
+  rcases zk_sessions_recursive_fork_innerC hA3
     (Flock.Guarantees.checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust hT) dg N hk hRw
     hM hρ hr' (Flock.Guarantees.checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust hT σ)
     (fun _ _ => Subtype.mk xR hreg) wmsg Sk cmt msg
     (hbr hT) Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) hin
+    (Nat.succ_pos r) (schedInner_lastFree T CT _ _ _ _)
+    (fun x => clashPickHL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp) x)
     with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)

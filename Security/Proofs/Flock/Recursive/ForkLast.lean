@@ -51,13 +51,6 @@ def relabelL {N : Type} : (List (M × C) → M → N) → N → List (M × C) �
   | _, m, [(_, ρ)] => [(m, ρ)]
   | ref, m, (c, ρ) :: e :: t => (ref [] c, ρ) :: relabelL (fun p c' => ref ((c, ρ) :: p) c') m (e :: t)
 
-theorem ite_one_zero_le {p q : Prop} {dp : Decidable p} {dq : Decidable q} (h : p → q) :
-    (if p then (1 : ℝ≥0∞) else 0) ≤ if q then 1 else 0 := by
-  by_cases hp : p
-  · exact le_of_eq (by rw [ite_eq_left hp, ite_eq_left (h hp)])
-  · rw [ite_eq_right hp]
-    exact zero_le
-
 variable {β : Type} [Fintype C] [Nonempty C]
 
 open Classical in
