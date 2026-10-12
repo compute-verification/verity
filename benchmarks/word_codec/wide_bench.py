@@ -107,6 +107,8 @@ class WLib:
         so.ww_gemm_sketch.argtypes = [i, v, v, v, i, i, i, q, i, v, v, q, v, v, i, v]
         so.ww_sketch_tags.argtypes = [v, q, q, v, v, v]
         so.ww_sketch_commit.argtypes = [v, q, v, v, v]
+        so.ww_sketch_leaves.argtypes = [v, q, v, q, q, v, v]
+        so.ww_sketch_tree.argtypes = [v, q, v, v]
         cs = (ctypes.c_int * 17)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,
@@ -730,82 +732,145 @@ def pass_sketch_commit(lib: WLib, torch, reps: int, log) -> dict:
     return {"vectors": nv, "median_s": med, "times_s": times}
 
 
-def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log, sketch: bool = False) -> dict:
+def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log, sketch: bool = False,
+                 layers: int | None = None, profile: bool = False) -> dict:
     """One pass of fused GEMMs (decode and tag at k: LAYERS layers of the four linears in order, 232 MB of store a
     layer at p521, so each linear's store is cold again by its next layer) alone, and with the previous window's
     commit (`pass_commit`'s, over the pass's tags) on a second stream from the pass's start. y_commit_overlap is the
     second's excess over the first, over LAYERS times the four linears' native time: the commit's cost to a prover that
     commits window n while it steps through window n + 1. The kernels, stores and key are the ones `gemm_case` gated.
-    sketch: the GEMMs hash their sketches (`ww_gemm_sketch`), and the commit is the sketch's (`pass_sketch_commit`)."""
+    sketch: the GEMMs hash their sketches (`ww_gemm_sketch`, the pass's vectors numbered from 0), the commit is the
+    sketch's (`pass_sketch_commit`), and a third arm commits the pass itself as it goes: each linear's tags go to one
+    slot of a two-slot ring, which L2 keeps under the weights' evict-first loads, and its leaves are hashed from there
+    on the second stream (`ww_sketch_leaves`), the tree after the last (`ww_sketch_tree`); y_leaves is its excess over
+    the pass alone, and `root_equal` its gate: its root is the pass commit's over the same tags written out.
+    profile: the gate, then one such pass of `layers` layers between cudaProfilerStart and Stop, untimed."""
     f = lib.field
+    layers = layers or LAYERS
     lib.set_key(W.key(f, SEED, k))
     stores, wss = {}, {}
+    nv = {name: 16 * WS.tiles(*B.SHAPES[name]) for name in cases}
     for name in cases:
         n, kd = B.SHAPES[name]
         pay = payload_store(torch, B.fp8_weights(torch, n, kd, 100 + n + kd).view(torch.uint8), f)
         s = torch.empty_like(pay)
         lib.call("ww_encode", ptr(pay), ptr(s), pay.numel() // f.limbs, 0, k, 188 * 4, stream(torch))
         torch.cuda.synchronize()
-        blocks = 16 * WS.tiles(n, kd) if sketch else pay.numel() // f.limbs // lib.lane_words // lib.tb
+        blocks = nv[name] if sketch else pay.numel() // f.limbs // lib.lane_words // lib.tb
         ws = torch.empty(lib.so.ww_workspace_bytes(blocks), dtype=torch.uint8, device="cuda")
         stores[name], wss[name] = s, (ws, lib.so.ww_workspace_tags(ptr(ws), blocks))
         del pay
-    pblocks = pass_vectors() if sketch else pass_blocks(lib)
+    pblocks = layers * sum(nv.values()) if sketch else pass_blocks(lib)
     pws = torch.empty(lib.so.ww_workspace_bytes(pblocks), dtype=torch.uint8, device="cuda")
     torch.as_strided(pws.view(torch.int32), (pblocks * 8,), (1,), 0).random_(-(1 << 31), (1 << 31) - 1)
     seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
     sgn = sign_tensor(torch, f) if sketch else None
+    ring = [torch.empty(32 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
     commit_fn = "ww_sketch_commit" if sketch else "ww_commit"
     sa, sb = torch.cuda.Stream(), torch.cuda.Stream()
+    ev_g, ev_l = [torch.cuda.Event() for _ in range(2)], [torch.cuda.Event() for _ in range(2)]
     so = lib.so
     out = {"k": k, "sketch": sketch, "per_batch": {}}
     for mb in batches:
         xs = {name: torch.randn(mb, B.SHAPES[name][1], device="cuda").to(torch.float8_e4m3fn) for name in cases}
         ys = {name: torch.zeros(mb, B.SHAPES[name][0], dtype=torch.float32, device="cuda") for name in cases}
-        native = LAYERS * sum(c["times"][mb]["native_s"] for c in cases.values())
+        torch.cuda.synchronize()
+        native = layers * sum(c["times"][mb]["native_s"] for c in cases.values()) if not profile else None
 
-        def one(with_commit: bool) -> float:
+        def gemm(name: str, tags, j: int) -> int:
+            n, kd = B.SHAPES[name]
+            if sketch:
+                return so.ww_gemm_sketch(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n,
+                                         kd, 0, 0, ptr(sgn), None, j, seed_buf, tags, 0, sa.cuda_stream)
+            return so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n, kd, 0, 0,
+                              seed_buf, tags, 0, sa.cuda_stream)
+
+        def committing(root) -> int:
+            rc, j, i = 0, 0, 0
+            for _ in range(layers):
+                for name in cases:
+                    r = i % 2
+                    if i >= 2:
+                        sa.wait_event(ev_l[r])
+                    rc |= gemm(name, ptr(ring[r]), j)
+                    ev_g[r].record(sa)
+                    sb.wait_event(ev_g[r])
+                    rc |= so.ww_sketch_leaves(ptr(pws), pblocks, ptr(ring[r]), j, nv[name], seed_buf, sb.cuda_stream)
+                    ev_l[r].record(sb)
+                    j, i = j + nv[name], i + 1
+            return rc | so.ww_sketch_tree(ptr(pws), pblocks, root, sb.cuda_stream)
+
+        if sketch and "root_equal" not in out:
+            tags0, rc, j = so.ww_workspace_tags(ptr(pws), pblocks), 0, 0
+            for _ in range(layers):
+                for name in cases:
+                    rc |= gemm(name, tags0 + 32 * j, j)
+                    j += nv[name]
+            ref, got = ctypes.create_string_buffer(64), ctypes.create_string_buffer(64)
+            rc |= so.ww_sketch_commit(ptr(pws), pblocks, seed_buf, ref, sa.cuda_stream)
+            torch.cuda.synchronize()
+            pws.zero_()
+            torch.cuda.synchronize()
+            rc |= committing(got)
+            torch.cuda.synchronize()
+            out["root_equal"] = not rc and ref.raw == got.raw and ref.raw != bytes(64)
+            log(f"pass leaves {lib.name} k={k} M={mb} ({layers} layers): root "
+                f"{'equals' if out['root_equal'] else 'DIFFERS from'} the pass commit's (rc {rc})")
+        if profile:
+            torch.cuda.profiler.start()
+            rc = committing(None)
+            torch.cuda.synchronize()
+            torch.cuda.profiler.stop()
+            out["profiled"] = {"batch": mb, "layers": layers, "rc": rc}
+            break
+
+        def one(mode: str) -> float:
             a, b, c_end = (torch.cuda.Event(enable_timing=True) for _ in range(3))
             with torch.cuda.stream(sa):
                 lib.call("ww_spin", B.SPIN_CYCLES, sa.cuda_stream)
                 a.record(sa)
-            if with_commit:
+            if mode == "commit":
                 sb.wait_event(a)
                 if getattr(so, commit_fn)(ptr(pws), pblocks, seed_buf, None, sb.cuda_stream):
                     raise RuntimeError(f"{commit_fn}: error")
                 c_end.record(sb)
-            rc = 0
-            for _ in range(LAYERS):
-                for name in cases:
-                    n, kd = B.SHAPES[name]
-                    if sketch:
-                        rc |= so.ww_gemm_sketch(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]),
-                                                mb, n, kd, 0, 0, ptr(sgn), None, 0, seed_buf, wss[name][1], 0,
-                                                sa.cuda_stream)
-                    else:
-                        rc |= so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n,
-                                         kd, 0, 0, seed_buf, wss[name][1], 0, sa.cuda_stream)
+            rc, j = 0, 0
+            if mode == "leaves":
+                rc = committing(None)
+                c_end.record(sb)
+            else:
+                for _ in range(layers):
+                    for name in cases:
+                        rc |= gemm(name, wss[name][1], j)
+                        j += nv[name]
             if rc:
-                raise RuntimeError(f"ww_gemm k={k} M={mb}: error {rc}")
-            if with_commit:
+                raise RuntimeError(f"pass {mode} k={k} M={mb}: error {rc}")
+            if mode != "alone":
                 sa.wait_event(c_end)
             b.record(sa)
             b.synchronize()
             return a.elapsed_time(b) / 1e3
 
-        one(False), one(True)
-        alone, both = [], []
+        modes = ("alone", "commit", "leaves") if sketch and out["root_equal"] else ("alone", "commit")
+        for m in modes:
+            one(m)
+        t = {m: [] for m in modes}
         for rep in range(reps):
-            for w in ((False, True) if rep % 2 == 0 else (True, False)):
-                (both if w else alone).append(one(w))
-        ta, tb = statistics.median(alone), statistics.median(both)
-        out["per_batch"][mb] = {"alone_s": alone, "with_commit_s": both, "native_pass_s": native,
-                                "y_pass": ta / native, "y_commit_overlap": (tb - ta) / native}
-        log(f"pass overlap {lib.name}{' sketch' if sketch else ''} k={k} M={mb}: a pass of fused GEMMs "
-            f"{ta * 1e3:.2f} ms ({ta / native:.2f}x native), with the commit beside it {tb * 1e3:.2f} ms: "
-            f"commit +{(tb - ta) / native:.3f}")
+            for m in (modes if rep % 2 == 0 else modes[::-1]):
+                t[m].append(one(m))
+        med = {m: statistics.median(v) for m, v in t.items()}
+        ta = med["alone"]
+        out["per_batch"][mb] = {"alone_s": t["alone"], "with_commit_s": t["commit"], "native_pass_s": native,
+                                "y_pass": ta / native, "y_commit_overlap": (med["commit"] - ta) / native}
+        line = (f"pass overlap {lib.name}{' sketch' if sketch else ''} k={k} M={mb}: a pass of fused GEMMs "
+                f"{ta * 1e3:.2f} ms ({ta / native:.2f}x native), with the commit beside it {med['commit'] * 1e3:.2f} ms: "
+                f"commit +{(med['commit'] - ta) / native:.3f}")
+        if "leaves" in med:
+            out["per_batch"][mb].update(with_leaves_s=t["leaves"], y_leaves=(med["leaves"] - ta) / native)
+            line += f"; committing as it goes {med['leaves'] * 1e3:.2f} ms: +{(med['leaves'] - ta) / native:.3f}"
+        log(line)
         del xs, ys
-    del stores, wss, pws
+    del stores, wss, pws, ring
     torch.cuda.empty_cache()
     return out
 
@@ -911,6 +976,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
             o = (po_sk or {}).get(k, {}).get("per_batch", {}).get(mb)
             if o is not None:
                 out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped"))
+                if "y_leaves" in o:
+                    out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_leaves"]), "/sketch/leaves-per-linear"))
     return out
 
 

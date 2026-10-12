@@ -1280,6 +1280,40 @@ __global__ void __launch_bounds__(128) sketch_tags_kernel(const int32_t* __restr
   o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
 }
 
+// `bw::b3_leaves` over the n tags [16 leaf0, 16 leaf0 + n) of a pass of B tags, held at `tags` (one linear's, read while
+// L2 still has them), each leaf at its index in the pass.
+__global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf0,
+                                                     uint64_t n, bw::Mid leafmid, uint64_t* __restrict__ leaves) {
+  const uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x, leaf = leaf0 + i, first = leaf * 16;
+  if (16 * i >= n) return;
+  const int c = (int)(B - first < 16 ? B - first : 16);
+  const int data = 1 + 4 * c, nb = (8 * data + 17 + 127) / 128;
+  const uint32_t* T = tags + 16 * i * 8;
+  uint64_t s[8];
+#pragma unroll
+  for (int e = 0; e < 8; ++e) s[e] = leafmid.h[e];
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+    uint64_t w[16];
+#pragma unroll
+    for (int e = 0; e < 16; ++e) {
+      const int q = 16 * blk + e;
+      uint64_t v = 0;
+      if (q == 0)
+        v = leaf;
+      else if (q < data)
+        v = ((uint64_t)bw::bswap32(T[2 * (q - 1)]) << 32) | bw::bswap32(T[2 * (q - 1) + 1]);
+      else if (q == data)
+        v = 0x80ULL << 56;
+      if (q == 16 * nb - 1) v = (uint64_t)(128 + 8 + 32 * c) * 8;
+      w[e] = v;
+    }
+    bw::compress(s, w);
+  }
+#pragma unroll
+  for (int e = 0; e < 8; ++e) leaves[leaf * 8 + e] = s[e];
+}
+
 __global__ void dtw_kernel(uint32_t* out) {
   uint32_t v[N], dv[N];
   tw_init(v, dv, 0, LANES);
@@ -1618,6 +1652,26 @@ int ww_commit(void* workspace, uint64_t blocks, const uint8_t* seed, uint8_t* ro
 // `ww_commit` over n ro-sketch-blake3/v0 tags (a leaf a tile).
 int ww_sketch_commit(void* workspace, uint64_t n, const uint8_t* seed, uint8_t* root, cudaStream_t s) {
   return commit_named(workspace, n, SKETCH_NAME, seed, root, s);
+}
+
+// `ww_sketch_commit`'s leaves of the pass's tags [jbase, jbase + n) (jbase a multiple of 16), read from `tags`, into
+// the leaves of the commit workspace of a pass of `blocks` tags; its own tag area is not read.
+int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
+                     const uint8_t* seed, cudaStream_t s) {
+  if (jbase % 16 || jbase + n > blocks) return 2;
+  if (!n) return 0;
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
+  sketch_leaves<<<(unsigned)(((n + 15) / 16 + 127) / 128), 128, 0, s>>>(tags, blocks, jbase / 16, n, lm, p.nodes);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The tree over the leaves `ww_sketch_leaves` wrote; with root non-null, the root's 64 bytes (and a sync).
+int ww_sketch_tree(void* workspace, uint64_t blocks, uint8_t* root, cudaStream_t s) {
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  bw::launch_tree(p, s);
+  if (cudaGetLastError()) return 4;
+  return root ? bw::read_root(p, root, s) : 0;
 }
 
 // The commit workspace's leaves (64 bytes each, big-endian u64 words), for the gate.

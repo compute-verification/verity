@@ -15,7 +15,8 @@
 # the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3) the largest k each
 # holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
 # `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
-# out/profile-details.txt.
+# out/profile-details.txt. L2PROBE=LAYERS runs, after the bench, wide_profile.py --l2 LAYERS (L2_ARGS, default 70B, M=1,
+# k=1) under ncu --cache-control none: each kernel's DRAM bytes and L2 read hits in out/l2probe.csv.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -58,6 +59,7 @@ if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
 export B PY WC LIBSET BENCH_ARGS=${BENCH_ARGS:-} PROFILE=${PROFILE:-} PROFILE_ARGS=${PROFILE_ARGS:-}
+export L2PROBE=${L2PROBE:-} L2_ARGS=${L2_ARGS:---model llama-3.1-70b --batch 1 --k 1}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -75,6 +77,14 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   else
     # shellcheck disable=SC2086
     "$PY" $WC/wide_bench.py "${LIBS[@]}" --wc "$B/wc-plain.so" --out "$O" $BENCH_ARGS; rc=$?
+  fi
+  if [ $rc = 0 ] && [ -n "${L2PROBE:-}" ]; then
+    lib=${LIBSET%% *}
+    M=dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_op_read_lookup_hit.sum,lts__t_sectors_op_read_lookup_miss.sum
+    # shellcheck disable=SC2086
+    ncu --profile-from-start off --cache-control none --replay-mode application --metrics $M --csv \
+      --log-file "$O/l2probe.csv" "$PY" $WC/wide_profile.py --lib "$lib=$B/ww-$lib.so" --out "$O" --l2 "$L2PROBE" \
+      $L2_ARGS > "$O/l2probe.log" 2>&1 || rc=6
   fi
   q
   exit $rc'

@@ -2,7 +2,8 @@
 `ncu --profile-from-start off`). The store is built and encoded as `wide_bench.py` does, and the fused kernel's
 partial sums are checked equal to the payload store's, with and without the tag, before anything is profiled; then
 each arm (ww0, t0, d<k>, t<k>, t<k>_ahead with the L2 prefetch) is launched once between cudaProfilerStart and cudaProfilerStop. Nothing is
-timed here: ncu's replays make its durations a profile's, not a measurement of record.
+timed here: ncu's replays make its durations a profile's, not a measurement of record. `--l2 LAYERS` profiles
+instead a pass that commits its sketch tags as it goes (`wide_run.sh` with L2PROBE=LAYERS, for DRAM bytes and L2 hits).
 """
 from __future__ import annotations
 
@@ -27,10 +28,22 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=1)
     ap.add_argument("--k", type=int, default=1)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--model", choices=sorted(WB.MODELS), default=WB.MODEL)
+    ap.add_argument("--l2", type=int, metavar="LAYERS",
+                    help="instead: a pass of LAYERS layers of the four linears that commits its sketch tags as it goes "
+                    "(`pass_overlap`'s third arm, gated first), for the tags' DRAM bytes under ncu --cache-control none")
     a = ap.parse_args()
 
     import torch
     lib = WB.WLib(*a.lib.split("=", 1))
+    WB.use_model(a.model)
+    if a.l2:
+        res = WB.pass_overlap(lib, torch, {name: {} for name in B.SHAPES}, a.k, [a.batch], 0,
+                              lambda s: print(s, flush=True), sketch=True, layers=a.l2, profile=True)
+        out = Path(a.out)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "l2probe.json").write_text(json.dumps({"lib": lib.name, "model": a.model, **res}, indent=1))
+        return 0 if res["root_equal"] and not res["profiled"]["rc"] else 5
     f, k, mb = lib.field, a.k, a.batch
     n, kd = B.SHAPES[a.shape]
     w = B.fp8_weights(torch, n, kd, 100 + n + kd)
