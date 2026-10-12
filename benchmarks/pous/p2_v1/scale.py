@@ -535,14 +535,14 @@ def audit_cmd(a: argparse.Namespace) -> int:
     out, scratch = Path(a.out), Path(a.scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     exps = sorted(int(x) for x in a.log2.split(",") if x)
-    doc: dict[str, Any] = {"log2": exps, "seed": a.seed, "stores": {}}
+    doc: dict[str, Any] = {"log2": exps, "store_seed": a.store_seed, "stores": {}}
     stores: dict[int, dict[str, Any]] = {}
     for e in exps:
         blocks = 1 << e
         segments = blocks // BPS
         salt, model = os.urandom(32), os.urandom(64)
         leaves = scratch / f"leaves-2^{e}.bin"
-        hash_s = leaves_file(leaves, a.seed + e, segments, salt, a.workers)
+        hash_s = leaves_file(leaves, a.store_seed + e, segments, salt, a.workers)
         stores[e] = {"blocks": blocks, "segments": segments, "salt": salt, "model": model, "leaves": leaves}
         doc["stores"][str(e)] = {"blocks": blocks, "store_bytes": blocks * NB, "leaf_hash_s": hash_s,
                                  "leaf_hash_workers": a.workers, "leaf_hash_blocks_per_s": blocks / hash_s}
@@ -571,7 +571,7 @@ def audit_cmd(a: argparse.Namespace) -> int:
         t0 = time.perf_counter()
         c = torch.empty((blocks, NB), dtype=torch.uint8, device=dev)
         for s in range(segments):
-            c[s * BPS:(s + 1) * BPS].copy_(torch.from_numpy(_segment(a.seed + e, s)))
+            c[s * BPS:(s + 1) * BPS].copy_(torch.from_numpy(_segment(a.store_seed + e, s)))
         torch.cuda.synchronize()
         rec["fill_s"] = time.perf_counter() - t0
         rec["free_after_store_bytes"] = torch.cuda.mem_get_info(dev)[0]
@@ -587,7 +587,7 @@ def audit_cmd(a: argparse.Namespace) -> int:
         bound.raised()
         rec["decode_all_s"] = dec
         rec["decode_stored_GBps"] = blocks * NB / dec / 1e9
-        rec["path"] = path_cost(blocks, a.path_reps, a.seed)
+        rec["path"] = path_cost(blocks, a.path_reps, a.store_seed)
         dump(out, "audit.json", doc)
         fields = {"salt": st["salt"].hex(), "model": st["model"].hex(), "manifest": P.manifest(), "payload_bytes": PAYLOAD}
         start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
@@ -687,7 +687,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.choices["audit"]
     p.add_argument("--scratch", required=True)
     p.add_argument("--log2", default="19,25")
-    p.add_argument("--seed", type=int, default=20261012)
+    p.add_argument("--store-seed", type=int, default=20261012,
+                   help="the synthetic store's blocks (the memory challenger draws its own coins)")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--audits", type=int, default=20)
     p.add_argument("--pings", type=int, default=5000)
