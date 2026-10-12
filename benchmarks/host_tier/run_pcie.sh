@@ -10,7 +10,8 @@
 # zero-copy read over grids; 4 KiB pages; and the host's DRAM read by CPU threads alone, beside every GPU's H2D copies, and
 # beside every GPU's zero-copy reads, timed together (--start-at).
 # Env: NGPU (1), REPS (2), SECONDS_EACH (3), MIB (host buffer per GPU, 1024), GRIDS ("188 376 752 1504 3008"),
-#      PCIE_CPUS (the pcie process's CPUs, 48-51), DRAM_CPUS (the CPU readers', 52-95).
+#      PCIE_CPUS (the pcie process's CPUs, 48-51), DRAM_CPUS (the CPU readers', 52-95), HOST_NODE (the CPUs-with-GPUs
+#      pairs' memory, 0; local for readers on both sockets); HOST_TIER_BIN and HOST_TIER_LEASED as run_loop.sh.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, env.txt, pcie.jsonl, dram.jsonl.
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -32,22 +33,27 @@ if [ "${1:-}" = leased ]; then
   for g in ${GRIDS:-188 376 752 1504 3008}; do P --host-node local --modes zcr,zcr_d2h --grid "$g" | tag grid; done
   P --host-node local --modes h2d,zcr --thp 0 | tag pages4k
   # host DRAM read by the CPUs alone and with every GPU reading it too, over the same seconds
-  D() { taskset -c "$DC" "$B/dram" --cpus "$DC" --node 0 --kernel multi --thp 1 --mib 256 --seconds "$S" "$@"; }
+  D() { taskset -c "$DC" "$B/dram" --cpus "$DC" --node "${HOST_NODE:-0}" --kernel multi --thp 1 --mib 256 --seconds "$S" "$@"; }
   at() { python3 -c 'import time; print(time.time() + 8)'; }
   for r in 1 2; do
     D --label cpu-alone | tee -a "$O/dram.jsonl"
     for m in h2d zcr; do
       t=$(at)
       D --label "cpu-with-$m" --start-at "$t" > "$B/d.json" &
-      P --host-node 0 --modes "$m" --start-at "$t" | tag "with-cpu-$m"
+      P --host-node "${HOST_NODE:-0}" --modes "$m" --start-at "$t" | tag "with-cpu-$m"
       wait; tee -a "$O/dram.jsonl" < "$B/d.json"
     done
   done
   exit 0
 fi
 
-B=$(mktemp -d /tmp/host-tier-pcie.XXXXXX); trap 'rm -rf "$B"' EXIT
-NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
-{ "$NVCC" --version; "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/pcie" pcie.cu && gcc -O3 -march=native -pthread -Wall -o "$B/dram" dram.c; } \
-  > "$O/build.txt" 2>&1 || { cat "$O/build.txt"; exit 4; }
+if [ -n "${HOST_TIER_BIN:-}" ]; then
+  B=$HOST_TIER_BIN
+else
+  B=$(mktemp -d /tmp/host-tier-pcie.XXXXXX); trap 'rm -rf "$B"' EXIT
+  NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
+  { "$NVCC" --version; "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/pcie" pcie.cu && gcc -O3 -march=native -pthread -Wall -o "$B/dram" dram.c; } \
+    > "$O/build.txt" 2>&1 || { cat "$O/build.txt"; exit 4; }
+fi
+[ -n "${HOST_TIER_LEASED:-}" ] && exec bash "$PWD/run_pcie.sh" leased "$B"
 GPU_LEASE_WHO=ra-host-tier gpu-lease "${NGPU:-1}" --wait --max-min 20 -- bash "$PWD/run_pcie.sh" leased "$B"

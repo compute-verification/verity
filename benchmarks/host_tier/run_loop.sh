@@ -15,9 +15,13 @@
 # receipts alone. CPU receipts hash their leaves on the SHA extensions (SHA=ni) unless SHA=c. SWEEP=scale instead runs,
 # REPS (3) times on the last 10, 16 and all 22 worker cores, the adversary's CPU read alone, beside the GPUs' copy-engine
 # receipts and timed with their copy engines, and the loop (copy engine; CPU receipts as HONEST, default KS 1 by chunks).
-# All host-tier memory is on NUMA node GPU_NODE (0), the node of the worker CPUs: one socket's DRAM.
+# SWEEP=window runs, REPS times, only the adversary's three mixes and the loop (copy engine and zero copy, KS 1 by chunks),
+# then the probes. All host-tier memory is on NUMA node GPU_NODE (0), the node of the worker CPUs: one socket's DRAM;
+# GPU_NODE=local puts each GPU's part on its own node and each CPU's on its own, for workers on both sockets.
 # Env: NGPU (1), REPS (4), SECONDS_EACH (3), LOOP_GRID (32), WORKERS (52-95), HOST_CPUS (GPU driver threads, 48,49),
-#      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (2), GPU_NODE (0), GPU_ON, SHA (ni).
+#      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (2), GPU_NODE (0), GPU_ON, SHA (ni), CPU_MIB (a thread's region,
+#      256); HOST_TIER_BIN (built binaries)
+#      and HOST_TIER_LEASED (GPUs already leased), both from run_window.sh.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate*/, gates.jsonl, loop.jsonl, pcie.jsonl, dram.jsonl,
 # hostproc.jsonl.
 set -uo pipefail
@@ -30,11 +34,11 @@ if [ "${1:-}" = leased ]; then
     --format=csv > "$O/gpu.txt" 2>&1
   S=${SECONDS_EACH:-3} G=${LOOP_GRID:-32} W=${WORKERS:-52-95} H=${HOST_CPUS:-48,49} PR=${PROBE_CPU:-50} N=${NGPU:-1}
   SHA=${SHA:-ni}
-  L() { "$B/loop" --seconds "$S" --gpu-mib 2048 --cpu-mib 256 --adv-mib 256 --gpu-node "${GPU_NODE:-0}" --host-cpus "$H" "$@"; }
+  L() { "$B/loop" --seconds "$S" --gpu-mib 2048 --cpu-mib "${CPU_MIB:-256}" --adv-mib "${CPU_MIB:-256}" --gpu-node "${GPU_NODE:-0}" --host-cpus "$H" "$@"; }
   one() {
     python3 cpuload.py snap > "$B/a.json"
     line=$(L "$@")
-    load=$(python3 cpuload.py diff "$B/a.json" --exclude 48-95)
+    load=$(python3 cpuload.py diff "$B/a.json" --exclude "$W,$H,$PR")
     echo "${line%\}}, \"load\": $load, \"cuda_visible\": \"$CUDA_VISIBLE_DEVICES\"}" | tee -a "$O/loop.jsonl"
   }
   gate() {  # gate NAME FLAGS...: the loop's first receipts against reference.py; a failed gate times nothing
@@ -68,7 +72,18 @@ if [ "${1:-}" = leased ]; then
     done
     exit 0
   fi
+  if [ "${SWEEP:-}" = window ]; then
+    # the whole-node window: C's three mixes and the loop's two best forms, REPS times
+    for r in $(seq "${REPS:-4}"); do
+      one --label adv --gpus 0 --adv-cpus "$W"
+      one --label gpu+adv --gpus "$N" --grid 4 --gpu-mode dma --adv-cpus "$W"
+      for m in dma zc; do one --label honest --gpus "$N" --grid "$G" --gpu-mode "$m" --cpus "$W" --ks 1 --sha "$SHA" --chunk 1; done
+      D "$W" --label cpu-alone | tee -a "$O/dram.jsonl"
+      with_h2d "$W"
+    done
+  fi
   for r in $(seq "${REPS:-4}"); do
+    [ "${SWEEP:-}" = window ] && break
     one --label cpu --gpus 0 --cpus "$W" --ks 1 --sha "$SHA"
     for k in 1 4; do one --label cpu --gpus 0 --cpus "$W" --ks "$k" --sha "$SHA" --chunk 1; done
     one --label cpu --gpus 0 --cpus "$W" --ks 1 --sha "$SHA" --chunk 1 --pf 2048
@@ -95,12 +110,18 @@ if [ "${1:-}" = leased ]; then
   exit 0
 fi
 
-B=$(mktemp -d /tmp/host-tier-loop.XXXXXX); trap 'rm -rf "$B"' EXIT
-NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
-{ "$NVCC" --version && g++ -O3 -march=native -Wall -c receipt.cpp -o "$B/receipt.o" \
-    && "$NVCC" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -pthread -o "$B/loop" loop.cu "$B/receipt.o" \
-    && "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/pcie" pcie.cu && gcc -O3 -march=native -pthread -Wall -o "$B/dram" dram.c; } \
-  > "$O/build.txt" 2>&1 || { cat "$O/build.txt"; exit 4; }
+if [ -n "${HOST_TIER_BIN:-}" ]; then
+  B=$HOST_TIER_BIN
+else
+  B=$(mktemp -d /tmp/host-tier-loop.XXXXXX); trap 'rm -rf "$B"' EXIT
+  NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
+  { "$NVCC" --version && g++ -O3 -march=native -Wall -c receipt.cpp -o "$B/receipt.o" \
+      && "$NVCC" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -pthread -o "$B/loop" loop.cu "$B/receipt.o" \
+      && "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/pcie" pcie.cu && gcc -O3 -march=native -pthread -Wall -o "$B/dram" dram.c; } \
+    > "$O/build.txt" 2>&1 || { cat "$O/build.txt"; exit 4; }
+fi
+# under run_window.sh's lease already (HOST_TIER_LEASED=1, CUDA_VISIBLE_DEVICES and GPU_LEASE_UUID naming this step's GPUs)
+[ -n "${HOST_TIER_LEASED:-}" ] && exec bash "$PWD/run_loop.sh" leased "$B"
 # GPU_ON (e.g. 0,1,2,3, GPU_NODE 0's GPUs) only when those are free: a waiting --on request holds every later waiter
 # back, even from GPUs outside its list
 GPU_LEASE_WHO=ra-host-tier gpu-lease "${NGPU:-1}" --wait ${GPU_ON:+--on "$GPU_ON"} --max-min 20 -- bash "$PWD/run_loop.sh" leased "$B"

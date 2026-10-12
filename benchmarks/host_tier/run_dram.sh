@@ -7,13 +7,14 @@
 # Sweeps dram.c's read kernels and huge pages at every CPU, the thread count (one a core, then SMT siblings), and the
 # placement (local, the other socket's DRAM over UPI, interleaved, and local plus remote at once from two processes). Each
 # configuration runs REPS times for SECONDS; each line records how busy the node's other CPUs were meanwhile.
-# Env: SECONDS_EACH (3), REPS (3), MIB (per thread, 256), CPUS (the affinity's list unless given).
+# Env: SECONDS_EACH (3), REPS (3), MIB (per thread, 256), CPUS (the affinity's list unless given), NODE (the local memory
+# node, 0; `local` for CPUs on both sockets), REMOTE (the other one, 1).
 # Outputs under $RESEARCH_RUN_DIR/out: env.txt, dram.jsonl.
 set -uo pipefail
 cd "$(dirname "$0")"
 O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
 B=$(mktemp -d /tmp/host-tier-dram.XXXXXX); trap 'rm -rf "$B"' EXIT
-S=${SECONDS_EACH:-3} R=${REPS:-3} M=${MIB:-256}
+S=${SECONDS_EACH:-3} R=${REPS:-3} M=${MIB:-256} NODE=${NODE:-0} REMOTE=${REMOTE:-1}
 CPUS=${CPUS:-$(taskset -pc $$ | sed 's/.*: //')}
 { lscpu; numactl -H; cat /sys/kernel/mm/transparent_hugepage/enabled /sys/kernel/mm/transparent_hugepage/defrag;
   uptime; echo "cpus: $CPUS"; } > "$O/env.txt" 2>&1
@@ -42,25 +43,25 @@ one() {  # label cpus node kernel thp
 
 nall=$(echo "$ALL" | tr , '\n' | wc -l); nphys=$(echo "$PHYS" | tr , '\n' | wc -l)
 for r in $(seq "$R"); do
-  for k in scalar avx512 nt pf pfnta multi; do for t in 0 1; do one kernels "$ALL" 0 $k $t; done; done
+  for k in scalar avx512 nt pf pfnta multi; do for t in 0 1; do one kernels "$ALL" "$NODE" $k $t; done; done
 done
 for r in $(seq "$R"); do
   for n in 1 2 4 8 12 16 $nphys; do
-    [ "$n" -le "$nphys" ] && { one threads-phys "$(first $n "$PHYS")" 0 avx512 1; one threads-phys "$(first $n "$PHYS")" 0 pf 1; }
+    [ "$n" -le "$nphys" ] && { one threads-phys "$(first $n "$PHYS")" "$NODE" avx512 1; one threads-phys "$(first $n "$PHYS")" "$NODE" pf 1; }
   done
   for n in 24 36 $nall; do
-    [ "$n" -le "$nall" ] && { one threads-smt "$(first $n "$ALL")" 0 avx512 1; one threads-smt "$(first $n "$ALL")" 0 pf 1; }
+    [ "$n" -le "$nall" ] && { one threads-smt "$(first $n "$ALL")" "$NODE" avx512 1; one threads-smt "$(first $n "$ALL")" "$NODE" pf 1; }
   done
 done
 for r in $(seq "$R"); do
-  one place "$ALL" 1 avx512 1
-  one place "$PHYS" 1 avx512 1
+  one place "$ALL" "$REMOTE" avx512 1
+  one place "$PHYS" "$REMOTE" avx512 1
   one place "$ALL" i avx512 1
   # local and remote at once: the two halves of the affinity, one process each
   h=$((nall / 2)); A=$(first $h "$ALL"); Bc=$(echo "$ALL" | tr , '\n' | tail -n +$((h + 1)) | paste -sd,)
   python3 cpuload.py snap > "$B/a.json"; at=$(python3 -c 'import time; print(time.time() + 4)')
-  "$B/dram" --label both-local --cpus "$A" --node 0 --kernel avx512 --thp 1 --mib "$M" --seconds "$S" --start-at "$at" > "$B/l.json" &
-  "$B/dram" --label both-remote --cpus "$Bc" --node 1 --kernel avx512 --thp 1 --mib "$M" --seconds "$S" --start-at "$at" > "$B/r.json" &
+  "$B/dram" --label both-local --cpus "$A" --node "$NODE" --kernel avx512 --thp 1 --mib "$M" --seconds "$S" --start-at "$at" > "$B/l.json" &
+  "$B/dram" --label both-remote --cpus "$Bc" --node "$REMOTE" --kernel avx512 --thp 1 --mib "$M" --seconds "$S" --start-at "$at" > "$B/r.json" &
   wait
   load=$(python3 cpuload.py diff "$B/a.json" --exclude "$ALL")
   for f in l r; do l=$(cat "$B/$f.json"); echo "${l%\}}, \"load\": $load}" | tee -a "$O/dram.jsonl"; done
