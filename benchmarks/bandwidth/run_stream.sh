@@ -85,7 +85,13 @@ if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kerne
 sha256sum stream.cu tagger.cu stream_host.cpp stream.py tests/stream_vectors.json "$S/bwstream" >> "$O/build.txt"
 { lscpu; echo; numactl -H 2> /dev/null || true; echo "affinity: $(taskset -pc $$)";
   grep -o -w -E 'vaes|avx512f|avx512bw|aes|vpclmulqdq' /proc/cpuinfo | sort | uniq -c;
-  ls /usr/lib/x86_64-linux-gnu/libcrypto.so.3 2> /dev/null || echo "no libcrypto.so.3"; } > "$O/host.txt" 2>&1
+  ls /usr/lib/x86_64-linux-gnu/libcrypto.so.3 2> /dev/null || echo "no libcrypto.so.3"
+  echo "hyperthread siblings: $(sort -u -t, -n /sys/devices/system/cpu/cpu*/topology/thread_siblings_list | tr '\n' ' ')"
+  # each CPU's busy share over one second, since a sibling's load halves a generator core's VAES rate
+  a=$(grep '^cpu[0-9]' /proc/stat); sleep 1; b=$(grep '^cpu[0-9]' /proc/stat)
+  paste <(echo "$a") <(echo "$b") | awk '{n = NF / 2; i0 = $5 + $6; i1 = $(n + 5) + $(n + 6); t0 = 0; t1 = 0;
+    for (k = 2; k <= n; k++) { t0 += $k; t1 += $(n + k) } printf "%s:%.0f%% ", $1, 100 * (1 - (i1 - i0) / (t1 - t0 + 1e-9)) }
+    END { print "" }'; } > "$O/host.txt" 2>&1
 
 "$PY" stream.py "$S/stream_vectors.json"
 cmp "$S/stream_vectors.json" tests/stream_vectors.json || { echo "REFUSED: tests/stream_vectors.json is not stream.py's"; exit 3; }
