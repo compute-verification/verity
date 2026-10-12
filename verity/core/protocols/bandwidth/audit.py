@@ -1,4 +1,5 @@
-"""The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.
+"""The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
+a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold different stores.
 
 1. The verifier derives the window's key from its own secret, bound to `vk` and the window's number, and sends the
    seed `σ` (`Window.start`, which starts its clock).
@@ -27,6 +28,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from verity.core.protocols.pous.codec import Geometry
+from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash, verify_path
 from verity.ml.randomness import Key, derive
@@ -35,6 +37,7 @@ from . import tags
 from .tags import SEED_BYTES
 
 WINDOW_DOMAIN = "verity/bandwidth/window/v1"
+SALT_DOMAIN = "verity/bandwidth/salt/v1"
 
 REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
@@ -69,6 +72,15 @@ class Params:
     def limit_ns(self) -> int:
         """`T` plus the round-trip allowance: the longest a prover may take, which the bound charges it with."""
         return self.deadline_ns + self.rtt_allowance_ns
+
+
+def draw_salt(source: bytes, commitment: bytes, device: str) -> bytes:
+    """The salt of `device`'s store, which PoUS's setup (`pous.setup`) takes in place of its own `draw_salt`: drawn after
+    the commitment to `W` from the verifier's secret (or a later beacon round) as PoUS's is, with the identity the
+    device attests bound in.  Devices holding one `W` then hold different stores, so their `vk`, seeds and tags differ."""
+    if type(device) is not str or not device:
+        raise ValueError("a device's identity is a nonempty str")
+    return derive(source, SALT_DOMAIN, {"w": commitment, "device": device}).stream("salt", SALT_BITS // 8)
 
 
 def window_key(source: bytes, vk: VerifierKey, window: int) -> Key:

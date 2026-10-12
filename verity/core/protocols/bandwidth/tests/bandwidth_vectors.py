@@ -56,6 +56,12 @@ def _tag_vectors() -> list[dict]:
     return out
 
 
+def _salt_vectors() -> list[dict]:
+    commitment = hashlib.sha512(b"verity bandwidth vector commitment").digest()
+    return [{"source": SOURCE.hex(), "commitment": commitment.hex(), "device": device,
+             "salt": audit.draw_salt(SOURCE, commitment, device).hex()} for device in ("GPU-a", "GPU-b")]
+
+
 def _window_vectors() -> list[dict]:
     s = store(37)
     vk = vk_of(s)
@@ -86,7 +92,8 @@ def _audit_vectors() -> list[dict]:
 
 def generate() -> dict:
     return {"block": "SHA512('verity/bandwidth/test-block/v1\\0' || u64be j || u32be c), c = 0, 1, ..., truncated",
-            "tags": _tag_vectors(), "windows": _window_vectors(), "audits": _audit_vectors()}
+            "tags": _tag_vectors(), "salts": _salt_vectors(), "windows": _window_vectors(),
+            "audits": _audit_vectors()}
 
 
 if __name__ == "__main__":

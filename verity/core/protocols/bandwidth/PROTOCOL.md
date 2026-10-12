@@ -49,8 +49,28 @@ error; `test_bound_is_the_guarantee_at_the_proofs_point` checks it against the f
 
 `E` is PoUS's P2 store `C*` (`verity.core.protocols.pous.schemes.p2`): `N = 2^19` blocks of 2,056 bytes (1.08 GB),
 encoded from the useful data `W` under PoUS's setup (`pous.setup`: the commitment to `W`, then the verifier's salt,
-then `vk`). The audit reuses that setup and `vk` unchanged: a block's identity is its leaf under `vk.root`
-(`pous.verifier.leaf_hash`, RFC 6962 SHA-512 tree), and the verifier holds only `vk`.
+then `vk`). The audit reuses that setup and `vk`, with one change of input: a block's identity is its leaf under
+`vk.root` (`pous.verifier.leaf_hash`, RFC 6962 SHA-512 tree), and the verifier holds only `vk`.
+
+**One store per device.** The verifier draws each device's salt with the device's identity bound in,
+
+~~~text
+salt = derive(source, "verity/bandwidth/salt/v1", {w: commitment, device: id}).stream("salt", 24)
+~~~
+
+(`audit.draw_salt`), where `id` is the identity the device attests (its GPU's UUID, with its SKU recorded beside it),
+and runs PoUS's setup with that salt in place of `pous.setup.draw_salt`'s. PoUS's setup takes the salt as an input and
+needs only that it is drawn after the commitment to `W`, from the verifier's secret or a later beacon round, which
+this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different stores, so their
+`vk`, seeds and tags differ, and one device's commitment fails another's window
+(`test_one_devices_commitment_fails_anothers_window`). Without it, two such devices hold byte-identical stores and get
+the same `σ` for the same window number, and one device's root passes both windows.
+
+The salt is the place for the device, not the window key. With the device only in the window key, two devices holding
+byte-identical stores get different seeds, but one device that reads each block once can tag it under both seeds and
+send the other device's tags (16.8 MB a window, under `c`) over its side link. Distinct stores are what make the
+ingress of devices audited together add up (§5), and the window key, which binds `vk.root` and `vk.salt`, carries the
+device without a change.
 
 Each block of `C*` is two slow roots of its keyed payload, `c = ρ(σ_K(ρ(m + t)))`. Under P2's assumptions a block is
 incompressible except through `W`, and rebuilding it from `W` takes two roots in sequence.
@@ -271,12 +291,12 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 
 - `tags.py`: `get(name)`, each construction's `keyed(σ)(j, block)`, `certified`, `guess`, `info_bits`; the tag tree
   (`leaves`).
-- `audit.py`: the prover's reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
+- `audit.py`: a device's salt (`draw_salt`), the prover's reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
   `open(j) -> Opening`), the verifier (`Verifier(vk, params, source).window(n)`: `start() -> σ`, `commit(root) ->
   samples`, `verdict(openings) -> Verdict`), the proof's point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`,
   `certified_blocks`, `samples_for`) and `bound`.
-- `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, window seeds and
-  samples, and a whole window over 37 blocks.
+- `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
+  salts, window seeds and samples, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
   (`gpu.py`: `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
   `Opening` this verifier checks; `windows` runs the honest prover's preparation and the windows), its Python twins
