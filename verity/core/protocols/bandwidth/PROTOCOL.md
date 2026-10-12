@@ -208,7 +208,7 @@ only the words mod p (`w`, `w + p` and `w + 2p` agree), 15,934 of a block's 16,4
 | `q` | at most `2^64` oracle queries in a window | `audit.QUERIES_LOG2`; the RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms, so `2^64` covers `2^38` such devices helping, and the bound needs no assumption on `q` |
 | `λ` | `64·k + 41` bits | `audit.SLACK_LOG2`: `C(q, k)/2^λ ≤ q^k/2^λ = 2^-41`; raising `q` from `2^40` cost 1.55 MB (0.14 points) |
 | `S` | 239,992,832 bytes (22.3% of `E`) | `S_chip` (`summarize.s_chip_bytes`, from the device's properties in `device.json`): 128 MiB of L2; for each of 188 SMs, 256 KiB of registers, 128 KiB of L1 and shared memory, and 160 KiB of other stores; then 1 MiB at the chip level (see below) |
-| `c` | `cap_side · (T + RTT)`, `cap_side` = 63.0 GB/s | the GPU's PCIe Gen 5 x16 link at its raw rate, 32 GT/s × 16 lanes at 128b/130b; measured 56.6 GB/s host to device, 51.4 GB/s zero-copy (§6) |
+| `c` | `cap_side · (T + RTT)`, `cap_side` = 63.0 GB/s | the GPU's PCIe Gen 5 x16 link at its raw rate, 32 GT/s × 16 lanes at 128b/130b; measured 56.3 GB/s host to device, 51.3 GB/s zero-copy (§6) |
 | `G` | 0 | `Params` refuses `T + RTT ≥ 2 · ROOT_CALL_NS = 1,708,058 ns`, the fastest cooperating P2 root; one root, not two, so a device holding a block's inner root rebuilds nothing |
 
 `S` counts every on-chip store a resident kernel can hold data in across `σ`, at its raw capacity. Beside L2, the
@@ -290,11 +290,12 @@ keyed BLAKE3's known answers on host and device; every tag's root over the full 
 vectors' 37 blocks equal to the reference's, with the output buffers poisoned; and a pass without the tag kernel that
 does not match. A failed gate times nothing.
 
-This section reports run `r20261012-011339-b99d`
-(art:ebd5d428c8dcf6f0807b54454f3fb3107b53fcaa4635ebf3c300c83a3d211f5d) at `84fc4199d`. Runs `r20261012-001813-b2be`
-(art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603, at `f18c1854a`), `r20261011-235743-0c42`
-(art:8735b1084479fca8cf64bd225c58fb85a2afe6599a5b6c864759a421699a2e8e) and `r20261012-000847-217b` ran the same kernels
-and reproduced every clean pass time to within 0.01 ms.
+This section reports run `r20261012-024259-a1d6`
+(art:34582b732f2c2e97ecd0621bad0bd17688684365b24c51538f8e9146153b3a14) at `7eb0467af`, the objection's fixes in place.
+Runs `r20261012-011339-b99d` (art:ebd5d428c8dcf6f0807b54454f3fb3107b53fcaa4635ebf3c300c83a3d211f5d, at `84fc4199d`),
+`r20261012-001813-b2be` (art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603, at `f18c1854a`),
+`r20261011-235743-0c42` (art:8735b1084479fca8cf64bd225c58fb85a2afe6599a5b6c864759a421699a2e8e) and
+`r20261012-000847-217b` ran the same kernels and reproduced every clean pass time to within 0.01 ms.
 
 Times are medians of 100 passes (20 for *idle*; p99 in brackets), in ms, under four L2 conditions set before the pass:
 *dirty*, after a 512 MiB write; *warm*, whatever the last pass left; *clean*, after a 512 MiB read of another buffer;
@@ -303,25 +304,33 @@ Times are medians of 100 passes (20 for *idle*; p99 in brackets), in ms, under f
 | | dirty | warm | clean | idle |
 |---|---|---|---|---|
 | raw device read of `E` | 0.730, 1,476 GB/s | | | |
-| `ro-blake3/v1` pass: tags, then leaves and tree | 1.579 (1.599) | 1.131 (1.357) | **0.978 (0.995)** = 0.835 + 0.143 | 0.998 (1.006) |
-| `ro-sha512/v1` pass | 1.725 (1.730) | 1.720 (1.724) | 1.719 (1.724) = 1.408 + 0.311 | 1.731 (1.742) |
-| `gf31-poly/v1` pass | 0.910 (0.921) | 0.879 (0.886) | 0.883 (0.891) = 0.741 + 0.142 | 0.894 (0.900) |
+| `ro-blake3/v1` pass: tags, then leaves and tree | 1.574 (1.595) | 1.129 (1.346) | **0.976 (0.983)** = 0.832 + 0.143 | 0.994 (1.042) |
+| `ro-sha512/v1` pass | 1.729 (1.742) | 1.725 (1.734) | 1.726 (1.737) = 1.412 + 0.313 | 1.744 (1.748) |
+| `gf31-poly/v1` pass | 0.909 (0.920) | 0.878 (0.885) | 0.883 (0.893) = 0.742 + 0.141 | 0.899 (0.913) |
 
 Whole windows through `audit.Verifier` at `T = 1.2 ms` and `s = 1,849`, 50 per tag, each after the honest prover's
 preparation (§3), with the verifier's clock beside the device's pass time:
 
 | | verifier's clock, p50 (max) | device's pass, p50 (max) | accepted |
 |---|---|---|---|
-| `ro-blake3/v1` | 1.011 ms (1.043) | 0.982 ms (0.991) | 50 of 50 |
-| `gf31-poly/v1` | 0.931 ms (1.017) | 0.887 ms (0.918) | 50 of 50 |
-| `ro-sha512/v1` | 1.748 ms (1.757) | 1.725 ms (1.732) | none: all late |
+| `ro-blake3/v1` | 1.024 ms (1.042) | 0.985 ms (0.995) | 50 of 50 |
+| `gf31-poly/v1` | 0.920 ms (1.000) | 0.889 ms (0.923) | 50 of 50 |
+| `ro-sha512/v1` | 1.773 ms (1.792) | 1.735 ms (1.750) | none: all late |
 
-The slowest honest `ro-blake3/v1` window took 1.043 ms, 157 µs (13%) inside `T = 1.2 ms`, and `T + RTT` leaves
+The slowest honest `ro-blake3/v1` window took 1.042 ms, 158 µs (13%) inside `T = 1.2 ms`, and `T + RTT` leaves
 0.508 ms for the round trip under the rebuild floor. One window per tag at a 100 ms deadline with the floor lifted,
 which certifies nothing, was accepted for all three: `ro-sha512/v1`'s openings pass even though its timed windows are
-late. Prepared like the others, that window's `ro-blake3/v1` pass took 1.008 ms on the verifier's clock (1.195 ms
+late. Prepared like the others, that window's `ro-blake3/v1` pass took 1.025 ms on the verifier's clock (1.195 ms
 unprepared at `f18c1854a`). PCIe into the GPU measured 56.3 GB/s (pinned copy) and 51.3 GB/s (a kernel reading
 pinned host memory).
+
+Every window of the run went through the store's one challenger state: 53 per tag (50 timed, two with skipped blocks,
+one at the 100 ms deadline), 159 nonces in all, each opened and closed once and none repeated. Run
+`r20261012-022850-f3ea` (art:a2154aeefb5c7c1e6c0f99218828d44ddd764514489ca00da3688ce8d74395f8) at `4ae302654`, before
+`Window.open`, fsynced the state between the prover's scrub and `σ` (§3). Its gates passed and every skipping device
+was rejected, but honest `ro-blake3/v1` windows took 1.095 ms at the median on the verifier's clock (1.221 ms at most)
+with the device's pass at 1.007 ms, and one of 50 was late; three of 50 `gf31-poly/v1` windows were late. It is the
+finding behind §3's ordering, not a measurement of the audit.
 
 `ro-blake3/v1`'s pass depends on L2's state when it starts. Its loads fetch 256 bytes into L2 per miss
 (`ld.global.nc.L1::no_allocate.L2::256B`), which helps when L2's lines are clean and costs 0.6 ms when they are dirty
