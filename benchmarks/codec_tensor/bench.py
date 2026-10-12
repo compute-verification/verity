@@ -46,6 +46,7 @@ SPIN_CYCLES = 20_000_000
 def word_codec():
     spec = importlib.util.spec_from_file_location("wc_codec", HERE.parent / "word_codec" / "codec.py")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -128,10 +129,11 @@ def to_dev(torch, data: bytes):
 
 
 def set_key(lib: Lib, torch, key: W.Key) -> None:
-    c = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in key.c))
-    tau = to_dev(torch, limbs_bytes(key.tau, lib.nl))
-    p = to_dev(torch, limbs_bytes(lib.field.p, lib.nl))
-    lib.call("wt_set_key", ptr(c), key.rounds, ptr(tau), ptr(p))
+    """The key into the library's constant memory, from host buffers."""
+    c = ctypes.create_string_buffer(b"".join(limbs_bytes(x, lib.nl) for x in key.c))
+    tau = ctypes.create_string_buffer(limbs_bytes(key.tau, lib.nl))
+    p = ctypes.create_string_buffer(limbs_bytes(lib.field.p, lib.nl))
+    lib.call("wt_set_key", ctypes.addressof(c), key.rounds, ctypes.addressof(tau), ctypes.addressof(p))
 
 
 # --- gates -------------------------------------------------------------------------------------------------------------

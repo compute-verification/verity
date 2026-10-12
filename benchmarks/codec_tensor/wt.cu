@@ -470,7 +470,7 @@ __device__ __forceinline__ void seed_word(u64 id, u32 (&x)[NL]) {
 
 // what 0: `steps` squarings of ILP words a thread (lazy); 1: `steps` decodes of K rounds; 2: `steps` encodes of K rounds.
 template <int WHAT, int K, int ILP>
-__global__ void __launch_bounds__(128) chain_kernel(u64 steps, unsigned long long *xr) {
+__global__ void __launch_bounds__(128, 1) chain_kernel(u64 steps, unsigned long long *xr) {
   const u64 id = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   u32 x[ILP][NL], t[NL];
 #pragma unroll
@@ -824,7 +824,7 @@ __global__ void __launch_bounds__(TC_WARPS * 32) tc_chain_kernel(u64 steps, unsi
 // Both units at once: warps [0, cw) square on CUDA cores (a word a thread, sc steps), warps [cw, 8) on tensor cores (a
 // word a warp, stc steps).
 constexpr int MIX_WARPS = 8;
-__global__ void __launch_bounds__(MIX_WARPS * 32) mix_kernel(u64 sc, u64 stc, int cw, unsigned long long *xr) {
+__global__ void __launch_bounds__(MIX_WARPS * 32, 1) mix_kernel(u64 sc, u64 stc, int cw, unsigned long long *xr) {
   extern __shared__ __align__(16) uint8_t mix_smem[];
   const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   u64 h = 0;
@@ -945,8 +945,10 @@ __device__ __forceinline__ void put_payload(uint8_t *st, int o, const u32 (&y)[N
   }
 }
 
+// ptxas's own choice caps a CTA of WS_MAX_CONSUMERS + 1 warps at 168 registers; the fused decode needs more (a word,
+// its tweaks and the double-width square live at once), and spills less with them.
 template <int MODE, int K, int NB8, bool PARTIALS>
-__global__ void __launch_bounds__((WS_MAX_CONSUMERS + 1) * 32) gemm_ws_kernel(
+__global__ void __maxnreg__(MODE == 3 ? 224 : 168) gemm_ws_kernel(
     const void *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int consumers, int stages, int knob, const u32 *__restrict__ tsteps,
     unsigned long long *xr) {
@@ -1101,6 +1103,7 @@ int wt_constants(int *out) {
   return 0;
 }
 
+// c (k elements of NL limbs), tau and p in host memory.
 int wt_set_key(const u32 *c, int k, const u32 *tau, const u32 *p) {
   if (k < 1 || k > MAXK) return 1;
   u32 cc[MAXK][NL] = {};

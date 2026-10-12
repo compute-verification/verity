@@ -34,6 +34,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $CT/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
+[ -n "${COMPILE_ONLY:-}" ] && exit 0
 export B PY CT FIELDS BENCH_ARGS=${BENCH_ARGS:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
