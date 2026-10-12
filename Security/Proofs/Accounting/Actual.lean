@@ -3,6 +3,7 @@ import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
+import Proofs.Accounting.Actual.Confidence
 
 /-!
 # The actual circuit's guarantees
@@ -19,4 +20,6 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Localization.lean`: `Localization` at `e = 0`: what a challenge reaches only through `X` reaches the rest of
   the prover only through `X`'s egress, and not at all when `X` sends it nothing of the challenge.
+* `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
+  `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; causality's global form from the local one.
 -/
