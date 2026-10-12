@@ -379,6 +379,62 @@ extern "C" int gc_split(int n_step, int prio_step, int prio_fill, void** s_step,
   return 0;
 }
 
+// The pump: a native thread (no GIL, beside an engine that runs Python) that keeps `depth` chunks of `per` tiles a CTA over
+// `grid` CTAs queued on `stream`, each the next queue positions, so the filler never holds the device for longer than
+// `depth` chunks: a device-wide synchronize (cudaFree, torch.cuda.synchronize) beside a persistent filler would never
+// return.  The stop flag is not set: fill_pump_stop stops launching and waits for the chunks in flight, so every position
+// launched is a tile computed, and returns their count.
+#include <atomic>
+#include <thread>
+#include <vector>
+static std::thread pump_thread;
+static std::atomic<bool> pump_on{false};
+static std::atomic<long long> pump_done_tiles{0};
+static int pump_rc = 0;
+extern "C" int fill_pump_start(int minb, int store, int grid, int per, int depth, const Args* a, void* stream) {
+  const void* fn = fill_fn(0, minb, store);
+  if (!fn || pump_on.load() || depth < 1) return -1;
+  Args args = *a;
+  cudaStream_t s = (cudaStream_t)stream;
+  pump_done_tiles = 0;
+  pump_rc = 0;
+  pump_on = true;
+  pump_thread = std::thread([=]() mutable {
+    std::vector<cudaEvent_t> ev(depth);
+    std::vector<long long> n(depth, 0);
+    for (auto& e : ev) cudaEventCreateWithFlags(&e, cudaEventDisableTiming | cudaEventBlockingSync);
+    const long long chunk = (long long)grid * per;
+    long long pos = args.i[4];
+    for (long long k = 0; pump_on.load(); k++) {
+      const int slot = (int)(k % depth);
+      if (k >= depth) {
+        cudaEventSynchronize(ev[slot]);
+        pump_done_tiles += n[slot];
+        n[slot] = 0;
+      }
+      args.i[4] = (int)pos;
+      args.i[5] = (int)chunk;
+      if ((pump_rc = launch(fn, grid, NT, smem_of(minb), &args, s))) break;
+      cudaEventRecord(ev[slot], s);
+      n[slot] = chunk;
+      pos += chunk;
+    }
+    for (int j = 0; j < depth; j++) cudaEventSynchronize(ev[j]);
+    long long rest = 0;
+    for (int j = 0; j < depth; j++) rest += n[j];
+    pump_done_tiles += rest;
+    for (auto& e : ev) cudaEventDestroy(e);
+  });
+  return 0;
+}
+extern "C" long long fill_pump_tiles() { return pump_done_tiles.load(); }
+extern "C" long long fill_pump_stop(int* rc) {
+  pump_on = false;
+  if (pump_thread.joinable()) pump_thread.join();
+  if (rc) *rc = pump_rc;
+  return pump_done_tiles.load();
+}
+
 // the filler's resident CTAs per SM at its dynamic shared memory, and its registers per thread
 extern "C" int fill_occupancy(int persist, int minb, int store, int* regs) {
   int n = 0;

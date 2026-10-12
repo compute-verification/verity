@@ -5,7 +5,8 @@ without a persistent Pearl-C filler on the SMs the step doesn't use.
 Arms (``--arm``):
   stock       vLLM as it is: every SM, no filler
   gc:N        the step on a green context of N SMs (fill.cu's `gc_split`), no filler
-  gc:N:fill   the same, and the 128 x 128 fold filler (bench.py's best arm) persistent on the rest through every timed point
+  gc:N:fill   the same, and the 128 x 128 fold filler (bench.py's best arm) on the rest through every timed point, launched
+              in bounded chunks by fill.cu's native pump (`Fill`)
 
 How the step is confined: before vLLM starts, the step's green-context stream becomes torch's current stream, so vLLM
 captures its CUDA graphs and launches its eager kernels there (`gc_split`'s `sm_spread` check: a green context's
@@ -67,30 +68,43 @@ def steady(rec: list, b: int) -> dict:
 
 
 class Fill:
-    """The persistent 128 x 128 fold filler on the filler's green stream, its tiles counted by the queue counter."""
+    """The 128 x 128 fold filler on the filler's green stream through fill.cu's native pump: `depth` chunks of `per` tiles a
+    CTA queued at a time, so a device-wide synchronize inside the engine waits for at most `depth` chunks (a persistent
+    filler would hold it forever), and every position launched is a tile computed."""
 
-    def __init__(self, lib: B.Lib, stream, fsms: int, sms: int, M: int = 4096, N: int = 4096, K: int = 8192):
-        self.lib, self.stream, self.fsms, self.sms = lib, stream, fsms, sms
+    def __init__(self, lib: B.Lib, stream, fsms: int, sms: int, M: int = 4096, N: int = 4096, K: int = 8192,
+                 per: int = 2, depth: int = 2):
+        self.lib, self.stream, self.fsms, self.sms, self.per, self.depth = lib, stream, fsms, sms, per, depth
         base = B.random_filler(M, N, K, qcap=1)
         self.f = base.with_tile(128, qcap=1)
         self.credit = B.credit_tile(M, N, K, 128)
-        self.running = False
+        lib.l.fill_pump_start.argtypes = [C.c_int] * 5 + [C.POINTER(B.Args), C.c_void_p]
+        lib.l.fill_pump_start.restype = C.c_int
+        lib.l.fill_pump_tiles.restype = C.c_longlong
+        lib.l.fill_pump_stop.argtypes = [C.POINTER(C.c_int)]
+        lib.l.fill_pump_stop.restype = C.c_longlong
+        self.args = None
 
     def start(self) -> None:
         f = self.f
         f.poison()
         torch.cuda.synchronize()
-        self.lib.fill(1, B.STORES["fold"], self.fsms, f.args(0, (1 << 31) - 1, log=False), self.stream, f.minb)
-        self.running = True
+        self.args = f.args(0, 0, log=False, stop=False)
+        rc = self.lib.l.fill_pump_start(f.minb, B.STORES["fold"], self.fsms, self.per, self.depth, C.byref(self.args),
+                                        C.c_void_p(self.stream.cuda_stream))
+        if rc:
+            raise RuntimeError(f"fill_pump_start: {rc}")
 
     def tiles(self) -> int:
-        return int(self.f.counter.cpu().item())
+        return int(self.lib.l.fill_pump_tiles())
 
     def stop(self) -> int:
-        self.f.stop[0] = 1
+        rc = C.c_int(0)
+        n = int(self.lib.l.fill_pump_stop(C.byref(rc)))
         torch.cuda.synchronize()
-        self.running = False
-        return self.tiles()
+        if rc.value:
+            raise RuntimeError(f"the pump's launch failed: {rc.value}")
+        return n
 
     def check(self, n: int) -> dict:
         """The fold of n queue positions (each tile XORed in once per pass) against `gemm_pearlc_d`'s words."""
@@ -209,7 +223,7 @@ def main() -> None:
             if fill:
                 n = fill.tiles() - n0
                 fl = n * (fill.f.fp8_flops_tile + fill.f.bf16_flops_tile)
-                point["filler"] = {"tiles": n, "tflops": fl / wall / 1e12, "credit_w1_per_s": (1 - B.CAP) * fill.credit * n / wall,
+                point["filler"] = {"tiles": n, "per": fill.per, "depth": fill.depth, "tflops": fl / wall / 1e12, "credit_w1_per_s": (1 - B.CAP) * fill.credit * n / wall,
                                    "util": n * (fill.f.fp8_flops_tile / B.PEAK_E4M3 + fill.f.bf16_flops_tile / B.PEAK_BF16) / wall}
             result["points"].append(point)
             save()
