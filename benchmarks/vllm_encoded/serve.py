@@ -540,6 +540,7 @@ def main() -> None:
     ap.add_argument("--contexts", default="512,2048,8192")
     ap.add_argument("--steps", type=int, default=64)
     ap.add_argument("--mem", type=float, default=0.75)
+    ap.add_argument("--kv-cache-dtype", default="auto", help="vLLM's kv_cache_dtype (fp8: twice the tokens a GB)")
     ap.add_argument("--max-batched-tokens", type=int, default=16384)
     ap.add_argument("--select-trials", type=int, default=5)
     ap.add_argument("--native-trials", type=int, default=10,
@@ -590,7 +591,8 @@ def main() -> None:
     # fewer batches, and the warmup's dummy batch (max_num_batched_tokens) fits max_num_seqs · max_model_len
     kw = {"model": args.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE), "enable_prefix_caching": False, "seed": 0,
           "max_model_len": max(contexts) + max_tokens_cap + 64, "max_num_batched_tokens": args.max_batched_tokens,
-          "gpu_memory_utilization": args.mem, "enforce_eager": False, "compilation_config": cc}
+          "gpu_memory_utilization": args.mem, "kv_cache_dtype": args.kv_cache_dtype, "enforce_eager": False,
+          "compilation_config": cc}
     if args.revision:
         kw["revision"] = args.revision
     t0 = time.perf_counter()

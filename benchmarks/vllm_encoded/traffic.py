@@ -60,8 +60,9 @@ def main() -> int:
             fails.append(f"{a['tag']}: {len(ws)} profile windows for {len(a['profiled'])} profiled points")
             continue
         inst = a["install"]
-        weights = inst["store_bytes"] if a["arm"] in ("enc", "wide") else inst["plain_bytes"]
-        tags = inst["plain_bytes"] // 8 if compare.codec_tag(a) else 0
+        weights = inst["store_bytes"] if a["arm"] in compare.ENCODED else inst["plain_bytes"]
+        cod = inst.get("codec") or {}
+        tags = (32 * cod["tag_blocks"] if "tag_blocks" in cod else inst["plain_bytes"] // 8) if compare.codec_tag(a) else 0
         for pt, w in zip(a["profiled"], ws):
             graphs = sum(r["read"] >= GRAPH_MIN for r in w)
             if not graphs:
