@@ -488,6 +488,9 @@ def main() -> int:
     ap.add_argument("--cells", default="160x4096,80x8192,40x16384")
     ap.add_argument("--write-batches", default="", help="the write side's batches (default: the cells')")
     ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--layers", type=int, default=0,
+                    help="the cells' and the write side's layers (default: the model's); at 1 a layer's call reads "
+                    "contiguous token-layers with the same grid")
     ap.add_argument("--sanitize", action="store_true", help="one tiny gate cell of 2 layers, then stop")
     a = ap.parse_args()
     out_dir = Path(a.out)
@@ -502,7 +505,7 @@ def main() -> int:
 
     import torch
 
-    m = MODELS[a.model]
+    m = dict(MODELS[a.model], layers=a.layers or MODELS[a.model]["layers"])
     ks = [int(v) for v in a.ks.split(",")]
     libs = [B.Lib(*spec.split("=", 1)) for spec in a.lib]
     props = torch.cuda.get_device_properties(0)
