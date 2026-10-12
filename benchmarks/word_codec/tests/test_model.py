@@ -119,3 +119,11 @@ def test_gamma_points():
     kv_open = G.Point(G.LLAMA_8B, 1, 4096, False, c3, idle=0.37).terms()
     assert kv_open["uncertified_reads"] == pytest.approx(0.063, abs=1e-3) and kv_open["gamma_bw"] > 0.09
     assert not G.Point(G.LLAMA_70B, 32, 4096, True, c3).terms()["fits"]
+
+
+def test_alu_idle_falls_with_k():
+    """The joint view: μ_rebuild drops out, and k sets the compute the window leaves unforced."""
+    hidden = {k: replace(G.MEASURED[k], y=max(1.05, G.MEASURED[k].eps + 0.011 + 0.05), tau=0.011) for k in (1, 4, 5)}
+    idle = {k: G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10).terms()["alu_idle"] for k, c in hidden.items()}
+    assert idle[1] == pytest.approx(0.75, abs=0.01)
+    assert idle[1] > idle[4] > idle[5] and idle[5] == pytest.approx(0.12, abs=0.01)

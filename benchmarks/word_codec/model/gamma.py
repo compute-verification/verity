@@ -222,4 +222,6 @@ class Point:
             "mu_slot": mu_slot(c.p_bits, c.slot_bits),
             "uncertified_reads": 1 - cert / q_honest,
             "gamma_bw": 1 - cert * (1 - lost) / q_honest,
+            # The joint view's compute residual: the window's ALU that decode and tag don't force.
+            "alu_idle": max(0.0, 1 - (c.eps + c.tau) / (self.kappa * d * (1 + self.theta))),
         }
