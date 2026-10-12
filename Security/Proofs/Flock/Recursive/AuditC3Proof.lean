@@ -42,7 +42,7 @@ theorem own_keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
       FlockSoundness.Discharge.Exec.Transcript → Prop)
     (hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t) : (Flock.Guarantees.keepOwn z P).own = z.own :=
-  if_pos hp
+  ite_eq_left hp
 
 /-- **The checked sessions accept what the typed sessions accept and the verifier's checks at candidate 3 pass**: at
 typed sessions, the checks of the accepted transcript keep each session's own list (`own_keepOwn`). -/
@@ -102,7 +102,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       exact hr _ _ _ _ j _ _ _ S' R'
   rcases zk_sessions_recursive_fork_inner hA3
     (Flock.Guarantees.checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust hT) dg N hk hRw
-    hM hρ hr' (Flock.Guarantees.transported zr hCust hT σ) (fun _ _ => Subtype.mk xR hreg) wmsg Sk cmt msg
+    hM hρ hr' (Flock.Guarantees.checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust hT σ)
+    (fun _ _ => Subtype.mk xR hreg) wmsg Sk cmt msg
     (hbr hT) Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) hin
     with hf | hf | hf | hf | hb
   · exact Or.inl hf

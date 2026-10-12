@@ -109,19 +109,31 @@ noncomputable def keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     own := if ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t then z.own else freshOwn Q.c
     hown := fun ω R' o h => by
       by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
-      · rw [if_pos hp] at h ⊢
+      · rw [ite_eq_left hp] at h ⊢
         exact z.hown ω R' o h
-      · rw [if_neg hp] at h
+      · rw [ite_eq_right hp] at h
         exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH _ h).elim }
 
 /-- **V*'s checked sessions**: the typed sessions (`custodied`), each kept where an accepted transcript passes the
 verifier's checks at candidate 3 as V*'s statement of its index (`ChecksC3`) and refusing everything elsewhere
-(`keepOwn`). Their games are the typed sessions', so the transported prover plays them. -/
+(`keepOwn`). Their games are the typed sessions', so the transported prover plays them (`checkedT`). -/
 noncomputable abbrev checkedC3 {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} (ish : RecVStar.Inner)
     (cs : Option Flock.RecVStar.InnerCommits) (coins : Option Flock.RecCoins.Source) (bind : Fin S → VStar.Bindings)
     (rows : Option (Array Flock.Registered.Port)) (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
     (hC : Flock.Premises.RecordCustody zr) (h : Typed zr) : A → B → C → D → (j : Fin S) → (Vs j).Outer Reg' :=
   fun R ω t R₂ j => keepOwn (custodied zr hC h R ω t R₂ j) (ChecksC3 ish cs coins j (bind j) rows)
+
+/-- **The prover's strategy against the checked sessions**: its strategy against the typed sessions (`transported`),
+whose games the checked sessions' are. -/
+noncomputable def checkedT {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ} (ish : RecVStar.Inner)
+    (cs : Option Flock.RecVStar.InnerCommits) (coins : Option Flock.RecCoins.Source) (bind : Fin S → VStar.Bindings)
+    (rows : Option (Array Flock.Registered.Port))
+    (zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
+    (hC : Flock.Premises.RecordCustody zr) (h : Typed zr)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerVR (zr R ω t) dg N)) :
+    Strategy (recGame L Reg I Cm fun R ω t => outerV (checkedC3 ish cs coins bind rows zr hC h R ω t) dg N) :=
+  transported zr hC h σ
 
 /-- **The recursive audit at candidate 3.**
 
@@ -205,26 +217,27 @@ def RecursiveAuditC3 : Prop :=
         (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       (regFinder (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h) dg N
-        (transported zr _hCust h σ)).Finds Refine.H512 ∨
+        (checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       RoundFork (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h) dg N k Rw
-        (transported zr _hCust h σ) cmt ∨
+        (checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ) cmt ∨
       SessionFork (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h) dg N k Rw M
-        (transported zr _hCust h σ) ∨
+        (checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ) ∨
       InnerForkRec (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h) dg N k Rw
-        (transported zr _hCust h σ) (fun _ _ => Subtype.mk xR _hreg)
+        (checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ)
+        (fun _ _ => Subtype.mk xR _hreg)
         wmsg Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
       prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st tr record reg) ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ChecksVR ish (innerCommitsAt tr record st reg).toOption coins bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR _hreg))
           (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
-        expAt (transported zr _hCust h σ) (fun ω t s =>
+        expAt (checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ) (fun ω t s =>
             sumV (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
               (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ.1 ω t R₂
                 j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) *
-            expAt (transported zr _hCust h σ) (fun ω t s =>
+            expAt (checkedT ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ) (fun ω t s =>
               sumV (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ =>
                 (checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr _hCust h σ.1 ω t R₂
