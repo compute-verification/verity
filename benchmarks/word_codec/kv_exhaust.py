@@ -103,6 +103,7 @@ def rc_setup(lib: B.Lib, seed: bytes) -> dict:
     v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
     so = lib.so
     so.kv_rc_set.argtypes, so.kv_rc_buffers.argtypes, so.kv_rc_tag.argtypes = [i, v, v], [v, v, v], [i, q, v]
+    so.kv_rc_l2.argtypes = [q, v, v]
     rt = rc_shape(lib)["rt"]
     bits = {}
     for rc in (1, 2):
@@ -468,6 +469,19 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                 log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: at {sp} splits, the sketch alone "
                     f"{row['sketch_only_s'] * 1e3:.3f} ms ({row['sketch_only_over_read']:.3f}x the read), the receipts' "
                     f"kernel alone {row['tag_s'] * 1e3:.3f} ms ({row['tag_over_read']:.3f}x), {nvec} vectors a layer")
+                win = (ctypes.c_uint64 * 2)()
+                lib.call("kv_rc_l2", nvec * 64, st, ctypes.cast(win, ctypes.c_void_p))
+                run_pass()
+                tl = [B.queued(lib, torch, run_pass, SPIN) / layers for _ in range(reps)]
+                tt = [B.queued(lib, torch, tag_pass, SPIN) / layers for _ in range(reps)]
+                row["l2"] = {"window_bytes": win[0], "persisting_bytes": win[1], "s": statistics.median(tl),
+                             "times_s": tl, "over_read": statistics.median(tl) / t_read, "tag_s": statistics.median(tt),
+                             "tag_times_s": tt, "tag_over_read": statistics.median(tt) / t_read}
+                lib.call("kv_rc_l2", 0, st, ctypes.cast(win, ctypes.c_void_p))
+                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: with {row['l2']['persisting_bytes'] / 1e6:.0f}"
+                    f" MB of the sketches' {nvec * 64 / 1e6:.0f} MB held in L2, a layer {row['l2']['s'] * 1e3:.3f} ms "
+                    f"({row['l2']['over_read']:.3f}x the read), the receipts' kernel alone {row['l2']['tag_s'] * 1e3:.3f}"
+                    f" ms ({row['l2']['tag_over_read']:.3f}x)")
             cell["forms"].setdefault(FORMS[fm], {})[k] = row
             log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]}" + ("" if fm in RTOL else f" k={k}")
                 + f": a layer {row['s'] * 1e3:.3f} ms at {sp} splits, {row['gbps']:.0f} GB/s, {row['over_read']:.3f}x"
