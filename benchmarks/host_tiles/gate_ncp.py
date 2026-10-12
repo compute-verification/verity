@@ -1,4 +1,5 @@
-"""Gate: `ncp_amx`'s snapshots equal `schemes.ncp.checked_route_u` bit for bit, both forms, at W = 0 and at random W.
+"""Gate: `ncp_amx`'s snapshots equal `schemes.ncp.checked_route_u` bit for bit, both forms, Y stored or formed from B and
+F₁, at W = 0 and at random W.
 
 Builds X, Y with the scheme's own `stack` (test instance `NCP(k_min=64, n_min=16)`), writes X + β (u8), Y's columns (s8)
 and c₀ = −β·Σ Y (int32), runs `ncp_amx gate DIR KS` for KS in 16, 32, 64, 128 and 0 (final only), and compares snapshot s
@@ -47,20 +48,33 @@ def case(binary: str, label: str, m: int, k: int, n: int, w_zero: bool) -> list[
         p.joinpath("y.bin").write_bytes(bytes(v & 0xFF for col in ops.y for v in col))
         c0 = [(-N.BETA * sum(col)) & M32 for col in ops.y]
         p.joinpath("c0.bin").write_bytes(struct.pack(f"<{n}I", *c0))
-        for ks in (16, 32, 64, 128, 0):
-            subprocess.run([binary, "gate", d, str(ks)], check=True, capture_output=True)
-            raw = p.joinpath(f"out_{ks}.bin").read_bytes()
-            got = struct.unpack(f"<{len(raw) // 4}I", raw)
-            nsnap = K // ks if ks else 1
-            bad = len(got) != nsnap * m * n
-            for s in range(nsnap if not bad else 0):
-                t = (ks // 16) * (s + 1) - 1 if ks else K // 16 - 1
-                for i in range(m):
-                    for j in range(n):
-                        bad += got[(s * m + i) * n + j] != chk[i][j][t]
-            out.append({"gate": "ncp_amx", "case": label, "W": "zero" if w_zero else "random", "m": m, "k": k, "n": n,
-                        "ks": ks, "form": "1x4" if m % 32 else "2x2", "snapshots": nsnap, "words": nsnap * m * n,
-                        "mismatches": int(bad)})
+        # Y formed per call from B and F₁: F₂'s quad p[a] is F₁'s quad a, negated where σ = +1 (the word P moves aligned words)
+        assert all(pi[4 * a + b] == pi[4 * a] + b and pi[4 * a] % 4 == 0 for a in range(k // 4) for b in range(4))
+        f1 = [N.noise_row("verity/pouw/ncp/F1/v1", k, ctx.salt, ctx.matmul.weight, j) for j in range(n)]
+        pinv, negq = [0] * (k // 4), [0] * (k // 4)
+        for a in range(k // 4):
+            q = pi[4 * a] // 4
+            pinv[q] = a
+            negq[q] = sum(1 << (4 * c + b) for c in range(16) for b in range(4) if sigma[4 * a + b] == 1)
+        p.joinpath("b.bin").write_bytes(bytes(v & 0xFF for col in b for v in col))
+        p.joinpath("f1.bin").write_bytes(bytes(v & 0xFF for col in f1 for v in col))
+        p.joinpath("pinv.bin").write_bytes(struct.pack(f"<{k // 4}i", *pinv))
+        p.joinpath("negq.bin").write_bytes(struct.pack(f"<{k // 4}Q", *negq))
+        for mode, y in (("gate", "stored"), ("gateform", "formed")):
+            for ks in (16, 32, 64, 128, 0):
+                subprocess.run([binary, mode, d, str(ks)], check=True, capture_output=True)
+                raw = p.joinpath(f"out_{ks}.bin").read_bytes()
+                got = struct.unpack(f"<{len(raw) // 4}I", raw)
+                nsnap = K // ks if ks else 1
+                bad = len(got) != nsnap * m * n
+                for s in range(nsnap if not bad else 0):
+                    t = (ks // 16) * (s + 1) - 1 if ks else K // 16 - 1
+                    for i in range(m):
+                        for j in range(n):
+                            bad += got[(s * m + i) * n + j] != chk[i][j][t]
+                out.append({"gate": "ncp_amx", "case": label, "W": "zero" if w_zero else "random", "m": m, "k": k,
+                            "n": n, "ks": ks, "form": "1x4" if m % 32 else "2x2", "y": y, "snapshots": nsnap,
+                            "words": nsnap * m * n, "mismatches": int(bad)})
     return out
 
 

@@ -55,6 +55,14 @@ if [ "$phase" = ncp ]; then
       OMP_PLACES=threads OMP_NUM_THREADS=$P NCP_REPEAT=64 "$B/ncp_amx" bench $m 3072 256 $((64 * P)) $ks 20 | tee -a "$O/ncp_resident.jsonl"
     done
   done
+  # Y formed per call from B and F₁ (2 bytes a weight byte): the forming's cost with the weight L2-resident
+  for t in 1 $C; do
+    for m in 16 32 64 128; do
+      for ks in 128 32; do
+        NCP_FORM=1 OMP_PLACES=cores OMP_NUM_THREADS=$t NCP_REPEAT=64 "$B/ncp_amx" bench $m 3072 256 $((64 * t)) $ks 20 | tee -a "$O/ncp_resident.jsonl"
+      done
+    done
+  done
   # streaming: 40 weights of k = n = 4096 (Y = 2 GB, six times the LLC), Y read from DRAM every pass
   for t in 1 4 8 12 16 $C; do
     for m in 16 32 64 128; do
@@ -67,6 +75,17 @@ if [ "$phase" = ncp ]; then
     for ks in 0 128 32 16; do
       OMP_PLACES=threads OMP_NUM_THREADS=$P "$B/ncp_amx" bench $m 12288 4096 40 $ks 5 | tee -a "$O/ncp_stream.jsonl"
     done
+  done
+  # streaming with Y formed: B and F₁ (1.3 GB) from DRAM every pass
+  for t in 1 4 8 12 16 $C; do
+    for m in 16 32 64 128; do
+      for ks in 128 32; do
+        NCP_FORM=1 OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/ncp_amx" bench $m 12288 4096 40 $ks 5 | tee -a "$O/ncp_stream.jsonl"
+      done
+    done
+  done
+  for m in 16 32 64 128; do
+    NCP_FORM=1 OMP_PLACES=threads OMP_NUM_THREADS=$P "$B/ncp_amx" bench $m 12288 4096 40 128 5 | tee -a "$O/ncp_stream.jsonl"
   done
 fi
 
