@@ -8,7 +8,8 @@ Nothing is timed before its gate passed:
 - `attn_gate`: at each batch x context of `--gate-cells`, with the model's layers, every `kv_attn` form at every split
   count of SPLITS, at layers 0 and L - 1: each encoded form's output equals its plain form's bit for bit (the CUDA-core
   forms 1 and 2 form 0's, the tensor-core forms 4 and 5 form 3's, 7, at the standalone decode's occupancy, its own
-  plain form 6's, and 9, persistent, its own plain form 8's), and each plain form is within RTOL of float64 attention
+  plain form 6's, 9, persistent, its own plain form 8's, and 12, mma-ws's work items handed out by a counter, form
+  3's), and each plain form is within RTOL of float64 attention
   over the same bf16 values.
 
 Then, at each batch x context of `--cells`, one store holding the cell's whole KV cache (batch x context x layers
@@ -65,8 +66,8 @@ MODELS = {
 }
 FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws",
          6: "mma-occ-plain", 7: "mma-occ", 8: "mma-pers-plain", 9: "mma-pers", 10: "mma-ws-receipt",
-         11: "mma-ws-bound"}
-PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6, 9: 8, 10: 3, 11: 3}
+         11: "mma-ws-bound", 12: "mma-dyn"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6, 9: 8, 10: 3, 11: 3, 12: 3}
 RECEIPT = {10: 1, 11: 2}  # kv_attn's receipt forms and their rc (kv_receipt.NAMES)
 RC_SEED = hashlib.sha256(b"ra-word-codec/kv-receipt-seed").digest()
 SPLITS = (1, 2, 4, 8, 16)
@@ -89,7 +90,7 @@ def shape(lib: B.Lib) -> dict:
 
 
 def forms_of(sh: dict, only=None) -> list[int]:
-    return [f for f in [0, 1, 2] + ([3, 4, 5, 6, 7, 8, 9, 10, 11] if sh["mma"] else []) if only is None or f in only]
+    return [f for f in [0, 1, 2] + ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12] if sh["mma"] else []) if only is None or f in only]
 
 
 def rc_shape(lib: B.Lib) -> dict:

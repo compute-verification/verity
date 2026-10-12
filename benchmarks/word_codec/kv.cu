@@ -1475,6 +1475,115 @@ __global__ void __launch_bounds__(MWT, 2) attn_pers_kernel(const uint8_t *__rest
   }
 }
 
+// The dynamic persistent form of mma-ws: a CTA pair an SM, each CTA folding mma-ws's CTAs' work items (sequence,
+// split, KV head; item (seq splits + split) KV_HEADS + g) in the order the counter *ctr (zero at launch) hands them out,
+// so no CTA starts or drains per item and none waits behind a static share. Item n + 1's id is in it[(n + 1) % 4] at
+// item n's start: thread 0 takes items 0 and 1 before the loop, and the first decoder thread takes item n + 2 at item
+// n's start and publishes it at item n + 1's, so the atomic's latency is a whole item. The decoder warps read it after
+// a named barrier, the MMA warps after the full barrier of the item's first tile; a decoder lane loads item n + 1's
+// first word during item n's last tile. Each item's partials are mma-ws's at the same splits, bit for bit.
+constexpr int dyn_smem() { return mws_smem() + 4 * 4; }
+
+__global__ void __launch_bounds__(MWT, 2) attn_dyn_kernel(const uint8_t *__restrict__ kv,
+                                                         const uint16_t *__restrict__ q, float *__restrict__ part,
+                                                         int ctx, int layers, int layer, int per_split, int splits,
+                                                         int k, int nitems, unsigned long long *__restrict__ ctr) {
+  if constexpr (MMA_OK) {
+    extern __shared__ __align__(16) uint8_t sm[];
+    uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
+    u32 *td = reinterpret_cast<u32 *>(empty + MNB);
+    volatile int *it = reinterpret_cast<volatile int *>(td + NL);
+    const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    const auto tokens = [&](int item) {
+      const int t0 = item / KV_HEADS % splits * per_split;
+      return min(ctx, t0 + per_split) - t0;
+    };
+    if (threadIdx.x == 0) {
+      for (int b = 0; b < MNB; ++b) {
+        mbar_init(full + b, 32 * MDW);
+        mbar_init(empty + b, 32 * MW);
+      }
+      u32 s[NL];
+      tweak((u64)MT * layers * TLW, s);
+#pragma unroll
+      for (int l = 0; l < NL; ++l) td[l] = s[l];
+      it[0] = (int)atomicAdd(ctr, 1ULL);
+      it[1] = (int)atomicAdd(ctr, 1ULL);
+    }
+    __syncthreads();
+    if (w >= MW) {
+      const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
+      const int wj = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + j;
+      const auto word = [&](int item, int tile) {
+        const int sq = item / KV_HEADS;
+        return (((u64)(sq / splits) * ctx + sq % splits * per_split + tile * MT + t) * layers + layer) * TLW + wj +
+               item % KV_HEADS * (HB / WB);
+      };
+      int cur = it[0], gt = 0;
+      unsigned long long pend = 0;
+      u32 nx[NL], tw[NL];
+      if (cur < nitems && t < min(MT, tokens(cur))) ldg_word(reinterpret_cast<const u32 *>(kv) + word(cur, 0) * NL, nx);
+#pragma unroll 1
+      for (int n = 0; cur < nitems; ++n) {
+        if (d == 0) {
+          if (n) it[(n + 1) & 3] = (int)pend;
+          pend = atomicAdd(ctr, 1ULL);
+        }
+        asm volatile("bar.sync 1, %0;" ::"n"(32 * MDW) : "memory");
+        const int nxt = it[(n + 1) & 3], rem = tokens(cur);
+        tweak(word(cur, 0), tw);
+#pragma unroll 1
+        for (int tile = 0; tile * MT < rem; ++tile, ++gt) {
+          const int nt = min(MT, rem - tile * MT);
+          u32 x[NL];
+          copy(x, nx);
+          if ((tile + 1) * MT < rem) {
+            if (t < min(MT, rem - (tile + 1) * MT))
+              ldg_word(reinterpret_cast<const u32 *>(kv) + word(cur, tile + 1) * NL, nx);
+          } else if (nxt < nitems && t < min(MT, tokens(nxt))) {
+            ldg_word(reinterpret_cast<const u32 *>(kv) + word(nxt, 0) * NL, nx);
+          }
+          if (tile) tweak_step(tw, td);
+          if (t < nt) decode_word_t(x, tw, k);
+          else
+#pragma unroll
+            for (int l = 0; l < NL; ++l) x[l] = 0u;
+          if (gt >= MNB) mbar_wait(empty + gt % MNB, (gt / MNB - 1) & 1);
+          store(reinterpret_cast<u32 *>(sm + (gt % MNB) * MT * MTS + t * MTS + j * WB), x);
+          mbar_arrive(full + gt % MNB);
+        }
+        cur = nxt;
+      }
+      return;
+    }
+    u32 qa[8][2];
+    float o[8][4];
+    int cur = it[0], gt = 0;
+#pragma unroll 1
+    for (int n = 0; cur < nitems; ++n) {
+      const int g = cur % KV_HEADS, sq = cur / KV_HEADS, rem = tokens(cur);
+      float m_own = -INFINITY, l_own = 0.f;
+#pragma unroll
+      for (int mt = 0; mt < 8; ++mt)
+#pragma unroll
+        for (int v = 0; v < 4; ++v) o[mt][v] = 0.f;
+      mma_load_q(q, sq / splits, g, lane, qa);
+      int nxt = nitems;
+#pragma unroll 1
+      for (int tile = 0; tile * MT < rem; ++tile, ++gt) {
+        const int b = gt % MNB, nt = min(MT, rem - tile * MT);
+        mbar_wait(full + b, (gt / MNB) & 1);
+        if (tile == 0) nxt = it[(n + 1) & 3];
+        if (nt > 16 * w)
+          mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
+        mbar_arrive(empty + b);
+      }
+      mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
+      cur = nxt;
+    }
+  }
+}
+
 // The warp-specialized form at the standalone decode's occupancy: ODW = 12 decoder warps and the MW MMA warps a CTA, two
 // CTAs an SM at 72 registers, so 24 decoder warps an SM. A decoder lane holds no next word in registers: it loads its
 // word of a tile of OT tokens, decodes it and stores it, and the SM's other warps hide the load, as in decode_kernel.
@@ -1791,15 +1900,37 @@ int kv_rc_l2(uint64_t bytes, cudaStream_t s, uint64_t *out) {
 // 8 the persistent warp-specialized form, plain, and 9 its words (the same output as 8), `splits` times the CTAs the
 // SMs hold at once, fewer if a pair would span more than 16 of them; encoded = 10 and 11 mma-ws with the unbound and the
 // bound receipt (the same output as 5 at the same split, in whole blocks of RT tiles), into kv_rc_buffers' sketches,
-// and their receipts if it has a receipt buffer.
+// and their receipts if it has a receipt buffer; encoded = 12 mma-ws's work items folded by a CTA pair an SM as a
+// counter hands them out (the same output as 5 at the same split).
 // q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
 // splits * kv_attn_shape's out[6] floats (times out[7] from 3 on; batch * 16 * out[6] * out[7] for 8 and 9). The tokens
 // are split into at most `splits` ranges of whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
-  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 11 ||
+  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 12 ||
       (encoded != 0 && encoded != 3 && encoded != 6 && encoded != 8 && (k < 1 || k > kv::KMAX)))
     return -1;
+  if (encoded == 12) {
+    if (!kv::MMA_OK) return -2;
+    static int slots = 0;
+    static unsigned long long *ctr = nullptr;
+    if (!slots) {
+      int dev, sms, occ;
+      cudaGetDevice(&dev);
+      cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+      cudaFuncSetAttribute(kv::attn_dyn_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::dyn_smem());
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, kv::attn_dyn_kernel, kv::MWT, kv::dyn_smem());
+      if (occ < 1 || cudaMalloc(&ctr, sizeof *ctr) != cudaSuccess) return -3;
+      slots = sms * occ;
+    }
+    const int per = (ctx + splits - 1) / splits, per_split = (per + kv::MT - 1) / kv::MT * kv::MT;
+    const int sp = (ctx + per_split - 1) / per_split, nitems = batch * sp * kv::KV_HEADS;
+    if (cudaMemsetAsync(ctr, 0, sizeof *ctr, s) != cudaSuccess) return launched();
+    kv::attn_dyn_kernel<<<std::min(slots, nitems), kv::MWT, kv::dyn_smem(), s>>>(
+        static_cast<const uint8_t *>(kv_), q, part, ctx, layers, layer, per_split, sp, k, nitems, ctr);
+    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
+    return launched();
+  }
   if (encoded >= 10) {
     if (!kv::MMA_OK) return -2;
     if (!rc_sk) return -1;
