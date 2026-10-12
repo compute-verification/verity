@@ -28,6 +28,7 @@ import Proofs.Flock.C3.Reps.Vals
 import Proofs.Flock.C3.Reps.Steps
 import Proofs.Flock.C3.Reps.StepsTie
 import Proofs.Flock.C3.Reps.RepsRead
+import Proofs.Flock.C3.Reps.RepCoins
 import Proofs.Flock.C3.HoloValues.Frames
 import Proofs.Flock.C3.HoloValues.Runs
 import Proofs.Flock.C3.HoloValues.Shift
@@ -37,6 +38,7 @@ import Proofs.Flock.C3.Reps.Maps
 import Proofs.Flock.C3.Reps.OpensRead
 import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.C3.Reps.SrcOK
+import Proofs.Flock.C3.Reps.TsRead
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
 import Proofs.Flock.C3.Opening.ClaimTie
