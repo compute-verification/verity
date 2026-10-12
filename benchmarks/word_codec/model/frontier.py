@@ -26,19 +26,38 @@ FUSED_768_Y = 1.159
 FUSED_768_Y32 = 1.386
 FUSED_512_Y = 1.051
 FUSED_1023_Y = 2.025
-# The fused decode's ALU over the issue bound, ε / sq(bits): 4.42 at 768 bits (the best measured), 5.17 at 512, 6.58
-# at 1023, where 32 limbs a thread leave room for 6 decode warps against 768's 10. Wider fields are bracketed by the
-# best and the worst measured; past 1023 bits a thread per word is outside the bracket.
-OFF_ISSUE = (4.42, 6.58)
 # Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits ra-word-codec's 2.81e10/s,
 # 1,536 and 2,048 the red team's F22 (r20261012-102430-ee3a: 8.3e9/s, 5.05e9/s with one level of Karatsuba).
 SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 5.05e9)}
 KAPPA = g.CLOCK_MAX_MHZ / g.CLOCK_LOCKED_MHZ  # Φ_cores is declared at the max clock
 
 
+def _square(limbs: int) -> int:
+    """Instructions to square `limbs` limbs without the fold, the fewer of schoolbook (products, their carry adds and
+    the doubling) and a level of Karatsuba (three squarings of half, the sum h, its carry 2h, the combine 4h)."""
+    school = limbs * limbs + 3 * limbs
+    if limbs < 4 or limbs % 2:
+        return school
+    h = limbs // 2
+    return min(school, 3 * _square(h) + 7 * h)
+
+
+def issue_count(bits: int) -> int:
+    """The fewest instructions a known squaring mod a pseudo-Mersenne p issues, the fold 3L included [estimate]: the
+    schoolbook L(L + 1) + 5L up to 512 bits, Karatsuba's below it from 768 (696, 1,120, 2,184 and 3,488 at 768,
+    1,023, 1,536 and 2,048 bits against 720, 1,216, 2,592 and 4,480)."""
+    limbs = math.ceil(bits / 32)
+    return _square(limbs) + 3 * limbs
+
+
 def sq(bits: int, ops: float = 1.0) -> float:
-    limbs = bits / 32
-    return g.sq_floor(bits, ops=ops * (limbs * (limbs + 1) + 5 * limbs))
+    return g.sq_floor(bits, ops=ops * issue_count(bits))
+
+
+# The fused decode's ALU over the issue bound, ε / sq(bits), from the measured steps: 4.57 at 768 bits (the best),
+# 5.17 at 512, 7.14 at 1023, where 32 limbs a thread leave room for 6 decode warps against 768's 10. Wider fields
+# are bracketed by the best and the worst measured; past 1023 bits a thread per word is outside the bracket.
+OFF_ISSUE = (g.WIDE["p767"].eps / sq(768), (FUSED_1023_Y - FUSED_768_Y + g.WIDE["p767"].eps) / sq(1023))
 
 
 def apart_off(bits: int) -> tuple[float, float]:
