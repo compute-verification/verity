@@ -50,40 +50,132 @@ __device__ __forceinline__ u64 be_word(u32 lo, u32 hi) {
 
 // --- receipts ----------------------------------------------------------------------------------------------------
 
-template <bool Z>
-__global__ void __launch_bounds__(128) receipts_kernel(const uint4 *__restrict__ data, const uint4 *__restrict__ zs,
-                                                       u64 j0, u64 n, u64 *__restrict__ ys) {
-  const u64 q = blockIdx.x * (u64)blockDim.x + threadIdx.x;
-  if (q >= n) return;
-  const uint4 *E = data + q * (BLOCK / 16), *X = Z ? zs + q * (BLOCK / 16) : nullptr;
-  u64 s[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kC.receipt_mid[i];
-  u64 carry = j0 + q, w[16];
-#pragma unroll 1
-  for (int k = 0; k < BLOCK / 128; ++k) {
-    u64 d[16];
-#pragma unroll
-    for (int i = 0; i < 8; ++i) {
-      uint4 v = __ldg(E + 8 * k + i);
-      if (Z) {
-        const uint4 x = __ldg(X + 8 * k + i);
-        v.x ^= x.x, v.y ^= x.y, v.z ^= x.z, v.w ^= x.w;
-      }
-      d[2 * i] = be_word(v.x, v.y), d[2 * i + 1] = be_word(v.z, v.w);
-    }
-    w[0] = carry;
-#pragma unroll
-    for (int i = 1; i < 16; ++i) w[i] = d[i - 1];
-    carry = d[15];
-    sha512_compress(s, w);
-  }
+// How a receipt thread reads its block (a thread a block, so a warp's loads fall 4 KiB apart):
+//   LOAD_LDG       16 bytes a load through the read-only path
+//   LOAD_L2_256    the same, asking L2 to fetch 256 bytes on a miss
+//   LOAD_PREFETCH  the same, with an L2 prefetch of the line three compressions ahead
+//   LOAD_WARP      the warp loads its 32 blocks' next 128 bytes as whole lines, through shared memory
+// and two ceilings that are not receipts: LOAD_HOT reads a 1 MiB window that stays in L2, LOAD_NONE reads nothing.
+enum { LOAD_LDG, LOAD_L2_256, LOAD_PREFETCH, LOAD_WARP, LOAD_HOT, LOAD_NONE, LOADS };
+
+__device__ __forceinline__ uint4 ld_l2_256(const uint4 *p) {
+  uint4 v;
+  asm("ld.global.nc.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+  return v;
+}
+
+__device__ __forceinline__ void receipt_finish(u64 s[8], u64 carry, u64 *__restrict__ out) {
+  u64 w[16];
 #pragma unroll
   for (int i = 0; i < 16; ++i) w[i] = 0;
   w[0] = carry, w[1] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + BLOCK) * 8;
   sha512_compress(s, w);
 #pragma unroll
-  for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
+  for (int i = 0; i < 8; ++i) out[i] = s[i];
+}
+
+// One 128-byte chunk d (big-endian words) of the message after u64be j: the compression takes carry ‖ d[0..14].
+__device__ __forceinline__ void receipt_step(u64 s[8], u64 &carry, const u64 d[16]) {
+  u64 w[16];
+  w[0] = carry;
+#pragma unroll
+  for (int i = 1; i < 16; ++i) w[i] = d[i - 1];
+  carry = d[15];
+  sha512_compress(s, w);
+}
+
+template <bool Z, int L>
+__global__ void __launch_bounds__(128) receipts_kernel(const uint4 *__restrict__ data, const uint4 *__restrict__ zs,
+                                                       u64 j0, u64 n, u64 *__restrict__ ys) {
+  const u64 q = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (q >= n) return;
+  const u64 at = L == LOAD_HOT ? (q & 255) : q;
+  const uint4 *E = data + at * (BLOCK / 16), *X = Z ? zs + at * (BLOCK / 16) : nullptr;
+  u64 s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kC.receipt_mid[i];
+  u64 carry = j0 + q;
+#pragma unroll 1
+  for (int k = 0; k < BLOCK / 128; ++k) {
+    if (L == LOAD_PREFETCH && k + 3 < BLOCK / 128) {
+      asm volatile("prefetch.global.L2 [%0];" ::"l"(E + 8 * (k + 3)));
+      if (Z) asm volatile("prefetch.global.L2 [%0];" ::"l"(X + 8 * (k + 3)));
+    }
+    u64 d[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      uint4 v;
+      if (L == LOAD_NONE) {
+        v = make_uint4((u32)carry ^ (u32)(16 * k + i), (u32)(carry >> 32), (u32)i, (u32)k);
+      } else {
+        v = L == LOAD_L2_256 ? ld_l2_256(E + 8 * k + i) : __ldg(E + 8 * k + i);
+        if (Z) {
+          const uint4 x = L == LOAD_L2_256 ? ld_l2_256(X + 8 * k + i) : __ldg(X + 8 * k + i);
+          v.x ^= x.x, v.y ^= x.y, v.z ^= x.z, v.w ^= x.w;
+        }
+      }
+      d[2 * i] = be_word(v.x, v.y), d[2 * i + 1] = be_word(v.z, v.w);
+    }
+    receipt_step(s, carry, d);
+  }
+  receipt_finish(s, carry, ys + 8 * q);
+}
+
+// LOAD_WARP: in each of the 32 steps the warp loads its 32 blocks' next 128-byte chunks, four whole lines a load,
+// into shared memory (each block's chunk swizzled by its index, so neither the stores nor the reads conflict), and
+// each thread compresses its own block's chunk.
+template <bool Z>
+__global__ void __launch_bounds__(128) receipts_warp_kernel(const uint4 *__restrict__ data,
+                                                            const uint4 *__restrict__ zs, u64 j0, u64 n,
+                                                            u64 *__restrict__ ys) {
+  __shared__ uint4 buf[4][32 * 8];
+  const int lane = threadIdx.x & 31;
+  const u64 base = blockIdx.x * (u64)blockDim.x + (threadIdx.x & ~31u), q = base + lane;
+  if (base >= n) return;
+  uint4 *B = buf[threadIdx.x >> 5];
+  u64 s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kC.receipt_mid[i];
+  u64 carry = j0 + q;
+#pragma unroll 1
+  for (int k = 0; k < BLOCK / 128; ++k) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const int b = 4 * i + (lane >> 3), c = lane & 7;
+      if (base + b < n) {
+        const u64 off = (base + b) * (BLOCK / 16) + 8 * k + c;
+        uint4 v = __ldg(data + off);
+        if (Z) {
+          const uint4 x = __ldg(zs + off);
+          v.x ^= x.x, v.y ^= x.y, v.z ^= x.z, v.w ^= x.w;
+        }
+        B[8 * b + (c ^ (b & 7))] = v;
+      }
+    }
+    __syncwarp();
+    u64 d[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const uint4 v = B[8 * lane + (i ^ (lane & 7))];
+      d[2 * i] = be_word(v.x, v.y), d[2 * i + 1] = be_word(v.z, v.w);
+    }
+    __syncwarp();
+    receipt_step(s, carry, d);
+  }
+  if (q < n) receipt_finish(s, carry, ys + 8 * q);
+}
+
+template <bool Z>
+void launch_receipts(int mode, const uint4 *data, const uint4 *zs, u64 j0, u64 n, u64 *ys, cudaStream_t s) {
+  const unsigned g = (unsigned)((n + 127) / 128);
+  switch (mode) {
+    case LOAD_LDG: receipts_kernel<Z, LOAD_LDG><<<g, 128, 0, s>>>(data, zs, j0, n, ys); break;
+    case LOAD_L2_256: receipts_kernel<Z, LOAD_L2_256><<<g, 128, 0, s>>>(data, zs, j0, n, ys); break;
+    case LOAD_PREFETCH: receipts_kernel<Z, LOAD_PREFETCH><<<g, 128, 0, s>>>(data, zs, j0, n, ys); break;
+    case LOAD_WARP: receipts_warp_kernel<Z><<<g, 128, 0, s>>>(data, zs, j0, n, ys); break;
+    case LOAD_HOT: receipts_kernel<Z, LOAD_HOT><<<g, 128, 0, s>>>(data, zs, j0, n, ys); break;
+    default: receipts_kernel<Z, LOAD_NONE><<<g, 128, 0, s>>>(data, zs, j0, n, ys); break;
+  }
 }
 
 // --- framed messages ---------------------------------------------------------------------------------------------
@@ -372,13 +464,13 @@ int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8
 }
 
 // The receipts of n blocks at data (block q at byte 4096 q, store index j0 + q) into ys (8 words a receipt); zs holds
-// each block's spread z (4096 bytes a block) or is null for z's of zero bytes.
-int rb_receipts(const void *data, const void *zs, uint64_t j0, uint64_t n, uint64_t *ys, cudaStream_t s) {
-  if (!data || !ys || n < 1) return 1;
+// each block's spread z (4096 bytes a block) or is null for z's of zero bytes; mode is how a block is read (LOAD_*).
+int rb_receipts(const void *data, const void *zs, uint64_t j0, uint64_t n, uint64_t *ys, int mode, cudaStream_t s) {
+  if (!data || !ys || n < 1 || mode < 0 || mode >= LOADS) return 1;
   if (zs)
-    receipts_kernel<true><<<grid(n, 128), 128, 0, s>>>((const uint4 *)data, (const uint4 *)zs, j0, n, ys);
+    launch_receipts<true>(mode, (const uint4 *)data, (const uint4 *)zs, j0, n, ys, s);
   else
-    receipts_kernel<false><<<grid(n, 128), 128, 0, s>>>((const uint4 *)data, nullptr, j0, n, ys);
+    launch_receipts<false>(mode, (const uint4 *)data, nullptr, j0, n, ys, s);
   return cudaGetLastError() ? 4 : 0;
 }
 

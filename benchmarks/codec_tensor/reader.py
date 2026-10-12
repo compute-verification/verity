@@ -32,6 +32,9 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
 BLOCK = 4096
 SALT_DOMAIN = b"verity/store/salt/v0\0"
+# reader.cu's LOAD_* modes: the first four compute receipts, the last two are ceilings that read other bytes or none.
+LOADS = ("ldg", "l2_256", "prefetch", "warp", "hot", "none")
+EXACT = LOADS[:4]
 
 
 def store_salt(key: bytes, seed: bytes, leaf: int) -> bytes:
@@ -46,12 +49,12 @@ def digest(words) -> bytes:
 class Reader:
     """One GPU's reader of the driver's receipt tree: `begin` a pass, receipt and commit its `segment`s, `open` them."""
 
-    def __init__(self, path: str, torch) -> None:
-        self.torch, self.so = torch, ctypes.CDLL(path)
+    def __init__(self, path: str, torch, load: str = "ldg") -> None:
+        self.torch, self.so, self.load = torch, ctypes.CDLL(path), load
         v, u64, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
         b = ctypes.c_char_p
         self.so.rb_set.argtypes = [b, b, b, b, b, b, b, b, i, b, i, u64, v]
-        self.so.rb_receipts.argtypes = [v, v, u64, u64, v, v]
+        self.so.rb_receipts.argtypes = [v, v, u64, u64, v, i, v]
         self.so.rb_leaves.argtypes = [v, u64, u64, v, v, v]
         self.so.rb_pads.argtypes = [u64, u64, v, v]
         self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
@@ -75,9 +78,10 @@ class Reader:
                   rb.KEY, self.dom.domain_id, rb.SCHEMA.encode(), len(rb.SCHEMA), salt_in, len(salt_in), n)
         self.kept = {}
 
-    def receipts(self, data, j0: int, n: int, ys, zs=None) -> None:
+    def receipts(self, data, j0: int, n: int, ys, zs=None, load: str | None = None) -> None:
         """Receipts of n blocks at `data` (store indices j0 …) into ys (n x 8), each bound to its spread z in zs."""
-        self.call("rb_receipts", data.data_ptr(), zs.data_ptr() if zs is not None else None, j0, n, ys.data_ptr())
+        self.call("rb_receipts", data.data_ptr(), zs.data_ptr() if zs is not None else None, j0, n, ys.data_ptr(),
+                  LOADS.index(load or self.load))
 
     def commit(self, ys, c0: int, nl: int, salts=None):
         dig = self.torch.empty((nl, 8), dtype=self.torch.int64, device="cuda")
@@ -151,9 +155,20 @@ def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
     tree = rb.tree(seed, plan, ref_ys, ref_salts)
     got = [digest(y) for y in ys]
     sl = salts.cpu().numpy().tobytes()
+    # Every exact load mode on the same runs (none a whole number of warps), bound to the z's and to z's of zero bytes.
+    ref_plain = [receipter(j, host[j * BLOCK:(j + 1) * BLOCK].tobytes(), bytes(BLOCK)) for j in order]
+    by_load = {}
+    for load in EXACT:
+        with_z, plain = torch.zeros_like(ys), torch.zeros_like(ys)
+        p = 0
+        for first, count in plan.runs:
+            reader.receipts(data[first * BLOCK:], first, count, with_z[p:], spread[p * BLOCK:], load=load)
+            reader.receipts(data[first * BLOCK:], first, count, plain[p:], load=load)
+            p += count
+        by_load[load] = [digest(y) for y in with_z] == ref_ys and [digest(y) for y in plain] == ref_plain
     out["partial"] = {
         "positions": plan.length, "leaves": reader.leaves, "width": len(levels[0]),
-        "receipts": got == ref_ys,
+        "receipts": got == ref_ys, "receipts_by_load": by_load,
         "salts": [sl[c * rb.SALT_BYTES:(c + 1) * rb.SALT_BYTES] for c in range(reader.leaves)] == ref_salts,
         "leaves_and_pads": [digest(x) for x in levels[0]] == list(tree._levels[0]),
         "levels": all([digest(x) for x in lv] == list(tree._levels[h]) for h, lv in enumerate(levels)),
@@ -183,7 +198,8 @@ def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
         "roots": roots == [tree._levels[h0][0], tree._levels[h1][half // rb.PER_LEAF >> h1]],
         "openings": len(opened), "openings_ok": all(opened),
     }
-    out["ok"] = all(v for part in ("partial", "segments") for k, v in out[part].items() if isinstance(v, bool))
+    out["ok"] = all(v for part in ("partial", "segments") for k, v in out[part].items() if isinstance(v, bool)) and all(
+        by_load.values())
     return out
 
 
@@ -198,12 +214,12 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     plan = rb.Plan.whole(n)
     reader.begin(rb.seed(bytes(32), 0, bytes(64)), plan, bytes(32))
     half = n // 2
-    steps = {
-        "read": lambda: reader.call("rb_read", data.data_ptr(), n * BLOCK, xr.data_ptr(), 16 * sms),
-        "receipts": lambda: reader.receipts(data, 0, n, ys),
-        "receipts_z_half": lambda: reader.receipts(data, 0, half, ys, data[half * BLOCK // 4:]),
-        "leaves": lambda: reader.commit(ys, 0, n // rb.PER_LEAF),
-    }
+    steps = {"read": lambda: reader.call("rb_read", data.data_ptr(), n * BLOCK, xr.data_ptr(), 16 * sms)}
+    for load in LOADS:
+        steps[f"receipts/{load}"] = lambda load=load: reader.receipts(data, 0, n, ys, load=load)
+        steps[f"receipts_z_half/{load}"] = lambda load=load: reader.receipts(data, 0, half, ys,
+                                                                             data[half * BLOCK // 4:], load=load)
+    steps["leaves"] = lambda: reader.commit(ys, 0, n // rb.PER_LEAF)
     dig = reader.commit(ys, 0, n // rb.PER_LEAF)
     steps["tree"] = lambda: reader.levels(dig, 0, pad=True)
     ms = {}
@@ -220,16 +236,22 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
             best.append(a.elapsed_time(b))
         ms[name] = min(best)
     nbytes = n * BLOCK
-    z = ms["receipts_z_half"] * n / half
-    reader_ms = ms["receipts"] + ms["leaves"] + ms["tree"]
+    by_load = {load: {"gb_s": nbytes / ms[f"receipts/{load}"] / 1e6,
+                      "z_gb_s": nbytes / (ms[f"receipts_z_half/{load}"] * n / half) / 1e6,
+                      "sha512_compressions_per_s": n * 33 / ms[f"receipts/{load}"] * 1e3} for load in LOADS}
+    best = min(EXACT, key=lambda load: ms[f"receipts/{load}"])
+    best_z = min(EXACT, key=lambda load: ms[f"receipts_z_half/{load}"])
+    plain, z = ms[f"receipts/{best}"], ms[f"receipts_z_half/{best_z}"] * n / half
+    reader_ms = plain + ms["leaves"] + ms["tree"]
     compressions = n * 33 + n // rb.PER_LEAF * 15
     return {
-        "blocks": n, "bytes": nbytes, "ms": ms,
-        "read_gb_s": nbytes / ms["read"] / 1e6, "receipts_gb_s": nbytes / ms["receipts"] / 1e6,
+        "blocks": n, "bytes": nbytes, "ms": ms, "by_load": by_load, "best_load": best, "best_load_z": best_z,
+        "read_gb_s": nbytes / ms["read"] / 1e6, "receipts_gb_s": nbytes / plain / 1e6,
         "receipts_z_gb_s": nbytes / z / 1e6,
-        "sha512_compressions_per_s": n * 33 / ms["receipts"] * 1e3,
+        "sha512_compressions_per_s": n * 33 / plain * 1e3,
         "reader_ms": reader_ms, "reader_z_ms": z + ms["leaves"] + ms["tree"],
         "tau_per_pass": reader_ms / ms["read"], "tau_z_per_pass": (z + ms["leaves"] + ms["tree"]) / ms["read"],
+        "tau_ceiling_none": (ms["receipts/none"] + ms["leaves"] + ms["tree"]) / ms["read"],
         "leaves_and_tree_share": (ms["leaves"] + ms["tree"]) / reader_ms,
         "compressions_per_block": compressions / n,
     }
