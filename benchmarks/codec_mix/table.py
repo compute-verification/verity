@@ -32,8 +32,9 @@ import sys
 MU_FIXED = 0.28 + 0.10
 X1_P512 = 175.0
 CEILINGS = (1.0, 1.2, 1.45)
-#: μ_host + μ_link + λ: none, the red team's fix (b) at 0.1% and at 0.26%.
-ALLOWANCES = (0.0, 0.1, 0.26)
+#: μ_host + μ_link + λ: none, the red team's fix (b) at 0.1% and at 0.26%, and ra-remote-driver's λ 0.195% with
+#: μ_timing's low end, 0.20%.
+ALLOWANCES = (0.0, 0.1, 0.26, 0.4)
 
 #: ra-codec-tensor's step at p512, in native passes (its report's table): d, W = linears' decode + receipt, A =
 #: attention, E = the append, at k = 1, 2, 3.
@@ -158,8 +159,9 @@ def build(attack: list[dict], rates: dict, exhausts: list[dict]) -> dict:
     m, n = masked(512)
     rows.append(row("p512 k=2 masked (σ_K)", 512, 2, fr=fr, lib="p512-m", margin=m, note=n,
                     attn=attn("p512-m", 2)))
-    rows.append(row("p512 k=3 plain", 512, 3, fr=fr, lib="p512", kappa=3.0, margin=None,
-                    note="direct degree-8 relation not priced", attn=attn("p512", 3)))
+    rows.append(row("p512 k=3 plain (the stated codec)", 512, 3, fr=fr, lib="p512", kappa=3.0, margin=None,
+                    note="its partial-completion margin isn't priced (no degree-8 completion measured)",
+                    attn=attn("p512", 3)))
     rows.append(row("p512 k=3 masked", 512, 3, fr=fr, lib="p512-m", margin=(2.0, 1.33, 2.0),
                     note="peel two roots: 2.02/(3·x/b) at b/3, 2/(1.5) at free b/2",
                     attn=attn("p512-m", 3)))
@@ -179,6 +181,9 @@ def build(attack: list[dict], rates: dict, exhausts: list[dict]) -> dict:
         m, n = masked(b)
         rows.append(row(f"p{b} k=2 masked (σ_K)", b, 2, fr=fr, lib=f"p{b}-m", margin=m,
                         note=n + ("" if attn(f"p{b}-m", 2) else "; projected step") + wide, attn=attn(f"p{b}-m", 2)))
+        rows.append(row(f"p{b} k=3 masked", b, 3, fr=fr, lib=f"p{b}-m", margin=(2.0, 1.33, 2.0),
+                        note="peel two roots, as at 512 bits" + ("" if attn(f"p{b}-m", 3) else "; projected step")
+                        + wide, attn=attn(f"p{b}-m", 3)))
     if attn("p768-m", 2):
         m, n = masked(768)
         rows.append(row("p768 k=2 masked (σ_K), tensor-core layout (projected)", 768, 2, fr=fr, lib="p768-m",
