@@ -1,17 +1,17 @@
 import Proofs.Flock.C3.RegLevels.SrcTie
+import Proofs.Flock.C3.Compose.LastRead
 import Proofs.Flock.C3.RegLevels.Read
 import Proofs.Flock.Soundness.Refine.LigeritoRun
 import Proofs.Flock.Soundness.Refine.Final
 
 /-!
-# n9: R's Ligerito ends in a coin (`LigWhole`) from the source's tie
+# n9: R's Ligerito ends in a coin (H's `LigWhole`) from the source's tie
 
-`LigWhole` is H's statement (`C3/Compose/LastRead.lean`, `9dfff0cb7`) in the same form; H's file was unbuilt when this
-was written, so it is stated here. At an accepting `LevelTie` the executable's Ligerito refines to the model's compiled
-Ligerito played on its messages and the rounds it consumes (`ligerito_refines`, whose final program leaves the
-transcript as it is, `finalProg_ok`), and that play is a play on `u.lg` (`Read.playsT_lig_of_tape`). A whole play of
-compiled Ligerito at a `fast100` schedule ends in a coin (`LigEndsInCoin`, named: the last level's queries,
-`qbShape lv false`, close with their coin), so `u.lg` does.
+At an accepting `LevelTie` the executable's Ligerito refines to the model's compiled Ligerito played on its messages
+and the rounds it consumes (`ligerito_refines`, whose final program leaves the transcript as it is, `finalProg_ok`),
+and that play is a play on `u.lg` (`Read.playsT_lig_of_tape`). A whole play of compiled Ligerito at a `fast100`
+schedule ends in a coin (`LigEndsInCoin`, named: the last level's queries, `qbShape lv false`, close with their coin),
+so `u.lg` does.
 -/
 
 namespace FlockC3.RegLevels
@@ -50,18 +50,13 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **R's Ligerito ends in a coin** at every accepted outer proof (H's `LigWhole`, in its form). -/
-def LigWhole (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) : Prop :=
-  AtSrc zs dg N k Rw src fun _ u => ∃ (l : List Step) (c : Game.Msg), u.lg = l ++ [.inr c]
-
-/-- **`LigWhole` from the source's tie**, at any registered cap. -/
+/-- **H's `LigWhole` from the source's tie**, at any registered cap. -/
 theorem ligWhole_of_srcLevelTie (hend : LigEndsInCoin)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {cap₀ : Cap Dig} (h : SrcLevelTie zs dg N k Rw src cap₀) : LigWhole zs dg N k Rw src :=
+    {cap₀ : Cap Dig} (h : SrcLevelTie zs dg N k Rw src cap₀) :
+    FlockC3.Compose.LigWhole zs dg N k Rw src :=
   fun R ω t R₂ τ o hA => ligWhole_of_levelTie hend (h R ω t R₂ τ o hA)
 
 end
