@@ -3,6 +3,7 @@ import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
+import Proofs.Accounting.Actual.Device
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Bridges
 
@@ -25,6 +26,9 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   state bounds the circuit's `state` (`memory_of_mem`), and binds on memory accounting's `not_markov` circuit
   (`markov_mem`); `Recall`, B2's count: what a location does is a function of its state's content, at most `mem`
   bits; `zero_link` fails `Alphabet` at capacity 0 while meeting `Links` (`zero_link_alphabet`, `zero_links`).
+* `Actual/Device.lean`: the bridge to the device model: the schedule a run induces, its chip and memory charges what
+  those locations hold, fits the device (`fits`, `fits_of_feasible`) and charges what an account's gates use
+  (`covers_ingress`, `covers_work`).
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; at tick 0 the state is the inputs (`state_zero`), and causality's global
   form (`global_of_causal`); the content is a function of the state as seen (`content_congr`), of at most `mem` bits
