@@ -13,7 +13,9 @@ import Proofs.Flock.C3.RegLevels.Top
 discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'s statements over the verifier's list
 (`_hob`). Each piece has its own directory and namespace, and `README.md` beside this file is the gap list.
 
-* (a) `C3/Fork/`, `FlockC3.Fork`: candidate 3's table is sound in fork form (`holoForkSound_holoAt`).
+* (a) `C3/Fork/`, `FlockC3.Fork`: candidate 3's table is sound in fork form (`holoForkSound_holoAt`), from the runs
+  (`holo_runs_sound`), which the oracle count (`holoTable_sound`, a1o, with a1s's `sparse_sound` and a1r's
+  `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
   `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
   n0) and `_hbr` at it from n1–n5 (`hbr_honest`).
