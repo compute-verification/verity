@@ -196,8 +196,7 @@ __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
     cy = (u32)(s >> 32);
   }
   u32 y[NL], ml[H], mh[H + 1];
-  u32 l0 = 0, l1 = 0, h0 = 0, h1 = 0, e0 = 0, e1 = 0, fy = 0;
-  long long cm = 0;
+  u32 l0 = 0, l1 = 0, h0 = 0, h1 = 0, e0 = 0, e1 = 0, fy = 0, cp = 0, bd = 0;
 #pragma unroll
   for (int m = 0; m < NL; ++m) {
     u32 lv = l0, hv = h0, dv = e0;
@@ -213,23 +212,32 @@ __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
       add3(r, e0, e1);
       dv = r[0], e0 = r[1], e1 = r[2];
     }
-    u64 s = (u64)hv * CF + lv + fy;
-    if (m >= H) s += ml[m - H];
-    y[m] = (u32)s;
-    fy = (u32)(s >> 32);
-    const long long t = (long long)lv + hv - dv + cm;
-    cm = t >> 32;
-    if (m < H) ml[m] = (u32)t;
-    else mh[m - H] = (u32)t;
+    // y_m = l + c h + fy (+ M_(m - H)) and M_m = (l + h + cp) - d - bd, each a carry chain of its own in one block
+    u32 yv, fn, mv, cn, bn;
+    asm("mad.lo.cc.u32 %0, %2, %3, %4;\n\tmadc.hi.u32 %1, %2, %3, 0;\n\tadd.cc.u32 %0, %0, %5;\n\taddc.u32 %1, %1, 0;"
+        : "=r"(yv), "=r"(fn) : "r"(hv), "n"(CF), "r"(lv), "r"(fy));
+    if (m >= H) asm("add.cc.u32 %0, %0, %2;\n\taddc.u32 %1, %1, 0;" : "+r"(yv), "+r"(fn) : "r"(ml[m - H]));
+    asm("add.cc.u32 %0, %3, %4;\n\taddc.u32 %1, 0, 0;\n\tadd.cc.u32 %0, %0, %5;\n\taddc.u32 %1, %1, 0;\n\t"
+        "sub.cc.u32 %0, %0, %6;\n\tsubc.u32 %2, 0, 0;\n\tsub.cc.u32 %0, %0, %7;\n\tsubc.u32 %2, %2, 0;"
+        : "=r"(mv), "=r"(cn), "=r"(bn) : "r"(lv), "r"(hv), "r"(cp), "r"(dv), "r"(bd));
+    y[m] = yv;
+    fy = fn;
+    cp = cn;
+    bd = bn & 1;
+    if (m < H) ml[m] = mv;
+    else mh[m - H] = mv;
   }
-  mh[H] = (u32)cm;
+  mh[H] = cp - bd;
   u32 g = 0;
 #pragma unroll
   for (int m = 0; m < NL; ++m) {
-    u64 s = (u64)y[m] + g;
-    if (m <= H) s += (u64)mh[m] * CF;
-    y[m] = (u32)s;
-    g = (u32)(s >> 32);
+    u32 gn;
+    if (m <= H)
+      asm("mad.lo.cc.u32 %0, %2, %3, %0;\n\tmadc.hi.u32 %1, %2, %3, 0;\n\tadd.cc.u32 %0, %0, %4;\n\taddc.u32 %1, %1, 0;"
+          : "+r"(y[m]), "=r"(gn) : "r"(mh[m]), "n"(CF), "r"(g));
+    else
+      asm("add.cc.u32 %0, %0, %2;\n\taddc.u32 %1, 0, 0;" : "+r"(y[m]), "=r"(gn) : "r"(g));
+    g = gn;
   }
   if (add_small(y, (g + fy) * CF)) add_small(y, CF);
   copy(x, y);
