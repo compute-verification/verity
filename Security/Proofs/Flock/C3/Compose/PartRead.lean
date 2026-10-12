@@ -141,12 +141,11 @@ def RsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
       RsAt (zs R' ω' t' R₂') (layers zs dg N k Rw R' ω' t' R₂' τ') sh gs
         (w R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')) i x' → x = x'
 
-variable {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
-  {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-  {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
-
 /-- **A part's committed rounds are its stage's** where the part before it has `c₀` coins and ends in one. -/
 theorem partMsgsRead_of_stage {prev part stage : C3Run (holoAt st hp) → List Step}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
     (hsplit : ∀ u, part u = prev u ++ stage u) {c₀ : ℕ} (he : PartEnds prev zs dg N k Rw src c₀)
     (h : StageMsgsRead c₀ stage zs dg N k Rw src own sel) : PartMsgsRead prev part zs dg N k Rw src own sel := by
   intro i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX hn hi hi'
@@ -161,21 +160,36 @@ theorem partMsgsRead_of_stage {prev part stage : C3Run (holoAt st hp) → List S
   rw [hsplit, hsplit, cutOf_shift_of hc (he R ω t R₂ τ o hA).2, cutOf_shift_of hc' (he R' ω' t' R₂' τ' o' hA').2]
   exact h j R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX (by omega) (by omega)
 
-theorem sparseMsgsRead_of_stage {c₀ : ℕ} (he : PartEnds repPart zs dg N k Rw src c₀)
+theorem sparseMsgsRead_of_stage
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
+    (he : PartEnds repPart zs dg N k Rw src c₀)
     (h : StageMsgsRead c₀ (fun u => u.sp 0 ++ u.sp 1) zs dg N k Rw src own sel) :
     SparseMsgsRead zs dg N k Rw src own sel :=
   partMsgsRead_of_stage sparsePart_split he h
 
-theorem openMsgsRead_of_stage {c₀ : ℕ} (he : PartEnds sparsePart zs dg N k Rw src c₀)
+theorem openMsgsRead_of_stage
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
+    (he : PartEnds sparsePart zs dg N k Rw src c₀)
     (h : StageMsgsRead c₀ C3Run.op zs dg N k Rw src own sel) : OpenMsgsRead zs dg N k Rw src own sel :=
   partMsgsRead_of_stage openPart_split he h
 
-theorem ligMsgsRead_of_stage {c₀ : ℕ} (he : PartEnds openPart zs dg N k Rw src c₀)
+theorem ligMsgsRead_of_stage
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
+    (he : PartEnds openPart zs dg N k Rw src c₀)
     (h : StageMsgsRead c₀ C3Run.lg zs dg N k Rw src own sel) : LigMsgsRead zs dg N k Rw src own sel :=
   partMsgsRead_of_stage ligPart_split he h
 
 /-- **R's opening's part ends in a coin at the source**, three coins past the sparse phases'. -/
-theorem partEnds_open {c₀ : ℕ} (he : PartEnds sparsePart zs dg N k Rw src c₀)
+theorem partEnds_open
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {c₀ : ℕ} (he : PartEnds sparsePart zs dg N k Rw src c₀)
     (hop : AtSrc zs dg N k Rw src fun _ u => ∃ s ρ γ, u.op = openSteps s ρ γ) :
     PartEnds openPart zs dg N k Rw src (c₀ + 3) := by
   intro R ω t R₂ τ o hA
@@ -185,7 +199,10 @@ theorem partEnds_open {c₀ : ℕ} (he : PartEnds sparsePart zs dg N k Rw src c�
 /-- **R's opening's committed rounds from V*'s layers**: R's opening tied to V*'s layers (`OpenTieL`) holds its ring
 switches at rounds `c₀` and `c₀ + 1` past the sparse phases' coins and nothing at `c₀ + 2`, so the ring switches being
 read at their rounds (`RsRead`) is `OpenMsgsRead`. -/
-theorem openMsgsRead_of_layer {sh : Flock.Shape}
+theorem openMsgsRead_of_layer
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {sh : Flock.Shape}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128} {c₀ : ℕ}
     (he : PartEnds sparsePart zs dg N k Rw src c₀)
     (htie : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
