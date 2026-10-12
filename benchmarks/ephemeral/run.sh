@@ -12,7 +12,9 @@
 # HOW node (ncu per kernel), graph (ncu per CUDA graph) or time (no profiler: step times and the HBM read rate), TP the
 # tensor parallelism (default 1; tag MODELtpTP): one process a rank, ncu on rank 0 only, so a collective it profiles runs
 # once against live peers (one pass, no replay).  GPUS (default 1) is the lease, at least every arm's TP.
-# BATCHES, CONTEXTS and ARM_MIN (default 12 minutes an arm) pass through.
+# BATCHES, CONTEXTS and ARM_MIN (default 12 minutes an arm) pass through.  NCU_EXTRA adds metrics (comma-separated) to the
+# two DRAM counters, such as lts__t_sectors_op_write.sum for each kernel's own writes into L2; more than one pass replays
+# each kernel, so keep collectives (TP > 1) to the two.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -44,7 +46,7 @@ gpu-lease "${GPUS:-1}" --wait --max-min "${MAXMIN:-28}" -- bash -c '
     case $how in
       node|graph) A+=(--profile-steps 2 --steps 12)
                   P=("$NCU_BIN" --profile-from-start off --graph-profiling "$how" --cache-control none --clock-control none
-                     --metrics dram__bytes_op_read.sum,dram__bytes_op_write.sum -f -o "$O/ncu-$tag") ;;
+                     --metrics "dram__bytes_op_read.sum,dram__bytes_op_write.sum${NCU_EXTRA:+,$NCU_EXTRA}" -f -o "$O/ncu-$tag") ;;
       time) A+=(--steps 32 --read-rate) ;;
     esac
     [ "$tp" -gt 1 ] && export RANK=0 LOCAL_RANK=0 WORLD_SIZE=$tp MASTER_ADDR=127.0.0.1 MASTER_PORT=$((29500 + RANDOM % 2000))
