@@ -1,18 +1,30 @@
-"""The Commit stage's opt-in serving rows: the units of the verifier's partition, read exactly as the replay reads them (committed
-members through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity_vllm.commit.serving_rows`.  Off unless the row stage writes a request (``commit --serving-rows``):
-``{"dir", "partition", "run", "committer"}``.  The partition file (``{partition, partition_digest, population, scope?}``) is the
-verifier's, fixed before serving; ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``).
+"""The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
+through an opened reader, registered weights for weight slices), committed in M0's serving row format by
+:mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Two ways in, one window:
 
-Members come from the partition's query, in its order (``Q_template_instances``' ``params.templates``, or
-``Q_template_instance``'s one ``template``), each named by its descriptor id:
+* **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
+  "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
+* **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
+  `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
+  window written into ``O``.
 
-  ``RoPEHead_v1{D=64}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (64 words each)
-  ``GemmCoordinate_v2{K=..}``      every coordinate of the ``Gemm_v1`` rows of that K, as shared rows (M0's shared-row files): the
+The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | {...}, "scope"?:
+{"op_path_prefix"}, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's
+Programs; the population program over them (``commit.serving_rows.population_program``) is the one the verifier builds from the same
+Programs, and a ``partition_digest`` in the file that is not that program's partition is refused.  ``partition.json`` beside the
+window is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
+(``model.layers.0.``).
+
+A Program row holds instances of a template when the template is its own Definition (its spec is the descriptor id), or when its
+Definition is cut into them (``CUT``: its body batches the template, read off the bound Definition, so a template id that is not what
+the row computes is no match).  Each member's ports:
+
+  ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
+  ``GemmCoordinate_v1{K=..}``      every coordinate of the ``Gemm_v1`` rows of that K, as shared rows (M0's shared-row files): the
                                    ``x`` table (every token's input row), the ``w`` table (every weight row ``W[c, :]``) and ``y``,
                                    the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (:func:`grid`); the tables
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
-  any other ``<Family>{...}``      every row of that family, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
+  any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
 Units go in request order, then Program row index, then head (``commit.serving_rows.ORDER``).  In a prefill step the Program lists
@@ -25,24 +37,27 @@ import os
 import re
 import time
 import traceback
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.sampled_proofs.one_stage import draw as DR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
-from verity_vllm.query.manifest import format as RM
 
-ROPE, ROPE_FAMILY, D = "RoPEHead_v1", "RoPE_v1", 64
-GEMM, GEMM_FAMILY = "GemmCoordinate", "Gemm_v1"
+ROPE, GEMM = "RoPEHead_v1", "GemmCoordinate"
+#: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
+CUT = ("RoPE_v1", "Gemm_v1")
+PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
 
 def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs: dict[str, dict[str, Any]], bmap: dict[str, Any],
-            arrivals: dict[str, int], loaded: dict[str, dict[str, Any]], manifest: Any, row: str | None) -> tuple[Callable, Any]:
+            arrivals: dict[str, int], loaded: dict[str, dict[str, Any]], manifest: Any, row: str | None,
+            digests: Mapping[str, str] | None = None) -> tuple[Callable, Any]:
     """The replay's weights provider and a fresh opened reader for it, as before.  With a ``request``, the serving rows are committed
     first, through their own opened reader and before the replay's seed exists; a failure is written beside them and changes no
     verdict."""
@@ -52,9 +67,9 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
         req = json.loads(Path(request).read_text())
         try:
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
-                         weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req["run"],
+                         weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req.get("run"),
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
-                         committer=req.get("committer"))
+                         digests=digests, committer=req.get("committer"))
         except Exception as e:  # noqa: BLE001
             Path(req["dir"]).mkdir(parents=True, exist_ok=True)
             (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
@@ -62,69 +77,74 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
     return weights, OpenedReader(com, rc)
 
 
-def templates(partition: dict[str, Any]) -> list[str]:
-    """The partition's templates (descriptor ids), in its order."""
-    q = partition["query"]
-    params = q.get("params") or {}
-    if "templates" in params:
-        return list(params["templates"])
-    if "template" in params or "template" in q:
-        return [params.get("template") or q["template"]]
-    raise ValueError(f"no templates in the partition's query {q.get('name')!r}")
+_UNITS: dict[str, tuple[tuple[str, Any, int], ...]] = {}
 
 
-def _family(template: str) -> str:
-    name = template.split("{", 1)[0]
-    if name == ROPE:
-        return ROPE_FAMILY
-    if name.startswith(GEMM):
-        return GEMM_FAMILY
-    return name
+def unit_templates(spec: str) -> tuple[tuple[str, Any, int], ...]:
+    """The template instances a Program row's Definition holds, ``(descriptor id, Definition, instances)``: the row itself, then, for a
+    ``CUT`` family, each template its body batches (a batch's members; Input batches are its parameters).  None when the spec does
+    not bind to exactly its own descriptor id."""
+    hit = _UNITS.get(spec)
+    if hit is not None:
+        return hit
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.program import is_input
+    from verity_vllm.query.program_view import _registry, spec_base, spec_statics
+
+    reg, _errors = _registry()
+    d, hit = reg.defs.get(spec_base(spec)), ()
+    try:
+        sp = d.bind(**spec_statics(spec)) if d is not None and hasattr(d, "bind") else None
+    except (TypeError, ValueError, KeyError):
+        sp = None
+    if sp is not None and sp.complete and descriptor_id(sp) == spec:
+        hit = ((spec, sp, 1),)
+        if spec_base(spec) in CUT:
+            hit += tuple((descriptor_id(n.fn), n.fn, int(n.n) if n.form == "batch" else 1) for n in sp.body.nodes
+                         if n.form in ("call", "batch") and not is_input(n.fn))
+    _UNITS[spec] = hit
+    return hit
 
 
-def _statics_match(template: str, statics: dict[str, Any]) -> bool:
-    """The row's integer statics, as ``NAME=value``, all appear in the descriptor id (RoPE: only ``D``)."""
-    if template.startswith(ROPE):
-        return f"D={statics.get('D')}" in template
-    if template.startswith(GEMM):
-        return f"K={statics.get('K')}," in template or f"K={statics.get('K')}}}" in template
-    return all(f"{k}={v}" in template for k, v in statics.items() if isinstance(v, int))
+Row = tuple[str, Any, dict, dict]
 
 
 def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | None = None,
-                program_dirs: dict[str, str] | None = None) -> list[list[tuple[str, Any, dict, dict]]]:
-    """Per template, its rows in order: (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
-    prefix).  Fixed by the Build's Programs before serving."""
-    fams = [_family(t) for t in tmpls]
-    out: list[list[tuple[str, Any, dict, dict]]] = [[] for _ in tmpls]
+                program_dirs: dict[str, str] | None = None) -> tuple[list[list[Row]], list[Any], list[int]]:
+    """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
+    prefix); each template's Definition; and its instance count.  Fixed by the Build's Programs before serving."""
+    want = {t: k for k, t in enumerate(tmpls)}
+    out: list[list[Row]] = [[] for _ in tmpls]
+    defs: list[Any] = [None] * len(tmpls)
+    counts = [0] * len(tmpls)
     for rid, inst in programs.items():
         pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)))
         for i in sorted(pi.by_i):
             r = pi.by_i[i]
-            f = RM.spec_family(r["spec"])
-            if f not in fams:
+            hits = [(want[t], fn, n) for t, fn, n in unit_templates(r["spec"]) if t in want]
+            if not hits:
                 continue
             d = pi.describe(r)
             if d is None or (scope and not d["op_path"].startswith(scope)):
                 continue
-            ks = [k for k, g in enumerate(fams) if g == f and _statics_match(tmpls[k], d["statics"])]
-            if not ks:
-                if f == GEMM_FAMILY:
-                    continue                                   # a GEMM of another K than the population's
-                raise ValueError(f"row {i} ({r['spec']}) is not an instance of {tmpls[fams.index(f)]}")
-            out[ks[0]].append((str(rid), pi, r, d))
+            if len(hits) > 1:
+                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _, _ in hits]}: one member reads a row")
+            (k, fn, n), = hits
+            out[k].append((str(rid), pi, r, d))
+            defs[k], counts[k] = fn, counts[k] + n
     for t, rows in zip(tmpls, out, strict=True):
         if not rows:
             raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else ""))
-    return out
+    return out, defs, counts
 
 
-def members(tmpls: Sequence[str], rows: Sequence[list[tuple[str, Any, dict, dict]]]) -> list[CS.Member]:
-    """Each template's ports, instance count and base, read off its first row."""
+def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None) -> list[CS.Member]:
+    """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree."""
     out, base = [], 0
-    for t, rs in zip(tmpls, rows, strict=True):
+    for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
         if t.startswith(ROPE):
+            D = int(d["statics"]["D"])
             n = sum(int(x[3]["statics"]["NHEADS"]) for x in rs)
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
         elif t.startswith(GEMM):
@@ -135,18 +155,48 @@ def members(tmpls: Sequence[str], rows: Sequence[list[tuple[str, Any, dict, dict
         else:
             groups = tuple((f"in{g}", sum(int(sl[3]) - int(sl[2]) for sl in grp)) for g, grp in enumerate(r["args"]))
             m = CS.Member(t, groups, tuple((f"out.{mm[0]}", int(mm[1])) for mm in d["members"]), len(rs), base)
+        if counts is not None and counts[k] != m.n:
+            raise ValueError(f"{t}: {m.n} units read off the rows, {counts[k]} in their Definitions")
         out.append(m)
         base += m.n
     return out
 
 
-def read(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable,
+def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
+    return DR.parse_law(law) if isinstance(law, str) else dict(law)
+
+
+def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
+               program_dirs: dict[str, str] | None = None) -> tuple[CS.Window, list[list[Row]]]:
+    """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
+    each member's rows; refused when the file names a ``partition_digest`` that is not the window's."""
+    tmpls = list(partition["templates"])
+    rows, defs, counts = member_rows(programs, tmpls, (partition.get("scope") or {}).get("op_path_prefix"), program_dirs)
+    ms = members(tmpls, rows, counts)
+    program, query = CS.population_program([(fn, m.n) for fn, m in zip(defs, ms, strict=True)])
+    window = CS.Window(program, query, law_of(partition["law"]), run_root, tuple(ms))
+    want = partition.get("partition_digest")
+    if want and want != window.partition_digest:
+        raise ValueError(f"the run's population ({', '.join(f'{m.template} x {m.n}' for m in ms)}) is partition "
+                         f"{window.partition_digest[:16]}, not the verifier's {str(want)[:16]}")
+    return window, rows
+
+
+def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, Any]:
+    """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
+    return {"format": PARTITION_FORMAT, "templates": [m.template for m in window.members], "law": window.law,
+            "scope": partition.get("scope"), "members": [[m.template, m.n] for m in window.members], "partition": window.partition,
+            "partition_digest": window.partition_digest, "population": window.population}
+
+
+def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
          arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
     """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
     index entries."""
     if m.template.startswith(GEMM):
         return _read_gemm(m, rows, store, weights, arrivals)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
+    D = dict(m.rows).get("x", 0)
     entries: list[list[Any]] = []
     lo = m.base
     for rid, pi, r, d in rows:
@@ -254,32 +304,32 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str, row: Any = None,
-                 arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None, committer: dict[str, Any] | None = None,
+                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str | None = None, row: Any = None,
+                 arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
+                 digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None) -> dict[str, Any]:
-    """The Commit stage's opt-in hook, after the vllm-v1 roots are final and before any challenge: commit the partition's units and
-    write the window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
+    """Commit the verifier's partition's units of a run whose vllm-v1 roots are final and write the window's files into ``out_dir``:
+    the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the research run ``run``, the row,
+    the committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  It reads the committed values
+    and writes only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
-    served = {CS.program_digest(dirs[str(r)]) for r in programs}
-    if len(served) != 1:
-        raise NotImplementedError(f"serving rows register one served Program; this run has {len(served)}")
     pf = json.loads(Path(partition_file).read_text())
-    tmpls = templates(pf["partition"])
-    rows = member_rows(programs, tmpls, (pf.get("scope") or {}).get("op_path_prefix"), dirs)
-    ms = members(tmpls, rows)
-    window = CS.Window.from_file(partition_file, run, ms)
+    window, rows = population(programs, pf, bytes(run_root).hex(), dirs)
+    ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = [read(m, r, store, weights, arrivals) for m, r in zip(ms, rows, strict=True)]
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
-    source = {"row": row, "run": run, "committer": dict(committer or {}, module=CS.__name__), "served_program": served.pop(),
-              "served_program_digest": sorted({str(i.get("digest")) for i in programs.values()}), "vllm_v1_run_root": bytes(run_root).hex(),
-              "scope": pf.get("scope")}
+    prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
+            "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope")}
     c.seconds["read_s"] = round(t_read - t0, 3)
-    res = CS.write(c, out_dir, source, CS.index_doc(ms, [g[1] for g in got], run))
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
+    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run))
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "
-          + ", ".join(f"{m.template} {m.n}" for m in ms) + f"; registration {res['registration_sha512'][:16]}; {res['seconds']}", flush=True)
+          + ", ".join(f"{m.template} {m.n}" for m in ms) + f"; registration {res['registration_digest'][:16]}; {res['seconds']}", flush=True)
     return res
+
