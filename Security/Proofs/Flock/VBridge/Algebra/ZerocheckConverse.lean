@@ -198,7 +198,6 @@ theorem bindAndZerocheck_of_checks (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteA
     refine Eq.trans (bind_of_ok (label_eq _ _)) ?_
     refine Eq.trans (bind_of_ok (absorbBytes_eq _ _)) ?_
     refine Eq.trans (bind_of_ok (absorbBytes_eq _ _)) ?_
-    refine Eq.trans (bind_of_ok (check_eq (decide_eq_true (by omega)) _ _)) ?_
     refine Eq.trans (bind_of_ok (label_eq _ _)) ?_
     refine Eq.trans (bind_of_ok (sampleVec_of_answers (by decide) hn₀ (ha₀.of_eq (by
       dsimp only
