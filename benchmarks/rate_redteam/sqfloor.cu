@@ -1,4 +1,5 @@
-// Squarings mod p = 2^768 - 825 on the CUDA cores (sm_120), a thread a word: the codec lanes' column form beside a row
+// Squarings mod p = 2^b - c on the CUDA cores (sm_120), a thread a word (b = SQ_BITS: 768, 1536 or 2048, the codec
+// theory's 2^768 - 825, 2^1536 - 3453 and 2^2048 - 1557): the codec lanes' column form beside a row
 // form and a Karatsuba form, to bound how far their squaring sits above a tuned one (the rebuild's x is the
 // adversary's squaring rate).
 //
@@ -6,9 +7,11 @@
 // unordered pair once, a three-word accumulator (three instructions a product), then two folds of 2^768 = 825.
 // Form 1 is the row form: each row's low halves in one carry chain and its high halves in a second, so a product costs
 // two instructions and no third accumulator word; the doubling and the squares are one chain each; the fold is two
-// chains and a single multiply-add (a fold that carries out leaves the value below 2^20, so the second never does).
+// chains and a single multiply-add (a fold that carries out leaves the value below c^2 < 2^32, so the second never
+// does).
 // Form 2 is one level of Karatsuba over form 0's columns: x = x1 2^384 + x0, x^2 = C 2^768 + (A + C - D) 2^384 + A with
-// A = x0^2, C = x1^2, D = (x0 - x1)^2, three 12-limb squares (234 products in place of 300), then form 0's fold.
+// A = x0^2, C = x1^2, D = (x0 - x1)^2, three half-width squares (234 products in place of 300 at 768 bits), then form
+// 0's fold.
 // All keep x lazily below 2^768; the host reduces below p.
 //
 //   sqfloor gate FORM K N          N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
@@ -27,8 +30,12 @@ namespace sq {
 
 using u32 = uint32_t;
 using u64 = uint64_t;
-constexpr int NL = 24;
-constexpr u32 CF = 825;
+#ifndef SQ_BITS
+#define SQ_BITS 768
+#endif
+constexpr int NL = SQ_BITS / 32;
+constexpr u32 CF = SQ_BITS == 768 ? 825 : SQ_BITS == 1536 ? 3453 : SQ_BITS == 2048 ? 1557 : 0;
+static_assert(CF != 0 && NL % 2 == 0, "SQ_BITS is 768, 1536 or 2048");
 
 __device__ __forceinline__ void mac(u32 *r, u32 a, u32 b) {
   asm("mad.lo.cc.u32 %0, %3, %4, %0;\n\tmadc.hi.cc.u32 %1, %3, %4, %1;\n\taddc.u32 %2, %2, 0;"
@@ -313,7 +320,7 @@ int main(int argc, char **argv) {
     h.resize(h0.size());
     CK(cudaMemcpy(h.data(), d, h.size() * 4, cudaMemcpyDeviceToHost));
     for (int w = 0; w < n; ++w) {
-      printf("%d %d ", form, K);
+      printf("%d %d %d %u ", form, K, SQ_BITS, sq::CF);
       print_canon(h0, n, w);
       printf(" ");
       print_canon(h, n, w);
@@ -352,9 +359,9 @@ int main(int argc, char **argv) {
       rate.push_back((double)n * K / (ms * 1e-3));
     }
     std::sort(rate.begin(), rate.end());
-    printf("{\"form\": %d, \"K\": %d, \"tpb\": %d, \"waves\": %d, \"blocks_per_sm\": %d, \"regs\": %d, \"words\": %d, "
+    printf("{\"bits\": %d, \"form\": %d, \"K\": %d, \"tpb\": %d, \"waves\": %d, \"blocks_per_sm\": %d, \"regs\": %d, \"words\": %d, "
            "\"sms\": %d, \"sq_per_s_max\": %.4e, \"sq_per_s_median\": %.4e}\n",
-           form, K, tpb, waves, per_sm, attr.numRegs, n, prop.multiProcessorCount, rate.back(), rate[rate.size() / 2]);
+           SQ_BITS, form, K, tpb, waves, per_sm, attr.numRegs, n, prop.multiProcessorCount, rate.back(), rate[rate.size() / 2]);
     return 0;
   }
   return 2;
