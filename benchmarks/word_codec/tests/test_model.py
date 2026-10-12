@@ -300,3 +300,13 @@ def test_built_point():
     assert b32["gamma_decode_free"] == pytest.approx(0.0077, abs=1e-4)
     assert b32["slowdown"] == pytest.approx(2.58, abs=0.01)
     assert F.built(ops=1.0)["gamma_decode_free"] > 0.01 > F.built(batch=32, ops=1.0)["gamma_decode_free"]
+
+
+def test_kv_on_a_narrower_prime():
+    """The KV words on a prime narrower than E's are rebuilt first (their payloads are free): on 2^512 − 569 the whole
+    KV fits the adversary's budget at batch 1, so γ_bw rises by its share, and every batch goes over 1%."""
+    for batch, low in ((1, 0.022), (32, 0.029)):
+        opts = F.built_options(batch=batch, kv_widths=(512, 768))
+        assert opts["k1"]["gamma_bw"] < 0.008 and opts["k1"]["gamma_decode_free"] < 0.0085
+        assert opts["w768"]["gamma_bw"] > 0.016 and opts["w512"]["gamma_bw"] > low
+        assert opts["w512"]["slowdown"] < opts["k1"]["slowdown"]

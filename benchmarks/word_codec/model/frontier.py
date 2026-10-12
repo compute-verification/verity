@@ -245,13 +245,19 @@ def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None
     return pick(options(shape, batch, e_codec(1536, batch, off, clock_mhz), ops, off=off))[1]
 
 
-def built(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None) -> dict:
-    """The point's codec as built: E on 2^1536 − 3453 at its measured step and tag (batch 1, or 32 from batch 32 up),
-    the decode's ALU read off the batch-1 step through `y_of_eps`, the honest at the locked clock it was timed at."""
+def built_options(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None,
+                  kv_widths=(1536, 2048)) -> dict[str, dict]:
+    """`options` at the point's codec as built: E on 2^1536 − 3453 at its measured step and tag (batch 1, or 32 from
+    batch 32 up), the decode's ALU read off the batch-1 step through `y_of_eps`, the honest at the locked clock it
+    was timed at."""
     i = int(batch >= 32)
     off = (FUSED_1536_Y[0] - FUSED_768_Y + g.WIDE["p767"].eps) / sq(1536)
     c = replace(e_codec(1536, batch, off), y=FUSED_1536_Y[i])
-    return pick(options(shape, batch, c, ops, off=off, tag=SKETCH_1536_Y[i] - FUSED_1536_Y[i]))[1]
+    return options(shape, batch, c, ops, kv_widths, off=off, tag=SKETCH_1536_Y[i] - FUSED_1536_Y[i])
+
+
+def built(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None) -> dict:
+    return pick(built_options(shape, batch, ops))[1]
 
 
 if __name__ == "__main__":
