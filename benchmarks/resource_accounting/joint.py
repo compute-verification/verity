@@ -228,6 +228,8 @@ def overlap(items: Sequence[Sequence[float]], chains: int, windows: Sequence[dic
 # ---- (f), joint v1: the honest prover pauses its chain ------------------------------------------------------------------
 
 LOOKAHEAD, SEGMENT_S, JUDGE_EACH, PINGS = 2, 2.5, 2, 200
+#: (d)'s timed passes in (f)'s round: at its start and its end, and after each segment without windows once its chain drained
+ALONE_START, ALONE_SEGMENT = 8, 2
 
 
 @dataclass(frozen=True)
@@ -389,7 +391,8 @@ class Pause:
     starting one later each round), the chain issued with at most `lookahead` in flight; at the first chain boundary once
     `every.ms` of chain have passed since the last window (the chain's last call: a call boundary), it drains the stream,
     prepares, takes σ (`remote`), runs the tag pass, sends its root and resumes.  The first `judge_each` windows of each
-    cadence keep a workspace of their own and are judged at `close`, after one skip control, which must be rejected."""
+    cadence keep a workspace of their own and are judged at `close`, after one skip control, which must be rejected.  (d)'s
+    timed passes (`alone`) run at its start, after each segment without windows and at `close`, in the round's own state."""
 
     def __init__(self, prover: Prover, remote: Remote, chains: dict[tuple[str, str], Chain], every: Sequence[Every] = EVERY,
                  seconds: float = SEGMENT_S, judge_each: int = JUDGE_EACH, lookahead: int = LOOKAHEAD,
@@ -408,12 +411,25 @@ class Pause:
         self.skip: tuple[int, Pass, int] | None = None
         prover.tag_pass(JOINT_TAG, THROWAWAY, 0)  # loads the kernels, untimed
         self.rtt = remote.ping(PINGS)
+        self.passes = {"start": self.alone(ALONE_START), "segments": [], "end": []}
+
+    def alone(self, n: int) -> list[dict]:
+        """`n` of (d)'s timed passes, each from a scrubbed L2, the chain idle (under the throwaway seed: no window)."""
+        out = []
+        for _ in range(n):
+            self.prover.scrub()
+            t0 = self.clock()
+            tp = self.prover.tag_pass(JOINT_TAG, THROWAWAY, 0)
+            out.append({"host_ns": self.clock() - t0, "device_tags_ms": tp.device_tags_ms, "device_ms": tp.device_ms})
+        return out
 
     def next(self) -> dict:
         key, arm, every = self.order[(self.i + self.i // len(self.order)) % len(self.order)]
         self.i += 1
         seg = {"key": key, "arm": arm, "every": every.label, "every_ms": every.ms, "prep": every.prep,
                **self.segment(self.chains[(key, arm)], every)}
+        if every.ms is None and self.error is None:
+            self.passes["segments"].append({"key": key, "arm": arm, "passes": self.alone(ALONE_SEGMENT)})
         self.segments.append(seg)
         return seg
 
@@ -491,6 +507,7 @@ class Pause:
         judged, skip = [], None
         try:
             if self.error is None:
+                self.passes["end"] = self.alone(ALONE_START)
                 self.skip_control()
             results = self.remote.results()
             T = self.params.deadline_ns
@@ -513,7 +530,8 @@ class Pause:
             self.prover.release(JOINT_TAG)
         return {"tag": JOINT_TAG, **params_record(self.params), "every": [e.label for e in self.every],
                 "seconds": self.seconds, "lookahead": self.lookahead, "judge_each": self.judge_each, "rtt": self.rtt,
-                "windows_started": self.n, "segments": self.segments, "judged": judged, "skip": skip, "error": self.error}
+                "windows_started": self.n, "segments": self.segments, "judged": judged, "skip": skip, "passes": self.passes,
+                "error": self.error}
 
 
 # ---- on the device ----------------------------------------------------------------------------------------------------

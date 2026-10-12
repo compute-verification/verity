@@ -119,7 +119,6 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert "T = 1,354,057 ns with the RTT at P2's cap, 354,000 ns, so T + RTT = 1,708,057 ns" in md
     assert "not a per-run covert bound; lane ra-per-run is proving the per-run form" in md
 
-
 def test_an_arm_divides_by_the_fastest_native_of_its_precision_the_point_measured():
     """The divisor is the fastest plain GEMM of the arm's precision (the PoUW panel's rule): a tuned arm that beats torch's
     is Pearl-C's divisor and F, torch's own arm is shown over it, and a tuned arm torch beats divides by torch's."""
@@ -338,7 +337,6 @@ def test_the_plan_needs_no_gpu(capsys):
     assert CHAIN.main(["--plan", "--rounds", "joint-v1,separate", "--tagger", "t.so", "--pause-every", "none,10-noprep",
                        "--host-bench", "bench.py", "--audits", "2"]) == 0
     assert json.loads(capsys.readouterr().out)["args"]["pause_every"] == ["none", "10-noprep"]
-
 
 def test_the_hosted_harness_s_argv_has_its_out_replaced():
     argv = ["--impl", "p2-v3-mc-gpu", "--out", "/o/bench", "--verifier-cpu=2"]
@@ -563,9 +561,15 @@ def test_the_pause_hook_drains_prepares_and_times_each_window(small_store, monke
     key, arm, chain = "o-n4096-k4096-b1-L32", "native-fp8", _Chain()
     p = _pause(store, vk, {(key, arm): chain}, ("none", "10", "10-noprep"))
     prover = p.prover
-    assert prover.calls == [("reserve", J.JOINT_TAG, 3), ("pass", J.JOINT_TAG, 0, None)] and p.rtt["n"] == J.PINGS
+    alone = [("scrub",), ("pass", J.JOINT_TAG, 0, None)]
+    assert prover.calls == [("reserve", J.JOINT_TAG, 3), ("pass", J.JOINT_TAG, 0, None)] + alone * J.ALONE_START
+    assert p.rtt["n"] == J.PINGS
     segs = [p.next() for _ in range(3)]
     out = p.close()
+    passes = out["passes"]
+    assert len(passes["start"]) == len(passes["end"]) == J.ALONE_START
+    assert [(s["key"], s["arm"], len(s["passes"])) for s in passes["segments"]] == [(key, arm, J.ALONE_SEGMENT)]
+    assert passes["start"][0] == {"host_ns": 1_000_000, "device_tags_ms": 0.4, "device_ms": 0.5}
     assert [s["every"] for s in segs] == ["none", "10ms", "10ms-noprep"] and out["error"] is None
     assert segs[0]["windows"] == [] and segs[0]["chains"] == 49 and segs[0]["wall_ns"] == 51_000_000
     assert chain.calls[:4] == ["launch", "launch", ("wait", 1), "launch"]
@@ -575,7 +579,7 @@ def test_the_pause_hook_drains_prepares_and_times_each_window(small_store, monke
     w = ten[0]
     assert (w["drain_ns"], w["seed_ns"], w["pass_ns"], w["commit_ns"], w["bubble_ms"]) == (1_000_000,) * 4 + (0.25,)
     assert all(x["elapsed_ns"] == 1_000 and x["on_time_at_T"] and x["drawn"] for x in ten + noprep)
-    assert prover.calls.count(("scrub",)) == len(ten) + 1
+    assert prover.calls.count(("scrub",)) == len(ten) + 1 + 2 * J.ALONE_START + J.ALONE_SEGMENT
     first = prover.calls.index(("pass", J.JOINT_TAG, 1, None))
     assert prover.calls[first - 2:first] == [("pass", J.JOINT_TAG, 0, None), ("scrub",)]
     assert prover.calls[prover.calls.index(("pass", J.JOINT_TAG, 2, None)) - 1] != ("scrub",)
@@ -606,6 +610,9 @@ def test_the_pause_hook_drains_prepares_and_times_each_window(small_store, monke
            "rejected (tag-mismatch)." in md
     assert f"| B=1 L=32 | native-fp8 | 10ms | {rate:.1f} | " in md and f"| {len(ten)} / {len(ten)} | " in md
     assert "Certified per wall second is E's 1.074 GB in each window on time at T, raw: Q_cert is pending." in md
+    assert "(tag kernel / whole pass): 10ms: 0.400 / 0.500; 10ms-noprep: 0.400 / 0.500." in md
+    assert (f"at its start ({J.ALONE_START}) 0.400 / 0.500; after each segment without windows ({J.ALONE_SEGMENT}) 0.400 / "
+            f"0.500; at its end ({J.ALONE_START}) 0.400 / 0.500.") in md
 
 
 def test_the_verifier_runs_in_a_process_of_its_own(small_store):

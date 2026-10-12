@@ -256,8 +256,19 @@ def pause_rows(p: dict, macs: dict[str, int], store_bytes: int | None) -> list[d
                "certified_bytes_per_s": None if store_bytes is None or not ws else on_time * store_bytes / wall}
         for part in ("drain_ns", "prep_ns", "seed_ns", "pass_ns", "commit_ns", "pause_ns"):
             row[part] = _pct([w[part] for w in ws if w.get(part) is not None], 0.5)
+        for part in ("device_tags_ms", "device_ms"):
+            row[part] = _pct([w[part] for w in ws if w.get(part) is not None], 0.5)
         out.append(row)
     return out
+
+
+def alone_passes(passes: dict) -> dict:
+    """(f)'s round's own (d) passes (`joint.Pause.alone`): their count and median tag kernel and pass ms on the device, at
+    the round's start, after its segments without windows, and at its end."""
+    groups = {"start": passes.get("start") or [], "segments": [x for s in passes.get("segments") or [] for x in s["passes"]],
+              "end": passes.get("end") or []}
+    return {k: {"n": len(v), "device_tags_ms": _pct([x["device_tags_ms"] for x in v], 0.5),
+                "device_ms": _pct([x["device_ms"] for x in v], 0.5)} for k, v in groups.items()}
 
 
 def pause(r: dict) -> dict:
@@ -269,7 +280,8 @@ def pause(r: dict) -> dict:
             "deadline_ns": p.get("deadline_ns"), "limit_ns": p.get("limit_ns"), "seconds": p.get("seconds"),
             "lookahead": p.get("lookahead"), "windows_started": p.get("windows_started"), "judged": len(judged),
             "judged_accepted": sum(bool(j.get("accepted")) for j in judged),
-            "elapsed_agrees": all(j.get("elapsed_agrees") for j in judged), "skip": p.get("skip"), "error": p.get("error")}
+            "elapsed_agrees": all(j.get("elapsed_agrees") for j in judged), "skip": p.get("skip"), "error": p.get("error"),
+            "alone": alone_passes(p["passes"]) if p.get("passes") else None}
 
 
 def probe(doc: dict) -> dict | None:
@@ -475,6 +487,16 @@ def pause_lines(name: str, f: dict) -> list[str]:
             f"{every}: drain {_f(_med(rs, 'drain_ns'), '.0f')}, prepare {_f(_med(rs, 'prep_ns'), '.0f')}, σ "
             f"{_f(_med(rs, 'seed_ns'), '.0f')}, pass {_f(_med(rs, 'pass_ns'), '.0f')}, root {_f(_med(rs, 'commit_ns'), '.0f')}, "
             f"drained to resumed {_f(_med(rs, 'pause_ns'), '.0f')}" for every, rs in parts.items()) + "."]
+        lines.append("The window's pass on the device, median ms over the cadence's rows (tag kernel / whole pass): " + "; ".join(
+            f"{every}: {_f(_pct([r['device_tags_ms'] for r in rs], 0.5), '.3f')} / "
+            f"{_f(_pct([r['device_ms'] for r in rs], 0.5), '.3f')}" for every, rs in parts.items()) + ".")
+    if f.get("alone"):
+        lines.append("(d)'s passes in this round (each from a scrubbed L2, the chain idle), median ms on "
+                     "the device (tag kernel / whole pass): " + "; ".join(
+                         f"{where} ({a['n']}) {_f(a['device_tags_ms'], '.3f')} / {_f(a['device_ms'], '.3f')}"
+                         for where, a in (("at its start", f["alone"]["start"]),
+                                          ("after each segment without windows", f["alone"]["segments"]),
+                                          ("at its end", f["alone"]["end"]))) + ".")
     lines.append(f"Lost is the throughput against the same point and arm's segments without windows; the gap is the chain "
                  f"stream's idle time a window, by its events; on time at T is within {_f(f['deadline_ns'], ',')} ns. "
                  f"Certified per wall second is E's {_gb(f['store_bytes'])} GB in each window on time at T, raw: Q_cert is "
