@@ -496,7 +496,9 @@ __global__ void spin_kernel(long long cycles) {
 // tile's words in place there, a thread a word, and then runs the plain form's arithmetic on the payloads, so the two
 // agree bit for bit. q is bf16 (vLLM's), pre-scaled by log2(e)/sqrt(128), so scores are in base 2; each split leaves its
 // unnormalized output, max and sum, which attn_combine merges. Shared memory stays under half an SM's 100 KB, so two
-// CTAs fit an SM; past 768 bits (STREAM) the decode's registers allow one.
+// CTAs fit an SM. Past 768 bits (STREAM) the decode's registers allow one, and the encoded form copies and decodes DT = 2
+// tiles at a time (1,536 bits' 22 words a token-layer would leave most of a tile's threads idle), each tile then
+// folded in turn as in the plain form.
 constexpr int HEADS = 64, KV_HEADS = 8, GROUP = HEADS / KV_HEADS, HEAD_DIM = 128;
 constexpr int TL_BYTES = 2 * KV_HEADS * HEAD_DIM * 2;
 constexpr int WB = NBITS / 8;
@@ -508,10 +510,12 @@ constexpr int PART = HEADS * (HEAD_DIM + 2);
 static_assert(GROUP * TT == 32 && TLE % 16 == 0 && WB % 16 == 0, "a warp's scores, one a lane; 16-byte copies");
 
 template <bool ENC>
+__host__ __device__ constexpr int attn_dt() { return ENC && STREAM ? 2 : 1; }
+template <bool ENC>
 constexpr int attn_smem() {
-  return 2 * TT * (ENC ? TLE : TL_BYTES) + HEADS * HEAD_DIM * 2;
+  return 2 * attn_dt<ENC>() * TT * (ENC ? TLE : TL_BYTES) + HEADS * HEAD_DIM * 2;
 }
-static_assert(attn_smem<true>() + 1024 <= 50 * 1024, "two CTAs an SM");
+static_assert(attn_smem<true>() + 1024 <= (STREAM ? 99 : 50) * 1024, "two CTAs an SM, or one past 768 bits");
 
 __device__ __forceinline__ void bf16x4(const uint8_t *p, float (&v)[4]) {
   const uint2 x = *reinterpret_cast<const uint2 *>(p);
@@ -598,10 +602,10 @@ template <bool ENC>
 __global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
                                                      float *__restrict__ part, int ctx, int layers, int layer,
                                                      int per_split, int splits, int k) {
-  constexpr int RAW = ENC ? TLE : TL_BYTES;
+  constexpr int RAW = ENC ? TLE : TL_BYTES, ST = attn_dt<ENC>() * TT;
   extern __shared__ __align__(16) uint8_t sm[];
   uint8_t *raw = sm;
-  uint8_t *qs = sm + 2 * TT * RAW;
+  uint8_t *qs = sm + 2 * ST * RAW;
   const int seq = blockIdx.x / splits, split = blockIdx.x % splits;
   const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
   const int g = threadIdx.x / 32, lane = threadIdx.x % 32;
@@ -609,10 +613,10 @@ __global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t 
     reinterpret_cast<uint4 *>(qs)[i] = reinterpret_cast<const uint4 *>(q + (size_t)seq * HEADS * HEAD_DIM)[i];
   float acc[GROUP][4] = {};
   float m_own = -INFINITY, l_own = 0.f;
-  const int ntiles = t1 > t0 ? (t1 - t0 + TT - 1) / TT : 0;
+  const int ntiles = t1 > t0 ? (t1 - t0 + ST - 1) / ST : 0;
   const auto issue = [&](int tile) {
-    const int bt = t0 + tile * TT, nt = min(TT, t1 - bt);
-    uint8_t *dst = raw + (tile & 1) * TT * RAW;
+    const int bt = t0 + tile * ST, nt = min(ST, t1 - bt);
+    uint8_t *dst = raw + (tile & 1) * ST * RAW;
     for (int c = threadIdx.x; c < nt * (RAW / 16); c += AT) {
       const int t = c / (RAW / 16), o = c % (RAW / 16);
       const size_t s = (size_t)seq * ctx + bt + t;
@@ -626,8 +630,8 @@ __global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t 
     else asm volatile("cp.async.commit_group;");
     asm volatile("cp.async.wait_group 1;");
     __syncthreads();
-    const int bt = t0 + tile * TT, nt = min(TT, t1 - bt);
-    uint8_t *src = raw + (tile & 1) * TT * RAW;
+    const int bt = t0 + tile * ST, nt = min(ST, t1 - bt);
+    uint8_t *src = raw + (tile & 1) * ST * RAW;
     if (ENC) {
       for (int u = threadIdx.x; u < nt * TLW; u += AT) {
         const int t = u / TLW, w = u % TLW;
@@ -639,7 +643,9 @@ __global__ void __launch_bounds__(AT, STREAM ? 1 : 2) attn_kernel(const uint8_t 
       }
       __syncthreads();
     }
-    attn_tile<RAW>(src, qs, g, lane, nt, acc, m_own, l_own);
+#pragma unroll
+    for (int d = 0; d < ST / TT; ++d)
+      if (nt > d * TT) attn_tile<RAW>(src + d * TT * RAW, qs, g, lane, min(TT, nt - d * TT), acc, m_own, l_own);
     __syncthreads();
   }
   attn_out(part + ((size_t)seq * splits + split) * PART, g, lane, acc, m_own, l_own);
