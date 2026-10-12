@@ -263,7 +263,7 @@ class TensorLib:
         """(decoders, stages, taggers, k_s, sketchers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged
         (taggers -1), the most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32;
         tagged, 0 or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched,
-        1 or 4 of them sketching, at 4 stages fewer than fit with the sketch's buffer.  Not 4 or 6 tag warps: with that
+        1 to 4 of them sketching, at 4 stages fewer than fit with the sketch's buffer.  Not 4 or 6 tag warps: with that
         many gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc and
         r20261012-092945-296e)."""
         def smax(ks: int) -> int:
@@ -276,7 +276,7 @@ class TensorLib:
 
         if self.sketch is not None:
             ks = self.sketch["k"]
-            return [(dmax - w, max(need(dmax - w), smax(ks) - 4), -1, ks, w) for w in (1, 4)
+            return [(dmax - w, max(need(dmax - w), smax(ks) - 4), -1, ks, w) for w in (1, 2, 3, 4)
                     if dmax - w >= self.fused_span]
         if not tagged:
             return list(dict.fromkeys([(dmax, max(need(dmax), smax(0) - 4), -1, 0, 0),

@@ -133,7 +133,10 @@ def config(a: dict) -> str:
 
 
 def tag_suffix(cod: dict) -> str:
-    return "" if not cod.get("tag") else f"s{cod['sketch_k']}" if cod["tag"] == SKETCH else "t"
+    """t for ro-blake3/v1, sK_S (sK_StT past T = 8 tasks a vector) for the sketch."""
+    if cod.get("tag") != SKETCH:
+        return "t" if cod.get("tag") else ""
+    return f"s{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "")
 
 
 def tag_blocks(cod: dict, batch: int) -> int:
@@ -262,7 +265,8 @@ def main() -> int:
                 "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
                                "cuda-int32/mersenne61/pb56/ve.cu")
-                              + (f"/sketch{cod['sketch_k']}" if sketched else "/tag" if cod.get("tag") else ""),
+                              + (f"/sketch{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "")
+                                 if sketched else "/tag" if cod.get("tag") else ""),
                 "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
                 "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag,
                 "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": tau,
