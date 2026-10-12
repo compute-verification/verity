@@ -34,18 +34,20 @@ def _has_ifma() -> bool:
 
 @pytest.mark.skipif(shutil.which("gcc") is None or not _has_ifma(), reason="needs gcc and AVX-512 IFMA")
 @pytest.mark.parametrize("g", [1, 2])
-def test_ifma_gate(tmp_path: Path, g: int) -> None:
+@pytest.mark.parametrize(("bits", "c"), [(512, 569), (768, 825), (1024, 105)])
+def test_ifma_gate(tmp_path: Path, g: int, bits: int, c: int) -> None:
     exe = tmp_path / f"ifma-{g}"
-    subprocess.run(["gcc", "-O2", "-march=native", f"-DG={g}", "-o", str(exe), str(HERE / "ifma.c"), "-lpthread"],
-                   check=True)
+    subprocess.run(["gcc", "-O2", "-march=native", f"-DG={g}", f"-DIF_BITS={bits}", f"-DIF_C={c}", "-o", str(exe),
+                    str(HERE / "ifma.c"), "-lpthread"], check=True)
     lines = []
     for k in (1, 777):
         out = subprocess.run([str(exe), "gate", str(k), str(16 * g)], check=True, capture_output=True, text=True).stdout
         lines += out.splitlines()
     assert len(lines) == 2 * 16 * g
     for line in lines:
-        _, k, bits, c, x0, xk = line.split()
-        p = 2 ** int(bits) - int(c)
+        _, k, b, cc, x0, xk = line.split()
+        assert (int(b), int(cc)) == (bits, c)
+        p = 2 ** bits - c
         assert pow(int(x0, 16) % p, 1 << int(k), p) == int(xk, 16), line
 
 
