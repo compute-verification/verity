@@ -8,8 +8,8 @@ Sections 4 and 5 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2
 
 * `Composition`: `k` protocols in one run, with independent coins (protocol `i`'s coins reach nothing but the input
   gates at its verifier's leaves `V i`) and `E i` sound at `δ i` alone, accept together with the run outside the
-  confidence set with probability at most `∑ δ i`. The feasible set is a set of runs, so it doesn't depend on which party runs a
-  gate.
+  confidence set with probability at most `∑ δ i`. The feasible set is a set of runs, so it doesn't depend on which
+  party runs a gate.
 * `Fit`: when `μ` adds over the confidence set and some run of it implements `P`, `req_μ(P)` is at most the residual
   `min(cap, obs) − cert`, given that every run of the set uses at most `cap` and at most `obs`.
 

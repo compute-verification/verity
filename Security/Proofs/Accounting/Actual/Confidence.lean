@@ -45,7 +45,6 @@ theorem card_filter_mul {k : ℕ} {Ω : Fin k → Type} [∀ i, Fintype (Ω i)] 
 
 end Actual
 
-open Actual in
 theorem Composition : Guarantees.Composition := by
   classical
   intro L k Ω _ _ 𝓕 V W acc E δ S hE h𝓕 hS hV
@@ -65,7 +64,7 @@ theorem Composition : Guarantees.Composition := by
         have := Fintype.card_eq_zero_iff.1 h0
         exact ⟨fun r => this.false (r i)⟩
       simp
-    have key := card_filter_mul i (fun r => acc i ((S r).view (V i)) ∧ ¬E i (S r))
+    have key := Actual.card_filter_mul i (fun r => acc i ((S r).view (V i)) ∧ ¬E i (S r))
     have hsum := Finset.sum_le_sum fun r (_ : r ∈ univ) => hs r
     rw [← Nat.cast_sum, ← key, sum_const, card_univ, nsmul_eq_mul, Nat.cast_mul] at hsum
     have hp : (0 : ℝ) < Fintype.card (Ω i) := by exact_mod_cast hpos
