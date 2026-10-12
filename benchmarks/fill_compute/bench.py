@@ -658,7 +658,7 @@ def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: float, rate12
     filler alone on every SM (`rate*` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one. The 64 x 64
     tile runs only on the smallest partitions, where it was the η line's best (r20261012-231033-73f3)."""
     out = []
-    plan = [("fold", 128, 1, 1.0), ("all", 128, 1, 1.0), ("fold", 128, 1, 0.5), ("fold", 128, 1, 0.25)]
+    plan = [("fold", 128, 1, 1.0), ("all", 128, 1, 1.0), ("fold", 128, 1, 0.5), ("fold", 128, 1, 0.25), ("fold", 128, 1, 0.1)]
     if fsms <= 12:
         plan += [("fold", 64, 2, 1.0), ("fold", 64, 2, 0.5)]
     for store, T, per_sm, duty in plan:
