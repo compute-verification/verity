@@ -46,6 +46,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 import tagging as TG  # noqa: E402
 import wide as W  # noqa: E402
@@ -53,6 +54,10 @@ import wide as W  # noqa: E402
 SEED = hashlib.sha256(b"verity/codec-tensor/bench/seed").digest()
 TAG_SEED = hashlib.sha256(b"verity/codec-tensor/bench/tag-seed").digest()   # the window's sigma
 TAG_BASE = (1 << 32) + 3                                                      # E's index of a layer's first block
+RECEIPT_SEED = SR.rb.seed(TAG_SEED, 0, bytes(64))    # a WT_RECEIPT build's window seed (sketch-sha512's are 64 bytes)
+STORE_KEY = hashlib.sha256(b"verity/codec-tensor/bench/store-key").digest()  # the receipt tree's salt key
+COMMIT_GATE_BLOCKS = 4096      # sketch-sha512's commit gate: the driver's tree over a launch's first receipts
+READER = None                  # a WT_RECEIPT build's commit: reader.Reader (reader.cu), set by step.py's main
 B3_PER_BLOCK = (67, 72)        # compressions a block (4,096 message bytes): the fewest (64 chunk, 3 parent), and the
                                # tag warps' (4 lanes, 16 + 2 each)
 PIPE_OPS = ("imad_wide", "imad", "iadd", "mac")   # wt_chain 5's ops
@@ -101,10 +106,10 @@ class Lib:
         so.wt_tag_tree.argtypes = [v, q, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 17)()
+        cs = (ctypes.c_int * 18)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag, self.fused_most) = list(cs)
+         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag, self.fused_most, self.receipt) = list(cs)
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
         if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
@@ -112,8 +117,10 @@ class Lib:
             raise RuntimeError(f"{path}: constants {list(cs)} are not wide.py's {f}")
         if self.tag_block != TG.TAG_BLOCK:
             raise RuntimeError(f"{path}: tag blocks of {self.tag_block} bytes, tagging.py's are {TG.TAG_BLOCK}")
-        self.name = f.name + (f"-diag{self.diag}" if self.diag else "")
+        self.name = f.name + (f"-diag{self.diag}" if self.diag else "") + ("-sha512" if self.receipt else "")
         self.tc = self.tc_mmas > 0
+        self.tag_bytes = 64 if self.receipt else 32          # a sketch vector's receipt
+        self.jbase = 0 if self.receipt else TAG_BASE          # sketch-sha512: vector v of a launch is the store's block v
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args)
@@ -470,7 +477,7 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
             raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dwide}, "
                              f"ceil(32 D / TW) <= stages <= {smax(ks, t == -2)}, k_s in 16, 64 with no T (or T = -2: two "
                              f"sketch warps, k_s = 16, full slot) and stages < {2 * sketch_t}")
-        if (d, st, t, ks) not in out:
+        if (d, st, t, ks) not in out and not (lib.receipt and ks and t != -2):   # only sketch warps hash sha512
             out.append((d, st, t, ks))
     return out
 
@@ -556,7 +563,8 @@ def root_words(root: bytes) -> bytes:
 
 
 def set_pass(lib: Lib, sketch_t: int, sigma: bytes = TAG_SEED) -> int:
-    """wt_set_pass at the window's σ for ro-sketch-blake3/v0 at k_s = 16 over tiles of sketch_t tasks; returns n."""
+    """wt_set_pass at the window's σ for the build's receipt (ro-sketch-blake3/v0, or sketch-sha512) at k_s = 16 over
+    tiles of sketch_t tasks; returns n."""
     n = SKT.vector_bytes(lib.sb, sketch_t)
     sg = ctypes.create_string_buffer(sigma)
     lib.call("wt_set_pass", ctypes.addressof(sg), 16, n)
@@ -564,16 +572,72 @@ def set_pass(lib: Lib, sketch_t: int, sigma: bytes = TAG_SEED) -> int:
 
 
 def pass_state(lib: Lib) -> dict:
-    out = ctypes.create_string_buffer(160)
+    """The last pass's seed (ro-sketch-blake3/v0's 32 bytes, sketch-sha512's 64), K_S, tag key and midstate."""
+    out = ctypes.create_string_buffer(192)
     lib.call("wt_pass_state", ctypes.addressof(out))
     b = out.raw
-    return {"seed": b[:32], "k_s": b[32:64], "key": b[64:96]}
+    return {"seed": b[:64] if lib.receipt else b[:32], "k_s": b[64:96], "key": b[96:128], "mid": b[128:192]}
+
+
+def window_seed(lib: Lib) -> bytes:
+    return RECEIPT_SEED if lib.receipt else TAG_SEED
+
+
+def pass_seed(lib: Lib, j: int, root: bytes) -> bytes:
+    """Pass j's seed from root_(j−1) in the build's receipt: sketching.pass_seed, or the driver's receipts.seed."""
+    return SR.rb.seed(TAG_SEED, j, root) if lib.receipt else SKT.pass_seed(TAG_SEED, j, root)
+
+
+def sketch_bits(lib: Lib, seed: bytes, k: int, n: int) -> np.ndarray:
+    """S's bits at `seed` in the build's receipt, k × n (1 is −1)."""
+    if not lib.receipt:
+        return SKT.sign_bits(seed, k, n)
+    if (k, n) != (SR.ROWS, SR.BLOCK):
+        raise ValueError(f"sketch-sha512's S is {SR.ROWS} x {SR.BLOCK}, not {k} x {n}")
+    return np.unpackbits(SR.sign_bits(seed), axis=1, bitorder="little")
+
+
+def sketch_derive(lib: Lib, seed: bytes, n: int) -> bytes:
+    if lib.receipt:
+        return SKT.randomness().derive(seed, SR.SIGN_DOMAIN, {"tag": SR.KIND, "k": SR.ROWS, "n": n}).value
+    return SKT.randomness().derive(seed, SKT.SIGN_DOMAIN, {"tag": SKT.NAME, "k": 16, "n": n}).value
+
+
+def receipt_mid(lib: Lib, seed: bytes) -> bytes:
+    """sketch-sha512's prefix midstate at `seed` as the host computes it (wt_set_tag); leaves set_sketch_tag's."""
+    k = ctypes.create_string_buffer(SKT.key(TAG_SEED))
+    pre = ctypes.create_string_buffer(SR.prefix(seed))
+    lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
+    mid = pass_state(lib)["mid"]
+    set_sketch_tag(lib)
+    return mid
+
+
+def receipt_commit_gate(torch, tags_dev, nvec: int, seed: bytes) -> dict:
+    """sketch-sha512's commit over a launch's first receipts (at most COMMIT_GATE_BLOCKS, the whole plan of those
+    blocks): reader.cu's leaves, pads and tree (READER) against the driver's `receipts.tree` at `seed`, its salts under
+    STORE_KEY. reader.py's own gate covers partial plans and openings."""
+    import reader as RD
+
+    n = min(nvec, COMMIT_GATE_BLOCKS)
+    plan = SR.rb.Plan.whole(n)
+    READER.begin(seed, plan, STORE_KEY)
+    ys = tags_dev.view(torch.int64)[:8 * n].view(n, 8)
+    levels = READER.levels(READER.commit(ys, 0, READER.leaves), 0, pad=True)
+    host = ys.cpu().numpy()
+    got = [RD.digest(y) for y in host]
+    tree = SR.rb.tree(seed, plan, got, [RD.store_salt(STORE_KEY, seed, c) for c in range(READER.leaves)])
+    root = RD.digest(levels[-1][0])
+    return {"blocks": n, "leaves": READER.leaves,
+            "leaves_ok": [RD.digest(x) for x in levels[0].cpu().numpy()] == list(tree._levels[0]),
+            "root_ok": root == tree.commitment.root, "root": root.hex()}
 
 
 def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4) -> dict:
     """wt_pass (red team F29: pass j's receipt keyed by s_j = pass_seed(σ, j, root_(j−1))) against Python at random
     j and roots: s_j, K_S, the tag key, the signs (sign_fragments of sign_bits(s_j)) and, through wt_tag_leaves over
-    random tags, the leaves' prefix (commit_gate at s_j)."""
+    random tags, the leaves' prefix (commit_gate at s_j); in a WT_RECEIPT build sketch-sha512's s_j, K_S, signs and
+    receipt prefix (its midstate against the host's of sketch_receipt.prefix(s_j))."""
     n, m, st = set_pass(lib, sketch_t), SKT.steps(lib.sb), stream(torch)
     signs = torch.empty(sketch_t * m * 32, dtype=torch.int32, device="cuda")
     rng = random.Random(29)
@@ -585,17 +649,19 @@ def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4) -> dict:
         frags = sign_frags(lib, torch, signs, sketch_t, st)
         torch.cuda.synchronize()
         got = pass_state(lib)
-        seed = SKT.pass_seed(TAG_SEED, j, root)
-        ks = SKT.randomness().derive(seed, SKT.SIGN_DOMAIN, {"tag": SKT.NAME, "k": 16, "n": n}).value
-        bits = SKT.sign_bits(seed, 16, n)
+        seed = pass_seed(lib, j, root)
+        bits = sketch_bits(lib, seed, 16, n)
         want = SKT.sign_fragments(bits, m, sketch_t)
-        ys = [rng.randbytes(32) for _ in range(40)]
-        c = commit_gate(lib, torch, to_dev(torch, b"".join(ys)), len(ys), st, SKT.leaves, seed)
-        rows.append({"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == ks, "key": got["key"] == SKT.key(seed),
-                     "signs": bool(np.array_equal(signs.cpu().numpy().view(np.uint32), want)),
-                     "frags": bool(np.array_equal(frags.cpu().numpy().view(np.uint32),
-                                                  SKT.b_fragments(bits, m, sketch_t))),
-                     "leaves": c["leaves_ok"], "root": c["root_ok"]})
+        row = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == sketch_derive(lib, seed, n),
+               "signs": bool(np.array_equal(signs.cpu().numpy().view(np.uint32), want)),
+               "frags": bool(np.array_equal(frags.cpu().numpy().view(np.uint32), SKT.b_fragments(bits, m, sketch_t)))}
+        if lib.receipt:
+            row["mid"] = got["mid"] == receipt_mid(lib, seed)
+        else:
+            ys = [rng.randbytes(32) for _ in range(40)]
+            c = commit_gate(lib, torch, to_dev(torch, b"".join(ys)), len(ys), st, SKT.leaves, seed)
+            row.update(key=got["key"] == SKT.key(seed), leaves=c["leaves_ok"], root=c["root_ok"])
+        rows.append(row)
     ok = all(all(v for a, v in r.items() if a != "j") for r in rows)
     log(f"pass gate {lib.name}: {'ok' if ok else 'FAIL'} over {trials} (j, root): {rows if not ok else ''}")
     return {"ok": ok, "trials": rows, "n": n}
@@ -684,9 +750,10 @@ def dump_words(lib: Lib, dbg, plain, store, key, gq: int, stages: int) -> dict:
 
 
 def set_sketch_tag(lib: Lib) -> None:
-    """ro-sketch-blake3/v0's key and leaf prefix at TAG_SEED into the library (set_tag restores ro-blake3/v1's)."""
+    """ro-sketch-blake3/v0's key and leaf prefix at TAG_SEED into the library (set_tag restores ro-blake3/v1's); a
+    WT_RECEIPT build's sketch-sha512 prefix at RECEIPT_SEED."""
     k = ctypes.create_string_buffer(SKT.key(TAG_SEED))
-    pre = ctypes.create_string_buffer(SKT.leaf_prefix(TAG_SEED))
+    pre = ctypes.create_string_buffer(SR.prefix(RECEIPT_SEED) if lib.receipt else SKT.leaf_prefix(TAG_SEED))
     lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
 
 
@@ -717,7 +784,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     sketched = [c for c in fused_cfgs if c[3]]
     sk = {}
     for s in sorted({c[3] for c in sketched}):
-        bits = SKT.sign_bits(TAG_SEED, s, SKT.vector_bytes(lib.sb, sketch_t))
+        bits = sketch_bits(lib, window_seed(lib), s, SKT.vector_bytes(lib.sb, sketch_t))
         words = SKT.sign_fragments(bits, SKT.steps(lib.sb), sketch_t)
         sk[s] = {"bits": bits, "signs": torch.from_numpy(words.view(np.int32)).cuda()}
         if s == 16:
@@ -729,19 +796,25 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         """The tag buffer of a sketched launch at gr groups, and its vector count."""
         nvec = lib.so.wt_sketch_vectors(n, kd, gr, sketch_t)
         if gr not in sk_bufs:
-            sk_bufs[gr] = torch.empty(nvec * 32, dtype=torch.uint8, device="cuda")
+            sk_bufs[gr] = torch.empty(nvec * lib.tag_bytes, dtype=torch.uint8, device="cuda")
         return sk_bufs[gr], nvec
 
-    def sketch_ref(k, s, gr, seed=TAG_SEED):
-        """Every vector's sketch at `seed` on the device (float32, exact), and its tags with the PyPI blake3 (tags.py
-        on a sample, which must agree)."""
+    def sketch_ref(k, s, gr, seed=None):
+        """Every vector's sketch at `seed` (the window's by default) on the device (float32, exact), and its tags with
+        the PyPI blake3 (tags.py on a sample, which must agree); sketch-sha512's receipts with hashlib."""
+        seed = window_seed(lib) if seed is None else seed
         if (k, s, gr, seed) not in sk_refs:
             vs = SKT.vectors_torch(torch, stores[k], n // 16, nch, lib.sb, gr, sketch_t)
-            bits = sk[s]["bits"] if seed == TAG_SEED else SKT.sign_bits(seed, s, SKT.vector_bytes(lib.sb, sketch_t))
+            bits = sk[s]["bits"] if seed == window_seed(lib) else sketch_bits(lib, seed, s,
+                                                                              SKT.vector_bytes(lib.sb, sketch_t))
             ref = SKT.sketch_torch(torch, vs, bits)
             del vs
             host = ref.cpu().numpy().astype(np.int64)
             pick = sorted({0, len(host) - 1, *random.Random(s + gr).sample(range(len(host)), 6)})
+            if lib.receipt:
+                ys = [root_words(y) for y in SR.receipts_of(seed, host, lib.jbase)]
+                sk_refs[(k, s, gr, seed)] = {"sk": ref, "tags": b"".join(ys), "sample": {v: ys[v] for v in pick}}
+                return sk_refs[(k, s, gr, seed)]
             sample = {v: SKT.tags_of(seed, host[v:v + 1], TAG_BASE + v)[0] for v in pick}
             ys = SKT.tags_fast(seed, host, TAG_BASE)
             if ys is not None and any(ys[v] != y for v, y in sample.items()):
@@ -754,7 +827,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         """cfg (two sketch warps) under pass j's key: wt_pass writes the signs and the key from a random root_(j−1),
         and the launch's sketches, tags, leaves and root must be ro-sketch-blake3/v0's at pass_seed(σ, j, root)."""
         j, root = 7, random.Random(n + kd + mb).randbytes(64)
-        seed = SKT.pass_seed(TAG_SEED, j, root)
+        seed = pass_seed(lib, j, root)
         set_pass(lib, sketch_t)
         signs = torch.empty_like(sk[16]["signs"])
         lib.call("wt_pass", j, ptr(to_dev(torch, root_words(root))), ptr(signs), sketch_t, st)
@@ -768,7 +841,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         r = sketch_ref(k, 16, gr, seed)
         out = {"cfg": fused_name(k, cfg), "j": j, "partials": bool(torch.equal(pf, pp)),
                "sketch": bool(torch.equal(skb.view(nvec, 16), r["sk"])), "tags": sketch_tags_ok(host_bytes(tb_dev), r)}
-        c = commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves, seed)
+        c = (receipt_commit_gate(torch, tb_dev, nvec, seed) if lib.receipt
+             else commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves, seed))
         out.update(leaves=c["leaves_ok"], root=c["root_ok"])
         out["ok"] = all(v for a, v in out.items() if a not in ("cfg", "j"))
         sk_refs.pop((k, 16, gr, seed))
@@ -776,7 +850,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         return out
 
     def sketch_tags_ok(tb: bytes, r: dict) -> bool:
-        if any(tb[32 * v:32 * v + 32] != y for v, y in r["sample"].items()):
+        b = lib.tag_bytes
+        if any(tb[b * v:b * v + b] != y for v, y in r["sample"].items()):
             return False
         return r["tags"] is None or tb == r["tags"]
 
@@ -796,7 +871,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             sg = signs if signs is not None else (
                 sk[cfg[3]]["frags" if sketch_warps(cfg) else "signs"] if cfg[3] else None)
             lib.call("wt_fused_sketch", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
-                     int(partials), cfg[0], cfg[1], groups, max(cfg[2], 0), ptr(steps), tp, TAG_BASE, cfg[3],
+                     int(partials), cfg[0], cfg[1], groups, max(cfg[2], 0), ptr(steps), tp,
+                     lib.jbase if cfg[3] else TAG_BASE, cfg[3],
                      ptr(sg) if sg is not None else None, ptr(skout) if skout is not None else None, sketch_t,
                      sketch_warps(cfg), None, st)
         else:
@@ -862,7 +938,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     if lib.diag:
                         res["sketch_commit"] = {"leaves_ok": True, "root_ok": True, "diagnostic": True}
                     if "sketch_commit" not in res and not sk_bad:
-                        res["sketch_commit"] = commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves)
+                        res["sketch_commit"] = (receipt_commit_gate(torch, tb_dev, nvec, RECEIPT_SEED) if lib.receipt
+                                                else commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves))
                         log(f"sketch commit gate {lib.name} {name}: {nvec} vectors, {res['sketch_commit']}")
                     if sketch_warps(cfg) and not lib.diag and not sk_bad and "pass_keyed" not in res:
                         res["pass_keyed"] = pass_keyed(k, mb, x, pp, cfg, gr, sp)
@@ -962,7 +1039,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 if mode == 3:
                     for p in ps:
                         rc |= so.wt_fused_sketch(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, nt, spp, tp,
-                                                 TAG_BASE, sks, sgp, None, sketch_t, skw, None, st)
+                                                 lib.jbase if sks else TAG_BASE, sks, sgp, None, sketch_t, skw, None,
+                                                 st)
                 else:
                     for p in ps:
                         rc |= so.wt_gemm(mode, p, xp, yp, mb, n, kd, 0, cfg[0], cfg[1], gr, knob, xrp, None, st)

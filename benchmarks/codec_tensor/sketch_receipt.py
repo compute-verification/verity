@@ -7,6 +7,10 @@ driver's own (`hm96-sha512/row/v2`, frame-v3-sha512): a `SketchReceipter` drops 
 S_i      16 × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": KIND, "k": 16, "n": 4096}), row c the
          first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1, 0 → +1; re-keyed every pass
          by the chained seed, so no sketch exists before the previous pass's root
+E_j      the store's block j, 4096 bytes. A weight GEMM's store (wt.cu's fused decode GEMM) is cut into blocks as the
+         GEMM tiles it: block j is its sketch vector j (`gemm_blocks`: row r of tile t of a CTA, 32 bytes of each
+         512-byte step of each of the tile's T = 8 tasks, 32 · 16 · 8 = 4096 at SB = 8192, p512's and p1024's), so the
+         sketch warps' tensor-core sums over the stored bytes are σ_j, and a launch's blocks are j = j0 + v
 e_j      E_j ⊕ spread(z_(i,j)), its 4096 bytes as int8
 σ_j      S_i · e_j over the integers (|σ_j[c]| ≤ 2^19), 16 int32 little-endian: 64 bytes
 y_(i,p)  SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_j),  j = plan_i[p]: one compression after the
@@ -62,6 +66,18 @@ def sketches(s: np.ndarray, blocks: np.ndarray) -> np.ndarray:
     return (e @ s.astype(np.int64).T).astype("<i4")
 
 
+def gemm_blocks(store: np.ndarray, nbs: int, nchunks: int, sb: int, groups: int, t: int) -> np.ndarray:
+    """A weight GEMM's store (`wt.cu`: nbs row blocks × nchunks 512-column chunks, SB = sb stored bytes a task) as its
+    blocks, (blocks × 4096) uint8, block v the launch's sketch vector v (`sketching.vectors` at its groups and T = t),
+    zeros where a CTA's last tile runs past its tasks."""
+    import sketching
+
+    vs = sketching.vectors(store, nbs, nchunks, sb, groups, t)
+    if vs.shape[1] != BLOCK:
+        raise ValueError(f"a GEMM's vector is {vs.shape[1]} bytes at SB = {sb} and T = {t}, not a {BLOCK}-byte block")
+    return vs.view(np.uint8)
+
+
 def prefix(seed: bytes) -> bytes:
     """`Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed))`, one SHA-512 block."""
     body = SKETCH_RECEIPT_DOMAIN + frame(rb._digest(seed, "a pass seed"))
@@ -75,6 +91,12 @@ def receipt_of(head, j: int, sigma: bytes) -> bytes:
     h = head.copy()
     h.update(j.to_bytes(8, "big") + sigma)
     return h.digest()
+
+
+def receipts_of(seed: bytes, sk: np.ndarray, j0: int) -> list[bytes]:
+    """y of blocks j0, j0 + 1, … from their sketches (n × 16 integers)."""
+    head, w = hashlib.sha512(prefix(seed)), np.asarray(sk).astype("<i4")
+    return [receipt_of(head, j0 + v, w[v].tobytes()) for v in range(w.shape[0])]
 
 
 class SketchReceipter:

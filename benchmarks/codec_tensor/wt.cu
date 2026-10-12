@@ -1667,18 +1667,28 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // prefix. So the ±1 matrix is fresh every pass, and no pass's receipts exist before the previous pass's root.
 // wt_set_pass puts the messages' fixed bytes in kPass (zeros where s_j, j, the root, K_S and the row go); pass_kernel,
 // one CTA on the stream after the previous commit, fills them in, so the chain needs no host round trip.
-constexpr int KPASS_ROWS = 16, PASS_BITS_BYTES = 16 * 1024, PASS_THREADS = 256;
+//
+// A WT_RECEIPT = 1 build's receipt is sketch-sha512 instead (`sketch_receipt.py`, the remote bandwidth driver's kind):
+// s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
+// {"k": 16, "n": 4096, "tag": "sketch-sha512"}), the store's block j is the GEMM's vector j (n = 4096 at T = 8), and
+// y_j = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(s_j)) ‖ u64be j ‖ σ_j): one compression from the prefix's midstate
+// (kRcptMid, the leaf slot's), 64 bytes a vector. Its leaves and tree are the driver's (reader.cu's rb_leaves, rb_tree).
+#ifndef WT_RECEIPT
+#define WT_RECEIPT 0
+#endif
+constexpr int KPASS_ROWS = 16, PASS_BITS_BYTES = 16 * 1024, PASS_THREADS = 256, SEED_BYTES = WT_RECEIPT ? 64 : 32;
 struct PassMsgs {
   uint8_t seed[160], derive[256], tag[128], leaf[128], row[128];
   int seed_len, derive_len, row_len, derive_s, tag_s, leaf_s, row_key, row_c, row_ctr, ks, n;
 };
 struct PassState {
-  uint8_t seed[32], ks[32];
+  uint8_t seed[64], ks[32];
   u32 key[8];
   u64 leafmid[8];
 };
 __constant__ PassMsgs kPass;
 __device__ PassState g_pass;
+__constant__ u64 kRcptMid[8];
 
 // SHA-512 of the len bytes at m (big-endian words, the standard padding).
 __device__ void sha512_bytes(const uint8_t *m, int len, u64 (&s)[8]) {
@@ -1707,7 +1717,7 @@ __device__ __forceinline__ void be_bytes(const u64 (&s)[8], uint8_t *out, int le
 
 __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u64 *__restrict__ root,
                                                             u32 *__restrict__ signs, int t) {
-  __shared__ uint8_t sd[32], ksd[32];
+  __shared__ uint8_t sd[64], ksd[32];
   __shared__ uint8_t bits[PASS_BITS_BYTES];
   const int tid = threadIdx.x, rb = kPass.n / 8, nb = (rb + 63) / 64;
   uint8_t m[256];
@@ -1717,15 +1727,16 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
     for (int b = 0; b < 4; ++b) m[64 + b] = (uint8_t)(j >> (24 - 8 * b));
     for (int b = 0; b < 64; ++b) m[68 + b] = (uint8_t)(root[b >> 3] >> (56 - 8 * (b & 7)));
     sha512_bytes(m, kPass.seed_len, h);
-    be_bytes(h, sd, 32);
+    be_bytes(h, sd, 64);
   }
   __syncthreads();
   if (tid == 0) {
     for (int b = 0; b < kPass.derive_len; ++b) m[b] = kPass.derive[b];
-    for (int b = 0; b < 32; ++b) m[kPass.derive_s + b] = sd[b];
+    for (int b = 0; b < SEED_BYTES; ++b) m[kPass.derive_s + b] = sd[b];
     sha512_bytes(m, kPass.derive_len, h);
     be_bytes(h, ksd, 32);
-    for (int b = 0; b < 32; ++b) g_pass.ks[b] = ksd[b], g_pass.seed[b] = sd[b];
+    for (int b = 0; b < 32; ++b) g_pass.ks[b] = ksd[b];
+    for (int b = 0; b < 64; ++b) g_pass.seed[b] = sd[b];
   } else if (tid == 32) {
     for (int b = 0; b < 128; ++b) m[b] = kPass.tag[b];
     for (int b = 0; b < 32; ++b) m[kPass.tag_s + b] = sd[b];
@@ -1735,7 +1746,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
     for (int i = 0; i < 8; ++i) g_pass.key[i] = kb[4 * i] | kb[4 * i + 1] << 8 | kb[4 * i + 2] << 16 | (u32)kb[4 * i + 3] << 24;
   } else if (tid == 64) {
     for (int b = 0; b < 128; ++b) m[b] = kPass.leaf[b];
-    for (int b = 0; b < 32; ++b) m[kPass.leaf_s + b] = sd[b];
+    for (int b = 0; b < SEED_BYTES; ++b) m[kPass.leaf_s + b] = sd[b];
     u64 w[16];
     for (int i = 0; i < 16; ++i) {
       u64 v = 0;
@@ -2099,10 +2110,13 @@ template <int KS, int SKW, class SkB>
 __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
                                             int lane, const Sketch &k) {
   static_assert(sk_words<KS>() == 1 && 16 % SKW == 0, "a sign word a lane a step; whole vectors a warp");
-  constexpr int KB = KS / 8, VW = 16 / SKW, NBT = sk_batch<SKW>(), LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
+  constexpr int KB = KS / 8, VW = 16 / SKW, NBT = sk_batch<SKW>(), LEN = 8 + 4 * KS;
   constexpr int PF = SK_M < 4 ? SK_M : 4;   // the steps whose fragments are in flight (L2 reads: 64 KiB at T = 8)
   const int g = lane >> 2, tq = lane & 3, swz = sk_swz<KS>(g);
+#if !WT_RECEIPT
+  constexpr int NMB = (LEN + 63) / 64;
   const u32 one = kOne;
+#endif
   const SkB bop{};
   for (int tl = 0; tl < k.tpc; ++tl) {
     int acc[KB][4];
@@ -2153,6 +2167,25 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
       const int t = lane / VW, r = VW * q + lane % VW, sz = sk_swz<KS>(r & 7);
       const int *w = bb + (16 * t + r) * KS;
       const u64 vi = 16 * (k.tile0 + tb + t) + r, j = k.jbase + vi;
+#if WT_RECEIPT
+      static_assert(KS == 16, "sketch-sha512's σ is 16 words");
+      u64 h[8], m[16];
+#pragma unroll
+      for (int i = 0; i < 8; ++i) h[i] = kRcptMid[i];
+      m[0] = j;
+#pragma unroll
+      for (int i = 0; i < 8; ++i)
+        m[1 + i] = (u64)bswap32((u32)w[(2 * i) ^ sz]) << 32 | bswap32((u32)w[(2 * i + 1) ^ sz]);
+      m[9] = 0x80ULL << 56;
+#pragma unroll
+      for (int i = 10; i < 15; ++i) m[i] = 0;
+      m[15] = (128 + LEN) * 8;
+      sha512_compress(h, m);
+      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 16 * vi);
+#pragma unroll
+      for (int i = 0; i < 4; ++i)
+        o[i] = make_uint4((u32)h[2 * i], (u32)(h[2 * i] >> 32), (u32)h[2 * i + 1], (u32)(h[2 * i + 1] >> 32));
+#else
       u32 cv[8];
 #pragma unroll
       for (int i = 0; i < 8; ++i) cv[i] = kTagKey[i];
@@ -2172,6 +2205,7 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
       uint4 *o = reinterpret_cast<uint4 *>(k.tags + 8 * vi);
       o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
       o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+#endif
     }
     __syncwarp();
     for (int e = lane; e < nt * VW * KS; e += 32) bb[(16 * (e / (VW * KS)) + VW * q) * KS + e % (VW * KS)] = 0;
@@ -2434,6 +2468,7 @@ int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
   out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
   out[13] = FUSED_SPAN; out[14] = TAG_BLOCK; out[15] = WT_SK_DIAG; out[16] = fused_warps<1, 0, 0>();
+  out[17] = WT_RECEIPT;
   return 0;
 }
 
@@ -2599,6 +2634,7 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
                    stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
     return 1;
   if (sketch_warps && (sketch_warps != 2 || sketch_k != 16 || PAY_E != 0)) return 1;
+  if (WT_RECEIPT && sketch_k && !sketch_warps) return 1;   // only the sketch warps hash sketch-sha512
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = warps * 32;
   int dev = 0, optin = 0;
   cudaGetDevice(&dev);
@@ -2654,7 +2690,8 @@ int wt_set_dbg(uint8_t *p) {
 }
 
 // One window's tag (ro-blake3/v1 or ro-sketch-blake3/v0): K as BLAKE3's 8 little-endian key words, and the leaves'
-// prefix block Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from.
+// prefix block Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from. A
+// WT_RECEIPT build's sketch warps start from the same midstate: there leaf_prefix is sketch_receipt.prefix(seed).
 int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   u64 w[16];
   for (int i = 0; i < 16; ++i) {
@@ -2667,7 +2704,7 @@ int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   sha512_compress(mid.h, w);
   const u32 one = 1;
   if (cudaMemcpyToSymbol(kTagKey, key, 8 * 4) || cudaMemcpyToSymbol(kOne, &one, 4) ||
-      cudaMemcpyToSymbol(g_leafmid, &mid, sizeof mid))
+      cudaMemcpyToSymbol(g_leafmid, &mid, sizeof mid) || cudaMemcpyToSymbol(kRcptMid, mid.h, sizeof mid.h))
     return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
@@ -2675,7 +2712,7 @@ int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
 // The fixed bytes of a pass's messages (pass_kernel) at σ (32 bytes), k_s and n.
 static int g_pass_n = 0;
 int wt_set_pass(const uint8_t *sigma, int ks, int n) {
-  if (ks != 16 || n < 8 || n % 8 || KPASS_ROWS * (n / 8) > PASS_BITS_BYTES) return 1;
+  if (ks != 16 || n < 8 || n % 8 || KPASS_ROWS * (n / 8) > PASS_BITS_BYTES || (WT_RECEIPT && n != 4096)) return 1;
   PassMsgs P{};
   auto put = [](uint8_t *m, int &o, const void *src, int len) {
     memcpy(m + o, src, len);
@@ -2694,7 +2731,8 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
     frame(m, o, 'i', be, len);
   };
   const uint8_t zero[4 + 64] = {};
-  const char *name = "ro-sketch-blake3/v0";
+  const char *name = WT_RECEIPT ? "sketch-sha512" : "ro-sketch-blake3/v0";
+  const char *sign_domain = WT_RECEIPT ? "verity/remote-bandwidth/sketch-signs/v0" : "verity/bandwidth/sketch-signs/v0";
   const int nl = (int)strlen(name);
   int o = 0;   // SHA512(PASS_DOMAIN ‖ σ ‖ u32be j ‖ root)
   put(P.seed, o, "verity/remote-bandwidth/seed/v0", 32);
@@ -2704,8 +2742,8 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   o = 0;   // derive(s, SIGN_DOMAIN, {"k": ks, "n": n, "tag": name})
   put(P.derive, o, "verity/randomness/derive/v2", 28);
   P.derive_s = o + 9;
-  frame(P.derive, o, 'b', zero, 32);
-  frame(P.derive, o, 's', "verity/bandwidth/sketch-signs/v0", 32);
+  frame(P.derive, o, 'b', zero, SEED_BYTES);
+  frame(P.derive, o, 's', sign_domain, (int)strlen(sign_domain));
   uint8_t ctx[128];
   int c = 0;
   frame(ctx, c, 's', "k", 1);
@@ -2721,11 +2759,15 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   frame(P.tag, o, 's', name, nl);
   P.tag_s = o + 9;
   frame(P.tag, o, 'b', zero, 32);
-  o = 0;   // Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(s)): the leaves' prefix
+  o = 0;   // Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(s)): the leaves' prefix; sketch-sha512's receipt prefix
+#if WT_RECEIPT
+  put(P.leaf, o, "verity/remote-bandwidth/sketch-receipt/v0", 42);
+#else
   put(P.leaf, o, "verity/bandwidth/tag-leaf/v1", 29);
   frame(P.leaf, o, 's', name, nl);
+#endif
   P.leaf_s = o + 9;
-  frame(P.leaf, o, 'b', zero, 32);
+  frame(P.leaf, o, 'b', zero, SEED_BYTES);
   o = 0;   // a row's stream block: STREAM ‖ K_S ‖ frame(frames(("row", c))) ‖ u64be block
   put(P.row, o, "verity/randomness/stream/v2", 28);
   P.row_key = o;
@@ -2754,21 +2796,23 @@ int wt_pass(unsigned j, const u64 *root, u32 *signs, int t, cudaStream_t s) {
   pass_kernel<<<1, PASS_THREADS, 0, s>>>(j, root, signs, t);
   void *gp = nullptr;
   if (cudaGetLastError() || cudaGetSymbolAddress(&gp, g_pass)) return 4;
-  return cudaMemcpyToSymbolAsync(kTagKey, static_cast<uint8_t *>(gp) + offsetof(PassState, key), 32, 0,
-                                 cudaMemcpyDeviceToDevice, s)
-             ? 4
-             : 0;
+  uint8_t *g = static_cast<uint8_t *>(gp);
+  if (WT_RECEIPT && cudaMemcpyToSymbolAsync(kRcptMid, g + offsetof(PassState, leafmid), 64, 0,
+                                            cudaMemcpyDeviceToDevice, s))
+    return 4;
+  return cudaMemcpyToSymbolAsync(kTagKey, g + offsetof(PassState, key), 32, 0, cudaMemcpyDeviceToDevice, s) ? 4 : 0;
 }
 
-// The last pass's seed (32 bytes), K_S (32), key (32, kTagKey's) and leaves' midstate (8 u64) into out (160 bytes).
+// The last pass's seed (the whole SHA-512, 64 bytes; ro-sketch-blake3/v0's s_j is its first 32), K_S (32), key (32,
+// kTagKey's) and leaves' (sketch-sha512: receipts') midstate (8 u64, kRcptMid's) into out (192 bytes).
 int wt_pass_state(uint8_t *out) {
   PassState p;
   if (cudaDeviceSynchronize() || cudaMemcpyFromSymbol(&p, g_pass, sizeof p) ||
-      cudaMemcpyFromSymbol(out + 64, kTagKey, 32))
+      cudaMemcpyFromSymbol(out + 96, kTagKey, 32) || cudaMemcpyFromSymbol(out + 128, kRcptMid, 64))
     return 2;
-  memcpy(out, p.seed, 32);
-  memcpy(out + 32, p.ks, 32);
-  memcpy(out + 96, p.leafmid, 64);
+  memcpy(out, p.seed, 64);
+  memcpy(out + 64, p.ks, 32);
+  if (!WT_RECEIPT) memcpy(out + 128, p.leafmid, 64);
   return 0;
 }
 

@@ -309,7 +309,7 @@ class Step:
     def _launch_params(self) -> None:
         torch, wt = self.torch, self.wt
         st = BW.stream(torch)
-        bits = SKT.sign_bits(BW.TAG_SEED, 16, SKT.vector_bytes(wt.sb, self.T))
+        bits = BW.sketch_bits(wt, BW.window_seed(wt), 16, SKT.vector_bytes(wt.sb, self.T))
         self.signs = torch.from_numpy(SKT.sign_fragments(bits, SKT.steps(wt.sb), self.T).view(np.int32)).cuda()
         self.frags = BW.sign_frags(wt, torch, self.signs, self.T, st)   # the sketch warps' B fragments of the signs
         BW.set_pass(wt, self.T)
@@ -337,9 +337,13 @@ class Step:
                 tot += self.prm[(name, k, "sketch")][3]
             self.nvec[k] = tot
         top = max(self.nvec.values())
-        self.tags = torch.empty(top * 32, dtype=torch.uint8, device="cuda")
+        self.tags = torch.empty(top * wt.tag_bytes, dtype=torch.uint8, device="cuda")
         nleaves = -(-top // BW.TG.PER_LEAF)
         self.nodes = torch.zeros((2 * nleaves + 64) * 64, dtype=torch.uint8, device="cuda")
+        if wt.receipt:   # the driver's tree over the pass's receipts: its leaves padded to a power of two, then nodes
+            width = 1 << max(0, (nleaves - 1).bit_length())
+            self.dig = torch.zeros((width, 8), dtype=torch.int64, device="cuda")
+            self.up = torch.zeros((max(width - 1, 1), 8), dtype=torch.int64, device="cuda")
         self.plain_prm = {}
         for name, (n, kd) in self.shapes.items():
             nat = self.picks[name]["native"]
@@ -353,6 +357,8 @@ class Step:
     def set_keys(self, k: int) -> None:
         BW.set_key(self.wt, self.torch, self.keys[k])
         KB.set_key(self.kv, K.key(self.kv.field.name, KB.SEED, k))
+        if self.wt.receipt:   # the tree's binding and salts at a fixed seed (host constants), the receipts at s_j
+            BW.READER.begin(BW.RECEIPT_SEED, BW.SR.rb.Plan.whole(self.nvec[k]), BW.STORE_KEY)
 
     def lin_plain(self, l: int, name: str) -> None:
         n, kd = self.shapes[name]
@@ -377,8 +383,8 @@ class Step:
         sg = (self.frags if BW.sketch_warps(cfg) else self.signs).data_ptr() if sketch else None
         rc = self.wt.so.wt_fused_sketch(
             k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
-            cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + 32 * to if sketch else None,
-            BW.TAG_BASE + to, 16 if sketch else 0, sg, None, self.T,
+            cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + self.wt.tag_bytes * to if sketch else None,
+            self.wt.jbase + to, 16 if sketch else 0, sg, None, self.T,
             BW.sketch_warps(cfg), None, BW.stream(self.torch))
         if rc:
             raise RuntimeError(f"wt_fused_sketch {name} k={k}: error {rc}")
@@ -393,14 +399,69 @@ class Step:
     def commit(self, k: int) -> None:
         st = BW.stream(self.torch)
         n = self.nvec[k]
+        if self.wt.receipt:
+            self.commit_receipts(n, st)
+            return
         self.wt.call("wt_tag_leaves", self.tags.data_ptr(), n, self.nodes.data_ptr(), st)
         ri = ctypes.c_ulonglong(0)
         self.wt.call("wt_tag_tree", self.nodes.data_ptr(), -(-n // BW.TG.PER_LEAF), ctypes.addressof(ri), st)
         self.root_ptr, self.pass_j = self.nodes.data_ptr() + 64 * ri.value, self.pass_j + 1
 
+    def commit_receipts(self, n: int, st: int) -> None:
+        """sketch-sha512's commit (reader.cu, READER's constants): the hm96 leaves of the pass's n receipts, the pads to
+        a power of two and the frame-v3 tree; the root is the next pass's root_(j−1)."""
+        so, nl = BW.READER.so, -(-n // BW.SR.rb.PER_LEAF)
+        width = 1 << max(0, (nl - 1).bit_length())
+        dig = self.dig.data_ptr()
+        for rc in (so.rb_leaves(self.tags.data_ptr(), 0, nl, dig, None, st),
+                   so.rb_pads(nl, width - nl, dig + 64 * nl, st) if width > nl else 0,
+                   so.rb_tree(dig, width, 0, self.up.data_ptr(), st) if width > 1 else 0):
+            if rc:
+                raise RuntimeError(f"the receipts' commit: error {rc}")
+        self.root_ptr = dig if width == 1 else self.up.data_ptr() + 64 * (width - 2)
+        self.pass_j += 1
+
+    def gate_chain_receipts(self, k: int, log) -> dict:
+        """sketch-sha512's chain over two sketched passes: pass j + 1's seed, K_S, signs and receipt prefix on the device
+        are receipts.seed(σ, j + 1, root_j) of pass j's root as committed (reader.cu's tree), and its first linear's
+        first receipts are `sketch_receipt`'s of that linear's first blocks (`gemm_blocks`) at that seed."""
+        torch, wt = self.torch, self.wt
+        self.set_keys(k)
+        self.step(k, "none", "W")
+        torch.cuda.synchronize()
+        if self.root_ptr >= self.up.data_ptr():
+            root_t = self.up[(self.root_ptr - self.up.data_ptr()) // 64]
+        else:
+            root_t = self.dig[(self.root_ptr - self.dig.data_ptr()) // 64]
+        root = BW.digests(BW.host_bytes(root_t))[0]
+        j = self.pass_j
+        self.step(k, "none", "W")
+        torch.cuda.synchronize()
+        got = BW.pass_state(wt)
+        seed = BW.pass_seed(wt, j, root)
+        n = SKT.vector_bytes(wt.sb, self.T)
+        bits = BW.sketch_bits(wt, seed, 16, n)
+        want = SKT.sign_fragments(bits, SKT.steps(wt.sb), self.T)
+        name = ORDER[0]
+        nn, kd = self.shapes[name]
+        _, gr, _, nvec = self.prm[(name, k, "sketch")]
+        o, first = self.off[(0, name)], min(64, nvec)
+        vs = SKT.vectors_torch(torch, self.W[o:o + nn * kd], nn // 16, kd // 512, wt.sb, gr, self.T)[:first]
+        sk = SKT.sketch_torch(torch, vs, bits).cpu().numpy()
+        ys = b"".join(BW.root_words(y) for y in BW.SR.receipts_of(seed, sk, wt.jbase + self.tag_off[(k, 0, name)]))
+        out = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == BW.sketch_derive(wt, seed, n),
+               "signs": bool(np.array_equal(self.signs.cpu().numpy().view(np.uint32), want)),
+               "mid": got["mid"] == BW.receipt_mid(wt, seed),
+               "receipts": BW.host_bytes(self.tags[:first * wt.tag_bytes]) == ys}
+        out["ok"] = all(v for a, v in out.items() if a != "j")
+        log(f"chain gate (sketch-sha512) k={k}: {out}")
+        return out
+
     def gate_chain(self, k: int, log) -> dict:
         """Two sketched passes (the linears and the commit): pass j + 1's seed, key and signs on the device are
         pass_seed(σ, j + 1, root_j) of pass j's root as committed, and its first leaves are at that seed."""
+        if self.wt.receipt:
+            return self.gate_chain_receipts(k, log)
         torch, wt = self.torch, self.wt
         self.set_keys(k)
         self.step(k, "none", "W")
@@ -605,7 +666,8 @@ def step_points(res: dict, run_id: str | None) -> dict:
     pts = []
     for k, r in res["model"]["k"].items():
         pts.append({"model": res["model_name"], "batch": res["batch"], "gemm_m": res["gemm_m"], "ctx": res["ctx"],
-                    "k": int(k), "word_bits": 512, "k_s": 16, "receipt": "ro-sketch-blake3/v0, re-keyed every pass",
+                    "k": int(k), "word_bits": res.get("word_bits", 512), "k_s": 16,
+                    "receipt": res.get("receipt", "ro-sketch-blake3/v0") + ", re-keyed every pass",
                     "f_kv": res["f_kv"], "f_w": res["f_w"], "stored_bytes": res["stored_bytes"],
                     "step_over_plain": r["step_over_plain"], "d": r["d"], "plain_over_pass": res["model"]["plain_over_pass"],
                     "o_w_per_w_pass": r["o_w_per_w_pass"], "tau_w_per_w_pass": r["tau_w_per_w_pass"],
@@ -648,6 +710,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--wt-lib", required=True, help="wt.cu built at -DWT_FIELD=512")
     ap.add_argument("--kv-lib", required=True, help="step.cu built at -DKV_FIELD=512")
+    ap.add_argument("--reader-lib", default="", help="reader.cu, the commit of a wt.cu built at -DWT_RECEIPT=1")
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="8b", choices=["8b", "70b", "tiny"])
     ap.add_argument("--batch", type=int, default=32)
@@ -692,13 +755,19 @@ def main() -> int:
     ash = KB.attn_shape(kv)
     if HEADS.get(a.model, ash["heads"]) != ash["heads"]:
         raise SystemExit(f"{a.kv_lib} has {ash['heads']} query heads, {a.model} {HEADS[a.model]}: build KV_QHEADS")
+    if wt.receipt:
+        if not a.reader_lib or a.sketch_t != 8:
+            raise SystemExit("a WT_RECEIPT build commits with reader.cu (--reader-lib) and sketches 4 KiB vectors (T 8)")
+        import reader as RD
+        BW.READER = RD.Reader(a.reader_lib, torch)
     BW.set_tag(wt)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     layers, shapes, lm = model_shapes(a.model)
     all_shapes = {**shapes, "lm_head": lm}
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model_name": a.model,
-           "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}}
+           "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}, "word_bits": wt.n,
+           "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0"}
 
     def save() -> None:
         (out_dir / "step.json").write_text(json.dumps(res, indent=1, default=str))
