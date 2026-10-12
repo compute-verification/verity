@@ -4,6 +4,7 @@ import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Device
+import Proofs.Accounting.Actual.Confidence
 
 /-!
 # The actual circuit's guarantees
@@ -22,4 +23,6 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   the prover only through `X`'s egress, and not at all when `X` sends it nothing of the challenge.
 * `Actual/Device.lean`: the bridge to the device model: the schedule the actual circuit induces fits the device
   (`fits`, `fits_of_feasible`).
+* `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
+  `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; causality's global form from the local one.
 -/
