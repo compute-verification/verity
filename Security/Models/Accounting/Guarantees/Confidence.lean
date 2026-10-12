@@ -4,7 +4,7 @@ import Mathlib.Data.Fintype.Pi
 /-!
 # Composition and fit (trusted)
 
-Sections 4 and 5 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1).
+Sections 4 and 5 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.2).
 
 * `Composition`: `k` protocols in one run, with independent coins (protocol `i`'s coins reach nothing but the input
   gates at its verifier's leaves `V i`) and `E i` sound at `δ i` alone, accept together with the run outside the
@@ -22,14 +22,14 @@ open Finset
 
 open Classical in
 /-- **Composition.** For `k` protocols with coins `Ω i`, verifiers at `V i` accepting on `acc i` and guarantees `E i`
-sound at `δ i` against `𝓕`, and every locally causal joint strategy `S` with runs in `𝓕` in which the input gates off
+sound at `δ i` against `𝓕`, and every admissible joint strategy `S` with runs in `𝓕` in which the input gates off
 `V i` depend on no coin of protocol `i`: all accept and `S r ∉ 𝓒(v)` (`v` the view at `W`) for at most a `∑ δ i`
 fraction of the coins. -/
 def Composition : Prop :=
   ∀ {L : Type*} {k : ℕ} (Ω : Fin k → Type) [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)] (𝓕 : Set (Actual.Run L))
     (V : Fin k → Finset L) (W : Finset L) (acc : Fin k → Set (ℕ × L × ℕ × ℕ) → Prop) (E : Fin k → Actual.Run L → Prop)
     (δ : Fin k → ℝ) (S : ((i : Fin k) → Ω i) → Actual.Run L),
-    (∀ i, Sound (Ω i) 𝓕 (V i) (acc i) (E i) (δ i)) → (∀ r, S r ∈ 𝓕) → LocallyCausal S →
+    (∀ i, Sound (Ω i) 𝓕 (V i) (acc i) (E i) (δ i)) → (∀ r, S r ∈ 𝓕) → Admissible S →
     (∀ i r r', (∀ j, j ≠ i → r j = r' j) → (S r).inputs (↑(V i))ᶜ = (S r').inputs (↑(V i))ᶜ) →
     ((univ.filter fun r => (∀ i, acc i ((S r).view (V i))) ∧ S r ∉ confidence 𝓕 W E ((S r).view W)).card : ℝ) ≤
       (∑ i, δ i) * Fintype.card ((i : Fin k) → Ω i)
