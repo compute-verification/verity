@@ -98,9 +98,11 @@ theorem coinClaim_ok {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat} {
     cases h
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt, gt_iff_lt] at hb
     obtain ⟨h1, h2⟩ := hb
-    refine ⟨sc, hsc, ?_, by omega, rfl, rfl⟩
-    simp only [coinPt, Array.size_append, Array.size_replicate] at h1 h2 ⊢
-    omega
+    refine ⟨sc, hsc, ?_, by omega, ?_, ?_⟩
+    · simp only [coinPt, Array.size_append, Array.size_replicate] at h1 h2 ⊢
+      omega
+    · dsimp only
+    · dsimp only
 
 /-- **(n4 item 2 and (b)) What `RecCoins.opening` accepted**: R's stacked shape, its two claims (value zero),
 `RecOpening.run` on the symbolic messages and those claims at some coins (`run_of_inline`), the passes from `kappa`
