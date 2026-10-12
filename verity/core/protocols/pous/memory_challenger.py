@@ -1,7 +1,7 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, which signs
-its rounds.  It is the auditor's hardware, on a machine the prover doesn't control at the prover's site (the auditor's own
-VM or box, under the auditor's account), never a process on the prover's node.  On the deployed path it replaces `audit.UnsignedRounds`, the same
-rounds unsigned.
+its rounds.  It is the auditor's hardware, on a machine the prover doesn't control at the prover's site (the auditor's
+own VM or box, under the auditor's account), never a process on the prover's node.  On the deployed path it replaces
+`audit.UnsignedRounds`, the same rounds unsigned.
 
 A session has four steps:
 

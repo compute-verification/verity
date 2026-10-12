@@ -349,9 +349,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `segDom_inj` is the certificates' hypothesis.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
-- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
-  it: `ideal-permutation`, `perfect-isolation` (the help-accounted row: "The problem"), `sequential-step-floor`, `feistel-indifferentiability` (refuted at the
-  reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
+- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core
+  holds it: `ideal-permutation`, `perfect-isolation` (the help-accounted row: "The problem"), `sequential-step-floor`,
+  `feistel-indifferentiability` (refuted at the reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`,
+  `sms-m1-instantiation`, `seq-root`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
   only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
   by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests

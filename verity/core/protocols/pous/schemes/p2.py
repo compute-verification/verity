@@ -95,8 +95,8 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
   held plus the help it received, and nothing attests the prover's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
-- a live, designated verifier, whose memory challenger is the auditor's hardware, a Nebius VM under the auditor's account
-  that the prover doesn't control and nothing attests (core's `trusted-nebius-host`)."""
+- a live, designated verifier, whose memory challenger is the auditor's hardware, a Nebius VM under the auditor's
+  account that the prover doesn't control and nothing attests (core's `trusted-nebius-host`)."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
