@@ -612,6 +612,17 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         assert f.read_bytes() == b
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
     assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
+    other = tmp_path / "node-b"                                       # another node, which built none of it
+    dest = tmp_path / "lean-artifacts.tar.gz"
+    assert arts.bundle(dest) == len(arts.added) > 0
+    h = hashlib.sha256(dest.read_bytes()).hexdigest()
+    assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
+    shutil.rmtree(pkg / ".lake")
+    monkeypatch.setattr(LC, "ARTIFACTS", other)
+    build()
+    for f, b in was.items():
+        assert f.read_bytes() == b
+    assert all(json.loads(t.read_text())["synthetic"] for t in lib.rglob("*.trace"))
     assert not any(f.name.endswith(".tmp") for f in store.rglob("*"))
 
 
