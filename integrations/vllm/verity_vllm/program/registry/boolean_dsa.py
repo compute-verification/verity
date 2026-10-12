@@ -1,10 +1,11 @@
 """`dsa`'s DeepSeek Sparse Attention indexer on bits: version 2 of each Definition, its word body line for line over Boolean
-Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's word view is its `_v1` at the same statics.
+Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's word view is its `_v1` at the same statics; the
+logits' version 4, whose word view is `_v3`.
 
     U32And_v2, I32Sub_v2, I32ToF32_v2, F32CeilFtz_v2     traced: and.b32, sub.s32, cvt.rn.f32.s32, cvt.rpi.ftz.f32.f32
     DsaUe8m0Scale_v2, DsaUe8m0Quant_v2{N}
     DsaIndexerKRow_v2{D,ROPE,EPS}, DsaIndexerQHead_v2{D,ROPE,NH}, DsaIndexerQ_v2{H,D,ROPE}
-    DsaMqaLogit_v2{H,D}, DsaMqaLogits_v2{N,H,D}
+    DsaMqaLogit_v4{H,D}, DsaMqaLogits_v4{N,H,D}          the H200's (`DsaMqaLogit_v3`); _v2 is the refuted `_v1` on bits
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
 The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
@@ -205,6 +206,29 @@ DsaMqaLogitsV2 = flat(
     _logits, D.DsaMqaLogits)
 
 
+def _logit_v3(B, S, q, w, k, ks):
+    """`DsaMqaLogit_v3`'s body on bits."""
+    return D.mqa_logit(bit_ops(B), S.H, S.D, q, w, k, ks, contracted=True)
+
+
+DsaMqaLogitV4 = flat(
+    "DsaMqaLogit", 4, ["H", "D"],
+    lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32),
+    _logit_v3, D.DsaMqaLogitV3)
+
+
+def _logits_v3(B, S, q, w, k, ks):
+    """`DsaMqaLogits_v3`'s body on bits."""
+    return B.batch(bind(DsaMqaLogitV4, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
+
+
+DsaMqaLogitsV4 = flat(
+    "DsaMqaLogits", 4, ["N", "H", "D"],
+    lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
+                ("ks", Array(S.N, F32))), Array(S.N, F32)),
+    _logits_v3, D.DsaMqaLogitsV3)
+
+
 def _topk(S):
     """`DsaTopKShortRow_v1{TOPK}` traced: `len <= i` (signed: the borrow of `(i ^ 2^31) - (len ^ 2^31)` negated) is one bit per
     slot, and slot i is i's bits each ORed with it (-1 when set)."""
@@ -223,4 +247,4 @@ DsaTopKShortRowV2 = EW.specialized("DsaTopKShortRow", 2, ["TOPK"], _topk, lambda
                                    doc=_topk.__doc__, word=lambda b: bind(D.DsaTopKShortRow, TOPK=b["TOPK"]))
 
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
-               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaTopKShortRowV2]
+               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaMqaLogitV4, DsaMqaLogitsV4, DsaTopKShortRowV2]
