@@ -35,16 +35,20 @@
 
 #include "tagger.cu"
 
+#include <cuda.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/random.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <cerrno>
+#include <cmath>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -287,6 +291,11 @@ __global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* _
   if (threadIdx.x == 0 && steps) steps[blockIdx.x] = step;
 }
 
+// attack: loads 32 bytes at p, an address the launching context may not own, into out.
+__global__ void read_probe(const uint4* p, uint4* out) {
+  if (threadIdx.x < 2) out[threadIdx.x] = p[threadIdx.x];
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Host: timing, threads, JSON.
 
@@ -448,11 +457,12 @@ struct Gen {
 
 // S[0, n) on `threads` pinned threads (n a multiple of 512 bytes per thread's share), with non-temporal stores: the
 // stream is bound for the copy engines, not the host's cache.
-static void generate(const Gen& g, uint8_t* out, size_t n, int threads, const std::vector<int>& cpus, uint64_t first = 0) {
+static void generate(const Gen& g, uint8_t* out, size_t n, int threads, const std::vector<int>& cpus, uint64_t first = 0,
+                     bool nt = true) {
   const uint64_t blocks = n / 16, per = ((blocks + threads - 1) / threads + 31) / 32 * 32;
   parallel(threads, cpus, [&](int t) {
     uint64_t b0 = t * per, b1 = std::min<uint64_t>(blocks, b0 + per);
-    if (b0 < b1) sg_ctr_vaes_nt(g.rk, first + b0, out + 16 * b0, b1 - b0);
+    if (b0 < b1) (nt ? sg_ctr_vaes_nt : sg_ctr_vaes)(g.rk, first + b0, out + 16 * b0, b1 - b0);
   });
 }
 
@@ -791,6 +801,9 @@ struct Args {
   double deadline_us = 0;              // foldlive: fold_live stops this long after it starts (0: never)
   std::vector<int> fold_ctas = {2, 4, 8};  // foldlive: the grids, in whole SMs
   size_t live_slot = 256u << 10;       // foldlive, foldtwo: the frontier's slot, the bytes a generator writes at a time
+  bool temporal = false;               // foldlive, foldtwo: the generators' stores are cached (the fold reads the LLC)
+  size_t dma_piece = 0;                // foldlive, foldtwo: 0 zero copy; else the copy engines carry S, this much a copy
+  int dma_streams = 1;
   int mps_challenger_pct = 0, mps_prover_pct = 0;  // foldtwo: each process's CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (0: unset)
 };
 
@@ -1797,8 +1810,70 @@ static bool slots_ok(const Args& a) {
          std::all_of(a.sizes_mib.begin(), a.sizes_mib.end(), [&](size_t m) { return (m << 20) % a.live_slot == 0; });
 }
 
+// --dma-piece-kib P: the copy engines carry S into HBM, and fold_live reads it there (or in L2) instead of zero copy.
+// The publisher copies each P-byte piece once the generators have written it, on --dma-streams streams in turn, and
+// after each piece a stream write (cuStreamWriteValue64, ordered after the piece's copy and, across streams, after the
+// previous piece's write) advances a frontier in device memory over it.
+using WriteValue64 = CUresult (*)(CUstream, CUdeviceptr, cuuint64_t, unsigned int);
+struct Carry {
+  uint8_t* d = nullptr;
+  unsigned long long* front = nullptr;
+  std::vector<cudaStream_t> s;
+  std::vector<cudaEvent_t> ev;
+  WriteValue64 write = nullptr;
+};
+
+static bool carry_ok(const Args& a) {
+  return !a.dma_piece || (a.dma_piece % a.live_slot == 0 && a.dma_streams >= 1 && a.dma_streams <= 4);
+}
+
+static Carry make_carry(const Args& a, size_t nmax, int priority) {
+  Carry c;
+  if (!a.dma_piece) return c;
+  OK(cudaMalloc(&c.d, nmax));
+  OK(cudaMalloc(&c.front, 64));
+  OK(cudaMemset(c.front, 0, 64));
+  c.s.resize(a.dma_streams);
+  for (auto& s : c.s) OK(cudaStreamCreateWithPriority(&s, cudaStreamNonBlocking, priority));
+  c.ev.resize(nmax / a.dma_piece + 1);
+  for (auto& e : c.ev) OK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+  void* f = nullptr;
+  cudaDriverEntryPointQueryResult q;
+  OK(cudaGetDriverEntryPointByVersion("cuStreamWriteValue64", &f, 12000, cudaEnableDefault, &q));
+  if (q != cudaDriverEntryPointSuccess || !f) exit(fail("cuStreamWriteValue64's entry point"));
+  c.write = (WriteValue64)f;
+  return c;
+}
+
+static void carry(const Args& a, Carry& c, const uint8_t* hm, size_t slots, const std::atomic<uint32_t>* done,
+                  uint32_t epoch) {
+  const size_t per = a.dma_piece / a.live_slot;
+  for (size_t f = 0, q = 0; f < slots; ++q) {
+    const size_t to = std::min(slots, f + per);
+    for (size_t k = f; k < to; ++k)
+      while (done[k].load(std::memory_order_acquire) != epoch) {
+      }
+    cudaStream_t s = c.s[q % c.s.size()];
+    OK(cudaMemcpyAsync(c.d + f * a.live_slot, hm + f * a.live_slot, (to - f) * a.live_slot, cudaMemcpyHostToDevice, s));
+    if (q && c.s.size() > 1) OK(cudaStreamWaitEvent(s, c.ev[q - 1], 0));
+    if (c.write(s, (CUdeviceptr)c.front, (cuuint64_t)epoch << 32 | to, CU_STREAM_WRITE_VALUE_DEFAULT) != CUDA_SUCCESS)
+      exit(fail("cuStreamWriteValue64"));
+    if (c.s.size() > 1) OK(cudaEventRecord(c.ev[q], s));
+    f = to;
+  }
+}
+
+static void carry_sync(Carry& c) {
+  for (auto& s : c.s) OK(cudaStreamSynchronize(s));
+}
+
+static std::string transport(const Args& a) {
+  return std::string(",\"temporal\":") + (a.temporal ? "true" : "false") + ",\"dma_piece\":" +
+         std::to_string(a.dma_piece) + ",\"dma_streams\":" + std::to_string(a.dma_piece ? a.dma_streams : 0);
+}
+
 static int mode_fold_live(const Args& a) {
-  if (a.live < 1 || a.live + 2 > (int)cpus.size() || !slots_ok(a) ||
+  if (a.live < 1 || a.live + 2 > (int)cpus.size() || !slots_ok(a) || !carry_ok(a) ||
       std::any_of(a.fold_ctas.begin(), a.fold_ctas.end(), [](int c) { return c < 1 || c > 64; })) {
     fprintf(stderr, "foldlive takes --live G, G + 2 CPUs, --fold-ctas from 1 to 64 and sizes in whole slots\n");
     return 2;
@@ -1834,13 +1909,16 @@ static int mode_fold_live(const Args& a) {
   uint8_t seed[32], throwaway[32] = {0}, root[64], want[64];
   fresh(seed, 32);
   if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
+  Carry cy = make_carry(a, nmax, hi);
+  const uint4* src = a.dma_piece ? (const uint4*)cy.d : (const uint4*)hm_dev;
+  const unsigned long long* fr = a.dma_piece ? cy.front : frontier_dev;
   std::atomic<uint64_t> next{0};
   uint32_t epoch = 0;
   int bad = 0;
   Timer ft;
   const uint64_t deadline_ns = (uint64_t)(a.deadline_us * 1e3);
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
-                  ",\"live_slot\":" + std::to_string(a.live_slot) + ",\"deadline_us\":" + num(a.deadline_us) +
+                  ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) + ",\"deadline_us\":" + num(a.deadline_us) +
                   ",\"runs\":[";
   bool first = true;
   for (int ctas : a.fold_ctas)
@@ -1861,8 +1939,11 @@ static int mode_fold_live(const Args& a) {
             if (t * per < n) sg_flush(hm + t * per, std::min(per, n - t * per));
           });
           if (arm >= 2) {
-            generate(gen, hm, n, a.gen_threads, cpus);
-            __atomic_store_n(frontier, (unsigned long long)epoch << 32 | slots, __ATOMIC_RELEASE);
+            generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+            if (a.dma_piece)
+              for (size_t k = 0; k < slots; ++k) done[k].store(epoch, std::memory_order_release);
+            else
+              __atomic_store_n(frontier, (unsigned long long)epoch << 32 | slots, __ATOMIC_RELEASE);
           }
           OK(cudaMemsetAsync(dout, 0, chunks * 16, s_fold));
           OK(cudaStreamSynchronize(s_fold));
@@ -1873,30 +1954,35 @@ static int mode_fold_live(const Args& a) {
           if (arm == 3)
             fold_chunks<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout);
           else
-            fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, a.live_slot / 1024,
-                                                 epoch, deadline_ns, dsteps);
+            fold_live<<<ctas, 1024, 0, s_fold>>>(src, chunks, dout, fr, a.live_slot / 1024, epoch, deadline_ns, dsteps);
           OK(cudaEventRecord(ft.b, s_fold));
-          if (arm < 2) {
+          if (arm < 2)
             for (auto& g : gens)
               g->post([&] {
                 for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
-                  sg_ctr_vaes_nt(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot, a.live_slot / 16);
+                  (a.temporal ? sg_ctr_vaes : sg_ctr_vaes_nt)(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot,
+                                                              a.live_slot / 16);
                   done[k].store(epoch, std::memory_order_release);
                 }
               });
+          if (arm < 2 || (a.dma_piece && arm == 2))
             publisher.post([&] {
+              if (a.dma_piece) {
+                carry(a, cy, hm, slots, done.get(), epoch);
+                return;
+              }
               for (size_t f = 0; f < slots;) {
                 if (done[f].load(std::memory_order_acquire) != epoch) continue;
                 while (f < slots && done[f].load(std::memory_order_acquire) == epoch) ++f;
                 __atomic_store_n(frontier, (unsigned long long)epoch << 32 | f, __ATOMIC_RELEASE);
               }
             });
-          }
           if (arm == 0) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
           OK(cudaStreamSynchronize(s_fold));
           const double t1 = now_s();
           for (auto& g : gens) g->wait();
           publisher.wait();
+          carry_sync(cy);
           if (arm == 0) {
             float tags_ms = 0, pass_ms = 0;
             bw_last_pass_ms(&tags_ms, &pass_ms);
@@ -1994,6 +2080,9 @@ static int fold_two_challenger(const Args& a, Two& sh) {
   OK(cudaMalloc(&dout, nmax / 1024 * 16));
   uint32_t* dsteps;
   OK(cudaMalloc(&dsteps, 64 * 4));
+  Carry cy = make_carry(a, nmax, hi);
+  const uint4* src = a.dma_piece ? (const uint4*)cy.d : (const uint4*)hm_dev;
+  const unsigned long long* fr = a.dma_piece ? cy.front : frontier_dev;
   std::atomic<uint64_t> next{0};
   uint32_t w = 0, epoch = 0;
   Timer ft;
@@ -2024,18 +2113,22 @@ static int fold_two_challenger(const Args& a, Two& sh) {
           sh.ready.store(w, std::memory_order_release);
           await(sh.go, w, 0);
           OK(cudaEventRecord(ft.a, s_fold));
-          fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, a.live_slot / 1024, epoch,
-                                               deadline_ns, dsteps);
+          fold_live<<<ctas, 1024, 0, s_fold>>>(src, chunks, dout, fr, a.live_slot / 1024, epoch, deadline_ns, dsteps);
           OK(cudaEventRecord(ft.b, s_fold));
           sh.launched.store(w, std::memory_order_release);
           for (auto& g : gens)
             g->post([&] {
               for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
-                sg_ctr_vaes_nt(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot, a.live_slot / 16);
+                (a.temporal ? sg_ctr_vaes : sg_ctr_vaes_nt)(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot,
+                                                            a.live_slot / 16);
                 done[k].store(epoch, std::memory_order_release);
               }
             });
           publisher.post([&] {
+            if (a.dma_piece) {
+              carry(a, cy, hm, slots, done.get(), epoch);
+              return;
+            }
             for (size_t f = 0; f < slots;) {
               if (done[f].load(std::memory_order_acquire) != epoch) continue;
               while (f < slots && done[f].load(std::memory_order_acquire) == epoch) ++f;
@@ -2046,6 +2139,7 @@ static int fold_two_challenger(const Args& a, Two& sh) {
           sh.fold_end[i] = now_s();
           for (auto& g : gens) g->wait();
           publisher.wait();
+          carry_sync(cy);
           sh.fold_ms[i] = ft.ms();
           generate(gen, regen.get(), n, a.gen_threads, cpus);
           std::fill(ref.begin(), ref.begin() + chunks * 4, 0);
@@ -2083,8 +2177,11 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
   fresh(seed, 32);
   if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
   const char* mps = getenv("CUDA_MPS_PIPE_DIRECTORY");
+  // the system clock, only to line the pair up with smi.csv's samples of the clocks
+  auto unix_s = [] { return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(); };
+  const double unix0 = unix_s();
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
-                  ",\"live_slot\":" + std::to_string(a.live_slot) + ",\"deadline_us\":" + num(a.deadline_us) +
+                  ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) + ",\"deadline_us\":" + num(a.deadline_us) +
                   ",\"mps\":" + (mps && *mps ? "true" : "false") + ",\"mps_challenger_pct\":" +
                   std::to_string(a.mps_challenger_pct) + ",\"mps_prover_pct\":" + std::to_string(a.mps_prover_pct) +
                   ",\"runs\":[";
@@ -2133,9 +2230,249 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
   waitpid(child, &status, 0);
   const bool child_ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
   bad += sh.bad.load() + !child_ok;
-  j += "],\"challenger_ok\":" + std::string(child_ok ? "true" : "false") + ",\"bad\":" + std::to_string(bad) + "}";
+  j += "],\"challenger_ok\":" + std::string(child_ok ? "true" : "false") + ",\"bad\":" + std::to_string(bad) +
+       ",\"unix_start\":" + std::to_string(unix0) + ",\"unix_end\":" + std::to_string(unix_s()) + "}";
   write(a, "fold_two", j);
   return bad ? fail("a two-process fold, the challenger or a root") : 0;
+}
+
+// attack: foldtwo's premise, that the prover's process cannot read the challenger's mapped host buffer, tried as an
+// attack.  The challenger (forked before either touches CUDA, under MPS when --mps-dir names the daemon) writes a fresh
+// secret into a buffer mapped for its own context and publishes the buffer's host and device addresses and its pid; the
+// prover then tries to read the secret through the CUDA API (cudaPointerGetAttributes on both addresses, a cudaMemcpy
+// from the device address), through the OS (process_vm_readv, by the same user and the challenger's parent: once while
+// the challenger is dumpable and once after it is not) and, last since a fault may end its context or the MPS server, a
+// kernel that loads the device address.  canary, the secret's first 32 bytes, is the referee's: an attempt leaks if it
+// returns them.  Afterwards the challenger checks that its own context still reads the buffer.
+struct Attack {
+  std::atomic<uint32_t> ready{0}, nodump{0}, nodumped{0}, done{0};
+  uint64_t host = 0, dev = 0;
+  pid_t pid = 0;
+  uint8_t canary[32];
+  int after = -1, intact = -1;
+};
+
+static int attack_challenger(Attack& sh) {
+  prctl(PR_SET_PDEATHSIG, SIGKILL);
+  const size_t n = 64u << 20;
+  uint8_t *hm, *hm_dev;
+  OK(cudaHostAlloc(&hm, n, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&hm_dev, hm, 0));
+  uint8_t ks[16];
+  fresh(ks, 16);
+  Gen gen(ks);
+  generate(gen, hm, n, 4, cpus);
+  memcpy(sh.canary, hm, 32);
+  sh.host = (uint64_t)hm;
+  sh.dev = (uint64_t)hm_dev;
+  sh.pid = getpid();
+  sh.ready.store(1, std::memory_order_release);
+  await(sh.nodump, 1, 0);
+  prctl(PR_SET_DUMPABLE, 0);
+  sh.nodumped.store(1, std::memory_order_release);
+  await(sh.done, 1, 0);
+  uint4* out = nullptr;
+  uint8_t got[32] = {0};
+  cudaError_t e = cudaMalloc(&out, 32);
+  if (e == cudaSuccess) {
+    read_probe<<<1, 32>>>((const uint4*)hm_dev, out);
+    e = cudaDeviceSynchronize();
+    if (e == cudaSuccess) e = cudaMemcpy(got, out, 32, cudaMemcpyDeviceToHost);
+  }
+  sh.after = (int)e;
+  sh.intact = e == cudaSuccess && !memcmp(got, sh.canary, 32);
+  return 0;
+}
+
+static int attack_prover(const Args& a, Attack& sh, pid_t child) {
+  await(sh.ready, 1, child);
+  const char* mps = getenv("CUDA_MPS_PIPE_DIRECTORY");
+  std::string j = "{\"mps\":" + std::string(mps && *mps ? "true" : "false") +
+                  ",\"same_address\":" + (sh.host == sh.dev ? "true" : "false") + ",\"attempts\":[";
+  int cuda_leaks = 0, os_leaks = 0;
+  bool first = true;
+  auto record = [&](const std::string& name, bool os, const std::string& result, const uint8_t* got) {
+    const bool leaked = got && !memcmp(got, sh.canary, 32);
+    (os ? os_leaks : cuda_leaks) += leaked;
+    j += std::string(first ? "" : ",") + "{\"attempt\":\"" + name + "\",\"result\":\"" + result + "\",\"leaked\":" +
+         (leaked ? "true" : "false") + "}";
+    first = false;
+  };
+  auto name_of = [](cudaError_t e) { return std::string(cudaGetErrorName(e)); };
+  const char* which[2] = {"host", "device"};
+  const uint64_t addr[2] = {sh.host, sh.dev};
+  for (int w = 0; w < 2; ++w) {
+    cudaPointerAttributes at{};
+    const cudaError_t e = cudaPointerGetAttributes(&at, (const void*)addr[w]);
+    cudaGetLastError();
+    record(std::string("cudaPointerGetAttributes of the ") + which[w] + " address", false,
+           name_of(e) + ", type " + std::to_string((int)at.type), nullptr);
+  }
+  for (int dumpable = 1; dumpable >= 0; --dumpable) {
+    if (!dumpable) {
+      sh.nodump.store(1, std::memory_order_release);
+      await(sh.nodumped, 1, child);
+    }
+    uint8_t got[32] = {0};
+    struct iovec mine = {got, 32}, theirs = {(void*)sh.host, 32};
+    const ssize_t r = process_vm_readv(sh.pid, &mine, 1, &theirs, 1, 0);
+    record(std::string("process_vm_readv, the challenger ") + (dumpable ? "dumpable" : "not dumpable"), true,
+           r == 32 ? "read 32 bytes" : std::string("errno ") + strerror(errno), r == 32 ? got : nullptr);
+  }
+  {
+    uint8_t got[32] = {0};
+    const cudaError_t e = cudaMemcpy(got, (const void*)sh.dev, 32, cudaMemcpyDeviceToHost);
+    record("cudaMemcpy from the device address", false, name_of(e), e == cudaSuccess ? got : nullptr);
+  }
+  {
+    uint8_t got[32] = {0};
+    uint4* out = nullptr;
+    cudaError_t e = cudaMalloc(&out, 32);
+    if (e == cudaSuccess) e = cudaMemset(out, 0, 32);
+    if (e == cudaSuccess) {
+      read_probe<<<1, 32>>>((const uint4*)sh.dev, out);
+      e = cudaDeviceSynchronize();
+      if (e == cudaSuccess) e = cudaMemcpy(got, out, 32, cudaMemcpyDeviceToHost);
+    }
+    record("a kernel loading the device address", false, name_of(e), e == cudaSuccess ? got : nullptr);
+  }
+  sh.done.store(1, std::memory_order_release);
+  int status = 0;
+  waitpid(child, &status, 0);
+  j += "],\"cuda_leaks\":" + std::to_string(cuda_leaks) + ",\"os_leaks\":" + std::to_string(os_leaks) +
+       ",\"challenger_after\":\"" + (sh.after < 0 ? std::string("none") : name_of((cudaError_t)sh.after)) +
+       "\",\"challenger_intact\":" + std::to_string(sh.intact) + ",\"challenger_exit\":" +
+       std::to_string(WIFEXITED(status) ? WEXITSTATUS(status) : -1) + "}";
+  write(a, "attack", j);
+  return cuda_leaks ? fail("the prover's context read the challenger's secret") : 0;
+}
+
+// egress: the audited GPU's outbound direction, while the stream fills the inbound one.  The copy engines' D2H and H2D
+// of --interfere-mib alone and both at once (is the D2H direction free while H2D is full?); fold_chunks' zero-copy H2D
+// over a pre-generated stream alone and beside a D2H copy (does egress slow the stream?); and the timing a device can
+// give its egress: a kernel writes a sequence word to mapped host memory at times it picks on the globaltimer, a host
+// thread records when each lands, and the spread of (landing - picked) bounds the bits one write's timing carries in a
+// window of --deadline-us, alone and beside both directions' copies.  Medians of --reps.
+__global__ void egress_clock(unsigned long long* word, uint64_t period_ns, uint32_t writes, uint64_t* when) {
+  uint64_t t0;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
+  for (uint32_t k = 0; k < writes; ++k) {
+    uint64_t t;
+    do asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    while (t < t0 + (k + 1) * period_ns);
+    asm volatile("st.release.sys.global.u64 [%0], %1;" ::"l"(word), "l"((unsigned long long)k + 1) : "memory");
+    when[k] = t;
+  }
+}
+
+static int mode_egress(const Args& a) {
+  const size_t n = a.interfere_mib << 20, chunks = n / 1024;
+  uint8_t *d, *h_in, *h_out, *hm, *hm_dev;
+  OK(cudaMalloc(&d, 2 * n));
+  OK(cudaHostAlloc(&h_in, n, cudaHostAllocDefault));
+  OK(cudaHostAlloc(&h_out, n, cudaHostAllocDefault));
+  OK(cudaHostAlloc(&hm, n, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&hm_dev, hm, 0));
+  uint8_t ks[16];
+  fresh(ks, 16);
+  Gen gen(ks);
+  generate(gen, hm, n, a.gen_threads, cpus);
+  generate(gen, h_in, n, a.gen_threads, cpus);
+  uint4* dout;
+  OK(cudaMalloc(&dout, chunks * 16));
+  cudaStream_t s_up, s_down, s_fold;
+  OK(cudaStreamCreateWithFlags(&s_up, cudaStreamNonBlocking));
+  OK(cudaStreamCreateWithFlags(&s_down, cudaStreamNonBlocking));
+  OK(cudaStreamCreateWithFlags(&s_fold, cudaStreamNonBlocking));
+  Timer up, down, fold;
+  auto gbs = [&](const std::vector<double>& ms) { return n / (median(ms) * 1e-3) / 1e9; };
+  // arms: 0 D2H alone, 1 H2D alone, 2 both, 3 fold alone, 4 fold beside D2H
+  std::vector<double> d2h[5], h2d[5], fms[5];
+  for (int arm = 0; arm < 5; ++arm)
+    for (int r = 0; r < a.reps; ++r) {
+      OK(cudaDeviceSynchronize());
+      const bool dn = arm == 0 || arm == 2 || arm == 4, upl = arm == 1 || arm == 2, fo = arm >= 3;
+      if (fo) {
+        OK(cudaEventRecord(fold.a, s_fold));
+        fold_chunks<<<8, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout);
+        OK(cudaEventRecord(fold.b, s_fold));
+      }
+      if (dn) {
+        OK(cudaEventRecord(down.a, s_down));
+        OK(cudaMemcpyAsync(h_out, d, n, cudaMemcpyDeviceToHost, s_down));
+        OK(cudaEventRecord(down.b, s_down));
+      }
+      if (upl) {
+        OK(cudaEventRecord(up.a, s_up));
+        OK(cudaMemcpyAsync(d + n, h_in, n, cudaMemcpyHostToDevice, s_up));
+        OK(cudaEventRecord(up.b, s_up));
+      }
+      OK(cudaDeviceSynchronize());
+      if (dn) d2h[arm].push_back(down.ms());
+      if (upl) h2d[arm].push_back(up.ms());
+      if (fo) fms[arm].push_back(fold.ms());
+    }
+  std::string j = "{\"bytes\":" + std::to_string(n) + ",\"d2h_alone_gbs\":" + num(gbs(d2h[0])) +
+                  ",\"h2d_alone_gbs\":" + num(gbs(h2d[1])) + ",\"duplex_d2h_gbs\":" + num(gbs(d2h[2])) +
+                  ",\"duplex_h2d_gbs\":" + num(gbs(h2d[2])) + ",\"fold_alone_gbs\":" + num(gbs(fms[3])) +
+                  ",\"fold_beside_d2h_gbs\":" + num(gbs(fms[4])) + ",\"d2h_beside_fold_gbs\":" + num(gbs(d2h[4]));
+  const double window_ns = (a.deadline_us > 0 ? a.deadline_us : 1200) * 1e3;
+  const uint32_t writes = 256;
+  const uint64_t period_ns = (uint64_t)(window_ns / writes);
+  unsigned long long *word, *word_dev;
+  OK(cudaHostAlloc(&word, 64, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&word_dev, word, 0));
+  uint64_t* when_dev;
+  OK(cudaMalloc(&when_dev, writes * 8));
+  std::vector<uint64_t> when(writes);
+  std::vector<double> landed(writes);
+  j += ",\"timing\":[";
+  for (int busy = 0; busy < 2; ++busy) {
+    std::vector<double> spread, jitter;
+    for (int r = 0; r < a.reps; ++r) {
+      OK(cudaDeviceSynchronize());
+      __atomic_store_n(word, 0ull, __ATOMIC_RELEASE);
+      if (busy) {
+        OK(cudaMemcpyAsync(h_out, d, n, cudaMemcpyDeviceToHost, s_down));
+        OK(cudaMemcpyAsync(d + n, h_in, n, cudaMemcpyHostToDevice, s_up));
+      }
+      egress_clock<<<1, 1, 0, s_fold>>>(word_dev, period_ns, writes, when_dev);
+      uint64_t seen = 0;
+      for (uint64_t polls = 0; seen < writes && polls < (1ull << 34); ++polls) {
+        const uint64_t v = __atomic_load_n(word, __ATOMIC_ACQUIRE);
+        if (v == seen) continue;
+        const double t = now_s();
+        for (; seen < v && seen < writes; ++seen) landed[seen] = t;
+      }
+      OK(cudaDeviceSynchronize());
+      OK(cudaMemcpy(when.data(), when_dev, writes * 8, cudaMemcpyDeviceToHost));
+      if (seen < writes) return fail("an egress write never landed");
+      std::vector<double> off(writes);
+      for (uint32_t k = 0; k < writes; ++k) off[k] = (landed[k] - landed[0]) * 1e9 - (double)(when[k] - when[0]);
+      const double mid = median(off);
+      for (double& x : off) x -= mid;
+      std::sort(off.begin(), off.end());
+      spread.push_back(off[writes * 99 / 100] - off[writes / 100]);
+      double s2 = 0;
+      for (double x : off) s2 += x * x;
+      jitter.push_back(std::sqrt(s2 / writes));
+    }
+    const double sp = median(spread);
+    j += std::string(busy ? "," : "") + "{\"busy\":" + (busy ? "true" : "false") + ",\"writes\":" +
+         std::to_string(writes) + ",\"period_ns\":" + std::to_string(period_ns) + ",\"spread_p1_p99_ns\":" +
+         stats(spread) + ",\"jitter_rms_ns\":" + stats(jitter) + ",\"bits_per_write\":" +
+         num(std::log2(window_ns / std::max(sp, 1.0))) + "}";
+  }
+  j += "],\"window_ns\":" + num(window_ns) + "}";
+  write(a, "egress", j);
+  cudaFree(d);
+  cudaFree(dout);
+  cudaFree(when_dev);
+  cudaFreeHost(h_in);
+  cudaFreeHost(h_out);
+  cudaFreeHost(hm);
+  cudaFreeHost(word);
+  return 0;
 }
 
 }  // namespace st
@@ -2165,6 +2502,9 @@ int main(int argc, char** argv) {
     else if (k == "--deadline-us") a.deadline_us = std::stod(v());
     else if (k == "--mps-dir") a.mps_dir = v();
     else if (k == "--live-slot-kib") a.live_slot = std::stoull(v()) << 10;
+    else if (k == "--temporal") a.temporal = true;
+    else if (k == "--dma-piece-kib") a.dma_piece = std::stoull(v()) << 10;
+    else if (k == "--dma-streams") a.dma_streams = std::stoi(v());
     else if (k == "--mps-challenger-pct") a.mps_challenger_pct = std::stoi(v());
     else if (k == "--mps-prover-pct") a.mps_prover_pct = std::stoi(v());
     else if (k == "--fold-ctas") {
@@ -2186,9 +2526,18 @@ int main(int argc, char** argv) {
   st::cpus = st::core_order();
   if (!a.mps_dir.empty()) setenv("CUDA_MPS_PIPE_DIRECTORY", a.mps_dir.c_str(), 1);
   st::Two* two = nullptr;
+  st::Attack* attack = nullptr;
   pid_t child = -1;
+  if (a.mode == "attack") {
+    void* p = mmap(nullptr, sizeof(st::Attack), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (p == MAP_FAILED) return st::fail("mmap");
+    attack = new (p) st::Attack();
+    fflush(stdout);
+    child = fork();
+    if (child < 0) return st::fail("fork");
+  }
   if (a.mode == "foldtwo") {
-    if (a.live < 1 || a.live + 3 > (int)st::cpus.size() || !st::slots_ok(a) ||
+    if (a.live < 1 || a.live + 3 > (int)st::cpus.size() || !st::slots_ok(a) || !st::carry_ok(a) ||
         std::any_of(a.fold_ctas.begin(), a.fold_ctas.end(), [](int c) { return c < 1 || c > 64; })) {
       fprintf(stderr, "foldtwo takes --live G, G + 3 CPUs, --fold-ctas from 1 to 64 and sizes in whole slots\n");
       return 2;
@@ -2219,6 +2568,8 @@ int main(int argc, char** argv) {
   if (a.mode == "fold") return st::mode_fold(a);
   if (a.mode == "foldlive") return st::mode_fold_live(a);
   if (a.mode == "foldtwo") return child == 0 ? st::fold_two_challenger(a, *two) : st::fold_two_prover(a, *two, child);
+  if (a.mode == "attack") return child == 0 ? st::attack_challenger(*attack) : st::attack_prover(a, *attack, child);
+  if (a.mode == "egress") return st::mode_egress(a);
   fprintf(stderr, "unknown mode %s\n", a.mode.c_str());
   return 2;
 }
