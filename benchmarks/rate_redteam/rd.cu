@@ -41,7 +41,7 @@ __global__ void fill_kernel(uint4* buf, size_t n16) {
 // cycles > 0: run for that many SM clocks; cycles < 0: exactly -cycles steps. counts[0] bytes read, counts[1] words.
 // Needs VL * (read threads) <= n16, so each wrap is one subtraction.
 template <int K>
-__global__ void __launch_bounds__(THREADS) rd_kernel(int rw, long long cycles, uint64_t tstep,
+__global__ void __launch_bounds__(THREADS) rd_kernel(int rw, int enc, long long cycles, uint64_t tstep,
                                                      const uint4* __restrict__ buf, size_t n16,
                                                      unsigned long long* counts, uint64_t* out_e, uint32_t* out_r) {
   const int warp = threadIdx.x >> 5;
@@ -70,7 +70,7 @@ __global__ void __launch_bounds__(THREADS) rd_kernel(int rw, long long cycles, u
     }
     atomicAdd(&counts[0], n * VL * 16);
     if (out_r) out_r[me] = acc;
-  } else {
+  } else if (enc) {
     uint64_t y[UE], t[UE];
 #pragma unroll
     for (int u = 0; u < UE; ++u) {
@@ -97,7 +97,7 @@ struct Run {
 
 template <int K>
 Run launch(int grid, int rw, long long cycles, uint64_t tstep, const uint4* buf, size_t n16, uint64_t* out_e,
-           uint32_t* out_r) {
+           uint32_t* out_r, int enc = 1) {
   unsigned long long* counts;
   cudaMalloc(&counts, 2 * sizeof(unsigned long long));
   cudaMemset(counts, 0, 2 * sizeof(unsigned long long));
@@ -105,7 +105,7 @@ Run launch(int grid, int rw, long long cycles, uint64_t tstep, const uint4* buf,
   cudaEventCreate(&a);
   cudaEventCreate(&b);
   cudaEventRecord(a);
-  rd_kernel<K><<<grid, THREADS>>>(rw, cycles, tstep, buf, n16, counts, out_e, out_r);
+  rd_kernel<K><<<grid, THREADS>>>(rw, enc, cycles, tstep, buf, n16, counts, out_e, out_r);
   cudaEventRecord(b);
   cudaEventSynchronize(b);
   float ms = 0;
@@ -197,11 +197,28 @@ int sweep(uint64_t tstep, const char* out, long long cycles, size_t mib) {
   return cudaGetLastError() ? 3 : 0;
 }
 
+// One launch at split rw (enc = 0: the other warps exit at once), for a profiler to count DRAM bytes against ours.
+template <int K>
+int one(uint64_t tstep, int rw, int enc, long long cycles, size_t mib) {
+  int dev = 0, sms = 0, per_sm = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, rd_kernel<K>, THREADS, 0);
+  const size_t n16 = (mib << 20) / sizeof(uint4);
+  uint4* buf = make_buf(n16);
+  if (!buf) return 4;
+  const Run r = launch<K>(sms * per_sm, rw, cycles, tstep, buf, n16, nullptr, nullptr, enc);
+  printf("one rw %d enc %d: %.3f ms, counted %.6e B (%.4e B/s), %.4e words/s\n", rw, enc, r.ms,
+         r.bytes_per_s * r.ms * 1e-3, r.bytes_per_s, r.words_per_s);
+  cudaFree(buf);
+  return cudaGetLastError() ? 3 : 0;
+}
+
 }  // namespace rd
 
 int main(int argc, char** argv) {
   if (argc < 5) {
-    fprintf(stderr, "usage: rd gate|sweep K KEYFILE OUT [MiB] [CYCLES]\n");
+    fprintf(stderr, "usage: rd gate|sweep K KEYFILE OUT [MiB] [CYCLES] | rd one K KEYFILE RW ENC MiB CYCLES\n");
     return 64;
   }
   const std::string mode = argv[1];
@@ -216,8 +233,12 @@ int main(int argc, char** argv) {
   if (!kf || wc_set_key(c, k, tau)) return 66;
   const size_t mib = argc > 5 ? atoll(argv[5]) : 4096;
   const long long cycles = argc > 6 ? atoll(argv[6]) : 400000000LL;
-#define RD_CASE(K) \
-  if (k == K) return mode == "gate" ? rd::gate<K>(tstep, argv[4]) : rd::sweep<K>(tstep, argv[4], cycles, mib);
+  if (mode == "one" && argc < 8) return 64;
+#define RD_CASE(K)                                                                                           \
+  if (k == K)                                                                                                \
+    return mode == "one"    ? rd::one<K>(tstep, atoi(argv[4]), atoi(argv[5]), atoll(argv[7]), atoll(argv[6])) \
+           : mode == "gate" ? rd::gate<K>(tstep, argv[4])                                                     \
+                            : rd::sweep<K>(tstep, argv[4], cycles, mib);
   RD_CASE(1) RD_CASE(2) RD_CASE(3)
 #undef RD_CASE
   return 67;
