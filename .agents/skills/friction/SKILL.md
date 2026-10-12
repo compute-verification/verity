@@ -102,6 +102,20 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (11:55 AM PDT): the remote bandwidth audit may derive each pass's seed by Fiat–Shamir, from the window's
+  challenge, the pass index and the previous pass's root. Live coins per pass are impractical at its rate. This
+  narrows 5 Oct's "live coins only" for that protocol, for now. The same message: if a prover's CPUs can compute what
+  a bound receipt needs, they become a resource to exhaust or count, not a break.
+- 2026-10-12 (11:46 AM PDT): a scheme may refuse all-zero weights. "The weights are known" means no bound may assume
+  the weights are incompressible, not that W = 0 must be in a scheme's domain.
+- 2026-10-12 (morning PDT): never assume trusted prover hardware. That rules out confidential computing, a trusted
+  process on the prover's host, and keys kept secret from the prover, so challenges are fresh, not secret.
+- 2026-10-12 (9:13 AM PDT): for memory and bandwidth accounting:
+  - no assumption that the weights are incompressible, since they may be known, even all zeros;
+  - memory exhaustion is over the node's memory (HBM, KV cache included), not the model's size;
+  - no overhead target: as fast as possible subject to 99%;
+  - the guarantee is stated for the whole node.
+
 - 2026-10-11 (8:53 PM PDT, through his console): a part of `check` whose cold run takes more than about 10 minutes may
   run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
   reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
