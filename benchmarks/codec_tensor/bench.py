@@ -83,7 +83,7 @@ class Lib:
         so.wt_mix.argtypes = [q, q, i, v, i, v]
         so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
         so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, i, v, v, i, v, v]
+        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, v, v]
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
         so.wt_set_tag.argtypes = [v, v]
@@ -410,42 +410,42 @@ def parse(spec: str) -> list[tuple[int, ...]]:
     return [tuple(int(v) for v in c.split("x")) for c in spec.split(",") if c]
 
 
-def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketchers: str = "1,4") -> list[tuple[int, int, int, int, int]]:
-    """(D, stages, T, k_s, W): DECODERSxSTAGES (untagged, T = -1), DECODERSxSTAGESxT (tagged: T tag warps from the
-    start, and every other warp tags once its own work is done) or DECODERSxSTAGESx-1xK_SxW (W sketch warps at k_s),
-    each checked against wt_fused_sketch's bounds. `auto`: untagged, the most decoder warps the field's registers allow
-    at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1); tagged, 0 and 2 of those warps tagging
-    from the start, at 4 fewer stages; sketched, for each k_s in `sketch` and W in `sketchers`, W of those warps
-    sketching, at 4 fewer stages. Four or more tag warps (with the decoders that leave) fail some gates in some runs,
-    on early tasks of random CTAs, unexplained, so auto leaves them out."""
-    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 16 - 64 * ks) // (lib.sb + 48)  # noqa: E731
+def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list[tuple[int, int, int, int]]:
+    """(D, stages, T, k_s): DECODERSxSTAGES (untagged, T = -1), DECODERSxSTAGESxT (tagged: T tag warps from the
+    start, and every other warp tags once its own work is done) or DECODERSxSTAGESx-1xK_S (the decoders sketch at
+    k_s, at most `sketch_t` stages), each checked against wt_fused_sketch's bounds. `auto`: untagged, the most decoder
+    warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1); tagged,
+    0 and 2 of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them
+    sketching at 4 and 6 fewer stages. Four or more tag warps (with the decoders that leave) fail some gates in some
+    runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
+    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 128 * ks) // (lib.sb + 40)  # noqa: E731
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":
         cfgs = [(dmax, max(need(dmax), smax(0) - 4), -1), (dmax, max(need(dmax), smax(0) - 6), -1)]
         cfgs += [(dmax - t, max(need(dmax - t), smax(0) - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
         for ks in (int(v) for v in sketch.split(",") if v):
-            cfgs += [(dmax - w, max(need(dmax - w), smax(ks) - 4), -1, ks, w) for w in (int(v) for v in sketchers.split(","))
-                     if dmax - w >= lib.fused_span]
+            cfgs += [(dmax, min(sketch_t, max(need(dmax), smax(ks) - f)), -1, ks) for f in (4, 6)]
     else:
         cfgs = parse(spec)
     out = []
     for c in cfgs:
-        if len(c) not in (2, 3, 5):
-            raise SystemExit(f"fused {c}: DxS, DxSxT or DxSx-1xK_SxW")
-        d, st, t, ks, w = tuple(c) + (-1, 0, 0)[len(c) - 2:]
-        if not (lib.fused_span <= d and d + max(t, 0) + w <= dmax and need(d) <= st <= smax(ks) and t >= -1
-                and (ks == 0) == (w == 0) and ks in (0, 16, 64) and (ks == 0 or t == -1) and 0 <= w <= 4):
-            raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T + W <= {dmax}, "
-                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with 1 <= W <= 4 and no T")
-        if (d, st, t, ks, w) not in out:
-            out.append((d, st, t, ks, w))
+        if len(c) not in (2, 3, 4):
+            raise SystemExit(f"fused {c}: DxS, DxSxT or DxSx-1xK_S")
+        d, st, t, ks = tuple(c) + (-1, 0)[len(c) - 2:]
+        if not (lib.fused_span <= d and d + max(t, 0) <= dmax and need(d) <= st <= smax(ks) and t >= -1
+                and ks in (0, 16, 64) and (ks == 0 or (t == -1 and st <= sketch_t))):
+            raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dmax}, "
+                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T and stages <= "
+                             f"{sketch_t}")
+        if (d, st, t, ks) not in out:
+            out.append((d, st, t, ks))
     return out
 
 
 def fused_name(k: int, cfg) -> str:
     return (f"fused_k{k}_d{cfg[0]}s{cfg[1]}" + (f"t{cfg[2]}" if cfg[2] >= 0 else "")
-            + (f"sk{cfg[3]}w{cfg[4]}" if cfg[3] else ""))
+            + (f"sk{cfg[3]}" if cfg[3] else ""))
 
 
 def host_bytes(t) -> bytes:
@@ -653,7 +653,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         launched = ctypes.c_int(0)
         if mode == 3:
             lib.call("wt_fused_sketch", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, max(cfg[2], 0), None,
-                     None, 0, cfg[3], cfg[4], None, None, sketch_t, ctypes.byref(launched), st)
+                     None, 0, cfg[3], None, None, sketch_t, ctypes.byref(launched), st)
         else:
             lib.call("wt_gemm", mode, None, None, None, mb, n, kd, 0, cfg[0], cfg[1], 0, 0, None,
                      ctypes.byref(launched), st)
@@ -663,7 +663,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         if mode == 3:
             tp = ptr(sk_tags_for(groups)[0]) if cfg[3] else ptr(tags_dev) if cfg[2] >= 0 else None
             lib.call("wt_fused_sketch", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
-                     int(partials), cfg[0], cfg[1], groups, max(cfg[2], 0), ptr(steps), tp, TAG_BASE, cfg[3], cfg[4],
+                     int(partials), cfg[0], cfg[1], groups, max(cfg[2], 0), ptr(steps), tp, TAG_BASE, cfg[3],
                      ptr(sk[cfg[3]]["signs"]) if cfg[3] else None, ptr(skout) if skout is not None else None, sketch_t,
                      None, st)
         else:
@@ -812,7 +812,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             xrp = ptr(xr)
             tp = ptr(tags_dev) if mode == 3 and cfg[2] >= 0 else None
             nt = max(cfg[2], 0) if mode == 3 else 0
-            sks, skw, sgp = (cfg[3], cfg[4], ptr(sk[cfg[3]]["signs"])) if mode == 3 and cfg[3] else (0, 0, None)
+            sks, sgp = (cfg[3], ptr(sk[cfg[3]]["signs"])) if mode == 3 and cfg[3] else (0, None)
             if sks:
                 tp = ptr(sk_tags_for(gr)[0])
 
@@ -821,7 +821,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 if mode == 3:
                     for p in ps:
                         rc |= so.wt_fused_sketch(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, nt, spp, tp,
-                                                 TAG_BASE, sks, skw, sgp, None, sketch_t, None, st)
+                                                 TAG_BASE, sks, sgp, None, sketch_t, None, st)
                 else:
                     for p in ps:
                         rc |= so.wt_gemm(mode, p, xp, yp, mb, n, kd, 0, cfg[0], cfg[1], gr, knob, xrp, None, st)
@@ -899,7 +899,7 @@ def layer_ratios(gemm: dict, batches, ks) -> dict:
                "plain": sum(min(v for a, v in m.items() if a.startswith("plain_")) for m in meds) / native}
         for k in ks:
             kinds = [(f"fused_k{k}", r"_d\d+s\d+$"), (f"fused_k{k}_tagged", r"t\d+$")]
-            kinds += [(f"fused_k{k}_sketch{s}", rf"sk{s}w\d+$") for s in (16, 64)]
+            kinds += [(f"fused_k{k}_sketch{s}", rf"sk{s}$") for s in (16, 64)]
             for label, pat in kinds:
                 arms = [[v for a, v in m.items() if a.startswith(f"fused_k{k}_") and re.search(pat, a)] for m in meds]
                 if all(arms):
@@ -959,7 +959,6 @@ def main() -> int:
     ap.add_argument("--dump", action="store_true",
                     help="after a failed fused gate, rerun it once dumping the MMA warp's operands (WT_DEBUG_DUMP build)")
     ap.add_argument("--sketch", default="", help="k_s values (16, 64) for the sketched fused kernel at k = 1")
-    ap.add_argument("--sketchers", default="1,4", help="sketch warps the auto grid tries")
     ap.add_argument("--sketch-t", type=int, default=8, help="tasks a sketch tile (n = 32 ceil(SB / 512) T bytes)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
@@ -1060,7 +1059,7 @@ def main() -> int:
             for name in a.shapes.split(",") if a.shapes else shapes:
                 n, kd = shapes[name]
                 g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain),
-                              fused_cfgs(lib, a.fused, a.sketch, a.sketchers), *knobs, gate_reps=a.gate_reps,
+                              fused_cfgs(lib, a.fused, a.sketch, a.sketch_t), *knobs, gate_reps=a.gate_reps,
                               dump=a.dump, sketch_t=a.sketch_t)
                 e["gemm"][name] = g
                 res["ok"] &= g.get("ok", False)
@@ -1071,7 +1070,7 @@ def main() -> int:
             for mb, row in e["layer"].items():
                 log(f"layer {lib.name} M={mb} ({'+'.join(e['gemm'])}): "
                     + ", ".join(f"{kk} {v:.3f}" for kk, v in row.items()))
-            cfgs_l = fused_cfgs(lib, a.fused, a.sketch, a.sketchers)
+            cfgs_l = fused_cfgs(lib, a.fused, a.sketch, a.sketch_t)
             for what, count, on in (("commit_step", "tag_blocks", any(c[2] >= 0 for c in cfgs_l)),
                                     ("sketch_commit_step", "sketch_tags", any(c[3] for c in cfgs_l))):
                 if not on:
