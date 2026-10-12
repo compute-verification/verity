@@ -28,6 +28,8 @@
 //           to --piece) is copied once its slots are written; every byte sent is checked against S regenerated from K_s
 //   fold    what a zero-copy absorb with a cheap leaf (each 1 KiB chunk's XOR, fold_chunks) costs the tag pass, over
 //           grids from a few whole SMs to one warp on every SM; every fold checked against the host's
+//   foldlive  the fold of a stream the challenger generates after σ on --live G threads (fold_live waits on each slot's
+//           flag in mapped host memory), on 4 and 8 SMs, over --sizes-mib; every fold checked against S regenerated
 
 #include "tagger.cu"
 
@@ -202,6 +204,41 @@ __global__ void fold_chunks(const uint4* __restrict__ p, uint64_t chunks, uint4*
       v[k] = make_uint4(0, 0, 0, 0);
       if (c0 + k < chunks) {
         const uint4 x = __ldcs(p + (c0 + k) * 64 + lane), y = __ldcs(p + (c0 + k) * 64 + 32 + lane);
+        v[k] = make_uint4(x.x ^ y.x, x.y ^ y.y, x.z ^ y.z, x.w ^ y.w);
+      }
+    }
+#pragma unroll
+    for (int k = 0; k < 4; ++k) {
+#pragma unroll
+      for (int d = 16; d; d >>= 1) {
+        v[k].x ^= __shfl_xor_sync(0xffffffffu, v[k].x, d);
+        v[k].y ^= __shfl_xor_sync(0xffffffffu, v[k].y, d);
+        v[k].z ^= __shfl_xor_sync(0xffffffffu, v[k].z, d);
+        v[k].w ^= __shfl_xor_sync(0xffffffffu, v[k].w, d);
+      }
+      if (lane == 0 && c0 + k < chunks) out[c0 + k] = v[k];
+    }
+  }
+}
+
+// fold_chunks over a stream the host is still writing: a warp reads a chunk group only once flags[slot] (mapped host
+// memory, one per slot_chunks chunks) holds this window's epoch.  slot_chunks is a multiple of 4.
+__global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* __restrict__ out, const uint32_t* flags,
+                          uint64_t slot_chunks, uint32_t epoch) {
+  const uint32_t lane = threadIdx.x & 31;
+  const uint64_t warp = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5;
+  const uint64_t warps = ((uint64_t)gridDim.x * blockDim.x) >> 5;
+  for (uint64_t c0 = 4 * warp; c0 < chunks; c0 += 4 * warps) {
+    const uint32_t* f = flags + c0 / slot_chunks;
+    // bounded (about 16 s of polls), so that a lost flag fails the fold's check instead of hanging the run
+    for (uint32_t seen = 0, tries = 0; seen != epoch && ++tries < (1u << 24);)
+      asm volatile("ld.acquire.sys.global.u32 %0, [%1];" : "=r"(seen) : "l"(f));
+    uint4 v[4];
+#pragma unroll
+    for (int k = 0; k < 4; ++k) {
+      v[k] = make_uint4(0, 0, 0, 0);
+      if (c0 + k < chunks) {
+        const uint4 x = __ldcv(p + (c0 + k) * 64 + lane), y = __ldcv(p + (c0 + k) * 64 + 32 + lane);
         v[k] = make_uint4(x.x ^ y.x, x.y ^ y.y, x.z ^ y.z, x.w ^ y.w);
       }
     }
@@ -1665,6 +1702,117 @@ static int mode_fold(const Args& a) {
   return bad ? fail("a fold or a root") : 0;
 }
 
+// The fold of a live stream: at σ the challenger starts generating S on --live G pinned threads, LIVE_SLOT slots taken
+// in order, each slot's flag (mapped host memory) set to the window's epoch once its bytes are written; fold_live reads
+// each slot zero-copy once its flag is set, beside the tag pass and then alone, for each size in --sizes-mib and for 4
+// and 8 whole SMs.  The buffer is evicted from the host's caches before σ; every fold is checked against S regenerated
+// from K_s, every root against an untimed pass.
+static int mode_fold_live(const Args& a) {
+  if (a.live < 1 || a.live + 1 > (int)cpus.size()) {
+    fprintf(stderr, "foldlive takes --live G and G + 1 CPUs\n");
+    return 2;
+  }
+  Store E = make_store(a);
+  int lo, hi;
+  OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t s_tag, s_fold;
+  OK(cudaStreamCreateWithPriority(&s_tag, cudaStreamNonBlocking, lo));
+  OK(cudaStreamCreateWithPriority(&s_fold, cudaStreamNonBlocking, hi));
+  pin(cpus[0]);
+  std::vector<std::unique_ptr<Spinner>> gens;
+  for (int t = 0; t < a.live; ++t) gens.emplace_back(new Spinner(cpus[1 + t]));
+  size_t nmax = 0;
+  for (size_t m : a.sizes_mib) nmax = std::max(nmax, m << 20);
+  const size_t smax = nmax / LIVE_SLOT;
+  uint8_t *hm, *hm_dev;
+  uint32_t *flags, *flags_dev;
+  OK(cudaHostAlloc(&hm, nmax, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&hm_dev, hm, 0));
+  OK(cudaHostAlloc(&flags, smax * 4, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&flags_dev, flags, 0));
+  memset(flags, 0, smax * 4);
+  std::unique_ptr<uint8_t, decltype(&free)> regen((uint8_t*)aligned_alloc(4096, nmax), &free);
+  std::vector<uint32_t> ref(nmax / 1024 * 4), got(nmax / 1024 * 4);
+  uint4* dout;
+  OK(cudaMalloc(&dout, nmax / 1024 * 16));
+  uint8_t seed[32], throwaway[32] = {0}, root[64], want[64];
+  fresh(seed, 32);
+  if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
+  std::atomic<uint64_t> next{0};
+  uint32_t epoch = 0;
+  int bad = 0;
+  Timer ft;
+  std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
+                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"runs\":[";
+  bool first = true;
+  for (int ctas : {4, 8})
+    for (size_t m : a.sizes_mib) {
+      const size_t n = m << 20, chunks = n / 1024, slots = n / LIVE_SLOT;
+      std::vector<double> wall, pass, fold_ms, alone_wall, alone_ms;
+      for (int alone = 0; alone < 2; ++alone)
+        for (int r = 0; r < a.windows; ++r) {
+          uint8_t ks[16];
+          fresh(ks, 16);
+          Gen gen(ks);
+          ++epoch;
+          bw_tag_pass(bw::TAG_B3, E.E, a.blocks, throwaway, E.ws, root, s_tag);
+          bw_read_scrub(dev.scrub, SCRUB);
+          const size_t per = (n / a.gen_threads + 63) / 64 * 64;
+          parallel(a.gen_threads, cpus, [&](int t) {
+            if (t * per < n) sg_flush(hm + t * per, std::min(per, n - t * per));
+          });
+          OK(cudaMemsetAsync(dout, 0, chunks * 16, s_fold));
+          OK(cudaStreamSynchronize(s_fold));
+          next.store(0, std::memory_order_release);
+          // σ: from here the window's clock runs.
+          const double t0 = now_s();
+          OK(cudaEventRecord(ft.a, s_fold));
+          fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, flags_dev, LIVE_SLOT / 1024, epoch);
+          OK(cudaEventRecord(ft.b, s_fold));
+          for (auto& g : gens)
+            g->post([&] {
+              for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
+                sg_ctr_vaes_nt(gen.rk, k * (LIVE_SLOT / 16), hm + k * LIVE_SLOT, LIVE_SLOT / 16);
+                __atomic_store_n(flags + k, epoch, __ATOMIC_RELEASE);
+              }
+            });
+          if (!alone) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
+          OK(cudaStreamSynchronize(s_fold));
+          const double t1 = now_s();
+          for (auto& g : gens) g->wait();
+          if (!alone) {
+            float tags_ms = 0, pass_ms = 0;
+            bw_last_pass_ms(&tags_ms, &pass_ms);
+            pass.push_back(pass_ms);
+            bad += memcmp(root, want, 64) != 0;
+          }
+          (alone ? alone_wall : wall).push_back((t1 - t0) * 1e3);
+          (alone ? alone_ms : fold_ms).push_back(ft.ms());
+          generate(gen, regen.get(), n, a.gen_threads, cpus);
+          std::fill(ref.begin(), ref.begin() + chunks * 4, 0);
+          parallel(a.gen_threads, cpus, [&](int t) {
+            for (size_t c = t; c < chunks; c += a.gen_threads)
+              for (size_t w = 0; w < 256; ++w) ref[4 * c + w % 4] ^= ((const uint32_t*)regen.get())[256 * c + w];
+          });
+          OK(cudaMemcpy(got.data(), dout, chunks * 16, cudaMemcpyDeviceToHost));
+          bad += memcmp(got.data(), ref.data(), chunks * 16) != 0;
+        }
+      auto gbs = [&](const std::vector<double>& ms) { return n / (median(ms) * 1e-3) / 1e9; };
+      j += std::string(first ? "" : ",") + "{\"ctas\":" + std::to_string(ctas) + ",\"threads\":1024,\"bytes\":" +
+           std::to_string(n) + ",\"window_ms\":" + stats(wall) + ",\"device_pass_ms\":" + stats(pass) +
+           ",\"fold_ms\":" + stats(fold_ms) + ",\"fold_gbs\":" + num(gbs(fold_ms)) + ",\"alone_window_ms\":" +
+           stats(alone_wall) + ",\"fold_alone_ms\":" + stats(alone_ms) + ",\"fold_alone_gbs\":" + num(gbs(alone_ms)) +
+           "}";
+      first = false;
+    }
+  j += "],\"bad\":" + std::to_string(bad) + "}";
+  write(a, "fold_live", j);
+  cudaFree(dout);
+  cudaFreeHost(hm);
+  cudaFreeHost(flags);
+  return bad ? fail("a live fold or a root") : 0;
+}
+
 }  // namespace st
 
 int main(int argc, char** argv) {
@@ -1714,6 +1862,7 @@ int main(int argc, char** argv) {
   if (a.mode == "window") return st::mode_window(a);
   if (a.mode == "interfere") return st::mode_interfere(a);
   if (a.mode == "fold") return st::mode_fold(a);
+  if (a.mode == "foldlive") return st::mode_fold_live(a);
   fprintf(stderr, "unknown mode %s\n", a.mode.c_str());
   return 2;
 }
