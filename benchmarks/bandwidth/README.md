@@ -13,8 +13,9 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   for every tag, and `Prover.commit(window)` its window under the window's tag: it opens the window
   (`window.open()`, whose record the verifier fsyncs), then always prepares (an untimed pass under a throwaway seed,
   then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed (`window.start()`).
-  `Tagger.device()` is the GPU's id (`audit.device_id`'s 16 bytes, from the driver), for which the store's salt is
-  drawn.
+  `challenger_device(tagger, gpu)` is the id the challenger reads itself (`audit.read_device`: nvidia-smi's `GPU-…`
+  UUID for `gpu`, a MIG slice refused), for which the store's salt is drawn; it refuses a tagger whose CUDA device
+  (`Tagger.device()`, 16 bytes) has another UUID. `gpu.py windows --gpu` names the GPU (`run.sh`: the lease's).
 - A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(state_dir, vk)`
   once, in the challenger's state directory under the name the store gives it (`audit.state_name`), then one
   `audit.ChallengerState(state_dir, vk)` that every tag's
@@ -32,8 +33,8 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
 The store is a generated test store (`reference.block`, the bandwidth vectors' blocks) under P2's geometry at its
 registered point: 2^19 blocks of 2,056 bytes. It is not a P2 encoding. The audit reads only the blocks and their tree
 under `vk`, so a generated store exercises the same work. Its salt is the device's, `audit.draw_salt(secret,
-reference.COMMITMENT, tagger.device())` from a secret drawn fresh in each run and never written out, as the verifier
-requires (`audit.Verifier` refuses any other salt).
+reference.COMMITMENT, device)` for the device the challenger read, from a secret drawn fresh in each run and never
+written out, as the verifier requires (`audit.Verifier` refuses any other salt).
 
 `tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
 of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.

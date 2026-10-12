@@ -456,6 +456,27 @@ def test_a_device_has_one_id_its_gpus_uuid() -> None:
             audit.draw_salt(b"s", com, other)
 
 
+def test_the_challenger_reads_a_devices_id_from_the_driver() -> None:
+    """`read_device` asks nvidia-smi for the GPU's UUID and MIG mode and reads the UUID through `device_id`: a whole GPU
+    (MIG off, or without MIG) gives its 16 bytes; a GPU in MIG mode, a selector naming a slice, another spelling, or
+    any answer that is not one row of a UUID and a mode is refused."""
+    uuid = "GPU-7e28035c-3c3b-b7aa-d655-0dad098bab62"
+    calls: list = []
+
+    def smi(out: str):
+        return lambda args: (calls.append(list(args)), out)[1]
+
+    assert audit.read_device("1", smi=smi(f"{uuid}, Disabled\n")) == audit.device_id(uuid)
+    assert calls == [["-i", "1", "--query-gpu=uuid,mig.mode.current", "--format=csv,noheader"]]
+    assert audit.read_device(uuid, smi=smi(f"{uuid}, [N/A]\n")) == audit.device_id(uuid)
+    for gpu, out in (("1", f"{uuid}, Enabled\n"), ("1", f"{uuid.upper()}, Disabled\n"), ("1", ""),
+                     ("1", f"{uuid}, Disabled\n{bv.DEVICES[0]}, Disabled\n"), ("1", f"{uuid}\n"),
+                     ("1", f"MIG-{uuid[4:]}, Disabled\n"), ("1", f"{uuid},Disabled\n"),
+                     ("MIG-" + uuid[4:], f"{uuid}, Disabled\n"), ("", f"{uuid}, Disabled\n")):
+        with pytest.raises(ValueError):
+            audit.read_device(gpu, smi=smi(out))
+
+
 def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store, state_of) -> None:
     store, vk = big_store
     params = _params("ro-blake3/v1")

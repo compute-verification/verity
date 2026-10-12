@@ -9,8 +9,9 @@
 # the expected roots over the full store and over the pinned vectors' 37 blocks.  Under
 # `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's and keyed BLAKE3's known answers; every tag's roots
 # against the reference with the output buffers poisoned; a control without the tag kernel that must not match), then its
-# timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: the store's salt for the leased GPU and its PoUS
-# leaves under it (the GPU is known only here), then honest windows through `audit.Verifier` at DEADLINE_NS (default the
+# timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: the leased GPU's id, read by the challenger from
+# nvidia-smi and checked against the tagger's device, the store's salt for it and its PoUS leaves under it (the GPU is
+# known only here), then honest windows through `audit.Verifier` at DEADLINE_NS (default the
 # largest it allows), each after an untimed warm pass and a read scrub, and windows that tag only part of the store,
 # every window recorded in the store's one challenger state.  After the lease:
 # `summarize.py`.
@@ -50,7 +51,7 @@ EOF
   "$S/bwtag" --out "$O" --blocks "${A[0]}" --reps "${REPS:-100}" --seed "${A[1]}" --small-seed "${A[2]}" \
     "${A[@]:3}" || rc=$?
   [ $rc = 0 ] || { echo "bwtag exited $rc: nothing more runs"; exit $rc; }
-  "$PY" gpu.py windows --lib "$S/libbwtag.so" --blocks "${A[0]}" --workers "${WORKERS:-32}" \
+  "$PY" gpu.py windows --lib "$S/libbwtag.so" --gpu "$UUID" --blocks "${A[0]}" --workers "${WORKERS:-32}" \
     --windows "${WINDOWS:-20}" ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"} --state-dir "$O/challenger" \
     --out "$O/windows.json" > "$O/windows.jsonl"
   exit 0

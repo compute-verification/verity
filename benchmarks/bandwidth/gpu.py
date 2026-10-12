@@ -12,11 +12,13 @@
 `PATH(c)` read from the tree levels the pass left in the workspace.  `store_tree` is the store's own tree under `vk`
 (`pous.verifier.MerkleTree`), which the prover keeps from setup.  The checks are the core verifier's (`audit.Window`).
 
-    python gpu.py windows --lib libbwtag.so --blocks N --state-dir challenger --out windows.json [--workers 32]
+    python gpu.py windows --lib libbwtag.so --gpu GPU-… --blocks N --state-dir challenger --out windows.json \
+        [--workers 32]
 
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
-`--deadline-ns` (default the largest `audit.Params` allows).  The store is this device's: a fresh secret, never written
-out, draws its salt for the GPU the tagger runs on (`Tagger.device`, `audit.draw_salt` under `reference.COMMITMENT`) and
+`--deadline-ns` (default the largest `audit.Params` allows).  The store is this device's: the challenger reads the id
+of `--gpu` from the driver itself (`challenger_device`: `audit.read_device`, then the tagger must run on that GPU), and
+a fresh secret, never written out, draws the store's salt for it (`audit.draw_salt` under `reference.COMMITMENT`) and
 every window's key; the store's leaves under that salt are computed here (`reference.store_leaves`, on `--workers`
 processes), and the store's one challenger state is made in the challenger's state directory, `--state-dir`, under the
 name the store gives it (`audit.state_name`).  Then negative controls that tag only part of the
@@ -128,7 +130,8 @@ class Tagger:
         return tags_ms.value, pass_ms.value
 
     def device(self) -> bytes:
-        """The id of the device the tagger runs on (`audit.device_id`): its GPU's 16-byte UUID, from the driver."""
+        """The UUID CUDA gives the device the tagger runs on (`cudaDeviceProp.uuid`, a MIG slice's own if it runs on
+        one): the prover's word, which the challenger checks against the id it reads (`challenger_device`)."""
         out = ctypes.create_string_buffer(audit.DEVICE_BYTES)
         self._ok(self.lib.bw_device_uuid(out), "device UUID")
         return out.raw
@@ -251,9 +254,20 @@ def uuid_text(device: bytes) -> str:
     return f"GPU-{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
 
 
+def challenger_device(tagger: Tagger, gpu: str) -> bytes:
+    """The device the windows audit, as the challenger reads it on this node (`audit.read_device`: nvidia-smi's
+    `GPU-…` UUID for `gpu`, a MIG slice refused), refused unless the tagger runs on that GPU: the UUID CUDA gives the
+    tagger's device (`Tagger.device`) must be the same 16 bytes."""
+    device = audit.read_device(gpu)
+    ran = tagger.device()
+    if ran != device:
+        raise TaggerError(f"the tagger runs on device {ran.hex()}, not on {uuid_text(device)}, the challenger's")
+    return device
+
+
 def _windows(a: argparse.Namespace) -> dict:
     t = Tagger(a.lib)
-    device = t.device()
+    device = challenger_device(t, a.gpu)
     secret = secrets.token_bytes(32)
     salt = audit.draw_salt(secret, COMMITMENT, device)
     store_leaves = reference.store_leaves(a.blocks, salt, a.workers)
@@ -307,6 +321,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     w = sub.add_parser("windows", help="honest windows and skip controls through audit.Verifier")
     w.add_argument("--lib", type=Path, required=True)
+    w.add_argument("--gpu", required=True,
+                   help="the GPU the windows audit, as nvidia-smi's -i takes it (run.sh: the lease's GPU_LEASE_UUID)")
     w.add_argument("--blocks", type=int, required=True)
     w.add_argument("--workers", type=int, default=1, help="processes for the store's leaves")
     w.add_argument("--samples", type=int, default=audit.SAMPLES)

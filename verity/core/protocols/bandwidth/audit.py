@@ -1,6 +1,7 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
-a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`), so devices holding one `W` hold
-different stores, and the verifier refuses a store whose salt is not its device's (`Verifier`).
+a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`, which the challenger reads from
+the driver itself, `read_device`), so devices holding one `W` hold different stores, and the verifier refuses a store
+whose salt is not its device's (`Verifier`).
 
 1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk
    (`Window.open`); then it derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and
@@ -31,6 +32,7 @@ import math
 import os
 import re
 import secrets
+import subprocess
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -98,6 +100,34 @@ def device_id(uuid: str) -> bytes:
     if m is None:
         raise ValueError("a GPU's id is its UUID as nvidia-smi prints it, GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
     return bytes.fromhex("".join(m.groups()))
+
+
+MIG_OFF = ("Disabled", "[N/A]")
+"""nvidia-smi's `mig.mode.current` for a GPU that is not split into MIG slices: off, or a GPU without MIG."""
+
+
+def nvidia_smi(args: Sequence[str]) -> str:
+    """nvidia-smi's output for `args`, from the driver of the node this runs on."""
+    return subprocess.run(["nvidia-smi", *args], check=True, capture_output=True, text=True).stdout
+
+
+def read_device(gpu: str, *, smi: Callable[[Sequence[str]], str] | None = None) -> bytes:
+    """The id of GPU `gpu` as the challenger reads it on the GPU's node: the UUID the driver reports, `GPU-…` as
+    nvidia-smi prints it (`smi`, by default `nvidia_smi`), through `device_id`.  `gpu` is what nvidia-smi's `-i` takes:
+    an index, the GPU's UUID or its PCI bus id.  A MIG slice is refused, whether `gpu` names one or the GPU is in MIG
+    mode, whose CUDA devices are its slices, each with a UUID of its own: a slice is not a device."""
+    if type(gpu) is not str or not gpu or gpu.startswith("MIG-"):
+        raise ValueError(f"{gpu!r} names no whole GPU")
+    rows = (smi or nvidia_smi)(["-i", gpu, "--query-gpu=uuid,mig.mode.current", "--format=csv,noheader"]).splitlines()
+    if len(rows) != 1:
+        raise ValueError(f"nvidia-smi gives {len(rows)} GPUs for {gpu!r}, not one")
+    fields = rows[0].split(", ")
+    if len(fields) != 2:
+        raise ValueError(f"nvidia-smi's row for {gpu!r} is not a UUID and a MIG mode: {rows[0]!r}")
+    uuid, mig = fields
+    if mig not in MIG_OFF:
+        raise ValueError(f"{uuid} is in MIG mode ({mig}): its CUDA devices are slices, and a slice is not a device")
+    return device_id(uuid)
 
 
 def draw_salt(source: bytes, commitment: bytes, device: bytes) -> bytes:

@@ -76,8 +76,12 @@ commitment is never audited as this device's (`test_a_store_not_salted_for_its_d
 **The device's id** is the 16 bytes of its GPU's UUID, nothing else: `draw_salt` refuses any other value, and
 `audit.device_id` reads it only from the one spelling nvidia-smi prints, `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in
 lowercase hex, refusing uppercase, missing dashes, braces, a MIG instance's id and anything else. So one GPU has one id
-and one salt. The challenger reads the id on the device's node, from the NVIDIA driver (`cudaDeviceProp.uuid`, which
-`benchmarks/bandwidth`'s `Tagger.device()` returns, or nvidia-smi through NVML), for the GPU it then audits. Nothing on
+and one salt. The challenger reads the id itself, on the device's node, from the NVIDIA driver: `audit.read_device(gpu)`
+asks nvidia-smi (NVML) for the GPU's UUID and MIG mode, reads the `GPU-…` string through `device_id`, and refuses a MIG
+slice, whether the selector names one or the GPU is in MIG mode (its CUDA devices are then slices, each with a UUID of
+its own). The prover's word is only checked against it: `benchmarks/bandwidth` refuses a tagger whose CUDA device
+(`cudaDeviceProp.uuid`, `Tagger.device()`) has another UUID (`gpu.challenger_device`;
+`test_the_challenger_reads_a_devices_id_from_the_driver`, `test_the_challenger_reads_the_device_it_audits`). Nothing on
 the chip signs it: the verifier trusts the id because it trusts the host the challenger runs on (`trusted-nebius-host`,
 §5) to report the UUID of the GPU it audits. A host that reported another GPU's id would get that GPU's store, and two
 GPUs would answer from one store. The GPU's confidential-computing attestation could sign the UUID with a key in the
@@ -397,7 +401,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 
 - `tags.py`: `get(name)`, each construction's `keyed(σ)(j, block)`, `certified`, `guess`, `info_bits`; the tag tree
   (`leaves`).
-- `audit.py`: a device's id and salt (`device_id(uuid)`, `draw_salt(source, commitment, device)`), the prover's
+- `audit.py`: a device's id and salt (`device_id(uuid)`, `read_device(gpu)` from nvidia-smi,
+  `draw_salt(source, commitment, device)`), the prover's
   reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
   `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(state_dir, vk)` once, then
   `ChallengerState(state_dir, vk)`, the file `state_name(vk)` in the challenger's state directory, shared by every
@@ -408,7 +413,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
   ids and salts, window seeds and samples over the first device's store, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
-  (`gpu.py`: `Tagger.device()` is the GPU's id; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
+  (`gpu.py`: `challenger_device(tagger, gpu)` is the id the challenger reads, refused unless `Tagger.device()`, the
+  tagger's CUDA device, is that GPU; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
   `Opening` this verifier checks; `Prover(tagger, store, blocks, scrub)` is a store's one prover for every tag, and
   `commit(window)` opens the window, prepares, then takes `σ` and commits; `windows` runs every window of every tag through it and
   through the store's one challenger state), its Python twins
