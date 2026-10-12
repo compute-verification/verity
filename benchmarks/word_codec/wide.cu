@@ -89,6 +89,11 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #if (WW_KW != 1 && WW_KW != 2) || WW_KW < WW_TB
 #error "WW_KW is 1 or 2, and at least WW_TB"
 #endif
+// WW_SKEND = 1: the fused GEMM sums its warps' sketches (and hashes them) after the GEMM rather than before the decode,
+// so no warp waits at a barrier for the others' records before it decodes its own.
+#ifndef WW_SKEND
+#define WW_SKEND 0
+#endif
 
 namespace ww {
 
@@ -1078,7 +1083,8 @@ __device__ __forceinline__ void pair_sync() {
 // task i: each warp's mma.m16n8k32.s8 over its record against `signs` (`wide_sketch.sign_fragments`) before the
 // decode, the four accumulators summed in shared memory, and the tile's 16 vectors at sk[256 · blockIdx.x …] when sk is
 // non-null. SK = 2: warp 0 also hashes them (ro-sketch-blake3/v0 under key, vector v of the call at index jbase + v)
-// into tags[8 v …] before its decode, its upper 16 lanes repeating the lower's so the warp never diverges.
+// into tags[8 v …] before its decode, its upper 16 lanes repeating the lower's so the warp never diverges. WW_SKEND:
+// the sum and the hash after the GEMM instead.
 template <int KR, int NB8, bool PARTIALS, bool TAG, int SK>
 __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
@@ -1114,21 +1120,8 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
     const int nb2 = (int)(bx / nk) * RG + pair;
     if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + (bx % nk) * KW + h) * (32ull * L * N);
   }
-  if constexpr (SK > 0) {
-    __shared__ int32_t skp[GEMM_WARPS][16][SK_ROW];
-    int d[2][4] = {};
-    const uint4* sg = signs + (size_t)warp * SK_M * 32 + lane;
-#pragma unroll
-    for (int s = 0; s < SK_M; ++s) {
-      const uint32_t a[4] = {rec_limb(w, 4 * s), rec_limb(w, 4 * s + 1), rec_limb(w, 4 * s + 2), rec_limb(w, 4 * s + 3)};
-      const uint4 b = __ldg(sg + 32 * s);
-      mma_s8(d[0], a, b.x, b.y);
-      mma_s8(d[1], a, b.z, b.w);
-    }
-#pragma unroll
-    for (int c8 = 0; c8 < 2; ++c8)
-#pragma unroll
-      for (int e = 0; e < 4; ++e) skp[warp][g + 8 * (e >> 1)][8 * c8 + 2 * tq + (e & 1)] = d[c8][e];
+  __shared__ int32_t skp[SK > 0 ? GEMM_WARPS : 1][16][SK_ROW];
+  auto sketch_sum = [&] {
     __syncthreads();
     for (int i = threadIdx.x; i < 16 * SK_K; i += GEMM_WARPS * 32) {
       const int r = i / SK_K, c = i % SK_K;
@@ -1151,6 +1144,22 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
         }
       }
     }
+  };
+  if constexpr (SK > 0) {
+    int d[2][4] = {};
+    const uint4* sg = signs + (size_t)warp * SK_M * 32 + lane;
+#pragma unroll
+    for (int s = 0; s < SK_M; ++s) {
+      const uint32_t a[4] = {rec_limb(w, 4 * s), rec_limb(w, 4 * s + 1), rec_limb(w, 4 * s + 2), rec_limb(w, 4 * s + 3)};
+      const uint4 b = __ldg(sg + 32 * s);
+      mma_s8(d[0], a, b.x, b.y);
+      mma_s8(d[1], a, b.z, b.w);
+    }
+#pragma unroll
+    for (int c8 = 0; c8 < 2; ++c8)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) skp[warp][g + 8 * (e >> 1)][8 * c8 + 2 * tq + (e & 1)] = d[c8][e];
+    if constexpr (!WW_SKEND) sketch_sum();
   }
 
   // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
@@ -1258,6 +1267,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
       }
     }
   }
+  if constexpr (SK > 0 && WW_SKEND) sketch_sum();
 }
 
 // ro-sketch-blake3/v0's tags apart from the GEMM: a thread a vector of sk (16 int32 each), vector v's tag (index
@@ -1436,7 +1446,7 @@ extern "C" {
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
   out[7] = KMAX; out[8] = WW_SQR; out[9] = TAG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
-  out[13] = WW_B3U; out[14] = TB; out[15] = KW; out[16] = SK_M;
+  out[13] = WW_B3U; out[14] = TB; out[15] = KW; out[16] = SK_M; out[17] = WW_SKEND;
   return 0;
 }
 

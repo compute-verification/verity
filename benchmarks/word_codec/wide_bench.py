@@ -109,10 +109,10 @@ class WLib:
         so.ww_sketch_commit.argtypes = [v, q, v, v, v]
         so.ww_sketch_leaves.argtypes = [v, q, v, q, q, v, v]
         so.ww_sketch_tree.argtypes = [v, q, v, v]
-        cs = (ctypes.c_int * 17)()
+        cs = (ctypes.c_int * 18)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,
-         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb, self.kw, self.sk_m) = list(cs)
+         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb, self.kw, self.sk_m, self.skend) = list(cs)
         self.field = W.field(self.bits)
         f = self.field
         if (self.limbs, self.payload, self.lane_words, lanes, tiles, self.sk_m) != (
@@ -966,7 +966,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
-             + ("/cc" if lib.cc else "") + ("/b3u2" if lib.b3u else "") + (f"/tb{lib.tb}" if lib.tb > 1 else "") + (f"/kw{lib.kw}" if lib.kw > lib.tb else ""))
+             + ("/cc" if lib.cc else "") + ("/b3u2" if lib.b3u else "") + (f"/tb{lib.tb}" if lib.tb > 1 else "") + (f"/kw{lib.kw}" if lib.kw > lib.tb else "")
+             + ("/skend" if getattr(lib, "skend", 0) else ""))
     out = []
 
     def point(k: int, mb: int, q: dict, y: dict, y_commit: float, suffix: str) -> dict:
