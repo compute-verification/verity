@@ -1,11 +1,13 @@
-"""A stand-in for vLLM's host process, timed per step: a scheduler step over a running batch, then tokenizing a prompt.
+"""A stand-in for vLLM's host process, timed per step: a scheduler step over a running batch, tokenizing a prompt, and
+copying a step's host buffers.
 
     hostproc.py --seconds 5 --label alone [--wait-for FILE]
 
 The scheduler step is pure Python as vLLM's is: each of 256 running requests takes a token, allocates a 16-token KV block
 from a free list when it fills one, and the step flattens input ids, positions and slot mapping for the batch. The
-tokenizer is a greedy longest match of a 4 KiB prompt over a 128k-entry vocabulary, in pure Python. Prints one JSON
-line: steps and the p50/p90/p99 of each part in microseconds.
+tokenizer is a greedy longest match of a 4 KiB prompt over a 128k-entry vocabulary, in pure Python. The copy moves
+16 MiB between buffers (staging inputs and outputs), the part that host DRAM bandwidth bounds. Prints one JSON line:
+steps and the p50/p90/p99 of each part in microseconds.
 """
 
 import argparse
@@ -69,10 +71,13 @@ def main():
                     break
         return out
 
+    src, dst = bytearray(16 << 20), bytearray(16 << 20)
+    src[:] = rng.randbytes(16 << 20)
+
     if a.wait_for:
         while not os.path.exists(a.wait_for):
             time.sleep(0.01)
-    sched, tok = [], []
+    sched, tok, copy = [], [], []
     t_end = time.perf_counter() + a.seconds
     k = 0
     while time.perf_counter() < t_end:
@@ -81,11 +86,14 @@ def main():
         t1 = time.perf_counter()
         tokenize(prompts[k % len(prompts)])
         t2 = time.perf_counter()
+        dst[:] = src
+        t3 = time.perf_counter()
         sched.append(t1 - t0)
         tok.append(t2 - t1)
+        copy.append(t3 - t2)
         k += 1
     print(json.dumps({"label": a.label, "cpu": sorted(os.sched_getaffinity(0)), "steps": k, "schedule_us": percentiles(sched),
-                      "tokenize_us": percentiles(tok)}))
+                      "tokenize_us": percentiles(tok), "copy_us": percentiles(copy)}))
 
 
 if __name__ == "__main__":

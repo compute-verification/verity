@@ -66,27 +66,51 @@ void cpu_keys(int8_t* K, int ks) {  // K[l*256 + j]
     for (int j = 0; j < 256; ++j)
       K[l * 256 + j] = (int8_t)(splitmix64(seed64() ^ (0x6300000000ull + l * 32 + j / 8)) >> (8 * (j % 8)));
 }
-template <int KS>
-static void cpu_sketch_block(const uint8_t* x, __m512i zz, const int8_t* K, int32_t* s) {
-  __m512i acc[KS];
-  for (int l = 0; l < KS; ++l) acc[l] = _mm512_setzero_si512();
+void cpu_mask(const uint32_t* z, uint8_t* M) {
+  uint64_t h = seed64();
+  for (int t = 0; t < 16; ++t) h = splitmix64(h ^ z[t]);
+  for (int i = 0; i < 512; ++i) {
+    uint64_t v = splitmix64(h ^ (0x6d00000000ull + i));
+    memcpy(M + 8 * i, &v, 8);
+  }
+}
+
+// NB blocks at once (NB streams from DRAM), KS sketches each; every key and mask line is read once for all NB blocks
+template <int KS, int NB>
+static void sketch(const uint8_t* const* xb, const uint8_t* M, const int8_t* K, int32_t* const* s) {
+  __m512i acc[NB][KS];
+  for (int b = 0; b < NB; ++b)
+    for (int l = 0; l < KS; ++l) acc[b][l] = _mm512_setzero_si512();
   for (int c = 0; c < 64; c += 4) {
 #pragma GCC unroll 4
     for (int q = 0; q < 4; ++q) {
-      __m512i d = _mm512_xor_si512(_mm512_load_si512(x + 64 * (c + q)), zz);
+      const __m512i m = _mm512_load_si512(M + 64 * (c + q));
+#pragma GCC unroll 4
+      for (int b = 0; b < NB; ++b) {
+        const __m512i d = _mm512_xor_si512(_mm512_load_si512(xb[b] + 64 * (c + q)), m);
 #pragma GCC unroll 16
-      for (int l = 0; l < KS; ++l) acc[l] = _mm512_dpbusd_epi32(acc[l], d, _mm512_load_si512(K + l * 256 + 64 * q));
+        for (int l = 0; l < KS; ++l) acc[b][l] = _mm512_dpbusd_epi32(acc[b][l], d, _mm512_load_si512(K + l * 256 + 64 * q));
+      }
     }
   }
-  for (int l = 0; l < KS; ++l) s[l] = _mm512_reduce_add_epi32(acc[l]);
+  for (int b = 0; b < NB; ++b)
+    for (int l = 0; l < KS; ++l) s[b][l] = _mm512_reduce_add_epi32(acc[b][l]);
 }
 
-void cpu_group(const uint8_t* x, const uint32_t* z, uint64_t zseq, uint64_t group, const int8_t* K, int ks,
-                      uint8_t leaf[32], int32_t* sk /* 16 * ks */) {
-  __m512i zz = _mm512_loadu_si512(z);
-  for (int b = 0; b < 16; ++b)
-    if (ks == 16) cpu_sketch_block<16>(x + 4096 * b, zz, K, sk + 16 * b);
-    else cpu_sketch_block<4>(x + 4096 * b, zz, K, sk + 4 * b);
+void cpu_group(const uint8_t* x, const uint8_t* M, uint64_t zseq, uint64_t group, const int8_t* K, int ks,
+               uint8_t leaf[32], int32_t* sk) {
+  if (ks == 4)
+    for (int i = 0; i < 4; ++i) {  // blocks i, i + 4, i + 8, i + 12 together: four 16 KiB streams
+      const uint8_t* xb[4] = {x + 4096 * i, x + 4096 * (i + 4), x + 4096 * (i + 8), x + 4096 * (i + 12)};
+      int32_t* s[4] = {sk + 4 * i, sk + 4 * (i + 4), sk + 4 * (i + 8), sk + 4 * (i + 12)};
+      sketch<4, 4>(xb, M, K, s);
+    }
+  else
+    for (int b = 0; b < 16; ++b) {
+      const uint8_t* xb[1] = {x + 4096 * b};
+      int32_t* s[1] = {sk + 16 * b};
+      sketch<16, 1>(xb, M, K, s);
+    }
   uint8_t msg[32 + 16 + 16 * 16 * 4];
   memcpy(msg, SEED, 32);
   memcpy(msg + 32, &group, 8);

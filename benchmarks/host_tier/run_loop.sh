@@ -13,7 +13,7 @@
 # run_pcie.sh); then hostproc.py alone and beside the loop, the adversary, and the GPUs' receipts alone.
 # All host-tier memory is on NUMA node GPU_NODE (0), the node of the worker CPUs: one socket's DRAM.
 # Env: NGPU (1), REPS (2), SECONDS_EACH (3), LOOP_GRID (32), WORKERS (52-95), HOST_CPUS (GPU driver threads, 48,49),
-#      PROBE_CPU (50), GPU_NODE (0).
+#      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (3), GPU_NODE (0).
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate16/, gate4/, gates.jsonl, loop.jsonl, pcie.jsonl,
 # dram.jsonl, hostproc.jsonl.
 set -uo pipefail
@@ -57,13 +57,13 @@ if [ "${1:-}" = leased ]; then
       wait; tee -a "$O/dram.jsonl" < "$B/d.json"
     done
   done
-  probe() { taskset -c "$PR" python3 hostproc.py --seconds "$S" "$@" | tee -a "$O/hostproc.jsonl"; }
-  for r in $(seq "${REPS:-2}"); do
+  probe() { taskset -c "$PR" python3 hostproc.py --seconds "${PROBE_SECONDS:-5}" "$@" | tee -a "$O/hostproc.jsonl"; }
+  for r in $(seq "${PROBE_REPS:-3}"); do
     probe --label alone
     for spec in "honest:--gpus $N --grid $G --cpus $W --ks 4" "adv:--gpus 0 --adv-cpus $W" "gpu:--gpus $N --grid $G"; do
       rm -f "$B/go"
       # shellcheck disable=SC2086
-      L ${spec#*:} --seconds $((S + 2)) --go-file "$B/go" --label "probe-${spec%%:*}" >> "$O/loop.jsonl" &
+      L ${spec#*:} --seconds $((${PROBE_SECONDS:-5} + 2)) --go-file "$B/go" --label "probe-${spec%%:*}" >> "$O/loop.jsonl" &
       probe --label "beside-${spec%%:*}" --wait-for "$B/go"
       wait
     done

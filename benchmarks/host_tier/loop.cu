@@ -9,10 +9,12 @@
 // --gpus N streams from the first N visible GPUs only (0: the CPUs alone); GPU d's driver thread runs on the d-th CPU
 // of --host-cpus if given. CPU lists take lo-hi:step. --go-file F is created when the timed phase starts.
 //
-// Receipts (measurement constructions, not certified ones; reference.py recomputes both):
-//   gpu  r(b) = (sum_i (w_i ^ z_{i mod 16}) k_i) | (sum_i (w_i ^ z_{i mod 16}) k'_i) << 32, over the block's 1,024 u32
-//        words, mod 2^32 each, keys from the seed.
-//   cpu  s_l(b) = sum_j K_l[j mod 256] (x_j ^ zb_{j mod 64}) for l < KS, over the block's 4,096 bytes (u8 x, s8 K: VNNI),
+// Receipts (measurement constructions, not certified ones; reference.py recomputes both). Both XOR the block with a
+// 4 KiB mask M expanded from all of z (receipt.h's cpu_mask), so that no precomputation smaller than the block answers
+// a fresh z (with z itself repeating every 64 bytes, the coefficients of z's bits would be 2-3.5 KiB a block):
+//   gpu  r(b) = (sum_i (w_i ^ M_i) k_i) | (sum_i (w_i ^ M_i) k'_i) << 32, over the block's 1,024 u32 words, mod 2^32
+//        each, keys from the seed.
+//   cpu  s_l(b) = sum_j K_l[j mod 256] (x_j ^ M_j) for l < KS, over the block's 4,096 bytes (u8 x, s8 K: VNNI),
 //        and per 16 blocks a leaf SHA-256(seed || group || z sequence || the 16 x KS sketches, int32 LE).
 // z here is the GPU's fold of its last chunk's receipts, standing in for the PoUW tile output the design binds.
 // --gate DIR: compute the first blocks' receipts with z0 on GPU 0 and CPU thread 0, write DIR/gate.json, and exit.
@@ -89,12 +91,25 @@ struct ZSlot {  // written by a GPU over PCIe, read by host threads: a seqlock, 
   uint8_t pad[56];
 };
 
+__device__ __host__ inline uint64_t mix64(uint64_t x) {
+  x += 0x9e3779b97f4a7c15ull;
+  x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+  x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+  return x ^ (x >> 31);
+}
+
 __global__ void stream_receipts(const uint4* __restrict__ host, size_t nblocks, const uint32_t* __restrict__ keys,
-                                const uint32_t* __restrict__ z, unsigned long long* __restrict__ out) {
+                                const uint32_t* __restrict__ z, uint64_t seed, unsigned long long* __restrict__ out) {
   const int lane = threadIdx.x & 31;
   const size_t warp = ((size_t)blockIdx.x * blockDim.x + threadIdx.x) >> 5, nw = ((size_t)gridDim.x * blockDim.x) >> 5;
-  uint32_t zc[4];
-  for (int c = 0; c < 4; ++c) zc[c] = z[(4 * lane + c) & 15];
+  uint64_t h = seed;
+  for (int t = 0; t < 16; ++t) h = mix64(h ^ z[t]);
+  uint4 mk[8];  // this lane's words of the mask: u32 words 128 l + 4 lane + c
+#pragma unroll
+  for (int l = 0; l < 8; ++l) {
+    const uint64_t a = mix64(h ^ (0x6d00000000ull + 64 * l + 2 * lane)), b = mix64(h ^ (0x6d00000000ull + 64 * l + 2 * lane + 1));
+    mk[l] = make_uint4((uint32_t)a, (uint32_t)(a >> 32), (uint32_t)b, (uint32_t)(b >> 32));
+  }
   for (size_t b = warp; b < nblocks; b += nw) {
     const uint4* p = host + b * 256;
     uint4 v[8];
@@ -104,7 +119,7 @@ __global__ void stream_receipts(const uint4* __restrict__ host, size_t nblocks, 
 #pragma unroll
     for (int l = 0; l < 8; ++l) {
       const int i = 128 * l + 4 * lane;
-      uint32_t x0 = v[l].x ^ zc[0], x1 = v[l].y ^ zc[1], x2 = v[l].z ^ zc[2], x3 = v[l].w ^ zc[3];
+      uint32_t x0 = v[l].x ^ mk[l].x, x1 = v[l].y ^ mk[l].y, x2 = v[l].z ^ mk[l].z, x3 = v[l].w ^ mk[l].w;
       r0 += x0 * __ldg(keys + i) + x1 * __ldg(keys + i + 1) + x2 * __ldg(keys + i + 2) + x3 * __ldg(keys + i + 3);
       r1 += x0 * __ldg(keys + 1024 + i) + x1 * __ldg(keys + 1025 + i) + x2 * __ldg(keys + 1026 + i) +
             x3 * __ldg(keys + 1027 + i);
@@ -281,7 +296,7 @@ int main(int argc, char** argv) {
       CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
       if (gating) {
         if (d == 0) {
-          stream_receipts<<<grid, 512, 0, s>>>(hdev, 16, keys, zdev, rec);
+          stream_receipts<<<grid, 512, 0, s>>>(hdev, 16, keys, zdev, seed64(), rec);
           CK(cudaStreamSynchronize(s));
           CK(cudaMemcpy(gate_gpu.data(), rec, 16 * 8, cudaMemcpyDeviceToHost));
         }
@@ -290,7 +305,7 @@ int main(int argc, char** argv) {
         return;
       }
       // one untimed chunk, so the module load stays out of the time
-      stream_receipts<<<grid, 512, 0, s>>>(hdev, chunk_blocks, keys, zdev, rec);
+      stream_receipts<<<grid, 512, 0, s>>>(hdev, chunk_blocks, keys, zdev, seed64(), rec);
       CK(cudaStreamSynchronize(s));
       cudaEvent_t ev[2];
       CK(cudaEventCreateWithFlags(&ev[0], cudaEventDisableTiming));
@@ -302,7 +317,7 @@ int main(int argc, char** argv) {
       size_t b0 = 0;
       for (int r = 0;; ++r) {
         size_t n = b0 + chunk_blocks <= nb ? chunk_blocks : nb - b0;
-        stream_receipts<<<grid, 512, 0, s>>>(hdev + b0 * 256, n, keys, zdev, rec + b0);
+        stream_receipts<<<grid, 512, 0, s>>>(hdev + b0 * 256, n, keys, zdev, seed64(), rec + b0);
         publish_z<<<1, 16, 0, s>>>(rec + b0, n, zdev, sdev, ++seq);
         CK(cudaGetLastError());
         CK(cudaEventRecord(ev[r & 1], s));
@@ -330,9 +345,10 @@ int main(int argc, char** argv) {
       std::vector<int32_t> sk(16 * ks);
       const ZSlot* slot = slots + (ngpu ? t % ngpu : 0);
       uint32_t z[16];
+      alignas(64) uint8_t M[4096];
       uint64_t zseq = 0, last = UINT64_MAX, distinct = 0;
       if (gating) {
-        if (t == 0) cpu_group(x, zinit, 0, 0, K, ks, gate_leaf, gate_sk.data());
+        if (t == 0) cpu_mask(zinit, M), cpu_group(x, M, 0, 0, K, ks, gate_leaf, gate_sk.data());
         pthread_barrier_wait(&ready);
         pthread_barrier_wait(&go);
         return;
@@ -342,8 +358,8 @@ int main(int argc, char** argv) {
       double bytes = 0;
       for (size_t g = 0; !stop.load(std::memory_order_relaxed); g = (g + 1) % groups) {
         while (!read_z(slot, z, &zseq)) _mm_pause();
-        if (zseq != last) ++distinct, last = zseq;
-        cpu_group(x + g * 65536, z, zseq, g, K, ks, &leaves[g * 32], sk.data());
+        if (zseq != last) ++distinct, last = zseq, cpu_mask(z, M);
+        cpu_group(x + g * 65536, M, zseq, g, K, ks, &leaves[g * 32], sk.data());
         bytes += 65536;
       }
       cpu_bytes_done[t] = bytes;
