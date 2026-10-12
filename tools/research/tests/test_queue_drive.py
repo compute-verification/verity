@@ -201,3 +201,29 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, auth=("-c", "credential.helper=", "-c", "credential.helper=!h get"))
     assert ids == ["r20261012-060000-aaaa"]
     assert "prompt=0 n=3 credential.helper= credential.helper=!h get" in tail and "stdin:" not in tail
+
+
+def test_a_disjoint_move_of_main_keeps_next_while_its_check_runs_and_a_shared_one_rebuilds_it(world, monkeypatch):
+    """12 Oct: the lander held a passed PR rather than land it beside drive's running check, since any move of `main` rebuilt
+    `next` and wasted the check."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    old = _tip(world)
+    other = world.change({"z.txt": "lander's\n"})
+    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
+    assert "stays on" in h.tick() and _tip(world) == old and len(h.launched) == 1
+    _check(world, monkeypatch, old)
+    assert h.tick().startswith("landed #1")
+    assert _git(world.origin, "rev-parse", "main^1", "main^2").split() == [other, old]
+
+
+def test_a_move_of_main_sharing_a_file_with_the_running_train_rebuilds_next(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    old = _tip(world)
+    other = world.change({"a.txt": "lander's\n"})
+    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
+    h.tick()
+    assert _tip(world) != old

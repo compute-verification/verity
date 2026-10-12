@@ -6,7 +6,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    the commit still lands when the commits `main` gained share no file with it (`Skipped-check:` names them) and change
    no check tooling (`CHECK_TOOLING`), which would have checked it differently.  Then
    `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
-2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`.
+2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`; but while a check of `next` runs and `main` moved
+   by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`).
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run.
@@ -187,6 +188,25 @@ class Driver:
             out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
         return base, out
 
+    def held(self, drive: dict) -> str | None:
+        """Why `next` stays on its base this tick, or None: a check of it is running and `main` moved by files none of the running
+        train's members change, and by no check tooling.  A sync would rebuild `next` on the new `main` and waste that check;
+        `land` merges the train onto the moved `main` once it passes."""
+        base, chain = self._chain()
+        main = _out(self.repo, "rev-parse", "origin/main")
+        if not chain or main == base:
+            return None
+        moved = changed(self.repo, base, main)
+        if any(p.startswith(CHECK_TOOLING) for p in moved):
+            return None
+        for m in reversed(chain):
+            if self.verdict(m.commit, base, drive).state == "running":
+                if moved & changed(self.repo, base, m.commit):
+                    return None
+                return (f"`main` moved to {main[:12]} by files `{self.q.branch}` doesn't change while {m.commit[:12]}'s check runs: "
+                        f"`{self.q.branch}` stays on {base[:12]} until it ends")
+        return None
+
     def land(self, drive: dict, dry_run: bool) -> Member | None:
         """Land the newest member of `next` with a passing check (see the module's step 1): a fast-forward when `main` is still
         `next`'s base, so the members above it keep their commits and their checks; a merge commit onto a moved `main`."""
@@ -273,6 +293,11 @@ class Driver:
         drive.setdefault("launched", {})
         drive.setdefault("told", [])
         landed = self.land(drive, dry_run)
+        if landed is None and (why := self.held(drive)):
+            if not dry_run:
+                q.save_state(state)
+            q.log(f"research queue drive: {why}")
+            return why
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         for n, c in state.get("conflicts", {}).items():
