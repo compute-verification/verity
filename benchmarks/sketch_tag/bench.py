@@ -928,12 +928,13 @@ def write_result(ok: bool, points: list[dict], libs: list[Lib], out: Path) -> No
         return
     ms = []
     for p in points:
-        lay = "enc" if p["b"] == 61 else "plain"
-        stem = (f"seq_{lay}_k{p['sketch_k']}_m{p['batch']}" if "layers" in p
-                else f"{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}")
+        lay, lib = "enc" if p["b"] == 61 else "plain", p["arithmetic"].split("/")[2]
+        seq = "layers" in p
+        stem = (f"seq_{lib}_{lay}_k{p['sketch_k']}_m{p['batch']}" if seq
+                else f"{lib}_{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}")
+        # The store caps an attempt's manifest at 256 KiB; every other figure is in the measurement files.
         ms += [{"name": f"y_{f}_{stem}", "value": p[f"y_{f}"], "unit": "1"}
-               for f in ("total", "total_fused", "total_split", "total_side", "total_window", "total_separate",
-                         "sketch", "hash", "commit", "commit_window") if p.get(f"y_{f}") is not None]
+               for f in (("total", "base", "sketch", "commit") if seq else ("total",)) if p.get(f"y_{f}") is not None]
     rel = os.path.relpath(out, run_dir)
     files = [f"{rel}/sketch-tag.json", f"{rel}/codec-frontier-points.json", f"{rel}/bench.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
