@@ -8,10 +8,11 @@
 #     -- taskset -c 48-95 bash benchmarks/sketch_tag/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
-# the profiles; LIBSET (default "dense_ef dense") names the builds: dense_ef / split_ef the 61-bit word codec at 60 / 56
-# payload bits with the store loaded L2 evict-first (sketch.cu's default), dense / split without; dense1, split1: one
-# sketch accumulator a sign block; dense4, dense16: four or sixteen chains; dense_ef_fd: the sketch and the decode in one
-# basic block (SK_FUSE_DEC); dense_ef_sw, dense_ef_sw2: the encoded store's sketch in one or two warps of its own (SK_SW).
+# the profiles; LIBSET (default "dense_ef_sw2 dense_ef") names the builds: dense_ef / split_ef the 61-bit word codec at
+# 60 / 56 payload bits with the store loaded L2 evict-first (sketch.cu's default), dense / split without; dense1, split1:
+# one sketch accumulator a sign block; dense4, dense16: four or sixteen chains; dense_ef_fd: the sketch and the decode in
+# one basic block (SK_FUSE_DEC); dense_ef_sw, dense_ef_sw2: the encoded store's sketch in one or two warps of its own
+# (SK_SW, sketch.cu's default 2), the others in the consumers.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -20,15 +21,17 @@ PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
 NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu}
 SK=benchmarks/sketch_tag
-export LIBSET=${LIBSET:-dense_ef dense}
+export LIBSET=${LIBSET:-dense_ef_sw2 dense_ef}
 B=$(mktemp -d /tmp/sketch-tag.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX=3 -DSK_KMAX=3)
-declare -A DEFS=([dense]="-DWC_PB=60 -DSK_L2_EF=0" [split]="-DWC_PB=56 -DSK_L2_EF=0"
-                 [dense1]="-DWC_PB=60 -DSK_CHAINS=1 -DSK_L2_EF=0" [split1]="-DWC_PB=56 -DSK_CHAINS=1 -DSK_L2_EF=0"
-                 [dense4]="-DWC_PB=60 -DSK_CHAINS=4 -DSK_L2_EF=0" [dense16]="-DWC_PB=60 -DSK_CHAINS=16 -DSK_L2_EF=0"
-                 [dense_ef]="-DWC_PB=60 -DSK_L2_EF=1" [split_ef]="-DWC_PB=56 -DSK_L2_EF=1"
-                 [dense_ef_fd]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_FUSE_DEC=1" [dense_ef_sw]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_SW=1"
-                 [dense_ef_sw2]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_SW=2")
+declare -A DEFS=([dense]="-DWC_PB=60 -DSK_L2_EF=0 -DSK_SW=0" [split]="-DWC_PB=56 -DSK_L2_EF=0 -DSK_SW=0"
+                 [dense1]="-DWC_PB=60 -DSK_CHAINS=1 -DSK_L2_EF=0 -DSK_SW=0"
+                 [split1]="-DWC_PB=56 -DSK_CHAINS=1 -DSK_L2_EF=0 -DSK_SW=0"
+                 [dense4]="-DWC_PB=60 -DSK_CHAINS=4 -DSK_L2_EF=0 -DSK_SW=0"
+                 [dense16]="-DWC_PB=60 -DSK_CHAINS=16 -DSK_L2_EF=0 -DSK_SW=0"
+                 [dense_ef]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_SW=0" [split_ef]="-DWC_PB=56 -DSK_L2_EF=1 -DSK_SW=0"
+                 [dense_ef_fd]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_FUSE_DEC=1 -DSK_SW=0"
+                 [dense_ef_sw]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_SW=1" [dense_ef_sw2]="-DWC_PB=60 -DSK_L2_EF=1 -DSK_SW=2")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086

@@ -36,8 +36,9 @@ static const char* const NAME = "ro-sketch-blake3/v0";
 #endif
 // SK_SW > 0 sketches the encoded store in that many warps of their own (more warps a CTA), which read every consumer's
 // stage before the producer refills it; the decode loop is latency-bound with idle issue slots, the consumers then only decode.
+// Two is the most that leaves the decoding consumers their registers (four cap them at 146 and spill).
 #ifndef SK_SW
-#define SK_SW 0
+#define SK_SW 2
 #endif
 
 __device__ __forceinline__ void bulk_load_ef(void* dst, const void* src, uint32_t bytes, uint64_t* bar, uint64_t pol) {
@@ -185,7 +186,7 @@ struct SkCommit {
 };
 
 template <int KR, int NB8, int KS, bool SK>
-__global__ void __launch_bounds__((WS_MAX_WARPS + SK_SW) * 32) sk_ws_kernel(const void* __restrict__ wstore,
+__global__ void __launch_bounds__((WS_MAX_WARPS + (SK && KR > 0 ? SK_SW : 0)) * 32) sk_ws_kernel(const void* __restrict__ wstore,
                                                                  const uint8_t* __restrict__ x, float* __restrict__ y,
                                                                  int M, int N, int Kd, uint64_t base, int groups,
                                                                  int consumers, int per_consumer, int partials, int T,
