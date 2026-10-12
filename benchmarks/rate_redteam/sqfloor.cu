@@ -287,6 +287,7 @@ static void print_canon(const std::vector<uint32_t> &h, int n, int w) {
   for (int k = sq::NL - 1; k >= 0; --k) printf("%08x", y[k]);
 }
 
+#ifndef SQFLOOR_NO_MAIN
 int main(int argc, char **argv) {
   if (argc < 2) return 2;
   if (!strcmp(argv[1], "clock")) {
@@ -366,3 +367,4 @@ int main(int argc, char **argv) {
   }
   return 2;
 }
+#endif
