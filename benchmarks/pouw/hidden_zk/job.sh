@@ -157,6 +157,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   cap=$(( STAGE_GB / par ))
   local base="verify --zk --circuit $D/circuit.txt"
+  [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then

@@ -20,13 +20,14 @@ SRC=$(pwd)
 export HZ_CONFIGS=${SU_UNITS:?} HZ_N=${SU_N:-4} HZ_MEM_GB=${SU_MEM_GB:?} HZ_RUNS=${SU_RUNS:-1} HZ_WARM=${SU_WARM:-0}
 export HZ_CASES=${SU_CASES:-honest output_row_committed_false output_claim_false unit_internal_bit_flipped}
 [ -n "${SU_CACHE:-}" ] && export HZ_CACHE=$SU_CACHE
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
 source benchmarks/pouw/hidden_zk/job.sh
 SU=$SRC/benchmarks/served_units
 
 stage_one() {   # stage_one SPEC D O: D holds the unit's staged files, from the stage cache or staged now
   local spec=$1 D=$2 O=$3 key S rc=0
-  key=$(tree_key benchmarks/served_units/stage.py verity/ml/flock/python verity integrations/vllm/verity_vllm/program)
+  key=$(tree_key benchmarks/served_units/stage.py verity/ml/flock/python verity integrations/vllm/verity_vllm/program \
+    tools/verity/circuit_check/src)
   S=${HZ_CACHE:-$W/cache}/stage/$(basename "$D")-n$N-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"
   (
@@ -56,7 +57,7 @@ run_units() {
       log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; rm -rf "$D"; "$PY" "$SU/summarize.py" "$OUT" > /dev/null; continue
     fi
     cp "$D/stage.json" "$D/pin.txt" "$O/"
-    log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s['ands'], 'ANDs,', s['unit_nnz'], 'nonzeros, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's, twin', s['twin']['agrees'], ', cache', 'hit' if c['hit'] else 'miss')")"
+    log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s.get('class') or '', s['n'], 'instances,', s['ands'], 'ANDs,', s['unit_nnz'], 'nonzeros, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's, twin', (s['twin'] or {}).get('agrees'), ', cache', 'hit' if c['hit'] else 'miss')")"
     if [ "${SU_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$SU/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"

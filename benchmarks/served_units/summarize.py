@@ -74,7 +74,8 @@ def lean(d: Path) -> dict:
         expect = "ACCEPT" if tag in HONEST else "REJECT"
         out[tag] = {"expect": expect, "verdict": got, "pass": got == expect,
                     "why": (v[0].get("why") or "")[:300] if v else tail(f.with_suffix(".err"), 2),
-                    "wall_s": t.get("wall_s"), "maxrss_gb": gb(t) if t else None}
+                    "wall_s": t.get("wall_s"), "maxrss_gb": gb(t) if t else None,
+                    **({"partition": v[0]["partition"]} if v and v[0].get("partition") else {})}
     return out
 
 
@@ -82,13 +83,14 @@ def one(d: Path) -> dict:
     st, t = load(d / "stage.json"), load(d / "stage.time")
     rec = {"tag": d.name, "stage_error": None if st else tail(d / "stage.err", 3), "stage_cache": load(d / "stage-cache.json")}
     if st:
-        rec.update({k: st.get(k) for k in ("unit", "statics", "n", "definition", "ands", "unit_nnz", "k_log", "unit_log",
-                                           "circuit_bytes", "circuit_sha512", "twin", "seconds")},
+        rec.update({k: st.get(k) for k in ("unit", "statics", "n", "definition", "type_definition", "class", "ands", "unit_nnz",
+                                           "k_log", "unit_log", "circuit_bytes", "circuit_sha512", "twin", "seconds")},
                    stage_maxrss_gb=gb(t), stage_wall_s=(t or {}).get("wall_s"))
     rec.update(zk=session(d), controls=controls(d), lean=lean(d))
     forged = [c for c in rec["lean"] if c not in HONEST]
     rec["lean_accepts_honest"] = bool(rec["lean"]) and all(rec["lean"].get(c, {}).get("pass") for c in HONEST)
-    rec["forgeries_refused"] = bool(forged) and all(rec["lean"][c]["pass"] for c in forged)
+    # a refusal counts only beside the honest records' acceptance under the same flags: a setup refusal refuses everything
+    rec["forgeries_refused"] = rec["lean_accepts_honest"] and bool(forged) and all(rec["lean"][c]["pass"] for c in forged)
     rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean_accepts_honest"] and rec["forgeries_refused"]
                            and all(v["pass"] for v in rec["controls"].values()))
     (d / "summary.json").write_text(json.dumps(rec, indent=1))
