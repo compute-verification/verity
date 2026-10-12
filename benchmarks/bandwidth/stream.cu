@@ -1015,8 +1015,9 @@ static int mode_gen(const Args& a) {
   return 0;
 }
 
-// Sustained generation and H2D: G threads fill a pinned ring of slots (regular or non-temporal stores), one thread
-// copies them out in order on COPY_STREAMS streams to a device ring, for each slot size and G.
+// Sustained generation and H2D: G threads fill a pinned ring of slots (regular or non-temporal stores), each taking the
+// next piece when it is free, and one thread copies them out in order on COPY_STREAMS streams to a device ring, for
+// each slot size and G.
 static int mode_pipe(const Args& a) {
   const size_t ring_bytes = 256u << 20, dring = 64u << 20;
   uint8_t *ring, *d;
@@ -1036,11 +1037,12 @@ static int mode_pipe(const Args& a) {
         std::vector<std::atomic<int64_t>> ready(R), freed(R);
         for (int i = 0; i < R; ++i) ready[i] = -1, freed[i] = i;  // slot i may take piece freed[i]
         std::atomic<bool> stop{false};
+        std::atomic<int64_t> next{0};  // pieces go to whichever generator is free, so one slow core delays only its own
         std::vector<std::thread> th;
         for (int t = 0; t < G; ++t)
           th.emplace_back([&, t] {
             pin(cpus[1 + t]);
-            for (int64_t k = t; !stop.load(std::memory_order_relaxed); k += G) {
+            for (int64_t k = next.fetch_add(1); !stop.load(std::memory_order_relaxed); k = next.fetch_add(1)) {
               const int sl = (int)(k % R);
               while (freed[sl].load(std::memory_order_acquire) != k)
                 if (stop.load(std::memory_order_relaxed)) return;
