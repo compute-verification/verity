@@ -10,6 +10,7 @@
 // Kernels (extern "C" launchers at the end): encode and decode of a flat store of words (NL limbs each, contiguous), the
 // decode written out or XORed into a checksum (the read-and-decode rate); the read of a store; compute-only chains for the
 // squaring (ILP 1 or 2 words a thread), decode and encode rates; a spin kernel to queue timed launches behind.
+#include <algorithm>
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -1160,6 +1161,109 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
   }
 }
 
+// The persistent warp-specialized form: gridDim.x CTAs (a CTA pair an SM at most once over), CTA c folding tiles
+// [c N / G, (c + 1) N / G) of the N tiles in (sequence, KV head, tile) order, so the CTAs get the same tiles within one
+// and none starts or drains per pair: a decoder lane loads the next pair's first word during the last tile's decode.
+// A pair (sequence, head) folded by several CTAs leaves one partial each in its slot e, the CTA's index among them; the
+// CTA folding the pair's last tile marks slots e + 1 .. sp - 1 empty, so attn_combine reads sp slots a pair. Its plain
+// form (ENC = false) stores the words undecoded, the same partition, so the two agree bit for bit.
+template <bool ENC>
+__global__ void __launch_bounds__(MWT, 2) attn_pers_kernel(const uint8_t *__restrict__ kv,
+                                                          const uint16_t *__restrict__ q, float *__restrict__ part,
+                                                          int batch, int ctx, int layers, int layer, int sp, int k) {
+  if constexpr (MMA_OK) {
+    extern __shared__ __align__(16) uint8_t sm[];
+    uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
+    u32 *td = reinterpret_cast<u32 *>(empty + MNB);
+    const int T = (ctx + MT - 1) / MT;
+    const u64 N = (u64)batch * KV_HEADS * T, G = gridDim.x, c = blockIdx.x;
+    const u64 i0 = c * N / G;
+    const int n = (int)((c + 1) * N / G - i0);
+    const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    if (threadIdx.x == 0) {
+      for (int b = 0; b < MNB; ++b) {
+        mbar_init(full + b, 32 * MDW);
+        mbar_init(empty + b, 32 * MW);
+      }
+      if (ENC) {
+        u32 s[NL];
+        tweak((u64)MT * layers * TLW, s);
+#pragma unroll
+        for (int l = 0; l < NL; ++l) td[l] = s[l];
+      }
+    }
+    __syncthreads();
+    if (w >= MW) {
+      const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
+      const int wo = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + j;
+      const auto word = [&](int p, int tile) {
+        return (((u64)(p / KV_HEADS) * ctx + tile * MT + t) * layers + layer) * TLW + wo + p % KV_HEADS * (HB / WB);
+      };
+      int p = (int)(i0 / T), tile = (int)(i0 % T), np = p, ntile = tile;
+      u32 nx[NL], tw[NL];
+      if (n && tile * MT + t < ctx) ldg_word(reinterpret_cast<const u32 *>(kv) + word(p, tile) * NL, nx);
+#pragma unroll 1
+      for (int li = 0; li < n; ++li) {
+        u32 x[NL];
+        copy(x, nx);
+        if (++ntile == T) ntile = 0, ++np;
+        if (li + 1 < n && ntile * MT + t < ctx)
+          ldg_word(reinterpret_cast<const u32 *>(kv) + word(np, ntile) * NL, nx);
+        if (ENC) {
+          if (li == 0 || tile == 0) tweak(word(p, tile), tw);
+          else tweak_step(tw, td);
+        }
+        if (tile * MT + t < ctx) {
+          if (ENC) decode_word_t(x, tw, k);
+        } else {
+#pragma unroll
+          for (int l = 0; l < NL; ++l) x[l] = 0u;
+        }
+        if (li >= MNB) mbar_wait(empty + li % MNB, (li / MNB - 1) & 1);
+        store(reinterpret_cast<u32 *>(sm + (li % MNB) * MT * MTS + t * MTS + j * WB), x);
+        mbar_arrive(full + li % MNB);
+        p = np, tile = ntile;
+      }
+      return;
+    }
+    u32 qa[8][2];
+    float o[8][4];
+    float m_own = -INFINITY, l_own = 0.f;
+    int p = (int)(i0 / T), tile = (int)(i0 % T), e = 0;
+#pragma unroll 1
+    for (int li = 0; li < n; ++li) {
+      const int seq = p / KV_HEADS, g = p % KV_HEADS;
+      if (li == 0 || tile == 0) {
+        mma_load_q(q, seq, g, lane, qa);
+#pragma unroll
+        for (int mt = 0; mt < 8; ++mt)
+#pragma unroll
+          for (int v = 0; v < 4; ++v) o[mt][v] = 0.f;
+        m_own = -INFINITY, l_own = 0.f;
+        e = (int)(c - (((u64)p * T + 1) * G - 1) / N);
+      }
+      const int b = li % MNB, nt = min(MT, ctx - tile * MT);
+      mbar_wait(full + b, (li / MNB) & 1);
+      if (nt > 16 * w)
+        mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
+      mbar_arrive(empty + b);
+      if (tile == T - 1 || li == n - 1) {
+        mma_out(part + (((size_t)seq * sp + e) * MW + w) * PART, g, lane, o, m_own, l_own);
+        if (tile == T - 1)
+          for (int s = e + 1; s < sp; ++s) {
+            float *op = part + (((size_t)seq * sp + s) * MW + w) * PART;
+            for (int v = lane; v < GROUP * HEAD_DIM; v += 32) op[g * GROUP * HEAD_DIM + v] = 0.f;
+            if (lane < GROUP) {
+              op[HEADS * HEAD_DIM + g * GROUP + lane] = -1e30f;
+              op[HEADS * HEAD_DIM + HEADS + g * GROUP + lane] = 0.f;
+            }
+          }
+      }
+      if (++tile == T) tile = 0, ++p;
+    }
+  }
+}
+
 // The warp-specialized form at the standalone decode's occupancy: ODW = 12 decoder warps and the MW MMA warps a CTA, two
 // CTAs an SM at 72 registers, so 24 decoder warps an SM. A decoder lane holds no next word in registers: it loads its
 // word of a tile of OT tokens, decodes it and stores it, and the SM's other warps hide the load, as in decode_kernel.
@@ -1410,15 +1514,40 @@ int kv_attn_occ(int *out) {
 // One layer's decode attention for `batch` sequences of `ctx` tokens (attn_kernel's layout): kv plain (encoded = 0) or
 // its words (encoded = 1, k rounds; encoded = 2 the warp-specialized form, the same output); on the tensor cores,
 // encoded = 3 plain, 4 its words and 5 its words in the warp-specialized form (4 and 5 the same output as 3, not as 0);
-// encoded = 6 the tensor-core form at the decode's occupancy, plain, and 7 its words (the same output as 6).
+// encoded = 6 the tensor-core form at the decode's occupancy, plain, and 7 its words (the same output as 6); encoded =
+// 8 the persistent warp-specialized form, plain, and 9 its words (the same output as 8), `splits` times the CTAs the
+// SMs hold at once, fewer if a pair would span more than 16 of them.
 // q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
-// splits * kv_attn_shape's out[6] floats (times out[7] from 3 on). The tokens are split into at most `splits` ranges of
-// whole tiles.
+// splits * kv_attn_shape's out[6] floats (times out[7] from 3 on; batch * 16 * out[6] * out[7] for 8 and 9). The tokens
+// are split into at most `splits` ranges of whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
-  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 7 ||
-      (encoded != 0 && encoded != 3 && encoded != 6 && (k < 1 || k > kv::KMAX)))
+  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 9 ||
+      (encoded != 0 && encoded != 3 && encoded != 6 && encoded != 8 && (k < 1 || k > kv::KMAX)))
     return -1;
+  if (encoded >= 8) {
+    if (!kv::MMA_OK) return -2;
+    static int slots = 0;
+    if (!slots) {
+      int dev, sms, occ;
+      cudaGetDevice(&dev);
+      cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+      for (auto *f : {kv::attn_pers_kernel<true>, kv::attn_pers_kernel<false>})
+        cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mws_smem());
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, kv::attn_pers_kernel<true>, kv::MWT, kv::mws_smem());
+      slots = sms * occ;
+    }
+    constexpr long long MAX_SP = 16;
+    const long long T = (ctx + kv::MT - 1) / kv::MT, N = (long long)batch * kv::KV_HEADS * T;
+    long long G = std::min((long long)splits * slots, N);
+    const long long per_min = std::max(1LL, (T - 1 + MAX_SP - 2) / (MAX_SP - 1));
+    G = std::min(G, N / per_min);
+    const long long per = N / G, sp = (T - 1 + per - 1) / per + 1;
+    (encoded == 9 ? kv::attn_pers_kernel<true> : kv::attn_pers_kernel<false>)<<<(int)G, kv::MWT, kv::mws_smem(), s>>>(
+        static_cast<const uint8_t *>(kv_), q, part, batch, ctx, layers, layer, (int)sp, k);
+    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, (int)sp * kv::MW);
+    return launched();
+  }
   const int tile = encoded >= 6 ? kv::OT : encoded >= 3 ? kv::MT : kv::TT;
   const int per = (ctx + splits - 1) / splits, per_split = (per + tile - 1) / tile * tile;
   const int sp = (ctx + per_split - 1) / per_split;

@@ -7,8 +7,9 @@ Nothing is timed before its gate passed:
 - `gate`: kv_bench's codec gate at every k of `--ks`;
 - `attn_gate`: at each batch x context of `--gate-cells`, with the model's layers, every `kv_attn` form at every split
   count of SPLITS, at layers 0 and L - 1: each encoded form's output equals its plain form's bit for bit (the CUDA-core
-  forms 1 and 2 form 0's, the tensor-core forms 4 and 5 form 3's, and 7, at the standalone decode's occupancy, its own
-  plain form 6's), and each plain form is within RTOL of float64 attention over the same bf16 values.
+  forms 1 and 2 form 0's, the tensor-core forms 4 and 5 form 3's, 7, at the standalone decode's occupancy, its own
+  plain form 6's, and 9, persistent, its own plain form 8's), and each plain form is within RTOL of float64 attention
+  over the same bf16 values.
 
 Then, at each batch x context of `--cells`, one store holding the cell's whole KV cache (batch x context x layers
 token-layers in kv.py's slot layout, so a layer's call reads 4 KB a token at the slots' stride) of random canonical
@@ -60,10 +61,12 @@ MODELS = {
     "70b": {"heads": 64, "layers": 80, "shapes": B.SHAPES_70B},
 }
 FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws",
-         6: "mma-occ-plain", 7: "mma-occ"}
-PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6}
+         6: "mma-occ-plain", 7: "mma-occ", 8: "mma-pers-plain", 9: "mma-pers"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6, 9: 8}
 SPLITS = (1, 2, 4, 8, 16)
-RTOL = {0: 1e-3, 3: 8e-3, 6: 8e-3}  # the tensor-core forms round P to bf16
+PERSISTENT = (8, 9)  # forms whose `splits` is the CTAs over the SMs' slots
+PERS_SPLITS = (1, 2, 4)
+RTOL = {0: 1e-3, 3: 8e-3, 6: 8e-3, 8: 8e-3}  # the tensor-core forms round P to bf16
 SPIN = 60_000_000
 WRITE_GRIDS = (0, 1, 2, 4)  # the encode's grid beside the GEMM: a thread a word (0), or this many CTAs an SM
 ENC_SMEM_CARVEOUTS = (100,)  # the encode's preferred shared memory carveout (-1 the driver's choice): the most
@@ -80,7 +83,7 @@ def shape(lib: B.Lib) -> dict:
 
 
 def forms_of(sh: dict, only=None) -> list[int]:
-    return [f for f in [0, 1, 2] + ([3, 4, 5, 6, 7] if sh["mma"] else []) if only is None or f in only]
+    return [f for f in [0, 1, 2] + ([3, 4, 5, 6, 7, 8, 9] if sh["mma"] else []) if only is None or f in only]
 
 
 def attn_occ(lib: B.Lib) -> dict:
@@ -282,7 +285,8 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
             B.set_key(lib, K.key(f.name, B.SEED, k))
             per = {}
             ctas = (lambda s: b * K.KV_HEADS * s) if fm >= 3 else (lambda s: b * s)
-            for sp in [s for s in SPLITS if ctas(s) >= sms] or [max(SPLITS)]:
+            sweep = PERS_SPLITS if fm in PERSISTENT else [s for s in SPLITS if ctas(s) >= sms] or [max(SPLITS)]
+            for sp in sweep:
                 def run_pass():
                     for l in range(layers):
                         attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
