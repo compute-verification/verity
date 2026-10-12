@@ -13,8 +13,8 @@ Arms:
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
 quantization before it is compiled as in the stock arm).  vLLM's default compile tunes inductor's kernels by timing in
-each process, so two processes can compile different reductions; ``--no-autotune`` compiles without that tuning, the
-same in every process.
+each process, so two processes can compile different reductions; ``--no-autotune`` compiles without any choice made by
+timing (inductor's deterministic mode), the same in every process.
 
 The plain and encoded arms install at the end of the model runner's `load_model` (before memory profiling, compilation and
 graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
@@ -458,9 +458,9 @@ def main() -> None:
     ap.add_argument("--compiled", action="store_true",
                     help="vLLM's default compilation (torch.compile, piecewise and full CUDA graphs) instead of mode 0")
     ap.add_argument("--no-autotune", action="store_true",
-                    help="compiled: without inductor's max-autotune and coordinate-descent tuning, which vLLM turns on for "
-                         "each capture size and which pick kernels by timing, so the compiled step is the same in every "
-                         "process (the compiled gate)")
+                    help="compiled without any choice made by timing: no max-autotune or coordinate-descent tuning (vLLM "
+                         "turns both on for each capture size), no combo-kernel benchmark, inductor's deterministic mode; "
+                         "the compiled step is the same in every process (the compiled gate)")
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--lib", help="a build of ve.cu (plain, enc and wide arms; the wide arm reduces with it)")
     ap.add_argument("--wide-lib", help="a build of wide.cu (wide arm)")
@@ -509,6 +509,10 @@ def main() -> None:
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:
         cc.update({"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY"})
+    elif args.no_autotune:
+        # vLLM's combo kernels, without the benchmark that picks them; inductor's deterministic mode skips every other
+        # on-device benchmark that affects numerics (reduction configs among them)
+        cc["inductor_compile_config"] = {"deterministic": True, "combo_kernels": True, "benchmark_combo_kernel": False}
     kw = {"model": args.model, "quantization": "fp8", "max_num_seqs": max(batches), "enable_prefix_caching": False, "seed": 0,
           "max_model_len": max(contexts) + max_tokens_cap + 64, "max_num_batched_tokens": args.max_batched_tokens,
           "gpu_memory_utilization": args.mem, "enforce_eager": False, "compilation_config": cc}

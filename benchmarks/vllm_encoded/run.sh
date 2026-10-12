@@ -12,8 +12,8 @@
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
 # ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
 # ro-blake3/v1 tag of every block read, as decode runs), any arm with +c compiled as vLLM serves by default (serve.py
-# --compiled) or +d compiled without inductor's autotuning (--no-autotune, the compiled gate); wide.cu is built for each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring);
-# SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
+# --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
+# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
 # MODE=profile runs the arms (default "stock enc:2") under Nsight Compute, each point's profiler window over two decode
