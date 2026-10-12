@@ -441,11 +441,26 @@
   "Accounting.SecurityProofs.Actual.Windows": {
    "owner": "@lean"
   },
+  "Accounting.SecurityProofs.B2": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.B2Audit": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.B2Determines": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.B2P2Ring": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Composition": {
    "owner": "@lean"
   },
   "Accounting.SecurityProofs.Fit": {
    "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.LengthCode": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Localization": {
    "owner": "@lean"
@@ -3722,6 +3737,10 @@
    "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
     "function": "Accounting.Tag.unreadSum",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LengthCode": {
+    "function": "Accounting.lengthCode",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -3729,6 +3748,10 @@
    "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.Recall": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what reaches the location during the window, fixed across the coins, as a hypothesis that is not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.Localization": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from a challenge's values to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what the rest of the prover can tell at the window's start and what it reads from the verifier during the window, fixed across the challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the location's state decided at the challenge ticks (Decided), its state at the first challenge fixed by the setup, and what reaches it during each window fixed by the help and that window's challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.B2Audit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2's hypotheses on the strategy (CausalFrom, Decided, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2P2Ring": "frozen (no-function,world-unlisted): It is B2Audit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure 0 0 0, and takes B2's hypotheses on the strategy (CausalFrom, Decided, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2Determines": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list, and concludes the existence of PoUS adversaries (lemma M's Determines), not a Lean function's acceptance.",
    "Accounting.Guarantees.B4": "unstated: the actual circuit model's obligation B4 (egress factoring across a location's secret inputs, over strategies causal from every tick), stated to be proved from causality, links as alphabets and the trusted devices; no theorem proves it yet (gap in note:console/20261012T0645Z-draft-actual-circuit-model's Lean plan).",
    "Accounting.SecurityProofs.Composition": "frozen (no-function): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick and each protocol's soundness alone, hypotheses about them rather than a Lean function's acceptance, and bounds a count of coins, not an event of shape.events.",
    "Accounting.SecurityProofs.Fit": "frozen (no-function): It is stated over arbitrary sets of runs (Accounting.Actual.Run) and a quantity on them, with additivity as a hypothesis, not a Lean function's acceptance.",
