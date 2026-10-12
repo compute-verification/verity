@@ -84,6 +84,19 @@ def test_more_openings_with_a_bigger_budget_and_fewer_with_bigger_blocks():
     assert evaluate(w, Params(2, 4096, 16, 0, 1.0), v)["cap"]["mu_sample"] < small["mu_sample"]
 
 
+def test_openings_cost_what_ra_openings_counts():
+    v = I.values()
+    v.update(x_from_transcript=True, v_budget=5959 * 18470 * 8 / 1e9)
+    w = Workload(SHAPES["8B"], 16, 8192)
+    p = Params(2, 4096, 16, 0, 1.0)
+    g = evaluate(w, p, v)["cap"]
+    assert g["openings"] == pytest.approx(18470, rel=0.01)
+    assert g["mu_sample"] == pytest.approx(0.0015, rel=0.01)
+    v.update(horizon=60, lambda_named=True)
+    h = evaluate(w, p, v)["cap"]
+    assert h["mu_sample"] == pytest.approx(g["mu_sample"] / 60) and h["lambda"] < g["lambda"] / 100
+
+
 def test_cheaper_decode_never_slows_the_step():
     w = Workload(SHAPES["70B"], 16, 8192)
     p = Params(2, 8192, 16, 0, 1.0)

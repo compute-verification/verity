@@ -198,19 +198,25 @@ def pad(st: dict[str, float], unreg_budget: float, v: dict[str, Any]) -> dict[st
 
 def _openings(w: Workload, p: Params, v: dict[str, Any]) -> tuple[float, float]:
     n_blocks = v["gpus"] * v["H"] / p.block
-    path = 2 * 64 * math.ceil(math.log2(n_blocks))
     k_bind = w.shape.hidden if p.binding == 0 else p.binding
     x_share = 0.0 if v["x_from_transcript"] else p.block * min(1.0, 4.0 * w.batch / k_bind)
-    s = v["v_budget"] * 1e9 / 8 * v["t_window"] / (p.block + path + x_share)
+    s = v["v_budget"] * 1e9 / 8 * v["t_window"] / (p.block + v["opening_bytes"] + x_share)
     return s, n_blocks
+
+
+def _lambda(p: Params, v: dict[str, Any], n_blocks: float) -> float:
+    if v["lambda_named"]:
+        g = GAMMA_MAX
+        return -(g * math.log2(g) + (1 - g) * math.log2(1 - g)) / (8 * p.block)
+    return max(0.0, v["log2_q"] + math.log2(math.e) - math.log2(n_blocks)) / (8 * p.block)
 
 
 def _common(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     s, n_blocks = _openings(w, p, v)
     return {
         "mu_partial": v["mu_partial"][p.k],
-        "mu_sample": math.log(2) * v["log2_inv_delta"] / s,
-        "lambda": max(0.0, v["log2_q"] + math.log2(math.e) - math.log2(n_blocks)) / (8 * p.block),
+        "mu_sample": math.log(2) * v["log2_inv_delta"] / (s * v["horizon"]),
+        "lambda": _lambda(p, v, n_blocks),
         "mu_sketch": 2.0 ** -p.k_s,
         "openings": s,
     }

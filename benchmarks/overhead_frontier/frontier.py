@@ -31,7 +31,7 @@ KS = (2, 3)
 # Every stated guarantee is at three rounds (STEERING 18:35Z); two rounds is the upgrade behind assumption 7.
 ROUNDS = {"k3": (3,), "k2": (2,)}
 STATED = "k3"
-BLOCKS = (4096, 8192, 16384, 32768, 65536)
+BLOCKS = (2048, 4096, 8192, 16384, 32768, 65536)
 K_S = (8, 12, 16, 32)
 BINDINGS = (0, 32, 64, 128, 256)
 HOST_SHARES = (0.0, 0.5, 0.8, 0.9, 0.95, 1.0)

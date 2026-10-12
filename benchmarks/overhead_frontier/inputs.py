@@ -111,6 +111,16 @@ INPUTS: dict[str, Input] = {
     "v_budget": Input(2.0, "Gb/s per node", "the verifier's download for openings; s ≈ 3 × 10^4 a window at 4 KiB "
                       "(the design's μ_sample ≈ 0.1%)", "policy", 10.0, "a 10 Gb/s verifier link"),
     "t_window": Input(1.0, "s", "the window", "policy"),
+    "opening_bytes": Input(1850.0, "B an opening beyond the block and z",
+                           "ra-openings §3: one multiproof per tree, 5,959 B at 4 KiB and s = 18,470 (store paths 793, "
+                           "receipt paths 1,006, the receipt 64); 4.0 KB at 2 KiB, 9.8 KB at 8 KiB", "derived"),
+    "lambda_named": Input(False, "switch", "λ = (log₂q + log₂e − log₂N)/(8n), the proved theorem with C(q, k) ≤ "
+                          "(eq/k)^k (ra-openings §2; a change to audit.bound, nothing in Lean)", "derived", True,
+                          "name the certified blocks in the compression (ra-openings' proposal, λ ≈ H₂(γ)/(8n); "
+                          "needs a Lean statement)"),
+    "horizon": Input(1, "windows", "a claim per 1-s window", "policy", 60,
+                     "a claim averaged over a minute (ra-openings' causal horizon bound; a window keeps its ≥ 2,761 "
+                     "openings, so each is still ≤ 1% alone; needs its Lean statement and Daniel's ruling)"),
     "log2_inv_delta": Input(40.0, "bits", "δ = 2^-40 (ra-bandwidth-lean)", "policy"),
     "log2_q": Input(64.0, "bits", "q ≤ 2^64 oracle queries (ra-bandwidth-protocol 4c3352875: λ = 64k + 41)", "policy"),
     "x_from_transcript": Input(False, "switch", "the verifier takes z_{j−1} for an opened block from PoUW's "
@@ -138,6 +148,8 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "s_adv": (1.0, "the adversary squares no faster than the best measured"),
     "v_budget": (10.0, "a 10 Gb/s verifier link"),
     "x_from_transcript": (True, "z from PoUW's transcript"),
+    "lambda_named": (True, "named λ"),
+    "horizon": (600, "a claim averaged over 10 minutes"),
 }
 
 # Values an input may take that make the frontier worse, each with why it is plausible.
