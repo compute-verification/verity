@@ -29,8 +29,8 @@ leg() {
     A) echo "8 10 ARMS=$NATIVE,$PEARLS" ;;
     B) echo "5 7 ARMS=$NATIVE SIDECAR=1" ;;
     C) echo "6 8 SHAPES=o,down,cube8192 LENGTHS=8,128 ARMS=$NATIVE,$PEARLS" ;;
-    D) echo "10 12 JOINT=joint-v1 SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100 SMI_MS=10" ;;
-    E) echo "20 22 JOINT=separate,inproc,joint SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100" ;;
+    D) echo "9 11 JOINT=joint-v1 SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100 SMI_MS=10 ROUND_MIN=6" ;;
+    E) echo "20 21 JOINT=separate,inproc,joint SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100 ROUND_MIN=5" ;;
     F) echo "7 9 POUS=1 POUS_IDLE=1 SHAPES=o BATCHES=1,128 ARMS=native-fp8,pearl-c" ;;
     *) return 1 ;;
   esac
