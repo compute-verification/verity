@@ -62,6 +62,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg rt
     stmt hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+  replace hob := vstarParsesScoped_of hob
   by_cases hT : Typed zr
   swap
   · left
@@ -106,7 +107,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.stmtAt rt stmt p o.2.1))
-      (fun o ho => ho.2.2.1) (fun o hall ho =>
+      (fun o ho => ho.2.2.1) (fun o _ hall ho =>
         ⟨ho.1, ho.2.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.2.1.1) ho.2.2.1.2,
           ho.2.2.2⟩))
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)

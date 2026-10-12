@@ -86,6 +86,7 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt
     msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
+  replace hob := vstarParsesScoped_of hob
   by_cases hT : Typed zr
   swap
   · left
@@ -123,7 +124,7 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
       (fun o => Flock.Guarantees.AcceptsPublic obj prog st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.publicHidden st))
-      (fun o ho => ho.2.1) (fun o hall ho =>
+      (fun o ho => ho.2.1) (fun o _ hall ho =>
         ⟨ho.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2, ho.2.2⟩))
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)
         fun o _ h => ⟨h.2.1.1, h.2.2⟩) hb)))))

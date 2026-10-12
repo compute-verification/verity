@@ -46,8 +46,10 @@ What it takes, against `PublicAudit`:
   statements to V*'s statement of its index with its own reads (`RecVStar.checkStmt`, which runs `checkOwn`), their
   verifier-registered values to the coin server's coins `coins` at the inner commits (check 5, `RecCoins.check`) and
   their public rows to what the inner transcript fixes (`RecVStar.checkPubRows`); and VBridge, the forks and the bound
-  at the typed sessions kept where those checks pass (`checkedC3`, each refusing everything elsewhere), whose games are
-  the typed sessions'.
+  at the typed sessions kept at a whole history where those checks pass (`checkedC3`, each refusing everything
+  elsewhere, so VBridge is read at the histories `recGame` plays), whose games are the typed sessions';
+* V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; #1847's
+  `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
 Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from piece (a)
 (`FlockC3.Fork.holoForkSound_holoAt`). Its non-vacuity needs VBridge at candidate 3 (piece (b), `FlockC3.Compose`) and
@@ -114,14 +116,17 @@ noncomputable def keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
       · rw [ite_eq_right hp] at h
         exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH _ h).elim }
 
-/-- **V*'s checked sessions**: the typed sessions (`custodied`), each kept where an accepted transcript passes the
-verifier's checks at candidate 3 as V*'s statement of its index (`ChecksC3`) and refusing everything elsewhere
-(`keepOwn`). Their games are the typed sessions', so the transported prover plays them (`checkedT`). -/
-noncomputable abbrev checkedC3 {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} (ish : RecVStar.Inner)
-    (cs : Option Flock.RecVStar.InnerCommits) (coins : Option Flock.RecCoins.Source) (bind : Fin S → VStar.Bindings)
-    (rows : Option (Array Flock.Registered.Port)) (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
-    (hC : Flock.Premises.RecordCustody zr) (h : Typed zr) : A → B → C → D → (j : Fin S) → (Vs j).Outer Reg' :=
-  fun R ω t R₂ j => keepOwn (custodied zr hC h R ω t R₂ j) (ChecksC3 ish cs coins j (bind j) rows)
+/-- **V*'s checked sessions**: the typed sessions (`custodied`), each kept at a whole history (a coin for each of the
+inner protocol's rounds, the only histories `recGame` plays) where an accepted transcript passes the verifier's checks
+at candidate 3 as V*'s statement of its index (`ChecksC3`), and refusing everything elsewhere (`keepOwn`). Their games
+are the typed sessions', so the transported prover plays them (`checkedT`). -/
+noncomputable abbrev checkedC3 {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I : Inner} {Cm : Type}
+    (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (coins : Option Flock.RecCoins.Source)
+    (bind : Fin S → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
+    (zr : A → B → List (Cm × I.Coin) → D → (j : Fin S) → (Vs j).OuterR Reg') (hC : Flock.Premises.RecordCustody zr)
+    (h : Typed zr) : A → B → List (Cm × I.Coin) → D → (j : Fin S) → (Vs j).Outer Reg' :=
+  fun R ω t R₂ j => keepOwn (custodied zr hC h R ω t R₂ j) fun J own tr =>
+    I.r ≤ t.length ∧ ChecksC3 ish cs coins j (bind j) rows J own tr
 
 /-- **The prover's strategy against the checked sessions**: its strategy against the typed sessions (`transported`),
 whose games the checked sessions' are. -/
@@ -145,14 +150,15 @@ every prover `σ` of the recursive audit with candidate 3's compiled table as it
 law of the registration's draws (`drawLaw`): V*'s statements `Vs`, one for each of the
 verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their
 records' custody `_hCust`, the verifier of record's own inputs (V*'s bindings `bind` and the shared rows `rows`; session
-`j` runs as V*'s statement `j`), at which V*'s statements' files parse to `Vs` (`VStarParses`), every session's inputs
-carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
-`Sk`, `cmt`, `msg`). Taken: A3 (`_hA3`).
+`j` runs as V*'s statement `j`), at which V*'s statements' files, where they parse into scope as the verifier's
+acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs carrying the tags their name names
+(`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`). Taken: A3
+(`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
-V*'s circuits compute candidate 3's inner verifier at the checked sessions (`checkedC3`: the typed sessions where the
-verifier's checks at candidate 3 pass) and R's registration (VBridge): the event below is empty; or the sessions type
-and there is a registrant fork, a round fork, a session fork, or an inner fork of the transported prover's own runs at the
-checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash; or
+V*'s circuits compute candidate 3's inner verifier at the checked sessions (`checkedC3`: the typed sessions at a whole
+history where the verifier's checks at candidate 3 pass) and R's registration (VBridge): the event below is empty;
+or the sessions type and there is a registrant fork, a round fork, a session fork, or an inner fork of the transported
+prover's own runs at the checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
   verifies as V*'s statement of its index and passes its checks at candidate 3} \wedge \neg\,\exists R \text{ near } w,\
   R\text{'s hidden statement holds}]$$
@@ -184,8 +190,9 @@ def RecursiveAuditC3 : Prop :=
     (_hCust : Flock.Premises.RecordCustody zr)
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
-    -- obligation (gap 4(c)): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
-    (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
+    -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's
+    -- acceptance parses it, it parses to `Vs j`'s circuit
+    (_hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
     -- obligation (our code): every session's inputs carry the tags their name names
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)

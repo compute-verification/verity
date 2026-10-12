@@ -111,7 +111,7 @@ the run decoded stage by stage (`decodeRun`) and the rows the verifier holds of 
 (`heldRow`). -/
 noncomputable def C3Family.honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements ish = .ok ss) (bind : Fin (vstarCount ish) → VStar.Bindings)
-    {Vs : Fin (vstarCount ish) → VStmt} (hob : VStarParses Flock.Tags.circuit ish bind Vs)
+    {Vs : Fin (vstarCount ish) → VStmt} (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
     (zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
       (Vs j).OuterR Reg')
     (hCust : Flock.Premises.RecordCustody zr) (h : Typed zr)

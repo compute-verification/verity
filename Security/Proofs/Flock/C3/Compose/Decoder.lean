@@ -21,9 +21,9 @@ fact of the source's run on its own steps (`at_c3DecOf`): `hFrame_c3DecOf` (whic
 `repsRead_c3DecOf`, `sparseRead_c3DecOf`, `openingRead_c3DecOf`, `regLevelsRead_c3DecOf`.
 
 No decoder meets a read fact or `HFrame` at a history shorter than the inner protocol's rounds: `zip` stops at the
-last coin, so the tape is a prefix of the whole one (at `t = []`, empty), and V*'s sessions can still accept there.
-That is G's `HLeaf`, false as `VBridge` is quantified; `HLeafC3` holds once `VBridge` is read at whole histories only,
-as `recGame` reads it, or the family's sessions refuse a short history.
+last coin, so the tape is a prefix of the whole one (at `t = []`, empty). That is G's `HLeaf`: false at a family whose
+sessions accept there, and true at the checked sessions, which refuse a short history (`hLeafC3_checked`, wherever V*
+has a statement).
 -/
 
 namespace FlockC3.Compose
@@ -69,13 +69,38 @@ def AtSrc (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
     P t (src R ω t (layers zs dg N k Rw R ω t R₂ τ))
 
-/-- Obligation: false as `VBridge` is quantified (G's `HLeaf`); discharged once `VBridge` is stated at whole histories,
-as `recGame` reads it, or the family's sessions refuse a short history.
-**V*'s sessions accept only at a whole history**: at every accepted outer proof, the history has a coin for each of
-the inner protocol's rounds. -/
+/-- **V*'s sessions accept only at a whole history** (G's `HLeaf`): at every accepted outer proof, the history has a
+coin for each of the inner protocol's rounds. False at a family whose sessions accept at a short history; the checked
+sessions refuse one (`hLeafC3_checked`). -/
 def HLeafC3 (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → (ℐ).r ≤ t.length
+
+open Classical in
+/-- **A session kept where `P` holds accepts nothing where `P` never holds**: its own list is `freshOwn`. -/
+theorem not_acceptsZKR_keepOwn {Q : VStmt} {z : Q.Outer Reg'}
+    {P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
+      FlockSoundness.Discharge.Exec.Transcript → Prop} (hP : ∀ J own tr, ¬ P J own tr)
+    (tr : FlockSoundness.Discharge.Exec.Transcript) :
+    ¬ AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own tr := by
+  intro h
+  have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right fun ⟨_, _, hp⟩ => hP _ _ _ hp
+  rw [hf] at h
+  exact not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH tr h
+
+/-- **The checked sessions accept only at a whole history**, wherever V* has a statement: at a shorter history no
+session keeps its own list (`checkedC3`), so the first accepts nothing (`not_acceptsZKR_keepOwn`). -/
+theorem hLeafC3_checked {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
+    {coins : Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} (hS : 0 < S) (dg : ByteArray → ByteArray) (N k Rw : ℕ) :
+    HLeafC3 (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h) dg N k Rw := by
+  intro R ω t R₂ τ o hacc
+  by_contra hlt
+  exact not_acceptsZKR_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ ⟨0, hS⟩)
+    (P := fun J own tr => (ℐ).r ≤ t.length ∧
+      Flock.Guarantees.ChecksC3 ish cs coins (⟨0, hS⟩ : Fin S) (bind ⟨0, hS⟩) rows J own tr)
+    (fun _ _ _ hp => hlt hp.1) _ (hacc.1 ⟨0, hS⟩).1
 
 /-- **The table's round-`i` messages are read from stage `i`'s commit strings** (G's `MsgsRead`): two accepted outer
 proofs whose layers agree on the read wires of stage `i`'s commit strings (`maskOf` at `skOf own sel`) have the same
@@ -189,7 +214,7 @@ section honest
 
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
-  {hob : VStarParses Flock.Tags.circuit ish bind Vs}
+  {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
   {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
     (Vs j).OuterR Reg'}
   {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}

@@ -252,7 +252,7 @@ def ChecksStmts (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option
 
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
-  {hob : VStarParses Flock.Tags.circuit ish bind Vs}
+  {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
   {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
     (Vs j).OuterR Reg'}
   {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}

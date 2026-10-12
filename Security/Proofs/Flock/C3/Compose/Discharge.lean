@@ -11,8 +11,8 @@ import Proofs.Flock.C3.HoloValues.Read
 `hbr_honest`: the guarantee's `_hbr` at G's commit strings, digests and messages (`skOf`, `cmtOf`, `wmsgOf`, `msgOf`):
 VBridge at every typed session, by `vbridge_c3` at `C3Family.honest`, from n1 (`hPubRows_of_check'`, `hTape_of_frame`),
 the stages at the honest family, `hCommits_honest`, `vDecodesR_wmsgOf` and `vFullR_of_read`. Its `Vs` and `hob` are the
-guarantee's: at the verifier's list they are `vstarParses_of_list`'s (`VStarList/Statements.lean`, modulo
-`circuitFile_parses`), which is `_hob`. The decoder `dec` is free, and a stage's messages are `dec`'s, so no stage
+guarantee's: at the verifier's list they are `vstarParsesScoped_of_list`'s (`VStarList/Statements.lean`), which is
+`_hob`. The decoder `dec` is free, and a stage's messages are `dec`'s, so no stage
 follows from the public rows alone: each stage is its read fact (`RepsRead`, `SparseRead`, `OpeningRead`,
 `RegLevelsRead`) and the tape its frame (`HFrame`), obligations on `dec` that n6 states at a
 fixed decoder (`C3/Compose/Decoder.lean`). What it takes besides is the verifier's: its list builds (`hss`), R's
@@ -55,7 +55,7 @@ are its prover's for a witness its verifier row accepts, which n6 states at a fi
 n6's `RegLevelsRead` reads. -/
 theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss)
     (bind : Fin (vstarCount ish) → VStar.Bindings) {Vs : Fin (vstarCount ish) → VStmt}
-    (hob : VStarParses Flock.Tags.circuit ish bind Vs)
+    (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
     (zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
       (Vs j).OuterR Reg')
     (hCust : Flock.Premises.RecordCustody zr)

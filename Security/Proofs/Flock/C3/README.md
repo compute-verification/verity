@@ -25,7 +25,7 @@ Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C
 | b1 | `FlockC3.Compose.holoTableCL_plays` | `C3/Compose/Tape.lean` | 100 | `playsT_interleave_first`, `PlaysT` bind lemmas, `regPhase` at two claims | W |
 | b2 | `FlockC3.Compose.vbridge_c3` | `C3/Compose/Bridge.lean` | 120 | b1, `HTape`; `vbridge_of_family`'s VCommits/VDecodes/VFull parts | W (after b1) |
 | h1 | `FlockC3.VStarList.stacked_of_openingShape`, `claims_of_stackedShape` | `C3/VStarList/Statements.lean` | 25, 25 | `Except` unfolding of `checkOpeningShape`, `checkStackedShape` | W |
-| h2 | `FlockC3.VStarList.vstarParses_of_list` (gap 4(c)), modulo `circuitFile_parses`; with gap 2, `mReg_of_list` (the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`; no `hpad`, since `mReg` is padded to `PAD_TO`, and `ℓ`'s range is `ellOk_of_sparseRange`'s) | `C3/VStarList/Statements.lean`, `Shape.lean`, `Range.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
+| h2 | `FlockC3.VStarList.vstarParsesScoped_of_list` (gap 4(c), proved: the parse and the scope are the event's); with gap 2, `mReg_of_list` (the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`; no `hpad`, since `mReg` is padded to `PAD_TO`, and `ℓ`'s range is `ellOk_of_sparseRange`'s) | `C3/VStarList/Statements.lean`, `Shape.lean`, `Range.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
 | c1 | (c)'s `hpl` generalization: drop `sh.holo = false` / `holoOf c = .ok false` from `lincheck_of_residuals_holo` (`Algebra/Holo.lean`), `zclc_of_residuals`, `prog_of_zclc` (`Runs/ZcLc.lean`), `run_of_algebra`, `run_of_frames` (`Runs/Rep.lean`), `prog_of_algebra` (`Runs/Prog.lean`), `rs_of_residuals` (`Runs/Rs.lean`), `ligerito_of_residuals_at`, `hlg_of_residuals`, `hlg_of_frames` (`Runs/Lg.lean`), `ligerito_of_residuals`, `ringSwitch_of_residuals`, `zerocheck_of_residuals`, `lincheck_of_residuals`, `build_eval`, `residuals_eq_run`, `buildRes_spec`, `buildAll_spec`, `coefOps_spec`, `prodOps_spec` (`Algebra/`), `decode_part`, `ResZeroAt` (`AlgHolds.lean`), `decode_checkR`, `decode_partR`, `ResZeroAtL` (`ResLayer.lean`), `decode_check` (`ResUnit.lean`), with `check_part_holo` beside `check_part` for the hidden units' net | `VBridge/` (in place, under VBridge G's names) | 600 | none; `check_refuses_plain_on_holo`, `shape?_holo` and `atomOp_plain` stay (plain facts) | W |
 
 a1's 500–800 (rounds 1–3) counted only the composition: the plain chain under `compiled_runs_sound` (`table_sound`'s
@@ -40,7 +40,7 @@ Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), 
 free fields. n0 fixes the decoder (`C3Family.honest`, `C3/Compose/Honest.lean`): `run` decodes the inner transcript's
 steps stage by stage on the prefix each stage's game plays (`decodeRun`), `row` is the verifier's `fixedRow` at its
 hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved) is VBridge at it, and the
-guarantee's `_hbr` through `vbridge_checked`; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is free, and every stage reads `dec`'s messages, so a
+guarantee's `_hbr` through `vbridge_checked`; `_hob` is h2's `vstarParsesScoped_of_list`. n0's decoder `dec` is free, and every stage reads `dec`'s messages, so a
 stage does not follow from the public rows: perturb one message on a stage's rounds and every stage still plays a
 prefix of the same length while that stage's verdict fails (Worker S's counterexample, at rep 0's `v₂`). So each stage
 is its read fact (its rounds' messages on the tape are its prover's for a witness its verifier row accepts), from which
@@ -135,13 +135,13 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
   with `R.bits`. Comparing every bit, as round 3 left it, made the inner statement false at a word whose padding is not
   zero while the table in its cells is satisfiable, and an honest prover there is accepted, so `holo_runs_sound` (and
   the guarantee's proof) could not hold.
-* `_hob` and the writer's round trip (ruling 5, assessed, not done): `VStarParses` could be met from the verifier's own
-  parse (`ScopeZR.parseH` and `checkStmt`'s byte compare) in place of `circuitFile_parses`, about 80–100 lines: Loads'
-  `prob_sessionsR_untypable` and `prob_recT_le` take a loads hypothesis in place of `hob` (proofs only), and a weaker
-  predicate (the file under `bind j` parses to `(Vs j).c`) is built from the verifier's parse. Blocked on one fact: at
-  hidden outputs the verifier checks `scopeOkH` (`v1Ports || bitRows`), while `VStmt.hscope` needs `scopeOk`
-  (`v1Ports`). Circuits' item: under `--rec-inner`, refuse a V* file whose parse uses `bitRows` ports (require
-  `scopeOk`); or a writer fact that V*'s files have `v1Ports`, much smaller than the round trip.
+* `_hob` from the event (ruling 5, round 6): `_hob` is `VStarParsesScoped`, `VStarParses` at the files the verifier's
+  acceptance parses into scope. The parse is `ScopeZR.parseH`'s and the scope is #1847's refusal in `checkStmt`
+  (`scope_of_accepts`), so `loads_of_verifiesV` reads `_hob` only there, and the verifier's list meets it with no
+  writer's round trip (`circuitFile_parses` is gone). `PublicAudit` and `RecursiveAudit` keep `VStarParses`, which gives
+  it (`vstarParsesScoped_of`).
+* Whole histories (G's `HLeaf`, round 6): `checkedC3` keeps a session only at a history with a coin for each inner
+  round, the only histories `recGame` plays, so `HLeafC3` holds at the checked family wherever V* has a statement.
 * `m` and claims: derived, not hypotheses. The model's R schedule is `fast100` at `mReg` (`holoAt`), and `claims` is the
   constant `STACKED_CLAIMS` (`regPhase` opens two, `regOpenError` counts two). The verifier's link is transitive: each
   `rec-opening` unit matches META's `stacked` (`stacked_of_openingShape`), which opens two claims at `fast100`'s rounds

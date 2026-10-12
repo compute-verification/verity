@@ -53,7 +53,7 @@ structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) 
   hstmts : RecVStar.statements ish = .ok stmts
   bind : Fin (vstarCount ish) → VStar.Bindings
   Vs : Fin (vstarCount ish) → VStmt
-  hob : VStarParses Flock.Tags.circuit ish bind Vs
+  hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs
   zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).Outer Reg'
   wmsg : ((j : Fin (vstarCount ish)) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg
   Sk : ℕ → (j : Fin (vstarCount ish)) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)

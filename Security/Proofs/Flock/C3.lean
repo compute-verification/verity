@@ -40,7 +40,7 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   registered top from the verifier's hold of the inner transcript (`stackedTop_of_innerCommits`, t0).
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
-* (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParses_of_list`), R's
+* (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
   shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), and R's `ℓ` and the slots'
   units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`).
 -/
