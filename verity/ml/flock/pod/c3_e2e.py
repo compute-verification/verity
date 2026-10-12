@@ -90,7 +90,6 @@ def stage(kind: str, a) -> dict:
             return v
 
         S.SP.verifier_row = verifier_row
-        S.stacked_reads = lambda *x, **k: None
         levels, algebra = [], False
     elif kind == "stacked-coef":
         orig = S.coefficients
