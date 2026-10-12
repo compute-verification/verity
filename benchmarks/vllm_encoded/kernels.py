@@ -13,7 +13,8 @@ codec) is another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` 
 seed set the bandwidth audit's ro-blake3/v1 tag of every block of encoded words it reads); its chunk sums have the same
 layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs ra-codec-tensor's
 (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead of one MMA warp, and
-tag warps hashing the store's 4,088-byte blocks), with the same chunk sums.
+tag warps hashing the store's 4,088-byte blocks, or sketch warps sketching the stored bytes on the tensor cores before the
+decoders overwrite them, ro-sketch-blake3/v0), with the same chunk sums.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import layout
+import numpy as np
 import torch
 
 HERE = Path(__file__).resolve().parent
@@ -52,6 +54,12 @@ def _wide():
 
 def _ct():
     return _load("ct_wide", "wide.py", CODEC_TENSOR)
+
+
+def _sketching():
+    if str(CODEC_TENSOR) not in sys.path:
+        sys.path.append(str(CODEC_TENSOR))  # sketching.py imports its sibling `tagging`
+    return _load("ct_sketching", "sketching.py", CODEC_TENSOR)
 
 
 def stream() -> int:
@@ -172,7 +180,9 @@ class TensorLib:
         so.wt_set_key.argtypes = [v, i, v, v]
         so.wt_encode.argtypes = [v, v, q, q, i, i, v]
         so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
+        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, i, v, v, i, v, v]
+        so.wt_sketch_vectors.argtypes = [i, i, i, i]
+        so.wt_sketch_vectors.restype = q
         so.wt_set_tag.argtypes = [v, v]
         cs = (ctypes.c_int * 15)()
         so.wt_constants(cs)
@@ -189,6 +199,7 @@ class TensorLib:
         self.sms = torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
         self.key = None
         self.tag_seed: bytes | None = None
+        self.sketch: dict | None = None
         self.tags: torch.Tensor | None = None
         self._steps: dict[tuple, tuple[int, torch.Tensor]] = {}
 
@@ -218,28 +229,66 @@ class TensorLib:
             key = ctypes.create_string_buffer(tags.Blake3Tag().key(seed))
             pre = ctypes.create_string_buffer(tags.prefix(tags.LEAF_DOMAIN, "ro-blake3/v1", seed))
             self.call("wt_set_tag", key, pre)
+        self.tag_seed, self.sketch = seed, None
+
+    def set_sketch(self, seed: bytes, k: int, t: int = 8) -> None:
+        """Tag the store under ro-sketch-blake3/v0 instead (`codec_tensor/sketching.py`, k = 1 only): the sketch warps'
+        k_s = k signed sums of each vector of t consecutive tasks of a CTA, then each vector's BLAKE3 tag under this
+        window seed."""
+        skt = _sketching()
+        if len(seed) != 32:
+            raise ValueError("a tag seed is 32 bytes")
+        bits = skt.sign_bits(seed, k, skt.vector_bytes(self.sb, t))
+        words = skt.sign_fragments(bits, skt.steps(self.sb), t)
+        key, pre = ctypes.create_string_buffer(skt.key(seed)), ctypes.create_string_buffer(skt.leaf_prefix(seed))
+        self.call("wt_set_tag", key, pre)
         self.tag_seed = seed
+        self.sketch = {"name": skt.NAME, "k": k, "t": t, "bits": bits,
+                       "signs": torch.from_numpy(words.view("<i4").copy()).cuda()}
+
+    def tag_vectors(self, n: int, kd: int) -> int:
+        """The most tags one launch over an n × kd linear writes: its 4,088-byte blocks, or sketched, its vectors at the
+        CTA groups that maximise them (`wt_sketch_vectors`; the launch's groups depend on the batch and config)."""
+        if self.sketch is None:
+            return -(-layout.tasks(n, kd) * self.sb // self.tag_block)
+        nbs, t, skt = n // 16, self.sketch["t"], _sketching()
+        return 16 * (kd // layout.TASK_COLS) * max(g * skt.tiles_per_cta(nbs, g, t) for g in range(1, nbs + 1))
 
     def tag_buffer(self, blocks: int) -> torch.Tensor:
         if self.tags is None or self.tags.numel() < 8 * blocks:
             self.tags = torch.empty(8 * blocks, dtype=torch.int32, device="cuda")
         return self.tags
 
-    def configs(self, tagged: bool) -> list[tuple[int, int, int]]:
-        """(decoders, stages, taggers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged (taggers -1), the
-        most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0 or 2 of
-        them tagging from the start instead (every other warp tags once its own work is done).  Not 4 or 6: with that
-        many tag warps gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc and
+    def configs(self, tagged: bool) -> list[tuple[int, int, int, int, int]]:
+        """(decoders, stages, taggers, k_s, sketchers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged
+        (taggers -1), the most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32;
+        tagged, 0 or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched,
+        1 or 4 of them sketching, at 4 stages fewer than fit with the sketch's buffer.  Not 4 or 6 tag warps: with that
+        many gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc and
         r20261012-092945-296e)."""
-        smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (self.sb + 40)
+        def smax(ks: int) -> int:
+            return (SMEM_PER_BLOCK - 4 * 8 * 528 - 16 - 64 * ks) // (self.sb + 48)
+
         dmax = self.fused_warps - 2
 
         def need(d: int) -> int:
             return -(-32 * d // self.task_words)
 
+        if self.sketch is not None:
+            ks = self.sketch["k"]
+            return [(dmax - w, max(need(dmax - w), smax(ks) - 4), -1, ks, w) for w in (1, 4)
+                    if dmax - w >= self.fused_span]
         if not tagged:
-            return list(dict.fromkeys([(dmax, max(need(dmax), smax - 4), -1), (dmax, max(need(dmax), smax - 6), -1)]))
-        return [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (0, 2) if dmax - t >= self.fused_span]
+            return list(dict.fromkeys([(dmax, max(need(dmax), smax(0) - 4), -1, 0, 0),
+                                       (dmax, max(need(dmax), smax(0) - 6), -1, 0, 0)]))
+        return [(dmax - t, max(need(dmax - t), smax(0) - 4), t, 0, 0) for t in (0, 2) if dmax - t >= self.fused_span]
+
+    def fused(self, k: int, w, x, y, m: int, n: int, kd: int, base: int, partials: int, cfg: Config, groups: int,
+              tsteps, tags, tag_base: int, launched=None) -> None:
+        sk = self.sketch if cfg.sketchers else None
+        self.call("wt_fused_sketch", k, w, x, y, m, n, kd, base, partials, cfg.consumers, cfg.stages, groups,
+                  max(cfg.taggers, 0), tsteps, tags, tag_base, cfg.sketch_k, cfg.sketchers,
+                  sk["signs"].data_ptr() if sk else None, None, sk["t"] if sk else 1, launched, stream())
 
     def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
         """The launch's CTA groups (as many as fill the device) and its tweak steps on the device (`bench.tsteps`): a
@@ -248,8 +297,7 @@ class TensorLib:
         at = (nb8, n, kd, cfg)
         if at not in self._steps:
             launched = ctypes.c_int(0)
-            self.call("wt_fused", self.key.rounds, None, None, None, m, n, kd, 0, 0, cfg.consumers, cfg.stages, 0,
-                      max(cfg.taggers, 0), None, None, 0, ctypes.byref(launched), stream())
+            self.fused(self.key.rounds, None, None, None, m, n, kd, 0, 0, cfg, 0, None, None, 0, ctypes.byref(launched))
             nch = kd // layout.TASK_COLS
             groups = launched.value // nch
             adv, rem = divmod(32 * cfg.consumers, self.task_words)
@@ -264,7 +312,8 @@ class TensorLib:
 class Config:
     """One GEMM form and its launch: `groups` CTA groups a chunk for the persistent forms (0: as many as fit), the
     warp-specialized form's consumer warps and ring stages (the tensor GEMM's decoder warps and stages), the wide GEMM's
-    L2 prefetch distance in CTAs, and the tensor GEMM's warps tagging from the start (-1: no tag)."""
+    L2 prefetch distance in CTAs, and the tensor GEMM's warps tagging from the start (-1: no tag) or its sketch warps
+    and k_s."""
 
     form: int
     groups: int = 0
@@ -272,13 +321,16 @@ class Config:
     stages: int = 0
     ahead: int = 0
     taggers: int = 0
+    sketch_k: int = 0
+    sketchers: int = 0
 
     @property
     def name(self) -> str:
         if self.form == 3:
             return "wide" + (f"-ahead{self.ahead}" if self.ahead else "")
         if self.form == 4:
-            return f"tensor-d{self.consumers}s{self.stages}" + (f"t{self.taggers}" if self.taggers >= 0 else "")
+            return f"tensor-d{self.consumers}s{self.stages}" + (
+                f"k{self.sketch_k}w{self.sketchers}" if self.sketchers else f"t{self.taggers}" if self.taggers >= 0 else "")
         return FORMS[self.form] + (f"-{self.consumers}x{self.stages}" if self.form == 2 else "")
 
 
@@ -485,7 +537,8 @@ class TensorLinear(Linear):
         self.store = torch.empty(self.words * tlib.word_bytes // 2, dtype=torch.int16, device=w.device)
         tlib.call("wt_encode", payloads.data_ptr(), self.store.data_ptr(), self.words, base, k, grid or 4 * tlib.sms,
                   stream())
-        self.blocks = -(-self.nbytes // tlib.tag_block)
+        self.blocks = tlib.tag_vectors(self.n, self.kd)
+        self.groups = 0
         self.payloads = payloads
 
     @property
@@ -496,17 +549,37 @@ class TensorLinear(Linear):
         return self.candidates(1)[0]
 
     def candidates(self, m: int) -> list[Config]:
-        return [Config(4, consumers=d, stages=s, taggers=t) for d, s, t in self.tlib.configs(self.tlib.tag_seed is not None)]
+        return [Config(4, consumers=d, stages=s, taggers=t, sketch_k=ks, sketchers=w)
+                for d, s, t, ks, w in self.tlib.configs(self.tlib.tag_seed is not None)]
 
     def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
         if cfg.form != 4:
             raise ValueError(f"the tensor GEMM has one form, not {cfg.name}")
         t = self.tlib
         groups, steps = t.steps(x8.shape[0], self.n, self.kd, cfg)
-        tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 else None
-        t.call("wt_fused", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd,
-               self.base, int(partials), cfg.consumers, cfg.stages, groups, max(cfg.taggers, 0), steps.data_ptr(), tags,
-               self.tag_base, None, stream())
+        tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 or cfg.sketchers else None
+        t.fused(self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd, self.base,
+                int(partials), cfg, groups, steps.data_ptr(), tags, self.tag_base)
+        self.groups = groups
+
+    def sketch_vectors(self, vs: list[int], groups: int) -> np.ndarray:
+        """Vectors ``vs`` of a sketched launch at ``groups`` CTA groups, as `sketching.vectors` lays them out (vector
+        16 (b·TPC + j) + r of CTA b = g0·chunks + kc is row r of tasks T j .. T j + T − 1 of the CTA, row blocks
+        g0 + i·groups at chunk kc, zero past the last), read from the device store a task at a time."""
+        skt, t = _sketching(), self.tlib.sketch["t"]
+        nbs, sb = self.n // 16, self.tlib.sb
+        tpc, w = skt.tiles_per_cta(nbs, groups, t), 32 * skt.steps(sb)
+        store = self.bytes.view(nbs, self.nchunks, sb)
+        out = np.zeros((len(vs), t * w), np.int8)
+        for o, v in enumerate(vs):
+            q, r = divmod(v, 16)
+            b, j = divmod(q, tpc)
+            g0, kc = divmod(b, self.nchunks)
+            for ii in range(t):
+                g = g0 + (t * j + ii) * groups
+                if g < nbs:
+                    out[o, ii * w:(ii + 1) * w] = skt.task_rows(store[g, kc].cpu().numpy(), 1, 1, sb)[0, 0, r]
+        return out
 
     def decoded(self) -> torch.Tensor:
         t = self.tlib

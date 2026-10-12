@@ -17,7 +17,8 @@ decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without
 little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
 kernel at k = 0), decode (over base) and tag (the tagged arm over the same arm untagged); the step runs no commit, so
 y_commit is 0.  x, Δ (and τ for a tagged arm) are the codec lanes' measurements for the same field, k and packing (`CODEC`;
-`TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime).
+`TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime); a sketched arm's
+τ is 0, as ra-codec-tensor's points.py has it (the sketch's MMAs share the decode's CTA).
 Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
 `native_pass`: every FP8 linear once through vLLM's own kernel, in one CUDA graph), which is μ_rebuild's numerator
 (d − τ)/x end to end, with x* = (d − τ)/0.5%; frontier.py's default d is y_total, which is a kernel-level point's d only.
@@ -64,6 +65,7 @@ TENSOR_CODEC = {
 #: prices 2^768 − 825 at p767's costs: no rates of their own yet
 TENSOR_CODEC |= {("p512", 1): TENSOR_CODEC[("p511", 1)], ("p768", 1): TENSOR_CODEC[("p767", 1)]}
 ENCODED = ("enc", "wide", "tensor")
+SKETCH = "ro-sketch-blake3/v0"
 #: frontier.py's `model`, by (layers, hidden)
 MODELS = {(32, 4096): "llama-3.1-8b", (80, 8192): "llama-3.1-70b"}
 
@@ -121,12 +123,23 @@ DETERMINISTIC = ("", "-d")
 
 def config(a: dict) -> str:
     """Arms that repeat one configuration share a name: stock, plain, enc2-56 (k, payload bits), w521-1t (wide field bits,
-    k, t when tagged), t511-1t (the same for the tensor kernel)."""
+    k, t when tagged), t511-1t (the same for the tensor kernel; t768-1s16 sketched at k_s = 16)."""
     if a["arm"] == "enc":
         return f"enc{a['k']}-{a['install'].get('bits')}"
     if a["arm"] in ("wide", "tensor"):
-        return f"{a['arm'][0]}{a['install']['codec']['word_bits']}-{a['k']}{'t' if codec_tag(a) else ''}"
+        cod = a["install"]["codec"]
+        return f"{a['arm'][0]}{cod['word_bits']}-{a['k']}{tag_suffix(cod)}"
     return a["arm"]
+
+
+def tag_suffix(cod: dict) -> str:
+    return "" if not cod.get("tag") else f"s{cod['sketch_k']}" if cod["tag"] == SKETCH else "t"
+
+
+def tag_blocks(cod: dict, batch: int) -> int:
+    """The tags a decode step's calls write: a tensor store's blocks, or sketched, its vectors at the launch the batch's
+    capture size selected (the CTA groups set them)."""
+    return cod.get("tag_vectors", {}).get(str(batch), cod["tag_blocks"])
 
 
 def group_name(a: dict) -> str:
@@ -209,7 +222,7 @@ def main() -> int:
                 continue
             pt = next(p for p in a["points"] if p["batch"] == b and p["context"] == ctx)
             mean_ctx = ctx + pt.get("max_tokens", 0) / 2
-            tag_bytes = (32 * cod["tag_blocks"] if "tag_blocks" in cod else inst["plain_bytes"] // 8) if cod.get("tag") else 0
+            tag_bytes = (32 * tag_blocks(cod, b) if "tag_blocks" in cod else inst["plain_bytes"] // 8) if cod.get("tag") else 0
             ws = working_set(ms, b, mean_ctx, inst["store_bytes"], True, tag_bytes)
             ws_stock = working_set(ms, b, mean_ctx, inst["plain_bytes"], False)
             point = {
@@ -222,8 +235,8 @@ def main() -> int:
                 "codec": {"field": cod["field"], "word_bits": cod["word_bits"], "rounds": a["k"],
                           "payload_bits": cod["payload_bits"], "tag": cod.get("tag")},
                 "kernel": ("benchmarks/word_codec/wide.cu ww_gemm (ra-codec-wide's fused decode + tag GEMM)" if wide else
-                           "benchmarks/codec_tensor/wt.cu wt_fused (ra-codec-tensor's decoder, MMA and tag warps), "
-                           "warps chosen per shape and batch" if tensor else
+                           "benchmarks/codec_tensor/wt.cu wt_fused_sketch (ra-codec-tensor's decoder, MMA and tag or "
+                           "sketch warps), warps chosen per shape and batch" if tensor else
                            "benchmarks/vllm_encoded/ve.cu (word_codec wc.cu fused GEMM), form chosen per shape and batch"),
                 "batch": b, "context": ctx, "tokens_per_s": e, "step_ms": b / e * 1e3,
                 "native_stock_tokens_per_s": s, "native_plain_tokens_per_s": pl, "native_stock_compiled_tokens_per_s": sc,
@@ -240,14 +253,16 @@ def main() -> int:
                 continue
             y_total, y_base = sc / e, sc / bs
             y_tag = sc / e - sc / un if un else 0.0
-            tau = ref[2] if cod.get("tag") else 0.0
+            sketched = cod.get("tag") == SKETCH
+            tau = ref[2] if cod.get("tag") and not sketched else 0.0
             pass_ms = native_pass.get(b)
             d = b / e * 1e3 / pass_ms if pass_ms else None
             frontier.append({
                 "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
                 "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
-                               "cuda-int32/mersenne61/pb56/ve.cu") + ("/tag" if cod.get("tag") else ""),
+                               "cuda-int32/mersenne61/pb56/ve.cu")
+                              + (f"/sketch{cod['sketch_k']}" if sketched else "/tag" if cod.get("tag") else ""),
                 "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
                 "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag,
                 "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": tau,

@@ -11,7 +11,8 @@ Arms:
             (ro-blake3/v1, the bandwidth audit's tag) as decode runs
   tensor    the same with ra-codec-tensor's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
             decoding in shared memory ahead of one MMA warp, k >= 1 rounds), with ``--tag`` its tag warps tagging the
-            store's 4,088-byte blocks (ro-blake3/v1) as decode runs
+            store's 4,088-byte blocks (ro-blake3/v1) as decode runs, or with ``--sketch K_S`` (k = 1) its sketch warps
+            sketching the stored bytes on the tensor cores and tagging the sketches (ro-sketch-blake3/v0)
 
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
@@ -115,12 +116,17 @@ class Install:
         k = args.k if args.arm in ENCODED else 0
         wlib = K.WideLib(args.wide_lib) if wide else None
         tlib = K.TensorLib(args.tensor_lib) if tensor else None
+        if args.sketch and not (tensor and k == 1):
+            raise ValueError("--sketch is the tensor arm's at k = 1")
         if tensor:
             tlib.set_key(SEED, k)
-            if args.tag:
+            if args.sketch:
+                tlib.set_sketch(TAG_SEED, args.sketch, args.sketch_t)
+            elif args.tag:
                 tlib.set_tag(TAG_SEED)
-                tlib.tag_buffer(max(-(-layout.tasks(m.output_size_per_partition, m.input_size_per_partition) * tlib.sb
-                                      // tlib.tag_block) for _, m in layers))
+            if args.sketch or args.tag:
+                tlib.tag_buffer(max(tlib.tag_vectors(m.output_size_per_partition, m.input_size_per_partition)
+                                    for _, m in layers))
         if wide:
             if k:
                 wlib.set_key(SEED, k)
@@ -182,7 +188,9 @@ class Install:
             if bad:
                 raise RuntimeError(f"gate: {name} k={lin.k} (word base {lin.base}): partial sums differ from plain simple: "
                                    + json.dumps(bad))
-            if args.tag:
+            if args.sketch:
+                gates["tags_checked"] += check_sketch(lin, name, args.python_tags)
+            elif args.tag:
                 gates["tags_checked"] += check_tags(lin, name, args.python_tags)
             if k or wide:
                 if not torch.equal(lin.decoded(), lin.payloads):
@@ -221,7 +229,12 @@ class Install:
             codec = {"field": tlib.field.name, "word_bits": tlib.bits, "payload_bits": 8 * tlib.payload_bytes,
                      "limbs": tlib.limbs, "word_bytes": tlib.word_bytes, "task_words": tlib.task_words,
                      "tensor_lib": Path(args.tensor_lib).name, "kmax": tlib.kmax, "tag_blocks": tag_base,
-                     "tag": TAG if tlib.tag_seed is not None else None}
+                     "tag": tlib.sketch["name"] if tlib.sketch else TAG if tlib.tag_seed is not None else None}
+            if tlib.sketch:
+                vecs = {m: sum(tlib.so.wt_sketch_vectors(lin.n, lin.kd, tlib.steps(m, lin.n, lin.kd, lin.configs[m])[0],
+                                                         tlib.sketch["t"]) for _, lin in self.linears) for m in CAPTURE}
+                codec |= {"sketch_k": tlib.sketch["k"], "sketch_t": tlib.sketch["t"], "tag_blocks": vecs[1],
+                          "tag_vectors": vecs, "tag_index_space": tag_base}
         elif wide:
             codec = {"field": wlib.field.name, "word_bits": wlib.bits, "payload_bits": wlib.payload, "limbs": wlib.limbs,
                      "lane_words": wlib.lane_words, "wide_lib": Path(args.wide_lib).name, "kmax": wlib.kmax,
@@ -329,6 +342,26 @@ def check_tags(lin: K.WideLinear | K.TensorLinear, name: str, n: int) -> int:
         if t.tobytes() != keyed(first + j, block):
             raise RuntimeError(f"gate: {name}: block {first + j}'s tag is not {TAG}'s")
     return len(js)
+
+
+def check_sketch(lin: K.TensorLinear, name: str, n: int) -> int:
+    """The last GEMM's tags of ``n`` sampled vectors and the last vector equal ro-sketch-blake3/v0's: each vector's
+    sketch exactly (`sketching.sketch`, float64 over its stored bytes as `sketching.vectors` lays them out at the launch's
+    CTA groups), then its keyed BLAKE3 at index tag_base + v (`tags.py`)."""
+    skt, t = K._sketching(), lin.tlib
+    torch.cuda.synchronize()
+    nvec = t.so.wt_sketch_vectors(lin.n, lin.kd, lin.groups, t.sketch["t"])
+    if not 0 < nvec <= lin.blocks:
+        raise RuntimeError(f"gate: {name}: {nvec} sketch vectors at {lin.groups} groups, not within (0, {lin.blocks}]")
+    rng = random.Random(lin.base)
+    vs = sorted({nvec - 1, *(rng.randrange(nvec) for _ in range(n))})
+    words = skt.sketch_words(skt.sketch(lin.sketch_vectors(vs, lin.groups), t.sketch["bits"]))
+    got = t.tags[:8 * nvec].view(-1, 8)[vs].cpu().numpy()
+    keyed = skt.tag().keyed(t.tag_seed)
+    for v, w, g in zip(vs, words, got):
+        if g.tobytes() != keyed(lin.tag_base + v, w.tobytes()):
+            raise RuntimeError(f"gate: {name}: vector {lin.tag_base + v}'s tag is not {t.sketch['name']}'s")
+    return len(vs)
 
 
 def apply(idx: int, quant):
@@ -531,6 +564,9 @@ def main() -> None:
     ap.add_argument("--tensor-lib", help="a build of codec_tensor's wt.cu (tensor arm)")
     ap.add_argument("--tag", action="store_true",
                     help="wide and tensor arms: tag every block of the store the GEMMs read (ro-blake3/v1)")
+    ap.add_argument("--sketch", type=int, default=0, choices=(0, 16, 64),
+                    help="tensor arm at k = 1: tag the store under ro-sketch-blake3/v0 at this k_s instead (sketch warps)")
+    ap.add_argument("--sketch-t", type=int, default=8, help="tasks a sketch vector (codec_tensor's --sketch-t)")
     ap.add_argument("--python-tags", type=int, default=3, help="sampled tags a layer checked against the reference")
     ap.add_argument("--gate-reps", type=int, default=1,
                     help="launches of each of the arm's GEMM configs a capture size in the gates, each bit for bit")

@@ -62,8 +62,9 @@ def main() -> int:
         inst = a["install"]
         weights = inst["store_bytes"] if a["arm"] in compare.ENCODED else inst["plain_bytes"]
         cod = inst.get("codec") or {}
-        tags = (32 * cod["tag_blocks"] if "tag_blocks" in cod else inst["plain_bytes"] // 8) if compare.codec_tag(a) else 0
         for pt, w in zip(a["profiled"], ws):
+            tags = ((32 * compare.tag_blocks(cod, pt["batch"]) if "tag_blocks" in cod else inst["plain_bytes"] // 8)
+                    if compare.codec_tag(a) else 0)
             graphs = sum(r["read"] >= GRAPH_MIN for r in w)
             if not graphs:
                 fails.append(f"{a['tag']} {pt}: no decode graph in the window")

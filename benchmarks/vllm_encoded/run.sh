@@ -13,8 +13,8 @@
 # ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
 # ro-blake3/v1 tag of every block read, as decode runs), ra-codec-tensor's as tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
 # 255, 511, 512, 521, 767, 768, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1, 512 and 768 being
-# full-slot fields at K = 1; tag: its tag warps tag the
-# store's 4,088-byte blocks), any arm with +c compiled as vLLM serves by default (serve.py
+# full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS, K = 1: its sketch warps tag
+# the store under ro-sketch-blake3/v0 at k_s = KS, 16 or 64), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); a last /g makes an arm its gates and one
 # point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
@@ -118,7 +118,7 @@ fi
             case $lib in *:tag) A+=(--tag); tag+=t ;; esac ;;
       tensor) A=(--arm tensor --k "${lib%%:*}" --lib "$B/ve-pb56.so" --tensor-lib "$B/wt-$k.so" --gate-reps 3)
               tag=t$k-${lib%%:*}
-              case $lib in *:tag) A+=(--tag); tag+=t ;; esac ;;
+              case $lib in *:tag) A+=(--tag); tag+=t ;; *:sk*) A+=(--sketch "${lib##*:sk}"); tag+=s${lib##*:sk} ;; esac ;;
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac
