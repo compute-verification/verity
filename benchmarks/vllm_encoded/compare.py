@@ -182,7 +182,7 @@ def main() -> int:
                 "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": ref[2] if cod.get("tag") else 0.0,
                 "x_source": ref[3], "measured": True, "packing": cod["payload_bits"],
                 "label": f"vLLM end to end, {name}, ctx {ctx}: whole decode step over stock vLLM FP8 compiled; base = "
-                         + ("wide k = 0" if wide else "plain fragments")
+                         + base_name
                          + (", tag split by the untagged arm" if un else ", no tag split" if cod.get("tag") else "")
                          + "; no commit in the step",
                 "gpu": a["gpu"], "run": run_id, "art": None,
