@@ -49,7 +49,7 @@ def digest(words) -> bytes:
 class Reader:
     """One GPU's reader of the driver's receipt tree: `begin` a pass, receipt and commit its `segment`s, `open` them."""
 
-    def __init__(self, path: str, torch, load: str = "ldg") -> None:
+    def __init__(self, path: str, torch, load: str = "warp") -> None:
         self.torch, self.so, self.load = torch, ctypes.CDLL(path), load
         v, u64, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
         b = ctypes.c_char_p
@@ -58,6 +58,7 @@ class Reader:
         self.so.rb_leaves.argtypes = [v, u64, u64, v, v, v]
         self.so.rb_pads.argtypes = [u64, u64, v, v]
         self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
+        self.so.rb_tree.argtypes = [v, u64, u64, v, v]
         self.so.rb_read.argtypes = [v, u64, v, i, v]
         self.kept: dict[int, tuple[int, object, list]] = {}
 
@@ -96,12 +97,18 @@ class Reader:
             pads = torch.empty((w - len(dig), 8), dtype=torch.int64, device="cuda")
             self.call("rb_pads", len(dig), w - len(dig), pads.data_ptr())
             level = torch.cat([dig, pads])
-        out, h = [level], 0
-        while len(level) > 1:
-            up = torch.empty((len(level) // 2, 8), dtype=torch.int64, device="cuda")
-            self.call("rb_level", level.data_ptr(), up.data_ptr(), h, c0 >> (h + 1), len(up))
-            out.append(up)
-            level, h = up, h + 1
+        n = len(level)
+        if n == 1:
+            return [level]
+        if n & (n - 1):
+            raise ValueError(f"{n} digests are no subtree")
+        up = torch.empty((n - 1, 8), dtype=torch.int64, device="cuda")
+        self.call("rb_tree", level.data_ptr(), n, c0, up.data_ptr())
+        out, at = [level], 0
+        while n > 1:
+            n //= 2
+            out.append(up[at:at + n])
+            at += n
         return out
 
     def segment(self, data, j0: int, position: int, count: int, zs=None) -> bytes:

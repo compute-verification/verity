@@ -492,6 +492,18 @@ int rb_level(const uint64_t *in, uint64_t *out, int h, uint64_t i0, uint64_t n, 
   return cudaGetLastError() ? 4 : 0;
 }
 
+// Every level above n digests of level 0 (a power of two, the first leaf c0) into out, level after level up to the
+// root: n − 1 nodes in one call, so the narrow levels wait on the device and not on the host.
+int rb_tree(const uint64_t *in, uint64_t n, uint64_t c0, uint64_t *out, cudaStream_t s) {
+  if (!in || !out || n < 2 || n & (n - 1)) return 1;
+  for (int h = 0; n > 1; ++h, n /= 2) {
+    level_kernel<<<grid(n / 2, 128), 128, 0, s>>>(in, out, h, c0 >> (h + 1), n / 2);
+    in = out;
+    out += 8 * (n / 2);
+  }
+  return cudaGetLastError() ? 4 : 0;
+}
+
 int rb_read(const void *p, uint64_t bytes, unsigned long long *xr, int blocks, cudaStream_t s) {
   if (!p || !xr || bytes % 16 || blocks < 1) return 1;
   read_kernel<<<blocks, 256, 0, s>>>((const uint4 *)p, bytes / 16, xr);
