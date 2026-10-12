@@ -12,7 +12,7 @@
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
 # ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
 # ro-blake3/v1 tag of every block read, as decode runs), any arm with +c compiled as vLLM serves by default (serve.py
-# --compiled); wide.cu is built for each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring);
+# --compiled) or +d compiled without inductor's autotuning (--no-autotune, the compiled gate); wide.cu is built for each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring);
 # SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
@@ -93,7 +93,10 @@ fi
   i=0
   for arm in $ARMS; do
     i=$((i + 1)); C=(); c=
-    case $arm in *+c) C=(--compiled); c=-c; arm=${arm%+c} ;; esac
+    case $arm in
+      *+c) C=(--compiled); c=-c; arm=${arm%+c} ;;
+      *+d) C=(--compiled --no-autotune); c=-d; arm=${arm%+d} ;;
+    esac
     IFS=: read -r name k lib <<< "$arm"
     case $name in
       enc) A=(--arm enc --k "$k" --lib "$B/ve-${lib:-pb56}.so"); tag=enc$k${lib:+-$lib} ;;

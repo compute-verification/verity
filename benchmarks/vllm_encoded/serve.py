@@ -12,7 +12,9 @@ Arms:
 
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
-quantization before it is compiled as in the stock arm).
+quantization before it is compiled as in the stock arm).  vLLM's default compile tunes inductor's kernels by timing in
+each process, so two processes can compile different reductions; ``--no-autotune`` compiles without that tuning, the
+same in every process.
 
 The plain and encoded arms install at the end of the model runner's `load_model` (before memory profiling, compilation and
 graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
@@ -400,6 +402,10 @@ def main() -> None:
     ap.add_argument("--arm", choices=("stock", "plain", "enc", "wide"), required=True)
     ap.add_argument("--compiled", action="store_true",
                     help="vLLM's default compilation (torch.compile, piecewise and full CUDA graphs) instead of mode 0")
+    ap.add_argument("--no-autotune", action="store_true",
+                    help="compiled: without inductor's max-autotune and coordinate-descent tuning, which vLLM turns on for "
+                         "each capture size and which pick kernels by timing, so the compiled step is the same in every "
+                         "process (the compiled gate)")
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--lib", help="a build of ve.cu (plain, enc and wide arms; the wide arm reduces with it)")
     ap.add_argument("--wide-lib", help="a build of wide.cu (wide arm)")
@@ -424,6 +430,11 @@ def main() -> None:
     if args.compiled:
         # the cache key doesn't cover the installed linears: a cached stock graph would bypass them
         os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
+        if args.no_autotune:
+            os.environ["VLLM_ENABLE_INDUCTOR_MAX_AUTOTUNE"] = "0"
+            os.environ["VLLM_ENABLE_INDUCTOR_COORDINATE_DESCENT_TUNING"] = "0"
+    elif args.no_autotune:
+        ap.error("--no-autotune is a compiled mode")
 
     import vllm
     from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
@@ -463,7 +474,8 @@ def main() -> None:
 
     props = torch.cuda.get_device_properties(0)
     result = {
-        "arm": args.arm, "compiled": args.compiled, "k": args.k if args.arm in ("enc", "wide") else 0,
+        "arm": args.arm, "compiled": args.compiled, "autotune": args.compiled and not args.no_autotune,
+        "k": args.k if args.arm in ("enc", "wide") else 0,
         "codec_tag": TAG if args.arm == "wide" and args.tag else None, "model": args.model,
         "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,

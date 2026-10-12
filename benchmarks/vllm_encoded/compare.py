@@ -1,5 +1,7 @@
-"""The run's gates and points from its arms (`serve.py`'s arm-*.json in OUT): exits non-zero unless every arm installed and
-every encoded arm generated the gate prompts of the plain arm in its compilation mode bit for bit (token ids and log-probs).
+"""The run's gates and points from its arms (`serve.py`'s arm-*.json in OUT): exits non-zero unless every arm installed,
+every encoded arm in mode 0 or compiled without autotuning generated the gate prompts of the plain arm in its mode bit for
+bit (token ids and log-probs), and every encoded configuration has such an arm.  The gates of arms compiled as vLLM serves by
+default are reported, not required: that compile picks inductor's kernels by timing, in each process.
 
 Writes OUT/points.json: one point per encoded arm, batch and context, with its decode tokens/s, the stock and plain arms'
 in the same compilation mode (the median over their repeats), y (encoded decode-step time over native: against stock vLLM
@@ -73,17 +75,31 @@ def working_set(ms: dict, b: int, ctx: float, weight_bytes: int, partials: bool,
 
 
 def mode(a: dict) -> str:
-    return "-c" if a.get("compiled") else ""
+    """"" for mode 0, -c compiled as vLLM serves by default, -d compiled without inductor's autotuning (serve.py
+    --no-autotune: the same compiled step in every process, so its gate is meaningful)."""
+    if not a.get("compiled"):
+        return ""
+    return "-c" if a.get("autotune", True) else "-d"
+
+
+#: the modes whose gate is bit for bit: vLLM's default compile picks inductor kernels by timing in each process, so two of
+#: its plain arms can differ in the last bits of a log-prob (r20261012-083225-9bee); its gates are reported, not required
+DETERMINISTIC = ("", "-d")
+
+
+def config(a: dict) -> str:
+    """Arms that repeat one configuration share a name: stock, plain, enc2-56 (k, payload bits), w521-1t (wide field bits,
+    k, t when tagged)."""
+    if a["arm"] == "enc":
+        return f"enc{a['k']}-{a['install'].get('bits')}"
+    if a["arm"] == "wide":
+        return f"w{a['install']['codec']['word_bits']}-{a['k']}{'t' if codec_tag(a) else ''}"
+    return a["arm"]
 
 
 def group_name(a: dict) -> str:
-    """Arms that repeat one configuration share a name: stock, plain, enc2-56 (k, payload bits), w521-1t (wide field bits,
-    k, t when tagged), with -c when compiled."""
-    if a["arm"] == "enc":
-        return f"enc{a['k']}-{a['install'].get('bits')}" + mode(a)
-    if a["arm"] == "wide":
-        return f"w{a['install']['codec']['word_bits']}-{a['k']}{'t' if codec_tag(a) else ''}" + mode(a)
-    return a["arm"] + mode(a)
+    """The configuration with its mode: -c when compiled, -d when compiled without autotuning."""
+    return config(a) + mode(a)
 
 
 def codec_tag(a: dict) -> str | None:
@@ -107,23 +123,25 @@ def main() -> int:
     by = {}
     for a in arms:
         by.setdefault(group_name(a), []).append(a)
-    gate = {}
+    gate, passed = {}, set()
     for a in arms:
         ref = by.get("plain" + mode(a), [])
-        if not ref:
-            if a["arm"] in ("enc", "wide"):
-                fails.append(f"{a['tag']}: no plain arm in its compilation mode to compare its gate with")
+        if not ref or not a["gate"]:
             continue
-        ref = ref[0]["gate"]
-        if not a["gate"]:
-            continue
-        same = sum(x["token_ids"] == y["token_ids"] and x["logprobs"] == y["logprobs"] for x, y in zip(a["gate"], ref))
-        tok = sum(sum(p == q for p, q in zip(x["token_ids"], y["token_ids"])) for x, y in zip(a["gate"], ref))
-        total = sum(len(y["token_ids"]) for y in ref)
-        gate[a["tag"]] = {"against": by["plain" + mode(a)][0]["tag"], "prompts_bit_identical": f"{same}/{len(ref)}",
-                          "tokens_equal": f"{tok}/{total}"}
-        if a["arm"] in ("enc", "wide") and same != len(ref):
-            fails.append(f"{a['tag']}: gate generation differs from {gate[a['tag']]['against']}")
+        ref = ref[0]
+        same = sum(x["token_ids"] == y["token_ids"] and x["logprobs"] == y["logprobs"] for x, y in zip(a["gate"], ref["gate"]))
+        tok = sum(sum(p == q for p, q in zip(x["token_ids"], y["token_ids"])) for x, y in zip(a["gate"], ref["gate"]))
+        total = sum(len(y["token_ids"]) for y in ref["gate"])
+        required = mode(a) in DETERMINISTIC
+        gate[a["tag"]] = {"against": ref["tag"], "prompts_bit_identical": f"{same}/{len(ref['gate'])}",
+                          "tokens_equal": f"{tok}/{total}", "required": required}
+        if a["arm"] in ("enc", "wide") and required:
+            if same == len(ref["gate"]) == len(a["gate"]):
+                passed.add(config(a))
+            else:
+                fails.append(f"{a['tag']}: gate generation differs from {ref['tag']}")
+    for c in sorted({config(a) for a in arms if a["arm"] in ("enc", "wide")} - passed):
+        fails.append(f"{c}: no arm of it generated the plain arm's gate bit for bit in mode 0 or compiled without autotuning")
     print("gate", json.dumps(gate, indent=1))
 
     def tps(group: list[dict], b: int, ctx: int) -> float | None:
@@ -158,7 +176,8 @@ def main() -> int:
             point = {
                 "lane": "ra-vllm-encoded", "end_to_end": True, "workload": "llama-3.1-8b-instruct decode",
                 "engine": f"vLLM {a['vllm']}, FP8 online, full decode CUDA graphs, "
-                          + ("torch.compile (vLLM's default)" if a.get("compiled") else "mode 0 (no torch.compile)"),
+                          + {"": "mode 0 (no torch.compile)", "-c": "torch.compile (vLLM's default)",
+                             "-d": "torch.compile without inductor's autotuning"}[md],
                 "gpu": a["gpu"],
                 "codec": {"field": cod["field"], "word_bits": cod["word_bits"], "rounds": a["k"],
                           "payload_bits": cod["payload_bits"], "tag": cod.get("tag")},
@@ -182,7 +201,7 @@ def main() -> int:
                 "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": ("cuda-int32/" + cod["field"] + "/wide.cu" if wide else "cuda-int32/mersenne61/pb56/ve.cu")
                               + ("/tag" if cod.get("tag") else ""),
-                "compiled": bool(a.get("compiled")), "batch": b, "context": ctx,
+                "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
                 "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag,
                 "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": ref[2] if cod.get("tag") else 0.0,
                 "x_source": ref[3], "measured": True, "packing": cod["payload_bits"],
@@ -206,7 +225,7 @@ def main() -> int:
                     print(f"{name:10} {b:3d} {ctx:5d} {v:10.1f}", *(f"{p['tokens_per_s']:.1f}" for a in group for p in a["points"]
                                                                   if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p))
     summary = {"schema": "verity/ra-points/v0-provisional", "gate": gate, "fails": fails, "points": points,
-               "arms": [{"tag": a["tag"], "arm": a["arm"], "compiled": bool(a.get("compiled")), "k": a["k"],
+               "arms": [{"tag": a["tag"], "arm": a["arm"], "compiled": bool(a.get("compiled")), "mode": mode(a), "k": a["k"],
                          "install": {k: v for k, v in a.get("install", {}).items()
                                                                                      if k != "selection"},
                          "kv_tokens": a.get("kv_tokens"), "attention": a.get("attention"), "startup_s": a.get("startup_s")}
