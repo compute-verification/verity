@@ -605,7 +605,7 @@ SEQ = ("qkv", "o", "gate_up", "down")
 COMMIT_MODES = ("fused", "split", "split8", "late", "late8")
 
 
-def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
+def sequence(lib: Lib, torch, a, warps_of, cases: dict, log, ks: int) -> dict:
     """A transformer layer's four linears in order over a ring of layers past the L2, with the commit deferred to the
     large calls' committer warps: gate_up hashes the previous layer's qkv, o and down sketches (one buffer, in that
     order), down its own layer's gate_up. Per batch the layer's time against the sum of the linears' native times, for
@@ -613,7 +613,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
     committing call writes its tags' leaves) or split (gate_up writes the leaves of the previous down's tags, down those
     of its own gate_up's). Every call runs at its arm's fastest configuration in `cases`. The sketches and tags rotate
     over two slots, as a deployment's would (the commit zeroes a sketch behind it), the ring's layer count even."""
-    ks, nt = 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0]
+    nt = 4096 if 4096 in a.ns else a.ns[0]
     res = {"k": ks, "n_target": nt, "cfg": "each call at its arm's fastest", "committers": a.committers,
            "layouts": {}, "ok": True}
 
@@ -958,6 +958,7 @@ def main() -> int:
     ap.add_argument("--kr", type=int, default=2, help="the word codec's rounds on the encoded store (0: plain only)")
     ap.add_argument("--ks", default="8,16,32")
     ap.add_argument("--ns", default="1024,4096,16384")
+    ap.add_argument("--seq-ks", default="16", help="the layer sequence's k (the first is the report's), n ~ 4096")
     ap.add_argument("--cfgs", default="6x1,4x2,8x1",
                     help="consumer warps x stages each: every arm at the first, base, decode, sketch and fused also at "
                          "the rest for k=16, n=4096 (each arm's fastest is the frontier's)")
@@ -972,6 +973,7 @@ def main() -> int:
     a.batches = [int(b) for b in a.batches.split(",")]
     a.ks = [int(k) for k in a.ks.split(",")]
     a.ns = [int(v) for v in a.ns.split(",")]
+    a.seq_ks = [int(k) for k in a.seq_ks.split(",") if int(k) in a.ks]
     a.cfgs = [tuple(int(v) for v in c.split("x")) for c in a.cfgs.split(",")]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1019,12 +1021,15 @@ def main() -> int:
             ok &= g.get("ok", False)
             if not g.get("ok", False):
                 break
-        if ok and a.mode == "bench" and all(s in lr["gemm"] for s in SEQ):
-            log(f"{lib.name}: layer sequence")
-            lr["sequence"] = sequence(lib, torch, a, warps_of, lr["gemm"], log)
-            ok &= lr["sequence"]["ok"]
+        seqs = []
+        for k in a.seq_ks if ok and a.mode == "bench" and all(s in lr["gemm"] for s in SEQ) else []:
+            log(f"{lib.name}: layer sequence, k={k}")
+            seq = sequence(lib, torch, a, warps_of, lr["gemm"], log, k)
+            lr["sequence" if k == a.seq_ks[0] else f"sequence_k{k}"] = seq
+            seqs.append(seq)
+            ok &= seq["ok"]
         if ok and a.mode == "bench":
-            lr["points"] = frontier(lr, lib, a) + sequence_points(lr.get("sequence"), lib, a)
+            lr["points"] = frontier(lr, lib, a) + [p for q in seqs for p in sequence_points(q, lib, a)]
     res["ok"] = ok
     res["elapsed_s"] = time.time() - t0
     (out / "sketch-tag.json").write_text(json.dumps(res, indent=1))
