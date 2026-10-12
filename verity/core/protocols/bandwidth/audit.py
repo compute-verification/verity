@@ -1,5 +1,6 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
-a salt with its identity bound in (`draw_salt`), so devices holding one `W` hold different stores.
+a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`), so devices holding one `W` hold
+different stores.
 
 1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk,
    derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and sends the seed `σ`
@@ -45,7 +46,8 @@ from . import tags
 from .tags import SEED_BYTES
 
 WINDOW_DOMAIN = "verity/bandwidth/window/v2"
-SALT_DOMAIN = "verity/bandwidth/salt/v1"
+SALT_DOMAIN = "verity/bandwidth/salt/v2"
+DEVICE_BYTES = 16
 NONCE_BYTES = 32
 STATE_FORMAT = "verity/bandwidth/challenger-state/v1"
 
@@ -84,12 +86,26 @@ class Params:
         return self.deadline_ns + self.rtt_allowance_ns
 
 
-def draw_salt(source: bytes, commitment: bytes, device: str) -> bytes:
+_GPU_UUID = re.compile(r"GPU-([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})")
+
+
+def device_id(uuid: str) -> bytes:
+    """A GPU's identity: the 16 bytes of the UUID its driver reports (`cudaDeviceProp.uuid`), from the text nvidia-smi
+    prints, `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in lowercase hex.  Every other spelling is refused, so one GPU has
+    one identity and one salt."""
+    m = _GPU_UUID.fullmatch(uuid) if type(uuid) is str else None
+    if m is None:
+        raise ValueError("a GPU's id is its UUID as nvidia-smi prints it, GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+    return bytes.fromhex("".join(m.groups()))
+
+
+def draw_salt(source: bytes, commitment: bytes, device: bytes) -> bytes:
     """The salt of `device`'s store, which PoUS's setup (`pous.setup`) takes in place of its own `draw_salt`: drawn after
-    the commitment to `W` from the verifier's secret (or a later beacon round) as PoUS's is, with the identity the
-    device attests bound in.  Devices holding one `W` then hold different stores, so their `vk`, seeds and tags differ."""
-    if type(device) is not str or not device:
-        raise ValueError("a device's identity is a nonempty str")
+    the commitment to `W` from the verifier's secret (or a later beacon round) as PoUS's is, with the device's 16-byte
+    id bound in (`device_id`).  Devices holding one `W` then hold different stores, so their `vk`, seeds and tags
+    differ."""
+    if type(device) is not bytes or len(device) != DEVICE_BYTES:
+        raise ValueError(f"a device's id is its GPU's {DEVICE_BYTES}-byte UUID (device_id)")
     return derive(source, SALT_DOMAIN, {"w": commitment, "device": device}).stream("salt", SALT_BITS // 8)
 
 

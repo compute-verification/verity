@@ -54,19 +54,29 @@ encoded from the useful data `W` under PoUS's setup (`pous.setup`: the commitmen
 then `vk`). The audit reuses that setup and `vk`, with one change of input: a block's identity is its leaf under
 `vk.root` (`pous.verifier.leaf_hash`, RFC 6962 SHA-512 tree), and the verifier holds only `vk`.
 
-**One store per device.** The verifier draws each device's salt with the device's identity bound in,
+**One store per device.** The verifier draws each device's salt with the device's id bound in,
 
 ~~~text
-salt = derive(source, "verity/bandwidth/salt/v1", {w: commitment, device: id}).stream("salt", 24)
+salt = derive(source, "verity/bandwidth/salt/v2", {w: commitment, device: id}).stream("salt", 24)
 ~~~
 
-(`audit.draw_salt`), where `id` is the identity the device attests (its GPU's UUID, with its SKU recorded beside it),
-and runs PoUS's setup with that salt in place of `pous.setup.draw_salt`'s. PoUS's setup takes the salt as an input and
-needs only that it is drawn after the commitment to `W`, from the verifier's secret or a later beacon round, which
-this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different stores, so their
-`vk`, seeds and tags differ, and one device's commitment fails another's window
-(`test_one_devices_commitment_fails_anothers_window`). Without it, two such devices hold byte-identical stores and get
-the same `σ` for the same window number, and one device's root passes both windows.
+(`audit.draw_salt`), and runs PoUS's setup with that salt in place of `pous.setup.draw_salt`'s. PoUS's setup takes the
+salt as an input and needs only that it is drawn after the commitment to `W`, from the verifier's secret or a later
+beacon round, which this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different
+stores, so their `vk`, seeds and tags differ, and one device's commitment fails another's window
+(`test_one_devices_commitment_fails_anothers_window`). Without it, two such devices hold byte-identical stores, and one
+device's root passes the other's windows.
+
+**The device's id** is the 16 bytes of its GPU's UUID, nothing else: `draw_salt` refuses any other value, and
+`audit.device_id` reads it only from the one spelling nvidia-smi prints, `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in
+lowercase hex, refusing uppercase, missing dashes, braces, a MIG instance's id and anything else. So one GPU has one id
+and one salt. The challenger reads the id on the device's node, from the NVIDIA driver (`cudaDeviceProp.uuid`, which
+`benchmarks/bandwidth`'s `Tagger.device()` returns, or nvidia-smi through NVML), for the GPU it then audits. Nothing on
+the chip signs it: the verifier trusts the id because it trusts the host the challenger runs on (`trusted-nebius-host`,
+§5) to report the UUID of the GPU it audits. A host that reported another GPU's id would get that GPU's store, and two
+GPUs would answer from one store. The GPU's confidential-computing attestation could sign the UUID with a key in the
+chip, which would remove the host from this step; the audit does not use it yet. The SKU the device reports is
+recorded beside the id.
 
 The salt is the place for the device, not the window key. With the device only in the window key, two devices holding
 byte-identical stores get different seeds, but one device that reads each block once can tag it under both seeds and
@@ -219,9 +229,10 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   a faster root). The device for all three is a whole GPU, not a MIG slice: slices share the chip's L2 and crossbar,
   so a co-resident slice's path in is on chip, not over PCIe. The RTX PRO 6000 Server's only link is its PCIe Gen 5
   x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the device attests (it supports confidential
-  computing) beside its identity (§2).
+  computing) beside its id (§2).
 - **`trusted-nebius-host`** (assumption, core's): the challenger runs its stated code on its Nebius host, which offers
-  no attesting hardware. The audit cites it for one property: the challenger's state is never rolled back (§3).
+  no attesting hardware. The audit cites it for two properties: the device id the challenger reads from the driver is
+  the UUID of the GPU it audits (§2), and the challenger's state is never rolled back (§3).
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
 

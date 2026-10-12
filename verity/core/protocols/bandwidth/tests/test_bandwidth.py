@@ -75,7 +75,7 @@ def _run(store: audit.Store, vk, params: audit.Params, state, *, step: int = 1_0
     return w.verdict([commitment.open(i) for i in drawn]), drawn
 
 
-def _p2_setup(device: str) -> tuple[audit.Store, object]:
+def _p2_setup(device: bytes) -> tuple[audit.Store, object]:
     """A real P2 store: one W encoded under `device`'s salt, and the verifier's `vk` from the public-encoder setup."""
     sch = schemes.P2(P2Params(128, 173, 8, 2))
     w = bytes(range(256))[: sch.params.w_bytes]
@@ -90,7 +90,7 @@ def _p2_setup(device: str) -> tuple[audit.Store, object]:
 
 @pytest.fixture(scope="module")
 def p2_store():
-    return _p2_setup("GPU-a")
+    return _p2_setup(audit.device_id(bv.DEVICES[0]))
 
 
 @pytest.fixture(scope="module")
@@ -374,7 +374,7 @@ def test_one_devices_commitment_fails_anothers_window(p2_store, state_of) -> Non
     """Two devices holding one `W` under one setup secret hold different stores, seeds and tags: device a's
     commitment, or its store tagged under b's seed, fails b's window, while each device passes its own, both open."""
     store_a, vk_a = p2_store
-    store_b, vk_b = _p2_setup("GPU-b")
+    store_b, vk_b = _p2_setup(audit.device_id(bv.DEVICES[1]))
     assert store_a.salt != store_b.salt and store_a.blocks != store_b.blocks and vk_a.root != vk_b.root
     params = _params("ro-blake3/v1")
     va, vb = (audit.Verifier(vk, params, b"window secret", state_of(vk), clock=_ticks(1)) for vk in (vk_a, vk_b))
@@ -390,8 +390,23 @@ def test_one_devices_commitment_fails_anothers_window(p2_store, state_of) -> Non
     win_b = vb.window()
     cb = audit.tag_pass(store_b, params.tag, win_b.start())
     assert win_b.verdict([cb.open(i) for i in win_b.commit(cb.root)]).accepted
-    with pytest.raises(ValueError):
-        audit.draw_salt(b"setup secret", bytes(64), "")
+
+
+def test_a_device_has_one_id_its_gpus_uuid() -> None:
+    """A device's id is its GPU's 16-byte UUID, read from nvidia-smi's one spelling; any other spelling, and any
+    id of another form, is refused, so two spellings of one GPU never give two salts."""
+    uuid = "GPU-7e28035c-3c3b-b7aa-d655-0dad098bab62"
+    device = audit.device_id(uuid)
+    assert device == bytes.fromhex("7e28035c3c3bb7aad6550dad098bab62") and len(device) == audit.DEVICE_BYTES
+    for other in (uuid.upper(), "GPU-" + uuid[4:].upper(), uuid[4:], "GPU-7e28035c3c3bb7aad6550dad098bab62",
+                  "{" + uuid + "}", uuid + "\n", " " + uuid, "MIG-" + uuid[4:], uuid[:-1], uuid + "0", uuid.encode(), device):
+        with pytest.raises(ValueError):
+            audit.device_id(other)
+    com = bytes(64)
+    assert audit.draw_salt(b"s", com, device) != audit.draw_salt(b"s", com, audit.device_id(bv.DEVICES[0]))
+    for other in (uuid, device.hex(), device[:15], device + b"\0", bytearray(device), None):
+        with pytest.raises(ValueError):
+            audit.draw_salt(b"s", com, other)
 
 
 def test_a_window_past_its_limit_frees_the_store_and_is_late(big_store, state_of) -> None:

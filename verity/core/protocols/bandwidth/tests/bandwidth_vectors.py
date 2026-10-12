@@ -21,6 +21,8 @@ BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"
 SEED = bytes(range(32))
 SOURCE = b"verity bandwidth vector source"
 SALT = bytes(range(100, 124))
+COMMITMENT = hashlib.sha512(b"verity bandwidth vector commitment").digest()
+DEVICES = ("GPU-00112233-4455-6677-8899-aabbccddeeff", "GPU-ffeeddcc-bbaa-9988-7766-554433221100")
 NONCES = (bytes(32), bytes(range(32)), bytes([0xFF]) * 32)
 BLOCK_BYTES = 2056
 
@@ -58,9 +60,8 @@ def _tag_vectors() -> list[dict]:
 
 
 def _salt_vectors() -> list[dict]:
-    commitment = hashlib.sha512(b"verity bandwidth vector commitment").digest()
-    return [{"source": SOURCE.hex(), "commitment": commitment.hex(), "device": device,
-             "salt": audit.draw_salt(SOURCE, commitment, device).hex()} for device in ("GPU-a", "GPU-b")]
+    return [{"source": SOURCE.hex(), "commitment": COMMITMENT.hex(), "uuid": uuid, "device": audit.device_id(uuid).hex(),
+             "salt": audit.draw_salt(SOURCE, COMMITMENT, audit.device_id(uuid)).hex()} for uuid in DEVICES]
 
 
 def _window_vectors() -> list[dict]:
