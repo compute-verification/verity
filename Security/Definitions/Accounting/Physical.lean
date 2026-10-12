@@ -3,7 +3,7 @@ import Definitions.Accounting.Confidence
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.4), sections 1 and 3.
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.5), sections 1 and 3.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
 certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
@@ -17,7 +17,7 @@ resource:
 | `SequentialSpeed root t_root` | a path that computes a P2 root spans at least `t_root` ticks | rebuilding a block in time |
 | `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` carries at most `β_e (b − a)` bits read during `[a, b)`, and as many sent | side channels, hidden bandwidth |
-| `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱` are the protocol's; what the certifiers send outside is a function of their record and of a jitter word, one of `χ` classes a bucket | forged records, timing channels |
+| `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱` are the protocol's; what the certifiers send outside during `[a, b)` is a function of their record before `b` and of a jitter word, one of `χ` classes a bucket | forged records, timing channels |
 
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
 leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
@@ -97,14 +97,17 @@ end Placed
 protocol (`spec r`) says and computes as it says, and the certifiers' leaves `cert` lie in `𝒱` (W1); and for some jitter
 word `J`, one of `χ = 2^jitter` classes a bucket of ticks (`bucket`) in each run, what the certifiers send outside
 themselves from the gates they place during `[a, b)`, values and ticks (`sent`), is a function of their record as they
-keep it (`record r`, its gates as seen, so whatever timing it logs is counted there) and of the jitter word on the
-buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained. -/
+keep it, placed before `b` (`record r`, its gates as seen, so whatever timing it logs is counted there; a send during
+`[a, b)` can't read a later record) and of the jitter word on the buckets of `[a, b)` (W2 and J). What a certifier
+reads is unconstrained. -/
 def TrustedUnits {Ω L : Type*} (S : Ω → Actual.Run L) (𝒱 cert : Finset L) (spec : ∀ r, (S r).A.Spec)
     (record : ∀ r, Finset (Fin (S r).A.N)) (bucket : ℕ → ℕ) (jitter : ℕ) : Prop :=
   cert ⊆ 𝒱 ∧
   (∀ r g, (S r).A.x g ∈ 𝒱 → (S r).A.isInput g = false →
     (S r).A.reads g = (spec r).reads g ∧ (S r).A.op g = (spec r).op g) ∧
-  ∃ J : Ω → ℕ → Fin (2 ^ jitter), ∀ a b r r', (S r).seen '' ↑(record r) = (S r').seen '' ↑(record r') →
+  ∃ J : Ω → ℕ → Fin (2 ^ jitter), ∀ a b r r',
+    (S r).seen '' ↑((record r).filter fun g => (S r).A.t g < b) =
+      (S r').seen '' ↑((record r').filter fun g => (S r').A.t g < b) →
     (∀ t ∈ Set.Ico a b, J r (bucket t) = J r' (bucket t)) →
     (S r).sent ↑cert (Set.Ico a b) = (S r').sent ↑cert (Set.Ico a b)
 
