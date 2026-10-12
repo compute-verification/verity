@@ -290,10 +290,44 @@ def hook_runner(hooks, install: Install) -> None:
         hooks.wrap(cls, "load_model", make)
 
 
-def recorder(hooks, sched, rec: list) -> None:
+class Window:
+    """cudaProfilerStart/Stop around `steps` steady decode steps of each point (for `ncu --profile-from-start off`), each
+    window opened by torch's ``spin_kernel`` (`torch.cuda._sleep`) so the profile splits by point."""
+
+    def __init__(self, steps: int) -> None:
+        self.steps, self.point, self.run, self.opened, self.on = steps, None, 0, False, False
+        self.windows: list[dict] = []
+
+    def begin(self, b: int, ctx: int) -> None:
+        self.point, self.run, self.opened = {"batch": b, "context": ctx}, 0, False
+
+    def __call__(self, n: int, r: int) -> None:
+        if not self.steps or self.point is None:
+            return
+        b = self.point["batch"]
+        self.run = self.run + 1 if n == r == b else 0
+        if not self.opened and self.run == 4:
+            torch.cuda.synchronize()
+            torch.cuda.profiler.start()
+            torch.cuda._sleep(1000)
+            self.opened = self.on = True
+        elif self.on and (self.run == 0 or self.run >= 4 + self.steps):
+            self.end()
+
+    def end(self) -> None:
+        if self.on:
+            torch.cuda.synchronize()
+            torch.cuda.profiler.stop()
+            self.on = False
+            self.windows.append(self.point)
+        self.point = None
+
+
+def recorder(hooks, sched, rec: list, window: Window) -> None:
     def make(orig):
         def update_from_output(so, mro):
             rec.append((time.perf_counter(), so.total_num_scheduled_tokens, len(so.num_scheduled_tokens)))
+            window(so.total_num_scheduled_tokens, len(so.num_scheduled_tokens))
             return orig(so, mro)
         return update_from_output
     hooks.wrap(sched, "update_from_output", make)
@@ -328,6 +362,8 @@ def main() -> None:
     ap.add_argument("--select-trials", type=int, default=5)
     ap.add_argument("--python-words", type=int, default=16)
     ap.add_argument("--gate-tokens", type=int, default=16)
+    ap.add_argument("--profile-steps", type=int, default=0,
+                    help="open a profiler window (cudaProfilerStart/Stop) over this many steady decode steps a point")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
@@ -369,7 +405,8 @@ def main() -> None:
     attn = sorted({type(getattr(m, "attn_backend", None)).__name__ for _, m in model.named_modules()
                    if getattr(m, "attn_backend", None) is not None})
     rec: list = []
-    recorder(hooks, get_scheduler(llm), rec)
+    window = Window(args.profile_steps)
+    recorder(hooks, get_scheduler(llm), rec, window)
 
     props = torch.cuda.get_device_properties(0)
     result = {
@@ -383,7 +420,7 @@ def main() -> None:
                         "kv_heads": hf.num_key_value_heads, "head_dim": getattr(hf, "head_dim", None) or
                         hf.hidden_size // hf.num_attention_heads, "intermediate": hf.intermediate_size,
                         "vocab": hf.vocab_size, "tied": bool(getattr(hf, "tie_word_embeddings", False))},
-        "gate": [], "points": [],
+        "gate": [], "points": [], "profile_steps": args.profile_steps, "profiled": window.windows,
     }
     if args.arm == "stock":
         layers = fp8_linears(model)
@@ -417,9 +454,11 @@ def main() -> None:
             prompts = [TokensPrompt(prompt_token_ids=[rng.randrange(1000, 120000) for _ in range(ctx)]) for _ in range(b)]
             mt = args.steps + math.ceil(b * ctx / args.max_batched_tokens) + 8
             rec.clear()
+            window.begin(b, ctx)
             t = time.perf_counter()
             llm.generate(prompts, SamplingParams(temperature=0.0, max_tokens=mt, ignore_eos=True, detokenize=False),
                          use_tqdm=False)
+            window.end()
             point.update(steady(rec, b), wall_s=time.perf_counter() - t, max_tokens=mt, updates=len(rec))
             result["points"].append(point)
             save()

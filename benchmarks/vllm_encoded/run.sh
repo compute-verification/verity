@@ -14,6 +14,8 @@
 # SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
+# MODE=profile runs the arms (default "stock enc:2") under Nsight Compute, each point's profiler window over two decode
+# steps, and traffic.py's measured HBM bytes a step instead of compare.py (its tokens/s are not timings).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -37,6 +39,12 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 (cd $VE && "$PY" -m pytest -q -p no:cacheprovider tests) > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 "$PY" -c 'import json, sys; d = json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ("model", "revision", "vllm", "torch")}))' \
   "$WORK/ready.json" > "$O/ready.json"
+export NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu} NCU_ARGS=
+if [ "${MODE:-}" = profile ]; then
+  ARMS=${ARMS:-stock enc:2} SERVE_ARGS=${SERVE_ARGS:---profile-steps 2 --steps 16} ARM_MIN=${ARM_MIN:-10}
+  NCU_ARGS="--profile-from-start off --graph-profiling graph --cache-control none --clock-control none"
+  NCU_ARGS+=" --metrics dram__bytes_read.sum,dram__bytes_write.sum"
+fi
 export B PY MODEL VE ARMS=${ARMS:-stock plain enc:2 enc:3 stock} SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-7}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
@@ -83,11 +91,19 @@ fi
       *) A=(--arm "$name"); tag=$name ;;
     esac
     A+=("${C[@]}"); tag=$i-$tag$c; q "$tag start"
+    # shellcheck disable=SC2206
+    P=(); [ -n "$NCU_ARGS" ] && P=("$NCU_BIN" $NCU_ARGS -f -o "$O/ncu-$tag")
     # shellcheck disable=SC2086
-    timeout "$((ARM_MIN * 60))" "$PY" $VE/serve.py "${A[@]}" --model "$MODEL" --out "$O/arm-$tag.json" $SERVE_ARGS \
+    timeout "$((ARM_MIN * 60))" "${P[@]}" "$PY" $VE/serve.py "${A[@]}" --model "$MODEL" --out "$O/arm-$tag.json" $SERVE_ARGS \
       > "$O/arm-$tag.log" 2>&1
     echo "$tag $?" >> "$O/arms.rc"; q "$tag end"
   done'
+if [ "${MODE:-}" = profile ]; then
+  for r in "$O"/ncu-*.ncu-rep; do "$NCU_BIN" --import "$r" --csv --page raw --print-units base > "${r%.ncu-rep}.csv" 2>&1; done
+  (cd $VE && "$PY" traffic.py "$O") > "$O/traffic.log" 2>&1; rc=$?
+  cat "$O/arms.rc" "$O/traffic.log"
+  exit $rc
+fi
 "$PY" $VE/compare.py "$O" > "$O/compare.log" 2>&1; rc=$?
 cat "$O/arms.rc" "$O/compare.log"
 exit $rc
