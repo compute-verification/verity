@@ -130,6 +130,7 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
+        "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/"
       ]
     },
