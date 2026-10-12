@@ -170,13 +170,13 @@ theorem colsHold_outs {st : St} {inBits outBits : Array ℕ} {w : List Lin} {v :
 /-! ## The laid-out net -/
 
 /-- **V*'s laid-out opening computes the verifier of record's climb and the opening's consistency term.** For a Merkle
-scheme `ms` whose node is `SHA-512(l ‖ r)`, `H ≤ 16` levels and input ports `p` laid out as `row, aux, acc, coef, dirs`,
+scheme `ms` whose node is `SHA-512(l ‖ r)`, `H ≤ 32` levels and input ports `p` laid out as `row, aux, acc, coef, dirs`,
 whenever `recOpenLaid`'s rows hold at the column values `v` (`LaidRows`): if the `row` columns hold the bytes of the
 `LANES` elements `r`, the `acc` columns those of two elements `a` and then `rest`, the `coef` columns those of `c`, the
 `aux` columns the 64-byte siblings `ss` one after another, and direction column `h < H` bit `h` of the position `idx`,
 then the output columns from `outStart` hold `Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes
 (`rec_open.expected` of that node), then the bytes of `consTerm` at `k = 0, 1` (`rec_open.acc_ref`) and `rest`. -/
-theorem laid_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+theorem laid_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (p : Ports) (outBits : Array ℕ) (v : ℕ → Bool) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)
     (h : LaidRows (recOpenLaid LANES H p outBits) (inRowsOf p.bits) v)
     (r a c : Array F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray)

@@ -22,9 +22,31 @@ Ligerito.lean:165–277) computes over `F256`: a K value `(c0, c1)` is the word 
   final check passes; `finalProg_of_finalOK` applies it to `FinalOK`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
+
+/-! ## A record's rounds of some coins -/
+
+/-- A record with no round of no coins, which `Coins.ofRounds` reads as recorded: it skips a round of no coins
+(RecAlgebra.lean, `Coins.ofRounds`), and a record whose rounds have `run`'s sizes has none (`verifierRows_schedule`). -/
+def NoEmpty (rounds : Array (Array F128)) : Prop := ∀ r ∈ rounds, r.size ≠ 0
+
+theorem filter_noEmpty {rounds : Array (Array F128)} (h : NoEmpty rounds) : rounds.filter (·.size ≠ 0) = rounds :=
+  Array.filter_eq_self.mpr fun r hr => decide_eq_true (h r hr)
+
+theorem noEmpty_filter (rounds : Array (Array F128)) : NoEmpty (rounds.filter (·.size ≠ 0)) := fun r hr => by
+  simpa using (Array.mem_filter.mp hr).2
+
+theorem noEmpty_of_sizes {rounds : Array (Array F128)} {ns : List Nat} (h : rounds.toList.map Array.size = ns)
+    (hn : ∀ n ∈ ns, n ≠ 0) : NoEmpty rounds := fun r hr => by
+  subst h
+  exact hn _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hr))
+
+theorem ofRounds_filter (rounds : Array (Array F128)) :
+    Coins.ofRounds (rounds.filter (·.size ≠ 0)) = Coins.ofRounds rounds := by
+  unfold Coins.ofRounds
+  rw [filter_noEmpty (noEmpty_filter rounds)]
 
 /-! ## K values as the verifier's words -/
 
@@ -415,7 +437,7 @@ final check passes, on the messages w holds (`decoded`), the ring switches' swit
 contexts at the rep's coins (`info.lg`). -/
 theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -428,7 +450,7 @@ theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
       (Coins.ofRounds rounds).drawnAll k' = true ∧ st.msg = (decoded sh w comb cons).msgs.size ∧
       st.ood = (decoded sh w comb cons).ood.size ∧ info.lg.oods = st.oods ∧ info.lg.conss = st.conss ∧
       FinalOK sh.sched info.rs.sws (decoded sh w comb cons).yr info.lg.initCh info.lg.levels ext st := by
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hpl hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   obtain ⟨-, r0, r1, rsr, lgr, k1, k2, k3, -, -, -, h4, hrs⟩ := run_stages hrun
@@ -440,4 +462,4 @@ theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
     ligerito_checks h4 (fun x hx => hzero x (by rw [hrs]; simp [hx]))
   exact ⟨k3, ext, st, k, hl, hd, hm, ho, hlo, hlc, hf⟩
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

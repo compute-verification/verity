@@ -24,8 +24,8 @@ or outside index, a wrong nonce, round, epoch or audit id, a replayed challenge 
 answer, a flipped, truncated or extended frame, a dropped tail or an extra frame, a wrong verifier secret, a seen pair, a
 bad AUDIT_OPEN field or length, a missing or wrong beacon, a non-canonical or invalid manifest, a broken setup frame, a
 wrong or missing private root, a wrong, short or missing held `W` under flag bit 1, an elapsed time past u64);
-deployment-width audits (B = 2^19, k = 105) over one private store; and the spec's audit vectors (§7), each checked here
-against its pinned FINAL. The `sha512` instance is §7's pins of the audit files and frames, its answer the pins as the spec
+deployment-width audits (B = 2^19, k = 105) over one private store; the spec's audit vectors (§7), each checked here
+against its pinned FINAL; and named sessions at edges the two once read apart (`redteam_audits`). The `sha512` instance is §7's pins of the audit files and frames, its answer the pins as the spec
 states them.
 """
 from __future__ import annotations
@@ -625,6 +625,80 @@ def _vector_audits(py) -> list[dict]:
     return out
 
 
+def _unchecked_params(R, w: int, c0: int, payload_bytes: int, bps: int, segments: int, profile: str):
+    """`reference.Params` without its refusals, for a store the wire must refuse."""
+    q = object.__new__(R.Params)
+    for k, v in {"w": w, "c0": c0, "payload_bytes": payload_bytes, "blocks_per_segment": bps, "segments": segments,
+                 "profile": profile}.items():
+        object.__setattr__(q, k, v)
+    return q
+
+
+def _small_p_session(py, rng: random.Random, *, public: bool, flags: int) -> _Session:
+    """An honest session over a store `reference.Params` refuses: w = 32, profile `p2-24b`, and p the largest prime
+    ≡ 3 mod 4 below 2^24, so that not every 3-byte payload is below p (c0 = 2^32 − p ≡ 1 mod 4)."""
+    R = py[0]
+    w, bits, bps, segments = 32, 24, 2, 2
+    p = 16777199
+    q = _unchecked_params(R, w, (1 << w) - p, bits // 8, bps, segments, "p2-24b")
+    payloads = [rng.randrange(p) for _ in range(q.blocks)]
+    held = R.pack_payloads(payloads, bits)
+    commitment = R.w_commitment(q, held)
+    salt = R.setup_salt(rng.randbytes(32), q, commitment)
+    blocks = []
+    for i, m in enumerate(payloads):
+        kv, t, _ = R.keys(salt, q, commitment, i // bps, i % bps)
+        blocks.append(R.encode(q, m, kv, t).to_bytes(w // 8, "big"))
+    leaves = [R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]
+    paths = [R.path(leaves, i) for i in range(len(leaves))]
+    s = _Session(py, rng, q, commitment, salt, R.root(leaves), blocks.__getitem__, paths.__getitem__,
+                 blocks if public else None, 0, 3, flags, R.DELTA_NS, 0)
+    s.w_bytes = held if flags & 2 else None
+    return s
+
+
+def _with_manifest(s: _Session, manifest: bytes) -> None:
+    s.setup[0] = s.py[1].envelope(s.py[1].SETUP_COMMIT, len(manifest).to_bytes(4, "big") + manifest + s.commitment)
+
+
+def redteam_audits(py) -> list[dict]:
+    """Named sessions at the edges the two verifiers once read apart: a store whose payloads are not all below p (honest
+    sessions over it, public and private, under each flag, and p negative), a store of 2^79 blocks under SETUP_ROOT block
+    counts no u64 can make its own, a mode-1 beacon list naming a round twice, and manifest numbers Python's `json` reads
+    as floats (an exponent of a million digits' value, `NaN`, `±Infinity`, either side of the double range's end)."""
+    R = py[0]
+    out = []
+    for public in (True, False):
+        for flags in (0, 1, 3):
+            s = _small_p_session(py, random.Random(f"redteam/p/{public}/{flags}"), public=public, flags=flags)
+            out.append(s.instance(f"redteam-payload-not-below-p-{'public' if public else 'private'}-flags-{flags}"))
+    s = _small_p_session(py, random.Random("redteam/p/truncated"), public=True, flags=1)
+    s.rounds = [s.rounds[0][:1]]
+    out.append(s.instance("redteam-payload-not-below-p-truncated"))
+    s = _small_p_session(py, random.Random("redteam/p/negative"), public=True, flags=1)
+    _with_manifest(s, R.canonical_json_bytes(s.params.manifest() | {"c0": (1 << 32) + 1}))
+    out.append(s.instance("redteam-p-negative"))
+    for count in (0, (1 << 64) - 1, 1 << 15):
+        s = _small_session(py, random.Random(f"redteam/blocks/{count}"), public=False, mode=0, flags=0)
+        _with_manifest(s, R.canonical_json_bytes(s.params.manifest() | {"blocks_per_segment": 1 << 16, "segments": 1 << 63}))
+        s.setup[-1] = s.root_frame(count, s.root, 0)
+        out.append(s.instance(f"redteam-blocks-past-u64-count-{count}"))
+    for order in ("wrong-first", "wrong-last"):
+        s = _small_session(py, random.Random(f"redteam/beacons/{order}"), mode=1, k=3, flags=0)
+        inst = s.instance(f"redteam-beacon-round-twice-{order}")
+        j, right = inst["beacons"][1]
+        pair = [[j, right], [j, _flip(bytes.fromhex(right), 0).hex()]]
+        inst["beacons"] = inst["beacons"][:1] + (pair[::-1] if order == "wrong-first" else pair) + inst["beacons"][2:]
+        out.append(inst)
+    for name, edit in [("exponent-1e1000000", b'"w":1e1000000'), ("exponent-1e16", b'"w":1e16'), ("nan", b'"w":NaN'),
+                       ("infinity", b'"w":Infinity'), ("minus-infinity", b'"w":-Infinity'),
+                       ("past-double", b'"w":1.7976931348623159e308'), ("below-double-max", b'"w":1.7976931348623158e308')]:
+        s = _small_session(py, random.Random(f"redteam/float/{name}"), public=True, mode=0, flags=0)
+        _with_manifest(s, R.canonical_json_bytes(s.params.manifest()).replace(f'"w":{s.params.w}'.encode(), edit))
+        out.append(s.instance(f"redteam-manifest-{name}"))
+    return out
+
+
 SPEC = "verity/core/protocols/pous/p2/PROTOCOL.md"
 
 
@@ -751,7 +825,7 @@ def instances(py) -> list[dict]:
     out += [_small_audit(py, random.Random(f"audit/{seed}")) for seed in range(600)]
     out += [_full_audit(py, random.Random(f"deployment/{i}"), name) for i, name in enumerate(DEPLOYMENT_AUDITS)]
     out += [_storage_instance(random.Random(f"storage/{seed}")) for seed in range(200)]
-    return out + _vector_audits(py) + [_pins(py)]
+    return out + _vector_audits(py) + redteam_audits(py) + [_pins(py)]
 
 
 ANSWERS = {"merkle": _merkle_answers, "randomness": _randomness_answers, "audit": _audit_answers, "sha512": _pins_answers,

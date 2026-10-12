@@ -4,7 +4,7 @@
 A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
 `names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`deliveries`): the names that
 lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, on a reply
-under an announcement the owners of the PRs it names (`pr_watchers`), and every name whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
+under an announcement that names no one the owners of the PRs it names (`pr_watchers`), and every name whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
 or a `digest` (in that name's next `read --as`). The footer carries the post's kind and flags, which subscriptions filter on.
 Notes are records, never messages.
 
@@ -111,6 +111,7 @@ EXPIRES_S = 2592000                                              # 30 days; a la
 PAGE = 200
 ROUTER_DOWN = "the router's events route doesn't answer"         # its owner's alert, by which the next sender sees it was sent
 ROUTER_ALERT_S = 21600                                           # 6 hours: one alert per outage, again if it outlasts that
+ROUTER_RECHECK_S = 300                                           # how stale a long-lived Routes' idea of the router may get
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -315,6 +316,10 @@ def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
     """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket. Asking again is safe: a token
     request changes nothing."""
     path = os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock")
+    hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
+        f"{aud} needs is unavailable (only a Cursor agent has one)"
+    if not os.path.exists(path):                     # checked first: connecting to a long path fails with a plain OSError
+        raise SlackError(f"the Cursor identity socket {hint}")
     for wait in (*OIDC_RETRY_S, None):
         conn = _UnixHTTP(path)
         try:
@@ -324,8 +329,6 @@ def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
             break
         except (OSError, http.client.HTTPException) as e:
             if wait is None or isinstance(e, FileNotFoundError):
-                hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
-                    f"{aud} needs is unavailable (only a Cursor agent has one)"
                 raise SlackError(f"the Cursor identity socket {hint}") from None
         finally:
             conn.close()
@@ -736,8 +739,9 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
-    A quiet post wakes only the names at its start.  A reply under an announcement, quiet or not, also wakes its
-    `pr_watchers` (with `history` and `branches`, as there).  The author is never a target."""
+    A quiet post wakes only the names at its start.  A reply under an announcement that names no one but its author, quiet
+    or not, also wakes its `pr_watchers` that are handles (with `history` and `branches`, as there); one that names
+    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
@@ -761,8 +765,9 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         elif reply and by:
             rt = (root or {}).get("text") or ""
             out += lead_names(rt, reg) + (header_names(rt, reg) if is_announcement(root) else [])
-    if reply and is_announcement(root) and not is_status(text):
-        out += pr_watchers(msg, reg, history, branches)
+    if reply and is_announcement(root) and not is_status(text) and not set(lead_names(text, reg)) - {author}:
+        handles = {h["handle"] for h in reg["handles"]}
+        out += [n for n in pr_watchers(msg, reg, history, branches) if n in handles]
     seen: list[str] = []
     for n in out:
         if n and n != author and n not in seen:
@@ -810,7 +815,7 @@ def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], i
                history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[dict]:
     """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
     (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes only the names it starts with and its `pr_watchers`, and still reaches
+    when that name reads its digest).  A quiet post wakes only the names it starts with (or, naming no one, its `pr_watchers`), and still reaches
     digests.  Nothing in an inbox thread, and nothing by an unknown author, reaches anyone; the author never gets their own post."""
     targets = route_targets(msg, root, reg, inboxes, history, branches)
     out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
@@ -907,8 +912,11 @@ class Routes:
         """Whether the console site's events route rings the doorbells: `routes.d/router.json` says `"mode": "server"` as
         published and in the clone, each that can be read, and its `url` answers.  Either saying otherwise means the sender
         rings them, so switching back to `cli` reaches every sender at once, a clone not yet pulled included; a route that
-        doesn't answer leaves `router_down` = (url, why, owner) for `deliver` to alert its owner."""
-        if not hasattr(self, "_mode"):
+        doesn't answer leaves `router_down` = (url, why, owner) for `deliver` to alert its owner.  A process that holds one
+        `Routes` for days (the monitors' relay, n1_alerts) reads all of this again every ROUTER_RECHECK_S."""
+        now = _now().timestamp()
+        if now - getattr(self, "_mode_at", -ROUTER_RECHECK_S) >= ROUTER_RECHECK_S:
+            self._mode_at, self.router_down = now, None
             p, routers = self.root / ROUTES_DIR / "router.json", []
             for read in (lambda: self.get(f"{self.base}router.json"), lambda: p.read_bytes() if p.is_file() else None):
                 try:
@@ -1180,7 +1188,8 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
           f"starts, replies in or picks up (not for a status line alone); renew on every wake")
     print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
-          f"@{h['handle']} at its start, one of its PRs, or a run it named beside one of its PRs; unsubscribe from any you hold")
+          f"@{h['handle']} at its start, or, naming no one, one of its PRs or a run it named beside one of its PRs; "
+          "unsubscribe from any you hold")
     return 2 if missing else 0
 
 
@@ -1618,6 +1627,9 @@ def _now_stamp() -> str:
 def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
     routes = routes_of(ns)
     if ns.verb == "list":
+        for h in reg["handles"]:                                    # a clone not pulled since the name opened lists it too
+            if h["handle"] not in routes.local:
+                routes.get_route(h["handle"])
         rows = sorted({**routes.local, **routes.all()}.values(), key=lambda r: r["name"])
         if ns.json:
             print(json.dumps(rows, indent=2))

@@ -145,7 +145,7 @@ theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (St
     subst h
     exact ⟨_, by with_reducible assumption⟩
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 8000000 in
 /-- A template's `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {t : Typed.Template} {c : Circuit} (h : HmRow.parse tags bytes tables (some t) #[] = .ok c) :

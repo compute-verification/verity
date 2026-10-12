@@ -9,6 +9,7 @@ import Proofs.Flock.Soundness.Refine.Zerocheck
 import Proofs.Flock.Soundness.Refine.Realizes
 import Proofs.Flock.Soundness.Refine.Lincheck
 import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.OpeningConverse
 import Proofs.Flock.Soundness.Refine.ExecLM
 import Proofs.Flock.Soundness.Refine.ArithK
 import Proofs.Flock.Soundness.Refine.Ligerito
@@ -28,3 +29,5 @@ import Proofs.Flock.Soundness.Refine.LiveCompiled
 import Proofs.Flock.Soundness.Refine.Frames
 import Proofs.Flock.Soundness.Refine.FramesPiop
 import Proofs.Flock.Soundness.Refine.Salted
+import Proofs.Flock.Soundness.Refine.LincheckConverse
+import Proofs.Flock.Soundness.Refine.RepConverse

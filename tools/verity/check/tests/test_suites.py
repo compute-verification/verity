@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parents[1]
 
 
@@ -947,8 +949,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-def test_an_interrupted_run_keeps_what_finished(tmp_path):
-    """A stop (check.py's SIGINT to the step's processes) mid-suite: the tests that passed before it are kept."""
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
+    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -960,14 +964,17 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
     (tests / "test_z_block.py").write_text(f"import signal\n\ndef test_block():\n    with open({str(gate)!r}, 'w') as f:\n"
                                            "        f.write('x')\n    signal.pause()\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
-    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+    (tmp := tmp_path / "tmp").mkdir()
+    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(tmp))
     p = subprocess.Popen([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
                          cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
-    os.killpg(p.pid, signal.SIGINT)
+    assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
+    os.killpg(p.pid, getattr(signal, stop))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
+    assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
     assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))) == 1
 
 
@@ -1217,17 +1224,49 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.classify(str(tmp_path / "lib" / "__pycache__" / "other.cpython-314.pyc")) == ("O", "lib/__pycache__/other.cpython-314.pyc")
     assert r.traced(str(tmp_path / "lib" / "data.json")) == "lib/data.json" and r.traced("/elsewhere/x") is None
     assert r.traced(str(Path(child) / "sitecustomize.py")) is None
-    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == ("F", "lib/a.py")
-    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == ("L", "lib")
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) is None
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == ("X", sys.executable)
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == ("X", sys.executable)
-    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == ("X", "git")
-    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == ("X", "uv")
-    assert r.trace("os.system", ("ls",)) == ("X", "os.system")
-    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) is None       # a machine probe reads no repository file
+    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == [("F", "lib/a.py")]
+    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == [("L", "lib")]
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == []
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == [("X", sys.executable)]
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == [("X", sys.executable)]
+    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == [("X", "git")]
+    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == [("X", "uv")]
+    assert r.trace("os.system", ("ls",)) == [("X", "os.system")]
+    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) == []       # a machine probe reads no repository file
     monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == ("X", sys.executable)
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
+
+
+def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):
+    """A Lean executable the suite declares under `artifacts` reads what its arguments name, so the tests that start it keep
+    traced per-test keys: its run is the files it was given (a file with those beside it, a directory whole), outside the inputs
+    a failure; `lake build` of declared outputs reads nothing the key doesn't hold. Any other program is still untraced."""
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    pkg, bin_ = tmp_path / "lean", tmp_path / "lean" / ".lake" / "build" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "verify").write_text("")
+    (bin_ / "other").write_text("")
+    for f in ("fx/a.bin", "fx/b.bin", "fx/sub/c.json", "out/x.bin"):
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text("")
+    monkeypatch.setenv("VERITY_SUITE_ROOT", str(tmp_path))
+    monkeypatch.setenv("VERITY_SUITE_ALLOW", '["fx"]')
+    monkeypatch.setenv("VERITY_SUITE_PROGRAMS", '["lean/.lake/build/bin/verify"]')
+    r = R.Reads()
+    exe = str(bin_ / "verify")
+    pop = lambda argv, cwd=None: r.trace("subprocess.Popen", (None, argv, cwd, None))     # noqa: E731
+    assert pop([exe, "check", "--circuit", str(tmp_path / "fx" / "a.bin"), "/elsewhere/tmp/p.bin"]) == [("F", "fx/a.bin"), ("F", "fx/b.bin")]
+    assert pop([exe, "--dir=fx/sub"], cwd=tmp_path) == [("F", "fx/sub/c.json")]
+    assert pop([exe, "out/x.bin"], cwd=tmp_path) == [("F", "out/x.bin"), ("O", "out/x.bin")]
+    monkeypatch.chdir(tmp_path)
+    assert r.trace("os.posix_spawn", (exe, [exe, "fx"], None)) == [("F", "fx/a.bin"), ("F", "fx/b.bin"), ("F", "fx/sub/c.json")]
+    assert pop(["lake", "build", "verify"], cwd=pkg) == []
+    assert pop(["lake", "build", "verify", "other"], cwd=pkg) == [("X", "lake")]
+    assert pop(["lake", "env", "lean", "x.lean"], cwd=pkg) == [("X", "lake")]
+    assert pop([str(bin_ / "other"), "fx"]) == [("X", str(bin_ / "other"))]
+    assert pop(["verify", "fx"], cwd=bin_) == [("X", "verify")]                         # found on PATH: not the declared one
 
 
 def _guard(monkeypatch):
@@ -1237,6 +1276,20 @@ def _guard(monkeypatch):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_a_passed_test_s_seconds_hold_its_setup_so_a_module_fixture_s_first_test_counts_as_heavy(monkeypatch):
+    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker
+    (proofs, 12 Oct); the teardown is not counted, and a failed phase still drops the test."""
+    from types import SimpleNamespace as R
+
+    G = _guard(monkeypatch)
+    for node, phases in (("t::fixture_first", [("setup", "passed", 1200.0), ("call", "passed", 1.5), ("teardown", "passed", 9.0)]),
+                         ("t::plain", [("setup", "passed", 0.25), ("call", "passed", 3.0), ("teardown", "passed", 0.0)]),
+                         ("t::bad", [("setup", "passed", 5.0), ("call", "failed", 1.0), ("teardown", "passed", 0.0)])):
+        for when, outcome, s in phases:
+            G.pytest_runtest_logreport(R(nodeid=node, when=when, outcome=outcome, duration=s, keywords={"slow": 1}))
+    assert G._outcomes == {"t::fixture_first": 1201.5, "t::plain": 3.25, "t::bad": None}
 
 
 def test_each_heavy_test_heads_its_own_worker_s_share_under_worksteal(monkeypatch):

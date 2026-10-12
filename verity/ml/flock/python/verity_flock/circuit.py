@@ -505,7 +505,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
             v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
-            leaf_scheme: dict | None = None) -> str:
+            leaf_scheme: dict | None = None, extra_meta: dict | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -528,7 +528,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
     commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
     descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
-    ``unit-class/...``)."""
+    ``unit-class/...``). ``extra_meta``: keys a statement adds to META for its verifier (`rec_residuals.HOLO_KEY`), none of
+    them one META already has."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -640,6 +641,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "program_sha512": program or program_sha512(sub, statics),
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
                           {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
+    if extra_meta:
+        if clash := sorted(set(extra_meta) & set(meta)):
+            raise ValueError(f"extra_meta: {clash} are META's own keys")
+        meta.update(extra_meta)
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
     texts = [("unit", _expanded(low.layout, low.name)),
              (SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
@@ -918,25 +923,27 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
           indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
-          public_inputs: dict | None = None, identifier: dict | None = None) -> Path:
+          public_inputs: dict | None = None, identifier: dict | None = None, leaf_scheme: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
     (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
     ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
     stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
-    :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`)."""
+    :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`). ``leaf_scheme``
+    (:func:`compose`): the proof's own Merkle leaves."""
     if public_only and salt_key is None:
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = set_statics(input_set)
-    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics, public_inputs=public_inputs)
+    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics, public_inputs=public_inputs,
+                   leaf_scheme=leaf_scheme)
     (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
-                                                            statics=statics, public_inputs=public_inputs))
+                                                            statics=statics, public_inputs=public_inputs, leaf_scheme=leaf_scheme))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
     write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows, identifier=identifier)
     if public_inputs:

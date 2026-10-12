@@ -3,6 +3,7 @@ PROTOCOL.md §16.10 (registered reads); `protocols/sampled_proofs/README.md`, "R
 registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
 leaves), opened against the verifier's own registered roots at the positions its own program reads.
 -/
+import Flock.Canon
 import Flock.HmRow
 
 namespace Flock
@@ -11,6 +12,31 @@ namespace Registered
 open Lean (Json)
 
 def FORMAT : String := "verity/registered-reads/v0"
+
+def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+/-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
+def WORD_BITS : Nat := 16
+def WIDTHS : List Nat := [16, 32]
+def WIDTH_KEY : String := "word_bits"
+
+private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String) (manifest : Json) : V ByteArray := do
+  let t := tag.toUTF8
+  let m := (← Flock.canon manifest).toUTF8
+  return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
+
+/-- `registered.domain(program, value, words, leaves, word_bits).domain_id` (one-stage `registered.py`), `leaves` the
+value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
+`identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+`"word_bits"` beside them when it is not 16. -/
+def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray := do
+  if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
+  let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
+    ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
+    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]))
+  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+  let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
+    (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
+  return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
 
 /-- A port of the verifier's own `--registered` file: the value its rows are rows of, the value's registered root, leaf
 count, row width and frame-v3-sha512 domain, and the position every unit of the population reads (none: a unit of
@@ -174,6 +200,130 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
+
+/-- The registered values that are a round's commitment by an index, `<prefix><i>`: round `i`'s commitment `rec-c<i>`,
+which V*'s algebra reads; level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads; R's registered
+opening's round `i`, `rec-opening-c<i>`, and R's level-`l` tops, `rec-top-stacked-L<l>`; and the sparse phase's messages
+`rec-sparse-pre<j>` and `rec-sparse-sc<j>`. -/
+def roundIndexed : List String :=
+  ["rec-c", "rec-top-L", "rec-opening-c", "rec-top-stacked-L", "rec-sparse-pre", "rec-sparse-sc"]
+
+/-- The sparse phase's other messages, each a round's commitment by its name. -/
+def roundNamed : List String := ["rec-sparse-v2", "rec-sparse-u", "rec-sparse-vt"]
+
+/-- A registered value a recursive statement reads a round's commitment from: a prefix of `roundIndexed` followed by an
+index's decimal digits, or one of `roundNamed`. The sparse phase's `rec-sparse-v`, `rec-sparse-zero` and `rec-sparse-tau`
+are no round's commitment. -/
+def roundCommitment (value : String) : Bool :=
+  let index (s : String) := !s.isEmpty && s.all Char.isDigit
+  roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
+
+/-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
+stratum draws all of its units (`k_s = n_s`). -/
+def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
+  let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
+  match d.law with
+  | .subset k => k == d.population
+  | .bernoulli a b => a == b
+  | .stratified _ strata => strata.any full
+  | .work _ strata => strata.any (full ·.toStratum)
+
+/-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
+does not draw in full. -/
+def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
+  own.findSome? fun p =>
+    if roundCommitment p.value then
+      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
+    else none
+
+/-- U4 (PROTOCOL.md §16.10): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
+draw proves its whole population. -/
+def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
+  let (some own, some j) := (own, draw) | pure ()
+  let d ← Draw.UnitDraw.ofJson j
+  match fullMiss own d with
+  | none => pure ()
+  | some (p, u) =>
+    throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
+
+/-! ### A recursive session's inner statement: its description, read from the developer's registration (§16.16) -/
+
+/-- The circuit's first port named `name`. -/
+def portOf (c : Circuit) (name : String) : Option Nat := (List.range c.ports.size).find? fun p => c.ports[p]!.name == name
+
+/-- The statement's commit strings of `reg`'s registered rows: registered row `r` is row `r` of the table of the circuit's
+port named `reg.name` (`checkDescription`: the table is the registration, in order). -/
+def rowsOf (c : Circuit) (pub : Public) (reg : Port) (r : Nat) : ByteArray :=
+  match portOf c reg.name, pub.tables with
+  | some p, some t => tableRow pub t p r
+  | _, _ => ByteArray.empty
+
+/-- The path the statement's header gives registered row `r` of `reg` (`entry`), the one `rowsOf c pub reg r` opens the
+registered root through. -/
+def pathOf (pub : Public) (reg : Port) (r : Nat) : ByteArray :=
+  match entry pub reg with
+  | .ok (_, paths) => paths.getD r ByteArray.empty
+  | .error _ => ByteArray.empty
+
+/-- The first of `rows` table rows whose stated position is not its own index. -/
+def badPosition (positions : Array Nat) (rows : Nat) : Option Nat :=
+  (List.range rows).find? fun r => positions.getD r 0 != r
+
+/-- The first of `n` instances whose ref names no row of port `p`'s `rows` table rows. -/
+def badRef (t : Tables) (np p rows n : Nat) : Option Nat :=
+  (List.range n).find? fun i => !decide (ref t np p i < rows)
+
+/-- The first of port `p`'s `rows` table rows that none of `n` instances reads. -/
+def unread (t : Tables) (np p rows n : Nat) : Option Nat :=
+  (List.range rows).find? fun r => !(List.range n).any fun i => ref t np p i == r
+
+/-- One port of an inner statement's description: a row of the circuit, an `hm96-sha512/row/v1` row of `reg`'s width
+(`Port.fits`), whose table is `reg`'s registration in order (as many rows as its leaves, table row `r` at position `r`,
+opening the registered root through its path), every instance reading a row of it, and every row of it read. -/
+def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) : V Unit := do
+  let np := c.ports.size
+  let some p := portOf c reg.name
+    | throw s!"registered reads: {reg.name} is not a row of the circuit (an input port, or an output port's row)"
+  if c.ports[p]!.v2 then
+    throw s!"registered reads: port {reg.name} is a {if c.ports[p]!.segs.isSome then HmRow.ROW_SCHEMA_SEG else HmRow.ROW_SCHEMA_V2} row, and {reg.value}'s registered rows are {HmRow.ROW_SCHEMA} rows"
+  if !reg.fits c.ports[p]!.words then
+    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.words} u16 words, not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
+  let (positions, paths) ← entry pub reg
+  let rows := t.counts.getD p 0
+  if rows != reg.leaves then
+    throw s!"registered reads: port {reg.name}: its table has {rows} rows, and {reg.value}'s registration {reg.leaves}: an inner statement's description is its registered rows, each once, in order"
+  else if positions.size != rows || paths.size != rows then
+    throw s!"registered reads: port {reg.name}: one position and one path per table row"
+  else match badPosition positions rows with
+  | some r =>
+    throw s!"registered reads: port {reg.name}: table row {r} states position {positions.getD r 0}, and an inner statement's description table is its registration in order (row {r} at position {r})"
+  | none =>
+    match badRow reg pub t p rows positions paths with
+    | some r =>
+      throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {r}"
+    | none =>
+      match badRef t np p rows pub.n with
+      | some i =>
+        throw s!"registered reads: port {reg.name}: instance {i}'s ref {ref t np p i} names no row of its {rows}-row table"
+      | none =>
+        match unread t np p rows pub.n with
+        | some r =>
+          throw s!"registered reads: port {reg.name}: none of the {pub.n} instances reads table row {r}, registered row {r} of {reg.value}'s {reg.leaves}: an inner statement reads its whole description"
+        | none => pure ()
+
+/-- **A recursive session's inner statement's description, read from the developer's registration** (PROTOCOL.md §16.16):
+the header's `registered` names exactly the verifier's own ports (`own`, `--registered`), each a table of a shared-row file
+that is the registration in order, every row of it opening the registered root at its index and read by an instance
+(`checkDescriptionPort`; `FlockProofs.Registered`: `checkDescription_ok`). No position depends on which unit an instance
+is, so unlike `check` the units need not be derived. -/
+def checkDescription (c : Circuit) (pub : Public) (own : Array Port) : V Unit := do
+  let .ok (.obj kvs) := pub.header.getObjVal? "registered"
+    | throw "registered reads: the inner statement names no registered rows: its description committed afresh opens no registered root"
+  for (name, _) in kvs.toArray do
+    if !own.any (·.name == name) then throw s!"registered reads: the statement names port {name} registered, and the verifier's registered reads do not"
+  let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
+  own.toList.forM (checkDescriptionPort c pub t)
 
 end Registered
 

@@ -3,8 +3,10 @@ Level 3: registered reads (PROTOCOL.md §16.10). `check_ok`: when `Registered.ch
 registered ports has the registered rows' width, and every instance's row of it climbs, from its frame-v3-sha512 leaf at
 the position the verifier's program reads for the instance's unit, to the registered root the verifier holds.
 `opensLeaf_binding`: two openings the verifier accepts at
-one position under one registered root, with different leaves, give an explicit SHA-512 collision (`openPair`). No random
-oracle.
+one position under one registered root, with different leaves, give an explicit SHA-512 collision (`openPair`), and
+`opens_binding` the same of two commit strings (`bcPair`). No random oracle. `checkDescription_ok` (PROTOCOL.md §16.16):
+when `Registered.checkDescription` accepts an inner statement, each of its registered rows opens the registered root at
+its own index, every instance reads one of them, and every one of them is read.
 -/
 import Flock.Registered
 import Proofs.Flock.Verifier.Hash
@@ -254,5 +256,137 @@ theorem opensLeaf_collision (reg : Port) (pos : Nat) (x path y path' : ByteArray
     (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) : Sha512.Collision :=
   let h := opensLeaf_binding reg pos x path y path' hx hy hne h1 h2
   ⟨_, _, h.1, h.2⟩
+
+/-- An opening's position is among the registered value's leaves. -/
+theorem opens_lt {reg : Port} {bc path : ByteArray} {pos : Nat} (h : opens reg bc pos path = true) :
+    pos < reg.leaves := by
+  simp only [opens, opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at h
+  exact h.1.1
+
+/-- No commit strings open a registered root at every position: the positions past its leaves open nothing. -/
+theorem not_opens_all (reg : Port) (bc path : Nat → ByteArray) : ¬ ∀ i, opens reg (bc i) i (path i) = true :=
+  fun h => Nat.lt_irrefl _ (opens_lt (h reg.leaves))
+
+/-- **A commit string's extractor:** for commit strings `bc` and `bc'` opened through `path` and `path'` at one position
+`pos` under `reg`'s root, the two tree leaves' inputs if their tree leaves are one, else the opening's pair
+(`openPair`) of the two tree leaves. -/
+def bcPair (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) : ByteArray × ByteArray :=
+  if Hm96.Default512.treeLeaf bc = Hm96.Default512.treeLeaf bc' then
+    (Hm96.Default512.leafPrefix ++ bc, Hm96.Default512.leafPrefix ++ bc')
+  else openPair reg pos (Hm96.Default512.treeLeaf bc) path (Hm96.Default512.treeLeaf bc') path'
+
+/-- **A registered root binds each position's commit string.** Two different commit strings the verifier opens at one
+position under one registered root (`opens`): `bcPair` computes two different SHA-512 inputs with one digest from them,
+the tree leaves' inputs (one leaf prefix, so they differ) or the opening's (`opensLeaf_binding`). -/
+theorem opens_binding (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) (hne : bc ≠ bc')
+    (h1 : opens reg bc pos path = true) (h2 : opens reg bc' pos path' = true) :
+    Collides (bcPair reg pos bc path bc' path') := by
+  unfold bcPair
+  split
+  · rename_i hl
+    exact ⟨fun e => hne ((ByteArray.append_right_inj _).mp e), hl⟩
+  · rename_i hl
+    exact opensLeaf_binding reg pos _ path _ path' (Sha512.hash_size _) (Sha512.hash_size _) hl h1 h2
+
+/-! ### A recursive session's inner statement: its description (PROTOCOL.md §16.16)
+
+`checkDescription_ok`: when `Registered.checkDescription` accepts, each of the verifier's registered ports `reg` is the
+circuit's port `p`, whose table is `reg`'s registration in order: table row `r` (`rowsOf c pub reg r`) opens `reg`'s root
+at `r` through the path the header gives it (`pathOf`) for every `r < reg.leaves`, every instance's row of the port is
+one of them, and each of them is some instance's row. -/
+
+theorem portOf_some {c : Circuit} {name : String} {p : Nat} (h : portOf c name = some p) :
+    p < c.ports.size ∧ c.ports[p]!.name = name := by
+  unfold portOf at h
+  exact ⟨List.mem_range.mp (List.mem_of_find?_eq_some h), by simpa using List.find?_some h⟩
+
+/-- A port `checkDescriptionPort` accepts is the circuit's port `p`, of `reg`'s width, whose table has `reg.leaves` rows,
+row `r` opening `reg`'s root at `r` through its path; every instance's ref names one of them, and each is some instance's
+ref. -/
+theorem checkDescriptionPort_ok {c : Circuit} {pub : Public} {t : Tables} {reg : Port}
+    (h : checkDescriptionPort c pub t reg = .ok ()) :
+    ∃ p positions paths, portOf c reg.name = some p ∧ reg.fits c.ports[p]!.words = true ∧
+      entry pub reg = .ok (positions, paths) ∧ t.counts.getD p 0 = reg.leaves ∧
+      (∀ r < reg.leaves, opens reg (tableRow pub t p r) r (paths.getD r ByteArray.empty) = true) ∧
+      (∀ i < pub.n, ref t c.ports.size p i < reg.leaves) ∧
+      (∀ r < reg.leaves, ∃ i < pub.n, ref t c.ports.size p i = r) := by
+  unfold checkDescriptionPort at h
+  simp only at h
+  split at h
+  · rename_i p hp
+    split at h
+    · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+    · split at h
+      · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+      · rename_i hfit
+        obtain ⟨⟨positions, paths⟩, hent, h⟩ := except_bind_ok h
+        simp only at h
+        split at h
+        · exact absurd h (throw_ne_ok _ _)
+        · rename_i hrows
+          split at h
+          · exact absurd h (throw_ne_ok _ _)
+          · split at h
+            · exact absurd h (throw_ne_ok _ _)
+            · rename_i hpos
+              split at h
+              · exact absurd h (throw_ne_ok _ _)
+              · rename_i hrow
+                split at h
+                · exact absurd h (throw_ne_ok _ _)
+                · rename_i href
+                  split at h
+                  · exact absurd h (throw_ne_ok _ _)
+                  · rename_i hun
+                    have hr : t.counts.getD p 0 = reg.leaves := by simpa using hrows
+                    refine ⟨p, positions, paths, hp, by simpa using hfit, hent, hr, fun r hr' => ?_, fun i hi => ?_,
+                      fun r hr' => ?_⟩
+                    · have hpr := List.find?_eq_none.mp hpos r (List.mem_range.mpr (hr ▸ hr'))
+                      have ho := List.find?_eq_none.mp hrow r (List.mem_range.mpr (hr ▸ hr'))
+                      simp only [bne_iff_ne, ne_eq, Classical.not_not] at hpr
+                      simpa [hpr] using ho
+                    · have hi' := List.find?_eq_none.mp href i (List.mem_range.mpr hi)
+                      simp only [Bool.not_eq_true', decide_eq_false_iff_not, Nat.not_lt] at hi'
+                      omega
+                    · have hu := List.find?_eq_none.mp hun r (List.mem_range.mpr (hr ▸ hr'))
+                      simpa using hu
+  · exact absurd h (throw_ne_ok _ _)
+
+/-- `checkDescription` accepting: the statement is a shared-row file, with tables `t`, and `checkDescriptionPort`
+accepts each of the verifier's registered ports. -/
+theorem checkDescription_tables {c : Circuit} {pub : Public} {own : Array Port}
+    (h : checkDescription c pub own = .ok ()) :
+    ∃ t, pub.tables = some t ∧ ∀ reg ∈ own, checkDescriptionPort c pub t reg = .ok () := by
+  unfold checkDescription at h
+  simp only at h
+  split at h
+  · obtain ⟨_, _, h⟩ := except_bind_ok h
+    split at h
+    · rename_i t ht
+      exact ⟨t, ht, fun reg hreg => forM_ok h reg (by simpa using hreg)⟩
+    · exact absurd h (throw_ne_ok _ _)
+  · exact absurd h (throw_ne_ok _ _)
+
+/-- **`Registered.checkDescription` accepting.** For each of the verifier's registered ports `reg` (the circuit's port
+`p`, whose rows of u16 words are `reg`'s registered rows: `Port.fits`), every registered row `r < reg.leaves` of the
+statement (`rowsOf`, its `b ‖ c`) opens `reg`'s root at `r` through the path the header gives it (`pathOf`); every
+instance's row of the port (`Public.digest`) is the registered row its ref names; and every registered row is some
+instance's. -/
+theorem checkDescription_ok {c : Circuit} {pub : Public} {own : Array Port} (h : checkDescription c pub own = .ok ())
+    {reg : Port} (hreg : reg ∈ own) :
+    ∃ t p, pub.tables = some t ∧ portOf c reg.name = some p ∧ p < c.ports.size ∧ reg.fits c.ports[p]!.words = true ∧
+      (∀ r < reg.leaves, opens reg (rowsOf c pub reg r) r (pathOf pub reg r) = true) ∧
+      (∀ i < pub.n, ref t c.ports.size p i < reg.leaves ∧
+        pub.digest i p c.ports.size = rowsOf c pub reg (ref t c.ports.size p i)) ∧
+      (∀ r < reg.leaves, ∃ i < pub.n, ref t c.ports.size p i = r) := by
+  obtain ⟨t, ht, hall⟩ := checkDescription_tables h
+  obtain ⟨p, positions, paths, hp, hfit, hent, -, hopen, href, hread⟩ := checkDescriptionPort_ok (hall reg hreg)
+  have hrow : ∀ r, rowsOf c pub reg r = tableRow pub t p r := fun r => by simp only [rowsOf, hp, ht]
+  have hpath : ∀ r, pathOf pub reg r = paths.getD r ByteArray.empty := fun r => by simp only [pathOf, hent]
+  refine ⟨t, p, ht, hp, (portOf_some hp).1, hfit, fun r hr => ?_, fun i hi => ⟨href i hi, ?_⟩, hread⟩
+  · rw [hrow, hpath]
+    exact hopen r hr
+  · rw [hrow]
+    simp only [Public.digest, ht, tableRow, ref]
 
 end Flock.Registered

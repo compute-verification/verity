@@ -30,7 +30,8 @@ the egress bucket before the one it is due by, sometimes in two reads, under dec
 tick of both grids, each a little after its boundary. A path then perturbs it (`PATHS`): a late tick or a stall of
 several buckets, a link backlog at or over one or four buckets, a refused connection, a request forwarded late (past
 the slack, or only past its anchor's egress bucket) or never, a queue past Q on either grid, a sync outside Σ_sync,
-valid syncs that don't cover the server (frames ready after their eligibility), the five malformed inputs (an event
+valid syncs that don't cover the server (frames ready after their eligibility, each handed late, which faults the
+window it is handed in `coverage-never-established`), the five malformed inputs (an event
 without a position, a position seen twice (also while the queue holds exactly Q), an event longer than a frame, an
 event on a stream with no released request, bytes left at a stream's end), link bytes that aren't frames (partial,
 padding, unknown kinds, a length past the frame, an early end), the online prover in place of the given syncs (with or
