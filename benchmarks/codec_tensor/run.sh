@@ -8,8 +8,7 @@
 #     -- taskset -c 48-95 bash benchmarks/codec_tensor/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 512 521 767 768 1023
-# 1279") names
-# the builds; NVFLAGS adds nvcc flags (a variant's -D); BENCH_ARGS passes through to bench.py.
+# 1279") names the builds; NVFLAGS adds nvcc flags (a variant's -D); BENCH_ARGS passes through to bench.py.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
