@@ -48,8 +48,8 @@ MODELS = {
            "shapes": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}},
     "70b": {"heads": 64, "layers": 80, "shapes": B.SHAPES_70B},
 }
-FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased"}
-PLAIN_OF = {1: 0, 2: 0, 4: 3}
+FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3}
 SPLITS = (1, 2, 4, 8, 16)
 RTOL = {0: 1e-3, 3: 8e-3}  # the tensor-core form rounds P to bf16
 SPIN = 60_000_000
@@ -63,7 +63,7 @@ def shape(lib: B.Lib) -> dict:
 
 
 def forms_of(sh: dict) -> list[int]:
-    return [0, 1, 2] + ([3, 4] if sh["mma"] else [])
+    return [0, 1, 2] + ([3, 4, 5] if sh["mma"] else [])
 
 
 def attn_call(lib, st, store, form, q, o, part, b, ctx, layers, layer, splits, k) -> None:

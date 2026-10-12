@@ -1018,6 +1018,79 @@ __global__ void __launch_bounds__(MTH, 2) attn_mma_kernel(const uint8_t *__restr
   }
 }
 
+// The warp-specialized tensor-core form: MDW decoder warps, each lane a word of every tile (8 lanes a token's 8 words),
+// load it from global memory a tile ahead into registers, decode it and store its payload into a ring of MNB tiles
+// (full); the MW MMA warps fold each tile as in attn_mma_kernel and hand it back (empty). Shared memory holds only
+// decoded tiles, so two CTAs fit an SM, and the decode never waits on the tensor cores' barrier.
+constexpr int MNB = 2, MDW = MMA_OK ? MT * HW / 32 : 1, MWT = 32 * (MDW + MW);
+constexpr int mws_smem() { return MNB * MT * MTS + 2 * MNB * 8; }
+static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's words in one warp");
+
+__device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
+  const uint4 *q = reinterpret_cast<const uint4 *>(p);
+#pragma unroll
+  for (int k = 0; k < NL / 4; ++k) {
+    const uint4 v = __ldcs(q + k);
+    x[4 * k] = v.x;
+    x[4 * k + 1] = v.y;
+    x[4 * k + 2] = v.z;
+    x[4 * k + 3] = v.w;
+  }
+}
+
+__global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__restrict__ kv,
+                                                            const uint16_t *__restrict__ q, float *__restrict__ part,
+                                                            int ctx, int layers, int layer, int per_split, int splits,
+                                                            int k) {
+  if constexpr (MMA_OK) {
+    extern __shared__ __align__(16) uint8_t sm[];
+    uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
+    const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
+    const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
+    const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
+    const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    if (threadIdx.x == 0) {
+      for (int b = 0; b < MNB; ++b) {
+        mbar_init(full + b, 32 * MDW);
+        mbar_init(empty + b, 32 * MW);
+      }
+    }
+    __syncthreads();
+    if (w >= MW) {
+      const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
+      const int wi = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
+      const auto word = [&](int tile) { return (((u64)seq * ctx + t0 + tile * MT + t) * layers + layer) * TLW + wi; };
+      u32 nx[NL];
+      if (ntiles && t < min(MT, t1 - t0)) ldg_word(reinterpret_cast<const u32 *>(kv) + word(0) * NL, nx);
+      for (int tile = 0; tile < ntiles; ++tile) {
+        const int nt = min(MT, t1 - t0 - tile * MT);
+        u32 x[NL];
+        copy(x, nx);
+        if (tile + 1 < ntiles && t < min(MT, t1 - t0 - (tile + 1) * MT))
+          ldg_word(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL, nx);
+        if (t < nt) decode_word(x, word(tile), k);
+        else for (int l = 0; l < NL; ++l) x[l] = 0u;
+        if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
+        store(reinterpret_cast<u32 *>(sm + (tile % MNB) * MT * MTS + t * MTS + j * WB), x);
+        mbar_arrive(full + tile % MNB);
+      }
+      return;
+    }
+    u32 qa[8][2];
+    float o[8][4] = {};
+    float m_own = -INFINITY, l_own = 0.f;
+    mma_load_q(q, seq, g, lane, qa);
+    for (int tile = 0; tile < ntiles; ++tile) {
+      const int b = tile % MNB, nt = min(MT, t1 - t0 - tile * MT);
+      mbar_wait(full + b, (tile / MNB) & 1);
+      if (nt > 16 * w)
+        mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
+      mbar_arrive(empty + b);
+    }
+    mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
+  }
+}
+
 // A block a sequence's head: warp w folds splits w, w + CW, ... online, a lane 4 dims, and the warps' folds merge in
 // shared memory. Every split holds at least one token, so warp 0's max is finite.
 constexpr int CW = 8;
@@ -1126,13 +1199,14 @@ void kv_attn_shape(int *out) {
 
 // One layer's decode attention for `batch` sequences of `ctx` tokens (attn_kernel's layout): kv plain (encoded = 0) or
 // its words (encoded = 1, k rounds; encoded = 2 the warp-specialized form, the same output); on the tensor cores,
-// encoded = 3 plain and 4 its words (the same output as 3, not as 0). q bf16 [batch][HEADS][128] pre-scaled by
-// log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch * splits * kv_attn_shape's out[6] floats (times
-// out[7] for 3 and 4). The tokens are split into at most `splits` ranges of whole tiles.
+// encoded = 3 plain, 4 its words and 5 its words in the warp-specialized form (4 and 5 the same output as 3, not as 0).
+// q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
+// splits * kv_attn_shape's out[6] floats (times out[7] from 3 on). The tokens are split into at most `splits` ranges of
+// whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
-  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 4 ||
-      ((encoded == 1 || encoded == 2 || encoded == 4) && (k < 1 || k > kv::KMAX)))
+  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 5 ||
+      (encoded != 0 && encoded != 3 && (k < 1 || k > kv::KMAX)))
     return -1;
   const int tile = encoded >= 3 ? kv::MT : kv::TT;
   const int per = (ctx + splits - 1) / splits, per_split = (per + tile - 1) / tile * tile;
@@ -1144,10 +1218,13 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
     if (!set) {
       cudaFuncSetAttribute(kv::attn_mma_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mma_smem());
       cudaFuncSetAttribute(kv::attn_mma_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mma_smem());
+      cudaFuncSetAttribute(kv::attn_mma_ws_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::mws_smem());
       set = true;
     }
     const int grid = batch * sp * kv::KV_HEADS;
-    if (encoded == 4)
+    if (encoded == 5)
+      kv::attn_mma_ws_kernel<<<grid, kv::MWT, kv::mws_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
+    else if (encoded == 4)
       kv::attn_mma_kernel<true><<<grid, kv::MTH, kv::mma_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);
     else
       kv::attn_mma_kernel<false><<<grid, kv::MTH, kv::mma_smem(), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k);

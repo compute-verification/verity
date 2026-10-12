@@ -16,7 +16,8 @@
 # KV=1 runs the KV cache's codec instead: kv.cu built at each width of KV_FIELDS (default 512 768; a width tagged k1
 # squares by one level of Karatsuba, o1 builds at ptxas -O1, h32 at 32 query heads (8B's attention), t16 with the
 # tensor-core attention's tiles of 16 tokens, as in 1536k1o1 or 512h32), then KV_SCRIPT (default kv_bench.py) with
-# KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck.
+# KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck,
+# and SANITIZE=2 runs KV_SCRIPT after it if every tool passed.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -45,15 +46,18 @@ if [ "${KV:-0}" = 1 ]; then
     "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
   fi
   KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
-  if [ "${SANITIZE:-0}" = 1 ]; then
+  if [ "${SANITIZE:-0}" != 0 ]; then
     SAN=/usr/local/cuda-13.0/bin/compute-sanitizer
     # shellcheck disable=SC2086
     gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
+      rc=0
       for tool in memcheck racecheck synccheck; do
         "$0" --tool $tool --error-exitcode 9 "$1" "$2" "${@:4}" --out "$3/san-$tool" --sanitize > "$3/san-$tool.log" 2>&1
-        echo "$tool rc=$?"; tail -4 "$3/san-$tool.log"
-      done' "$SAN" "$PY" $WC/$KV_SCRIPT "$O" "${LIBS[@]}" ${KV_ARGS:-}
-    exit $?
+        r=$?; echo "$tool rc=$r"; tail -4 "$3/san-$tool.log"; [ $r = 0 ] || rc=$r
+      done
+      exit $rc' "$SAN" "$PY" $WC/$KV_SCRIPT "$O" "${LIBS[@]}" ${KV_ARGS:-} || exit 6
+    # SANITIZE=2: the timed run follows a clean smoke
+    [ "$SANITIZE" = 2 ] || exit 0
   fi
   # shellcheck disable=SC2086
   gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
