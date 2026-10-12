@@ -2,6 +2,7 @@ import Proofs.Flock.C3.PubRows.Frame
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Opening.Read
 import Proofs.Flock.C3.RegLevels.Read
+import Proofs.Flock.C3.HoloValues.Read
 import Proofs.Flock.VBridge.Family.Transcript
 
 /-!
@@ -17,7 +18,7 @@ At the honest family at that decoder (`𝓓`) the inner transcript is the source
 source's obligations hold (`SrcOK`): the history is whole (`HLeafC3`), the source's coins are the history's, its
 messages are read and typed as above, and its run is the decode of its steps. So each read fact at `𝓓` is that read
 fact of the source's run on its own steps (`at_c3DecOf`): `hFrame_c3DecOf` (which needs nothing more),
-`sparseRead_c3DecOf`, `openingRead_c3DecOf`, `regLevelsRead_c3DecOf`.
+`repsRead_c3DecOf`, `sparseRead_c3DecOf`, `openingRead_c3DecOf`, `regLevelsRead_c3DecOf`.
 
 No decoder meets a read fact or `HFrame` at a history shorter than the inner protocol's rounds: `zip` stops at the
 last coin, so the tape is a prefix of the whole one (at `t = []`, empty), and V*'s sessions can still accept there.
@@ -223,6 +224,12 @@ theorem at_c3DecOf {P : List Step → C3Run (holoAt st hp) → Prop} (hs : SrcOK
 /-- **`HFrame` at the fixed decoder.** -/
 theorem hFrame_c3DecOf (hs : SrcOK 𝒵 dg N k Rw src own sel) : HFrame 𝓓 dg N k Rw :=
   at_c3DecOf (P := fun l u => Framed u l) hs fun _ _ _ _ _ _ _ => framed_runSteps _
+
+/-- **`RepsRead` at the fixed decoder**, from the source's two reps' accepting runs on its own steps. -/
+theorem repsRead_c3DecOf (hs : SrcOK 𝒵 dg N k Rw src own sel)
+    (hrp : AtSrc 𝒵 dg N k Rw src fun _ u => FlockC3.HoloValues.RepsReadAt (holoAt st hp) (runSteps u) u) :
+    FlockC3.HoloValues.RepsRead 𝓓 dg N k Rw :=
+  at_c3DecOf (P := FlockC3.HoloValues.RepsReadAt (holoAt st hp)) hs hrp
 
 /-- **`SparseRead` at the fixed decoder**, from the source's sparse phases on its own steps. -/
 theorem sparseRead_c3DecOf (hs : SrcOK 𝒵 dg N k Rw src own sel)

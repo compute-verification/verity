@@ -50,20 +50,21 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
 | t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
-| n1 | `hPubRows_of_check'` (from `ChecksPubRows`, `RowsHeld`, `PortsNamed`, `SparseAtShape`); `hTape_of_frame` (from `HFrame`, `hTape_iff_frame`) | `C3/PubRows/Honest.lean`, `Check.lean`, `Frame.lean` | proved (round 4) | `SparseAtShape` from the verifier's shape check | W (H, `SparseAtShape`) |
-| n2 | `hReps_of_read`: `HReps` from the reps' read fact (`RepsRead`) | `C3/HoloValues/Read.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W (C) |
+| n1 | `hPubRows_of_check'` (from `ChecksPubRows`, `RowsHeld`, `PortsNamed`, `SparseAtShape`); `hTape_of_frame` (from `HFrame`, `hTape_iff_frame`) | `C3/PubRows/Honest.lean`, `Check.lean`, `Frame.lean` | proved (round 4) | | |
+| n1′ | `sparseAtShapeChecked`: `SparseAtShape` at the units `checkStmt` passes (`SparseAtShapeChecked`), for every family; `hPubRows_of_checked`: `hPubRows_of_check'` with it, at the sessions the verifier checks (`ChecksStmts`) | `C3/PubRows/Shape.lean` | proved (round 5, H) | | |
+| n2 | `hReps_of_read` (with `hRepStages_honest`, so `hReps_honest_of_read`): `HReps` from the reps' read fact (`RepsRead`) | `C3/HoloValues/Read.lean`, `Shape.lean`, `ZcLc.lean` | proved (round 5, C) | | |
 | n2a | the transcript-level holo rep program `holoRepProg`, its refinement to `holoRepC` (`holoRep_refines`) and its run from the stages' checks (`holoProg_of_checks`) | `Soundness/Refine/HoloRep.lean`, `HoloRefines.lean`, `HoloRepConverse.lean` | proved (round 4) | | |
 | n3 | `hSparse_of_read` (with `hStages_honest`, so `hSparse_honest_of_read`): `HSparse` from `SparseRead` | `C3/Sparse/Read.lean` | proved (round 4) | | |
-| n4 | `hOpening_of_decode`, `hOpening_of_read`: `HOpening` from `OpeningRead`, O1–O6 at `mReg` | `C3/Opening/Read.lean` | proved (round 4) | | |
+| n4 | `hOpening_of_decode`, `hOpening_of_read`: `HOpening` from `OpeningRead`, O1–O6 at `mReg`; `openingRead_of_rows`: `OpeningRead` from the `rec-opening` unit's residuals (`residuals_eq_runO`), at its session and coins (L, `openingRead_of_session`), the claim tie (`ClaimRel` from `claimO` to `u.claim i`, rec-lean) and the tape prefix (n6) | `C3/Opening/Read.lean`, `Rows.lean` | proved (rounds 4, 5) | | |
 | n5 | `hRegLevels_of_read` (with `hLgStages_honest`, so `hRegLevels_honest_of_read`): `HRegLevels` from `RegLevelsRead`, R's tape against `xR.cap` | `C3/RegLevels/Read.lean` | proved (round 4) | | |
-| n6 | `tape_c3DecOf`: at the fixed decoder `c3DecOf` (G's `decOf` at candidate 3: `c3Msgs` cuts the source run's steps at their coins, `c3DecOf_spec` proved), the inner transcript is the source run's steps wherever `SrcOK` holds; from it the read facts at the honest family at that decoder are proved (`at_c3DecOf`, `hFrame_c3DecOf`, `sparseRead_c3DecOf`, `openingRead_c3DecOf`, `regLevelsRead_c3DecOf`) | `C3/Compose/Decoder.lean` | 150–250 | `c3DecOf_spec`; `schedSteps` against `PlaysCoin.cut` and `coinSteps` | W |
+| n6 | `tape_c3DecOf`: at the fixed decoder `c3DecOf` (G's `decOf` at candidate 3: `c3Msgs` cuts the source run's steps at their coins, `c3DecOf_spec` proved), the inner transcript is the source run's steps wherever `SrcOK` holds; from it the read facts at the honest family at that decoder are proved (`at_c3DecOf`, `hFrame_c3DecOf`, `repsRead_c3DecOf`, `sparseRead_c3DecOf`, `openingRead_c3DecOf`, `regLevelsRead_c3DecOf`) | `C3/Compose/Decoder.lean` | 150–250 | `c3DecOf_spec`; `schedSteps` against `PlaysCoin.cut` and `coinSteps` | W |
 | n7 | the source: the run V*'s layers hold, read stage by stage from each stage's sessions, with `SrcOK` (but `HLeafC3`) and each read fact on its own steps (`SparseReadAt`, `OpeningReadAt`, `RegTape` against `xR.cap`, which `_htop` and `HPubRows` give), from that stage's sessions' acceptance of its verifier row | `C3/Compose/` | to size (round 6) | n6; `RepsRead` (n2) | L |
 
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved; `hdec` is
 `vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes (round 5), each with who discharges it:
 
-* `hreps` (`HReps`): n2, C's `RepsRead` and `hReps_of_read`; then the read fact at n6's decoder.
-* `hsread`, `horead`, `hlread` (`SparseRead`, `OpeningRead`, `RegLevelsRead`) and `hfr` (`HFrame`): at n6's fixed
+* `hrread`, `hsread`, `horead`, `hlread` (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`), through
+  `hReps_honest_of_read`, `hSparse_honest_of_read`, `hOpening_of_read`, `hRegLevels_honest_of_read`, and `hfr` (`HFrame`): at n6's fixed
   decoder, from `tape_c3DecOf` and the source's facts (n7). `SrcOK`'s `HLeafC3` is G's `HLeaf`: no decoder meets a
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty) while V*'s sessions can accept there, so it holds only once `VBridge` is read at whole histories or the
@@ -71,7 +72,9 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 * `hchk` (`ChecksPubRows`): n1b's `checkPubRows`, once `hbr_honest` is at the checked family (below).
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
-* `hspsh` (`SparseAtShape`): the verifier's shape check (H, round 5).
+* `hspsh` (`SparseAtShape`): false as stated (`bind` is free, so `Vs j` can be rec-sparse at another shape); at the
+  sessions `checkStmt` passes it is H's `sparseAtShapeChecked`, which `hPubRows_of_checked` takes with `ChecksStmts`
+  in place of `hspsh` once `hbr_honest` is at the checked family.
 * `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
 * `hheld` (`HeldIs`): n1c, below.
 * `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
