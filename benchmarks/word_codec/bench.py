@@ -47,8 +47,9 @@ B3_LANE_COMPRESSIONS = 5  # a lane block's message, 8 + 8 L bytes, at either pac
 SHA_LEAF_COMPRESSIONS = 5  # a leaf's 16 tags and index after the prefix's midstate, 8 + 512 bytes
 SHA_NODE_COMPRESSIONS = 2  # RFC 6962's node, 0x01 ‖ L ‖ R, 129 bytes
 DESIGNS = ("fused", "passes", "audit", "audit-commit", "audit-tree")
-# wc_audit_tree's sweep: the group whose subtree the pass builds (warp tasks; 0 none), tasks prefetched ahead, blocks an SM
-AUDIT_TREE_CFGS = tuple((g, a, x) for g in (0, 4, 8, 32) for a in (0, 1, 2, 4) for x in (2, 8))
+# wc_audit_tree's sweep: the group whose subtree the pass builds (warp tasks; 0 none), tasks prefetched ahead, the tags
+# kept in the workspace (1) or each warp's in a scratch slot (0), blocks an SM
+AUDIT_TREE_CFGS = tuple((g, a, t, x) for g in (0, 4) for a in (0, 1) for t in (1, 0) for x in (2, 8))
 WS_MAX_WARPS = 10         # wc.cu's: consumers, the producer and the committers
 TAG_MODES = ((1, ""), (2, "i"))  # wc_gemm_ws_tag's decode: the tag then the decode, or interleaved (a cfg's suffix)
 LAYERS = 32               # Llama-3.1-8B's, each with the four linears
@@ -81,7 +82,7 @@ class Lib:
         so.wc_commit_tree.argtypes = [v, q, v, v]
         so.wc_audit_tag.argtypes = [v, q, ctypes.c_char_p, q, v, i, v]
         so.wc_audit_commit.argtypes = [v, q, ctypes.c_char_p, q, v, v, i, v]
-        so.wc_audit_tree.argtypes = [v, q, ctypes.c_char_p, q, v, i, i, i, v]
+        so.wc_audit_tree.argtypes = [v, q, ctypes.c_char_p, q, v, i, i, i, i, v]
         so.wc_spin.argtypes = [ctypes.c_longlong, v]
         so.wc_empty.argtypes = [i, v]
         cs = (ctypes.c_int * 8)()
@@ -804,15 +805,17 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
     tree_gate = audit_tree_gate(lib, torch, log)
     trees = {}
     c = Commit(lib, torch, blocks)
-    for group, ahead, per_sm in AUDIT_TREE_CFGS:
-        name, g = f"g{group}a{ahead}x{per_sm}", sms * per_sm
+    for group, ahead, keep, per_sm in AUDIT_TREE_CFGS:
+        name, g = audit_tree_name(group, ahead, keep, per_sm), sms * per_sm
         c.buf.zero_()
-        lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, group, ahead, g, st)
+        lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, group, ahead, keep, g, st)
         torch.cuda.synchronize()
-        same = bool(torch.equal(c.buf, b.buf))
-        t = timed(torch, lambda: lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, group, ahead, g, st),
-                  reps)
-        trees[name] = {"group": group, "ahead": ahead, "grid": g, "ok": same, "s": statistics.median(t), "times_s": t}
+        o = 0 if keep else c.leaves - c.ptr
+        same = bool(torch.equal(c.buf[o:], b.buf[o:]))
+        t = timed(torch, lambda: lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, group, ahead, keep, g,
+                                          st), reps)
+        trees[name] = {"group": group, "ahead": ahead, "keep_tags": keep, "grid": g, "ok": same,
+                       "s": statistics.median(t), "times_s": t}
         ok &= same
     best = min(trees, key=lambda n: trees[n]["s"])
     out = {"blocks": blocks, "store_bytes": store.numel() * 8, "grid": grid, "ok": ok and tree_gate["ok"],
@@ -830,9 +833,13 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
     return out
 
 
+def audit_tree_name(group: int, ahead: int, keep: int, per_sm: int) -> str:
+    return f"g{group}a{ahead}{'t' if keep else 's'}x{per_sm}"
+
+
 def audit_tree_gate(lib: Lib, torch, log) -> dict:
-    """wc_audit_tree's workspace (tags and every tree level) byte for byte wc_audit_commit's and wc_commit_tree's, at sizes
-    whose groups and levels end odd, in every configuration."""
+    """wc_audit_tree's workspace (every tree level, and the tags when it keeps them) byte for byte wc_audit_commit's and
+    wc_commit_tree's, at sizes whose groups and levels end odd, in every configuration."""
     st, sms = stream(torch), torch.cuda.get_device_properties(0).multi_processor_count
     bad = []
     for tasks in (1, 3, 37, 167, 1029):
@@ -841,12 +848,13 @@ def audit_tree_gate(lib: Lib, torch, log) -> dict:
         ref, c = Commit(lib, torch, blocks), Commit(lib, torch, blocks)
         lib.call("wc_audit_commit", ptr(store), blocks, TAG_SEED, 7, ref.tags, ref.leaves, sms * 8, st)
         lib.call("wc_commit_tree", ref.ptr, blocks, None, st)
-        for group, ahead, per_sm in AUDIT_TREE_CFGS:
+        for group, ahead, keep, per_sm in AUDIT_TREE_CFGS:
             c.buf.zero_()
-            lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 7, c.ptr, group, ahead, sms * per_sm, st)
+            lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 7, c.ptr, group, ahead, keep, sms * per_sm, st)
             torch.cuda.synchronize()
-            if not torch.equal(c.buf, ref.buf):
-                bad.append([tasks, group, ahead, per_sm])
+            o = 0 if keep else c.leaves - c.ptr
+            if not torch.equal(c.buf[o:], ref.buf[o:]):
+                bad.append(audit_tree_name(group, ahead, keep, per_sm) + f"@{tasks}")
     out = {"tasks": [1, 3, 37, 167, 1029], "cfgs": [list(x) for x in AUDIT_TREE_CFGS], "bad": bad, "ok": not bad}
     log(f"audit tree gate {lib.name}: {'ok' if not bad else 'FAIL ' + str(bad)} (the workspace = wc_audit_commit's and "
         f"wc_commit_tree's at 1, 3, 37, 167 and 1029 warp tasks, {len(AUDIT_TREE_CFGS)} configurations)")

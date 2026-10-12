@@ -941,9 +941,9 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
 }
 
 // Lane block j's tag straight from the store (32 q + l's words are q TASK_WORDS + 32 w + l, a warp's loads coalesced),
-// its words loaded a compression at a time; jj = jbase + j, its index in the tag.
+// its words loaded a compression at a time, into out's 8 words; jj = jbase + j, its index in the tag.
 __device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ store, const bw::Key3& key, uint64_t j,
-                                               uint64_t jj, uint32_t* tags) {
+                                               uint64_t jj, uint32_t* out) {
   constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
   const unsigned long long* src =
       reinterpret_cast<const unsigned long long*>(store) + (j / LANES) * TASK_WORDS + j % LANES;
@@ -965,7 +965,7 @@ __device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ stor
         bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
     b3c<WC_B3V>(cv, m, 0, len, flags, cv);
   }
-  uint4* o = reinterpret_cast<uint4*>(tags + 8 * j);
+  uint4* o = reinterpret_cast<uint4*>(out);
   o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
   o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
 }
@@ -974,7 +974,7 @@ __device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ stor
 __global__ void __launch_bounds__(256) audit_tag_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
                                                         bw::Key3 key, uint64_t jbase, uint32_t* __restrict__ tags) {
   for (uint64_t j = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x; j < blocks; j += (uint64_t)gridDim.x * blockDim.x)
-    audit_lane_tag(store, key, j, jbase + j, tags);
+    audit_lane_tag(store, key, j, jbase + j, tags + 8 * j);
 }
 
 // b3_leaf over 16 tags this warp wrote before its __syncwarp, read through L1 (ld.ca), never the read-only path a
@@ -1019,7 +1019,7 @@ __global__ void __launch_bounds__(256) audit_commit_kernel(const uint64_t* __res
 #pragma unroll 1
     for (int u = 0; u < 16; ++u) {
       const uint64_t j = g * 512 + 32 * u + lane;
-      audit_lane_tag(store, key, j, jbase + j, tags);
+      audit_lane_tag(store, key, j, jbase + j, tags + 8 * j);
     }
     __syncwarp();
     const uint64_t c = g * 32 + lane;
@@ -1042,16 +1042,20 @@ __device__ __forceinline__ void prefetch_l2(const void* p, uint32_t bytes) {
 // audit_commit_kernel with tl.levels of the tree above its leaves: a group's warps publish their leaves (a fence, then
 // the group's count), and the one that completes the count builds the group's levels, reading the other warps' nodes
 // from L2 (ld.cg: L1 is not coherent across SMs), then resets the count for the next pass. Every node is tagger.cu's
-// level_step, odd last node promoted. With ahead > 0, lane 0 has the task `ahead` tasks on prefetched into L2.
+// level_step, odd last node promoted. With ahead > 0, lane 0 has the task `ahead` tasks on prefetched into L2. With
+// scratch, the tags go to the warp's own 512 there (16 KiB a warp, reused every warp task, so they stay in L2) instead
+// of the workspace: the leaves and the tree are the audit's answer, and an opened leaf's tags are recomputed.
 __global__ void __launch_bounds__(256) audit_tree_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
                                                          bw::Key3 key, bw::Mid mid, uint64_t jbase, uint32_t* tags,
-                                                         uint64_t* nodes, TreeLow tl, uint32_t* counts, int ahead) {
+                                                         uint64_t* nodes, TreeLow tl, uint32_t* counts, int ahead,
+                                                         uint32_t* scratch) {
   const int lane = threadIdx.x % 32;
   const uint64_t warps = (uint64_t)gridDim.x * (blockDim.x / 32), tasks = blocks / 512;
   const uint64_t first = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) / 32;
   if (lane == 0)
     for (int u = 0; u < ahead && first < tasks; ++u) prefetch_l2(store + (first * 16 + u) * TASK_WORDS, TASK_WORDS * 8);
   for (uint64_t g = first; g < tasks; g += warps) {
+    uint32_t* T = scratch ? scratch + first * 512 * 8 : tags + g * 512 * 8;
 #pragma unroll 1
     for (int u = 0; u < 16; ++u) {
       if (ahead && lane == 0) {
@@ -1059,11 +1063,11 @@ __global__ void __launch_bounds__(256) audit_tree_kernel(const uint64_t* __restr
         if (ga < tasks) prefetch_l2(store + (ga * 16 + ua) * TASK_WORDS, TASK_WORDS * 8);
       }
       const uint64_t j = g * 512 + 32 * u + lane;
-      audit_lane_tag(store, key, j, jbase + j, tags);
+      audit_lane_tag(store, key, j, jbase + j, T + 8 * (32 * u + lane));
     }
     __syncwarp();
     const uint64_t c = g * 32 + lane;
-    audit_leaf(tags + c * 16 * 8, c, mid, nodes + c * 8);
+    audit_leaf(T + lane * 16 * 8, c, mid, nodes + c * 8);
     if (tl.levels) {
       __threadfence();
       __syncwarp();
@@ -1421,16 +1425,23 @@ int wc_audit_commit(const void* store, uint64_t blocks, const uint8_t* seed, uin
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The whole audit in one pass and the tree's top: the workspace's tags, leaves and every level, as wc_audit_commit and
-// wc_commit_tree leave them. The pass builds the levels below each group of `group` warp tasks (32 group leaves; 0: none,
-// else a power of two up to 32), and prefetches `ahead` tasks (0 to 15) into L2. blocks % 512 == 0.
+// The whole audit in one pass and the tree's top: the workspace's leaves and every level, and with keep_tags its tags,
+// as wc_audit_commit and wc_commit_tree leave them. The pass builds the levels below each group of `group` warp tasks
+// (32 group leaves; 0: none, else a power of two up to 32), and prefetches `ahead` tasks (0 to 15) into L2. Without
+// keep_tags each warp's tags stay in a scratch slot of its own. blocks % 512 == 0.
 int wc_audit_tree(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, void* workspace, int group,
-                  int ahead, int grid, cudaStream_t s) {
+                  int ahead, int keep_tags, int grid, cudaStream_t s) {
   if (!store || !seed || !workspace || !blocks || grid < 1 || blocks % 512 || group < 0 || group > 32 ||
       (group & (group - 1)) || ahead < 0 || ahead > 15)
     return 1;
-  static uint32_t* counts = nullptr;
-  static uint64_t capacity = 0;
+  static uint32_t *counts = nullptr, *scratch = nullptr;
+  static uint64_t capacity = 0, scratch_warps = 0;
+  const uint64_t warps = (uint64_t)grid * 8;
+  if (!keep_tags && scratch_warps < warps) {
+    if (scratch) cudaFree(scratch);
+    if (cudaMalloc(&scratch, warps * 512 * 32)) return 4;
+    scratch_warps = warps;
+  }
   const WsTag& tg = ws_tag_keys(seed);
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   TreeLow tl{};
@@ -1449,7 +1460,7 @@ int wc_audit_tree(const void* store, uint64_t blocks, const uint8_t* seed, uint6
     capacity = groups;
   }
   audit_tree_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, tg.key, tg.leafmid, jbase, p.tags,
-                                         p.nodes, tl, counts, ahead);
+                                         p.nodes, tl, counts, ahead, keep_tags ? nullptr : scratch);
   tree_from(p, (size_t)tl.levels, s);
   return cudaGetLastError() ? 4 : 0;
 }
