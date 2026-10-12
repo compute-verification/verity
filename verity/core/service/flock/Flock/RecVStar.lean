@@ -42,8 +42,8 @@ def STACKED_CLAIMS : Nat := 2
 
 /-- RecSparse shapes compared and shown field by field, here rather than derived in `Flock.RecSparse`, which the circuit
 guarantees read. -/
-instance : BEq RecSparse.Shape := ⟨fun a b => a.nu == b.nu && a.ell == b.ell && a.sLog == b.sLog && a.tLog == b.tLog⟩
-instance : Repr RecSparse.Shape := ⟨fun s _ => repr (s.nu, s.ell, s.sLog, s.tLog)⟩
+instance instBEqShape : BEq RecSparse.Shape := ⟨fun a b => a.nu == b.nu && a.ell == b.ell && a.sLog == b.sLog && a.tLog == b.tLog⟩
+instance instReprShape : Repr RecSparse.Shape := ⟨fun s _ => repr (s.nu, s.ell, s.sLog, s.tLog)⟩
 
 /-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), its claims, two and one per region and
 link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), its table's regions (`Stmt.regions`), and
