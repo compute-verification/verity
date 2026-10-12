@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import math
 import os
 import random
 import re
@@ -74,8 +75,8 @@ class Lib:
             "tf_init": [v, v], "tf_fused": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, v, v, v, v, i, i, i, u64, v, v],
-            "tf_fused3c": [i, i, i, v, v, v, v, i, i, i, u64, v, v, i, v], "tf_commit": [v, i, v],
-            "tf_commit_plan": [v, v, i, v, v, u64, i, i, v, v, i], "tf_commit_job_bytes": [],
+            "tf_fused3c": [i, i, i, v, v, v, v, i, i, i, u64, v, v, i, i, v, v, u64, i, i, i, i, v],
+            "tf_commit": [v, i, v], "tf_commit_plan": [v, v, v, i, v, v, u64, i, v, v, i], "tf_commit_job_bytes": [],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_chain": [i, i, i, u64, v, i, i, v], "tf_b3_one": [i, v, v, v], "tf_keccak_one": [v, v],
@@ -677,9 +678,9 @@ def commit_costs(lib: Lib, torch, spans, reps: int, log) -> dict:
 STEP_GROUPS = (4, 8)
 
 
-def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_ptr, jbase, xr, cj=(0, 0)):
-    """One launch of a timed arm on one layer's copy of a shape (plain layout `pl`, row-major `wf`); a fused3 arm also
-    runs commit job cj = (device pointer, CTAs)."""
+def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_ptr, jbase, xr, company=None):
+    """One launch of a timed arm on one layer's copy of a shape (plain layout `pl`, row-major `wf`). company: a fused3
+    tag arm in fused3c_kernel, (commit job pointer, its CTAs, tag_ctas, deferred (w, tags, jbase, n, k, bid0, blocks))."""
     so, xp, yp, xrp = lib.so, ptr(x.view(torch.uint8)), ptr(y), ptr(xr)
     if arm == "cublas":
         one = torch.ones((), device="cuda")
@@ -689,12 +690,16 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
         return lambda: so.tf_plain(ptr(pl), xp, yp, mb, n, k, 0, stream(torch))
     m = FORM.match(arm)
     mode = {"g": MODE_GEMM, "t": MODE_TAGS, "s": MODE_SINK, "u": MODE_TAGS}[m["stage"]]
+    if m["rpd"] and company:
+        lanes, pd = int(m["span"]) or 1, int(m["rpd"])
+        cj, cb, tag_ctas, d = company
+        return lambda: so.tf_fused3c(lanes, mode, pd, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, cj, cb, tag_ctas,
+                                     *d, stream(torch))
+    if company:
+        raise ValueError(f"{arm}: only fused3 forms run in company")
     if m["rpd"]:
         lanes, pd = int(m["span"]) or 1, int(m["rpd"])
-        return lambda: so.tf_fused3c(lanes, mode, pd, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, cj[0], cj[1],
-                                     stream(torch))
-    if cj[1]:
-        raise ValueError(f"{arm}: only fused3 forms run commit jobs")
+        return lambda: so.tf_fused3(lanes, mode, pd, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, stream(torch))
     if m["k"]:
         lanes, wc, st = int(m["span"]) or 1, int(m["w"]), int(m["st"])
         rounds = PROBE_ROUNDS if m["stage"] == "u" else 7
@@ -705,25 +710,53 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
     return lambda: so.tf_fused(v, span, mode, pd, 0, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, stream(torch))
 
 
-LEAF_SHAPES = ("gate_up", "down")
-COMMIT_WARPS = 376
+COMMIT_SHAPES = ("gate_up", "down")  # the long launches: a leaf is ~20 us of dependent SHA-512 on one warp
+F3_WARPS, F3_COLS = 4, layout.TILE_COLS * layout.CHUNK_TILES
 
 
-def commit_plan(lib: Lib, torch, weights: dict, g: int, tags, nodes) -> dict:
-    """tf_commit_plan's jobs for the step's launch order, its tags at their store offsets in `tags` and the tree in
-    `nodes`: leaves only in LEAF_SHAPES' launches (the long ones), then the drain."""
-    ends, ok, off = [], [], 0
-    for _ in range(layout.LAYERS):
+def step_launches(weights: dict, g: int, nsm: int) -> list[dict]:
+    """The step's fused3 launches at g lanes: each one's store offset, grid, and two balancing moves. A grid a few CTAs
+    past a whole number of waves of nsm (qkv: 192 on 188 SMs) runs those few GEMM-only (tag_ctas) and the next launch
+    hashes them (defer); budget is the commit CTAs that fill a COMMIT_SHAPES launch's hashing CTAs to whole waves."""
+    out, off = [], 0
+    for layer in range(layout.LAYERS):
         for name in layout.SHAPES:
             n, k, _ = weights[name]
+            grid = (n // 16 // F3_WARPS) * (k // F3_COLS)
+            out.append({"layer": layer, "name": name, "n": n, "k": k, "off": off, "grid": grid, "tag_ctas": grid,
+                        "defer": 0})
             off += layout.chunk_block_count(n, k, g)
-            ends.append(off)
-            ok.append(int(name in LEAF_SHAPES))
+    for q, launch in enumerate(out[:-1]):
+        rem = launch["grid"] % nsm
+        if launch["grid"] > nsm and 0 < rem <= nsm // 16:
+            launch["tag_ctas"] -= rem
+            out[q + 1]["defer"] = rem
+    for launch in out:
+        launch["budget"] = (-(launch["tag_ctas"] + launch["defer"])) % nsm if launch["name"] in COMMIT_SHAPES else 0
+    return out
+
+
+BEHIND_SLACK = 1.5
+
+
+def commit_plan(lib: Lib, torch, launches: list[dict], g: int, tags, nodes, nsm: int, behind: bool = False) -> dict:
+    """tf_commit_plan's jobs for the step's launches, the tree over `tags` (the store's, at their offsets) in `nodes`;
+    behind: the tags are a finished step's (the commit runs behind the next step), its work spread evenly over the
+    COMMIT_SHAPES launches (BEHIND_SLACK over an even share), else the launches' own."""
+    total = launches[-1]["off"] + layout.chunk_block_count(launches[-1]["n"], launches[-1]["k"], g)
+    ends = [total if behind else launches[q]["off"] if launches[q]["tag_ctas"] < launches[q]["grid"]
+            else launches[q + 1]["off"] if q + 1 < len(launches) else total for q in range(len(launches))]
+    ok = [int(launch["name"] in COMMIT_SHAPES) for launch in launches]
+    budget = [launch["budget"] for launch in launches]
+    if behind:
+        nleaves = (total + 15) // 16
+        warps = 2 * -(-nleaves // 32)  # the leaves, then about as many nodes
+        share = math.ceil(BEHIND_SLACK * warps / sum(ok) / 4)
+        budget = [min(b, share) for b in budget]
     q, cap, jb = len(ends), len(ends) + 64, lib.so.tf_commit_job_bytes()
     host, cb = (ctypes.c_uint8 * (cap * jb))(), (ctypes.c_int * cap)()
-    nsm = torch.cuda.get_device_properties(0).multi_processor_count
-    nj = lib.so.tf_commit_plan((ctypes.c_uint64 * q)(*ends), (ctypes.c_uint8 * q)(*ok), q, ptr(nodes), ptr(tags), 0,
-                               COMMIT_WARPS, nsm, host, cb, cap)
+    nj = lib.so.tf_commit_plan((ctypes.c_uint64 * q)(*ends), (ctypes.c_uint8 * q)(*ok), (ctypes.c_int * q)(*budget), q,
+                               ptr(nodes), ptr(tags), 0, nsm, host, cb, cap)
     if nj < q:
         raise RuntimeError(f"tf_commit_plan: error {nj}")
     dev = torch.frombuffer(bytearray(host)[: nj * jb], dtype=torch.uint8).cuda()
@@ -739,10 +772,13 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     overlapL tagL with each layer's leaves and their complete subtrees on a low-priority stream behind the layer's last
              linear, then the tree's top (the levels over the layers' subtrees)
     topL     that top alone (what pipelining the commit behind the next step would leave)
-    tagrL    tagL with fused3 at one quad ahead at every shape (the form that runs commit jobs)
-    commitinL tagrL with the commit in its launches (commit_plan), then the drain; its tree must equal commitL's, every
-             node, or the arm is dropped
+    tagrL    tagL with fused3 at one quad ahead at every shape (the form that runs in company)
+    tagdL    tagrL in fused3c_kernel, a launch's few CTAs past whole waves deferred to the next (step_launches)
+    commitinL tagdL with the commit in its launches (commit_plan), then the drain
     drainL   that drain alone (commit-only launches after the step's last linear)
+    behindL  tagdL with the commit of a finished step's tags in its launches, no drain: the steady state when each
+             step's commit runs behind the next step
+    Every tagd, commitin and behind arm's tags must equal tagL's and its tree commitL's, every node, or it is dropped.
     probe4   u4kw4s3 at every shape: 4-round BLAKE3, uncertified
     """
     names = list(layout.SHAPES)
@@ -761,11 +797,18 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     nleaves = {g: layout.store_chunk_blocks(g) // 16 for g in groups}
     nodes = {g: torch.zeros(int(lib.so.tf_tree_nodes(nleaves[g])) * 8, dtype=torch.int64, device="cuda")
              for g in groups}
+    nsm = torch.cuda.get_device_properties(0).multi_processor_count
+    launches = {g: step_launches(weights, g, nsm) for g in groups}
     nodes_in = {g: torch.zeros_like(nodes[g]) for g in groups}
-    plans = {g: commit_plan(lib, torch, weights, g, tbs[g], nodes_in[g]) for g in groups}
-    for g, p in plans.items():
-        log(f"commit plan {g} KiB: {p['launches']} launches + {p['jobs'] - p['launches']} drains, "
-            f"commit CTAs up to {max(p['cblocks'])}")
+    nodes_behind = {g: torch.zeros_like(nodes[g]) for g in groups}
+    done_tags = {g: torch.zeros_like(tbs[g]) for g in groups}
+    plans = {g: commit_plan(lib, torch, launches[g], g, tbs[g], nodes_in[g], nsm) for g in groups}
+    behind = {g: commit_plan(lib, torch, launches[g], g, done_tags[g], nodes_behind[g], nsm, True) for g in groups}
+    for g in groups:
+        log(f"commit plan {g} KiB: {plans[g]['launches']} launches + {plans[g]['jobs'] - plans[g]['launches']} drains, "
+            f"commit CTAs up to {max(plans[g]['cblocks'])}; behind: {behind[g]['jobs'] - behind[g]['launches']} drains;"
+            f" deferred CTAs {sum(launch['defer'] for launch in launches[g])}, budgets "
+            f"{sorted({launch['name']: launch['budget'] for launch in launches[g]}.items())}")
     events = [torch.cuda.Event() for _ in range(layout.LAYERS)]
     out = {}
     gx = torch.Generator(device="cuda").manual_seed(6)
@@ -781,21 +824,31 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
                 xcs[name][:mb] = xs[name]
             ys[name] = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
 
-        def seq(pick, g=None, plan=None):
-            """The step's launches: pick(name) is the arm of each shape, tags at their offsets in tbs[g]; with a plan,
-            each launch runs its commit job and the drain follows."""
+        def seq(pick, g=None, company=False, plan=None, drain=False):
+            """The step's launches: pick(name) is the arm of each shape, tags at their offsets in tbs[g]; in company,
+            fused3c_kernel with launches[g]'s deferrals and, with a plan, each launch's commit job (then its drain)."""
             fs, off = [], 0
             for layer in range(layout.LAYERS):
                 for name in names:
                     n, k, _ = weights[name]
                     pl, wf = copies[name][layer]
                     tp = ptr(tbs[g]) + 32 * off if g else 0
-                    cj = (ptr(plan["dev"]) + len(fs) * plan["jb"], plan["cblocks"][len(fs)]) if plan else (0, 0)
+                    with_ = None
+                    if company:
+                        q = len(fs)
+                        launch = launches[g][q]
+                        cj = (ptr(plan["dev"]) + q * plan["jb"], plan["cblocks"][q]) if plan else (0, 0)
+                        d = (0,) * 7
+                        if launch["defer"]:
+                            prev = launches[g][q - 1]
+                            d = (ptr(copies[prev["name"]][prev["layer"]][0]), ptr(tbs[g]) + 32 * prev["off"],
+                                 prev["off"], prev["n"], prev["k"], prev["tag_ctas"], launch["defer"])
+                        with_ = (*cj, launch["tag_ctas"], d)
                     fs.append(launcher(lib, torch, pick(name), n, k, mb, timing[name]["batches"][mb]["cublas_m"], pl,
-                                       wf, xs[name], xcs[name], ys[name], tp, off, xr, cj))
+                                       wf, xs[name], xcs[name], ys[name], tp, off, xr, with_))
                     if g:
                         off += layout.chunk_block_count(n, k, g)
-            return fs + (drain_fns(plan) if plan else [])
+            return fs + (drain_fns(plan) if drain else [])
 
         def drain_fns(plan):
             return [lambda q=q: lib.so.tf_commit(ptr(plan["dev"]) + q * plan["jb"], plan["cblocks"][q], stream(torch))
@@ -850,17 +903,30 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
 
             rpick = {name: f"t{g}kr1" for name in names}
             arms[f"tagr{g}"] = run(seq(lambda name: rpick[name], g), f"tagr{g}")
-            commitin = run(seq(lambda name: rpick[name], g, plans[g]), f"commitin{g}")
             nodes[g].zero_()
-            nodes_in[g].zero_()
             commit()
-            commitin()
             torch.cuda.synchronize()
-            same = bool(torch.equal(nodes[g], nodes_in[g]))
-            gates[g] = {"commitin_nodes_equal": same, "picks": rpick}
-            log(f"gate step M={mb} commitin{g}: {'ok' if same else 'FAIL'} ({nodes[g].numel() // 8} nodes)")
-            if same:
-                arms[f"commitin{g}"] = commitin
+            want = tbs[g].clone()
+            done_tags[g].copy_(want)
+            company = {
+                "tagd": (run(seq(lambda name: rpick[name], g, True), f"tagd{g}"), None),
+                "commitin": (run(seq(lambda name: rpick[name], g, True, plans[g], True), f"commitin{g}"), nodes_in[g]),
+                "behind": (run(seq(lambda name: rpick[name], g, True, behind[g]), f"behind{g}"), nodes_behind[g]),
+            }
+            gates[g] = {"picks": rpick}
+            for what, (f, tree) in company.items():
+                tbs[g].zero_()
+                if tree is not None:
+                    tree.zero_()
+                f()
+                torch.cuda.synchronize()
+                ok = bool(torch.equal(tbs[g], want)) and (tree is None or bool(torch.equal(tree, nodes[g])))
+                gates[g][what] = ok
+                log(f"gate step M={mb} {what}{g}: {'ok' if ok else 'FAIL'} (tags"
+                    + (f", {nodes[g].numel() // 8} nodes)" if tree is not None else ")"))
+                if ok:
+                    arms[f"{what}{g}"] = f
+            if gates[g]["commitin"]:
                 arms[f"drain{g}"] = run(drain_fns(plans[g]), f"drain{g}")
         if 4 in groups and all("u4kw4s3" in timing[name]["batches"][mb]["median_s"] for name in names):
             arms["probe4"] = run(seq(lambda name: "u4kw4s3", 4), "probe4")
@@ -930,8 +996,9 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
             what, g = re.fullmatch(r"([a-z]+)(\d+)", a).groups()
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": {"tag": "tag", "commit": "tag+commit", "overlap": "tag+commit overlapped",
-                                  "top": "commit's tree top alone", "probe": "tag", "tagr": "tag",
-                                  "commitin": "tag+commit in the launches", "drain": "commit's drain alone"}[what],
+                                  "top": "commit's tree top alone", "probe": "tag", "tagr": "tag", "tagd": "tag",
+                                  "commitin": "tag+commit in the launches", "drain": "commit's drain alone",
+                                  "behind": "tag+commit of the previous step in the launches"}[what],
                         **({"certified": False, "rounds": PROBE_ROUNDS} if what == "probe" else {})})
     return out
 

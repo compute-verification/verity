@@ -32,6 +32,7 @@
 
 #include <cuda_runtime.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <unordered_set>
@@ -854,23 +855,15 @@ __device__ void commit_warp(const CommitJob* __restrict__ cj, int w);
 
 // fused2's chunk-block map in fused_kernel's shape: FW warps a CTA on one span s of consecutive row blocks (spans fastest
 // in the grid), each lane's chunk loaded into registers PD quads ahead (no ring, no cp.async), x's M rows of the span in
-// shared memory. Tags and modes as fused2_kernel's. Under CJ, cblocks commit CTAs ahead of them run job cj, and the
-// kernel keeps to the GEMM's 6 CTAs an SM by spilling SHA-512's registers, not the GEMM's.
-template <int V, int L, int NB8, int MODE, int PD, bool CJ = false>
-__global__ void __launch_bounds__(FW * 32, CJ ? 6 : 1)
-    fused3_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x, float* __restrict__ y,
-                  uint32_t* __restrict__ tags, int M, int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr,
-                  const CommitJob* __restrict__ cj, int cblocks) {
+// shared memory. Tags and modes as fused2_kernel's; bid is the CTA's index in the GEMM's grid.
+template <int V, int L, int NB8, int MODE, int PD>
+__device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
+                                            float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N, int Kd,
+                                            uint64_t jbase, unsigned int* __restrict__ xr) {
   constexpr bool GEMM = MODE != MODE_TAGONLY, TAG = MODE != MODE_GEMM;
   constexpr int NQ = CHUNK_TILES / 4, DEPTH = PD + 1;
-  if constexpr (CJ) {
-    if ((int)blockIdx.x < cblocks) {
-      commit_warp(cj, blockIdx.x + cblocks * (threadIdx.x / 32));
-      return;
-    }
-  }
   extern __shared__ __align__(16) uint8_t xs[];
-  const int nspans = Kd / CCOLS, rts = N / 16, bid = blockIdx.x - (CJ ? cblocks : 0);
+  const int nspans = Kd / CCOLS, rts = N / 16;
   const int s = bid % nspans;
   const int nb = (bid / nspans) * FW + threadIdx.x / 32;
   const int lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
@@ -952,6 +945,45 @@ __global__ void __launch_bounds__(FW * 32, CJ ? 6 : 1)
       o[1] = make_uint4(t[4], t[5], t[6], t[7]);
     }
   }
+}
+
+template <int V, int L, int NB8, int MODE, int PD>
+__global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
+                                                         float* __restrict__ y, uint32_t* __restrict__ tags, int M,
+                                                         int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
+  fused3_body<V, L, NB8, MODE, PD>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr);
+}
+
+// An earlier launch's CTAs bid0 .. bid0 + blocks - 1, which it ran GEMM-only, as tags only.
+struct Defer {
+  const uint4* w;
+  uint32_t* tags;
+  uint64_t jbase;
+  int N, Kd, bid0, blocks;
+};
+
+// fused3_kernel with company: cblocks commit CTAs (job cj), then df.blocks CTAs of deferred tags, then the GEMM's grid,
+// whose CTAs from tag_ctas on run GEMM-only. Five CTAs an SM: SHA-512 may spill, the GEMM's registers stay.
+template <int V, int L, int NB8, int MODE, int PD>
+__global__ void __launch_bounds__(FW * 32, 5)
+    fused3c_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x, float* __restrict__ y,
+                   uint32_t* __restrict__ tags, int M, int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr,
+                   const CommitJob* __restrict__ cj, int cblocks, int tag_ctas, Defer df) {
+  int b = blockIdx.x;
+  if (b < cblocks) {
+    commit_warp(cj, b + cblocks * (threadIdx.x / 32));
+    return;
+  }
+  b -= cblocks;
+  if (b < df.blocks) {
+    fused3_body<V, L, 1, MODE_TAGONLY, PD>(df.bid0 + b, df.w, nullptr, nullptr, df.tags, 1, df.N, df.Kd, df.jbase, xr);
+    return;
+  }
+  b -= df.blocks;
+  if (b >= tag_ctas)
+    fused3_body<V, 1, NB8, MODE_GEMM, PD>(b, wstore, x, y, tags, M, N, Kd, jbase, xr);
+  else
+    fused3_body<V, L, NB8, MODE, PD>(b, wstore, x, y, tags, M, N, Kd, jbase, xr);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1364,65 +1396,72 @@ int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int packed, i
 }
 #undef F2
 
-#define F3(L, MODE, PD)                                                                                                \
+#define F3(K, L, MODE, PD)                                                                                             \
   if (lanes == L && mode == MODE && pd == PD)                                                                          \
-    kern = nb8 == 1 ? fused3_kernel<1, L, 1, MODE, PD> : nb8 == 2 ? fused3_kernel<1, L, 2, MODE, PD>                   \
-                                                                  : fused3_kernel<1, L, 4, MODE, PD>;
-#define F3C(L, MODE, PD)                                                                                               \
-  if (lanes == L && mode == MODE && pd == PD)                                                                          \
-    kern = nb8 == 1   ? fused3_kernel<1, L, 1, MODE, PD, true>                                                         \
-           : nb8 == 2 ? fused3_kernel<1, L, 2, MODE, PD, true>                                                         \
-                      : fused3_kernel<1, L, 4, MODE, PD, true>;
+    kern = nb8 == 1 ? K<1, L, 1, MODE, PD> : nb8 == 2 ? K<1, L, 2, MODE, PD> : K<1, L, 4, MODE, PD>;
 
-// The chunk-block GEMM in registers (fused3_kernel): lanes L; mode GEMM or tags; pd quads ahead (1 or 2). M <= 32, N a
-// multiple of 16 FW, K of 2,048; cj (device) a commit job run by cblocks commit CTAs ahead of the GEMM's, or none.
-// 3: form not built; 4: x's M rows exceed a CTA's shared memory.
-int tf_fused3c(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
-               int Kd, uint64_t jbase, unsigned int* xr, const void* cj, int cblocks, cudaStream_t st) {
-  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || mode < 0 || mode > 3 || cblocks < 0 || (cblocks && !cj))
-    return 1;
-  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
-  if (mode == MODE_GEMM) lanes = 1;
-  void (*kern)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*,
-               const CommitJob*, int) = nullptr;
-  if (cj) {
-    F3C(1, 1, 1) F3C(4, 1, 1) F3C(8, 1, 1)
-  } else {
-    F3(1, 0, 1) F3(1, 0, 2) F3(1, 1, 1) F3(1, 1, 2) F3(4, 1, 1) F3(4, 1, 2) F3(8, 1, 1) F3(8, 1, 2)
-  }
-  if (!kern) return 3;
-  const int smem = M * CXS;
-  if (smem > 99 * 1024) return 4;
+static int configure3(const void* kern, int M) {
+  if (M * CXS > 99 * 1024) return 4;
   static std::unordered_set<const void*> configured;
-  if (!configured.count((const void*)kern)) {
+  if (!configured.count(kern)) {
     if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, 99 * 1024) ||
         cudaFuncSetAttribute(kern, cudaFuncAttributePreferredSharedMemoryCarveout, 100))
       return 2;
-    configured.insert((const void*)kern);
+    configured.insert(kern);
   }
-  const int grid = (N / 16 / FW) * (Kd / CCOLS) + cblocks;
-  kern<<<grid, FW * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr, (const CommitJob*)cj, cblocks);
+  return 0;
+}
+
+// The chunk-block GEMM in registers (fused3_kernel): lanes L; mode GEMM or tags; pd quads ahead (1 or 2). M <= 32, N a
+// multiple of 16 FW, K of 2,048. 3: form not built; 4: x's M rows exceed a CTA's shared memory.
+int tf_fused3(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
+              int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
+  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
+  if (mode == MODE_GEMM) lanes = 1;
+  Kern2 kern = nullptr;
+  F3(fused3_kernel, 1, 0, 1) F3(fused3_kernel, 1, 0, 2) F3(fused3_kernel, 1, 1, 1) F3(fused3_kernel, 1, 1, 2)
+  F3(fused3_kernel, 4, 1, 1) F3(fused3_kernel, 4, 1, 2) F3(fused3_kernel, 8, 1, 1) F3(fused3_kernel, 8, 1, 2)
+  if (!kern) return 3;
+  if (const int rc = configure3((const void*)kern, M)) return rc;
+  kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, M * CXS, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
+  return cudaGetLastError() ? 2 : 0;
+}
+
+// tf_fused3's tag forms at one quad ahead in fused3c_kernel: cj (device) a commit job on cblocks CTAs or none, the
+// GEMM's CTAs from tag_ctas on GEMM-only, and dblocks CTAs of an earlier launch's (dw, dtags, djbase, dN, dKd) from
+// dbid0 on as tags only.
+int tf_fused3c(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
+               int Kd, uint64_t jbase, unsigned int* xr, const void* cj, int cblocks, int tag_ctas, const void* dw,
+               uint32_t* dtags, uint64_t djbase, int dN, int dKd, int dbid0, int dblocks, cudaStream_t st) {
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || mode != MODE_TAGS || cblocks < 0 || (cblocks && !cj) ||
+      dblocks < 0 || (dblocks && (!dw || dN % (16 * FW) || dKd % CCOLS)))
+    return 1;
+  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
+  void (*kern)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*,
+               const CommitJob*, int, int, Defer) = nullptr;
+  F3(fused3c_kernel, 1, 1, 1) F3(fused3c_kernel, 4, 1, 1) F3(fused3c_kernel, 8, 1, 1)
+  if (!kern) return 3;
+  if (const int rc = configure3((const void*)kern, M)) return rc;
+  const Defer df{(const uint4*)dw, dtags, djbase, dN, dKd, dbid0, dblocks};
+  const int grid = (N / 16 / FW) * (Kd / CCOLS) + cblocks + dblocks;
+  kern<<<grid, FW * 32, M * CXS, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr, (const CommitJob*)cj, cblocks,
+                                       tag_ctas, df);
   return cudaGetLastError() ? 2 : 0;
 }
 #undef F3
-#undef F3C
-
-int tf_fused3(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
-              int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
-  return tf_fused3c(lanes, mode, pd, w, x, y, tags, M, N, Kd, jbase, xr, nullptr, 0, st);
-}
 
 int tf_commit_job_bytes() { return (int)sizeof(CommitJob); }
 
 // The in-step commit's plan over `launches` tag launches, launch q leaving the store's first ends[q] of its ntags =
 // ends[launches - 1] tags done (the tree over their leaves, leaf0 the first's index, in nodes as tf_tree's). Job q (into
-// host jobs[q]) runs in launch q: one level more of every level whose children earlier launches finished, and, if
-// leaf_ok[q] (a leaf is five dependent SHA-512 compressions, too long for a short launch), the leaves of earlier tags;
-// then drain jobs, commit-only launches, until the root. At most max_warps warps a job, in cblocks[q] CTAs of nsm or
-// fewer where they fit. Returns the job count, -1 if cap jobs are too few, -2 if a job needs more segments.
-int tf_commit_plan(const uint64_t* ends, const uint8_t* leaf_ok, int launches, uint64_t* nodes, const uint32_t* tags,
-                   uint64_t leaf0, int max_warps, int nsm, void* jobs, int* cblocks, int cap) {
-  if (launches < 1 || max_warps < 1 || nsm < 1) return -3;
+// host jobs[q]) runs in launch q on at most budget[q] CTAs of up to 4 warps: one level more of every level whose children
+// earlier launches finished, and, if leaf_ok[q] (a leaf is five dependent SHA-512 compressions, too long for a short
+// launch), the leaves of earlier tags; then drain jobs, commit-only launches on up to nsm CTAs, until the root.
+// cblocks[q] gets each job's CTAs. Returns the job count, -1 if cap jobs are too few, -2 if a job needs more segments.
+int tf_commit_plan(const uint64_t* ends, const uint8_t* leaf_ok, const int* budget, int launches, uint64_t* nodes,
+                   const uint32_t* tags, uint64_t leaf0, int nsm, void* jobs, int* cblocks, int cap) {
+  if (launches < 1 || nsm < 1) return -3;
   const uint64_t ntags = ends[launches - 1], nleaves = (ntags + 15) / 16;
   const Levels lv = levels_for(nleaves);
   const size_t top = lv.n.size() - 1;
@@ -1433,6 +1472,7 @@ int tf_commit_plan(const uint64_t* ends, const uint8_t* leaf_ok, int launches, u
     if (q >= launches && done[top] == lv.n[top]) return q;
     if (q >= cap) return -1;
     const bool drain = q >= launches;
+    const int ctas = drain ? nsm : std::max(budget[q], 0), max_warps = 4 * ctas;
     CommitJob& j = J[q];
     memset(&j, 0, sizeof j);
     j.nodes = nodes;
@@ -1462,8 +1502,7 @@ int tf_commit_plan(const uint64_t* ends, const uint8_t* leaf_ok, int launches, u
     if (drain || leaf_ok[q])
       if (add(0, done[0], drain ? nleaves : (q ? ends[q - 1] / 16 : 0))) return -2;
     done = nd;
-    cblocks[q] = j.warps <= nsm ? j.warps : (j.warps + 3) / 4 > nsm ? (j.warps + 3) / 4 : nsm;
-    if (j.warps > 4 * cblocks[q]) return -3;
+    cblocks[q] = std::min(j.warps, ctas);
   }
 }
 
