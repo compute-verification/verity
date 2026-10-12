@@ -830,6 +830,39 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     return found
 
 
+def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
+    """The ids in `arts` whose manifest the public export at `url` doesn't hold. The export writes a manifest after its blobs, so
+    a manifest there means the fixture is whole."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .store import ids
+    from .store.local import manifest_key
+    from .store.remote import HttpRemote
+
+    pub = HttpRemote(url)
+    with ThreadPoolExecutor(max_workers=jobs) as ex:
+        held = list(ex.map(lambda a: pub.head(manifest_key(ids.hex_of(a))) is not None, arts))
+    return [a for a, h in zip(arts, held) if not h]
+
+
+def fixtures_public(ctx: Ctx) -> list[Finding]:
+    """A fixture main's `fixtures/artifacts.json` registers that the public export, where nodes and pods without the store's key
+    fetch fixtures, doesn't hold (its manifest, by anonymous HEAD). The control pod's export loop copies new ones every 5 min."""
+    from .store import fetchset, fixtures
+
+    doc = json.loads(ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw",
+                             f"repos/{REPO_SLUG}/contents/{fixtures.REPLICA_MAP}?ref=main"], timeout=60))
+    url = fetchset.public_url()
+    if not (arts := list(fixtures.entries(doc))):
+        raise RuntimeError(f"main's {fixtures.REPLICA_MAP} registers no fixture")
+    if not (gone := public_missing(arts, url)):
+        return []
+    return [Finding("missing", f"*{len(gone)} of the {len(arts)} fixtures main registers aren't in the public export* ({url}): "
+                    + ", ".join(f"`{a[:16]}…`" for a in gone[:5]) + (f" and {len(gone) - 5} more" if len(gone) > 5 else "")
+                    + ". A node or pod without the store's key can't fetch them.",
+                    cleared="*Cleared:* the public export holds every fixture main registers.")]
+
+
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
 
 USER_SLICE = "/sys/fs/cgroup/user.slice/user-1001.slice"      # each research run is a session scope here (one ssh login each)
@@ -1469,6 +1502,11 @@ MONITORS: list[Monitor] = [
             "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "
             "an alert dir that takes no writes, its disk and owner (`df` and `ls -ld` on node 1).",
             every_s=120, unread_s=600),
+    Monitor("fixtures-public", "infra", "warn", "relay", fixtures_public,
+            "Read the control pod's /data/infra/fixtures-export.log (infra/control/fixtures_export.sh, every 5 min): a fixture "
+            "`not local and not on any source` was registered without `research data push`, so ask whoever registered it to push "
+            "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
+            every_s=900, for_s=1800, unread_s=4 * 3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

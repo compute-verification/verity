@@ -417,6 +417,7 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
   A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
+  The control pod runs it on main every 5 min (`infra/control/fixtures_export.sh`); monitor `fixtures-public` flags a gap.
 
 ## 8. Labels
 

@@ -719,6 +719,26 @@ def test_an_unanswered_ask_goes_to_whoever_it_asked():
     assert f.key == "1791050000.000100" and f.owners == ("infra", "proofs") and "@circuits" in f.text
 
 
+def test_fixtures_public_names_main_s_fixtures_the_public_export_lacks(monkeypatch):
+    a, b, old = ("art:" + c * 64 for c in "abc")
+    doc = {a: "fixtures/a.json", b: "fixtures/b.json", "previous": {a: [old]}}
+    run = Run((has("artifacts.json?ref=main"), (0, json.dumps(doc), "")))
+    asked = []
+    monkeypatch.setattr(M, "public_missing", lambda arts, url: asked.extend(arts) or [b])
+    (f,) = M.fixtures_public(M.Ctx(now=T0, run=run))
+    assert asked == [a, b] and f.key == "missing" and "1 of the 2 fixtures" in f.text and f"`{b[:16]}…`" in f.text
+    monkeypatch.setattr(M, "public_missing", lambda arts, url: [])
+    assert M.fixtures_public(M.Ctx(now=T0, run=run)) == []
+
+
+def test_public_missing_heads_each_manifest(monkeypatch):
+    from research.store.remote import HttpRemote
+
+    a, b = "art:" + "a" * 64, "art:" + "b" * 64
+    monkeypatch.setattr(HttpRemote, "head", lambda self, key: {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None)
+    assert M.public_missing([a, b], "https://example.invalid/store") == [b]
+
+
 def test_node_1s_heartbeat_is_stale_after_10_minutes_without_a_pass():
     def ctx(last):
         return M.Ctx(now=T0, run=Run((has("n1"), (0, f"{last}\n", ""))))
