@@ -458,6 +458,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
+  "Accounting.SecurityProofs.BandwidthOfAudit": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit"],
+   "assumptions": [],
+   "type_hash": "bb41fea01012eea126f03a9f2f6fab6cfc2e588f1a1ef70e5f2f6941d224b0e8"
+  },
+  "Accounting.SecurityProofs.CapacityOfStateBound": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.CapacityOfStateBound : Accounting.Guarantees.CapacityOfStateBound"],
+   "assumptions": [],
+   "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
+  },
   "Accounting.SecurityProofs.ComputeOfPouw": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw"],
@@ -470,11 +482,23 @@
    "assumptions": [],
    "type_hash": "89a050fbdfa6a718cc71e69413c2ea03e70e9cb47076c42b6531b9acf5047a64"
   },
+  "Accounting.SecurityProofs.DerivedStateResidual": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.DerivedStateResidual : Accounting.Guarantees.DerivedStateResidual"],
+   "assumptions": [],
+   "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619"
+  },
   "Accounting.SecurityProofs.Joint": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Joint : Accounting.Guarantees.Joint"],
    "assumptions": [],
    "type_hash": "2349616973612a78bdb833e74d98a7ec19326ddf536e89213964f9e18066707f"
+  },
+  "Bandwidth.SecurityProofs.AuditRO": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
+   "assumptions": [],
+   "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -3410,21 +3434,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Bandwidth.SecurityProofs.AuditRO": {
-   "owner": "@memory-accounting",
-   "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
-   "assumptions": [],
-   "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
-  },
-  "Accounting.SecurityProofs.BandwidthOfAudit": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.CapacityOfStateBound": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.DerivedStateResidual": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -3787,6 +3796,64 @@
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Definitions.Accounting.Bandwidth.Game": {
+   "digest": "419713f54ecb1553848ac084adeaab4e0a2db5738e1f27422be1050001d17ef0",
+   "definitions": {
+    "Bandwidth.Accepts": "e0bd08492460be18678e3282dfa068086b3c6e2d948e830d5e83a3db266a52b8",
+    "Bandwidth.Chip": "d45ebdb58abcdf8efc1b28e7bc4486fde30e16042446b9e02a0b279be2cc60f0",
+    "Bandwidth.Chip.below": "bb601ba183ce2e00b180f88a4056ccaa203f06b96efb324822340ff56e21d4df",
+    "Bandwidth.Chip.brecOn": "d6ae4146cbb47deb9bedcde350fafce683d0c4e4c73e0b97ba8a81145cb37758",
+    "Bandwidth.Chip.brecOn.go": "96932ebdb15eeac09e165fe22a8b89d464c71745d1809824bcb49b2773459aa8",
+    "Bandwidth.Chip.casesOn": "c93abf8f65fcb224fab8c29cd20353dd5c63ffb162fde7d08e877342ac065328",
+    "Bandwidth.Chip.done": "500286417fb8c754443ba87e9707b55903f2ee6c2415b3e864aba6a515c1aaaa",
+    "Bandwidth.Chip.ingress": "4c4aa8f8cf05183e5314d3a84a3345ef90af112eb55bdb982dde35cc1d4b42f4",
+    "Bandwidth.Chip.ingressBits": "c742a4a97c4585ee40046a027fceed817dc3e990c18a2caf1fac0565d1278c09",
+    "Bandwidth.Chip.queries": "d4e2e04b2d282eb6575fa2482d647c6080e8dba6988430eed644f74b184fdb28",
+    "Bandwidth.Chip.rec": "15011d328e665a5e6bbfade46d3e9c3fb0ccf878e7d9c478d70f26e7343f18b3",
+    "Bandwidth.Chip.regen": "88152855e208ae7daa93948380847295801b7ea7a6c1a589c30bf1a2bd3f6e04",
+    "Bandwidth.Chip.regens": "c73db498b34f8166c8055388982023473c0c953734df8a2d2f9636ac5e5c4332",
+    "Bandwidth.Chip.run": "d3ba71b334065b9b9c195e3399288ae8e531833ad35cf5c992c466baf4d030cf",
+    "Bandwidth.Chip.side": "c0f2ad3c3702aa70e52bf55844c80bbb722e605981b8be1371e76cd2e1c654a0",
+    "Bandwidth.Chip.sideBits": "141d32368d0786c9265410ad894f49caa90ea8a5b0fde8bc5c8117d7ca1c0c67",
+    "Bandwidth.Chip.tag": "69fc2badff916fbc3d79b67253633f3a0e732579c301eee23fab4f79ba2ce4cd",
+    "Bandwidth.Device": "8337e59b024471c7c84210e675bed3911444d809fce91a643b3e8a982695df1d",
+    "Bandwidth.Device.chip": "458f55105a6bc6dedf46e474a9ca6e72db2d6f029ba383946096da2993438507",
+    "Bandwidth.Device.ingress": "e7cd27e527fd802ea70b828679a336534f6c87f0f469ab50aa9dffae49ab45c3",
+    "Bandwidth.Device.mem": "3a9878dea6546e1442a17a7e527d19b04f57a72b57ff915d4733b4ec6c5c85a0",
+    "Bandwidth.Device.side": "f6a832e092295e65f52ab0fb8c3d36a20bc2addaf75813268307649ade926b9a",
+    "Bandwidth.Device.state": "74147efd3edbb2ab9604ee3a2bccc177be62bbca0a6992fc74a0cadcbf730b1a",
+    "Bandwidth.Device.tags": "48978632c53a2f5de4fd8eb7201d47ad99e3408b06acd7cff8d7a52ea4485791",
+    "Bandwidth.Device.world": "d38a7e62e80d0bd0f0e3262976752d10d9edcc9c1770e8f38de7f81fea3e121d",
+    "Bandwidth.Oracle": "00ba99c07d062a5499b309208fe1e4c3810334fa842eb2f437000dda6f8a04d5",
+    "Bandwidth.Store": "856a234f1ff4bc32b7603e9d223a26e7189b5c78d81dad699e2ba4d2e9cc1688",
+    "Bandwidth.World": "2f274b1c4548afd44a3098351cb44afc7570e8fbc78ab003372ca3f3fccc9b61",
+    "Bandwidth.World.block": "2ad5c8ac78c796224c8c65b59e59c02f6cd397e152ce8a715595903e8e284a8c",
+    "Bandwidth.World.mem": "529ee68a8130789546b62ff0661ff9ed7d739e72ed93c4fb56abf86f5d97d1bc",
+    "Bandwidth.World.oracle": "f624d94a48e3c59ebf88fa87dd1224d0287c1d02e19270d236d424eeec1f8d56",
+    "Bandwidth.World.side": "f566a8353998a8afde7363fd5ca5b98c5cb9ade02af1f79d543430fb1b1e8b99"
+   },
+   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit", "Bandwidth.SecurityProofs.AuditRO"]
+  },
+  "Definitions.Accounting.BandwidthAudit": {
+   "digest": "102c6f71bb14f51a38a0b3e715a9caaaa95cbe133f4fe34ca5280ec5c4eaf59f",
+   "definitions": {
+    "Accounting.BandwidthCoins": "c3bb41c05837c55489d3f73243f4280cbdb8336332389cf2c224c1e49c149b17",
+    "Accounting.RealizesBandwidth": "1c8f9e7323acb94a975e149593bba361b534675309658dcedbbab7df0dafcd65"
+   },
+   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
+  },
+  "Definitions.Accounting.Capacity": {
+   "digest": "0f90fd7d200f4cd8daa8b835b17d21cb6aec7e6d674a59fe12b271cdd484db29",
+   "definitions": {
+    "Accounting.RealizesState": "d865a85348d80a13c6df00d3e2697f3848cf85fc779bfa5cbaec23247011017c",
+    "Accounting.Run.CapacityCovertBut": "77eb4eceea9a457ffb0ccaa70e1841b243aa6ae68015b3fbc58295303326258c",
+    "Accounting.Run.othersHeldBut": "32155aaa4b4a4b7726988b8d6f39a45b39c501e0eb2993630eaa55e1bd91406d",
+    "Accounting.StateGame": "b4d984277997f64e3638e03e2b2b6b3197ce043d01c265870ead77794a89271d",
+    "Accounting.StateGame.Passes": "60870be594677ba26723d83c48bcc24df34523644962e16e3e13308a785dd1b1",
+    "Accounting.StateGame.Server": "122993a1a3168f4b046def674212c550b909c7c6c3d768062628457f43d700b8"
+   },
+   "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
+  },
   "Definitions.Accounting.Device": {
    "digest": "b60d978eda8fd4fe8e9527d359ea2e19c96b48edf40d183ad8682bd8f70e09a2",
    "definitions": {
@@ -3826,8 +3893,11 @@
     "Accounting.instFintypeOp": "215511804eac7984ffc432e02f18ff1db6a3ae8f96101691aa6f1d5338bddd4d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.CovertResidual",
+    "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint"
    ]
   },
@@ -3861,8 +3931,11 @@
     "Accounting.Run.work": "d39cf276471cdf45bd5457c94f6fb876ffbe01adf2c83ba9cf70a99f1fe9d89a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.CovertResidual",
+    "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint"
    ]
   },
@@ -4317,6 +4390,7 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
     "Bandwidth.SecurityProofs.AuditRO",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
@@ -4629,8 +4703,11 @@
     "Pouw.pr": "c72cdec579500ec37c510210e22769c63de3d3f4f7e39a9f243452a0b22e4134"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.CovertResidual",
+    "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -11775,6 +11852,28 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
+  },
+  "Models.Accounting.Guarantees.Bandwidth": {
+   "digest": "e4ca1c75ea30d2c9ed0f847a814de0fdcaf61dc5905b5b8346ec0705ef788f1c",
+   "definitions": {
+    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20"
+   },
+   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
+  },
+  "Models.Accounting.Guarantees.BandwidthAudit": {
+   "digest": "ef04dfc432d883173d1d9e15f11c0f890a1c75b97f7e29c51d4915b12c72bb93",
+   "definitions": {
+    "Accounting.Guarantees.BandwidthOfAudit": "43fac698ca83b814ccf82b087ffc701dd90d85c7e779fef455d2702c5d473e52"
+   },
+   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
+  },
+  "Models.Accounting.Guarantees.Capacity": {
+   "digest": "cf5df34c167e3f0a863c2768d0a0efe9fb0af1bca6a0329f56248c540bdc63cf",
+   "definitions": {
+    "Accounting.Guarantees.CapacityOfStateBound": "d065469e7ef6e61786a57194f3e0e53b9929cf8de55d8673c1d008ce2883f536",
+    "Accounting.Guarantees.DerivedStateResidual": "d458ccd34b3830b92b076cdd4d0979c673403a25da473077e751d573084071d1"
+   },
+   "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Models.Accounting.Guarantees.Joint": {
    "digest": "6c3005740d08578ac0e0fda861dbe77c578ceb28314b3b026ad572fb9ffd9837",
@@ -19882,51 +19981,6 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
-  },
-  "Definitions.Accounting.Bandwidth.Game": {
-   "digest": "419713f54ecb1553848ac084adeaab4e0a2db5738e1f27422be1050001d17ef0",
-   "definitions": {
-    "Bandwidth.Accepts": "e0bd08492460be18678e3282dfa068086b3c6e2d948e830d5e83a3db266a52b8",
-    "Bandwidth.Chip": "d45ebdb58abcdf8efc1b28e7bc4486fde30e16042446b9e02a0b279be2cc60f0",
-    "Bandwidth.Chip.below": "bb601ba183ce2e00b180f88a4056ccaa203f06b96efb324822340ff56e21d4df",
-    "Bandwidth.Chip.brecOn": "d6ae4146cbb47deb9bedcde350fafce683d0c4e4c73e0b97ba8a81145cb37758",
-    "Bandwidth.Chip.brecOn.go": "96932ebdb15eeac09e165fe22a8b89d464c71745d1809824bcb49b2773459aa8",
-    "Bandwidth.Chip.casesOn": "c93abf8f65fcb224fab8c29cd20353dd5c63ffb162fde7d08e877342ac065328",
-    "Bandwidth.Chip.done": "500286417fb8c754443ba87e9707b55903f2ee6c2415b3e864aba6a515c1aaaa",
-    "Bandwidth.Chip.ingress": "4c4aa8f8cf05183e5314d3a84a3345ef90af112eb55bdb982dde35cc1d4b42f4",
-    "Bandwidth.Chip.ingressBits": "c742a4a97c4585ee40046a027fceed817dc3e990c18a2caf1fac0565d1278c09",
-    "Bandwidth.Chip.queries": "d4e2e04b2d282eb6575fa2482d647c6080e8dba6988430eed644f74b184fdb28",
-    "Bandwidth.Chip.rec": "15011d328e665a5e6bbfade46d3e9c3fb0ccf878e7d9c478d70f26e7343f18b3",
-    "Bandwidth.Chip.regen": "88152855e208ae7daa93948380847295801b7ea7a6c1a589c30bf1a2bd3f6e04",
-    "Bandwidth.Chip.regens": "c73db498b34f8166c8055388982023473c0c953734df8a2d2f9636ac5e5c4332",
-    "Bandwidth.Chip.run": "d3ba71b334065b9b9c195e3399288ae8e531833ad35cf5c992c466baf4d030cf",
-    "Bandwidth.Chip.side": "c0f2ad3c3702aa70e52bf55844c80bbb722e605981b8be1371e76cd2e1c654a0",
-    "Bandwidth.Chip.sideBits": "141d32368d0786c9265410ad894f49caa90ea8a5b0fde8bc5c8117d7ca1c0c67",
-    "Bandwidth.Chip.tag": "69fc2badff916fbc3d79b67253633f3a0e732579c301eee23fab4f79ba2ce4cd",
-    "Bandwidth.Device": "8337e59b024471c7c84210e675bed3911444d809fce91a643b3e8a982695df1d",
-    "Bandwidth.Device.chip": "458f55105a6bc6dedf46e474a9ca6e72db2d6f029ba383946096da2993438507",
-    "Bandwidth.Device.ingress": "e7cd27e527fd802ea70b828679a336534f6c87f0f469ab50aa9dffae49ab45c3",
-    "Bandwidth.Device.mem": "3a9878dea6546e1442a17a7e527d19b04f57a72b57ff915d4733b4ec6c5c85a0",
-    "Bandwidth.Device.side": "f6a832e092295e65f52ab0fb8c3d36a20bc2addaf75813268307649ade926b9a",
-    "Bandwidth.Device.state": "74147efd3edbb2ab9604ee3a2bccc177be62bbca0a6992fc74a0cadcbf730b1a",
-    "Bandwidth.Device.tags": "48978632c53a2f5de4fd8eb7201d47ad99e3408b06acd7cff8d7a52ea4485791",
-    "Bandwidth.Device.world": "d38a7e62e80d0bd0f0e3262976752d10d9edcc9c1770e8f38de7f81fea3e121d",
-    "Bandwidth.Oracle": "00ba99c07d062a5499b309208fe1e4c3810334fa842eb2f437000dda6f8a04d5",
-    "Bandwidth.Store": "856a234f1ff4bc32b7603e9d223a26e7189b5c78d81dad699e2ba4d2e9cc1688",
-    "Bandwidth.World": "2f274b1c4548afd44a3098351cb44afc7570e8fbc78ab003372ca3f3fccc9b61",
-    "Bandwidth.World.block": "2ad5c8ac78c796224c8c65b59e59c02f6cd397e152ce8a715595903e8e284a8c",
-    "Bandwidth.World.mem": "529ee68a8130789546b62ff0661ff9ed7d739e72ed93c4fb56abf86f5d97d1bc",
-    "Bandwidth.World.oracle": "f624d94a48e3c59ebf88fa87dd1224d0287c1d02e19270d236d424eeec1f8d56",
-    "Bandwidth.World.side": "f566a8353998a8afde7363fd5ca5b98c5cb9ade02af1f79d543430fb1b1e8b99"
-   },
-   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
-  },
-  "Models.Accounting.Guarantees.Bandwidth": {
-   "digest": "e4ca1c75ea30d2c9ed0f847a814de0fdcaf61dc5905b5b8346ec0705ef788f1c",
-   "definitions": {
-    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20"
-   },
-   "guarantees": ["Bandwidth.SecurityProofs.AuditRO"]
   }
  },
  "dependencies": {
