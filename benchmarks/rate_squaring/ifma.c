@@ -1,5 +1,6 @@
 // Squarings mod p = 2^512 - 569 on a host core with AVX-512 IFMA (vpmadd52luq / vpmadd52huq), eight words a vector and
-// G vectors interleaved a thread: the host CPUs' share h of the adversary's squaring rate.
+// G vectors interleaved a thread: the host CPUs' share h of the adversary's squaring rate. -DIF_BITS=768 -DIF_C=825
+// and -DIF_BITS=1024 -DIF_C=105 build it mod 2^768 - 825 and 2^1024 - 105 (15 and 20 limbs; the counts below are 512's).
 //
 // A word is ten 52-bit limbs (lazily below 2^520). The square takes each unordered pair's low and high halves once
 // (90 IFMA), doubles the 19 columns and adds the 10 diagonal squares (20 IFMA). The high half is normalized alone
@@ -8,7 +9,7 @@
 // limb 0 the same way. Limb 0's carry into limbs 1 and 2 ends the square; a carry past limb 2 (probability below
 // 2^-100) takes a full pass.
 //
-//   ifma gate K N          N words (a multiple of 8 G) from a fixed seed, K squarings: "tag K 512 569 x0 xK", canonical
+//   ifma gate K N          N words (a multiple of 8 G) from a fixed seed, K squarings: "tag K BITS C x0 xK", canonical
 //   ifma time K THREADS    THREADS threads, one a CPU of the affinity mask, each squaring 8 G words K times: JSON
 #define _GNU_SOURCE
 #include <immintrin.h>
@@ -23,7 +24,15 @@
 #ifndef G
 #define G 4
 #endif
-#define NL 10
+#ifndef IF_BITS
+#define IF_BITS 512
+#define IF_C 569
+#endif
+#define NL ((IF_BITS + 51) / 52)
+#define NW (IF_BITS / 64)
+#define SHIFT (52 * NL - IF_BITS)
+_Static_assert(IF_BITS % 64 == 0 && IF_C % 4 == 1 && ((unsigned long long)IF_C << SHIFT) < (1ull << 24),
+               "p = 2^IF_BITS - IF_C = 3 mod 4, its fold constant below 2^24");
 typedef __m512i V;
 typedef uint64_t u64;
 
@@ -31,7 +40,7 @@ static inline V lo52(V acc, V a, V b) { return _mm512_madd52lo_epu64(acc, a, b);
 static inline V hi52(V acc, V a, V b) { return _mm512_madd52hi_epu64(acc, a, b); }
 
 static inline __attribute__((always_inline)) void sqr(V (*x)[NL]) {
-  const V M = _mm512_set1_epi64((1ull << 52) - 1), K = _mm512_set1_epi64(569 << 8), Z = _mm512_setzero_si512();
+  const V M = _mm512_set1_epi64((1ull << 52) - 1), K = _mm512_set1_epi64((long long)IF_C << SHIFT), Z = _mm512_setzero_si512();
   V t[G][2 * NL];
 #pragma GCC unroll 64
   for (int g = 0; g < G; ++g)
@@ -108,50 +117,50 @@ static u64 splitmix(u64 *s) {
   return z ^ (z >> 31);
 }
 
-// Word w of a group's lane l: eight u64 words (below 2^512) into ten 52-bit limbs, and back mod p.
-static void to_limbs(const u64 w[8], u64 l[NL]) {
+// Word w of a group's lane l: NW u64 words (below 2^IF_BITS) into NL 52-bit limbs, and back mod p.
+static void to_limbs(const u64 w[NW], u64 l[NL]) {
   for (int k = 0; k < NL; ++k) {
     const int b = 52 * k, q = b / 64, r = b % 64;
     unsigned __int128 v = w[q] >> r;
-    if (r > 12 && q + 1 < 8) v |= (unsigned __int128)w[q + 1] << (64 - r);
+    if (r > 12 && q + 1 < NW) v |= (unsigned __int128)w[q + 1] << (64 - r);
     l[k] = (u64)v & ((1ull << 52) - 1);
   }
 }
 
 static void canon_hex(const u64 l[NL], char *out) {
-  u64 w[9] = {0};
+  u64 w[NW + 1] = {0};
   for (int k = 0; k < NL; ++k) {
     const int b = 52 * k, q = b / 64, r = b % 64;
     w[q] |= l[k] << r;
     if (r > 12) w[q + 1] |= l[k] >> (64 - r);
   }
-  u64 add = 569 * w[8];
+  u64 add = IF_C * w[NW];
   for (int pass = 0; pass < 3 && add; ++pass) {
     unsigned __int128 c = add;
-    for (int q = 0; q < 8; ++q) {
+    for (int q = 0; q < NW; ++q) {
       c += w[q];
       w[q] = (u64)c;
       c >>= 64;
     }
-    add = c ? 569 : 0;
+    add = c ? IF_C : 0;
   }
-  u64 y[8];
-  unsigned __int128 c = 569;
-  for (int q = 0; q < 8; ++q) {
+  u64 y[NW];
+  unsigned __int128 c = IF_C;
+  for (int q = 0; q < NW; ++q) {
     c += w[q];
     y[q] = (u64)c;
     c >>= 64;
   }
   const u64 *z = c ? y : w;
-  for (int q = 7; q >= 0; --q) out += sprintf(out, "%016llx", (unsigned long long)z[q]);
+  for (int q = NW - 1; q >= 0; --q) out += sprintf(out, "%016llx", (unsigned long long)z[q]);
 }
 
 static void fill(V (*x)[NL], u64 *seed) {
   u64 lanes[8][NL];
   for (int g = 0; g < G; ++g) {
     for (int l = 0; l < 8; ++l) {
-      u64 w[8];
-      for (int q = 0; q < 8; ++q) w[q] = splitmix(seed);
+      u64 w[NW];
+      for (int q = 0; q < NW; ++q) w[q] = splitmix(seed);
       to_limbs(w, lanes[l]);
     }
     for (int k = 0; k < NL; ++k) {
@@ -215,12 +224,12 @@ int main(int argc, char **argv) {
       for (int g = 0; g < G; ++g)
         for (int l = 0; l < 8; ++l) {
           u64 a[NL], b[NL];
-          char ha[200], hb[200];
+          char ha[16 * NW + 1], hb[16 * NW + 1];
           lane(x0, g, l, a);
           lane(x, g, l, b);
           canon_hex(a, ha);
           canon_hex(b, hb);
-          printf("ifma%d %ld 512 569 %s %s\n", G, K, ha, hb);
+          printf("ifma%d %ld %d %d %s %s\n", G, K, IF_BITS, IF_C, ha, hb);
         }
     }
     return 0;
@@ -246,9 +255,9 @@ int main(int argc, char **argv) {
       if (jobs[i].seconds > worst) worst = jobs[i].seconds;
       sum_rate += 8.0 * G * K / jobs[i].seconds;
     }
-    printf("{\"g\": %d, \"K\": %ld, \"threads\": %d, \"first_cpu\": %d, \"sq_per_s_sum\": %.4e, \"sq_per_s_per_thread\": %.4e, "
+    printf("{\"bits\": %d, \"g\": %d, \"K\": %ld, \"threads\": %d, \"first_cpu\": %d, \"sq_per_s_sum\": %.4e, \"sq_per_s_per_thread\": %.4e, "
            "\"sq_per_s_at_slowest\": %.4e}\n",
-           G, K, T, cpus[0], sum_rate, sum_rate / T, 8.0 * G * K * T / worst);
+           IF_BITS, G, K, T, cpus[0], sum_rate, sum_rate / T, 8.0 * G * K * T / worst);
     return 0;
   }
   return 2;

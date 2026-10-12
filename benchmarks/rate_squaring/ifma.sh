@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# ifma.c on the host CPUs (cwd = the source tree, CPUs from the affinity mask): for G = 1, 2 and 3 vectors a thread,
+# ifma.c on the host CPUs (cwd = the source tree, CPUs from the affinity mask), mod 2^$BITS - $C (default 2^512 - 569):
+# for G = 1, 2 and 3 vectors a thread,
 # each compiler's build (gcc, and clang where the node has it) gated against
 # Python's pow (384 words at K = 1, 777 and 1,000) before it is timed: on one thread, on one thread a physical core of
 # the mask, and on every CPU of the mask. Results in $RESEARCH_RUN_DIR/out.
@@ -10,6 +11,7 @@ set -uxo pipefail
 O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 D=benchmarks/rate_squaring
 B=$(mktemp -d /tmp/rate-squaring-ifma.XXXXXX); trap 'rm -rf "$B"' EXIT
+BITS=${BITS:-512}; C=${C:-569}
 { lscpu; grep -m1 "model name" /proc/cpuinfo; grep -c processor /proc/cpuinfo; } > "$O/cpu.txt" 2>&1
 MASK=$(taskset -pc $$ | sed 's/.*: //')
 lscpu -e=CPU,CORE,SOCKET,NODE > "$O/topology.txt" 2>&1
@@ -35,7 +37,7 @@ for cc in "${CCS[@]}"; do
   name=$(basename "$cc")
   $cc --version 2>&1 | head -1 >> "$O/compilers.txt"
   for g in 1 2 3; do
-    $cc -O3 -march=native -DG=$g -o "$B/ifma-$name-$g" $D/ifma.c -lpthread >> "$O/build.log" 2>&1 || { echo "build $name $g" >> "$O/errors.txt"; continue; }
+    $cc -O3 -march=native -DG=$g -DIF_BITS="$BITS" -DIF_C="$C" -o "$B/ifma-$name-$g" $D/ifma.c -lpthread >> "$O/build.log" 2>&1 || { echo "build $name $g" >> "$O/errors.txt"; continue; }
     ok=1
     for k in 1 777 1000; do
       "$B/ifma-$name-$g" gate $k 384 | python3 $D/sq_gate.py > "$O/gate-$name-g$g-k$k.json" 2>&1 || ok=0
