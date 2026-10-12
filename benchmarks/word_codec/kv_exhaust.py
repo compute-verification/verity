@@ -103,7 +103,7 @@ def rc_setup(lib: B.Lib, seed: bytes) -> dict:
     v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
     so = lib.so
     so.kv_rc_set.argtypes, so.kv_rc_buffers.argtypes, so.kv_rc_tag.argtypes = [i, v, v], [v, v, v], [i, q, v]
-    so.kv_rc_l2.argtypes = [q, v, v]
+    so.kv_rc_l2.argtypes, so.kv_rc_tag16.argtypes = [q, v, v], [i, q, v]
     rt = rc_shape(lib)["rt"]
     bits = {}
     for rc in (1, 2):
@@ -482,6 +482,24 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                     f" MB of the sketches' {nvec * 64 / 1e6:.0f} MB held in L2, a layer {row['l2']['s'] * 1e3:.3f} ms "
                     f"({row['l2']['over_read']:.3f}x the read), the receipts' kernel alone {row['l2']['tag_s'] * 1e3:.3f}"
                     f" ms ({row['l2']['tag_over_read']:.3f}x)")
+                nblk = nvec // 16
+
+                def tag16_pass():
+                    for _ in range(layers):
+                        lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
+
+                tag16_pass()
+                tt = [B.queued(lib, torch, tag16_pass, SPIN) / layers for _ in range(reps)]
+                skn, tgn = sk.cpu().numpy(), tg[:nblk].cpu().numpy()
+                ok = all(R.receipt(RC_SEED, RECEIPT[fm], u, skn[16 * u: 16 * u + 16]) == tgn[u].astype("<i4").tobytes()
+                         for u in list(range(8)) + list(range(nblk - 8, nblk)))
+                row["tag16"] = {"blocks": nblk, "s": statistics.median(tt), "times_s": tt,
+                                "over_read": statistics.median(tt) / t_read, "receipts_equal": ok}
+                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: a receipt a block of 16 vectors, its "
+                    f"kernel alone {row['tag16']['s'] * 1e3:.3f} ms ({row['tag16']['over_read']:.3f}x the read), "
+                    f"{nblk} receipts a layer; the first and last 8 equal kv_receipt's: {ok}")
+                if not ok:
+                    raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt differs from kv_receipt's")
             cell["forms"].setdefault(FORMS[fm], {})[k] = row
             log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]}" + ("" if fm in RTOL else f" k={k}")
                 + f": a layer {row['s'] * 1e3:.3f} ms at {sp} splits, {row['gbps']:.0f} GB/s, {row['over_read']:.3f}x"

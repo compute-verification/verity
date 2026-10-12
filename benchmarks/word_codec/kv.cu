@@ -1288,9 +1288,10 @@ constexpr u32 B3_CHUNK_START = 1, B3_CHUNK_END = 2, B3_ROOT = 8, B3_KEYED = 16;
   b = __funnelshift_r(b ^ c, b ^ c, 7)
 
 // One compression of the message words m (permuted in place) from chaining value cv (`tagger.cu`'s b3_compress).
-__device__ __forceinline__ void b3_compress(const u32 cv[8], u32 m[16], u32 len, u32 flags, u32 out[8]) {
+__device__ __forceinline__ void b3_compress(const u32 cv[8], u32 m[16], u32 len, u32 flags, u32 out[8],
+                                            u32 counter = 0) {
   u32 v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
-  u32 v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = 0, v13 = 0, v14 = len, v15 = flags;
+  u32 v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
 #pragma unroll
   for (int r = 0; r < 7; ++r) {
     B3_G(v0, v4, v8, v12, m[0], m[1]);
@@ -1330,6 +1331,43 @@ __global__ void __launch_bounds__(128) rc_tag_kernel(int rc, const int *__restri
   for (int i = 2; i < 16; ++i) m[i] = 0u;
   b3_compress(cv, m, 8, B3_KEYED | B3_CHUNK_END | B3_ROOT, out);
   uint4 *o = reinterpret_cast<uint4 *>(tags + v * 8);
+  o[0] = make_uint4(out[0], out[1], out[2], out[3]);
+  o[1] = make_uint4(out[4], out[5], out[6], out[7]);
+}
+
+// A receipt a decoder warp's block of 16 vectors, the candidate that hashes 18 blocks where 16 vector receipts hash 32:
+// BLAKE3-keyed(kRcKey[rc - 1], u64be(jbase + u) ‖ rc_sk[16 u .. 16 u + 15] as 256 int32 LE), 1,032 bytes, so chunk 0's
+// 16 blocks (each the previous block's last two sketch words and 14 of its own), chunk 1's last 8 bytes, and their
+// parent.
+__global__ void __launch_bounds__(128) rc_tag16_kernel(int rc, const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
+                                                       u64 jbase) {
+  constexpr u32 B3_PARENT = 4;
+  const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
+  if (u >= n) return;
+  const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 256);
+  u32 m[16], key[8], cv[8], c1[8], out[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key[i] = kRcKey[rc - 1][i];
+  const u64 j = jbase + u;
+  u32 h0 = __byte_perm((u32)(j >> 32), 0, 0x0123), h1 = __byte_perm((u32)j, 0, 0x0123);
+#pragma unroll 1
+  for (int t = 0; t < 16; ++t) {
+    const uint4 a = p[4 * t], b = p[4 * t + 1], c = p[4 * t + 2], d = p[4 * t + 3];
+    m[0] = h0, m[1] = h1, m[2] = a.x, m[3] = a.y, m[4] = a.z, m[5] = a.w, m[6] = b.x, m[7] = b.y, m[8] = b.z;
+    m[9] = b.w, m[10] = c.x, m[11] = c.y, m[12] = c.z, m[13] = c.w, m[14] = d.x, m[15] = d.y;
+    h0 = d.z, h1 = d.w;
+    b3_compress(cv, m, 64, B3_KEYED | (t == 0 ? B3_CHUNK_START : 0) | (t == 15 ? B3_CHUNK_END : 0), out);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) cv[i] = out[i];
+  }
+  m[0] = h0, m[1] = h1;
+#pragma unroll
+  for (int i = 2; i < 16; ++i) m[i] = 0u;
+  b3_compress(key, m, 8, B3_KEYED | B3_CHUNK_START | B3_CHUNK_END, c1, 1);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) m[i] = cv[i], m[8 + i] = c1[i];
+  b3_compress(key, m, 64, B3_KEYED | B3_PARENT | B3_ROOT, out);
+  uint4 *o = reinterpret_cast<uint4 *>(tags + u * 8);
   o[0] = make_uint4(out[0], out[1], out[2], out[3]);
   o[1] = make_uint4(out[4], out[5], out[6], out[7]);
 }
@@ -1713,6 +1751,13 @@ int kv_rc_buffers(int *sk, uint32_t *tags, uint32_t *zdump) {
 int kv_rc_tag(int rc, uint64_t n, cudaStream_t s) {
   if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
   kv::rc_tag_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
+  return launched();
+}
+
+// rc_tag16_kernel's receipts of the n blocks of 16 vectors of kv_rc_buffers' sketches, into the first n receipt slots.
+int kv_rc_tag16(int rc, uint64_t n, cudaStream_t s) {
+  if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
+  kv::rc_tag16_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
   return launched();
 }
 
