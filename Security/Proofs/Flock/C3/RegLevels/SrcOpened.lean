@@ -209,11 +209,8 @@ theorem opened_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin
     exact hr
   · obtain ⟨a, cf, A, h⟩ := hu ℓ hℓ j hj
     exact climb_of_opensTop (zs (sess ℓ)) (hG (sess ℓ)) h msId
-  · rw [decodedO_cons]
-    congr 1
-    funext l
-    show RecAlgebra.consAt (ops.rows ℓ) (ops.q ℓ) (ops.alpha ℓ) l = _
-    rw [hq ℓ hℓ, halpha ℓ hℓ]
+  · rw [decodedO_cons, ← hq ℓ hℓ, ← halpha ℓ hℓ]
+    rfl
 
 end Units
 
