@@ -403,21 +403,23 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
   u32 Ys[48];
 #pragma unroll
   for (int i = 0; i < 24; ++i) Ys[2 * i] = (u32)S[i], Ys[2 * i + 1] = (u32)(S[i] >> 32);
-  u32 M[16];   // M_key · salt over GF(2): bit i = XOR_j salt_j key_(i + j)
-#pragma unroll 1
-  for (int o = 0; o < 16; ++o) {
-    u32 kw[49];
+  // M_key · salt over GF(2): bit i = XOR_j salt_j key_(i + j). For each shift b the key's 63 shifted words serve all
+  // 16 output words (output word o, bit b reads shifted words o … o + 47).
+  u32 M[16];
 #pragma unroll
-    for (int v = 0; v < 49; ++v) kw[v] = kC.key[o + v];
-    u32 out = 0;
-#pragma unroll 4
-    for (int b = 0; b < 32; ++b) {
+  for (int o = 0; o < 16; ++o) M[o] = 0;
+#pragma unroll 1
+  for (int b = 0; b < 32; ++b) {
+    u32 kb[63];
+#pragma unroll
+    for (int u = 0; u < 63; ++u) kb[u] = __funnelshift_r(kC.key[u], kC.key[u + 1], b);
+#pragma unroll
+    for (int o = 0; o < 16; ++o) {
       u32 acc = 0;
 #pragma unroll
-      for (int v = 0; v < 48; ++v) acc ^= __funnelshift_r(kw[v], kw[v + 1], b) & Ys[v];
-      out |= (u32)(__popc(acc) & 1) << b;
+      for (int v = 0; v < 48; ++v) acc ^= kb[o + v] & Ys[v];
+      M[o] |= (u32)(__popc(acc) & 1) << b;
     }
-    M[o] = out;
   }
 
   u64 cd[8], val[8];
