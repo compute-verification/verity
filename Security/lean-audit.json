@@ -467,7 +467,12 @@
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8"
   },
   "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced : Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced"
+   ],
+   "assumptions": [],
+   "type_hash": "fabaf877067f5e46ea4a935870364484d98d0b161f650b5a356673fae8dfd82a"
   },
   "Accounting.SecurityProofs.ComputeOfPouw": {
    "owner": "@memory-accounting",
@@ -526,7 +531,10 @@
    "type_hash": "5580f497f2834e1184ec443923d18b04dd3cc28704c6df37f330206d35d0e139"
   },
   "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.PearlCStopEndToEndPerRun : Accounting.Guarantees.PearlCStopEndToEndPerRun"],
+   "assumptions": [],
+   "type_hash": "6cedd6501a14fec827a8babde06c27e2cd58a9806a0ee2db78ccfd26db65d101"
   },
   "Accounting.SecurityProofs.PouwEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -4260,6 +4268,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.CovertResidual",
@@ -4301,6 +4310,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.CovertResidual",
@@ -4333,12 +4343,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun"
    ]
   },
@@ -5174,6 +5186,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.CovertResidual",
@@ -5183,6 +5196,7 @@
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -5299,9 +5313,11 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -5489,7 +5505,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.Sketch.Exact",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -5699,7 +5717,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.Sketch.Exact",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -5850,9 +5870,11 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -6218,7 +6240,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -7065,7 +7089,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -8240,6 +8266,17 @@
     "Pouw.PearlC.TileCircuit.val": "5eba5b68841a39918695a18e0e73ccd6a967f7f072c3c12129067f507623d17e"
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.W1Stop": {
+   "digest": "558e771ebb7e80486bff1ba983ac445145d08b03d65b63fe44866315514e5ebb",
+   "definitions": {
+    "Pouw.PearlC.CostModel.withStop": "cf09db6fb8af7bb248d51f8b82f044be279213d491989c32b28e223a76e07ea2",
+    "Pouw.PearlC.GγPerCoin": "4e5d6b88e220e3282d010ee330a5cee1bbe1e0587b3533f1d3d0785e1466fc0c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun"
+   ]
   },
   "Definitions.Pouw.PearlC.WholeCircuit": {
    "digest": "4e07ba011253ad7028a94ce69d22acd2d4631ad74583d6392c16c6b6dfad71d6",
@@ -12795,25 +12832,29 @@
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
   },
   "Models.Accounting.Guarantees.PerRun": {
-   "digest": "941a482e189d2da4f40944a00b69a38d5cbf4c92bfa6f28fe09adef6c6f31291",
+   "digest": "f9031d56e0bccf3376726e64c491827fa7eef030da6eb09a50e9829cefb2aff4",
    "definitions": {
     "Accounting.Guarantees.ComputeOfPearlCPerRunPriced": "85fc03a3e54736bfbde1f2a5646409e66d66b9f33d0a87846d305a3c2fdf1e42",
+    "Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced": "de3f53183a86bcddf56d654deb492b27136e693e35fa990968e3e85362632e25",
     "Accounting.Guarantees.ComputeOfPouwPerRun": "7bf9e72e72ba31929d16f32c42674f24d166fdc27c4810d433d8dbcd2c9fb327",
     "Accounting.Guarantees.CovertResidualPerRun": "a7888fcadf38ef0ff8dab66f1c20973cc90f9a1ed3f5c74ebae7c7cada1be4f6",
     "Accounting.Guarantees.CovertResidualPerRunPriced": "8e3a3e7076a9762c2ae540c03f93e756d15bd26f49b2f68cdfa2a6154b2d96a6",
     "Accounting.Guarantees.JointPerRun": "66d14586b1fe8ef2b9a48535fc1d89439b5df0b40448a8e2f5a3039eb30187f8",
     "Accounting.Guarantees.JointPerRunPriced": "526fce1e7f1814c4c016871cc8472a2fda2bed744fed3c3cfb59e6455001c2a5",
     "Accounting.Guarantees.PearlCEndToEndPerRun": "c395a7383557fd79f933b9064602a709444bc461cb46e9879fa71aacfaca5bd0",
+    "Accounting.Guarantees.PearlCStopEndToEndPerRun": "e25ba7b255fc02e0466ad868b632d46fb1ebd63254c0b93cf8cf288fe31639a3",
     "Accounting.Guarantees.PouwEndToEndPerRun": "61879b9f414acf6b7bee5c10f414272c7217fc0b2e0882f8953db21b99da0a31"
    },
    "guarantees": [
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
+    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
+    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun"
    ]
   },
