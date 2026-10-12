@@ -11,7 +11,7 @@ against `W_UV`).  Its bf16-output linears (`lm_head`, the indexer's `wk_weights_
 
 on words, and each one's v2 the same body on bits (`DotBf16_v3`, `Gemm_v3`; its ``word`` the v1, so `boolean.boolean_version`
 finds it).  `BatchedGemm_v2` is the function of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which
-names no word; `tests/program/test_cublas_bf16.py` checks that they agree.  `bf16_gemm_check` holds the numpy models.
+names no word; `tests/program/test_bf16_gemm.py` checks that they agree.  `bf16_gemm_check` holds the numpy models.
 
 The split-K-off configuration is vLLM's batch-invariant one on cc 9.0 (`enable_batch_invariant_mode`): CUBLAS_WORKSPACE_CONFIG=:16:8,
 CUBLASLT_WORKSPACE_SIZE=1, `allow_bf16_reduced_precision_reduction = (False, False)`, `preferred_blas_library("cublaslt")`.  Under it the
