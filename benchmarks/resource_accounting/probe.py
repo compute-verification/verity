@@ -175,6 +175,30 @@ def course(natives: dict, chains: dict[str, int], script: str, args: list[str], 
             "summary": course_summary(series, rel, after)}
 
 
+class Sidecar:
+    """An idle CUDA context in a process of its own (`SECOND` idle) while the ``with`` lasts.  The course of run
+    r20261012-031720-786d found every native chain faster from the moment one is ready (3.5% BF16, 11.5% FP8 at o, B = 1)
+    and still faster 10 s after it exits, at one SM and memory clock: an arm measured beside it runs at that speed."""
+
+    def __enter__(self) -> dict:
+        t0 = time.monotonic()
+        self.proc = subprocess.Popen([sys.executable, "-c", SECOND, "idle"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     text=True)
+        if self.proc.stdout.readline().strip() != "ready":
+            self.proc.kill()
+            raise RuntimeError(f"the sidecar never got ready (rc {self.proc.wait()})")
+        self.record = {"pid": self.proc.pid, "ready_s": round(time.monotonic() - t0, 3)}
+        return self.record
+
+    def __exit__(self, *exc) -> None:
+        self.proc.stdin.close()
+        try:
+            self.record["rc"] = self.proc.wait(timeout=COURSE_WAIT_S)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            self.record["rc"] = self.proc.wait()
+
+
 def smi(uuid: str | None) -> dict:
     if not uuid:
         return {"error": "no GPU_LEASE_UUID"}

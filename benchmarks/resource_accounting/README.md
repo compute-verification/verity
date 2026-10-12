@@ -35,7 +35,9 @@ certifies beside what it did.
   `JOINT=separate,inproc,joint,joint-v1` (one shape, native arms, `--cwd clone`) instead runs `chain.py` inside the
   harness's process (`pod.sh BENCH_HOST`), one harness run a round with the chain as its honest audit's load: its
   responder in a process of its own, or a thread of the chain's (no MPS), and the joint rounds with `joint.py`'s arms.
-  `PROBE=1` (either mode) adds `probe.py` once the shape's points are measured alone. A tuned arm in `ARMS` needs `TUNED=<build dir|art:id>`,
+  `PROBE=1` (either mode) adds `probe.py` once the shape's points are measured alone; `SIDECAR=1` (either mode, not with
+  `PROBE`) holds the course's idle CUDA context in a second process through the run, so every arm is measured at the speed
+  it gives the native chains. A tuned arm in `ARMS` needs `TUNED=<build dir|art:id>`,
   the harness's library as its `native/build.sh` makes it (`pouw-harness-build/v1`).
 - `render.py`: the table, from a run's `art:` id (or a local `chain.json`), on demand, with the PoUS section when the run
   had that arm, the rounds' (the responder's isolation, the chain's time in each, (d), (e) and (f)) when it hosted the

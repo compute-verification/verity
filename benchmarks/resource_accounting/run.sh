@@ -23,7 +23,7 @@
 # IMPL=p2-v3-mc-gpu BENCH_HOST='chain.py ...', which measures the shape's points alone in the harness's venv and then runs
 # each round with the chain as the honest audit's load. POUS_AUDITS (default 100 here), POUS_WS and POUS_SEGMENTS as for
 # POUS=1; the outputs go to $OUT/pous, each round's harness under $OUT/pous/bench/<round>. PROBE=1 adds chain.py --probe, in
-# either mode.
+# either mode, and SIDECAR=1 chain.py --sidecar (an idle CUDA context in a second process through the run; not with PROBE).
 # TUNED=<build dir|art:id> (ARMS with native-bf16-tuned or native-fp8-tuned) is the PoUW harness's library for the tuned
 # arms (tuned.py), a build.sh output such as `pouw-harness-build/v1`: before the lease its jobs/env.sh gives the cuBLASLt and
 # CUDA runtime 12.9 wheels it links (sonames .so.12, which torch's .so.13 never resolve to) on LD_LIBRARY_PATH, and
@@ -74,7 +74,8 @@ if [ -n "${JOINT:-}" ]; then
     TAGGER="--tagger $S/libbwtag.so" ;;
   esac
   HOST="benchmarks/resource_accounting/chain.py --out $OUT/chain.json --shapes $SHAPES --batches $BATCHES --lengths $LENGTHS"
-  HOST+=" --arms $ARMS --reps $REPS --budget-min $((LEASE_MIN - 3)) --rounds $JOINT $TAGGER ${PROBE:+--probe} --host-bench"
+  HOST+=" --arms $ARMS --reps $REPS --budget-min $((LEASE_MIN - 3)) --rounds $JOINT $TAGGER ${PROBE:+--probe}"
+  HOST+=" ${SIDECAR:+--sidecar} --host-bench"
   stamp "the chain hosting the PoUS harness under gpu-lease 1 (at most $LEASE_MIN min)"
   export OUT LEASE_MIN HOST POUS_WORK POUS_WS POUS_AUDITS POUS_SEGMENTS
   set +e
@@ -123,8 +124,8 @@ if [ -n "${POUS:-}" ]; then
 fi
 
 stamp "chain under gpu-lease 1 (at most $LEASE_MIN min)"
-PROBE=${PROBE:-}
-export OUT PY CHECK SHAPES BATCHES LENGTHS ARMS REPS LEASE_MIN PROBE
+PROBE=${PROBE:-}; SIDECAR=${SIDECAR:-}
+export OUT PY CHECK SHAPES BATCHES LENGTHS ARMS REPS LEASE_MIN PROBE SIDECAR
 set +e
 gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" -- bash -c '
   set -euo pipefail
@@ -136,7 +137,8 @@ gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" -- bash -c '
       || { echo "RUN_FAIL_GPU1_CHECK: run.py exited $?" >&2; exit 4; }
   fi
   exec timeout $((LEASE_MIN * 60 - 30)) "$PY" benchmarks/resource_accounting/chain.py --out "$OUT/chain.json" --shapes "$SHAPES" \
-    --batches "$BATCHES" --lengths "$LENGTHS" --arms "$ARMS" --reps "$REPS" --budget-min $((LEASE_MIN - 3)) ${PROBE:+--probe} "${@}"
+    --batches "$BATCHES" --lengths "$LENGTHS" --arms "$ARMS" --reps "$REPS" --budget-min $((LEASE_MIN - 3)) ${PROBE:+--probe} \
+    ${SIDECAR:+--sidecar} "${@}"
 ' _ "${KERNEL[@]}" 2>&1 | tee "$OUT/chain.log"
 rc=${PIPESTATUS[0]}
 set -e

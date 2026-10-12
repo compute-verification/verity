@@ -118,6 +118,10 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert "S_chip – (this run recorded no registers a SM)" in R.markdown(doc_no_regs, {}, "fixture")
     assert "T = 1,354,057 ns with the RTT at P2's cap, 354,000 ns, so T + RTT = 1,708,057 ns" in md
     assert "not a per-run covert bound; lane ra-per-run is proving the per-run form" in md
+    assert "sidecar" not in md
+    assert ("Every arm ran beside a sidecar, an idle CUDA context in a second process held through the run (ready in 2.0 s)"
+            in R.markdown({**_doc(), "sidecar": {"pid": 7, "ready_s": 2.04, "rc": 0}}, {}, "fixture"))
+
 
 def test_an_arm_divides_by_the_fastest_native_of_its_precision_the_point_measured():
     """The divisor is the fastest plain GEMM of the arm's precision (the PoUW panel's rule): a tuned arm that beats torch's
@@ -337,6 +341,11 @@ def test_the_plan_needs_no_gpu(capsys):
     assert CHAIN.main(["--plan", "--rounds", "joint-v1,separate", "--tagger", "t.so", "--pause-every", "none,10-noprep",
                        "--host-bench", "bench.py", "--audits", "2"]) == 0
     assert json.loads(capsys.readouterr().out)["args"]["pause_every"] == ["none", "10-noprep"]
+    assert CHAIN.main(["--plan", "--sidecar"]) == 0 and json.loads(capsys.readouterr().out)["args"]["sidecar"] is True
+    with pytest.raises(SystemExit):
+        CHAIN.main(["--plan", "--sidecar", "--probe"])
+    assert "not with --probe" in capsys.readouterr().err
+
 
 def test_the_hosted_harness_s_argv_has_its_out_replaced():
     argv = ["--impl", "p2-v3-mc-gpu", "--out", "/o/bench", "--verifier-cpu=2"]

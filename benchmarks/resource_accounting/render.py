@@ -657,6 +657,10 @@ def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None,
              (f"{ident.get('name')} {ident.get('uuid')}, driver {ident.get('driver')}, torch {ident.get('torch')} (CUDA {ident.get('cuda')}); "
               f"SM clock median {statistics.median(clocks) if clocks else '–'} MHz over {len(clocks)} reps; "
               f"read rate {_f(rr.get('bytes_per_s') and rr['bytes_per_s'] / 1e9, '.0f')} GB/s ({rr.get('kernel')})")]
+    if doc.get("sidecar"):
+        lines.append(f"Every arm ran beside a sidecar, an idle CUDA context in a second process held through the run (ready in "
+                     f"{_f(doc['sidecar'].get('ready_s'), '.1f')} s), which the probe's course found makes the native chains "
+                     "faster.")
     v = doc.get("verify")
     if v:
         lines.append(f"Retained pass at {v.get('point')}: equals the eager pass {v.get('equals_reference')}, graphed pass gated "

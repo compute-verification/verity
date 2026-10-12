@@ -50,7 +50,9 @@ before the limit is calibrated, and (e)'s windows through the honest audit); ``j
 the load, the chain paused at a call boundary for each bandwidth window (`joint.Pause`).  Only the native arms run there
 (the harness's venv has no Pearl-C), each item on a stream of the chain's own.  Every native item is timed on the host, by
 events on the device, and from its start to its last launch on the host.  ``--probe`` times the first shape's smallest batch
-by stream, NUMA node and beside a second process (`probe`), once its points are measured alone.
+by stream, NUMA node and beside a second process (`probe`), once its points are measured alone.  ``--sidecar`` holds an
+idle CUDA context in a second process through the whole run (`probe.Sidecar`), which the probe found makes every native
+chain faster; every arm is then measured at that speed.
 """
 
 from __future__ import annotations
@@ -1000,6 +1002,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--probe", action="store_true",
                     help="after the first shape's points, time its smallest batch's native chains by stream and beside a "
                          "second CUDA process (probe.py)")
+    ap.add_argument("--sidecar", action="store_true",
+                    help="hold an idle CUDA context in a second process through the run (probe.Sidecar)")
     ap.add_argument("--round-min", type=float, default=9.0, help="start no round with less of the budget left")
     ap.add_argument("--host-bench", nargs=argparse.REMAINDER,
                     help="the rest: the PoUS harness's bench.py and its arguments (pod.sh BENCH_HOST), run as --rounds")
@@ -1021,6 +1025,8 @@ def main(argv: list[str] | None = None) -> int:
                 [J.Every.parse(x) for x in a.pause_every]
             except ValueError as ex:
                 ap.error(str(ex))
+    if a.sidecar and a.probe:
+        ap.error("--sidecar holds the second context the probe's course measures: not with --probe")
     arms = tuple(x for x in a.arms.split(",") if x)
     if set(arms) - set(S.ARMS):
         ap.error(f"unknown arms {sorted(set(arms) - set(S.ARMS))}")
@@ -1036,6 +1042,9 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--out is required")
     if set(arms) & set(S.TUNED) and not a.tuned_lib:
         ap.error("the tuned arms need --tuned-lib (or POUW_HARNESS_LIB)")
+    import contextlib
+
+    import probe as P
     import torch
     start = time.perf_counter()
     uuid = (os.environ.get("GPU_LEASE_UUID") or "").split(",")[0] or None
@@ -1051,7 +1060,8 @@ def main(argv: list[str] | None = None) -> int:
     clocks = Clocks(uuid)
     left = lambda: a.budget_min * 60 - (time.perf_counter() - start)
     over = lambda: left() < 0
-    with torch.inference_mode():
+    with torch.inference_mode(), (P.Sidecar() if a.sidecar else contextlib.nullcontext()) as sidecar:
+        doc["sidecar"] = sidecar
         doc["read_rate"] = read_rate()
         if set(arms) & set(S.TUNED):
             import tuned as T
