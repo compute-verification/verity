@@ -294,8 +294,10 @@ static void mode_peer(const Args& a) {
   gate("memcpyPeer (peer access) equals the source", h0.data(), h1.data(), B);
   emit("p2p_copy_engine_write", "", B,
        time_op(s0, B, a.reps, [&] { CK(cudaMemcpyPeerAsync(d1, a.peer, d0, a.gpu, B, s0)); }));
+  CK(cudaSetDevice(a.peer));  // time_op's events belong to the current device, which must be s1's
   emit("p2p_copy_engine_read_by_peer", "", B,
        time_op(s1, B, a.reps, [&] { CK(cudaMemcpyPeerAsync(d1, a.peer, d0, a.gpu, B, s1)); }));
+  CK(cudaSetDevice(a.gpu));
   // SM stores from gpu into the peer
   CK(cudaSetDevice(a.peer));
   CK(cudaMemset(d1, 0, B));
