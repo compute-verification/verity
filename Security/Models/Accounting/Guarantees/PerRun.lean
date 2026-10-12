@@ -20,8 +20,20 @@ already per-run: its event reads the ingress of the run itself. PoUS's `EndToEnd
 type, not a charge that varies with the coins, so its per-run form is a matter of how a run's device memory maps to a
 server's state, in the capacity embedding.
 
-Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.PerRunPouw`
-and `Proofs.Accounting.PerRunJoint`).
+**Priced.** Under the machine's pricing (Daniel's decision 9, 11 Oct), the compute account pays W1's instruction prices
+with no fetch charge and no refund, the bandwidth account pays for every first fetch of a pre-salt or supplied byte, and
+the compute certificate is on the priced sum: the compute account's work plus `pRead` per bit it read from device memory
+(`Accounting.Run.ComputeSoundPerRunPriced`). Tables cite the work and the bits separately; the certificate is on their
+priced sum. Pearl-C's game gives that guarantee by the same truncation, from its γ-gap property at a priced cost model
+that truncates (`PearlCEndToEndPerRun`, `ComputeOfPearlCPerRunPriced`): at W1 with fetches priced, `Gγ` is a hypothesis
+until compute-accounting's `gγ_w1Priced` lands, and `BudgetAbortPearlC` is one too. PoUW's reads and the bandwidth audit's
+window reads are charged to different accounts over one window (`Accounting.Run.ReadsAttributed`), so no bit read is
+credited twice (`JointPerRunPriced`), and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)`
+(`CovertResidualPerRunPriced`). The unpriced statements stay: a compute guarantee on the work alone gives the priced
+one at any `pRead ≥ 0` (`Accounting.Run.computeSoundPerRunPriced_of_perRun`).
+
+Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.PerRunPouw`,
+`Proofs.Accounting.PerRunJoint` and `Proofs.Accounting.PerRunPriced`).
 -/
 
 namespace Accounting.Guarantees
@@ -90,6 +102,80 @@ def CovertResidualPerRun : Prop :=
     pr (fun ω => r.Accepted ω ∧
         (((d.priced p * (r.win .compute).len : ℕ) : ℝ) - W < r.othersWork p ω ∨
           ((d.bw * (r.win .bandwidth).len : ℕ) : ℝ) - Q < r.othersRead ω ∨
+          ((d.mem : ℝ) - S) * (r.win .capacity).len < r.othersHeld ω))
+      ≤ εW + εQ + εS
+
+/-- **Pearl-C's γ-gap property, audited by work-weighted tickets, per run.** For Pearl-C's game at any cost model that
+truncates (`BudgetAbortPearlC`) and has the γ-gap property at `γ < 1` with error `η`, every in-domain workload whose
+units' `W_ref` are `κ ≥ 0` times their ticket weights `w`, every oracle bound `q ≤ 2^64` and every adversary that makes
+at most `q` oracle calls (with no bound on its cost), the audit with `t` tickets accepts while the adversary's online
+cost on that run is below `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` with probability at most `(1 − ε_s)^t + η(q, N)`. At W1 with
+fetches priced (`w1Priced`), the cost is the run's instruction prices plus its first fetches priced. -/
+def PearlCEndToEndPerRun : Prop :=
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
+    ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
+    (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
+    ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM, CallsWithinPearlC A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+      pr (fun x : PearlCCoins Q R S U w t =>
+          AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          onlineCostPearlC A U x.1 x.2.1 < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+        ≤ (1 - εs) ^ t + η q U.layout.N
+
+/-- **Pearl-C's per-run guarantee is the compute audit's per-run guarantee on the priced sum.** Under
+`PearlCEndToEndPerRun`'s hypotheses, for any run on any device whose compute audit realizes Pearl-C's game with the
+adversary's cost covered by the compute account's work at price `p` plus `pRead` per bit it read
+(`RealizesPearlCPriced`), with at least one draw of the game's coins and the device's oracle queries over the compute
+window at most `2^64`, the compute audit has its per-run guarantee on the priced sum at certificate
+`(1 − γ)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + η(q, N)`, where `q` is the device's oracle rate times the
+compute window's length. Tables cite the work and the bits read separately; the certificate is on their priced sum. -/
+def ComputeOfPearlCPerRunPriced : Prop :=
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
+    ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
+    (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+    Nonempty (PearlCCoins Q R S U w t) →
+    ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
+      (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ),
+      d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → RealizesPearlCPriced CM P U w r p pRead →
+      r.ComputeSoundPerRunPriced p pRead ((1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+        ((1 - εs) ^ t + η (d.rate .oracle * (r.win .compute).len) U.layout.N)
+
+/-- **The joint guarantee, per run, with the compute certificate on the priced sum.** On any device and any run of a
+joint audit on it whose reads are attributed (`Run.ReadsAttributed`: PoUW's reads and the bandwidth audit's window reads
+are charged to different accounts over one window), whose compute audit has its per-run guarantee on the priced sum at
+certificate `W` and read price `pRead`, and whose bandwidth and capacity audits have theirs at `Q` and `S`, with errors
+`εW`, `εQ` and `εS`: on every run, each bit read over the window is the bandwidth account's, the compute account's or
+another's, so no bit is credited to both certificates; and the probability that every audit accepts and, on that run,
+the compute account's work plus `pRead` per bit it read is below `W`, the bandwidth account read fewer than `Q` bits, or
+the capacity account held fewer than `S` bits on average, is at most `εW + εQ + εS`. -/
+def JointPerRunPriced : Prop :=
+  ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
+    [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (pRead W Q S εW εQ εS : ℝ),
+    r.ReadsAttributed →
+    r.ComputeSoundPerRunPriced p pRead W εW → r.BandwidthSoundPerRun Q εQ → r.CapacitySoundPerRun S εS →
+    (∀ ω, r.read ω + r.pouwRead ω + r.covertRead ω = r.totalRead ω) ∧
+      pr (fun ω => r.Accepted ω ∧
+          ((r.work p ω : ℝ) + pRead * r.pouwRead ω < W ∨ (r.read ω : ℝ) < Q ∨
+            (r.held ω : ℝ) < S * (r.win .capacity).len))
+        ≤ εW + εQ + εS
+
+/-- **The covert residual, per run, as one priced budget.** Under `JointPerRunPriced`'s hypotheses and a read price
+`pRead ≥ 0`, the probability that every audit accepts and, on that run, the work of the accounts other than the compute
+account plus `pRead` per bit read by the accounts other than the compute and bandwidth accounts exceeds
+`(F + pRead·BW)·T − (W + pRead·Q)`, or the other accounts held more than `M − S` bits of device memory on average over the
+capacity window, is at most `εW + εQ + εS`. `F` is the device's priced work per tick, `BW` its bits read from device
+memory per tick and `T` the window's length. -/
+def CovertResidualPerRunPriced : Prop :=
+  ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
+    [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (pRead W Q S εW εQ εS : ℝ),
+    0 ≤ pRead → r.ReadsAttributed →
+    r.ComputeSoundPerRunPriced p pRead W εW → r.BandwidthSoundPerRun Q εQ → r.CapacitySoundPerRun S εS →
+    pr (fun ω => r.Accepted ω ∧
+        (((d.priced p * (r.win .compute).len : ℕ) : ℝ) + pRead * ((d.bw * (r.win .compute).len : ℕ) : ℝ) -
+            (W + pRead * Q) < r.othersWork p ω + pRead * r.covertRead ω ∨
           ((d.mem : ℝ) - S) * (r.win .capacity).len < r.othersHeld ω))
       ≤ εW + εQ + εS
 
