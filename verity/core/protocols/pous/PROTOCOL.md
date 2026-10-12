@@ -773,19 +773,20 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
 Two gaps stood between these statements and the deployed verifier:
 
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
-  `SessionLog` under its host presumption, which `trusted-nebius-host` now covers (Daniel, decision 2). Every session
-  names its setup: a `SessionCommitment`'s `binding` has no default, the `MemoryChallenger` refuses one that is not a
-  64-byte root, and the harness's memory challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to
-  the root the setup publishes for the `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also
-  its audit's: its id (`session`, in the signed header) is the auditor's, designated for one audit, and the device runs
-  at most one session under an id. Its `SessionLog` is a file of its own, never in the signer's key directory (`live.py
-  --session-log`, `bench.py --mc-session-log`). It is append-only: the id goes in, fsynced, when the session commits,
-  before its first challenge, so a session that never runs has used its id too. A used id is refused, a log that is
-  missing or unreadable refuses every session, and nothing rewrites, truncates or remakes a log. A file cannot see its
-  host restore an earlier copy of it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto
-  one. That the host never does is `trusted-nebius-host` (`verity.core.claims`) as network-accounting widens it, in
-  Daniel's words: "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its
-  Nebius host, and its host never restores an earlier copy of the state the device keeps there"
+  `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
+  (pending network-accounting's widening, Daniel decision 2). Every session names its setup: a `SessionCommitment`'s
+  `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
+  challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
+  `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in
+  the signed header) is the auditor's, designated for one audit, and the device runs at most one session under an id.
+  Its `SessionLog` is a file of its own, never in the signer's key directory (`live.py --session-log`, `bench.py
+  --mc-session-log`). It is append-only: the id goes in, fsynced, when the session commits, before its first challenge,
+  so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
+  every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
+  it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
+  `trusted-nebius-host` (`verity.core.claims`) as network-accounting widens it, in Daniel's words: "An auditor-trusted
+  device (a network certifier, the memory challenger) runs its stated code on its Nebius host, and its host never
+  restores an earlier copy of the state the device keeps there"
   (pending network-accounting's widening, Daniel decision 2). This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
