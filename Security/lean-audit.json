@@ -410,8 +410,8 @@
   },
   "Definitions.Accounting": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Definitions.Accounting"],
-   "except": [],
-   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), and they import no assumption, guarantee or proof"
+   "except": ["Definitions.Accounting.Bandwidth.Game"],
+   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), and they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
   },
   "Models.Accounting.Guarantees": {
    "imports": [
