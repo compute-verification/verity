@@ -21,7 +21,7 @@ realizations do (`Accounting.RealizesPouw`, `Accounting.RealizesBandwidth`, `Acc
 
 namespace Accounting.Ledger
 
-open Experiment
+namespace Experiment
 
 variable {Λ G Adv Ω : Type} [Fintype Λ] [DecidableEq Λ] [Fintype G] [Fintype Ω] (E : Experiment Λ G Adv Ω)
 
@@ -77,6 +77,8 @@ least its addition-chain length per word, with no amortization across words). An
 `k` words does at least `k·c` work at price `p` on part `cores` over window `w`. -/
 def RebuildGates (cores : Finset Λ) (w : Window) (rebuilt : Adv → Ω → ℕ) (p : G → ℕ) (c : ℝ) : Prop :=
   ∀ k : ℕ, E.Requires (fun a ω => k ≤ rebuilt a ω) (Region.ofWindow cores w) (Meter.priced p) (k * c)
+
+end Experiment
 
 /-- **The network certifier's content pin** (`NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow`). Over a
 run's first `m` windows of `T` buckets, a covert sender inside the unit moves at most

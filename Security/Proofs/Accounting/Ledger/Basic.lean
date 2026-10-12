@@ -60,6 +60,10 @@ theorem Meter.eval_mono_meter {m m' : Meter G} (h : m ≤ m') (L : Ledger G) : m
   · exact h _
   · exact h _
 
+theorem Meter.eval_add_meter (m m' : Meter G) (L : Ledger G) : (m + m').eval L = m.eval L + m'.eval L := by
+  simp only [Meter.eval, Pi.add_apply, add_mul, Finset.sum_add_distrib]
+  ring
+
 theorem Meter.eval_entry [DecidableEq G] (e : Entry G) (L : Ledger G) : (Meter.entry e).eval L = L e := by
   cases e <;> simp [Meter.eval, Meter.entry, Finset.sum_ite_eq']
 
@@ -158,6 +162,14 @@ theorem eval_union_part [Fintype G] {m : Meter G} (hm : m.NoCrossing) {p q : Fin
   simp only [Meter.eval, hm.1, hm.2, zero_mul, add_zero, ledger_union_part_gates A h, ledger_union_part_held A h,
     mul_add, Finset.sum_add_distrib]
   ring
+
+/-- A meter that reads no crossing grows with the part. -/
+theorem eval_mono_part [Fintype G] {m : Meter G} (hm : m.NoCrossing) {p q : Finset Λ} (h : p ⊆ q) (T : Finset ℕ) :
+    m.eval (A.ledger ⟨p, T⟩) ≤ m.eval (A.ledger ⟨q, T⟩) := by
+  simp only [Meter.eval, hm.1, hm.2, zero_mul, add_zero]
+  gcongr with g
+  · exact ledger_mono_part_gates A h T g
+  · exact ledger_mono_part_held A h T
 
 /-- The ledger of a circuit made of accounts' shares is the sum of the shares' ledgers. -/
 theorem ledger_sum {α : Type} [Fintype α] (A : α → Annotation Λ G) (ρ : Region Λ) :
