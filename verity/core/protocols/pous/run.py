@@ -3,10 +3,11 @@
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
 `root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
 in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and one signed session (`Session`: the signed
-session, the commitment published before it, its coin openings and the trusted memory challengers' keys), checked against
-the 32-byte id the auditor designated for the audit's session.  `check` accepts it at P2's deployed point (`DEPLOYED`:
-`2^19` blocks of 2,056 bytes in 8 segments, `k = 105`, `Δ + RTT ≤ 854,000 ns`) under S1's LMS
-(`memory_challenger.SCHEMES`) when, in order:
+session, the commitment published before it and its coin openings).  `check` judges it with two inputs of the verifier's
+own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record (whoever writes
+the record could otherwise list its own key), and the 32-byte id the auditor designated for the audit's session.  It
+accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`,
+`Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`verifier.row_leaf`) have the root the setup
@@ -15,7 +16,7 @@ the 32-byte id the auditor designated for the audit's session.  `check` accepts 
    of the point's block size, and its `binding` the published root;
 4. the session runs under the designated id (`session`, in the signed header), which the memory challenger runs at most
    one session under (`memory_challenger.SessionLog`), so an audit has at most one session `check` accepts;
-5. `memory_challenger.verdict` accepts the session against the table.
+5. `memory_challenger.verdict` accepts the session against the table, signed under a key in `trusted`.
 
 The first refusal is the reason (`Refused`).  `check_at` takes another point and other schemes, for tests.
 `PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
@@ -23,7 +24,7 @@ acceptance establishes is `RunCheckAccepts` (`Security/Properties/Pous/EndToEnd.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -68,21 +69,21 @@ class Setup:
 
 @dataclass(frozen=True, slots=True)
 class Session:
-    """One session as the memory challenger records it, and the keys it is judged under."""
+    """One session as the memory challenger records it: what it signed, the commitment published before it and its coin
+    openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
 
     signed: mc.SignedSession
     commitment: mc.SessionCommitment
     openings: tuple[mc.CoinOpening, ...]
-    trusted: tuple[bytes, ...]
 
     def to_json(self) -> dict[str, Any]:
         return {"commitment": self.commitment.to_json(), "openings": [o.to_json() for o in self.openings],
-                "signed": self.signed.to_json(), "trusted": [k.hex() for k in self.trusted]}
+                "signed": self.signed.to_json()}
 
     @classmethod
     def from_json(cls, doc: Mapping[str, Any]) -> Session:
         return cls(mc.SignedSession.from_json(doc["signed"]), mc.SessionCommitment.from_json(doc["commitment"]),
-                   tuple(mc.CoinOpening.from_json(o) for o in doc["openings"]), tuple(bytes.fromhex(k) for k in doc["trusted"]))
+                   tuple(mc.CoinOpening.from_json(o) for o in doc["openings"]))
 
 
 class Refused(ValueError):
@@ -94,8 +95,8 @@ def _need(ok: bool, reason: str) -> None:
         raise Refused(reason)
 
 
-def check_at(point: Point, schemes: Mapping[str, mc.Verify], setup: Setup, digests: bytes, session: Session,
-             session_id: bytes) -> None:
+def check_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], setup: Setup, digests: bytes,
+             session: Session, session_id: bytes) -> None:
     """`check` at `point` under `schemes`."""
     q, sc = point.params, session.commitment
     _need(setup.blocks == q.blocks, f"the setup published {setup.blocks} blocks, not the point's {q.blocks}")
@@ -113,13 +114,14 @@ def check_at(point: Point, schemes: Mapping[str, mc.Verify], setup: Setup, diges
     _need(sc.binding == setup.root, "the session is not bound to the root the setup published")
     _need(sc.session == session_id, "the session does not run under the id the auditor designated")
     v = mc.verdict(session.signed, sc, session.openings, lambda i: rows[i] if 0 <= i < q.blocks else None,
-                   trusted=frozenset(session.trusted), schemes=schemes)
+                   trusted=frozenset(trusted), schemes=schemes)
     _need(v.accepted, "; ".join(v.reasons))
 
 
-def check(setup: Setup, digests: bytes, session: Session, session_id: bytes) -> None:
-    """Accept the run, or raise `Refused` with the first reason (module docstring)."""
-    check_at(DEPLOYED, mc.SCHEMES, setup, digests, session, session_id)
+def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: Session, session_id: bytes) -> None:
+    """Accept the run, or raise `Refused` with the first reason (module docstring).  `trusted` is the verifier's list of
+    memory-challenger keys and never comes from the run's record."""
+    check_at(DEPLOYED, mc.SCHEMES, trusted, setup, digests, session, session_id)
 
 
 __all__ = ["DEPLOYED", "SALT_BYTES", "Point", "Refused", "Session", "Setup", "check", "check_at"]

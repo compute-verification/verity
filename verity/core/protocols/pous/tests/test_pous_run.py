@@ -1,7 +1,7 @@
 """`run.check`, the composed check of a recorded PoUS run: an honest run at a reduced point is accepted under the id the
 auditor designated, each refusal is the first that applies, its reason word for word, an audit has at most one session the
-check accepts, and `check` is `check_at` at the deployed point under S1's LMS.  Every clock is injected, and every session
-log is a temporary file."""
+check accepts, the keys it trusts are the verifier's alone, and `check` is `check_at` at the deployed point under S1's
+LMS.  Every clock is injected, and every session log is a temporary file."""
 from __future__ import annotations
 
 import dataclasses
@@ -32,6 +32,8 @@ SETUP = run.Setup(Q.blocks, hashlib.sha512(b"the commitment to W").digest(), ROO
 OTHER_ROOT = VerifierKey.from_row_digests(Q, bytes(run.SALT_BYTES), ROWS).root
 SID = hashlib.sha512(b"session").digest()[:32]
 OTHER_SID = hashlib.sha512(b"another session").digest()[:32]
+TRUSTED = (ts.TestSigner(b"run challenger", height=1).public_key,)
+"""The verifier's list of memory-challenger keys: the default signer's."""
 
 
 class Clock:
@@ -57,21 +59,21 @@ def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.l
         return (respond or (lambda i: block(i, block_bytes)))(i)
 
     signed = c.run(answer)
-    return run.Session(signed, c.commitment, c.openings(), (signer.public_key,))
+    return run.Session(signed, c.commitment, c.openings())
 
 
 def outcome(setup: run.Setup = SETUP, digests: bytes = DIGESTS, s: run.Session | None = None, point: run.Point = POINT,
-            schemes=ts.SCHEMES, session_id: bytes = SID) -> str | None:
+            schemes=ts.SCHEMES, session_id: bytes = SID, trusted: tuple[bytes, ...] = TRUSTED) -> str | None:
     try:
-        run.check_at(point, schemes, setup, digests, s or session(), session_id)
+        run.check_at(point, schemes, trusted, setup, digests, s or session(), session_id)
     except run.Refused as e:
         return str(e)
     return None
 
 
-def verdict_reasons(s: run.Session) -> str:
+def verdict_reasons(s: run.Session, trusted: tuple[bytes, ...] = TRUSTED) -> str:
     v = mc.verdict(s.signed, s.commitment, s.openings, lambda i: ROWS[i] if i < Q.blocks else None,
-                   trusted=frozenset(s.trusted), schemes=ts.SCHEMES)
+                   trusted=frozenset(trusted), schemes=ts.SCHEMES)
     assert not v.accepted
     return "; ".join(v.reasons)
 
@@ -124,11 +126,21 @@ def test_an_audit_has_at_most_one_session_the_check_accepts():
 def test_the_verdict_refuses_last():
     wrong = session(respond=lambda i: block(i + 1))
     late = session(spend=POINT.limit_ns + 1)
-    untrusted = dataclasses.replace(session(), trusted=())
-    for s in (wrong, late, untrusted):
+    for s in (wrong, late):
         assert outcome(s=s) == verdict_reasons(s)
+    assert outcome(trusted=()) == verdict_reasons(session(), trusted=())
     assert outcome(s=wrong) == f"{POINT.k} answers are not their blocks of C"
     assert outcome(schemes=mc.SCHEMES) == f"signature scheme {ts.scheme(1)!r} is not accepted"
+
+
+def test_the_trusted_keys_are_the_verifiers_never_the_records():
+    """A server that runs a memory challenger of its own signs an honest-looking session under its own key; the run's
+    record carries no keys, and the verifier's list holds only the device's, so the check refuses the session."""
+    own = session(signer=ts.TestSigner(b"the server's own challenger", height=1))
+    assert own.signed.public_key not in TRUSTED
+    assert outcome(s=own) == "the session is signed by a key that is not a trusted memory challenger's"
+    assert outcome(s=own, trusted=TRUSTED + (own.signed.public_key,)) is None
+    assert "trusted" not in own.to_json()
 
 
 def test_the_formats_round_trip():
@@ -136,7 +148,7 @@ def test_the_formats_round_trip():
     assert run.Setup.from_json(SETUP.to_json()) == SETUP
     assert run.Session.from_json(s.to_json()) == s
     assert sorted(SETUP.to_json()) == ["blocks", "commitment", "root", "salt"]
-    assert sorted(s.to_json()) == ["commitment", "openings", "signed", "trusted"]
+    assert sorted(s.to_json()) == ["commitment", "openings", "signed"]
 
 
 @pytest.mark.slow
@@ -165,10 +177,10 @@ def test_check_is_the_deployed_point_under_s1s_lms():
         clock.now += 20_000
         return block(i, q.block_bytes)
 
-    s = run.Session(c.run(answer), c.commitment, c.openings(), (signer.public_key,))
-    table = b"".join(rows)
-    run.check_at(d, ts.SCHEMES, setup, table, s, tree_session)
+    s = run.Session(c.run(answer), c.commitment, c.openings())
+    table, trusted = b"".join(rows), (signer.public_key,)
+    run.check_at(d, ts.SCHEMES, trusted, setup, table, s, tree_session)
     with pytest.raises(run.Refused, match=f"^signature scheme {ts.scheme(1)!r} is not accepted$"):
-        run.check(setup, table, s, tree_session)
+        run.check(trusted, setup, table, s, tree_session)
     with pytest.raises(run.Refused, match=f"^the setup published {Q.blocks} blocks, not the point's {2 ** 19}$"):
-        run.check(SETUP, DIGESTS, session(), SID)
+        run.check(TRUSTED, SETUP, DIGESTS, session(), SID)

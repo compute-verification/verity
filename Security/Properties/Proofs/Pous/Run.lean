@@ -7,11 +7,12 @@ import Properties.Proofs.Pous.MemoryChallenger
 
 `runCheckAccepts : RunCheckAccepts` (`Properties.Pous.EndToEnd`). An accepted `Run.check` passed every `need` in turn
 (`checkAt_ok`), so the session audits the setup at the deployed point under the designated id and the verdict accepted
-it: by `verdictAccepts` each signed round is on time with the table's row for its index, and by `verdictSigned` the
-signed rounds are the device's own record or the run carries a break. The device's record is its kept answers in order
-(`inv_recorded`), so each round's digest is `blockDigest` of the answer it received. The table's leaves and `C*`'s have
-one root, so leaf by leaf they agree or two inner nodes collide (`mth_binds`); a leaf's input then gives the row as
-`C*`'s block's row digest, and the block's input the answer as the block, or two of the run's strings collide.
+it against the verifier's list of keys: by `verdictAccepts` each signed round is on time with the table's row for its
+index, and by `verdictSigned` the signed rounds are the device's own record or the run carries a break. The device's
+record is its kept answers in order (`inv_recorded`), so each round's digest is `blockDigest` of the answer it
+received. The table's leaves and `C*`'s have one root, so leaf by leaf they agree or two inner nodes collide
+(`mth_binds`); a leaf's input then gives the row as `C*`'s block's row digest, and the block's input the answer as the
+block, or two of the run's strings collide.
 
 `runCertifies_of` composes it with the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
 -/
@@ -37,14 +38,14 @@ theorem need_ok {b : Bool} {reason : String} (h : Run.need b reason = .ok ()) : 
   cases b <;> simp_all [throw, throwThe, MonadExceptOf.throw]
 
 /-- What an accepted `checkAt` checked, in its order. -/
-theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {pub : SetupProtocol.Public} {digests : ByteArray}
-    {r : Run.Session} {sid : ByteArray} (h : Run.checkAt schemes pt pub digests r sid = .ok ()) :
+theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public}
+    {digests : ByteArray} {r : Run.Session} {sid : ByteArray}
+    (h : Run.checkAt schemes pt trusted pub digests r sid = .ok ()) :
     pub.blocks = pt.params.blocks ∧ pub.salt.size = Run.SALT ∧ digests.size = pt.params.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves pt.params pub.salt digests) = some pub.root ∧
       r.commitment.blocks = pt.params.blocks ∧ r.commitment.k = pt.k ∧ r.commitment.limitNs ≤ pt.limitNs ∧
       r.commitment.blockBytes = pt.params.blockBytes ∧ r.commitment.binding = pub.root ∧ r.commitment.session = sid ∧
-      (verdict schemes r.trusted.toList (Run.expected pt.params digests) r.signed r.commitment r.openings).accepted =
-        true := by
+      (verdict schemes trusted (Run.expected pt.params digests) r.signed r.commitment r.openings).accepted = true := by
   unfold Run.checkAt at h
   obtain ⟨h1, h⟩ := need_bind h
   obtain ⟨h2, h⟩ := need_bind h
@@ -260,23 +261,23 @@ theorem mem_table_leaf {pub : SetupProtocol.Public} {digests : ByteArray} {C : A
 /-! ## The theorem -/
 
 /-- What an accepted `check` checked, at the deployed point. -/
-theorem check_ok {pub : SetupProtocol.Public} {digests : ByteArray} {r : Run.Session} {sid : ByteArray}
-    (h : Run.check pub digests r sid = .ok ()) :
+theorem check_ok {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray} {r : Run.Session}
+    {sid : ByteArray} (h : Run.check trusted pub digests r sid = .ok ()) :
     AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ digests.size = q.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves q pub.salt digests) = some pub.root ∧
-      (verdict SCHEMES r.trusted.toList (Run.expected q digests) r.signed r.commitment r.openings).accepted = true := by
+      (verdict SCHEMES trusted (Run.expected q digests) r.signed r.commitment r.openings).accepted = true := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩ := checkAt_ok (schemes := SCHEMES) (pt := Run.DEPLOYED) h
   exact ⟨⟨h1, h2, h5, h6, h7, h8, h9⟩, h10, h3, h4, h11⟩
 
 theorem runCheckAccepts : RunCheckAccepts := by
-  intro pub digests r sid hcheck dev C
+  intro trusted pub digests r sid hcheck dev C
   obtain ⟨hau, hsid, -, hroot, hv⟩ := check_ok hcheck
   obtain ⟨⟨p, hp, htr, m, hm, hlms⟩, hcom, hend, hsize, hrounds⟩ :=
     MemoryChallenger.Properties.SecurityProofs.verdictAccepts _ _ _ _ _ _ hv
   refine ⟨hau, hsid, htr, fun hS hCroot => ?_⟩
   by_cases hT : TableBreak pub digests C
   · exact .inr (.inr hT)
-  by_cases hR : RunBreak r.trusted.toList r.signed dev C
+  by_cases hR : RunBreak trusted r.signed dev C
   · exact .inr (.inl hR)
   rcases MemoryChallenger.Properties.SecurityProofs.verdictSigned _ _ _ _ _ _ dev hv with
     ⟨run, hrun, hrc, hre, hrr⟩ | ⟨x, hx, y, hy, hxy⟩ | hforge
@@ -378,11 +379,11 @@ theorem shaped_of {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (
 /-- `RunCertifies` from the setup check's two open properties: an accepted `C*` is of the point's shape and has the
 published root, which is all `runCheckAccepts` asks of it. -/
 theorem runCertifies_of (hd : AcceptsDecodes) (hp : PublishesRoot) : RunCertifies := by
-  intro c C pub digests r sid dev ⟨hs, hc⟩
+  intro trusted c C pub digests r sid dev ⟨hs, hc⟩
   have hD := hd q c C ⟨pub, (), hs⟩
   have hP := hp q c C pub () hs
-  obtain ⟨ha, hsid, -, hrest⟩ := runCheckAccepts pub digests r sid hc dev C
+  obtain ⟨ha, hsid, htr, hrest⟩ := runCheckAccepts trusted pub digests r sid hc dev C
   have hroot : Merkle.root (leaves pub.salt C) = some pub.root := by rw [hP.2.2.1]; exact hP.1
-  exact ⟨hD, hP, ha, hsid, hrest (shaped_of hD) hroot⟩
+  exact ⟨hD, hP, ha, hsid, htr, hrest (shaped_of hD) hroot⟩
 
 end Pous.EndToEnd.SecurityProofs

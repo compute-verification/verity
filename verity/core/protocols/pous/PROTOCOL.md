@@ -426,7 +426,7 @@ requirement.
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
-| `run` | the composed check of a recorded run: `check(setup, digests, session, session_id)` over the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings, trusted keys) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
+| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -723,10 +723,11 @@ column at a time, where whole-label pebbling charges it a whole label. N10′, t
 Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
 
 - `Pous.EndToEnd.RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and with no assumption.
-  When the composed check (`run.check`, Lean's `PousCheck.Run.check`) accepts the setup's public outputs, the memory
+  When the composed check (`run.check`, Lean's `PousCheck.Run.check`) accepts, against the verifier's own list of
+  memory-challenger keys (`trusted`, which never comes from the run's record), the setup's public outputs, the memory
   challenger's table and its signed session under the id the auditor designated, the session audits that setup at the
   deployed point (`AuditsSetup`: every block, `k = 105`, within `Δ + RTT`, 2,056-byte answers, bound to the published
-  root), runs under the designated id and is signed under a trusted key, and for every `C*` of the point's shape
+  root), runs under the designated id and is signed under a key in `trusted`, and for every `C*` of the point's shape
   whose leaves have the published root, every one of the device's 105 recorded answers was the challenged block of
   `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS forgery. `RunCheckAccepts` is
   proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
@@ -783,10 +784,11 @@ Two gaps stood between these statements and the deployed verifier, and both are 
   auditor designated (`run.check`'s `session_id`), so an audit has at most one session it can accept. The Lean states
   the check's side (`RunCheckAccepts`: an accepted session carries the designated id); the device's refusal is its code
   and log, which the Lean does not model.
-- G-2, the composed setup-to-challenger check, fixed: `run.check` (`PousCheck.Run.check`, `pous-run SETUP.json
-  DIGESTS.bin SESSION.json SESSION_ID`) refuses a run unless the setup published `2^19` blocks under a 24-byte salt, the
-  table's leaves have the published root, the session audits that setup at the deployed point, is bound to that root
-  and carries the designated id, and the verdict accepts it against the table. `check/tests/test_run.py` holds the two
+- G-2, the composed setup-to-challenger check, fixed: `run.check` (`PousCheck.Run.check`, `pous-run TRUSTED.json
+  SETUP.json DIGESTS.bin SESSION.json SESSION_ID`) refuses a run unless the setup published `2^19` blocks under a
+  24-byte salt, the table's leaves have the published root, the session audits that setup at the deployed point, is
+  bound to that root and carries the designated id, and the verdict accepts it against the table under a key of the
+  verifier's own list (`TRUSTED.json`, never the run's record). `check/tests/test_run.py` holds the two
   to one another, and `Accepted` is now setup's acceptance and this check's.
 
 ## Named assumptions (`Security/Models/Pous/Assumptions.lean`)

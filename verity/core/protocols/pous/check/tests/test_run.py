@@ -1,10 +1,12 @@
 """`pous-run` (`PousCheck.Run`) against `run.check_at`, through the core difftest harness: the outcome, its reason word for
-word, on runs drawn at reduced points (a setup's public outputs, the table of `C*`'s row digests, one session the memory
-challenger signed bound to the setup's root, the id the auditor designated), honest and under one edit of the setup, the
-table, the point, the session or the designated id, the session edits among them every one of `mc_cases.MUTATIONS`, and runs
-whose JSON is not exactly what it decodes to. Then `pous-run SETUP.json DIGESTS.bin SESSION.json SESSION_ID`, the deployed
-check, on a run at the deployed point signed by a key at S1's deployed parameters: both accept it, and both refuse it once
-one row of the table is another or the designated id is another."""
+word, on runs drawn at reduced points (the verifier's list of memory-challenger keys, a setup's public outputs, the table of
+`C*`'s row digests, one session the memory challenger signed bound to the setup's root, the id the auditor designated),
+honest and under one edit of the verifier's list, the setup, the table, the point, the session or the designated id, the
+session edits among them every one of `mc_cases.MUTATIONS`, and runs whose JSON is not exactly what it decodes to, a
+session that carries keys of its own among them. Then `pous-run TRUSTED.json SETUP.json DIGESTS.bin SESSION.json
+SESSION_ID`, the deployed check, on a run at the deployed point signed by a key at S1's deployed parameters: both accept
+it, and both refuse it once one row of the table is another, the designated id is another or the verifier's list holds
+another key."""
 
 from __future__ import annotations
 
@@ -59,12 +61,14 @@ class Run:
         q = self.point.params
         return {"point": {"params": {"blocks_per_segment": q.blocks_per_segment, "c0": q.c0, "segments": q.segments, "w": q.w},
                           "k": self.point.k, "limit_ns": self.point.limit_ns},
-                "schemes": list(self.schemes), "setup": self.setup.to_json(), "digests": self.digests.hex(),
-                "session": session_of(self.session).to_json(), "session_id": self.session_id.hex()}
+                "schemes": list(self.schemes), "trusted": [t.hex() for t in self.session.trusted],
+                "setup": self.setup.to_json(), "digests": self.digests.hex(), "session": session_of(self.session).to_json(),
+                "session_id": self.session_id.hex()}
 
 
 def session_of(s: M.Session) -> run.Session:
-    return run.Session(s.signed, s.commitment, s.openings, s.trusted)
+    """The record of `s`; `s.trusted` is the verifier's list, which the record never carries."""
+    return run.Session(s.signed, s.commitment, s.openings)
 
 
 def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
@@ -163,6 +167,9 @@ RUN_MUTATIONS = [
     lambda r, x: dataclasses.replace(r, session_id=hashlib.sha512(b"another session %d" % (x % 3)).digest()[:32]),
     lambda r, x: dataclasses.replace(r, session_id=r.session_id[:-1 - x % 32]),
     lambda r, x: _published(r, session=hashlib.sha512(b"another session %d" % (x % 3)).digest()[:32]),
+    lambda r, x: dataclasses.replace(r, session=dataclasses.replace(r.session, trusted=())),
+    lambda r, x: dataclasses.replace(r, session=dataclasses.replace(
+        r.session, trusted=(M.test_signer(M.STRANGER, 1, 0).public_key,))),
 ]
 #: The memory challenger's session edits, each reason printable (`test_verdict.records`).
 SESSION_MUTATIONS = [M._printable_scheme if m is M._scheme else m for m in M.MUTATIONS]
@@ -190,7 +197,9 @@ JSON_MUTATIONS = [
     _edit((), lambda j, x: j | {"session_id": j["session_id"] + "0"}),
     _edit(("session",), lambda s, x: s | {"extra": x}),
     _edit(("session",), lambda s, x: {k: v for k, v in s.items() if k != sorted(s)[x % len(s)]}),
-    _edit(("session",), lambda s, x: s | {"trusted": [t.upper() for t in s["trusted"]] or ["A"]}),
+    _edit((), lambda j, x: j | {"trusted": [t.upper() for t in j["trusted"]] or ["A"]}),
+    _edit((), lambda j, x: j | {"trusted": [j["trusted"][0] + "0"] if j["trusted"] else [x]}),
+    _edit((), lambda j, x: j | {"session": j["session"] | {"trusted": j["trusted"]}}),
     _edit(("session", "commitment"), lambda c, x: c | {"protocol": "verity-pous/memory-challenger/v0"}),
     _edit(("session", "signed", "commitment"), lambda c, x: c | {"clock": "CLOCK_REALTIME ns"}),
     _edit(("session", "openings"), lambda o, x: o + [o[0] | {"j": -1}] if o else [None]),
@@ -208,7 +217,7 @@ def _decode_setup(j: Any) -> run.Setup:
 
 def _decode_session(j: Any) -> run.Session:
     return run.Session(M.signed_of(M._get(j, "signed")), M.commitment_of(M._get(j, "commitment")),
-                       tuple(M.opening_of(o) for o in M.list_(j, "openings")), tuple(M.hexes(j, "trusted")))
+                       tuple(M.opening_of(o) for o in M.list_(j, "openings")))
 
 
 def _point_of(j: Any) -> run.Point:
@@ -228,10 +237,11 @@ def reference(j: Any) -> dict:
         raise D.Reject("a scheme this port doesn't verify")
     setup = M._exactly(_decode_setup, M._get(j, "setup"))
     digests = M.hex_(j, "digests")
-    session = M._exactly(_decode_session, M._get(j, "session"))
     session_id = M.hex_(j, "session_id")
+    trusted = M.hexes(j, "trusted")
+    session = M._exactly(_decode_session, M._get(j, "session"))
     try:
-        run.check_at(point, {i: KNOWN[i] for i in ids}, setup, digests, session, session_id)
+        run.check_at(point, {i: KNOWN[i] for i in ids}, trusted, setup, digests, session, session_id)
     except run.Refused as e:
         return {"accepted": False, "reason": str(e)}
     return {"accepted": True}
@@ -239,7 +249,7 @@ def reference(j: Any) -> dict:
 
 @dataclass(frozen=True)
 class _Port(D.Port):
-    """`pous-run serve`: the executable serves under `serve`, and judges three files otherwise."""
+    """`pous-run serve`: the executable serves under `serve`, and judges four files and an id otherwise."""
 
     def argv(self) -> list[str]:
         return [*super().argv(), "serve"]
@@ -278,7 +288,8 @@ def test_run_agrees(server):
 def test_named_runs_agree(server):
     """An honest run accepted, and one run under each run edit, through the port: the Lean's outcome is the Python's, and
     each edit is refused for a reason of the check's own before the verdict, or by the verdict; the designated id's edits,
-    and a session published under another id, for the id's reason."""
+    and a session published under another id, for the id's reason; a verifier's list without the signer's key, for the
+    verdict's."""
     p = port(st.none())
     r = _named(M.test_signer(M.SECRETS[0], 1, 0))
     assert D.replay(p, r.doc(), server) == ("output", D.canonical({"accepted": True}))
@@ -291,6 +302,8 @@ def test_named_runs_agree(server):
     assert accepted == {15, 21, 23}, reasons
     assert len(set(reasons.values())) >= 15, reasons
     assert {reasons[i] for i in (24, 25, 26)} == {"the session does not run under the id the auditor designated"}, reasons
+    assert {reasons[i] for i in (27, 28)} == {"the session is signed by a key that is not a trusted memory challenger's"}, \
+        reasons
 
 
 def _named(signer: M.AtLeaf) -> Run:
@@ -312,10 +325,10 @@ def _named(signer: M.AtLeaf) -> Run:
     return Run(point, run.Setup(q.blocks, bytes(64), root, salt), s, (signer.scheme,), bytes(32))
 
 
-def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, Path, run.Setup, bytes, run.Session]:
+def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, Path, run.Setup, bytes, run.Session, bytes]:
     """A run at the deployed point signed at leaf 0 of a key at S1's deployed parameters (`mc_cases.deployed_signer`, a
     sparse tree), written as `pous-run` reads it, round `tampered`'s answer not its block. The rows the rounds don't name
-    are digests of nothing in particular."""
+    are digests of nothing in particular. Last, the signer's public key."""
     d = run.DEPLOYED
     q = d.params
     salt = hashlib.sha512(b"deployed salt").digest()[:run.SALT_BYTES]
@@ -336,18 +349,25 @@ def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, P
         b = M.block(i, q.block_bytes)
         c.receive(M._flip(b, 0) if j == tampered else b)
     setup = run.Setup(q.blocks, hashlib.sha512(b"deployed W").digest(), root, salt)
-    session = run.Session(c.close(), c.commitment, c.openings(), (signer.public_key,))
+    session = run.Session(c.close(), c.commitment, c.openings())
     digests = b"".join(rows)
     paths = tmp / "SETUP.json", tmp / "DIGESTS.bin", tmp / "SESSION.json"
     paths[0].write_text(D.canonical(setup.to_json()))
     paths[1].write_bytes(digests)
     paths[2].write_text(D.canonical(session.to_json()))
-    return *paths, setup, digests, session
+    return *paths, setup, digests, session, signer.public_key
 
 
-def _python_outcome(setup: run.Setup, digests: bytes, session: run.Session, session_id: bytes) -> dict:
+def _trusted_file(path: Path, trusted: tuple[bytes, ...]) -> Path:
+    """The verifier's `TRUSTED.json`."""
+    path.write_text(D.canonical({"trusted": [t.hex() for t in trusted]}))
+    return path
+
+
+def _python_outcome(trusted: tuple[bytes, ...], setup: run.Setup, digests: bytes, session: run.Session,
+                    session_id: bytes) -> dict:
     try:
-        run.check(setup, digests, session, session_id)
+        run.check(trusted, setup, digests, session, session_id)
     except run.Refused as e:
         return {"accepted": False, "reason": str(e)}
     return {"accepted": True}
@@ -355,28 +375,39 @@ def _python_outcome(setup: run.Setup, digests: bytes, session: run.Session, sess
 
 @pytest.mark.slow
 def test_the_deployed_check_agrees_from_its_files(tmp_path):
-    """`pous-run`'s three files and the designated id at the deployed point (`2^19` rows, `k = 105`, S1's LMS at its deployed
+    """`pous-run`'s four files and the designated id at the deployed point (`2^19` rows, `k = 105`, S1's LMS at its deployed
     parameters): `PousCheck.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of
-    whose answers is not its block and the honest run under another designated id; `pous-run` refuses an id that is not
-    lowercase hex. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a drawn point, is the deployed point
-    under `SCHEMES`, in Lean."""
+    whose answers is not its block, the honest run under another designated id and the honest run against a verifier's list
+    that holds another key only; `pous-run` refuses an id that is not lowercase hex and a session that carries keys of its
+    own. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a drawn point, is the deployed point under
+    `SCHEMES`, in Lean."""
     exe = D.build(LEAN, "pous-run")
     another = hashlib.sha512(b"another deployed session").digest()[:32]
+    stranger = (M.test_signer(M.STRANGER, 1, 0).public_key,)
+    untrusted = "the session is signed by a key that is not a trusted memory challenger's"
     for tampered in (None, 7):
         sub = tmp_path / str(tampered)
         sub.mkdir()
-        setup_path, digests_path, session_path, setup, digests, session = _deployed_run(sub, tampered)
-        files = [str(exe), str(setup_path), str(digests_path), str(session_path)]
+        setup_path, digests_path, session_path, setup, digests, session, key = _deployed_run(sub, tampered)
         designated = session.commitment.session
-        expect = {designated: "1 answers are not their blocks of C"} if tampered is not None else {
-            designated: None, another: "the session does not run under the id the auditor designated"}
-        for sid, reason in expect.items():
-            python = _python_outcome(setup, digests, session, sid)
+        expect = [((key,), designated, "1 answers are not their blocks of C")] if tampered is not None else [
+            ((key,), designated, None), ((key,), another, "the session does not run under the id the auditor designated"),
+            (stranger, designated, untrusted), ((), designated, untrusted)]
+        for n, (trusted, sid, reason) in enumerate(expect):
+            python = _python_outcome(trusted, setup, digests, session, sid)
             assert python == ({"accepted": True} if reason is None else {"accepted": False, "reason": reason}), python
-            out = subprocess.run([*files, sid.hex()], capture_output=True, text=True, check=False)
+            trusted_path = _trusted_file(sub / f"TRUSTED-{n}.json", trusted)
+            out = subprocess.run([str(exe), str(trusted_path), str(setup_path), str(digests_path), str(session_path),
+                                  sid.hex()], capture_output=True, text=True, check=False)
             assert out.returncode == (0 if python["accepted"] else 1), out.stderr
             assert out.stdout == D.canonical(python) + "\n"
         if tampered is None:
-            out = subprocess.run([*files, designated.hex().upper()], capture_output=True, text=True, check=False)
+            files = [str(exe), str(_trusted_file(sub / "TRUSTED.json", (key,))), str(setup_path), str(digests_path)]
+            out = subprocess.run([*files, str(session_path), designated.hex().upper()], capture_output=True, text=True,
+                                 check=False)
             assert (out.returncode, out.stdout) == (1, D.canonical({"accepted": False, "reason": "session id: not lowercase hex"})
                                                     + "\n"), out
+            carrying = sub / "SESSION-carrying-keys.json"
+            carrying.write_text(D.canonical(session.to_json() | {"trusted": [key.hex()]}))
+            out = subprocess.run([*files, str(carrying), designated.hex()], capture_output=True, text=True, check=False)
+            assert out.returncode == 1 and json.loads(out.stdout)["reason"].startswith("session: "), out

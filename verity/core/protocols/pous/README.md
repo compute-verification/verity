@@ -79,10 +79,11 @@ v = mc.verdict(signed, c.commitment, c.openings(), lambda i: mc.block_digest(blo
 print(v.public())                                                                   # {"accepted": ...}
 ~~~
 
-A recorded run is checked whole by `run.check(setup, digests, session, session_id)`: the setup's public outputs, the
-memory challenger's table of `C*`'s row digests (the harness's `DIGESTS.bin`) and its signed session, joined at P2's
-deployed point, the session under the id the auditor designated. `pous-run SETUP.json DIGESTS.bin SESSION.json SESSION_ID`
-(`check/`) is the same check in Lean.
+A recorded run is checked whole by `run.check(trusted, setup, digests, session, session_id)`: the setup's public
+outputs, the memory challenger's table of `C*`'s row digests (the harness's `DIGESTS.bin`) and its signed session, joined
+at P2's deployed point, the session under the id the auditor designated and signed under a key of `trusted`, the
+verifier's own list of memory-challenger keys, which never comes from the run's record. `pous-run TRUSTED.json SETUP.json
+DIGESTS.bin SESSION.json SESSION_ID` (`check/`) is the same check in Lean.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
