@@ -102,6 +102,11 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (3:59 PM PDT): the remote bandwidth audit's receipt is sketch-then-SHA-512. Each block's ±1 sketch,
+  re-keyed every pass from the chained seed, goes through one SHA-512 compression. The leaves and the frame-v3-sha512
+  tree are unchanged, so the one-hash rule holds. It rests on `RateAuditSketch`, and the full-block SHA-512 receipt
+  is not the default.
+
 - 2026-10-12 (1:53 PM PDT): the remote bandwidth audit treats the prover's resources as one undifferentiated pool.
   Its guarantee is conservation: receipts over registered data worth at least 99% of the declared capacity were paid
   for by resources somewhere (reads, held state, or rebuild compute). It makes no claim about where, so it takes no
