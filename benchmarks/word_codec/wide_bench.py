@@ -774,7 +774,9 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
     ring = [torch.empty(32 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
     ring_sk = [torch.empty(64 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
     commit_fn = "ww_sketch_commit" if sketch else "ww_commit"
-    sa, sb, sh = torch.cuda.Stream(), torch.cuda.Stream(), torch.cuda.Stream(priority=-1)
+    sa, sb, sh, sf = (torch.cuda.Stream(), torch.cuda.Stream(), torch.cuda.Stream(priority=-1),
+                      torch.cuda.Stream(priority=-1))
+    ev_f = torch.cuda.Event()
     ev_g, ev_l = [torch.cuda.Event() for _ in range(2)], [torch.cuda.Event() for _ in range(2)]
     so = lib.so
     out = {"k": k, "sketch": sketch, "per_batch": {}}
@@ -796,8 +798,9 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
         def committing(root, apart: bool = False, hash_: bool = True, fold: bool = False, hi: bool = False) -> int:
             """The pass committing as it goes; apart: the GEMMs write sketches to a ring (`ww_gemm_sketch` without
             tags) and the second stream hashes them (`ww_sketch_tags`) before the leaves; hash_ False: only the GEMMs
-            (apart's own base); fold: each linear's leaves folded by `ww_sketch_fold`, the tree from level SUB; hi:
-            the second stream at high priority."""
+            (apart's own base); fold: each linear's leaves folded by `ww_sketch_fold` on a third stream (high
+            priority), which waits only for them, so the ring slot is free once the leaves have read it; the tree
+            goes on from level SUB; hi: the second stream at high priority."""
             sc = sh if hi else sb
             rc, j, i = 0, 0, 0
             for _ in range(layers):
@@ -812,10 +815,14 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
                         if apart:
                             rc |= so.ww_sketch_tags(ptr(ring_sk[r]), nv[name], j, seed_buf, ptr(ring[r]), sc.cuda_stream)
                         rc |= so.ww_sketch_leaves(ptr(pws), pblocks, ptr(ring[r]), j, nv[name], seed_buf, sc.cuda_stream)
-                        if fold:
-                            rc |= so.ww_sketch_fold(ptr(pws), pblocks, j, nv[name], sc.cuda_stream)
                         ev_l[r].record(sc)
+                        if fold:
+                            sf.wait_event(ev_l[r])
+                            rc |= so.ww_sketch_fold(ptr(pws), pblocks, j, nv[name], sf.cuda_stream)
                     j, i = j + nv[name], i + 1
+            if fold and hash_:
+                ev_f.record(sf)
+                sc.wait_event(ev_f)
             tree = so.ww_sketch_tree(ptr(pws), pblocks, lib.sub if fold else 0, root, sc.cuda_stream) if hash_ else 0
             return rc | tree
 
