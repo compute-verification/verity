@@ -413,19 +413,21 @@ def parse(spec: str) -> list[tuple[int, ...]]:
 def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list[tuple[int, int, int, int]]:
     """(D, stages, T, k_s): DECODERSxSTAGES (untagged, T = -1), DECODERSxSTAGESxT (tagged: T tag warps from the
     start, and every other warp tags once its own work is done) or DECODERSxSTAGESx-1xK_S (the decoders sketch at
-    k_s, at most `sketch_t` stages), each checked against wt_fused_sketch's bounds. `auto`: untagged, the most decoder
-    warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1); tagged,
-    0 and 2 of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them
-    sketching at 4 and 6 fewer stages. Four or more tag warps (with the decoders that leave) fail some gates in some
-    runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
-    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 128 * ks) // (lib.sb + 40)  # noqa: E731
+    k_s over tiles of `sketch_t` tasks, floor(32 D / TW) + stages <= 2 sketch_t), each checked against
+    wt_fused_sketch's bounds. `auto`: untagged, the most decoder warps the field's registers allow at 4 and 6 stages
+    fewer than fit at M = 32 (fewer stages leave more L1); tagged, 0 and 2 of those warps tagging from the start, at 4
+    fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 2, 3 and 4 fewer stages (the sketch's
+    buffers already take some). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on
+    early tasks of random CTAs, unexplained, so auto leaves them out."""
+    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (lib.sb + 40)  # noqa: E731
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
+    sk_stages = lambda d: 2 * sketch_t - 32 * d // lib.tw  # noqa: E731
     if spec == "auto":
         cfgs = [(dmax, max(need(dmax), smax(0) - 4), -1), (dmax, max(need(dmax), smax(0) - 6), -1)]
         cfgs += [(dmax - t, max(need(dmax - t), smax(0) - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
         for ks in (int(v) for v in sketch.split(",") if v):
-            cfgs += [(dmax, min(sketch_t, max(need(dmax), smax(ks) - f)), -1, ks) for f in (4, 6)]
+            cfgs += [(dmax, min(sk_stages(dmax), max(need(dmax), smax(ks) - f)), -1, ks) for f in (2, 3, 4)]
     else:
         cfgs = parse(spec)
     out = []
@@ -434,10 +436,10 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
             raise SystemExit(f"fused {c}: DxS, DxSxT or DxSx-1xK_S")
         d, st, t, ks = tuple(c) + (-1, 0)[len(c) - 2:]
         if not (lib.fused_span <= d and d + max(t, 0) <= dmax and need(d) <= st <= smax(ks) and t >= -1
-                and ks in (0, 16, 64) and (ks == 0 or (t == -1 and st <= sketch_t))):
+                and ks in (0, 16, 64) and (ks == 0 or (t == -1 and st <= sk_stages(d)))):
             raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dmax}, "
-                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T and stages <= "
-                             f"{sketch_t}")
+                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T and "
+                             f"floor(32 D / TW) + stages <= {2 * sketch_t}")
         if (d, st, t, ks) not in out:
             out.append((d, st, t, ks))
     return out
