@@ -1,11 +1,13 @@
 # The bandwidth audit, v0
 
-Status: v0 with the certified tag `ro-blake3/v1`, ready for the red team's re-review. The Python reference and verifier
-are `audit.py` and `tags.py`, pinned by `tests/vectors.json`; the GPU tagger is `benchmarks/bandwidth`, checked bit for
-bit against them and timed on the RTX PRO 6000 (§6). The guarantee is `Bandwidth.Guarantees.AuditRO`, in the
-`Accounting` area of `Security/`'s guarantees, proved as `Bandwidth.SecurityProofs.AuditRO` with no named assumption
-by lane `ra-bandwidth-lean` (PR #1806); its completeness is `HonestPasses`. Until #1806 is on `main`, the statement is
-that PR's. `T` and `s` are proposed in §6 and fixed once the red team has read this.
+Status: v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
+`f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6) and fixed `T` and
+`s`; its conditions are met at `84fc4199d`, whose re-grant is pending. The Python reference and verifier are `audit.py`
+and `tags.py`, pinned by `tests/vectors.json`; the GPU tagger is `benchmarks/bandwidth`, checked bit for bit against
+them and timed on the RTX PRO 6000 (§6). The guarantee is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of
+`Security/`'s guarantees, proved as `Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane
+`ra-bandwidth-lean` (PR #1806); its completeness is `HonestPasses`. Until #1806 is on `main`, the statement is that
+PR's.
 
 ## 1. What a window certifies
 
@@ -229,16 +231,25 @@ paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
 ## 6. Parameters and measurements
 
 `T` must cover the honest prover's elapsed time on the verifier's clock with margin, and leave `T + RTT` under the
-rebuild floor. The proposal: **`ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`**, which leaves up to 0.5 ms for `RTT`.
+rebuild floor. The parameters: **`ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`**, which leaves up to 0.5 ms for `RTT`,
+fixed by the red team's grant of `f18c1854a`.
+
+**The certified rate** (code at `84fc4199d`; red team: granted with conditions at `f18c1854a`,
+art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6, conditions met at `84fc4199d`, re-grant
+pending): an accepted window at `T = 1.2 ms`, with an on-node verifier and no round-trip allowance, certifies
+741,353,308 bytes (68.8% of `E`), 618 GB/s, except with probability `2^-40.42`; with a 0.3 ms round-trip allowance,
+722,448,693 bytes (67.0%), 482 GB/s. It is a per-device figure for an isolated device, or each device's share of a
+co-audited set's total, depending on which reading of `bandwidth-device` Daniel picks (§5).
 
 The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
-timed lease, SM clock 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and keyed
-BLAKE3's known answers on host and device; every tag's root over the full store (`N = 2^19`) and over the pinned
+timed lease, SM clock 2,085 to 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and
+keyed BLAKE3's known answers on host and device; every tag's root over the full store (`N = 2^19`) and over the pinned
 vectors' 37 blocks equal to the reference's, with the output buffers poisoned; and a pass without the tag kernel that
 does not match. A failed gate times nothing.
 
-This section reports run `r20261012-001813-b2be`
-(art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603). Runs `r20261011-235743-0c42`
+This section reports run `r20261012-011339-b99d`
+(art:ebd5d428c8dcf6f0807b54454f3fb3107b53fcaa4635ebf3c300c83a3d211f5d) at `84fc4199d`. Runs `r20261012-001813-b2be`
+(art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603, at `f18c1854a`), `r20261011-235743-0c42`
 (art:8735b1084479fca8cf64bd225c58fb85a2afe6599a5b6c864759a421699a2e8e) and `r20261012-000847-217b` ran the same kernels
 and reproduced every clean pass time to within 0.01 ms.
 
@@ -249,23 +260,25 @@ Times are medians of 100 passes (20 for *idle*; p99 in brackets), in ms, under f
 | | dirty | warm | clean | idle |
 |---|---|---|---|---|
 | raw device read of `E` | 0.730, 1,476 GB/s | | | |
-| `ro-blake3/v1` pass: tags, then leaves and tree | 1.577 (1.590) | 1.130 (1.367) | **0.976 (0.981)** = 0.833 + 0.143 | 0.990 (0.994) |
-| `ro-sha512/v1` pass | 1.727 (1.734) | 1.722 (1.727) | 1.720 (1.727) = 1.409 + 0.311 | 1.733 (1.738) |
-| `gf31-poly/v1` pass | 0.911 (0.922) | 0.881 (0.887) | 0.885 (0.893) = 0.742 + 0.143 | 0.893 (0.901) |
+| `ro-blake3/v1` pass: tags, then leaves and tree | 1.579 (1.599) | 1.131 (1.357) | **0.978 (0.995)** = 0.835 + 0.143 | 0.998 (1.006) |
+| `ro-sha512/v1` pass | 1.725 (1.730) | 1.720 (1.724) | 1.719 (1.724) = 1.408 + 0.311 | 1.731 (1.742) |
+| `gf31-poly/v1` pass | 0.910 (0.921) | 0.879 (0.886) | 0.883 (0.891) = 0.741 + 0.142 | 0.894 (0.900) |
 
 Whole windows through `audit.Verifier` at `T = 1.2 ms` and `s = 1,849`, 50 per tag, each after the honest prover's
 preparation (§3), with the verifier's clock beside the device's pass time:
 
 | | verifier's clock, p50 (max) | device's pass, p50 (max) | accepted |
 |---|---|---|---|
-| `ro-blake3/v1` | 1.012 ms (1.025) | 0.981 ms (0.992) | 50 of 50 |
-| `gf31-poly/v1` | 0.911 ms (0.942) | 0.886 ms (0.909) | 50 of 50 |
-| `ro-sha512/v1` | 1.750 ms (1.763) | 1.726 ms (1.729) | none: all late |
+| `ro-blake3/v1` | 1.011 ms (1.043) | 0.982 ms (0.991) | 50 of 50 |
+| `gf31-poly/v1` | 0.931 ms (1.017) | 0.887 ms (0.918) | 50 of 50 |
+| `ro-sha512/v1` | 1.748 ms (1.757) | 1.725 ms (1.732) | none: all late |
 
-The slowest honest `ro-blake3/v1` window took 1.025 ms, 175 µs (17%) inside `T = 1.2 ms`, and `T + RTT` leaves
+The slowest honest `ro-blake3/v1` window took 1.043 ms, 157 µs (13%) inside `T = 1.2 ms`, and `T + RTT` leaves
 0.508 ms for the round trip under the rebuild floor. One window per tag at a 100 ms deadline with the floor lifted,
 which certifies nothing, was accepted for all three: `ro-sha512/v1`'s openings pass even though its timed windows are
-late. PCIe into the GPU measured 56.6 GB/s (pinned copy) and 51.4 GB/s (a kernel reading pinned host memory).
+late. Prepared like the others, that window's `ro-blake3/v1` pass took 1.008 ms on the verifier's clock (1.195 ms
+unprepared at `f18c1854a`). PCIe into the GPU measured 56.3 GB/s (pinned copy) and 51.3 GB/s (a kernel reading
+pinned host memory).
 
 `ro-blake3/v1`'s pass depends on L2's state when it starts. Its loads fetch 256 bytes into L2 per miss
 (`ld.global.nc.L1::no_allocate.L2::256B`), which helps when L2's lines are clean and costs 0.6 ms when they are dirty
