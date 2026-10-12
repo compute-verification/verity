@@ -554,6 +554,9 @@
    "assumptions": [],
    "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035"
   },
+  "Accounting.SecurityProofs.pouwRow": {
+   "owner": "@lean"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -3751,6 +3754,7 @@
    "Accounting.SecurityProofs.Recall": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what reaches the location during the window, fixed across the coins, as a hypothesis that is not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.Localization": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from a challenge's values to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what the rest of the prover can tell at the window's start and what it reads from the verifier during the window, fixed across the challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B4": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick (CausalFrom), with links as alphabets (Alphabet) and the trusted devices across the strategy (TrustedUnits), and takes what the certifiers and the outside can tell at the window's start and the record placed before it, fixed across the coins, and per-run causality and links as hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.pouwRow": "frozen (conjecture,no-function): It takes B1 (Accounting.Guarantees.B1), the named open conjecture TT (Pouw.Assumptions.TT) at the cost model of an arbitrary actual circuit's provers (Accounting.Actual.costModel), as a hypothesis, and is about PoUW's audit of an abstract protocol (Pouw.Protocol) against those provers, not a Lean function.",
    "Accounting.SecurityProofs.Composition": "frozen (no-function): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick and each protocol's soundness alone, hypotheses about them rather than a Lean function's acceptance, and bounds a count of coins, not an event of shape.events.",
    "Accounting.SecurityProofs.Fit": "frozen (no-function): It is stated over arbitrary sets of runs (Accounting.Actual.Run) and a quantity on them, with additivity as a hypothesis, not a Lean function's acceptance.",
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",

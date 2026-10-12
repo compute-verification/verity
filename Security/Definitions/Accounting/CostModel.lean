@@ -13,7 +13,7 @@ what the prover (off `V`) can tell when the salt reaches it, at `tₛ + ℓ`, do
 everything before `tₛ + ℓ`, and it hands on what the prover holds then); and its oracle calls are the hash's gates
 (`hash`). Its cost is the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)` (`Actual.costModel`, `CM_A`).
 `Actual.timedRun` is an adversary's timed run: the salt released at `tₛ`, the transcript received at `t_d`, and by
-each time `t` the prover's work placed before `t` spent.
+each time `t` the cost window's work placed before `t` spent, so that what it spends from `tₛ` to `t_d` is the cost.
 
 Runs don't confine the oracle to the hash's gates (a gate's operation is any function of what it reads, and a strategy
 any map from the oracle to runs), so a program carries red-team B6's form as a field (`queries`): on the other inputs
@@ -60,8 +60,8 @@ noncomputable def Actual.costModel (Q R S : Type) {L : Type} [LinearOrder L] [Fi
   calls P H U act σ s := (hash (P.strategy (H, U, act, σ, s))).card
 
 /-- **An adversary's timed run** in `CM_A` on the workload `U`: the salt is released at `tₛ`, the transcript is
-received at `t_d` (it is what the verifier receives before then), and by each time `t` the prover has spent its work
-at `π` placed before `t`. -/
+received at `t_d` (it is what the verifier receives before then), and by each time `t` the prover has spent the cost
+window's work placed before `t`, its work at `π` in `[tₛ + ℓ, t_d − ℓ)` before `t`. -/
 noncomputable def Actual.timedRun {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
     {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
@@ -71,6 +71,7 @@ noncomputable def Actual.timedRun {Q R S : Type} {L : Type} [LinearOrder L] [Fin
   tr _ _ := t_d
   spent H s t :=
     let P : Actual.Prover Q R S 𝓕 V tₛ t_d ℓ read hash := A.online
-    ((P.strategy (H, U, A.act, A.pre.eval H, s)).workIn (π _) V {u | (u : ℝ) < t} : ℝ)
+    ((P.strategy (H, U, A.act, A.pre.eval H, s)).workIn (π _) V
+      ({u | (u : ℝ) < t} ∩ Set.Ico (tₛ + ℓ) (t_d - ℓ)) : ℝ)
 
 end Accounting
