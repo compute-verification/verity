@@ -139,7 +139,8 @@ def main() -> int:
         cod = inst.get("codec") or {"field": "p61", "word_bits": 61, "payload_bits": inst["bits"], "tag": None}
         wide = a["arm"] == "wide"
         stock, plain, compiled = by.get("stock" + md, []), by.get("plain" + md, []), by.get("stock-c", [])
-        base = by.get(f"w{cod['word_bits']}-0" + md, []) if wide else plain
+        base = (by.get(f"w{cod['word_bits']}-0" + md) if wide else None) or plain
+        base_name = "wide k = 0" if base is not plain else "plain fragments"
         untagged = by.get(f"w{cod['word_bits']}-{a['k']}" + md, []) if cod.get("tag") else []
         for b, ctx in keys:
             e, s, pl, sc = tps(group, b, ctx), tps(stock, b, ctx), tps(plain, b, ctx), tps(compiled, b, ctx)
