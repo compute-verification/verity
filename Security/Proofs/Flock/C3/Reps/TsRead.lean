@@ -71,18 +71,18 @@ theorem consAt_congr {rows rows' : Array (Array F128)} {q : ℕ} {α α' : Array
 
 end algebra
 
-/-- Copy `j` of unit `u`'s columns in the layer `X`, as `OpensAtL` reads them. -/
-def colsAt (Q : FlockSoundness.Discharge.Recursion.VStmt) (X : Q.Bits) (u : Fin Q.nv) {j : ℕ} (hj : j < Q.c.upv) :
+/-- Copy `j` of unit `u`'s columns in the layer `bits`, as `OpensAtL` reads them. -/
+def colsAt (Q : FlockSoundness.Discharge.Recursion.VStmt) (bits : Q.Bits) (u : Fin Q.nv) {j : ℕ} (hj : j < Q.c.upv) :
     ℕ → Bool :=
-  FlockVBridge.copyVal (FlockVBridge.keyInst Q.hU Q.nv (FlockSoundness.Discharge.Layout.outsOf Q.c Q.hU Q.nv) u) X hj
+  FlockVBridge.copyVal (FlockVBridge.keyInst Q.hU Q.nv (FlockSoundness.Discharge.Layout.outsOf Q.c Q.hU Q.nv) u) bits hj
 
 /-- **An opened row is its copy's row columns**: two layers whose copies agree on the row's `128 · LANES` columns
 open the same row there (`OpensAtL`'s `ColsHold`, `rowBytes_inj`'s bits). -/
-theorem rows_congr {Q : FlockSoundness.Discharge.Recursion.VStmt} {X X' : Q.Bits} {u : Fin Q.nv} {j LANES : ℕ}
+theorem rows_congr {Q : FlockSoundness.Discharge.Recursion.VStmt} {bits bits' : Q.Bits} {u : Fin Q.nv} {j LANES : ℕ}
     {r r' a a' cf cf' A A' : Array F128}
-    (h : FlockVBridge.Family.OpensAtL Q X u j LANES r a cf A)
-    (h' : FlockVBridge.Family.OpensAtL Q X' u j LANES r' a' cf' A')
-    (hc : ∀ hj : j < Q.c.upv, ∀ t < 128 * LANES, colsAt Q X u hj t = colsAt Q X' u hj t) :
+    (h : FlockVBridge.Family.OpensAtL Q bits u j LANES r a cf A)
+    (h' : FlockVBridge.Family.OpensAtL Q bits' u j LANES r' a' cf' A')
+    (hc : ∀ hj : j < Q.c.upv, ∀ t < 128 * LANES, colsAt Q bits u hj t = colsAt Q bits' u hj t) :
     ∀ l : ℕ, r[l]! = r'[l]! := by
   obtain ⟨hj, -, -, _, -, hs, -, hr, -⟩ := h
   obtain ⟨hj', -, -, _, -, hs', -, hr', -⟩ := h'
@@ -137,10 +137,10 @@ every copy of rep `ρ`'s level-`ℓ` openings. -/
 def RowColsRead (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh)
     (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
   ∀ s (ρ : Fin 2) ℓ l, K s ρ (.cons ℓ l) → ℓ < sh.sched.levels.size ∧ ∀ j < M.q ℓ,
-    ∀ (hj : cpO ℓ ρ j < (Vs (M.sessO ℓ)).c.upv) (X X' : (x : Fin S) → (Vs x).Bits),
-      maskOf Vs (skOf Vs own sel) s X = maskOf Vs (skOf Vs own sel) s X' → ∀ t < 128 * levelLanes sh ℓ,
-        colsAt (Vs (M.sessO ℓ)) (X (M.sessO ℓ)) (M.unO ℓ ρ j) hj t =
-          colsAt (Vs (M.sessO ℓ)) (X' (M.sessO ℓ)) (M.unO ℓ ρ j) hj t
+    ∀ (hj : cpO ℓ ρ j < (Vs (M.sessO ℓ)).c.upv) (Lb Lb' : (x : Fin S) → (Vs x).Bits),
+      maskOf Vs (skOf Vs own sel) s Lb = maskOf Vs (skOf Vs own sel) s Lb' → ∀ t < 128 * levelLanes sh ℓ,
+        colsAt (Vs (M.sessO ℓ)) (Lb (M.sessO ℓ)) (M.unO ℓ ρ j) hj t =
+          colsAt (Vs (M.sessO ℓ)) (Lb' (M.sessO ℓ)) (M.unO ℓ ρ j) hj t
 
 /-- **Hypothesis: stage `s` reads `α` at the levels its sums read**: at two accepted outer proofs whose layers agree
 under stage `s`'s mask, rep `ρ`'s `α` agrees at every level `ℓ` of a `.cons ℓ l` key of `K s ρ`. -/
