@@ -269,7 +269,7 @@ def tile_sketch(store, f: W.Field, n: int, kd: int, t: int, s):
 
 def gate_layouts(torch, libs: list[WLib], log) -> dict:
     rng = random.Random(8)
-    n, kd = 64, 1024
+    n, kd = 64, 1536  # whole tasks at 512 and 384 columns
     w = bytes(rng.getrandbits(8) for _ in range(n * kd))
     wt = torch.tensor(list(w), dtype=torch.uint8, device=DEV).view(n, kd)
     out = {}
