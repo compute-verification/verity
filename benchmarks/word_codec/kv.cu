@@ -86,32 +86,51 @@ __device__ __forceinline__ void mul_full(const u32 (&a)[NL], const u32 (&b)[NL],
   t[2 * NL - 1] = c0;
 }
 
-// x = t mod p lazily for t < 2^(2n): lo + c hi, whose carry word h <= c; then h c (< 2^20) into the low limbs, and c once
-// more if that carried out (the limbs are then below 2^20). x < 2^n.
+// One PTX instruction each, so a carry chain is a run of them (`benchmarks/codec_tensor/wt.cu`'s): volatile keeps the
+// compiler from moving anything between the links that would clobber the carry flag.
+__device__ __forceinline__ u32 add_cc(u32 a, u32 b) { u32 r; asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc_cc(u32 a, u32 b) { u32 r; asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 madlo_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("mad.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madclo_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madhi_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("mad.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madchi_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madchi(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+
+// x += a (a < 2^32) into NL limbs; returns the carry out of 2^n.
+__device__ __forceinline__ u32 add_small(u32 (&x)[NL], u32 a) {
+  x[0] = add_cc(x[0], a);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) x[k] = addc_cc(x[k], 0u);
+  return addc(0u, 0u);
+}
+
+// x = t mod p lazily for t < 2^(2n): lo + c hi (the low products' chain, then the high ones' a limb up), whose carry
+// word h <= c; then h c (< 2^20) into the low limbs, and c once more if that carried out (the limbs are then below
+// 2^20). x < 2^n.
 __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
-  u64 v = 0;
+  x[0] = madlo_cc(t[NL], CF, t[0]);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    v += (u64)t[NL + k] * CF + t[k];
-    x[k] = (u32)v;
-    v >>= 32;
-  }
-  v *= CF;
+  for (int k = 1; k < NL; ++k) x[k] = madclo_cc(t[NL + k], CF, t[k]);
+  u32 h = addc(0u, 0u);
+  x[1] = madhi_cc(t[NL], CF, x[1]);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    v += x[k];
-    x[k] = (u32)v;
-    v >>= 32;
-  }
-  if (v) {
-    u64 z = CF;
-#pragma unroll
-    for (int k = 0; k < NL; ++k) {
-      z += x[k];
-      x[k] = (u32)z;
-      z >>= 32;
-    }
-  }
+  for (int k = 2; k < NL; ++k) x[k] = madchi_cc(t[NL + k - 1], CF, x[k]);
+  h = madchi(t[2 * NL - 1], CF, h);
+  if (add_small(x, h * CF)) add_small(x, CF);
 }
 
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
@@ -134,68 +153,50 @@ __device__ __forceinline__ void copy(u32 (&x)[NL], const u32 (&a)[NL]) {
 // x mod p for x < 2^n: x - p = x + c - 2^n when that carries out.
 __device__ __forceinline__ void canon(u32 (&x)[NL]) {
   u32 z[NL];
-  u64 v = CF;
+  z[0] = add_cc(x[0], CF);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    v += x[k];
-    z[k] = (u32)v;
-    v >>= 32;
-  }
-  const bool ge = v != 0;
+  for (int k = 1; k < NL; ++k) z[k] = addc_cc(x[k], 0u);
+  const bool ge = addc(0u, 0u) != 0;
 #pragma unroll
   for (int k = 0; k < NL; ++k) x[k] = ge ? z[k] : x[k];
 }
 
-// x + b mod p, both canonical: a carry out of 2^n is c (a + b - 2^n + c < 2^n), then canonical.
+// x + b mod p, both canonical: s = x + b < 2p, and s - p = s + c - 2^n when s carried out of 2^n or s + c does.
 __device__ __forceinline__ void add_mod(u32 (&x)[NL], const u32 (&b)[NL]) {
-  u64 v = 0;
+  u32 z[NL];
+  x[0] = add_cc(x[0], b[0]);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    v += (u64)x[k] + b[k];
-    x[k] = (u32)v;
-    v >>= 32;
-  }
-  if (v) {
-    u64 z = CF;
+  for (int k = 1; k < NL; ++k) x[k] = addc_cc(x[k], b[k]);
+  const u32 co = addc(0u, 0u);
+  z[0] = add_cc(x[0], CF);
 #pragma unroll
-    for (int k = 0; k < NL; ++k) {
-      z += x[k];
-      x[k] = (u32)z;
-      z >>= 32;
-    }
-  }
-  canon(x);
+  for (int k = 1; k < NL; ++k) z[k] = addc_cc(x[k], 0u);
+  const bool ge = (co | addc(0u, 0u)) != 0;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] = ge ? z[k] : x[k];
 }
 
-// x - b mod p, both canonical: a borrow adds p, i.e. takes c from the wrapped difference (which is then above c).
+// x - b mod p, both canonical: a borrow adds p (limbs 2^32 - c, then all ones), masked by the borrow.
 __device__ __forceinline__ void sub_mod(u32 (&x)[NL], const u32 (&b)[NL]) {
-  u32 br = 0;
+  x[0] = sub_cc(x[0], b[0]);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    const u64 d = (u64)x[k] - b[k] - br;
-    x[k] = (u32)d;
-    br = (u32)(d >> 63);
-  }
-  if (br) {
-    u32 bc = CF;
+  for (int k = 1; k < NL; ++k) x[k] = subc_cc(x[k], b[k]);
+  const u32 m = subc(0u, 0u);
+  x[0] = add_cc(x[0], (0u - CF) & m);
 #pragma unroll
-    for (int k = 0; k < NL; ++k) {
-      const u64 d = (u64)x[k] - bc;
-      x[k] = (u32)d;
-      bc = (u32)(d >> 63);
-    }
-  }
+  for (int k = 1; k < NL - 1; ++k) x[k] = addc_cc(x[k], m);
+  x[NL - 1] = addc(x[NL - 1], m);
 }
 
-// p - s for canonical s: ~s - (c - 1).
-__device__ __forceinline__ void neg(u32 (&s)[NL]) {
-  u32 br = CF - 1;
+// s = p - s when on, s canonical (0 becomes p).
+__device__ __forceinline__ void neg_if(u32 (&s)[NL], bool on) {
+  u32 z[NL];
+  z[0] = sub_cc(0u - CF, s[0]);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    const u64 d = (u64)(~s[k]) - br;
-    s[k] = (u32)d;
-    br = (u32)(d >> 63);
-  }
+  for (int k = 1; k < NL - 1; ++k) z[k] = subc_cc(0xffffffffu, s[k]);
+  z[NL - 1] = subc(0xffffffffu, s[NL - 1]);
+#pragma unroll
+  for (int k = 0; k < NL; ++k) s[k] = on ? z[k] : s[k];
 }
 
 __device__ __forceinline__ bool eq(const u32 (&a)[NL], const u32 (&b)[NL]) {
@@ -237,7 +238,7 @@ __device__ __forceinline__ void rho(u32 (&x)[NL]) {
   sqr(s, q);
   canon(q);
   const bool square = eq(q, x);
-  if ((s[0] & 1) != (square ? 0u : 1u)) neg(s);
+  neg_if(s, (s[0] & 1) != (square ? 0u : 1u));
   copy(x, s);
 }
 
@@ -247,51 +248,43 @@ __device__ __forceinline__ void rho_inv(u32 (&y)[NL]) {
   u32 q[NL];
   sqr(y, q);
   canon(q);
-  if (odd) neg(q);
+  neg_if(q, odd);
   copy(y, q);
 }
 
-// t(i) = tau i mod p: tau i < 2^(n + 64), its two top limbs h folded in as c h, canonical.
+// t(i) = tau i mod p: tau i < 2^(n + 64) (the high word's products only when i >= 2^32), its two top limbs h folded in
+// as c h, canonical.
 __device__ __forceinline__ void tweak(u64 i, u32 (&t)[NL]) {
   const u32 ilo = (u32)i, ihi = (u32)(i >> 32);
   u32 r[NL + 2];
-  u64 v = 0;
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    v += (u64)kTau[k] * ilo;
-    r[k] = (u32)v;
-    v >>= 32;
-  }
-  r[NL] = (u32)v;
-  v = 0;
+  for (int k = 0; k < NL; ++k) r[k] = kTau[k] * ilo;
+  r[1] = madhi_cc(kTau[0], ilo, r[1]);
 #pragma unroll
-  for (int k = 0; k < NL; ++k) {
-    v += (u64)kTau[k] * ihi + r[k + 1];
-    r[k + 1] = (u32)v;
-    v >>= 32;
-  }
-  r[NL + 1] = (u32)v;
-  v = (u64)r[NL] * CF + r[0];
-  t[0] = (u32)v;
-  v >>= 32;
-  v += (u64)r[NL + 1] * CF + r[1];
-  t[1] = (u32)v;
-  v >>= 32;
+  for (int k = 2; k < NL; ++k) r[k] = madchi_cc(kTau[k - 1], ilo, r[k]);
+  r[NL] = madchi(kTau[NL - 1], ilo, 0u);
+  r[NL + 1] = 0;
+  if (ihi) {
+    r[1] = madlo_cc(kTau[0], ihi, r[1]);
 #pragma unroll
-  for (int k = 2; k < NL; ++k) {
-    v += r[k];
-    t[k] = (u32)v;
-    v >>= 32;
-  }
-  if (v) {
-    u64 z = CF;
+    for (int k = 1; k < NL; ++k) r[k + 1] = madclo_cc(kTau[k], ihi, r[k + 1]);
+    r[NL + 1] = addc(0u, 0u);
+    r[2] = madhi_cc(kTau[0], ihi, r[2]);
 #pragma unroll
-    for (int k = 0; k < NL; ++k) {
-      z += t[k];
-      t[k] = (u32)z;
-      z >>= 32;
-    }
+    for (int k = 1; k < NL - 1; ++k) r[k + 2] = madchi_cc(kTau[k], ihi, r[k + 2]);
+    r[NL + 1] = madchi(kTau[NL - 1], ihi, r[NL + 1]);
   }
+  t[0] = madlo_cc(r[NL], CF, r[0]);
+  t[1] = madclo_cc(r[NL + 1], CF, r[1]);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) t[k] = addc_cc(r[k], 0u);
+  u32 co = addc(0u, 0u);
+  t[1] = madhi_cc(r[NL], CF, t[1]);
+  t[2] = madchi_cc(r[NL + 1], CF, t[2]);
+#pragma unroll
+  for (int k = 3; k < NL; ++k) t[k] = addc_cc(t[k], 0u);
+  co = addc(co, 0u);
+  if (co) add_small(t, CF);
   canon(t);
 }
 
