@@ -789,6 +789,18 @@ def test_the_course_finds_the_onset_and_the_offset_of_a_co_tenant_s_effect():
     assert "Course spinners ×4: 1 of 4 never got ready in 60 s" in md
 
 
+def test_the_decay_probe_summarizes_each_burst_before_and_after():
+    P = _load("probe")
+    pt = lambda tags, at=None: {**({} if at is None else {"at_ms": at}), "tags_ms": tags, "raw_ms": 0.72, "l2_ms": 0.1}
+    s = P.decay_summary([{"kind": "gemm-o-fp8", "seconds": 0.01, "pre": [pt(0.84), pt(0.86), pt(0.83)],
+                          "post": [pt(1.2, 0), pt(0.9, 1000)]}])
+    assert s == [{"kind": "gemm-o-fp8", "seconds": 0.01, "before": {"tags_ms": 0.84, "raw_ms": 0.72, "l2_ms": 0.1},
+                  "after": [{"at_ms": 0, "tags_ms": 1.2, "raw_ms": 0.72, "l2_ms": 0.1},
+                            {"at_ms": 1000, "tags_ms": 0.9, "raw_ms": 0.72, "l2_ms": 0.1}]}]
+    with pytest.raises(SystemExit):
+        P.main(["decay", "--out", "x.json"])
+
+
 def test_the_rounds_chain_times_carry_the_device_s_and_the_launch_s():
     turns = object.__new__(CHAIN.Turns)
     turns.plans = {"k": {"arms": {"native-fp8": {"chains": 4, "median_s": 0.002, "device_median_s": 0.0019}}}}

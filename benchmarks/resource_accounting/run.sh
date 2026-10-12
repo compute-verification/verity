@@ -32,6 +32,8 @@
 # and SIDECAR=1 chain.py --sidecar (an idle CUDA context in a second process through the run; not with PROBE).
 # SMI_MS=<ms> (JOINT) samples the leased GPU's clocks, power, temperatures and clock event reasons every <ms> through the
 # lease into $OUT/smi.csv (nvidia-smi, no CUDA context), on the wall time joint.py's anchor maps its passes to.
+# DECAY=1 runs probe.py decay instead (the tag pass before and after GEMM, copy and L2 bursts, no PoUS): the tagger into
+# scratch before the lease, the probe under it into $OUT/decay.json and $OUT/smi.csv.
 # TUNED=<build dir|art:id> (ARMS with native-bf16-tuned or native-fp8-tuned) is the PoUW harness's library for the tuned
 # arms (tuned.py), a build.sh output such as `pouw-harness-build/v1`: its jobs/env.sh gives the cuBLASLt and CUDA runtime
 # 12.9 wheels it links (sonames .so.12, which torch's .so.13 never resolve to) on LD_LIBRARY_PATH, and POUW_HARNESS_LIB, for
@@ -101,6 +103,40 @@ pous_prepare() {
   touch "$S/pous-prepared"
 }
 prepared() { [ -e "$1" ] || { stamp "RUN_FAIL_PHASE: no $1: PHASE=prepare first, over the same SCRATCH"; exit 2; }; }
+# the bandwidth tagger's libbwtag.so once per scratch, refused on a register spill; its build log goes to $OUT
+build_tagger() {
+  if [ ! -f "$S/libbwtag.so" ]; then
+    stamp "tagger build"
+    { "$CUDA/bin/nvcc" --version; "$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -fPIC -shared \
+        benchmarks/bandwidth/tagger.cu -o "$S/libbwtag.so.part"; } > "$S/tagger-build.log" 2>&1 \
+      || { cp "$S/tagger-build.log" "$OUT/"; stamp "RUN_FAIL_TAGGER_BUILD"; tail -20 "$S/tagger-build.log"; exit 14; }
+    if grep -E "[1-9][0-9]* bytes spill" "$S/tagger-build.log"; then
+      cp "$S/tagger-build.log" "$OUT/"; stamp "RUN_FAIL_TAGGER_BUILD: a kernel spills"; exit 14
+    fi
+    sha256sum benchmarks/bandwidth/tagger.cu "$S/libbwtag.so.part" >> "$S/tagger-build.log"
+    mv "$S/libbwtag.so.part" "$S/libbwtag.so"
+  fi
+  cp "$S/tagger-build.log" "$OUT/tagger-build.log"
+}
+
+if [ -n "${DECAY:-}" ]; then
+  if on prepare; then build_tagger; fi
+  on gpu || exit 0
+  prepared "$S/libbwtag.so"
+  stamp "the decay probe under gpu-lease $LEASE (at most $LEASE_MIN min)"
+  export OUT PY S
+  set +e
+  lease bash -c '
+    set -euo pipefail
+    eval "$PICK"
+    exec timeout $((LEASE_MIN * 60 - 30)) "$PY" benchmarks/resource_accounting/probe.py decay --lib "$S/libbwtag.so" \
+      --out "$OUT/decay.json" --smi-csv "$OUT/smi.csv"
+  ' 2>&1 | tee "$OUT/chain.log"
+  rc=${PIPESTATUS[0]}
+  set -e
+  stamp "lease ended, the probe exited $rc"
+  exit "$rc"
+fi
 
 if [ -n "${JOINT:-}" ]; then
   [ -z "${POUS:-}" ] || { stamp "RUN_FAIL_JOINT: JOINT and POUS are two modes"; exit 2; }
@@ -114,18 +150,7 @@ if [ -n "${JOINT:-}" ]; then
   case ",$JOINT," in *,joint,*|*,joint-v1,*) TAGGER="--tagger $S/libbwtag.so" ;; esac
   if on prepare; then
     pous_prepare
-    if [ -n "$TAGGER" ] && [ ! -f "$S/libbwtag.so" ]; then
-      stamp "tagger build"
-      { "$CUDA/bin/nvcc" --version; "$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -fPIC -shared \
-          benchmarks/bandwidth/tagger.cu -o "$S/libbwtag.so.part"; } > "$S/tagger-build.log" 2>&1 \
-        || { cp "$S/tagger-build.log" "$OUT/"; stamp "RUN_FAIL_TAGGER_BUILD"; tail -20 "$S/tagger-build.log"; exit 14; }
-      if grep -E "[1-9][0-9]* bytes spill" "$S/tagger-build.log"; then
-        cp "$S/tagger-build.log" "$OUT/"; stamp "RUN_FAIL_TAGGER_BUILD: a kernel spills"; exit 14
-      fi
-      sha256sum benchmarks/bandwidth/tagger.cu "$S/libbwtag.so.part" >> "$S/tagger-build.log"
-      mv "$S/libbwtag.so.part" "$S/libbwtag.so"
-    fi
-    [ -z "$TAGGER" ] || cp "$S/tagger-build.log" "$OUT/tagger-build.log"
+    [ -z "$TAGGER" ] || build_tagger
   fi
   on gpu || exit 0
   prepared "$S/pous-prepared"; [ -z "$TAGGER" ] || prepared "$S/libbwtag.so"

@@ -25,10 +25,18 @@ starts, after it is ready and after it exits, so the onset and the offset of the
 co-tenant is seen alone.
 
 nvidia-smi reads the clocks before and after each phase (pynvml is not in the harness's venv).
+
+``decay`` (`python probe.py decay`, run.sh ``DECAY=1``) asks why joint v1's tag passes ran at 1.17–1.32 ms (the tag kernel)
+after the chain's GEMMs and at 0.84 ms after a long idle (runs r20261012-051020-03ac, r20261012-035705-85d4): in one process,
+on a store of its own in the tagger's memory, it times (d)'s pass from a scrubbed L2, then a raw read of the store and an
+op on an L2-resident tensor, `DECAY_PRE` times before each burst of `DECAY` and at `DECAY_AT_MS` after its last kernel,
+with nvidia-smi sampling the clocks beside it.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import statistics
 import subprocess
@@ -81,6 +89,15 @@ sys.stdin.read()
 """
 #: the course's co-tenants in turn: (name, script, its arguments, how many)
 COURSE = (("sleeper", SLEEP, [], 1), ("spinners", SPIN, [], SPINNERS), ("context", SECOND, ["idle"], 1))
+#: the decay probe's bursts in turn, (kind, seconds): GEMMs at o (B = 128) and at 8192³, 1 GiB copies through DRAM, an op on
+#: a 32 MB tensor (L2-resident), 8 GiB allocated and freed with no kernel, and nothing
+DECAY = (("none", 2.0), ("gemm-o-bf16", 0.01), ("gemm-o-fp8", 0.01), ("gemm-o-bf16", 2.0), ("gemm-o-fp8", 2.0),
+         ("gemm-big", 2.0), ("copy", 2.0), ("l2", 2.0), ("alloc", 0.0), ("none", 2.0))
+#: ms after a burst's last kernel at which a timed point starts
+DECAY_AT_MS = (0, 1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 20000)
+DECAY_PRE = 3
+DECAY_TAG = "ro-blake3/v1"
+DECAY_SMI = "timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,pstate,clocks_event_reasons.active"
 
 
 def course_summary(series: list[list], marks: dict, after_s: float = COURSE_S[2]) -> dict:
@@ -336,3 +353,139 @@ def run(natives: dict, chains: dict[str, int], uuid: str | None, reserved: set[i
         except Exception as ex:  # noqa: BLE001 - one co-tenant's failure is recorded and the next runs
             out["course"][name] = {"clocks_before": clocks, "error": f"{type(ex).__name__}: {ex}"}
     return out
+
+
+def decay_summary(conditions: list[dict]) -> list[dict]:
+    """Per burst (`decay`'s conditions), the median of its points before it, and each point after it, in ms: the tag kernel,
+    the raw read and the L2 op."""
+    keys = ("tags_ms", "raw_ms", "l2_ms")
+    return [{"kind": c["kind"], "seconds": c["seconds"],
+             "before": {k: statistics.median(p[k] for p in c["pre"]) for k in keys},
+             "after": [{"at_ms": p["at_ms"], **{k: p[k] for k in keys}} for p in c["post"]]} for c in conditions]
+
+
+class _Words:
+    """A device buffer as torch's int64 tensor (`torch.as_tensor`), through the CUDA array interface."""
+
+    def __init__(self, ptr: int, nbytes: int) -> None:
+        self.__cuda_array_interface__ = {"shape": (nbytes // 8,), "typestr": "<i8", "data": (ptr, False), "version": 3}
+
+
+def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, bursts=DECAY, at_ms=DECAY_AT_MS) -> dict:
+    """The decay probe (module docstring) on the one visible GPU, through the bandwidth harness's tagger at `lib`."""
+    import torch
+
+    import joint as J
+    G = J.load_gpu()
+    t = G.Tagger(lib)
+    nbytes = blocks * G.BLOCK_BYTES
+    store, scrub = t.alloc(nbytes), t.alloc(G.SCRUB_BYTES)
+    t.fill_test_store(store, blocks)
+    t.memset(scrub, 0, G.SCRUB_BYTES)
+    ws = t.alloc(t.workspace_bytes(DECAY_TAG, blocks))
+    words = torch.as_tensor(_Words(store, nbytes), device="cuda")
+    a = torch.randn(128, 4096, device="cuda", dtype=torch.bfloat16)
+    w = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)
+    a8, w8, one = a.to(torch.float8_e4m3fn), w.to(torch.float8_e4m3fn), torch.ones((), device="cuda")
+    big = torch.randn(8192, 8192, device="cuda", dtype=torch.bfloat16)
+    src = torch.empty(1 << 30, dtype=torch.uint8, device="cuda")
+    dst, l2 = torch.empty_like(src), torch.ones(8 << 20, device="cuda")
+    ops = {"gemm-o-bf16": (64, lambda: torch.matmul(a, w.t())),
+           "gemm-o-fp8": (64, lambda: torch._scaled_mm(a8, w8.t(), scale_a=one, scale_b=one, out_dtype=torch.bfloat16)),
+           "gemm-big": (2, lambda: torch.matmul(big, big)), "copy": (4, lambda: dst.copy_(src)), "l2": (64, lambda: l2.mul_(1.0))}
+
+    def timed(f) -> float:
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        e0.record()
+        f()
+        e1.record()
+        e1.synchronize()
+        return e0.elapsed_time(e1)
+
+    def point(t0: float) -> dict:
+        t.read_scrub(scrub, G.SCRUB_BYTES)
+        s = time.monotonic()
+        t.tag_pass(DECAY_TAG, store, blocks, J.THROWAWAY, ws)
+        tags_ms, pass_ms = t.last_pass_ms()
+        t.read_scrub(scrub, G.SCRUB_BYTES)
+        raw = timed(lambda: torch.sum(words))
+        l2_ms = timed(lambda: [l2.mul_(1.0) for _ in range(10)])
+        return {"t_s": round(s - t0, 6), "unix_ns": time.time_ns(), "tags_ms": tags_ms, "pass_ms": pass_ms, "raw_ms": raw,
+                "l2_ms": l2_ms}
+
+    def burst(kind: str, seconds: float) -> int:
+        n = 0
+        if kind == "alloc":
+            x = torch.empty(8 << 30, dtype=torch.uint8, device="cuda")
+            del x
+            torch.cuda.empty_cache()
+        elif kind == "none":
+            time.sleep(seconds)
+        else:
+            each, op = ops[kind]
+            end = time.monotonic() + seconds
+            while n == 0 or time.monotonic() < end:
+                for _ in range(each):
+                    op()
+                n += each
+                torch.cuda.synchronize()
+        torch.cuda.synchronize()
+        return n
+
+    for _, op in ops.values():
+        op()
+    t.tag_pass(DECAY_TAG, store, blocks, J.THROWAWAY, ws)
+    torch.cuda.synchronize()
+    smi_proc = None
+    if smi_csv is not None and uuid:
+        smi_proc = subprocess.Popen(["nvidia-smi", "-i", uuid, "--format=csv", "-lms", "20", f"--query-gpu={DECAY_SMI}"],
+                                    stdout=smi_csv.open("w"), stderr=subprocess.STDOUT)
+    conditions = []
+    try:
+        time.sleep(at_ms[-1] / 1e3)
+        for kind, seconds in bursts:
+            pre = []
+            for _ in range(DECAY_PRE):
+                pre.append(point(time.monotonic()))
+                time.sleep(0.1)
+            b0 = time.monotonic()
+            n = burst(kind, seconds)
+            end = time.monotonic()
+            post = []
+            for ms in at_ms:
+                wait = end + ms / 1e3 - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
+                post.append({"at_ms": ms, **point(end)})
+            conditions.append({"kind": kind, "seconds": seconds, "launches": n, "burst_s": round(end - b0, 6), "pre": pre,
+                               "post": post})
+            after = " ".join(f"{p['tags_ms']:.3f}" for p in post)
+            print(f"probe decay: {kind} {seconds} s ({n} launches) before {statistics.median(p['tags_ms'] for p in pre):.3f}"
+                  f" after {after}", flush=True)
+    finally:
+        if smi_proc is not None:
+            smi_proc.terminate()
+            smi_proc.wait()
+        for p in (ws, scrub, store):
+            t.free(p)
+    return {"tag": DECAY_TAG, "blocks": blocks, "bytes": nbytes, "scrub_bytes": G.SCRUB_BYTES, "at_ms": list(at_ms),
+            "device": G.uuid_text(t.device()), "smi": smi(uuid), "conditions": conditions,
+            "summary": decay_summary(conditions)}
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    d = sub.add_parser("decay", help="the tag pass before and after each burst (module docstring)")
+    d.add_argument("--lib", type=Path, required=True, help="the bandwidth tagger's libbwtag.so")
+    d.add_argument("--blocks", type=int, default=1 << 19, help="the store's rows of 2,056 bytes (default E's, 2^19)")
+    d.add_argument("--smi-csv", type=Path, help="nvidia-smi's samples every 20 ms through the probe (GPU_LEASE_UUID's)")
+    d.add_argument("--out", type=Path, required=True)
+    a = ap.parse_args(argv)
+    result = decay(a.lib, a.blocks, a.smi_csv, os.environ.get("GPU_LEASE_UUID"))
+    a.out.write_text(json.dumps(result, indent=1) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
