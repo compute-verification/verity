@@ -51,9 +51,11 @@ measure what is left of each on the card.
   AES-NI; OpenSSL for comparison). `stream.cu` (`bwstream`) is the device's absorb and the streamed window, built with
   `tagger.cu`, and its modes measure the link's ceilings, HBM reads beside the link, the generators, the sustained
   generate-and-copy pipe, the absorb, windows with and without the stream, and the fold read zero copy on a few SMs
-  beside the tag pass (`fold`), behind a frontier the host's generators advance after σ (`foldlive`). `run_stream.sh`
-  is one Attempt: the gates first (the generators against the vectors, the absorb and both fold kernels against the
-  reference, the tag pass's root), then the timings. Its header lists the environment and outputs.
+  beside the tag pass (`fold`), behind a frontier the host's generators advance after σ (`foldlive`), and from the
+  challenger's own process beside the prover's (`foldtwo`, under an MPS daemon that `run_stream.sh` starts with
+  `MPS=1`). `run_stream.sh` is one Attempt: the gates first (the generators against the vectors, the absorb and both
+  fold kernels against the reference, the tag pass's root), then the timings. Its header lists the environment and
+  outputs.
 - `chip.cu` (`bwchip`) measures the on-chip stores that S_chip has to cover: the instruction caches (code-footprint
   sweeps over PTX that it writes and ptxas assembles), whether code and constants share a cache, and where the evicted
   constants come back from; the constant cache, the TLBs, L1 and L2 retention; and how many uniform registers a warp
