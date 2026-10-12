@@ -1321,14 +1321,24 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
             for (int l = 0; l < NL; ++l) x[l] = 0u;
           mbar_wait(bfull + tile % ZB, (tile / ZB) & 1);
           rc_sketch(x, acc, bbuf + tile % ZB * SLOT + (RC == 2 ? 512 * i & (ZW - 1) : 0) + 4 * lane);
-          if (tile % RT == RT - 1 || tile == ntiles - 1) {
-            const int nblk = (ctx + RT * MT - 1) / (RT * MT), blk = (t0 / MT + tile) / RT, gid = lane >> 2, t4 = lane & 3;
+          const int at = t0 / MT + tile;
+          if (at % RT == RT - 1 || tile == ntiles - 1) {
+            const int nblk = (ctx + RT * MT - 1) / (RT * MT), blk = at / RT, gid = lane >> 2, t4 = lane & 3;
             int *vp = rc_sk + ((((size_t)seq * KV_HEADS + g) * nblk + blk) * MDW + i) * 16 * 16;
+            // A block another split shares is summed into sketches the host zeroed; int32 sums in any order are exact.
+            const bool whole = blk * RT * MT >= t0 && min(ctx, (blk + 1) * RT * MT) <= t1;
 #pragma unroll
             for (int h = 0; h < 2; ++h) {
-              *reinterpret_cast<int2 *>(vp + (gid + 8 * h) * 16 + 2 * t4) = make_int2(acc[0][2 * h], acc[0][2 * h + 1]);
-              *reinterpret_cast<int2 *>(vp + (gid + 8 * h) * 16 + 8 + 2 * t4) =
-                  make_int2(acc[1][2 * h], acc[1][2 * h + 1]);
+              int *v0 = vp + (gid + 8 * h) * 16 + 2 * t4, *v1 = v0 + 8;
+              if (whole) {
+                *reinterpret_cast<int2 *>(v0) = make_int2(acc[0][2 * h], acc[0][2 * h + 1]);
+                *reinterpret_cast<int2 *>(v1) = make_int2(acc[1][2 * h], acc[1][2 * h + 1]);
+              } else {
+                atomicAdd(v0, acc[0][2 * h]);
+                atomicAdd(v0 + 1, acc[0][2 * h + 1]);
+                atomicAdd(v1, acc[1][2 * h]);
+                atomicAdd(v1 + 1, acc[1][2 * h + 1]);
+              }
             }
 #pragma unroll
             for (int v = 0; v < 4; ++v) acc[0][v] = acc[1][v] = 0;
@@ -1349,7 +1359,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     const int rem = t1 - t0;
     if constexpr (RC > 0) {
       for (int jt = 0; jt < RLAG && jt * MT < rem; ++jt) {
-        rc_fill<RC>(bbuf + jt * SLOT, jt, 32 * w + lane);
+        rc_fill<RC>(bbuf + jt * SLOT, t0 / MT + jt, 32 * w + lane);
         mbar_arrive(bfull + jt);
       }
     }
@@ -1363,7 +1373,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         const int jt = tile + RLAG;
         const bool next = jt * MT < rem;
         u32 *bs = bbuf + tile % ZB * SLOT;
-        if (RC == 1 && next) rc_fill<1>(bs, jt, 32 * w + lane);
+        if (RC == 1 && next) rc_fill<1>(bs, t0 / MT + jt, 32 * w + lane);
         if constexpr (RC == 2) {
           constexpr int ZL = GROUP / 2;
           const int gid = lane >> 2, t4 = lane & 3;
@@ -2225,9 +2235,14 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
       cudaFuncSetAttribute(kv::attn_mma_ws_kernel<2>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::rc_smem(2));
       set = true;
     }
-    const int bt = kv::RT * kv::MT, per = (ctx + splits - 1) / splits, per_split = (per + bt - 1) / bt * bt;
-    const int sp = (ctx + per_split - 1) / per_split, grid = batch * sp * kv::KV_HEADS, rc = encoded - 9;
+    // RC = 2's B takes the CTA's own PV output two tiles back, so its splits hold whole blocks; RC = 1's B is fixed
+    // rows, so its splits end at any tile and a shared block's partial sketches are summed.
+    const int bt = kv::RT * kv::MT, rc = encoded - 9, unit = rc == 1 ? kv::MT : bt;
+    const int per = (ctx + splits - 1) / splits, per_split = (per + unit - 1) / unit * unit;
+    const int sp = (ctx + per_split - 1) / per_split, grid = batch * sp * kv::KV_HEADS;
+    const uint64_t n = (uint64_t)batch * kv::KV_HEADS * ((ctx + bt - 1) / bt) * kv::MDW * 16;
     const auto *p = static_cast<const uint8_t *>(kv_);
+    if (per_split % bt && cudaMemsetAsync(rc_sk, 0, n * 16 * sizeof(int), s) != cudaSuccess) return launched();
     if (rc == 1)
       kv::attn_mma_ws_kernel<1><<<grid, kv::MWT, kv::rc_smem(1), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k,
                                                                        rc_sk, nullptr);
@@ -2236,7 +2251,6 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
                                                                        rc_sk, rc_zdump);
     kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
     if (rc_tags) {
-      const uint64_t n = (uint64_t)batch * kv::KV_HEADS * ((ctx + bt - 1) / bt) * kv::MDW * 16;
       kv::rc_tag_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
     }
     return launched();
