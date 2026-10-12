@@ -14,7 +14,8 @@
 # once against live peers (one pass, no replay).  GPUS (default 1) is the lease, at least every arm's TP.
 # BATCHES, CONTEXTS and ARM_MIN (default 12 minutes an arm) pass through.  NCU_EXTRA adds metrics (comma-separated) to the
 # two DRAM counters, such as lts__t_sectors_op_write.sum for each kernel's own writes into L2; more than one pass replays
-# each kernel, so keep collectives (TP > 1) to the two.
+# each kernel, so keep collectives (TP > 1) to the two.  LINEAR_BACKEND (vLLM's linear_backend, such as torch) swaps the
+# FP8 GEMM for every arm and marks the tag's model (MODEL_torch), so gamma.py keeps the two GEMMs' arms apart.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -37,10 +38,12 @@ gpu-lease "${GPUS:-1}" --wait --max-min "${MAXMIN:-28}" -- bash -c '
   for arm in $ARMS; do
     unset RANK LOCAL_RANK WORLD_SIZE MASTER_ADDR MASTER_PORT
     IFS=: read -r m layers mode how tp <<< "$arm"
-    tp=${tp:-1}; tag=${m}-L${layers}-${mode}-${how}; [ "$tp" -gt 1 ] && tag=${m}tp${tp}-L${layers}-${mode}-${how}
+    tp=${tp:-1}; mt=$m; [ "$tp" -gt 1 ] && mt=${m}tp${tp}; [ -n "${LINEAR_BACKEND:-}" ] && mt=${mt}_$LINEAR_BACKEND
+    tag=${mt}-L${layers}-${mode}-${how}
     export CUDA_VISIBLE_DEVICES=$(cut -d, -f1-"$tp" <<< "$LEASED")
     model=$M8; [ "$m" = 70b ] && model=$M70
-    A=(--model "$model" --layers "$layers" --batches "$BATCHES" --contexts "$CONTEXTS" --tp "$tp")
+    A=(--model "$model" --layers "$layers" --batches "$BATCHES" --contexts "$CONTEXTS" --tp "$tp"
+       --linear-backend "${LINEAR_BACKEND:-auto}")
     [ "$mode" = c ] && A+=(--compiled)
     P=()
     case $how in

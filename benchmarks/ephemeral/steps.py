@@ -144,6 +144,8 @@ def main() -> None:
     ap.add_argument("--tp", type=int, default=1,
                     help="tensor parallelism, one process a rank (vLLM's external_launcher: RANK, LOCAL_RANK, WORLD_SIZE, "
                          "MASTER_ADDR, MASTER_PORT); rank 0 writes --out, the others --out.rankR")
+    ap.add_argument("--linear-backend", default="auto",
+                    help="vLLM's linear_backend: auto (CUTLASS's FP8 GEMM on sm120) or another, such as torch (_scaled_mm)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     rank = int(os.environ.get("RANK", "0"))
@@ -177,6 +179,8 @@ def main() -> None:
         kw["hf_overrides"] = {"num_hidden_layers": args.layers}
     if args.tp > 1:
         kw.update(tensor_parallel_size=args.tp, distributed_executor_backend="external_launcher")
+    if args.linear_backend != "auto":
+        kw["linear_backend"] = args.linear_backend
     t0 = time.perf_counter()
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t0:.1f} s")
@@ -204,7 +208,7 @@ def main() -> None:
     pc = getattr(vc.compilation_config, "pass_config", None)
     result = {
         "model": args.model, "layers_override": args.layers, "compiled": args.compiled, "tp": args.tp, "rank": rank,
-        "vllm": vllm.__version__,
+        "linear_backend": args.linear_backend, "vllm": vllm.__version__,
         "torch": torch.__version__, "gpu": props.name, "sms": props.multi_processor_count,
         "l2_bytes": getattr(props, "L2_cache_size", None), "kv_tokens": kv_tokens, "block_size": int(cache.block_size),
         "kv_cache_dtype": str(cache.cache_dtype), "attention": attn, "compilation": cc,
