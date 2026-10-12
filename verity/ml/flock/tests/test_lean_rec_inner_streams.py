@@ -544,3 +544,67 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     assert p.returncode == 1, p.stdout + p.stderr
     assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not sparse/rep1's c_31 \(u, inner "
                         rf"round {flip.k}\) of the inner transcript", p.stdout.strip()), p.stdout
+
+
+def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE) -> list[str]:
+    """`rec-inner`'s line at 3f97's table shape (m 25, k_log 22, claims 8 over 3 regions), with the bucket's RecSparse shape
+    and R's when given (`rec-inner --sparse`, META's `stacked`)."""
+    j = {"format": "verity/rec-inner/v1", "m": 25, "k_log": 22, "claims": 8, "regions": 3,
+         **({"sparse": list(sparse)} if sparse else {}), **({"stacked": stacked} if stacked else {})}
+    return ["--rec-inner", str(_write(tmp_path / "rec-inner.json", j))]
+
+
+def _covers(tmp_path: Path, shape: list[str], transcript: Path | None = None) -> tuple[int, str]:
+    d = _fixture(C3)
+    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
+                        "--rec-inner-session", str(d / "prover"), *_inner(), *shape], capture_output=True, text=True)
+    return p.returncode, p.stderr.strip()
+
+
+NO_SPARSE = ("rec-inner: the inner transcript holds candidate 3's sparse phases, and the verifier's inner shape names no "
+             "RecSparse shape (rec-inner --sparse): its V* list would have no RecSparse statement")
+
+
+@pytest.mark.parametrize("sparse,stacked,why", [
+    (SPARSE, R_SHAPE, ""),
+    (None, R_SHAPE, NO_SPARSE),
+    (None, None, NO_SPARSE),
+    (SPARSE, None, "rec-inner: the inner transcript holds R's stream (stacked/rep0), and the verifier's inner shape names no "
+     "shape of R (stacked): its V* list would have no level of R's or R's opening"),
+    (SPARSE, {"m": 24, "claims": 2}, "rec-inner: the verifier's inner shape names R's shape (m 24, claims 2), and the inner "
+     "circuit's META (m 23, claims 2) (stacked)"),
+], ids=["honest", "no-sparse", "plain", "no-r", "r-m24"])
+def test_the_verifiers_inner_shape_covers_candidate_3s_session(tmp_path, sparse, stacked, why):
+    """`RecVStar.checkCovers`, as `verify` and `statement` run it beside the V* checks: 3f97's session has both sparse phases
+    and R's stream, so the verifier's inner shape names the bucket's RecSparse shape and META's R, else its V* list would
+    leave RecSparse, R's levels or R's opening out; each shape short of that is refused by name."""
+    assert _covers(tmp_path, _shape(tmp_path, sparse, stacked)) == (0 if not why else 1, why)
+
+
+def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_path):
+    """The plain session (`rec-coins`' inner session, two reps and no other stream) passes under its own inner shape, and is
+    refused under one naming the bucket's RecSparse shape: the shape names a phase the session does not have."""
+    d = _fixture(PLAIN)
+    run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(d / "public.json"),
+                                        "--rec-inner-session", str(d / "session"), *shape], capture_output=True, text=True)
+    p = run(["--rec-inner", str(_write(tmp_path / "plain.json", {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22,
+                                                                 "claims": 8, "regions": 3}))])
+    assert p.returncode == 0 and p.stdout.startswith('RECTRANSCRIPT {"reps":[78,78],"streams":[]}'), p
+    p = run(_shape(tmp_path, stacked=None))
+    assert p.returncode == 1 and p.stderr.strip() == (
+        "rec-inner: the verifier's inner shape names a RecSparse shape (--sparse), and the inner transcript holds no sparse "
+        "phase"), p
+
+
+def test_rec_inner_refuses_r_without_the_sparse_shape():
+    """`rec-inner` reads R's shape from the inner circuit's META (3f97's header) and refuses it without the bucket's RecSparse
+    shape (`--sparse`), before it reads the circuit's tables: R opens the sparse phase's claims. A `--sparse` that is not
+    four numbers is refused as the flag reads."""
+    d = _fixture(C3)
+    base = [str(BIN), "rec-inner", "--circuit", str(d / "circuit-meta.txt"), "--public", str(d / "public.json")]
+    p = subprocess.run(base, capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() + p.stderr.strip() == (
+        "rec-inner: the inner circuit's META names R's shape (m 23, claims 2), and the verifier names no RecSparse shape "
+        "(--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse"), p
+    p = subprocess.run([*base, "--sparse", "18,13,6"], capture_output=True, text=True)
+    assert p.returncode == 2 and p.stderr.strip() == "--sparse 18,13,6: NU,ELL,S_LOG,T_LOG, four natural numbers", p
