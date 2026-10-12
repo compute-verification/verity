@@ -738,7 +738,7 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 TR_WORDS = 8  # tf.cu's trace words a chain link
 # The leaves beside the chain on SMs / 2 or SMs / 4 long-lived CTAs (a grid-stride b3_leaves, gated node for node) are a
 # wash (r20261012-130143-799b: 1.098, 1.096 vs 1.096 at M = 1): the commit costs its issue wherever it runs.
-PIPE_PLANS = ("px",)
+PIPE_PLANS = ("px", "psy")
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
 # one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones. So do two quads
 # of register prefetch on gate_up and down (r20261012-114545-aca3: 1.089 vs 1.065 at M = 1), letting the next launch
@@ -756,7 +756,8 @@ PX = {"qkv": 0, "o": 0, "gate_up": 0}
 CAP_PLANS = {"p": {}, "px": PX, "psy": PX}
 # Per plan, shapes whose padding leaves room for one CTA of the named next shape (its CTAs then start beside them).
 LEAVE_PLANS: dict[str, dict[str, str]] = {}
-# tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 a CTA's warps in step (a barrier a quad)
+# tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 a CTA's warps in step (a barrier a quad; at M <= 8 it
+# wins, r20261012-133232-185b: 1.051 vs 1.064 at M = 1, and at M = 16 it loses, 1.073 vs 1.056)
 PROBE_PLANS = {"psy": 3}
 TRACE_BATCHES = (1, 8)
 
@@ -784,7 +785,8 @@ At TRACE_BATCHES, nativepx and tagpx4 once more with tf.cu's trace (globaltimer 
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
     proberpx4, noendpx4  the same two in tagpx4's chain
-    tagonlypx4  tagpx4's chain without the GEMM (tags only; a diagnostic)
+    tagonlypx4  tagpx4's chain without the GEMM (tags only; a diagnostic: r20261012-133232-185b, 1.067 vs tagpx4's
+                1.064 at M = 1, so the GEMM hides wholly in the tag's time)
     """
     names = list(layout.SHAPES)
     copies = {name: [] for name in names}
