@@ -91,14 +91,16 @@ def _audit(event: str, args: tuple) -> None:
             _forked.seen(event, args, _current, _test)
         return
     try:
-        hit = _tracer.trace(event, args) if _tracer is not None else None
+        hits = _tracer.trace(event, args) if _tracer is not None else []
     except (TypeError, ValueError):
-        hit = None
-    if hit is not None:
-        if hit[0] == "X":
-            _untraced.setdefault(_current, set()).add(hit[1])
+        hits = []
+    for kind, rel in hits:
+        if kind == "X":
+            _untraced.setdefault(_current, set()).add(rel)
+        elif kind == "O":
+            _outside.add(rel)
         else:
-            _traced.add(f"{hit[0]}\t{hit[1]}")
+            _traced.add(f"{kind}\t{rel}")
     if event == "import":
         if args and isinstance(args[0], str):
             _tried.add(args[0].partition(".")[0])

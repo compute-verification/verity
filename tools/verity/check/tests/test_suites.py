@@ -1224,17 +1224,49 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.classify(str(tmp_path / "lib" / "__pycache__" / "other.cpython-314.pyc")) == ("O", "lib/__pycache__/other.cpython-314.pyc")
     assert r.traced(str(tmp_path / "lib" / "data.json")) == "lib/data.json" and r.traced("/elsewhere/x") is None
     assert r.traced(str(Path(child) / "sitecustomize.py")) is None
-    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == ("F", "lib/a.py")
-    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == ("L", "lib")
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) is None
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == ("X", sys.executable)
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == ("X", sys.executable)
-    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == ("X", "git")
-    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == ("X", "uv")
-    assert r.trace("os.system", ("ls",)) == ("X", "os.system")
-    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) is None       # a machine probe reads no repository file
+    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == [("F", "lib/a.py")]
+    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == [("L", "lib")]
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == []
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == [("X", sys.executable)]
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == [("X", sys.executable)]
+    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == [("X", "git")]
+    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == [("X", "uv")]
+    assert r.trace("os.system", ("ls",)) == [("X", "os.system")]
+    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) == []       # a machine probe reads no repository file
     monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == ("X", sys.executable)
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
+
+
+def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):
+    """A Lean executable the suite declares under `artifacts` reads what its arguments name, so the tests that start it keep
+    traced per-test keys: its run is the files it was given (a file with those beside it, a directory whole), outside the inputs
+    a failure; `lake build` of declared outputs reads nothing the key doesn't hold. Any other program is still untraced."""
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    pkg, bin_ = tmp_path / "lean", tmp_path / "lean" / ".lake" / "build" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "verify").write_text("")
+    (bin_ / "other").write_text("")
+    for f in ("fx/a.bin", "fx/b.bin", "fx/sub/c.json", "out/x.bin"):
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text("")
+    monkeypatch.setenv("VERITY_SUITE_ROOT", str(tmp_path))
+    monkeypatch.setenv("VERITY_SUITE_ALLOW", '["fx"]')
+    monkeypatch.setenv("VERITY_SUITE_PROGRAMS", '["lean/.lake/build/bin/verify"]')
+    r = R.Reads()
+    exe = str(bin_ / "verify")
+    pop = lambda argv, cwd=None: r.trace("subprocess.Popen", (None, argv, cwd, None))     # noqa: E731
+    assert pop([exe, "check", "--circuit", str(tmp_path / "fx" / "a.bin"), "/elsewhere/tmp/p.bin"]) == [("F", "fx/a.bin"), ("F", "fx/b.bin")]
+    assert pop([exe, "--dir=fx/sub"], cwd=tmp_path) == [("F", "fx/sub/c.json")]
+    assert pop([exe, "out/x.bin"], cwd=tmp_path) == [("F", "out/x.bin"), ("O", "out/x.bin")]
+    monkeypatch.chdir(tmp_path)
+    assert r.trace("os.posix_spawn", (exe, [exe, "fx"], None)) == [("F", "fx/a.bin"), ("F", "fx/b.bin"), ("F", "fx/sub/c.json")]
+    assert pop(["lake", "build", "verify"], cwd=pkg) == []
+    assert pop(["lake", "build", "verify", "other"], cwd=pkg) == [("X", "lake")]
+    assert pop(["lake", "env", "lean", "x.lean"], cwd=pkg) == [("X", "lake")]
+    assert pop([str(bin_ / "other"), "fx"]) == [("X", str(bin_ / "other"))]
+    assert pop(["verify", "fx"], cwd=bin_) == [("X", "verify")]                         # found on PATH: not the declared one
 
 
 def _guard(monkeypatch):
