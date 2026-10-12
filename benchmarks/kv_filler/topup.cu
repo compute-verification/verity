@@ -912,8 +912,9 @@ extern "C" {
 
 // Starts fill-sk16/v1 on `device` over `n` regions (16-byte aligned) under `seed`: BASE kernels of `base_ctas` CTAs
 // (0: none) of `warps` warps, `base_budget` units each; epochs of 2^shift units. The IDLE kernels wait for sq_idle(1).
+// BASE and IDLE run at stream `priority`, STEP at `step_priority`.
 int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, const uint8_t* seed, int base_ctas,
-             int warps, uint64_t base_budget, int shift, int priority) {
+             int warps, uint64_t base_budget, int shift, int priority, int step_priority) {
   if (sq::S || n <= 0 || shift < 0 || shift > 20 || (warps != 4 && warps != 8 && warps != 16)) return -1;
   std::vector<tu::Region> regions;
   for (int k = 0; k < n; ++k) regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
@@ -930,8 +931,9 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaSetDevice(device));
   CK(cudaDeviceGetAttribute(&st->sms, cudaDevAttrMultiProcessorCount, device));
   if (int rc = tu::gate_set(-1, -1, true)) return rc;
-  for (cudaStream_t* s : {&st->s_base, &st->s_idle, &st->s_step})
+  for (cudaStream_t* s : {&st->s_base, &st->s_idle})
     CK(cudaStreamCreateWithPriority(s, cudaStreamNonBlocking, priority));
+  CK(cudaStreamCreateWithPriority(&st->s_step, cudaStreamNonBlocking, step_priority));
   CK(cudaStreamCreateWithFlags(&st->s_h, cudaStreamNonBlocking));
   CK(cudaEventCreate(&st->start));
   CK(cudaEventCreateWithFlags(&st->base_done[0], cudaEventDisableTiming));

@@ -136,7 +136,7 @@ class Seq:
         v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
         so = self.so = tu.so
         self.tu = tu
-        so.sq_start.argtypes = [i, v, v, i, v, i, i, q, i, i]
+        so.sq_start.argtypes = [i, v, v, i, v, i, i, q, i, i, i]
         so.sq_idle.argtypes = [i, q]
         so.sq_step_begin.argtypes = [i, v]
         so.sq_step_end.argtypes = [v]
@@ -145,10 +145,11 @@ class Seq:
         so.sq_now_ms.restype = d
 
     def start(self, regions, seed: bytes, base_ctas: int, warps: int = 4, base_budget: int = 0, shift: int = 8,
-              priority: int = 0, device: int = 0) -> None:
+              priority: int = 0, step_priority: int | None = None, device: int = 0) -> None:
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
         sizes = (ctypes.c_uint64 * len(regions))(*[n for _, n in regions])
-        rc = self.so.sq_start(device, ptrs, sizes, len(regions), seed, base_ctas, warps, base_budget, shift, priority)
+        rc = self.so.sq_start(device, ptrs, sizes, len(regions), seed, base_ctas, warps, base_budget, shift, priority,
+                              priority if step_priority is None else step_priority)
         if rc:
             raise RuntimeError(f"sq_start error {rc}")
 

@@ -162,6 +162,8 @@ def main() -> int:
     ap.add_argument("--fill-chunk-mib", type=int, default=512)
     ap.add_argument("--token-gate", type=int, default=0)
     ap.add_argument("--seq-shift", type=int, default=8, help="seq: epochs of 2^shift units of 128 KiB")
+    ap.add_argument("--seq-step-priority", choices=("greatest", "least"), default="greatest",
+                    help="seq: the STEP kernels' stream priority (IDLE's is the least)")
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
@@ -261,8 +263,8 @@ def main() -> int:
     sq = Seq(tu)
     tu.so.tu_pause.argtypes = [ctypes.c_int]
     tu.so.tu_throttle.argtypes = [ctypes.c_int]
-    least, _ = torch.cuda.Stream.priority_range()
-    least = max(least, _)
+    least, greatest = torch.cuda.Stream.priority_range()
+    least, greatest = max(least, greatest), min(least, greatest)
     eside = torch.cuda.Stream(priority=least)
     vocab = eng.vllm_config.model_config.hf_config.vocab_size
 
@@ -440,7 +442,8 @@ def main() -> int:
             if top == "seq":
                 if mode not in FILL_WARPS:
                     continue
-                sq.start(regions, RUN_SEED, base_ctas=0, warps=FILL_WARPS[mode], shift=a.seq_shift, priority=least)
+                sq.start(regions, RUN_SEED, base_ctas=0, warps=FILL_WARPS[mode], shift=a.seq_shift, priority=least,
+                         step_priority=greatest if a.seq_step_priority == "greatest" else least)
                 tu.so.sq_idle(1, 0)
                 cur["seq_step"] = ctas
                 if a.token_gate:
