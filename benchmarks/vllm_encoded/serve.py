@@ -484,6 +484,8 @@ def main() -> None:
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [int(x) for x in args.contexts.split(",")]
+    if max(batches) > max(CAPTURE):
+        ap.error(f"a decode batch is at most the largest capture size, {max(CAPTURE)}")
     if args.compiled:
         # the cache key doesn't cover the installed linears: a cached stock graph would bypass them
         os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
@@ -513,7 +515,9 @@ def main() -> None:
         # vLLM's combo kernels, without the benchmark that picks them; inductor's deterministic mode skips every other
         # on-device benchmark that affects numerics (reduction configs among them)
         cc["inductor_compile_config"] = {"deterministic": True, "combo_kernels": True, "benchmark_combo_kernel": False}
-    kw = {"model": args.model, "quantization": "fp8", "max_num_seqs": max(batches), "enable_prefix_caching": False, "seed": 0,
+    # every arm's engine holds the largest capture size's requests: the gate prompts are scheduled the same in an arm timing
+    # fewer batches, and the warmup's dummy batch (max_num_batched_tokens) fits max_num_seqs · max_model_len
+    kw = {"model": args.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE), "enable_prefix_caching": False, "seed": 0,
           "max_model_len": max(contexts) + max_tokens_cap + 64, "max_num_batched_tokens": args.max_batched_tokens,
           "gpu_memory_utilization": args.mem, "enforce_eager": False, "compilation_config": cc}
     if args.revision:
