@@ -22,6 +22,9 @@ protocol that reads `mem_X` as what `X` can know at a challenge (PoUS's responde
 B3 of `note:console/20261012T0645Z-draft-actual-circuit-model` v2.1) needs causality in its Markov form: what `X` does
 in `[t, t')` is a function of the values of the gates it carries across `t` and of what it reads from outside in
 `[t, t')`.
+
+That form isn't too strong: on one circuit it holds (`region_determined`), since two faithful transcripts that agree
+on what `X` carries and hears agree on what it runs. Only a circuit that varies with the coins can break it.
 -/
 
 namespace Accounting.SecurityProofs.Actual.Markov
@@ -227,3 +230,35 @@ theorem not_markov :
   ⟨locallyCausal, inputs_prover, feasible, ⟨rfl, rfl⟩, fun b => ⟨state_zero b, ingress_zero b⟩, window_ne⟩
 
 end Accounting.SecurityProofs.Actual.Markov
+
+namespace Accounting.SecurityProofs.Actual
+
+open Verity Finset
+
+variable {L : Type*} (A : Placed L)
+
+/-- **One circuit meets the Markov form.** Two faithful transcripts of one actual circuit that agree on the gates `X`
+carries across `t` (those `state X t` counts) and on the gates outside `X` that `A[X, [t, t'))` reads agree on
+`A[X, [t, t'))`, when wires run forward in time inside `X`. So a strategy whose circuit doesn't depend on the coins
+meets the Markov form, and the counterexamples above use a circuit that does. -/
+theorem region_determined (X : Finset L) (t t' : ℕ) (hF : A.Forward X) (v v' : A.Transcript)
+    (hv : ∀ g, A.isInput g = false → v g = A.op g v) (hv' : ∀ g, A.isInput g = false → v' g = A.op g v')
+    (hc : ∀ a ∈ A.into (A.region X (Set.Ici t)), A.x a ∈ X → v a = v' a)
+    (hh : ∀ a ∈ A.into (A.region X (Set.Ico t t')), A.x a ∉ X → v a = v' a) :
+    ∀ g ∈ A.region X (Set.Ico t t'), v g = v' g := by
+  intro g
+  induction g using WellFoundedLT.induction with
+  | _ g ih =>
+    intro hg
+    obtain ⟨hgi, hgx, hgt⟩ := (mem_region A).1 hg
+    rw [hv g hgi, hv' g hgi]
+    refine A.op_congr g v v' fun a ha => ?_
+    by_cases har : a ∈ A.region X (Set.Ico t t')
+    · exact ih a (A.reads_lt g a ha) har
+    by_cases hx : A.x a ∈ X
+    · refine hc a ((mem_into A).2 ⟨fun ha' => har ?_, g, (mem_region A).2 ⟨hgi, hgx, hgt.1⟩, ha⟩) hx
+      obtain ⟨hai, -, hat⟩ := (mem_region A).1 ha'
+      exact (mem_region A).2 ⟨hai, hx, hat, (hF g a ha hai hx hgx).trans_lt hgt.2⟩
+    · exact hh a ((mem_into A).2 ⟨har, g, hg, ha⟩) hx
+
+end Accounting.SecurityProofs.Actual
