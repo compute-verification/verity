@@ -26,9 +26,12 @@ words:
 
 `write`: the step's new tokens' encode (batch x layers x a token-layer's words) at each k: alone (queued behind a spin),
 at the compute-only rate, and beside the step's weight GEMM (cuBLASLt FP8 at the model's linears, every layer's own
-cold weights) on a second stream of lower priority, at several grids, against the GEMM alone; then with CARVEOUTS SMs
-taken from the GEMM (torch's SM carveout, cuBLASLt's SM count target) and the encode at CARVE_GRIDS CTAs a carved-out
-SM: the GEMM alone on the rest, and both.
+cold weights) on a second stream of lower priority, at several grids and at each of ENC_SMEM_CARVEOUTS (the encode's
+preferred shared memory carveout: an SM the encode reaches first is set to the encode's carveout and takes the GEMM's
+CTAs only if it fits their shared memory, so at the driver's choice whether the two overlap depends on which reaches
+an SM first), against the GEMM alone; then with CARVEOUTS SMs taken from the GEMM (torch's SM carveout, cuBLASLt's SM
+count target) and the encode at CARVE_GRIDS CTAs a carved-out SM and the most shared memory: the GEMM alone on the
+rest, and both.
 """
 from __future__ import annotations
 
@@ -62,6 +65,7 @@ SPLITS = (1, 2, 4, 8, 16)
 RTOL = {0: 1e-3, 3: 8e-3}  # the tensor-core form rounds P to bf16
 SPIN = 60_000_000
 WRITE_GRIDS = (0, 1, 2, 4)  # the encode's grid beside the GEMM: a thread a word (0), or this many CTAs an SM
+ENC_SMEM_CARVEOUTS = (-1, 100)  # the encode's preferred shared memory carveout: the driver's choice, the most
 CARVEOUTS = (24, 47, 94)  # SMs taken from the GEMM (cuBLASLt's SM count target) for the encode beside it
 CARVE_GRIDS = (1, 2, 4, 6)  # the encode's CTAs a carved-out SM
 OCC_CTAS = (2, 3, 4)  # the read-and-decode's floor at this many CTAs an SM
@@ -369,12 +373,19 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
             kr = {"sm_s": n / enc_rates[k]["per_s"], "grids": {}}
             for gr in WRITE_GRIDS:
                 grid = gr * sms
-                both(False, grid, k)
-                t_enc = statistics.median([both(False, grid, k) for _ in range(reps)])
-                t_both = statistics.median([both(True, grid, k) for _ in range(reps)])
-                kr["grids"][gr] = {"grid": grid, "alone_s": t_enc, "with_gemm_s": t_both,
-                                   "hidden_s": t_gemm + t_enc - t_both,
+                by = {}
+                for cv in ENC_SMEM_CARVEOUTS:
+                    lib.call("kv_encode_carveout", cv)
+                    both(False, grid, k)
+                    t_enc = statistics.median([both(False, grid, k) for _ in range(reps)])
+                    t_both = statistics.median([both(True, grid, k) for _ in range(reps)])
+                    by[cv] = {"alone_s": t_enc, "with_gemm_s": t_both, "hidden_share": (t_gemm + t_enc - t_both) / t_enc}
+                cv = min(by, key=lambda c_: by[c_]["with_gemm_s"])
+                t_enc, t_both = by[cv]["alone_s"], by[cv]["with_gemm_s"]
+                kr["grids"][gr] = {"grid": grid, "alone_s": t_enc, "with_gemm_s": t_both, "smem_carveout": cv,
+                                   "by_smem_carveout": by, "hidden_s": t_gemm + t_enc - t_both,
                                    "hidden_share": (t_gemm + t_enc - t_both) / t_enc}
+            lib.call("kv_encode_carveout", 100)
             best = min(kr["grids"], key=lambda g_: kr["grids"][g_]["with_gemm_s"] - t_gemm)
             kr["best_grid"] = best
             kr["alone_s"] = min(v["alone_s"] for v in kr["grids"].values())
@@ -395,12 +406,14 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
                 cr["best_grid"] = min(cr["grids"], key=lambda g_: cr["grids"][g_]["with_gemm_s"])
                 cr["exposed_s"] = cr["grids"][cr["best_grid"]]["with_gemm_s"] - t_gemm
                 kr["carveouts"][co] = cr
-            kr["exposed_carved_s"] = min(v["exposed_s"] for v in kr["carveouts"].values())
+            lib.call("kv_encode_carveout", -1)
+            kr["exposed_carved_s"] = min((v["exposed_s"] for v in kr["carveouts"].values()), default=math.nan)
             row["k"][k] = kr
             log(f"write {lib.name} B={b} k={k}: {n * f.word_bytes / 1e6:.1f} MB; encode alone {kr['alone_s'] * 1e3:.2f} ms "
                 f"(compute-only rate {kr['sm_s'] * 1e3:.2f} ms); GEMM alone {t_gemm * 1e3:.2f} ms "
                 f"({row['gemm_gbps']:.0f} GB/s); beside it " + ", ".join(
-                    f"grid {g_}: +{(v['with_gemm_s'] - t_gemm) * 1e3:.2f} ms ({v['hidden_share']:.0%} hidden)"
+                    f"grid {g_}: +{(v['with_gemm_s'] - t_gemm) * 1e3:.2f} ms ({v['hidden_share']:.0%} hidden; "
+                    + "/".join(f"{c_}: {w['hidden_share']:.0%}" for c_, w in v["by_smem_carveout"].items()) + ")"
                     for g_, v in kr["grids"].items()))
             log(f"write {lib.name} B={b} k={k}: with SMs carved out of the GEMM, " + "; ".join(
                 f"{co} SMs: GEMM {cr['gemm_s'] * 1e3:.2f} ms, both {cr['grids'][cr['best_grid']]['with_gemm_s'] * 1e3:.2f}"

@@ -1223,6 +1223,13 @@ int kv_encode(const void *in, void *out, uint64_t n, uint64_t base, int k, int g
   return launched();
 }
 
+// The encode's preferred shared memory carveout (percent of the SM's L1 and shared memory, -1 the driver's choice). An
+// SM holding the encode's CTAs takes another kernel's CTAs only when its carveout fits their shared memory, so beside a
+// GEMM the encode asks for the most.
+int kv_encode_carveout(int pct) {
+  return (int)cudaFuncSetAttribute(kv::encode_kernel, cudaFuncAttributePreferredSharedMemoryCarveout, pct);
+}
+
 int kv_decode(const void *in, void *out, uint64_t n, uint64_t base, int k, int grid, unsigned long long *xr,
               cudaStream_t s) {
   if (k < 1 || k > kv::KMAX || (!out && !xr)) return -1;
