@@ -1,10 +1,10 @@
-"""Every repository path a tracked shell script puts on `PYTHONPATH` exists.
+"""Every repository path a tracked shell script, or a shell line a Python script builds, puts on `PYTHONPATH` exists.
 
 A dead entry fails the suite read guard: `importlib.metadata` opens a missing entry as a zip, and the guard counts that open
 as a read outside the suite's inputs, so a pod script that keeps a path the tree no longer has breaks every suite it runs.
 An entry is checked when it is `$REPO`, `$SRC`, `$PWD`, `$T`, `$ROOT` or `$TREE` (braced or not) followed by a path with no
-further `$`, `{` or `}` (a `${PYTHONPATH:-...}` default is not read); it exists when it resolves, `..` included, from the root or from the script's directory or one of its
-ancestors, since each script sets that variable to its own checkout or package directory.
+further `$`, `{` or `}` (a `${PYTHONPATH:-...}` default is not read); it exists when it resolves from the root. One that climbs with `..` resolves from the script's directory or one of its
+ancestors instead, since that script sets its variable to its own package directory.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ _ENTRY = re.compile(r"^\$(?:\{(?:REPO|SRC|PWD|T|ROOT|TREE)\}|(?:REPO|SRC|PWD|T|R
 
 def _resolves(script: str, rel: str) -> bool:
     parts = script.split("/")[:-1]
-    bases = ["/".join(parts[:i]) for i in range(len(parts), -1, -1)]
+    bases = ["/".join(parts[:i]) for i in range(len(parts), -1, -1)] if rel.startswith("..") else [""]
     for base in bases:
         path = posixpath.normpath(posixpath.join(base, rel.rstrip("/")))
         if not path.startswith("..") and (ROOT / path).exists():
@@ -30,7 +30,7 @@ def _resolves(script: str, rel: str) -> bool:
 def test_pythonpath_entries_exist() -> None:
     dead = []
     for script in _tracked():
-        if not script.endswith(".sh") or script.startswith("archive/"):
+        if not script.endswith((".sh", ".py")) or script.startswith("archive/"):
             continue
         for value in _ASSIGN.findall((ROOT / script).read_text(errors="replace")):
             for entry in value.strip("\"'").split(":"):
