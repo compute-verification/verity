@@ -27,10 +27,12 @@ export LIBSET=${LIBSET:-split wide dense}
 B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 if [ "${KV:-0}" = 1 ]; then
   LIBS=()
-  for n in ${KV_FIELDS:-512 768}; do
+  for f in ${KV_FIELDS:-512 768}; do
+    n=${f%k1} lib=p${f/k1/-k1} kara=0
+    [ "$f" != "$n" ] && kara=1
     nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
-      -o "$B/kv-p$n.so" $WC/kv.cu > "$O/kv-p$n.ptxas" 2>&1 || { tail -30 "$O/kv-p$n.ptxas"; exit 4; }
-    LIBS+=(--lib "p$n=$B/kv-p$n.so")
+      -DKV_KARATSUBA=$kara -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
+    LIBS+=(--lib "$lib=$B/kv-$lib.so")
   done
   sha256sum "$B"/*.so > "$O/libs.sha256"
   if "$PY" -c 'import pytest' 2> /dev/null; then

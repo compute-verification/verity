@@ -75,7 +75,9 @@ class Lib:
         so.kv_spin.argtypes = [ctypes.c_longlong, v]
         so.kv_attn_shape.argtypes = [v]
         so.kv_attn.argtypes = [v, i, v, v, v, i, i, i, i, i, i, v]
-        self.field = K.field(name)
+        so.kv_karatsuba.restype = i
+        self.field = K.field(name.split("-")[0])
+        self.karatsuba = so.kv_karatsuba()
         if so.kv_bits() != self.field.n:
             raise RuntimeError(f"{name}: the library is built for {so.kv_bits()} bits")
         self.kmax = so.kv_kmax()
@@ -272,7 +274,8 @@ def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
             x = words / e["per_s"] / NATIVE_70B_S
             out.append({"schema": RATES_SCHEMA, "lane": "ra-word-codec", "b": f.n, "field": f"2^{f.n}-{f.c}",
                         "lib": lib.name, "k": int(k),
-                        "arithmetic": "cuda-int32/thread-per-word/column" + ("/streamed-fold" if f.limbs > 24 else ""),
+                        "arithmetic": "cuda-int32/thread-per-word/column"
+                        + ("/karatsuba-1" if lib.karatsuba else "/streamed-fold" if f.limbs > 24 else ""),
                         "squarings_per_s": r["square_s"], "sm_clocks_per_squaring": res["sms"] * hz / r["square_s"],
                         "roots_per_s": e["per_s"] * int(k), "encode_words_per_s": e["per_s"],
                         "root_over_squaring_floor": e["per_s"] * int(k) / r["encode_floor_words_s"],
@@ -573,7 +576,7 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--lib", action="append", required=True, help="NAME=PATH, NAME a field of kv.FIELDS")
+    ap.add_argument("--lib", action="append", required=True, help="NAME=PATH, NAME a field of kv.FIELDS (or FIELD-TAG)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ks", default="1,2,4,6")
     ap.add_argument("--attn-ks", default="1", help="the rounds `attention` decodes inside attention at (empty: none)")
