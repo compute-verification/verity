@@ -398,6 +398,12 @@ static std::string stats(const std::vector<double>& v) {
          ",\"max\":" + num(s.back()) + ",\"p90\":" + num(s[(size_t)(0.9 * (s.size() - 1))]) + "}";
 }
 
+static std::string each(const std::vector<double>& v) {
+  std::string s = "[";
+  for (size_t i = 0; i < v.size(); ++i) s += (i ? "," : "") + num(v[i]);
+  return s + "]";
+}
+
 static std::string hex(const uint8_t* p, size_t n) {
   static const char* d = "0123456789abcdef";
   std::string s;
@@ -2088,6 +2094,9 @@ static int fold_two_challenger(const Args& a, Two& sh) {
   std::atomic<uint64_t> next{0};
   uint32_t w = 0, epoch = 0;
   Timer ft;
+  // one launch behind a stale frontier with a 1 ns deadline (it folds nothing), so no window pays for loading the module
+  fold_live<<<*std::max_element(a.fold_ctas.begin(), a.fold_ctas.end()), 1024, 0, s_fold>>>(
+      src, 128, dout, fr, a.live_slot / 1024, 1, 1, dsteps);
   OK(cudaDeviceSynchronize());
   sh.challenger_ready.store(1, std::memory_order_release);
   const uint64_t deadline_ns = (uint64_t)(a.deadline_us * 1e3);
@@ -2230,7 +2239,9 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
            std::to_string(m << 20) + ",\"window_ms\":" + stats(wall[0]) + ",\"device_pass_ms\":" + stats(pass[0]) +
            ",\"fold_ms\":" + stats(fold_ms[0]) + ",\"landed_mb\":" + stats(landed_mb[0]) + ",\"tag_alone_window_ms\":" +
            stats(wall[1]) + ",\"tag_alone_pass_ms\":" + stats(pass[1]) + ",\"fold_alone_window_ms\":" + stats(wall[2]) +
-           ",\"fold_alone_ms\":" + stats(fold_ms[2]) + ",\"alone_landed_mb\":" + stats(landed_mb[2]) + "}";
+           ",\"fold_alone_ms\":" + stats(fold_ms[2]) + ",\"alone_landed_mb\":" + stats(landed_mb[2]) +
+           ",\"each_landed_mb\":" + each(landed_mb[0]) + ",\"each_fold_ms\":" + each(fold_ms[0]) +
+           ",\"each_window_ms\":" + each(wall[0]) + "}";
       first = false;
     }
   int status = 0;
