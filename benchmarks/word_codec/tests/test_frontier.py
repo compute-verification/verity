@@ -35,9 +35,10 @@ def test_check_refuses_other_schemas_and_missing_fields():
 
 def test_frontier_takes_the_lowest_y_at_x_at_least_x_star():
     budget = 0.005
-    assert F.x_star(0.6, budget) == pytest.approx(80.0)
-    pts = F.check([point(y_total=1.5, x=79.0), point(y_total=1.7), point(y_total=1.6), point(batch=32, y_total=1.9),
-                   point(y_total=1.0, reference=True)])
+    assert F.x_star(0.6, budget) == pytest.approx(80.0) and F.x_star(0.6, budget, 1.6) == pytest.approx(200.0)
+    pts = F.check([point(y_total=1.5, x=150.0), point(y_total=1.7), point(y_total=1.6), point(batch=32, y_total=1.9),
+                   point(batch=32, y_total=2.0, x=300.0), point(y_total=1.0, reference=True)])
     best = F.frontier(pts, budget)
-    assert best[1]["y_total"] == 1.6 and best[32]["y_total"] == 1.9
+    assert best[1]["y_total"] == 1.6 and best[32]["y_total"] == 2.0
+    assert F.frontier(pts, budget, d=1.0)[1]["y_total"] == 1.5
     assert "| 1 | 521 | 1 |" in F.table(pts, budget) and "none at x ≥ x*" in F.table(pts, budget, batches=(8,))

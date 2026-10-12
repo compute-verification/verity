@@ -1,19 +1,22 @@
 """The rate audit's frontier (the overnight brief's core plot), rendered on demand from the evidence store.
 
-Every lane's points are artifacts of kind `codec-frontier-points`: a JSON list of points in the schema below, put with
+Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON list of points in the schema below, put with
 
-    research data put --kind codec-frontier-points --file points.json --preserve \
+    research data put --kind codec-frontier-points/v0 --file points.json --preserve \
       --meta '{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}'
 
-and this script selects them all (`research data select --kind codec-frontier-points`), or reads `--art` ids and
+and this script selects them all (`research data select --kind codec-frontier-points/v0`), or reads `--art` ids and
 `--file` paths, and draws:
-- x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (1 − τ)/x on a secondary
-  axis (at `--tau`, default the median τ of the points) and a vertical line at x* = (1 − τ)/μ_budget for each tag's τ
-  (μ_budget = 0.5% leaves γ = 1% after μ_chip and μ_sample, the brief's budget);
+- x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
+  axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
+  passes of E (the red team's correction: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is
+  a curve: a vertical line at x* for d = 1 at each tag's τ, and the boundary y = τ + μ_budget·x for d = y (μ_budget =
+  0.5% leaves γ = 1% after μ_chip and μ_sample, the brief's budget);
 - y, fused decode-step time over native at Llama-3.1-8B's linears, layer-weighted, as a stacked bar per point
   (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a horizontal line at 2×;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
-and prints the frontier, the lowest y_total at x ≥ x* at each batch. Never commit the image or the table.
+and prints the frontier, the lowest y_total at x ≥ x* at each batch (d = the point's y_total unless `--d` fixes it).
+Never commit the image or the table.
 
 Schema `verity/codec-frontier-point/v0`, one object per (configuration, batch):
 
@@ -49,7 +52,7 @@ import sys
 from pathlib import Path
 
 SCHEMA = "verity/codec-frontier-point/v0"
-KIND = "codec-frontier-points"
+KIND = "codec-frontier-points/v0"
 REQUIRED = ("b", "k", "arithmetic", "batch", "y_total", "y_decode", "y_tag", "y_commit", "x", "tau")
 
 
@@ -84,14 +87,19 @@ def check(points: list[dict]) -> list[dict]:
     return out
 
 
-def x_star(tau: float, budget: float) -> float:
-    return (1 - tau) / budget
+def x_star(tau: float, budget: float, d: float = 1.0) -> float:
+    return (d - tau) / budget
 
 
-def frontier(points: list[dict], budget: float) -> dict[int, dict | None]:
+def step(p: dict, d: float | None) -> float:
+    """d, the step's time in passes of E: `--d`, else the point's own y_total (at least one pass)."""
+    return max(1.0, p["y_total"]) if d is None else d
+
+
+def frontier(points: list[dict], budget: float, d: float | None = None) -> dict[int, dict | None]:
     best = {}
     for p in points:
-        if p.get("reference") or p["x"] < x_star(p["tau"], budget):
+        if p.get("reference") or p["x"] < x_star(p["tau"], budget, step(p, d)):
             continue
         b = best.get(p["batch"])
         if b is None or p["y_total"] < b["y_total"]:
@@ -99,19 +107,20 @@ def frontier(points: list[dict], budget: float) -> dict[int, dict | None]:
     return best
 
 
-def table(points: list[dict], budget: float, batches=(1, 32)) -> str:
+def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None) -> str:
     lines = ["| batch | b | k | arithmetic | x | x* | μ_rebuild | y_total | decode | tag | commit | measured | source |",
              "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    best = frontier(points, budget)
+    best = frontier(points, budget, d)
     for mb in batches:
         p = best.get(mb)
         if p is None:
             lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | |")
             continue
-        mu = (1 - p["tau"]) / p["x"]
-        lines.append(f"| {mb} | {p['b']} | {p['k']} | {p['arithmetic']} | {p['x']:.0f} | {x_star(p['tau'], budget):.0f} "
-                     f"| {mu * 100:.2f}% | {p['y_total']:.2f} | {p['y_decode']:.2f} | {p['y_tag']:.2f} "
-                     f"| {p['y_commit']:.2f} | {'yes' if p['measured'] else 'model'} | {p.get('art') or p.get('run') or p.get('lane')} |")
+        dd = step(p, d)
+        lines.append(f"| {mb} | {p['b']} | {p['k']} | {p['arithmetic']} | {p['x']:.0f} | {x_star(p['tau'], budget, dd):.0f} "
+                     f"| {(dd - p['tau']) / p['x'] * 100:.2f}% | {p['y_total']:.2f} | {p['y_decode']:.2f} "
+                     f"| {p['y_tag']:.2f} | {p['y_commit']:.2f} | {'yes' if p['measured'] else 'model'} "
+                     f"| {p.get('art') or p.get('run') or p.get('lane')} |")
     return "\n".join(lines)
 
 
@@ -149,15 +158,24 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
     ax.text(ax.get_xlim()[0], 2.02, " 2× native", color="r", fontsize=8, va="bottom")
     for tau in sorted({round(p["tau"], 2) for p in pts}):
         xs = x_star(tau, budget)
-        ax.axvline(xs, color="k", linestyle=":", linewidth=1)
-        ax.text(xs, ax.get_ylim()[1] * 0.97, f" x* (τ={tau:.2f})", fontsize=7, va="top")
+        if xs > 0:
+            ax.axvline(xs, color="k", linestyle=":", linewidth=1)
+            ax.text(xs, ax.get_ylim()[1] * 0.97, f" x* (d=1, τ={tau:.2f})", fontsize=7, va="top", rotation=90)
+    lo, hi = ax.get_xlim()
+    xx = np.geomspace(lo, hi, 200)
+    ax.plot(xx, tau_ref + budget * xx, color="purple", linewidth=1)
+    ax.text(hi, tau_ref + budget * hi, f"y = τ + {budget:g}·x (x* at d = y, τ={tau_ref:.2f}) ", color="purple",
+            fontsize=7, ha="right", va="bottom")
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(0, max(3.0, max(p["y_total"] for p in pts) * 1.1))
     ax.set_xlabel("x: encode time of one pass's data, in native passes (log)")
     ax.set_ylabel("y: fused decode step / native, Llama-3.1-8B linears, layer-weighted")
+
     def mu(x):
         return (1 - tau_ref) * 100 / np.maximum(np.asarray(x, dtype=float), 1e-9)
 
     sec = ax.secondary_xaxis("top", functions=(mu, mu))
-    sec.set_xlabel(f"μ_rebuild = (1 − τ)/x, % (τ = {tau_ref:.2f})")
+    sec.set_xlabel(f"μ_rebuild = (d − τ)/x, % (d = 1, τ = {tau_ref:.2f})")
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in colors.values()]
     handles += [plt.Rectangle((0, 0), 1, 1, facecolor="none", edgecolor="k")]
     ax.legend(handles, [*colors, "modelled (hollow)"], loc="upper left", fontsize=8)
@@ -174,6 +192,7 @@ def main() -> int:
     ap.add_argument("--out", help="the image to write (not into the repository)")
     ap.add_argument("--budget", type=float, default=0.005, help="μ_rebuild's share of γ (default 0.5%%)")
     ap.add_argument("--tau", type=float, help="τ for the secondary axis (default: the points' median)")
+    ap.add_argument("--d", type=float, help="the step's time in passes of E for x* (default: each point's y_total)")
     ap.add_argument("--batches", default="1,32")
     ap.add_argument("--p2", help="X,Y,TAU: P2 as a modelled reference point")
     a = ap.parse_args()
@@ -191,7 +210,7 @@ def main() -> int:
                            "y_total": y, "y_decode": 0.0, "y_tag": 0.0, "y_commit": 0.0, "y_base": y, "x": x,
                            "tau": tau, "measured": False, "reference": True, "label": "P2"})
     points = check(points)
-    print(table(points, a.budget, batches))
+    print(table(points, a.budget, batches, a.d))
     if a.out:
         draw(points, Path(a.out), a.budget, a.tau, batches)
         print(f"wrote {a.out}")

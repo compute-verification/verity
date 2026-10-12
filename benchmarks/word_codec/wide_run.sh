@@ -9,8 +9,9 @@
 #     -- taskset -c 48-95 bash benchmarks/word_codec/wide_run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
-# (default "p127s0 p127s1 p255s0 p255s1 p521s0 p521s1") names the builds, KMAX_<bits> (defaults 4, 4, 2) the largest k
-# each holds, and WW_DEFS extra -D flags for every build.
+# (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
+# r20261012-071155-d336; add p127s0 … for both) names the builds, KMAX_<bits> (defaults 4, 2, 2) the largest k each
+# holds, and WW_DEFS extra -D flags for every build.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -19,8 +20,8 @@ PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}  # verity's bandwidth tags and PoUS's tree, for the gates
 WC=benchmarks/word_codec
-LIBSET=${LIBSET:-p127s0 p127s1 p255s0 p255s1 p521s0 p521s1}
-declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-4} [521]=${KMAX_521:-2})
+LIBSET=${LIBSET:-p127s1 p255s1 p521s1}
+declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-2} [521]=${KMAX_521:-2})
 B=$(mktemp -d /tmp/wide-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -I benchmarks/bandwidth)
 declare -A PIDS=()

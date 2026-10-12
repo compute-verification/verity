@@ -24,8 +24,11 @@ The frontier's quantities, per field and k (`wide.json` "frontier"):
   Δ        (L / 256) · R / (decode words/s at k): decode's share, compute only
   τ        (MSG_BLOCKS / 256) · R / (BLAKE3 compressions/s): the tag's share, compute only
   μ        (1 − τ) / x, the rebuild bound
-  y        layer-weighted fused time over native: total = (t<k> + commit) / native, decode = (d<k> − ww0) / native,
-           tag = (t<k> − d<k>) / native, commit = commit / native; the rest (ww0 / native) is the layout's base
+  y        layer-weighted fused time over native: total = t<k> / native + commit, decode = (d<k> − ww0) / native,
+           tag = (t<k> − d<k>) / native; the rest (ww0 / native) is the layout's base. The commit is the window's, once
+           a pass: the leaves and tree over the pass's tags (32 layers of the four linears, `pass_commit`) over 32
+           times the four linears' native time; `y_commit_linear` is a commit launched per linear, for comparison
+The SM clock is sampled during a squaring chain for each library (`clock`, and each point's `sm_mhz`).
 """
 from __future__ import annotations
 
@@ -51,6 +54,7 @@ TAG_SEED = hashlib.sha256(b"verity/word-codec/wide/bench/tag-seed").digest()
 POINT_SCHEMA = "verity/codec-frontier-point/v0"
 POISON = 0xA5A5A5A5
 DEV = "cuda"
+LAYERS = 32  # Llama-3.1-8B
 
 
 class WLib:
@@ -499,23 +503,81 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     return res
 
 
-def breakdown(cases: dict, batches, ks) -> dict:
-    """Layer-weighted: Σ over the four linears of each arm's time over Σ of native's, per batch and k."""
+def pass_blocks(lib: WLib) -> int:
+    """The tag blocks of one pass over Llama-3.1-8B's linears: LAYERS layers of the four shapes."""
+    return LAYERS * sum(n * kd // W.LANE_BYTES for n, kd in B.SHAPES.values())
+
+
+def pass_commit(lib: WLib, torch, reps: int, log) -> dict:
+    """The window's commit, once a pass: the leaves and tree over every tag of the pass (cold, far past the L2)."""
+    blocks = pass_blocks(lib)
+    ws = torch.empty(lib.so.ww_workspace_bytes(blocks), dtype=torch.uint8, device="cuda")
+    tags = torch.as_strided(ws.view(torch.int32), (blocks * 8,), (1,), 0)
+    tags.random_(-(1 << 31), (1 << 31) - 1)
+    seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
+    so, st = lib.so, stream(torch)
+
+    def go():
+        if so.ww_commit(ptr(ws), blocks, seed_buf, None, st):
+            raise RuntimeError("ww_commit: error")
+    go()
+    torch.cuda.synchronize()
+    times = [queued(lib, torch, go) for _ in range(reps)]
+    med = statistics.median(times)
+    log(f"pass commit {lib.name}: {blocks} tags in {med * 1e3:.3f} ms ({blocks / med / 1e9:.2f} G tags/s)")
+    del ws, tags
+    torch.cuda.empty_cache()
+    return {"blocks": blocks, "median_s": med, "times_s": times}
+
+
+def breakdown(cases: dict, batches, ks, commit_s: float) -> dict:
+    """Layer-weighted: Σ over the four linears of each arm's time over Σ of native's, per batch and k. The commit is
+    the window's, once a pass (`pass_commit`), over LAYERS times the four linears' native time; `y_commit_linear` is a
+    commit launched per linear, for comparison."""
     out = {}
     for mb in batches:
         t = [c["times"][mb] for c in cases.values()]
         native = sum(x["native_s"] for x in t)
         s = {a: sum(x["median_s"][a] for x in t) for a in t[0]["median_s"]}
+        y_commit = commit_s / (LAYERS * native)
         row = {"native_s": native, "base": s["ww0"] / native, "tag_only": (s["t0"] - s["ww0"]) / native}
         for k in ks:
-            row[k] = {"y_total": (s[f"t{k}"] + s["commit"]) / native, "y_decode": (s[f"d{k}"] - s["ww0"]) / native,
-                      "y_tag": (s[f"t{k}"] - s[f"d{k}"]) / native, "y_commit": s["commit"] / native,
-                      "y_base": s["ww0"] / native}
+            row[k] = {"y_total": s[f"t{k}"] / native + y_commit, "y_decode": (s[f"d{k}"] - s["ww0"]) / native,
+                      "y_tag": (s[f"t{k}"] - s[f"d{k}"]) / native, "y_commit": y_commit,
+                      "y_commit_linear": s["commit"] / native, "y_base": s["ww0"] / native}
         out[mb] = row
     return out
 
 
-def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str) -> list[dict]:
+def clocks(lib: WLib, torch, log, what: str, squarings_s: float) -> dict:
+    """The SM clock (MHz) sampled while a compute-only squaring chain runs (about 1.5 s), and the board's maximum,
+    through nvidia-smi."""
+    import subprocess
+
+    dev = os.environ.get("GPU_LEASE_UUID") or os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+    q = ["nvidia-smi", "-i", dev, "--query-gpu=clocks.sm,clocks.max.sm,clocks.mem,power.draw,temperature.gpu",
+         "--format=csv,noheader,nounits"]
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    grid = torch.cuda.get_device_properties(0).multi_processor_count * 8
+    steps = max(1, int(1.5 * squarings_s / (grid * 256)))
+    lib.call("ww_chain", 2, 1, 1, steps, ptr(xr), grid, stream(torch))
+    samples = []
+    for _ in range(3):
+        try:
+            out = subprocess.run(q, check=False, capture_output=True, text=True, timeout=10).stdout.strip()
+            samples.append([float(v) for v in out.split(",")])
+        except Exception as e:  # noqa: BLE001
+            samples.append(str(e))
+    torch.cuda.synchronize()
+    good = [s for s in samples if isinstance(s, list)]
+    res = {"what": what, "samples": samples}
+    if good:
+        res.update(sm_mhz=statistics.median(s[0] for s in good), max_sm_mhz=good[0][1], mem_mhz=good[0][2])
+        log(f"clock ({what}): SM {res['sm_mhz']:.0f} MHz of max {res['max_sm_mhz']:.0f}, mem {res['mem_mhz']:.0f} MHz")
+    return res
+
+
+def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: float | None = None) -> list[dict]:
     f = lib.field
     out = []
     for mb, row in bd.items():
@@ -528,10 +590,11 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str) -> list[
                                       f"/sqr{lib.sqr}",
                         "packing": f.payload, "expansion": f.expansion(), "batch": mb,
                         "y_total": y["y_total"], "y_decode": y["y_decode"], "y_tag": y["y_tag"],
-                        "y_commit": y["y_commit"], "y_base": y["y_base"],
+                        "y_commit": y["y_commit"], "y_commit_linear": y["y_commit_linear"], "y_base": y["y_base"],
                         "x": q["x"], "delta": q["delta"], "tau": q["tau"], "mu_rebuild": q["mu_rebuild"],
+                        "payload_per_stored_bit": 1 / f.expansion(),
                         "measured": True, "label": f"{f.name} k={k} {lib.name}", "run": run_id, "art": None,
-                        "gpu": gpu})
+                        "gpu": gpu, "sm_mhz": sm_mhz})
     return out
 
 
@@ -614,6 +677,8 @@ def main() -> int:
     for lib in libs:
         ks = [k for k in ks_all if k <= lib.kmax]
         res["libs"][lib.name]["rates"] = rates(lib, torch, ks, sms, a.reps, log)
+        res["libs"][lib.name]["clock"] = clocks(lib, torch, log, f"{lib.name} squaring chain",
+                                                res["libs"][lib.name]["rates"]["best"]["square_s"])
         save()
     fields = sorted({lib.bits for lib in libs})
     res["frontier"] = {}
@@ -644,14 +709,17 @@ def main() -> int:
                 if not cases[name].get("ok", False):
                     break
             if all(c.get("ok", False) for c in cases.values()) and len(cases) == len(B.SHAPES):
-                bd = breakdown(cases, batches, ks)
+                pc = pass_commit(lib, torch, a.reps, log)
+                res["libs"][lib.name]["pass_commit"] = pc
+                bd = breakdown(cases, batches, ks, pc["median_s"])
                 res["libs"][lib.name]["breakdown"] = bd
                 fq = res["frontier"][lib.field.name]
-                res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name)
+                res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name,
+                                        res["libs"][lib.name].get("clock", {}).get("sm_mhz"))
                 for mb, row in bd.items():
                     log(f"layer-weighted {lib.name} M={mb}: base {row['base']:.2f}, " + ", ".join(
                         f"k{k} total {row[k]['y_total']:.2f} (decode {row[k]['y_decode']:.2f}, tag {row[k]['y_tag']:.2f}"
-                        f", commit {row[k]['y_commit']:.2f})" for k in ks))
+                        f", commit {row[k]['y_commit']:.3f}; per linear {row[k]['y_commit_linear']:.2f})" for k in ks))
             save()
     (out_dir / "points.json").write_text(json.dumps(res["points"], indent=1))
     save()

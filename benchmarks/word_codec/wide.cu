@@ -91,8 +91,9 @@ __host__ __device__ constexpr uint32_t plimb(int e) {
   return e < MB ? (e == 0 ? 0xFFFFFFFFu - (C - 1) : 0xFFFFFFFFu) : e == MB ? (MS ? (1u << MS) - 1 : 0) : 0;
 }
 
-__constant__ uint32_t kC[KMAX][N];  // c_j
-__constant__ uint32_t kTau[N];      // τ
+__constant__ uint32_t kC[KMAX][N];   // c_j
+__constant__ uint32_t kNC[KMAX][N];  // p − c_j (Mersenne decode)
+__constant__ uint32_t kTau[N];       // τ
 __constant__ uint32_t kI[N];        // p255: √−1, c1, c1·√−1
 __constant__ uint32_t kC1[N];
 __constant__ uint32_t kC1I[N];
@@ -146,6 +147,17 @@ __device__ __forceinline__ bool eq_k(const uint32_t (&a)[K], const uint32_t (&b)
 __device__ __forceinline__ void pconst(uint32_t (&p)[N]) {
 #pragma unroll
   for (int e = 0; e < N; ++e) p[e] = plimb(e);
+}
+
+// p − a for canonical a (a = 0 gives p, which every lazy input takes).
+__host__ __device__ __forceinline__ void neg_el(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  int64_t c = 0;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    c += (int64_t)plimb(e) - a[e];
+    r[e] = (uint32_t)c;
+    c >>= 32;
+  }
 }
 
 // --- products ---------------------------------------------------------------------------------------------------------
@@ -419,6 +431,79 @@ __device__ __forceinline__ void decode_word(uint32_t (&y)[N], const uint32_t (&t
   }
 }
 
+// r = a + b folded once mod a Mersenne p: a ≤ p + 1 and b ≤ p give r ≤ p + 1.
+__device__ __forceinline__ void add_fold(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+  add_k<N>(r, a, b);
+  uint64_t c = r[MB] >> MS;
+  r[MB] &= (1u << MS) - 1;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    c += r[e];
+    r[e] = (uint32_t)c;
+    c >>= 32;
+  }
+}
+
+// y ← ρ⁻¹(y) − u for a Mersenne p, given nu ≡ −u below 2^(M+1). y² = lo + 2^M·hi ≡ lo + hi with lo, hi < 2^M, and
+// −x ≡ x ⊕ p for x < 2^M, so ρ⁻¹(y) − u ≡ (lo ⊕ m) + (hi ⊕ m) + nu, m = p for odd y and 0 for even: a sum below
+// 2^(M+2), folded once and made canonical.
+__device__ __forceinline__ void dec_round_mers(uint32_t (&y)[N], const uint32_t (&nu)[N]) {
+  static_assert(MB == N - 1, "the top limb holds bit M − 1");
+  const uint32_t m = 0u - (y[0] & 1);
+  uint32_t t[2 * N];
+  sqr_full(t, y);
+  uint64_t c = 0;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    const uint32_t lo = e < MB ? t[e] : t[e] & ((1u << MS) - 1);
+    const uint32_t hi = __funnelshift_r(t[MB + e], t[MB + e + 1], MS);
+    const uint32_t pm = plimb(e) & m;
+    c += (uint64_t)(lo ^ pm) + (hi ^ pm) + nu[e];
+    y[e] = (uint32_t)c;
+    c >>= 32;
+  }
+  uint64_t top = (y[MB] >> MS) | (c << (32 * N - M));
+  y[MB] &= (1u << MS) - 1;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    top += y[e];
+    y[e] = (uint32_t)top;
+    top >>= 32;
+  }
+  canon(y);
+}
+
+// The decode's tweak over words i, i + s, i + 2s, …: t(i) = τ·i canonical, or for a Mersenne p its negation −t(i)
+// (≤ p + 1, lazy), which the decode adds where it would subtract t(i).
+__device__ __forceinline__ void tw_init(uint32_t (&v)[N], uint32_t (&dv)[N], uint64_t i, uint64_t s) {
+  mul_u64(v, kTau, i);
+  mul_u64(dv, kTau, s);
+  if constexpr (MERS) {
+    neg_el(v, v);
+    neg_el(dv, dv);
+  }
+}
+
+__device__ __forceinline__ void tw_step(uint32_t (&v)[N], const uint32_t (&dv)[N]) {
+  if constexpr (MERS) add_fold(v, v, dv);
+  else addmod(v, v, dv);
+}
+
+// k inverse rounds of word y under the tweak state v (`tw_init`).
+template <int K>
+__device__ __forceinline__ void decode_tw(uint32_t (&y)[N], const uint32_t (&v)[N]) {
+  if constexpr (MERS) {
+#pragma unroll
+    for (int j = K - 1; j >= 0; --j) {
+      uint32_t nu[N];
+      add_k<N>(nu, v, kNC[j]);
+      dec_round_mers(y, nu);
+    }
+  } else {
+    decode_word<K>(y, v);
+  }
+}
+
 // a^(2^n) for lazy a, n squarings.
 template <int NSQ>
 __device__ __forceinline__ void sqr_n(uint32_t (&a)[N]) {
@@ -527,17 +612,16 @@ __global__ void __launch_bounds__(256) decode_kernel(const uint32_t* __restrict_
   const uint64_t stride = (uint64_t)gridDim.x * blockDim.x;
   uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t t[N], ts[N];
-  mul_u64(t, kTau, base + i);
-  mul_u64(ts, kTau, stride);
+  tw_init(t, ts, base + i, stride);
   uint64_t acc = 0;
   for (; i < n; i += stride) {
     uint32_t y[N];
     load_word(y, store, i);
-    decode_word<K>(y, t);
+    decode_tw<K>(y, t);
     if (MODE == 2) store_word(out, i, y);
 #pragma unroll
     for (int e = 0; e < N; ++e) acc ^= (uint64_t)y[e] << (e & 1) * 32;
-    addmod(t, t, ts);
+    tw_step(t, ts);
   }
   atomicXor(xr, (unsigned long long)acc);
 }
@@ -626,15 +710,14 @@ __global__ void __launch_bounds__(256) chain_decode(uint64_t steps, unsigned lon
 #pragma unroll
   for (int u = 0; u < U; ++u) {
     seed_word(y[u], id * U + u);
-    mul_u64(t[u], kTau, id * U + u);
+    tw_init(t[u], ts, id * U + u, stride);
   }
-  mul_u64(ts, kTau, stride);
 #pragma unroll 1
   for (uint64_t s = 0; s < steps; ++s) {
 #pragma unroll
     for (int u = 0; u < U; ++u) {
-      decode_word<K>(y[u], t[u]);
-      addmod(t[u], t[u], ts);
+      decode_tw<K>(y[u], t[u]);
+      tw_step(t[u], ts);
     }
   }
   uint64_t acc = 0;
@@ -698,21 +781,17 @@ __device__ __forceinline__ uint32_t msg_word(const uint32_t (&w)[L][N], uint64_t
   return 0;
 }
 
-// ro-blake3/v1 of block j (one chunk: the message is under 1,024 bytes), from the lane's registers.
-__device__ __forceinline__ void tag_block(uint32_t (&cv)[8], const uint32_t (&w)[L][N], uint64_t j, const bw::Key3& key) {
+// Compression b of ro-blake3/v1 over block j (one chunk: the message is under 1,024 bytes), from the lane's registers;
+// cv starts as the key, and after the last compression it is the tag.
+__device__ __forceinline__ void tag_step(uint32_t (&cv)[8], const uint32_t (&w)[L][N], uint64_t j, int b) {
   static_assert(4 * MSG <= 1024, "a block is one BLAKE3 chunk");
+  uint32_t m[16];
 #pragma unroll
-  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
-#pragma unroll
-  for (int b = 0; b < MSG_BLOCKS; ++b) {
-    uint32_t m[16];
-#pragma unroll
-    for (int i = 0; i < 16; ++i) m[i] = msg_word(w, j, 16 * b + i);
-    const uint32_t len = b + 1 < MSG_BLOCKS ? 64 : 4 * MSG - 64 * (MSG_BLOCKS - 1);
-    const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
-                           (b + 1 == MSG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-    bw::b3_compress(cv, m, 0, len, flags, cv);
-  }
+  for (int i = 0; i < 16; ++i) m[i] = msg_word(w, j, 16 * b + i);
+  const uint32_t len = b + 1 < MSG_BLOCKS ? 64 : 4 * MSG - 64 * (MSG_BLOCKS - 1);
+  const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
+                         (b + 1 == MSG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+  bw::b3_compress(cv, m, 0, len, flags, cv);
 }
 
 // One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk. TAG: lane l's block j = jbase + 32q + l
@@ -743,23 +822,31 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* _
 #pragma unroll
     for (int e = 0; e < N; ++e) w[i][e] = __ldcs(rec + 32 * (i * N + e));
 
+  // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
+  // the decode's multiplies and the hash's ALU work are independent instructions in one stream.
+  uint32_t cv[8], t[N], t32[N];
+  const uint64_t j = jbase + q * 32 + lane;
   if constexpr (TAG) {
-    uint32_t cv[8];
-    tag_block(cv, w, jbase + q * 32 + lane, key);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+  }
+  if constexpr (KR > 0) tw_init(t, t32, wbase + q * (32ull * L) + lane, LANES);
+#pragma unroll
+  for (int b = 0; b < MSG_BLOCKS; ++b) {
+    if constexpr (TAG) tag_step(cv, w, j, b);
+    if constexpr (KR > 0) {
+#pragma unroll
+      for (int i = 0; i < L; ++i)
+        if ((1 + (i + 1) * N) / 16 == b) {
+          decode_tw<KR>(w[i], t);
+          tw_step(t, t32);
+        }
+    }
+  }
+  if constexpr (TAG) {
     uint4* o = reinterpret_cast<uint4*>(tags + 8 * (q * 32 + lane));
     o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
     o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
-  }
-
-  if constexpr (KR > 0) {
-    uint32_t t[N], t32[N];
-    mul_u64(t, kTau, wbase + q * (32ull * L) + lane);
-    mul_u64(t32, kTau, LANES);
-#pragma unroll
-    for (int i = 0; i < L; ++i) {
-      decode_word<KR>(w[i], t);
-      addmod(t, t, t32);
-    }
   }
   float acc[NB8][4];
 #pragma unroll
@@ -835,18 +922,24 @@ static void write_el(const uint32_t (&a)[N]) {
 int main() {
   int k;
   if (scanf("%d", &k) != 1 || k < 1 || k > KMAX) return 1;
-  for (int j = 0; j < k; ++j)
+  for (int j = 0; j < k; ++j) {
     if (!read_el(kC[j])) return 1;
+    neg_el(kNC[j], kC[j]);
+  }
   if (!read_el(kTau) || !read_el(kI) || !read_el(kC1) || !read_el(kC1I)) return 1;
   unsigned long long i;
   while (scanf("%llu", &i) == 1) {
-    uint32_t m[N], y[N], t[N];
+    uint32_t m[N], y[N], t[N], v[N], dv[N];
     if (!read_el(m) || !read_el(y)) return 1;
     mul_u64(t, kTau, i);
+    // the decode's tweak stepped to i in up to 50 lazy steps of 3, as the kernels advance it
+    const unsigned long long r = i / 3 < 50 ? i / 3 : 50;
+    tw_init(v, dv, i - 3 * r, 3);
+    for (unsigned long long s = 0; s < r; ++s) tw_step(v, dv);
 #define F(K)                 \
   do {                       \
     encode_word<K>(m, t);    \
-    decode_word<K>(y, t);    \
+    decode_tw<K>(y, v);      \
   } while (0)
     WW_K_SWITCH(k, F)
 #undef F
@@ -872,10 +965,14 @@ int ww_constants(int* out) {
 // c: k × N limbs; tau, i_, c1, c1i: N limbs each (the last three p255's, ignored otherwise).
 int ww_set_key(const uint32_t* c, int k, const uint32_t* tau, const uint32_t* i_, const uint32_t* c1, const uint32_t* c1i) {
   if (k < 1 || k > KMAX) return 1;
-  uint32_t cc[KMAX][N] = {};
-  for (int j = 0; j < k; ++j)
+  uint32_t cc[KMAX][N] = {}, nc[KMAX][N] = {};
+  for (int j = 0; j < k; ++j) {
     for (int e = 0; e < N; ++e) cc[j][e] = c[j * N + e];
-  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kTau, tau, 4 * N)) return 2;
+    neg_el(nc[j], cc[j]);
+  }
+  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kNC, nc, sizeof nc) ||
+      cudaMemcpyToSymbol(kTau, tau, 4 * N))
+    return 2;
   if (i_ && (cudaMemcpyToSymbol(kI, i_, 4 * N) || cudaMemcpyToSymbol(kC1, c1, 4 * N) || cudaMemcpyToSymbol(kC1I, c1i, 4 * N)))
     return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
