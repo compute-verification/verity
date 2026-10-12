@@ -31,7 +31,7 @@ theorem skLeaf_of_lt {r i : ℕ} (hi : i + 1 < r) (j : Fin S) : skLeaf Vs own se
 /-- **At the committed rounds the decoder's mask is the commit strings'.** -/
 theorem maskOf_skLeaf {r i : ℕ} (hi : i + 1 < r) :
     maskOf Vs (skLeaf Vs own sel r) i = maskOf Vs (skOf Vs own sel) i :=
-  funext fun _ => funext fun j => funext fun _ => by simp only [maskOf, skLeaf_of_lt hi j]
+  funext fun _ => funext fun j => funext fun _ => by simp only [maskOf]; rw [skLeaf_of_lt hi j]
 
 /-- **`VBridgeC`'s decoding at the leaf decoder**: messages `wmsgOf`'s and `msgOf`'s at `skLeaf` and one decoder `dec`
 decode each committed round's message from the read wires of its commit strings, and hold one at the last round. -/
@@ -44,7 +44,8 @@ theorem vDecodesR_wmsgLeaf {I : Recursion.Inner} (dec : ℕ → ((j : Fin S) →
   intro hc
   show dec i (maskOf Vs (skLeaf Vs own sel I.r) i Xt) = dec i (layerOf Vs (skLeaf Vs own sel I.r) i v)
   refine congrArg (dec i) (funext fun j => funext fun g => ?_)
-  simp only [maskOf, layerOf, skLeaf_of_lt hc j]
+  simp only [maskOf, layerOf]
+  rw [skLeaf_of_lt hc j]
   split_ifs with h
   · exact hX j g (by simpa [hc] using h.1) h.2
   · rfl

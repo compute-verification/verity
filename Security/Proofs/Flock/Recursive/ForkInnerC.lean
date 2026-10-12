@@ -45,10 +45,14 @@ theorem zip_eq_relabelL {N : Type} : ∀ (ref : List (M × C) → M → N) (m : 
   | ref, m, (c, ρ) :: e :: t, w, hm, h => by
       obtain ⟨a, w', rfl⟩ : ∃ a w', w = a :: w' := by
         cases w with
-        | nil => simpa using h 0 (by simp)
+        | nil => simpa using h 0 (by simp only [List.length_cons] <;> omega)
         | cons a w' => exact ⟨a, w', rfl⟩
-      have h0 : a = ref [] c := by simpa using h 0 (by simp)
-      have hm' : w'[(e :: t).length - 1]? = some m := by simpa using hm
+      have h0 : a = ref [] c := by simpa using h 0 (by simp only [List.length_cons] <;> omega)
+      have hlen : ((c, ρ) :: e :: t).length - 1 = (e :: t).length - 1 + 1 := by
+        simp only [List.length_cons] <;> omega
+      have hm' : w'[(e :: t).length - 1]? = some m := by
+        rw [hlen, List.getElem?_cons_succ] at hm
+        exact hm
       have ht : ∀ k, k + 1 < (e :: t).length →
           w'[k]? = ((e :: t)[k]?).map fun e' => (fun p c' => ref ((c, ρ) :: p) c') ((e :: t).take k) e'.1 :=
         fun k hk => by simpa using h (k + 1) (by simp only [List.length_cons] at hk ⊢; omega)
@@ -120,8 +124,7 @@ theorem zk_sessions_recursive_fork_innerC
       ∃ m, l.zip (t.map Prod.snd) = relabelL (ref ω) m t := by
     intro ref ω t l ht h
     obtain ⟨m, hm⟩ := exists_of_rel (h (t.length - 1) (by omega)) (by
-      simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le]
-      omega)
+      simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le] <;> omega)
     exact ⟨m, zip_eq_relabelL (ref ω) m t l hm fun k hk =>
       option_eq_of_rel (R := fun a b => k + 1 < I.r → a = b) (fun _ _ hab => hab (by omega)) (h k (by omega))⟩
   rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun i _ a b => i + 1 < I.r → a = b)

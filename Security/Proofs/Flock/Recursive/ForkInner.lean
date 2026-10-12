@@ -232,7 +232,8 @@ theorem recursive_sound_on [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos
     if hk : k < I.r then (hst k hk ω).choose else fun _ _ _ => Classical.arbitrary V
   have hrefAll : ∀ k (hk : k < I.r) ω, refAll k ω = (hst k hk ω).choose := fun k hk ω => dite_eq_left hk
   refine commit_and_prove_on σ Acc x dec wstmt wmsg (fun ω p c => msg p.length (refAll p.length ω p c)) same
-    (rd fun ω p c => msg p.length (refAll p.length ω p c)) (hrd _) _ hout hP (fun k hk => ?_) (hin _)
+    (rd fun ω p c => msg p.length (refAll p.length ω p c)) (hrd fun ω p c => msg p.length (refAll p.length ω p c)) _
+    hout hP (fun k hk => ?_) (hin fun ω p c => msg p.length (refAll p.length ω p c))
   unfold probAt expAt
   calc avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
