@@ -18,15 +18,18 @@ budget `b` costs at most `b` on every coin, and commits `A`'s transcript whereve
 model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
 whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
 
-**Pricing.** The machine prices a PoUW run in two parts (Daniel's decision 9, 11 Oct): its arithmetic at W1's
-instruction prices, with no fetch charge and no refund, and every first fetch of a pre-salt or supplied byte,
-deduplicated within the run, at the device's price of a bit read. In the device model those fetches are reads by the
-compute account (`Run.pouwRead`). The compute audit's certificate is on the priced sum, the compute account's work plus
-`pRead` per bit it read from device memory (`Run.ComputeSoundPerRunPriced`, `pRead` the price of a bit read in the unit
-the work is counted in), and tables cite the two terms separately. PoUW's reads and the bandwidth audit's window reads
-are charged to different accounts over one window (`Run.ReadsAttributed`), so no bit read is credited to both
-certificates. Pearl-C's game is a game of its own, with its own cost model; `BudgetAbortPearlC` is truncation for it,
-and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the priced sum.
+**Pricing.** The machine prices a PoUW run in two parts (Daniel's decision 9, 11 Oct): its arithmetic, at W1's
+instruction prices with no fetch charge and no refund, is charged to the compute account, and every first fetch of a
+pre-salt or supplied byte, deduplicated within the run, to the bandwidth account, at the device's price of a bit read.
+Those accounts are charges; the device model's accounts are who incurs them. A PoUW run is the compute audit's
+device-model account (`acct .compute`): its work is its compute charge, and the bits it read (`Run.pouwRead`, its first
+fetches among them) are its bandwidth charge, beside the bandwidth audit's window reads (`Run.read`). The bandwidth
+audit's reads are another device-model account's over the same window (`Run.ReadsAttributed`), so no bit read is
+certified twice. What the compute audit certifies is the priced sum, work plus `pRead` per bit read
+(`Run.ComputeSoundPerRunPriced`, `pRead` the price of a bit read in the unit the work is counted in), and tables cite
+the work and the bits separately. Pearl-C's game is a game of its own, with its own cost model; `BudgetAbortPearlC` is
+truncation for it, and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the
+priced sum.
 -/
 
 namespace Accounting
@@ -98,19 +101,20 @@ namespace Run
 
 variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (r : Run d α ΩW ΩQ ΩS)
 
-/-- PoUW's reads (`read_pouw`): the bits the compute account read from device memory over the compute window. -/
+/-- PoUW's reads (`read_pouw`): the bits the compute account read from device memory over the compute window, the
+PoUW run's bandwidth charge (decision 9). -/
 def pouwRead (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).read (r.win .compute) (r.acct .compute)
 
 /-- The bits every account read from device memory over the bandwidth window (`read_total`). -/
 def totalRead (ω : ΩW × ΩQ × ΩS) : ℕ := ∑ a, (r.schedule ω).read (r.win .bandwidth) a
 
-/-- **The reads are attributed**: PoUW's reads and the bandwidth audit's window reads are charged to different accounts
-over one window. The device model charges each bit read to one account, so no bit is in both `pouwRead` and `read`,
-and `read_total ≥ read + read_pouw` on every run. -/
+/-- **The reads are attributed**: PoUW's reads and the bandwidth audit's window reads are different device-model
+accounts' over one window. The device model gives each bit read to one account, so no bit is in both `pouwRead` and
+`read`, and `read_total ≥ read + read_pouw` on every run. -/
 def ReadsAttributed : Prop := r.acct .compute ≠ r.acct .bandwidth ∧ r.win .compute = r.win .bandwidth
 
 /-- The bits read from device memory over the bandwidth window by the accounts other than the bandwidth and compute
-accounts: the reads that neither the bandwidth certificate nor the priced compute certificate credits. -/
+accounts: the reads that neither the bandwidth audit's certified reads nor the certified priced sum credits. -/
 def covertRead [DecidableEq α] (ω : ΩW × ΩQ × ΩS) : ℕ :=
   ∑ a ∈ (Finset.univ.erase (r.acct .bandwidth)).erase (r.acct .compute), (r.schedule ω).read (r.win .bandwidth) a
 
@@ -137,9 +141,9 @@ def CapacitySoundPerRun (S ε : ℝ) : Prop :=
 
 /-- **The compute audit's per-run guarantee on the priced sum, at price `p`, read price `pRead`, certificate `W` and
 error `ε`**: at any value of the other audits' coins, the probability over the compute coins that the compute audit
-accepts and, on that run, the compute account's work plus `pRead` per bit it read from device memory is below `W` is at
-most `ε`. `pRead` is the device's price of one bit read, in the unit `p` counts work in. Tables cite the work and the
-bits separately; the certificate is on their priced sum. -/
+accepts and, on that run, the compute account's work (its compute charge) plus `pRead` per bit it read from device
+memory (its bandwidth charge) is below `W` is at most `ε`. `pRead` is the device's price of one bit read, in the unit
+`p` counts work in. Tables cite the work and the bits separately; what is certified is their priced sum. -/
 def ComputeSoundPerRunPriced (p : Price) (pRead W ε : ℝ) : Prop :=
   ∀ o : ΩQ × ΩS,
     Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) + pRead * r.pouwRead (x, o) < W) ≤ ε
@@ -149,9 +153,10 @@ end Run
 /-- Run `r`'s compute audit is Pearl-C's audit, with `t` tickets weighted by `w`, of an adversary of Pearl-C's game at
 `CM`, `P` and `U`, one adversary for each value of the other audits' coins, whose cost the priced sum covers: the
 compute account's work at price `p` plus `pRead` per bit it read from device memory. A cost model that charges its
-arithmetic and a price per word it first fetches (Pearl-C's W1 with fetches priced, `w1Priced`) has its cost covered
-when its arithmetic is within the compute account's work and each fetch's price within `pRead` per bit the compute
-account read for it. -/
+arithmetic and a price per word it first fetches (Pearl-C's W1 with fetches priced, `w1Priced`, or it on the machine
+that stops a run at its budget, `W1.w1Stop`) has its cost covered when its arithmetic is within the compute charge,
+the compute account's work, and its first fetches' price within the bandwidth charge, `pRead` per bit the compute
+account read. -/
 structure RealizesPearlCPriced {Q R S : Type} (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S)
     (U : PearlC.Workload) (w : ℕ → ℕ) {t : ℕ} {ι : Type} {d : Device ι} {α ΩQ ΩS : Type} [Fintype α]
     (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ) where
