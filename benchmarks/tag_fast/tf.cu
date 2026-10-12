@@ -1269,6 +1269,13 @@ __global__ void b3_leaves(const uint32_t* __restrict__ tags, uint64_t count, uin
   leaf_hash(tags, count, leaf0, leafmid, blockIdx.x * (uint64_t)blockDim.x + threadIdx.x, leaves);
 }
 
+__global__ void b3_leaves_gs(const uint32_t* __restrict__ tags, uint64_t count, uint64_t leaf0, Mid leafmid,
+                             uint64_t* __restrict__ leaves) {
+  const uint64_t n = (count + 15) / 16, stride = (uint64_t)gridDim.x * blockDim.x;
+  for (uint64_t leaf = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x; leaf < n; leaf += stride)
+    leaf_hash(tags, count, leaf0, leafmid, leaf, leaves);
+}
+
 __device__ __forceinline__ void node_hash(const uint64_t* L, const uint64_t* R, uint64_t* out) {
   uint64_t w[16], s[8], prev = 1;
 #pragma unroll
@@ -1808,6 +1815,14 @@ int tf_plain(const void* w, const uint8_t* x, float* y, int M, int N, int Kd, in
 int tf_leaves(const uint32_t* tags, uint64_t count, uint64_t leaf0, uint64_t* nodes, cudaStream_t st) {
   const uint64_t leaves = (count + 15) / 16;
   b3_leaves<<<(unsigned)((leaves + 127) / 128), 128, 0, st>>>(tags, count, leaf0, g_leafmid, nodes);
+  return cudaGetLastError() ? 2 : 0;
+}
+
+// tf_leaves on `grid` CTAs of 128 threads, each thread the leaves a grid apart: beside a chain, the commit then holds a
+// few CTAs for the step rather than a wave of short ones.
+int tf_leaves_gs(const uint32_t* tags, uint64_t count, uint64_t leaf0, uint64_t* nodes, int grid, cudaStream_t st) {
+  if (grid < 1) return 1;
+  b3_leaves_gs<<<grid, 128, 0, st>>>(tags, count, leaf0, g_leafmid, nodes);
   return cudaGetLastError() ? 2 : 0;
 }
 
