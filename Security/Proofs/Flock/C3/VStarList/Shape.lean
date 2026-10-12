@@ -11,10 +11,9 @@ shape, and `candidate3Statements` an R off the two claims or off the bucket's `t
 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
 * `sparse_of_list`: the list holds RecSparse at that entry.
-* `tableM_of_list`: each of the list's `rec-opening` statements is at `m = max PAD_TO mReg` and `STACKED_CLAIMS`
-  claims, where `mReg` is the model's (`(holoAt st hp).cls.shape.mReg`) and `ℓ` is in the class's range.
-* `mReg_of_list`: so at `m = mReg` where `mReg` is at least `PAD_TO`. Below it the verifier opens R at the padded
-  `PAD_TO`, and the model's R schedule (`fast100` at `mReg`, none below 22) rejects.
+* `mReg_of_list`: each of the list's `rec-opening` statements is at `m = mReg` and `STACKED_CLAIMS` claims, where
+  `mReg` is the model's (`(holoAt st hp).cls.shape.mReg`, padded to `PAD_TO` as the verifier's `tableM` is) and `ℓ` is
+  in the class's range.
 -/
 
 namespace FlockC3.VStarList
@@ -194,38 +193,27 @@ def SparseIs (ish : Flock.RecVStar.Inner) (hp : HoloParams) : Prop :=
   ish.sparse = some { nu := hp.nu, ell := hp.ell, sLog := hp.sLog, tLog := hp.tLog }
 
 open FlockSoundness.Discharge.Recursion in
-/-- **The model's `mReg`** where `ℓ` is in the class's range: `ν + pLog + tLog` at the template's `ℓ`. -/
+/-- **The model's `mReg`** where `ℓ` is in the class's range: `ν + pLog + tLog` at the template's `ℓ`, padded to
+`PAD_TO` (`SparseShape.mReg`). -/
 theorem mReg_holoAt {st : Flock.Stmt} {hp : HoloParams} (hell : hp.EllOk (execClassAt st).cls.kLog) :
-    (holoAt st hp).cls.shape.mReg = hp.nu + (Nat.log2 (2 * hp.ell + 1) + 1) + hp.tLog := by
+    (holoAt st hp).cls.shape.mReg =
+      max Flock.RecVStar.PAD_TO (hp.nu + (Nat.log2 (2 * hp.ell + 1) + 1) + hp.tLog) := by
   have hs : (holoAt st hp).cls.slotLog = hp.ell := ite_eq_left hell
-  rw [show (holoAt st hp).cls.shape.mReg =
-    hp.nu + (Nat.log2 (2 * (holoAt st hp).cls.slotLog + 1) + 1) + hp.tLog from rfl, hs]
+  rw [show (holoAt st hp).cls.shape.mReg = max Flock.RecVStar.PAD_TO
+    (hp.nu + (Nat.log2 (2 * (holoAt st hp).cls.slotLog + 1) + 1) + hp.tLog) from rfl, hs]
 
 open FlockSoundness.Discharge.Recursion in
-/-- **The list's openings are at `max PAD_TO mReg`**: at `hp` the inner shape's `sparse` entry and `ℓ` in the class's
-range, each `rec-opening` statement of the verifier's list is at the model's `mReg` padded to `PAD_TO`, and at
-`STACKED_CLAIMS` claims. -/
-theorem tableM_of_list {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
+/-- **The list's openings are at `mReg`** (gap 2's `m`): at `hp` the inner shape's `sparse` entry and `ℓ` in the
+class's range, each `rec-opening` statement of the verifier's list is at `m = (holoAt st hp).cls.shape.mReg`, the
+model's `mReg` padded to `PAD_TO` as the verifier's `tableM` is, and at `STACKED_CLAIMS` claims. -/
+theorem mReg_of_list {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (hss : Flock.RecVStar.statements ish = .ok ss) (hsp : SparseIs ish hp) (hell : hp.EllOk (execClassAt st).cls.kLog)
     {m c j : ℕ} {S : Flock.RecOpen.GfS} {ports : List (String × ℕ)} {nv : ℕ}
     (hs : VStar.Stmt.opening m c j S ports nv ∈ ss) :
-    m = max Flock.RecVStar.PAD_TO (holoAt st hp).cls.shape.mReg ∧ c = Flock.RecVStar.STACKED_CLAIMS := by
+    m = (holoAt st hp).cls.shape.mReg ∧ c = Flock.RecVStar.STACKED_CLAIMS := by
   obtain ⟨sp, hsp', hm, hc⟩ := opening_of_list hss hs
   obtain rfl := Option.some.inj ((show ish.sparse = _ from hsp).symm.trans hsp')
   refine ⟨?_, hc⟩
   rw [hm, tableM_eq, mReg_holoAt hell]
-
-open FlockSoundness.Discharge.Recursion in
-/-- **The list's openings are at `mReg`** (gap 2's `m`): at `hp` the inner shape's `sparse` entry, `ℓ` in the class's
-range and `mReg` at least `PAD_TO`, each `rec-opening` statement of the verifier's list is at
-`m = (holoAt st hp).cls.shape.mReg` and `STACKED_CLAIMS` claims. -/
-theorem mReg_of_list {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
-    (hss : Flock.RecVStar.statements ish = .ok ss) (hsp : SparseIs ish hp) (hell : hp.EllOk (execClassAt st).cls.kLog)
-    (hpad : Flock.RecVStar.PAD_TO ≤ (holoAt st hp).cls.shape.mReg)
-    {m c j : ℕ} {S : Flock.RecOpen.GfS} {ports : List (String × ℕ)} {nv : ℕ}
-    (hs : VStar.Stmt.opening m c j S ports nv ∈ ss) :
-    m = (holoAt st hp).cls.shape.mReg ∧ c = Flock.RecVStar.STACKED_CLAIMS := by
-  obtain ⟨hm, hc⟩ := tableM_of_list hss hsp hell hs
-  exact ⟨hm.trans (Nat.max_eq_right hpad), hc⟩
 
 end FlockC3.VStarList

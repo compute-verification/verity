@@ -1,4 +1,5 @@
 import Flock.RecVStar
+import Flock.RecCoins
 import Flock.Firewall
 import Proofs.Flock.Recursive.Holo
 import Proofs.Flock.Recursive.Compile
@@ -12,14 +13,19 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 
 * `HoloParams`: the sparse phase's public parameters, the verifier's own (the template's `ℓ`, `ν`, the slots' and types'
   bits, the slots' unit slots and types); `HoloClass.ofExec` is `HClass`'s fields with them, and `holoAt st hp` the
-  class, regions and schedule of `execClassAt st` with R's registered schedule `fast100`'s at `mReg = ν + pLog + tLog`
-  (the default, whose empty levels reject R, where `ℓ` is out of `[6, k_log]`).
+  class, regions and schedule of `execClassAt st` with R's registered schedule `fast100`'s at `mReg`, `ν + pLog + tLog`
+  padded to `PAD_TO` as the verifier opens R (the default, whose empty levels reject R, where `ℓ` is out of
+  `[6, k_log]`, which the verifier refuses: `SparseRangeOk`).
 * `HoloReg`: the registered word `w` and its level-0 cap `cap`; `Opens` is the registrant's openings of every position
   of `cap` to `w`'s columns, what defines `w` from `cap` (`RecursiveAudit`'s `_hreg` for an encoded table).
 * `StackedTop lv st reg cap`: `cap` is R's registered top, the `stacked` entry of the registration record `reg` (the
   verifier's `--rec-inner-registration`) that the inner statement's META binds by its digest (`metaRegistration st`,
   `RecVStar.registration`): the entry `topEntry` makes from one hm96 commit string per node, each over the node's row
-  (`Firewall.topRows`, `rowDigest`) under a salt.
+  (`Firewall.topRows`, `rowDigest`) under a salt. The verifier holds it of the binding round's top (`innerCommitsAt`).
+* `AcceptsC3`: the verifier's checks at candidate 3 of its own inputs, which the event carries: V*'s list builds, the
+  inner transcript holds against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass
+  (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's slots inside the block). `UnitsOf`: the slots' units are the
+  unit range's.
 * `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`; the statement is true when
   some table `R` within the unique-decoding radius of `w` (`RegSchedule.Close`) has a satisfiable hidden statement at
   the slots' types.
@@ -112,16 +118,61 @@ def metaRegistration (st : Flock.Stmt) : Option String :=
   | .ok (.str d) => some d
   | _ => none
 
+/-- **`bcs` are `cap`'s commit strings**: `2^capDepth lv` of them, node `i`'s the hm96 commit string of its row
+(`Firewall.topRows`) under a salt. -/
+def TopOf (lv : Level) (cap : Cap Refine.Dig) (bcs : Array ByteArray) : Prop :=
+  bcs.size = 2 ^ capDepth lv ∧ ∃ salt : ℕ → ByteArray, ∀ i (h : i < bcs.size),
+    bcs[i] = Flock.Hm96.Default512.commitString (Flock.Firewall.rowDigest ((Flock.Firewall.topRows (cap i).1).headD #[]))
+      (salt i)
+
 /-- **`cap` is R's registered top**: the registration record `reg` (`--rec-inner-registration`, the verifier's own
 input) is the one the inner statement's META binds by its digest (`metaRegistration st`), it names `stacked` under its
-`program`, and that entry is what `topEntry` makes from `2^capDepth lv` commit strings, node `i`'s the hm96 commit
-string of its row (`Firewall.topRows`) under a salt. -/
+`program`, and that entry is, canonically, what `topEntry` makes from `cap`'s commit strings (`TopOf`), as
+`RecVStar.candidate3` compares them. -/
 def StackedTop (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) : Prop :=
-  ∃ (prog : String) (e : Lean.Json) (bcs : Array ByteArray) (salt : ℕ → ByteArray),
+  ∃ (prog : String) (e e' : Lean.Json) (bcs : Array ByteArray) (s : String),
     Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
-      Flock.RecVStar.topEntry prog bcs = .ok e ∧ bcs.size = 2 ^ capDepth lv ∧
-      ∀ i (h : i < bcs.size), bcs[i] = Flock.Hm96.Default512.commitString
-        (Flock.Firewall.rowDigest ((Flock.Firewall.topRows (cap i).1).headD #[])) (salt i)
+      Flock.RecVStar.topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok s ∧ Flock.canon e = .ok s ∧ TopOf lv cap bcs
+
+/-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `FlockVerify.recTranscriptInput` calls
+it, at the coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
+`record` (`--rec-inner-session`), R's registration `reg` (`--rec-inner-registration`), and the digest and R's shape the
+inner statement's META names (`metaRegistration`, `RecVStar.stackedShapeOf`). It refuses a registration META does not
+bind, and a binding round of R's stream whose top does not make the registered `stacked` entry. -/
+def innerCommitsAt (tr : Lean.Json) (record : String) (st : Flock.Stmt) (reg : Lean.Json) :
+    Except String Flock.RecVStar.InnerCommits := do
+  let shape ← Flock.RecVStar.stackedShapeOf st.c.metaJ
+  Flock.RecVStar.innerCommits tr record (some reg) (metaRegistration st) shape
+
+/-- **The inner circuit's unit range**, as check 5 reads it off the inner statement (`RecCoins.Inner.load`'s
+`unitRange`): its one range of the unit net. -/
+def unitRangeOf (st : Flock.Stmt) : Except String Flock.Range :=
+  match st.c.ranges.filter (·.kind == Flock.Kind.net st.c.unitNet) with
+  | #[r] => .ok r
+  | _ => .error "the inner circuit has not one range of its unit net"
+
+/-- **Check 5's refusals at the sparse shape**, which read only the verifier's own inputs: at the inner shape's RecSparse
+shape `sp` (`RecVStar.Inner.sparse`, the verifier's `--sparse`), RecSparse's shape check (`RecSparse.Shape.valid`,
+`6 ≤ ELL`); and at inner points of the inner statement's `k_log − 6` coordinates, RecSparse's `v`'s check that they are
+not short of `ELL − 6` (`RecCoins.sparseV`) and the slots' layout factors at the inner circuit's unit range
+(`RecCoins.layoutFactors`: slots of `2^ELL` rows, at most `2^S_LOG` of them, inside the block). Both read only the
+points' sizes, so this is their verdict at every rep's points (`RecCoins.checkSparse`). -/
+def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
+  ∀ sp, ish.sparse = some sp →
+    let xs := Array.replicate ((execClassAt st).cls.kLog - 6) (0 : Flock.F128)
+    sp.valid = true ∧ ¬ xs.size < sp.ell - Flock.RecSparse.PRE_ROUNDS ∧
+      ∃ rng, unitRangeOf st = .ok rng ∧ (Flock.RecCoins.layoutFactors sp xs xs rng).isOk = true
+
+/-- **Lean's verifier accepts its own inputs at candidate 3**: V*'s list builds (`RecVStar.statements`), it holds the
+inner transcript against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass (`SparseRangeOk`). -/
+def AcceptsC3 (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) (tr : Lean.Json) (record : String) (reg : Lean.Json) :
+    Prop :=
+  (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧ SparseRangeOk ish st
+
+/-- **The slots' unit slots are the verifier's**: slot `σ` fills unit `pos0 + σ` of the inner circuit's unit range
+below its count, and none past it (`RecCoins.layoutFactors`). -/
+def UnitsOf (st : Flock.Stmt) (hp : HoloParams) : Prop :=
+  ∃ rng, unitRangeOf st = .ok rng ∧ ∀ σ, hp.units σ = if σ.val < rng.count then {rng.pos0 + σ.val} else ∅
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 

@@ -26,12 +26,17 @@ What it takes, against `PublicAudit`:
 * R's registration, which says which table the audit is about, as `RecursiveAudit`'s `p`, `path₀` and `_hreg` say which
   private circuit: the record `reg`, the verifier of record's `--rec-inner-registration`, which `st`'s META binds by
   its digest (`metaRegistration st`, as the verifier reads it off `--rec-inner-circuit`, the file `st` is set up from),
-  the registered word and cap `xR`, the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`) and
-  the cap the record's `stacked` entry (`_hstk`, `StackedTop`), so `st` fixes the cap up to a collision. The word's closeness to a codeword is no hypothesis: the statement holds only when some
-  table within the unique-decoding radius of the word has a satisfiable hidden statement, so a far word is a false
-  statement that the bound covers;
+  the registered word and cap `xR` and the registrant's openings of every level-0 position (`_hreg`, `HoloReg.Opens`).
+  The tie of the cap to the record's `stacked` entry is the verifier's, so it is in the event, not a hypothesis: the
+  verifier holds the inner transcript (`tr`, `record`, its own inputs) against `reg` (`innerCommitsAt`), whose binding
+  round's top must make the entry, and at a top that is `xR.cap`'s that gives `StackedTop`
+  (`FlockC3.RegLevels.stackedTop_of_innerCommits`). The word's closeness to a codeword is no hypothesis: the statement
+  holds only when some table within the unique-decoding radius of the word has a satisfiable hidden statement, so a far
+  word is a false statement that the bound covers;
 * V*'s statements indexed by the verifier's own list (`vstarCount ish`, `RecVStar.statements`; gap 4(c)), in place of
-  the formula `outerStatementsAt st`; the event adds the verifier's own check that its list builds;
+  the formula `outerStatementsAt st`; the event adds the verifier's checks at candidate 3 of its own inputs
+  (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, and check 5's sparse refusals pass, so
+  `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block (`SparseRangeOk`);
 * R's `m`: Lean's verifier never compares META's `stacked.m` with the bucket's `table_m`; it holds R's stream and each
   `rec-opening` unit to META's shape, and the unit names come from the outer program it compiles (the list). The model
   takes R's `m` from the class (`mReg`), and VBridge (`_hbr`, V*'s circuits compute this inner verifier at the list's
@@ -60,9 +65,9 @@ set_option synthInstance.maxHeartbeats 1000000
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
 parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, the
-registered word and cap `xR` with the registrant's openings `_hreg`, its cap the record's `stacked` entry `_hstk`), the
-verifier of record's inner
-shape `ish`, and every prover `σ` of the recursive audit with candidate 3's compiled table as its inner protocol
+registered word and cap `xR` with the registrant's openings `_hreg`), the verifier of record's records of the inner
+session (`tr`, `record`) and inner shape `ish`, and every prover `σ` of the recursive audit with candidate 3's compiled
+table as its inner protocol
 (`holoInnerAt`), at the law of the registration's draws (`drawLaw`): V*'s statements `Vs`, one for each of the
 verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their
 records' custody `_hCust`, the verifier of record's own inputs (V*'s bindings `bind` and the shared rows `rows`; session
@@ -73,8 +78,8 @@ Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at
 V*'s circuits compute candidate 3's inner verifier at the typed sessions and R's registration (VBridge): the event below
 is empty; or the sessions type and there is a registrant fork, a round fork, a session fork, or an inner fork of the
 transported prover's own runs whose decoded transcripts play candidate 3's table to outcomes that clash; or
-$$\Pr[\text{Lean's verifier builds } st \wedge \text{V*'s list builds} \wedge \text{every session verifies as V*'s
-  statement of its index} \wedge \neg\,\exists R \text{ near } w,\ R\text{'s hidden statement holds}]$$
+$$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
+  verifies as V*'s statement of its index} \wedge \neg\,\exists R \text{ near } w,\ R\text{'s hidden statement holds}]$$
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and candidate 3's error.
 
@@ -85,11 +90,12 @@ def RecursiveAuditC3 : Prop :=
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the verifier's own partition object and program, the inner statement and the sparse phase's parameters
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) (hp : HoloParams)
-    -- R's registration: the verifier of record's own input, the record `--rec-inner-registration` that `st`'s META
-    -- binds; the registered word and cap, the registrant's openings and the record's `stacked` entry
-    (reg : Lean.Json) (xR : HoloReg FlockLevel3.GF128 Refine.Dig)
+    -- the verifier of record's own inputs: R's registration (`--rec-inner-registration`, the record `st`'s META binds),
+    -- the coin server's record of V*'s inner session (`--rec-inner-transcript`) and the session's (`--rec-inner-session`)
+    (reg : Lean.Json) (tr : Lean.Json) (record : String)
+    -- the registered word and cap, and the registrant's openings
+    (xR : HoloReg FlockLevel3.GF128 Refine.Dig)
     (_hreg : xR.Opens Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp).rsch.sch.level₀)
-    (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg xR.cap)
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
@@ -124,7 +130,7 @@ def RecursiveAuditC3 : Prop :=
     -- registration
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (fun _ _ => Subtype.mk xR _hreg) wmsg Sk cmt msg),
-    prob (fun o => (AcceptsPublic obj prog st ∧ (RecVStar.statements ish).isOk = true) ∧
+    prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st tr record reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR _hreg))
         (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
@@ -134,7 +140,7 @@ def RecursiveAuditC3 : Prop :=
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (fun _ _ => Subtype.mk xR _hreg)
         wmsg Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
-      prob (fun o => (AcceptsPublic obj prog st ∧ (RecVStar.statements ish).isOk = true) ∧
+      prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st tr record reg) ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR _hreg))
           (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤

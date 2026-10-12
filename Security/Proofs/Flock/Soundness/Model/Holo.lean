@@ -26,8 +26,13 @@ open FlockSoundness.Game FlockSoundness.Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- The registered table's variables: the entries', the planes' and the types'. -/
-def SparseShape.mReg (sh : SparseShape) : ℕ := sh.nu + sh.pLog + sh.tLog
+/-- The fewest variables the registered opening opens a registered table at (`RecVStar.PAD_TO`). -/
+def SparseShape.padTo : ℕ := 22
+
+/-- The registered table's variables: the entries', the planes' and the types', padded to `padTo` as the verifier
+opens it (`RecVStar.tableM`); the padding's cells are zero, and a claim's point is zero at its coordinates
+(`RegClaim.coord`), so it reads only the cells. -/
+def SparseShape.mReg (sh : SparseShape) : ℕ := max SparseShape.padTo (sh.nu + sh.pLog + sh.tLog)
 
 /-- Coordinate `j` of the registered claim's point `(r_k, ζ_p, ρ_t)`. -/
 def RegClaim.coord {sh : SparseShape} (c : RegClaim F sh) (j : ℕ) : F :=

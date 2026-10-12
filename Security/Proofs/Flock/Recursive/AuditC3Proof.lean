@@ -11,7 +11,8 @@ table, and `RecursiveFirewallPrivate`.
 
 In (i), as in `PublicAudit`'s:
 * where some index has no session that types, the event is empty (`prob_sessionsR_untypable`);
-* at a statement Lean's verifier doesn't build, or a V* list it doesn't build, the event is empty (its first conjunct);
+* at a statement Lean's verifier doesn't build, or inputs at candidate 3 it refuses (`AcceptsC3`: V*'s list, the inner
+  transcript against R's registration, check 5's sparse refusals), the event is empty (its first conjunct);
 * at one it builds, the class checks pass (`classOk_of_accepts`), and candidate 3's table at the executable's
   parameters is sound in fork form (piece (a), `FlockC3.Fork.holoForkSound_holoAt`);
 * the hidden statement is R's registration (`xR` with the registrant's openings `_hreg`), a constant of the run, and the
@@ -35,8 +36,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg xR hreg hstk ish Vs zr hCust bind rows hob hF
-    dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg tr record xR hreg ish Vs zr hCust bind rows
+    hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
   · left
@@ -46,7 +47,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
     rw [prob_outerVR]
     exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (hF σ.1 ω t s.1) j₀
       (hj₀ (σ.1, ω, t, s.1)) _ (fun b hb => hb.2.1) _
-  by_cases hacc : Flock.Guarantees.AcceptsPublic obj prog st ∧ (RecVStar.statements ish).isOk = true
+  by_cases hacc : Flock.Guarantees.AcceptsPublic obj prog st ∧ AcceptsC3 ish st tr record reg
   swap
   · exact Or.inl (le_antisymm ((prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans (prob_false _ σ).le)
       (zero_le ..))
@@ -71,7 +72,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   · exact Or.inr (Or.inr (Or.inl hf))
   · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
   · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT hF σ _
-      (fun o => (Flock.Guarantees.AcceptsPublic obj prog st ∧ (RecVStar.statements ish).isOk = true) ∧
+      (fun o => (Flock.Guarantees.AcceptsPublic obj prog st ∧ AcceptsC3 ish st tr record reg) ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR hreg))
       (fun o ho => ho.2.1) (fun o hall ho =>

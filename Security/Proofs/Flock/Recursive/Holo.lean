@@ -102,15 +102,19 @@ def toStatement (R : RegTable cls) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLo
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) : Statement :=
   ⟨cls.m, cls.kLog, cls.hk, cls.hk6, cls.pin, R.side τ false, R.side τ true, regs⟩
 
-theorem type_lt (a : Fin (2 ^ cls.shape.mReg)) : a.val / 2 ^ (cls.nu + cls.shape.pLog) < 2 ^ cls.tLog := by
+theorem type_lt {a : ℕ} (h : a < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog)) :
+    a / 2 ^ (cls.nu + cls.shape.pLog) < 2 ^ cls.tLog := by
   rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add]
-  exact a.isLt.trans_le (Nat.pow_le_pow_right (by norm_num) (by simp only [SparseShape.mReg, HoloClass.shape]; omega))
+  exact h
 
-/-- The stacked table the registered opening reads: bit `k + 2^ν·(p + 2^pLog·t)` is `R t p k`. -/
+/-- The stacked table the registered opening reads: bit `k + 2^ν·(p + 2^pLog·t)` is `R t p k`, and the padding's bits
+past the cells (`SparseShape.mReg`) are zero. -/
 def bits (R : RegTable cls) : Witness cls.shape.mReg := fun a =>
-  R ⟨a.val / 2 ^ (cls.nu + cls.shape.pLog), type_lt a⟩
-    ⟨a.val / 2 ^ cls.nu % 2 ^ cls.shape.pLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
-    ⟨a.val % 2 ^ cls.nu, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+  if h : a.val < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog) then
+    R ⟨a.val / 2 ^ (cls.nu + cls.shape.pLog), type_lt h⟩
+      ⟨a.val / 2 ^ cls.nu % 2 ^ cls.shape.pLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+      ⟨a.val % 2 ^ cls.nu, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+  else 0
 
 end RegTable
 
