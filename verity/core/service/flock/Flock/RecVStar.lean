@@ -13,6 +13,7 @@ up for V*'s native side, read once, since the inner circuit can be tens of GB; `
 printed.
 -/
 import Flock.HmRow
+import Flock.RecOpening
 import Flock.Registered
 import VStar.Cli
 import VStar.Compose
@@ -324,11 +325,21 @@ structure InnerStream where
   commits : Array (Nat × ByteArray)
   tops : Array (Array ByteArray)
 
+/-- R's opening-only shape, `Shape(m, 6, claims, opening_only=True)`, as staging committed R (`rec_session.stage_stacked`):
+`m` R's variables (`rec_sparse.table_m` of the bucket) and its claims, the two reps' sparse claims. The registered top is a
+cap of `2^cap` nodes, which fixes neither: three `m` share a cap depth. -/
+structure StackedShape where
+  m : Nat
+  claims : Nat
+  deriving BEq, Repr
+
 /-- What the verifier holds of the inner session's transcript: the circuit table's reps' `c_k` (`reps`, rep `x` at `x`), and
-with candidate 3's streams every stream of the session (`streams`; empty for a session of one table's two reps). -/
+with candidate 3's streams every stream of the session (`streams`; empty for a session of one table's two reps) and, with
+R's stream, the shape R's stream was held to (`stacked`, `StackedShape`, the inner circuit's META's). -/
 structure InnerCommits where
   reps : Array (Array (Nat × ByteArray))
   streams : Array InnerStream := #[]
+  stacked : Option StackedShape := none
 
 def InnerCommits.stream? (ic : InnerCommits) (name : String) : Option InnerStream := ic.streams.find? (·.name == name)
 
@@ -403,6 +414,85 @@ def registration (reg : Option Json) (bound : Option String) : V (Option (String
     | #[e] => return some (program, some e)
     | _ => throw none_
 
+/-- META's key for R's shape (`rec_session.STACKED_SHAPE_KEY`), `{"m", "claims"}`. -/
+def STACKED_SHAPE_KEY : String := "stacked"
+/-- R is opened at the two reps' sparse claims (`rec_live.REPS`, `rec_vstage.stacked_reads`). -/
+def STACKED_CLAIMS : Nat := 2
+
+/-- META's R shape (`STACKED_SHAPE_KEY`) of the inner circuit, the shape staging committed R at; none when META names none. -/
+def stackedShapeOf (hdr : Json) : V (Option StackedShape) := do
+  let .ok s := hdr.getObjVal? STACKED_SHAPE_KEY | return none
+  let (.ok m, .ok claims) := (s.getObjValAs? Nat "m", s.getObjValAs? Nat "claims")
+    | throw s!"rec inner circuit: META's {STACKED_SHAPE_KEY} is not R's shape (m, claims)"
+  return some { m, claims }
+
+/-- One round of a stream's schedule (`rec_live.rep_rounds`' tuples): its coin count, the node counts of the tops it
+commits, its copies of level 0's top, and whether it absorbs a message (one row when it absorbs any elements). -/
+abbrev SchedRound := Nat × Array Nat × Nat × Bool
+
+/-- Python's `int.bit_length`. -/
+def bitLength (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
+
+/-- `rec_live.rep_rounds`: one fast100 rep's rounds for a table of `2^m` packed elements, `2^k_log` a block, with `claims`
+claims, in `rec_algebra.run`'s order of draws: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
+def repRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
+  let sch ← fast100 m
+  let lv := sch.levels
+  let r := lv.size - 1
+  let cap := fun (l : Nat) => #[2 ^ (lv.getD l default).cap]
+  let one := fun (n : Nat) (absorbs : Bool) => ((n, #[], 0, absorbs) : SchedRound)
+  let level := fun (i split : Nat) =>
+    let q := (lv.getD i default).q
+    #[((split, cap (i + 1), 0, true) : SchedRound), one 1 true, one split false, one 1 true, one q false,
+      one (bitLength (q - 1)) false, one 1 true]
+  let mut out : Array SchedRound := #[(6, #[], 1, false), one (m - 13) false, one 1 true] ++
+    Array.replicate (m - 5) (one 1 true) ++ #[one 1 false] ++ Array.replicate (kLog - 6) (one 1 true) ++ #[one 1 true] ++
+    Array.replicate claims (one 7 true) ++ #[one claims false]
+  let mut split := sch.n - sch.k0 + 1
+  out := out ++ #[(sch.n, #[], 1, true), one 1 true] ++ Array.replicate sch.k0 (one 2 true) ++ level 0 split
+  for i in [0:r] do
+    if split < 4 then none
+    out := out ++ #[one 2 false] ++ Array.replicate 3 (one 2 true)
+    let ext := split - 4
+    if i + 1 < r then
+      split := ext + 1
+      out := out ++ level (i + 1) split
+    else
+      let q := (lv.getD r default).q
+      out := out ++ #[one q true, one (bitLength (q - 1)) false, one 1 false]
+  return out
+
+/-- `rec_live.stacked_rounds` at `claims` claims: R's one stream, the opening-only prover's rep at `Shape(m, 6, claims)`. Its
+binding round commits R's level-0 top (R has no root at `Commit`) and absorbs the first claim's s_hat_v; then the other
+claims' ring switches, the gammas and Ligerito at `fast100 m` (`repRounds m 6 claims` past its first ring switch). -/
+def stackedRounds (sh : StackedShape) : Option (Array SchedRound) := do
+  let sch ← fast100 sh.m
+  if sh.claims < 1 then none
+  let rep ← repRounds sh.m 6 sh.claims
+  return #[(7, #[2 ^ (sch.levels.getD 0 default).cap], 0, true)] ++ rep.extract (sh.m + 1) rep.size
+
+/-- A transcript round's schedule round: its coins' count, its tops' node counts, its copies of level 0's top, and whether
+it commits a message. -/
+def schedOf (r : Json) : SchedRound :=
+  ((coinsOf r).size, ((r.getObjValAs? (Array (Array String)) "tops").toOption.getD #[]).map (·.size),
+    (r.getObjValAs? Nat "level0").toOption.getD 0, !((r.getObjValAs? (Array String) "commits").toOption.getD #[]).isEmpty)
+
+def showSched (s : SchedRound) : String := s!"(coins {s.1}, tops {s.2.1.toList}, level0 {s.2.2.1}, commits {s.2.2.2})"
+
+/-- **R's stream is R's at the shape staging committed R at** (`sh`, META's): R is opened at the two reps' sparse claims,
+and `stacked/rep0`'s rounds `rs` (in round order) are `stackedRounds sh` exactly, round for round. Neither the stream's
+declared count nor its proof's header fixes R's shape, and the registered top fixes only its cap, so a stream opened at
+another `m` (or claim count) over the registered top is refused here. -/
+def checkStackedShape (s : String) (sh : StackedShape) (rs : Array Json) : V Unit := do
+  let at_ := s!"{s} is not R's stream at the shape staging committed R at (m {sh.m}, claims {sh.claims}, META's {STACKED_SHAPE_KEY})"
+  if sh.claims != STACKED_CLAIMS then
+    throw (refused s!"registration: {at_}: R is opened at the two reps' sparse claims, not {sh.claims}")
+  let some want := stackedRounds sh | throw (refused s!"registration: {at_}: no fast100 schedule at m {sh.m}")
+  if rs.size != want.size then throw (refused s!"registration: {at_}: {rs.size} rounds, not {want.size}")
+  for (r, w) in rs.zip want, k in [0:rs.size] do
+    let got := schedOf r
+    if got != w then throw (refused s!"registration: {at_}: round {k} is {showSched got}, not {showSched w}")
+
 /-- **Candidate 3's session** (`rec_live.schedule_for` with `sparse`, and `stacked`): the circuit table `t`'s two reps, both
 reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`) and the streams its message
 rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end of the rep's stream, the
@@ -410,10 +500,12 @@ reps and R at round 0 of no parent), each with every round from 0 to its count; 
 server's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
 `t`'s alone (the inner statement's Hello), R's root being the top its stream's binding round commits; each round's tops are
 lists of `b ‖ c`, none in a sparse stream; R's binding round's first top makes R's registered entry `regR` (the
-registration's `program` and its `stacked` entry, `topEntry`, as `rec_vstar.registered` holds it); and every `b ‖ c` the session holds (roots, tops, `c_k`) is a distinct one, since the firewall
-commits each under a fresh salt. -/
+registration's `program` and its `stacked` entry, `topEntry`, as `rec_vstar.registered` holds it); R's rounds are those of
+the shape staging committed R at (`shape`, META's, `checkStackedShape`); and every `b ‖ c` the session holds (roots, tops,
+`c_k`) is a distinct one, since the firewall commits each under a fresh salt. -/
 def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List String)
-    (msgs : Array (String × Nat × ByteArray)) (regR : Option (String × Json) := none) : V (Array InnerStream) := do
+    (msgs : Array (String × Nat × ByteArray)) (regR : Option (String × Json) := none)
+    (shape : Option StackedShape := none) : V (Array InnerStream) := do
   let stacked := names.contains s!"{STACKED}/rep0"
   let want := [s!"{t}rep0", s!"{t}rep1", s!"{SPARSE}/rep0", s!"{SPARSE}/rep1"] ++ (if stacked then [s!"{STACKED}/rep0"] else [])
   let tbl := (t.dropEnd 1).toString
@@ -475,6 +567,10 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
             | none => pure false
           if !made then throw (refused s!"registration: {s}'s binding round's top is not {STACKED}'s registered top")
         tops := tops.push bcs
+    if table == some STACKED then
+      let some sh := shape
+        | throw (refused s!"registration: {s} binds R, and the inner circuit's META names no shape of R ({STACKED_SHAPE_KEY}): R's m and claims are bound nowhere")
+      checkStackedShape s sh rs
     let cs := ((msgs.filter (·.1 == s)).qsort (·.2.1 < ·.2.1)).map (·.2)
     all := all ++ (tops.extract (if committed then 1 else 0)).foldl (· ++ ·) #[] ++ cs.map (·.2)
     out := out.push { name := s, commits := cs, tops := if table.isSome then tops else #[] }
@@ -496,9 +592,11 @@ server's record alone. R has no root at `Commit`, so the circuit registration bi
 (`--rec-inner-registration`) must be the one the inner circuit's META binds (`bound`, its `registration`; `registration`), a
 session with R's stream needs the record's `stacked` entry, which its binding round's top must make (`candidate3`); and a
 session whose registration names R needs R's stream, whose opening the statement then reads (a session without it is a
-downgrade). -/
-def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (bound : Option String := none) :
-    V InnerCommits := do
+downgrade). R's `m` and claims are `shape`, META's `stacked` (`stackedShapeOf`), the shape staging committed R at, which R's
+stream must be opened at (`checkStackedShape`) and R's opening units are then held to (`checkPubRows`); never the stream's
+own count or its proof's header. -/
+def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (bound : Option String := none)
+    (shape : Option StackedShape := none) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
   let held ← registration reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
@@ -547,8 +645,10 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
     if !(declaredR && c3) then
       throw s!"rec inner transcript: the registration names R's top ({STACKED}), and the session has no {stackedS}: R's stream is missing (a downgrade)"
   | _, _, _ => pure ()
+  if shape.isSome && regR.isNone then
+    throw s!"rec inner transcript: the inner circuit's META names R's shape ({STACKED_SHAPE_KEY}), and its registration names no top of R's"
   let reps := #[0, 1].map fun x => ((msgs.filter (·.1 == s!"{t}rep{x}")).qsort (·.2.1 < ·.2.1)).map (·.2)
-  if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR }
+  if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR shape, stacked := shape }
   return { reps }
 
 /-- `rec-opening-c<i>`'s `i`. -/
@@ -606,7 +706,8 @@ def fixedRow (cs : InnerCommits) (value : String) (x : Nat) (sparse : Option Rec
 the verifier's reads file registering a value `fixedRow` names (`rec-c<i>`, and with R `rec-opening-c<i>` and
 `rec-top-stacked-L<l>`, and with a rec-sparse unit `rec-sparse-<p>`), every row of the port's table, at the registered
 position `x` it opens, is that value's row `x` in `innerCommits`: for `rec-c<i>`, rep `x`'s `i`-th message round's `c_i`.
-`Registered.check` puts each instance's row at the position its unit reads. -/
+`Registered.check` puts each instance's row at the position its unit reads. An R opening unit
+(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
     (commits : Option InnerCommits) : V Unit := do
   let unit := st.c.unit.name
@@ -614,6 +715,10 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
   let some reg0 := regs[0]? | return
   let some cs := commits
     | throw s!"rec-pub: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no c_k to check port {reg0.name}'s rows of {reg0.value} against"
+  if let some (m, c, _) := RecOpening.params unit then
+    if cs.stacked != some { m, claims := c } then
+      let held := (cs.stacked.map fun sh => s!"m {sh.m}, claims {sh.claims}").getD "no shape"
+      throw (refused s!"registration: {unit} opens R at (m {m}, claims {c}), not at the shape staging committed R at ({held}, META's {STACKED_SHAPE_KEY})")
   let some t := st.pub.tables | throw s!"rec-pub: {unit}: {reg0.name} is not a table of a shared-row file"
   for reg in regs do
     let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)

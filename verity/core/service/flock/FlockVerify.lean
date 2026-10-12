@@ -306,9 +306,11 @@ def recBindingsInput (args : List String) : IO (Except String (Option VStar.Bind
 
 /-- META's `registration` (`inner_registered.REGISTRATION_KEY`) of the inner circuit (`--rec-inner-circuit`): the digest of
 the circuit registration it binds (one-stage `registration.digest`), or none, when META names none or no inner circuit is
-given. Only the circuit's header is read, up to its `META` line. -/
-def innerMetaRegistration (args : List String) : IO (Except String (Option String)) := do
-  let some f := argOf args "--rec-inner-circuit" | return .ok none
+given; and META's `stacked` (`RecVStar.stackedShapeOf`), the shape staging committed R at. Only the circuit's header is
+read, up to its `META` line. -/
+def innerMetaRegistration (args : List String) :
+    IO (Except String (Option String × Option RecVStar.StackedShape)) := do
+  let some f := argOf args "--rec-inner-circuit" | return .ok (none, none)
   try
     let h ← IO.FS.Handle.mk f .read
     let mut line ← h.getLine
@@ -319,10 +321,12 @@ def innerMetaRegistration (args : List String) : IO (Except String (Option Strin
     if !line.startsWith "META " then return .error "rec inner circuit: no META line"
     match Lean.Json.parse (line.drop 5).toString with
     | .error e => return .error s!"rec inner circuit: META is not JSON: {e}"
-    | .ok m => match m.getObjVal? "registration" with
-      | .error _ => return .ok none
-      | .ok (.str d) => return .ok (some d)
-      | .ok _ => return .error "rec inner circuit: META's registration is not a digest"
+    | .ok m => return do
+      let sh ← RecVStar.stackedShapeOf m
+      match m.getObjVal? "registration" with
+      | .error _ => pure (none, sh)
+      | .ok (.str d) => pure (some d, sh)
+      | .ok _ => throw "rec inner circuit: META's registration is not a digest"
   catch e => return .error s!"rec inner circuit: {e}"
 
 /-- `--rec-inner-transcript F`: the coin server's record of V*'s inner session (`rec/inner-transcript/v1`), with the inner
@@ -350,9 +354,9 @@ def recTranscriptInput (args : List String) (record : Option String) :
       | some s => match Lean.Json.parse s with
         | .ok j => pure (some j)
         | .error e => throw s!"rec inner registration: not JSON: {e}"
-    let bound ← bound
+    let (bound, shape) ← bound
     match Lean.Json.parse (← t) with
-    | .ok j => some <$> RecVStar.innerCommits j record rj bound
+    | .ok j => some <$> RecVStar.innerCommits j record rj bound shape
     | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
 /-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide]`: the shape of V*'s inner session
