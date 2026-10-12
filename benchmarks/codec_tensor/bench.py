@@ -423,18 +423,18 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     start, and every other warp tags once its own work is done), DECODERSxSTAGESx-1xK_S (the decoders sketch at
     k_s over tiles of `sketch_t` tasks, stages < 2 sketch_t) or DECODERSxSTAGESx-2x16 (two sketch warps of their own
     sketch and hash, beside D decoders: full slot, k_s = 16), each checked against wt_fused_sketch's bounds; at
-    M > 16 the kernel has two MMA warps (wt.cu's fused_mma_warps), so D + 3 warps untagged and D + 5 beside the sketch
-    warps must fit. `auto`: untagged, the most decoder warps the field's registers allow at 4 and 6 stages fewer than
-    fit at M = 32 (fewer stages leave more L1) and at all of them, 1 fewer at 4 and 6 fewer stages (M = 32's), and 2
-    fewer warps at 2 fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its best); tagged, 0
-    and 2 of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them
-    sketching at 0, 2, 3 and 4 fewer stages (the sketch's buffers already take some), and at k_s = 16 and full slot
-    the two sketch warps beside all of them, beside 2 and 3 fewer (M = 32's), at 0 and 2 fewer stages. Where the
-    field's kernel takes 20 warps (wt.cu's fused_warps: untagged at M <= 8, and beside the sketch warps at M <= 16),
-    also 16 decoders, four a sub-partition, untagged at 2 and 4 fewer stages and beside the sketch warps at 0 and 2
-    fewer, and 18 untagged at 4 fewer. gemm_case skips each config at an M whose kernel doesn't take its warps
-    (fused_fits). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on early tasks of
-    random CTAs, unexplained, so auto leaves them out."""
+    M > 16 and k <= 2 the kernel has two MMA warps (wt.cu's fused_mma_warps), so D + 3 warps untagged and D + 5 beside
+    the sketch warps must fit. `auto`: untagged, the most decoder warps the field's registers allow at 16 warps at 4
+    and 6 stages fewer than fit at M = 32 (fewer stages leave more L1) and at all of them, 1 fewer at 4 and 6 fewer
+    stages, and 2 fewer warps at 2 fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its
+    best); tagged, 0 and 2 of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in
+    `sketch`, all of them sketching at 0, 2, 3 and 4 fewer stages (the sketch's buffers already take some), and at
+    k_s = 16 and full slot the two sketch warps beside all of them and beside 2 and 3 fewer, at 0 and 2 fewer stages.
+    Where the field's kernel takes 20 warps (wt.cu's fused_warps: full slot, untagged or beside the sketch warps), also
+    16 decoders, four a sub-partition, untagged at 2 and 4 fewer stages and beside the sketch warps (and 15, M = 32's)
+    at 0 and 2 fewer, and 18 untagged at 4 fewer. gemm_case skips each config at an M and k whose kernel doesn't take
+    its warps (fused_fits). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on early
+    tasks of random CTAs, unexplained, so auto leaves them out."""
     smax = lambda ks, w=False: (  # noqa: E731
         (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 64 * (8 if w else 3) * ks) // (lib.sb + 48))
     dmax, dwide = lib.fused_warps - 2, lib.fused_most - 2
@@ -453,7 +453,8 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
             cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (0, 2, 3, 4)]
             if ks == 16 and full_slot:
                 cfgs += [(d, min(2 * sketch_t - 1, max(need(d), smax(ks, True) - f)), -2, ks)
-                         for d in sorted({dmax, dmax - 2, dmax - 3, dwide - 2}, reverse=True) if d >= lib.fused_span
+                         for d in sorted({dmax, dmax - 2, dmax - 3, dwide - 2, dwide - 3}, reverse=True)
+                         if d >= lib.fused_span
                          for f in (0, 2)]
     else:
         cfgs = parse(spec)
