@@ -11,7 +11,9 @@
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
 # r20261012-071155-d336; add p127s0 … for both) names the builds, KMAX_<bits> (defaults 4, 2, 2) the largest k each
-# holds, and WW_DEFS extra -D flags for every build.
+# holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
+# `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
+# out/profile-details.txt.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -45,7 +47,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
-export B PY WC LIBSET BENCH_ARGS=${BENCH_ARGS:-}
+export B PY WC LIBSET BENCH_ARGS=${BENCH_ARGS:-} PROFILE=${PROFILE:-} PROFILE_ARGS=${PROFILE_ARGS:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -54,7 +56,15 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
           -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
   LIBS=(); for lib in $LIBSET; do LIBS+=(--lib "$lib=$B/ww-$lib.so"); done
-  # shellcheck disable=SC2086
-  "$PY" $WC/wide_bench.py "${LIBS[@]}" --wc "$B/wc-plain.so" --out "$O" $BENCH_ARGS; rc=$?
+  if [ -n "${PROFILE:-}" ]; then
+    lib=${LIBSET%% *}
+    # shellcheck disable=SC2086
+    ncu --profile-from-start off --set full --import-source no -f -o "$O/profile" \
+      "$PY" $WC/wide_profile.py --lib "$lib=$B/ww-$lib.so" --out "$O" $PROFILE_ARGS > "$O/profile.log" 2>&1; rc=$?
+    [ $rc = 0 ] && ncu -i "$O/profile.ncu-rep" --page details > "$O/profile-details.txt" 2>&1
+  else
+    # shellcheck disable=SC2086
+    "$PY" $WC/wide_bench.py "${LIBS[@]}" --wc "$B/wc-plain.so" --out "$O" $BENCH_ARGS; rc=$?
+  fi
   q
   exit $rc'
