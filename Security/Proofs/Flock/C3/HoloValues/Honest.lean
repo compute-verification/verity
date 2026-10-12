@@ -2,6 +2,7 @@ import Proofs.Flock.C3.HoloValues.Reps
 import Proofs.Flock.C3.PubRows.Prefix
 import Proofs.Flock.C3.Compose.Honest
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
+import Proofs.Flock.C3.HoloValues.Read
 
 /-!
 # n2: the holo values at the honest family
@@ -19,7 +20,8 @@ the transcript-level holo rep program (n2a): `holoRepProg` (`Soundness/Refine/Ho
 As stated the stub is false: no hypothesis reads the decoder `dec`. At `dec := fun _ _ => []` every step of the inner
 transcript is a coin, `repsOf` finds no play of `holoRepC` (its zerocheck receives messages first) and returns its
 default, and `HReps` fails at every accepted outcome. It needs `dec` tied to V*'s layers: each rep's segment of the
-tape is its proof's messages (`holoRepMsgs`) at its rounds' coins.
+tape is its proof's messages (`holoRepMsgs`) at its rounds' coins. That is the read fact `RepsRead` (`Read.lean`), from
+which `hReps_honest_of_read` proves `HReps` at the honest family.
 -/
 
 namespace FlockC3.HoloValues
