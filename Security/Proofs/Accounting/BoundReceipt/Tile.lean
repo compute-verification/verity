@@ -47,4 +47,23 @@ theorem TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono := b
   obtain ⟨hr, c, hc, hact, hck⟩ := hx
   exact ⟨hr, c, hc, hact, fun y hy => by rw [← hY]; exact hck y (hidx _ hy)⟩
 
+/-- **`TT_OUT`'s shape gives `TileUnpredictablePearlC`** (`Accounting.Guarantees.TileUnpredictablePearlCOfTTOut`). -/
+theorem TileUnpredictablePearlCOfTTOut : Accounting.Guarantees.TileUnpredictablePearlCOfTTOut := by
+  classical
+  intro Q R S _ _ _ _ CM P credit D γ₀ ε hc hTT U hU T hT q hq A hA u hu
+  refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT.2 U hU T hT q hq A hA)
+  have hcorrect : ∀ v ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2), ∃ c : Pouw.PearlC.Commit,
+      Pouw.PearlC.actOf (A.transcript U x.1 x.2) v = c.act ∧ Pouw.PearlC.Correct P U x.1 x.2 v c := by
+    intro v hv
+    rw [Pouw.PearlC.correctSet, Finset.mem_filter] at hv
+    obtain ⟨-, c, hτ, hcor⟩ := hv
+    exact ⟨c, by simp [Pouw.PearlC.actOf, hτ], hcor⟩
+  obtain ⟨c, hact, hcor⟩ := hcorrect u hx
+  refine hu.trans_le ((hc x.1 x.2 U u c hcor).2.trans ?_)
+  rw [← hact]
+  refine Finset.single_le_sum
+    (f := fun v => P.credit x.1 x.2 U v (Pouw.PearlC.actOf (A.transcript U x.1 x.2) v)) (fun v hv => ?_) hx
+  obtain ⟨c', hact', hcor'⟩ := hcorrect v hv
+  simpa only [hact'] using (hc x.1 x.2 U v c' hcor').1
+
 end Accounting.SecurityProofs
