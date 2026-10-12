@@ -62,7 +62,10 @@ guarantee yet:
   outcome, so either VBridge's acceptance gains those checks or the event's acceptance reaches the sessions (L, to size).
 * n1c, the record–history link: `row` reads the verifier's fixed record `tr`, while the history `t` ranges, so
   `hheld` (`HeldIs`: at each accepted history the held row is `t`'s commitment) needs custody of `tr` as the live
-  history's record, beside `RecordCustody` (L, to state).
+  history's record, beside `RecordCustody`: stated as `Compose.InnerRecordCustody` (`C3/Compose/Custody.lean`, at
+  the coin server's writer `wr` of the inner record), which gives `HeldIs` (`heldIs_of_custody`, proved). It is
+  `live-verifier` at the inner session: no premise and no check of the verifier's gives it, so it is a new named
+  assumption, and the guarantee would read the record at the history (`wr t`) in place of `tr` and `record`.
 * `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
 * `hss` and `htop` are the event's (`AcceptsC3`'s list and hold of the inner transcript, with t0): `_hbr` at the honest
   family is used only where they hold.
