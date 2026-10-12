@@ -31,7 +31,7 @@ def main() -> int:
     import torch
 
     ks = [int(k) for k in args.ks.split(",")]
-    lib = B.Lib("512", args.lib)
+    lib = B.Lib("p512", args.lib)
     f = lib.field
     log = lambda m: print(m, flush=True)  # noqa: E731
     res: dict = {"field": f.name, "word_bytes": f.word_bytes, "gpu": torch.cuda.get_device_name(0),
@@ -66,8 +66,46 @@ def main() -> int:
                                  "encode_over_read": e / r, "decode_over_read": d / r, "round_trip": ok})
             log(f"k={k} {size >> 10:8d} KiB  encode {e * 1e6:9.1f} us  decode {d * 1e6:8.1f} us  read {r * 1e6:8.2f} us  "
                 f"encode/read {e / r:8.1f}  {'ok' if ok else 'ROUND TRIP FAILED'}")
+    del words, y, back
+    torch.cuda.empty_cache()
+    res["lm_head"] = lm_head(torch, R, args.reps, log)
     Path(args.out).write_text(json.dumps(res, indent=1))
     return 0 if all(s["round_trip"] for s in res["sizes"]) else 3
+
+
+def lm_head(torch, R: float, reps: int, log) -> list[dict]:
+    """The lm_head GEMM as vLLM leaves it (BF16, F.linear) and in FP8 (torch._scaled_mm, per-tensor scales), at Llama-3.1's
+    vocabulary and 8B's and 70B's hidden sizes, against reading its weight at R.  The weight is far larger than L2, so
+    every call reads it from HBM."""
+    import torch.nn.functional as F
+    out = []
+    for hidden in (4096, 8192):
+        w = torch.randn(128256, hidden, device="cuda", dtype=torch.bfloat16) * 0.02
+        w8 = w.to(torch.float8_e4m3fn)
+        one = torch.ones((), device="cuda", dtype=torch.float32)
+        for b in (1, 4, 16, 64):
+            x = torch.randn(b, hidden, device="cuda", dtype=torch.bfloat16)
+            x8 = torch.randn(max(b, 16), hidden, device="cuda").to(torch.float8_e4m3fn)  # cuBLASLt's FP8 wants M >= 16
+            row = {"hidden": hidden, "batch": b, "bf16_bytes": w.numel() * 2, "fp8_bytes": w8.numel()}
+            for name, fn in (("bf16", lambda: F.linear(x, w)),
+                             ("fp8", lambda: torch._scaled_mm(x8, w8.t(), one, one, out_dtype=torch.bfloat16))):
+                fn()
+                ts = []
+                for _ in range(reps):
+                    a, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                    a.record()
+                    fn()
+                    e.record()
+                    e.synchronize()
+                    ts.append(a.elapsed_time(e) / 1e3)
+                row[f"{name}_s"] = statistics.median(ts)
+            row["bf16_read_s"], row["fp8_read_s"] = row["bf16_bytes"] / R, row["fp8_bytes"] / R
+            out.append(row)
+            log(f"lm_head H={hidden} B={b}: bf16 {row['bf16_s'] * 1e6:.0f} us (read {row['bf16_read_s'] * 1e6:.0f}), "
+                f"fp8 {row['fp8_s'] * 1e6:.0f} us (read {row['fp8_read_s'] * 1e6:.0f})")
+        del w, w8
+        torch.cuda.empty_cache()
+    return out
 
 
 if __name__ == "__main__":
