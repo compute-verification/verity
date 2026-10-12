@@ -54,8 +54,8 @@ def relabelL {N : Type} : (List (M × C) → M → N) → N → List (M × C) �
 theorem ite_one_zero_le {p q : Prop} {dp : Decidable p} {dq : Decidable q} (h : p → q) :
     (if p then (1 : ℝ≥0∞) else 0) ≤ if q then 1 else 0 := by
   by_cases hp : p
-  · exact le_of_eq (by rw [if_pos hp, if_pos (h hp)])
-  · rw [if_neg hp]
+  · exact le_of_eq (by rw [ite_eq_left hp, ite_eq_left (h hp)])
+  · rw [ite_eq_right hp]
     exact zero_le
 
 variable {β : Type} [Fintype C] [Nonempty C]
@@ -73,7 +73,7 @@ theorem lastMsg_spec {N δ : Type} (f : List (M × C) → Game β) (ref : List (
     (s : Strategy (rounds M C 1 f)) (hm : ∃ ρ m, Q (h [(m, ρ)]) ∧ V [(s.1, ρ)] (s.2 ρ) [(m, ρ)]) :
     ∃ ρ, Q (h [(lastMsg f ref Q h V s, ρ)]) ∧ V [(s.1, ρ)] (s.2 ρ) [(lastMsg f ref Q h V s, ρ)] := by
   unfold lastMsg
-  rw [dif_pos hm]
+  rw [dite_eq_left hm]
   exact ⟨hm.choose, hm.choose_spec.choose_spec⟩
 
 /-- **The simulated inner prover, last message free**: `refStrat`, but at the last round it sends `lastMsg`. -/
@@ -177,7 +177,7 @@ theorem finds_forkG_refL {D N δ : Type} (H : List UInt8 → D) (pk : δ → δ 
       obtain ⟨p, hp, hc⟩ := hF
       obtain ⟨d, d', hd, hd', rfl⟩ := outcome_of_twoRuns _ _ _ hp
       have hGG : G d ∧ G d' := Classical.byContradiction fun hn => by
-        have hnone : pickOn G pk d d' = none := if_neg hn
+        have hnone : pickOn G pk d d' = none := ite_eq_right hn
         rw [hnone] at hc
         obtain ⟨_, _, he, _⟩ := hc
         exact absurd he (by simp)
@@ -242,7 +242,7 @@ theorem innerAtLeavesL_of_forkOn (σ : Strategy (recGame L Reg I Cm outer))
   intro ref ω
   by_cases hx : I.holds (x σ.1 ω)
   · refine le_trans (leafAvg_mono (G := fun _ _ => 0) (fun t s => ?_) _) ?_
-    · exact le_of_eq (if_neg fun h => h.1 hx)
+    · exact le_of_eq (ite_eq_right fun h => h.1 hx)
     · exact (leafAvg_const 0 _).le.trans zero_le
   let f := fun t : List (Cm × I.Coin) => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b)
   let dz : (t : List (Cm × I.Coin)) → Strategy (f t) → β → List (I.Msg × I.Coin) := fun t s b =>
@@ -308,24 +308,40 @@ end Schedule
 
 section Picks
 
+open Model Accounting Exec
+
+/-- **`collOf` reads its condition only up to `↔`.** -/
+theorem collOf_congr {D : Type} {H : List UInt8 → D} {p q : Prop} {h : p → Merkle.Collision H}
+    {h' : q → Merkle.Collision H} (e : p ↔ q) : collOf H p h = collOf H q h' := by
+  cases propext e
+  rfl
+
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
-  {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+  {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 
 /-- **`clashPickCL` ignores the last round's coin**: `outCL` reads a transcript only through `schedSteps`. -/
 theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : Schedule) (M : Hidden cls) : PickLastFree (r + 1) (clashPickCL T CT A H E Lf cls regs sch M) := by
   intro u₁ u₂ u₁' u₂' h₁ h₂ c₁ c₂
-  unfold clashPickCL outCL
-  rw [schedSteps_lastCoin T CT h₁ c₁, schedSteps_lastCoin T CT h₂ c₂]
+  have hout : ∀ t t' : List (List (SMsg T) × ((k : Fin r) → CT k)), schedSteps T CT 0 t = schedSteps T CT 0 t' →
+      outCL T CT A H E Lf cls regs sch M t = outCL T CT A H E Lf cls regs sch M t' := fun _ _ h => by
+    unfold outCL
+    rw [h]
+  unfold clashPickCL
+  exact collOf_congr (by rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)])
 
 /-- **`clashPickHL` ignores the last round's coin**: `outHL` reads a transcript only through `schedSteps`. -/
 theorem clashPickHL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀}) :
     PickLastFree (r + 1) (clashPickHL T CT A H E Lf e x) := by
   intro u₁ u₂ u₁' u₂' h₁ h₂ c₁ c₂
-  unfold clashPickHL outHL
-  rw [schedSteps_lastCoin T CT h₁ c₁, schedSteps_lastCoin T CT h₂ c₂]
+  have hout : ∀ t t' : List (List (SMsg T) × ((k : Fin r) → CT k)), schedSteps T CT 0 t = schedSteps T CT 0 t' →
+      outHL T CT A H E Lf e x.1 t = outHL T CT A H E Lf e x.1 t' := fun _ _ h => by
+    unfold outHL
+    rw [h]
+  unfold clashPickHL
+  exact collOf_congr (by rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)])
 
 end Picks
 
