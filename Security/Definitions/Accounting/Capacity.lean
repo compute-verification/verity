@@ -20,10 +20,14 @@ certificate, and it then counts against the capacity residual (`Accounting.Guara
 every residual event here, the one that guarantee bounds (`Run.CapacityCovertBut`) holds only when the other accounts are
 beyond the residual on every one of the capacity audit's own coins.
 
-The game bounds the state at every round boundary at once, so it certifies the capacity account's peak: a run whose
-capacity account holds less than the game's bound at one tick and more at others is not one of its servers. The capacity
-guarantee (`Run.CapacitySound`) is a time average over the window, so a peak certificate is a time-average one only over
-a window of one tick.
+The game bounds the state at every round boundary at once, while `B` bounds the capacity account's memory only at the
+capacity window's ticks, so a run realizes the game only when the window contains every round boundary: for PoUS, the
+whole session. A window of one tick does so only for a one-round game. The capacity guarantee (`Run.CapacitySound`) is
+in bit-ticks over the window, a time average, and the account's bit-ticks bound its memory at one tick only by their
+whole total, so over a window of `T` ticks the certificate this realization gives is about `S₀/T` bits on average,
+where `S₀` is the state the game is sound against (`Accounting.Guarantees.CapacityOfStateBound`). That is inherent to
+games graded by their peak state: a useful certificate needs a game graded at each round boundary (the continuous
+audit, for P2), and that choice is Daniel's. No table should cite `CapacityOfStateBound` at a session window.
 -/
 
 namespace Accounting
@@ -38,12 +42,14 @@ structure StateGame (Ω : Type) : Type 1 where
 
 /-- Run `r`'s capacity audit is game `G`, with rounds of `round` ticks: at each value of the other audits' coins, if the
 capacity account holds at most `B` bits of device memory at every tick of the capacity window on every capacity coin, the
-device is a server with state `B + chip + ∑ i, cap i * round`, which passes exactly where the capacity audit accepts. -/
+device is a server with state `B + chip + ∑ i, cap i * round`, which passes exactly where the capacity audit accepts.
+Since `B` bounds the account's memory only at the window's ticks, a device is such a server only when the window
+contains every round boundary. -/
 structure RealizesState {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (G : StateGame ΩS)
     (r : Run d α ΩW ΩQ ΩS) (round : ℕ) where
   /-- the server the device is, at the other audits' coins and a bound on the capacity account's memory -/
   server : ∀ (o : ΩW × ΩQ) (B : ℕ),
-    (∀ s, ∀ t ∈ (r.win .capacity).ticks, (r.trace (o.1, o.2, s) t).mem (r.acct .capacity) ≤ B) →
+    (∀ s, ∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, s) t).mem (r.acct .capacity) ≤ B) →
       G.Server (B + d.chip + ∑ i, d.cap i * round)
   /-- the capacity audit's verdict is the game's -/
   accepts_iff : ∀ o B hB s, r.accepts .capacity (o.1, o.2, s) ↔ G.Passes (server o B hB) s
@@ -55,13 +61,13 @@ variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] [Decid
 /-- The device memory the accounts other than the capacity account and account `w` held over the capacity window, in
 bit-ticks. -/
 def othersHeldBut (w : α) (ω : ΩW × ΩQ × ΩS) : ℕ :=
-  ∑ a ∈ (Finset.univ.erase (r.acct .capacity)).erase w, (r.trace ω).held (r.win .capacity) a
+  ∑ a ∈ (Finset.univ.erase (r.acct .capacity)).erase w, (r.schedule ω).held (r.win .capacity) a
 
 /-- The accounts other than the capacity account and `w` are beyond the capacity residual `M - S`, less what `w` holds,
 at the other audits' coins: on every one of the capacity audit's own coins, they hold more than `M - S` bits on average
 over the capacity window, less what `w` holds. -/
 def CapacityCovertBut (w : α) (S : ℝ) (ω : ΩW × ΩQ × ΩS) : Prop :=
-  ∀ s : ΩS, ((d.mem : ℝ) - S) * (r.win .capacity).len - (r.trace (ω.1, ω.2.1, s)).held (r.win .capacity) w <
+  ∀ s : ΩS, ((d.mem : ℝ) - S) * (r.win .capacity).len - (r.schedule (ω.1, ω.2.1, s)).held (r.win .capacity) w <
     r.othersHeldBut w (ω.1, ω.2.1, s)
 
 end Run

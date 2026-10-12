@@ -47,7 +47,7 @@ the honest device's. -/
 def honestRun (N b h s : ℕ) : Run (honestDevice N b) Unit Unit (BandwidthCoins N b h s) Unit where
   acct _ := ()
   win _ := ⟨0, 1⟩
-  trace _ _ := ⟨fun _ _ => 0, fun _ => N * b, fun _ i => i.elim, fun _ => 0, fun _ => 0⟩
+  schedule _ _ := ⟨fun _ _ => 0, fun _ => N * b, fun _ i => i.elim, fun _ => 0, fun _ => 0⟩
   fits _ _ := ⟨fun _ => by simp [honestDevice], by simp [honestDevice], fun i => i.elim, by simp [honestDevice],
     by simp [honestDevice]⟩
   accepts _ ω := Bandwidth.Accepts (honest N b h) ω.2.1.1 ω.2.1.2.1 ω.2.1.2.2
@@ -60,6 +60,6 @@ theorem honestRun_realizesBandwidth (N b h s : ℕ) : Nonempty (RealizesBandwidt
      accepts_iff := fun _ _ _ => Iff.rfl
      ingress_le := fun _ y _ => by
       refine le_of_eq ((honest_accepts (s := s) y.1 y.2.1 y.2.2).2.trans ?_)
-      simp [Run.read, Trace.read, Window.ticks, honestRun] }⟩
+      simp [Run.read, Schedule.read, Window.ticks, honestRun] }⟩
 
 end Accounting.Sanity

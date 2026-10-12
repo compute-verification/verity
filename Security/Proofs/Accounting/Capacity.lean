@@ -24,9 +24,9 @@ namespace Run
 variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (r : Run d α ΩW ΩQ ΩS)
 
 theorem mem_le_held {ω : ΩW × ΩQ × ΩS} {t : ℕ} (ht : t ∈ (r.win .capacity).ticks) :
-    (r.trace ω t).mem (r.acct .capacity) ≤ r.held ω := by
-  unfold Run.held Trace.held
-  exact Finset.single_le_sum (f := fun t => (r.trace ω t).mem (r.acct .capacity)) (fun _ _ => Nat.zero_le _) ht
+    (r.schedule ω t).mem (r.acct .capacity) ≤ r.held ω := by
+  unfold Run.held Schedule.held
+  exact Finset.single_le_sum (f := fun t => (r.schedule ω t).mem (r.acct .capacity)) (fun _ _ => Nat.zero_le _) ht
 
 theorem capacitySound_of_state [Fintype ι] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] {G : StateGame ΩS}
     {round S₀ : ℕ} {S ε : ℝ} (hε : 0 ≤ ε) (hG : ∀ n ≤ S₀, ∀ A : G.Server n, pr (G.Passes A) ≤ ε)
@@ -34,7 +34,7 @@ theorem capacitySound_of_state [Fintype ι] [Fintype ΩW] [Fintype ΩQ] [Fintype
     (hS : S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ S₀) : r.CapacitySound S ε := by
   intro x q B hB hheld
   by_cases hBS : B < S * (r.win .capacity).len
-  · have hmem : ∀ s, ∀ t ∈ (r.win .capacity).ticks, (r.trace (x, q, s) t).mem (r.acct .capacity) ≤ ⌊B⌋₊ :=
+  · have hmem : ∀ s, ∀ t ∈ (r.win .capacity).ticks, (r.schedule (x, q, s) t).mem (r.acct .capacity) ≤ ⌊B⌋₊ :=
       fun s t ht => Nat.le_floor ((Nat.cast_le.2 (r.mem_le_held ht)).trans (hheld s))
     have hn : ⌊B⌋₊ + d.chip + ∑ i, d.cap i * round ≤ S₀ := by
       have hfl := Nat.floor_le hB
@@ -51,8 +51,8 @@ section Derived
 variable [DecidableEq α]
 
 theorem othersHeld_eq {w : α} (hw : w ≠ r.acct .capacity) (ω : ΩW × ΩQ × ΩS) :
-    r.othersHeld ω = (r.trace ω).held (r.win .capacity) w + r.othersHeldBut w ω :=
-  (Finset.add_sum_erase _ (fun a => (r.trace ω).held (r.win .capacity) a)
+    r.othersHeld ω = (r.schedule ω).held (r.win .capacity) w + r.othersHeldBut w ω :=
+  (Finset.add_sum_erase _ (fun a => (r.schedule ω).held (r.win .capacity) a)
     (Finset.mem_erase.2 ⟨hw, Finset.mem_univ _⟩)).symm
 
 theorem capacityShort_of_covertBut {w : α} (hw : w ≠ r.acct .capacity) {S : ℝ} {ω : ΩW × ΩQ × ΩS}
@@ -61,7 +61,7 @@ theorem capacityShort_of_covertBut {w : α} (hw : w ≠ r.acct .capacity) {S : �
       (d.mem : ℝ) * (r.win .capacity).len := by
     exact_mod_cast r.held_add_othersHeld (ω.1, ω.2.1, s)
   have heq : (r.othersHeld (ω.1, ω.2.1, s) : ℝ) =
-      ((r.trace (ω.1, ω.2.1, s)).held (r.win .capacity) w : ℝ) + r.othersHeldBut w (ω.1, ω.2.1, s) := by
+      ((r.schedule (ω.1, ω.2.1, s)).held (r.win .capacity) w : ℝ) + r.othersHeldBut w (ω.1, ω.2.1, s) := by
     exact_mod_cast r.othersHeld_eq hw _
   have hring : ((d.mem : ℝ) - S) * (r.win .capacity).len =
       d.mem * (r.win .capacity).len - S * (r.win .capacity).len := by

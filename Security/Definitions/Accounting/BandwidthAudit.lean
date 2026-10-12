@@ -24,7 +24,10 @@ abbrev BandwidthCoins (N b h s : ℕ) : Type := Bandwidth.Store N b × Bandwidth
 
 /-- Run `r`'s bandwidth audit is the bandwidth audit's game, played at each value of the other audits' coins by a device
 of the game within the device model's limits over the bandwidth window and at most `G` regenerations, whose ingress the
-bandwidth account's reads from device memory cover. -/
+bandwidth account's reads from device memory cover. The game's side sources are a function of the store
+(`Bandwidth.Device.side`), laid out before the seed, so no realization carries relayed tags: the claim
+`bandwidth-device`'s exclusion holds here intact, and a device that relays tags in over a side channel is the relay
+variant's (`AuditRelay`). -/
 structure RealizesBandwidth (G : ℕ) {N b h s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type} [Fintype α]
     (r : Run d α ΩW (BandwidthCoins N b h s) ΩS) where
   /-- the device of the game at the other audits' coins -/
