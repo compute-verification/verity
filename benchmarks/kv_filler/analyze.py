@@ -48,6 +48,29 @@ def phases(steps: list[dict]) -> list[dict]:
     return [{**s, "prefill_tokens": max(s["prefill_tokens"], s["tokens"] - s["reqs"])} for s in steps]
 
 
+def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes: int, R: float,
+              token_bytes: int = lag.KV_TOKEN_BYTES) -> dict:
+    """η, the share of R·T over [0, seconds) that no registered read covers, by where it falls: each phase's seconds,
+    its steps' own fraction of R (the weights and each scheduled request's context, as `serve.py` counts a window),
+    and its share of η before filler (decode, prefill, empty steps that schedule nothing, idle time between steps).
+    The filler the run's top-up read comes off the total, wherever it fell."""
+    cap = R * 1e9 * seconds
+    out, busy = {}, 0.0
+    for name, keep in (("decode", lambda s: s["tokens"] > 0 and s["prefill_tokens"] == 0),
+                       ("prefill", lambda s: s["prefill_tokens"] > 0), ("empty", lambda s: s["tokens"] == 0)):
+        sel = [s for s in steps if keep(s)]
+        t = sum(s["t1"] - s["t0"] for s in sel)
+        reads = sum(weight_bytes + s["kv_tokens"] * token_bytes for s in sel if s["tokens"] > 0)
+        busy += t
+        out[name] = {"s": t, "of_R": reads / (R * 1e9 * t) if t else 0.0, "eta": (R * 1e9 * t - reads) / cap}
+    idle = max(0.0, seconds - busy)
+    out["idle"] = {"s": idle, "of_R": 0.0, "eta": idle / seconds}
+    out["eta_before_filler"] = sum(v["eta"] for v in out.values())
+    out["filler"] = filler_bytes / cap
+    out["eta"] = out["eta_before_filler"] - out["filler"]
+    return out
+
+
 def price(run: dict, a: dict, R: float) -> dict:
     steps = phases(run["step_records"])
     t1 = run["seconds"]
@@ -88,8 +111,14 @@ def main() -> int:
         s = json.loads(path.read_text())
         pool = s["args"]["pool"]
         for run in s["runs"]:
+            eta = shortfall(phases(run["step_records"]), run["seconds"], s["weight_bytes_per_step"],
+                            run["filler_bytes"], R)
+            print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} η {eta['eta']:.3f} (before filler "
+                  f"{eta['eta_before_filler']:.3f}: " + ", ".join(
+                      f"{n} {eta[n]['s']:.1f} s at {eta[n]['of_R']:.3f} R, {eta[n]['eta']:.3f}"
+                      for n in ("decode", "prefill", "empty", "idle")) + f"; filler {eta['filler']:.3f})")
             for k, ar in by_k.items():
-                row = {"pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k,
+                row = {"pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k, "shortfall": eta,
                        "arms": price(run, ar, R)}
                 out["runs"].append(row)
                 print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} k={k}: " + "; ".join(
