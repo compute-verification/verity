@@ -223,6 +223,22 @@ class StoreLabels:
         self.store, self.log, self.since = store, log, since
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
+        self._fresh: set[str] = set()
+
+    def prefetch(self, heads: Iterable[tuple[int, str]]) -> None:
+        """Pull the labels of each `pr:{n}@{head}` from the store's remote at once, so `ready` answers each from them without a
+        pull of its own (12 Oct: one listing per open PR, in turn, was 10 s of every drive tick).  A failed pull leaves each
+        target to its own, which says why."""
+        from .store import labels_sync
+
+        targets = [label_target(n, h) for n, h in heads]
+        if not targets or getattr(self.store, "remote", None) is None:
+            return
+        try:
+            labels_sync.pull_targets(self.store, targets, jobs=labels_sync.SYNC_JOBS)
+        except Exception:  # noqa: BLE001
+            return
+        self._fresh.update(targets)
 
     def ready(self, pr: int, head: str) -> bool:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
@@ -270,6 +286,8 @@ class StoreLabels:
         from .store.local import StoreError
 
         target = label_target(pr, head)
+        if target in self._fresh:
+            return self.store.labels(target, key=key)
         try:
             labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"), strict=True)
         except StoreError as e:
@@ -309,10 +327,11 @@ class Queue:
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (), first: tuple[int, ...] = (),
                  before_cutoff: Callable[[int, str], str | None] | None = None,
-                 marked_by: Callable[[int, str], str | None] | None = None):
+                 marked_by: Callable[[int, str], str | None] | None = None,
+                 prefetch: Callable[[list[tuple[int, str]]], None] | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
-        self.before_cutoff, self.marked_by = before_cutoff, marked_by
+        self.before_cutoff, self.marked_by, self.prefetch = before_cutoff, marked_by, prefetch
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
@@ -403,6 +422,8 @@ class Queue:
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
+        if self.prefetch is not None:
+            self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
@@ -1098,7 +1119,7 @@ def main(argv: list[str]) -> int:
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n),
-                  before_cutoff=labels.before_cutoff, marked_by=labels.marked_by)
+                  before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, prefetch=labels.prefetch)
         lock = _lock(a.workdir)  # noqa: F841
         if not a.marked_after:
             if a.rules is None:

@@ -476,6 +476,45 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
     assert StoreLabels(LocalStore(tmp_path / "q5")).ready(12, head) is True          # until its owner marks it again
 
 
+def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
+    """12 Oct: one listing of the store's remote per open PR, in turn, was 105 listings, 10 s of every drive tick."""
+    from research.queue import StoreLabels
+
+    heads = {n: f"{n:040x}" for n in (1, 2, 3)}
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    lane = LocalStore(tmp_path / "lane")
+    for n, value in ((1, True), (2, False)):
+        lane.add_label(label_target(n, heads[n]), vocab.READY, value, f"lane-{n}", ts="2026-10-12T07:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(n, heads[n]) for n in (1, 2)])["failed"] == []
+    pulls: list[tuple[int, int]] = []
+    pull = labels_sync.pull_targets
+    monkeypatch.setattr(labels_sync, "pull_targets", lambda store, targets, jobs=1: pulls.append((len(targets), jobs))
+                        or pull(store, targets, jobs=jobs))
+    labels = StoreLabels(LocalStore(tmp_path / "q1"))
+    labels.prefetch(list(heads.items()))
+    assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
+    assert pulls == [(3, labels_sync.SYNC_JOBS)]
+
+    pulls.clear()
+    monkeypatch.setattr(labels_sync, "remote_labels_for", lambda r, t, f=labels_sync.remote_labels_for:
+                        (_ for _ in ()).throw(OSError("listing refused")) if not pulls[1:] else f(r, t))
+    labels = StoreLabels(LocalStore(tmp_path / "q2"))
+    labels.prefetch(list(heads.items()))
+    assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
+    assert pulls == [(3, labels_sync.SYNC_JOBS), (1, 1), (1, 1), (1, 1)]
+
+
+def test_admission_prefetches_the_marks_of_every_pr_it_will_ask_of(world):
+    asked: list[list[tuple[int, str]]] = []
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}), labels=("hold",))
+    world.gh.put(3, h3 := world.change({"c.txt": "3\n"}))
+    world.queue(prefetch=asked.append).sync()
+    assert asked == [[(1, h1), (3, h3)]]
+
+
 def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
     """12 Oct: `research queue status` on architecture's VM, run without `--marked-after`, listed week-old marks (#1145, #1736)
     as admitted though drive, with its cutoff, never took them.  The cutoff is `marked_after` in the rules on `main`, and a PR whose
