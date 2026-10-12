@@ -102,6 +102,9 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
+  displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
+  shape, then the properties provable under them.
 - 2026-10-11 (8:53 PM PDT, through his console): a part of `check` whose cold run takes more than about 10 minutes may
   run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
   reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
