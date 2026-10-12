@@ -170,6 +170,63 @@ end obligations
 
 end RepMaps
 
+/-! ## R's openings: the `recOpenStacked` statements -/
+
+/-- Values forgotten: a run's coin points do not read them. -/
+instance instValUnit : RecAlgebra.Val Unit := ⟨(), fun _ _ => (), fun _ _ => (), fun _ _ => .ok (), fun _ => ()⟩
+
+theorem homUnit {α : Type} [RecAlgebra.Val α] : RecAlgebra.Hom (fun _ : α => ()) :=
+  ⟨rfl, fun _ _ => rfl, fun _ _ => rfl, fun _ _ _ _ => rfl, fun _ => rfl⟩
+
+/-- R's messages, their values forgotten. -/
+def skel (sh : Shape) : RecAlgebra.Messages Unit := (RecAlgebra.symbolic sh).map fun _ => ()
+
+theorem map_skel (sh : Shape) (g : RecAlgebra.Lin → F128) :
+    ((RecAlgebra.symbolic sh).map g).map (fun _ : F128 => ()) = skel sh := by
+  simp only [skel, RecAlgebra.Messages.map, Array.map_map, Option.map_map, RecAlgebra.KV.map, Function.comp_def]
+
+/-- **The Ligerito run's α** at level `ℓ`: R's ring switches, then its Ligerito, on `skel`, at the claims' points `cl`
+from coin `k₀` of the rounds `c`. `RecOpening.run`'s and `RecCoins.opening`'s runs both map to it, values forgotten
+(`ringSwitch_sim`, `ligerito_sim` at `homUnit`). -/
+def runAlpha (sh : Shape) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ) (c : Array (Array F128)) (ℓ : ℕ) :
+    Array F128 :=
+  match RecAlgebra.ringSwitch (skel sh) cl k₀ (RecAlgebra.Coins.ofRounds c) with
+  | .ok ((_, rs), k₂) =>
+    match RecAlgebra.ligerito sh.sched (skel sh) () rs.sws k₂ (RecAlgebra.Coins.ofRounds c) with
+    | .ok ((_, lg), _) => (lg.conss[ℓ]!).alpha
+    | .error _ => #[]
+  | .error _ => #[]
+
+/-- **C3's decoder of R's openings** over V*'s statements `stmt` (one rep, `RecCoins.checkStackedLevel`): opening `j` of
+level `ℓ` is instance `j` of the statement tagged `.recOpenStacked ℓ`; its row and the chain's rows, off the layers. -/
+structure StackedMaps {S : ℕ} (stmt : Fin S → VStar.Stmt) (Vs : Fin S → VStmt) where
+  sess : ℕ → Fin S
+  hsess : ∀ ℓ j, (∃ LANES H n, stmt j = .recOpenStacked ℓ LANES H n) → sess ℓ = j
+  un : (ℓ : ℕ) → ℕ → Fin (Vs (sess ℓ)).nv
+  hun : ∀ ℓ j, j < (Vs (sess ℓ)).nv → (un ℓ j).val = j
+  row : ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → Array F128
+  acc : ((j : Fin S) → (Vs j).Bits) → ℕ → Array F128
+
+namespace StackedMaps
+
+variable {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} (M : StackedMaps stmt Vs) (sh : Shape)
+  (l : (j : Fin S) → (Vs j).Bits) (kap : Array (Array (Array F128))) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ)
+  (c : Array (Array F128))
+
+/-- **R's openings** at R's shape `sh`: from chain row 0, level `ℓ`'s `q` rows, the run's α, and the coefficients at the
+verifier's `kappa` `kap` (`RecCoins.opening`'s). -/
+def ops : Openings :=
+  ⟨0, fun ℓ => (sh.sched.levels[ℓ]!).q, fun ℓ => Array.ofFn fun j : Fin (sh.sched.levels[ℓ]!).q => M.row l ℓ j,
+    runAlpha sh cl k₀ c, fun ℓ j => RecCoins.coefAt (kap[ℓ]!) (levelLanes sh ℓ) (eqTable (runAlpha sh cl k₀ c ℓ))[j]!⟩
+
+theorem rows_size (ℓ : ℕ) : ((M.ops sh l kap cl k₀ c).rows ℓ).size = (sh.sched.levels[ℓ]!).q := Array.size_ofFn
+
+/-- `SessionAt`'s coefficient conjunct at `kap := o.kappa`, by definition. -/
+theorem coef_eq (ℓ j : ℕ) : (M.ops sh l kap cl k₀ c).coef ℓ j =
+    RecCoins.coefAt (kap[ℓ]!) (levelLanes sh ℓ) (eqTable ((M.ops sh l kap cl k₀ c).alpha ℓ))[j]! := rfl
+
+end StackedMaps
+
 end
 
 end FlockC3.Reps
