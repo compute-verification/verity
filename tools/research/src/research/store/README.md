@@ -190,12 +190,14 @@ listings(prefix, listed_at, keys)    the last listing of each prefix: the index 
 
 `index(remote, db)` lists `manifests/`, `labels/` and the runs after the newest indexed one (a full `attempts/` listing
 hourly), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
-and never touches `objects/`. One pass and pass by pass give the same rows (tested). `index(public, db, policy=PUBLIC,
+and never touches `objects/`. One pass and pass by pass agree. `index(public, db, policy=PUBLIC,
 private=db)` rebuilds the public tables: the artifacts whose manifests are in the public bucket, their producing runs cut to
 `PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
 `research data index` builds `<store>/index.sqlite` (`--public`: `index-public.sqlite`; `--from DIR`: a directory as bucket;
 `--postgres`: both schemas of `$STORE_INDEXER_DATABASE_URL` through `psql`, rows only, so grants survive). The control pod runs
-it every 5 minutes (`infra/control/store_index.sh`).
+it every 5 minutes, `--public` once `store-export.env` exists (`infra/control/store_index.sh`). Displays read it via `reader`
+(Neon's `store_private` with `$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the
+records only here.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -417,7 +419,6 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
   A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
-  The control pod runs it on main every 5 min (`infra/control/fixtures_export.sh`); monitor `fixtures-public` flags a gap.
 
 ## 8. Labels
 
@@ -512,7 +513,7 @@ research data doctor [--clean] [--runs-dir D] [--json]
 research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
-research data sql "SELECT ..." [--json]      power-user escape hatch; read-only connection
+research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
 research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
 ~~~
 
