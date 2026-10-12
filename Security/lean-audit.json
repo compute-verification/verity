@@ -50,6 +50,14 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
+  "Pous.P2.Assumptions.P2RingAuditSecure": {
+   "owner": "@memory-accounting",
+   "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+  },
+  "Pous.P2.Assumptions.P2RingReducesToM1p": {
+   "owner": "@memory-accounting",
+   "digest": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
+  },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
    "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
@@ -2497,6 +2505,12 @@
    "assumptions": [],
    "type_hash": "19fea98f31d0c4fd87f36ee71e63c88b1f3d84b76c5ff3db77e73bc79e710f34"
   },
+  "Pous.SecurityProofs.P2RingAuditSecureOfReduces": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces : Pous.Guarantees.P2RingAuditSecureOfReduces"],
+   "assumptions": [],
+   "type_hash": "1430a42ac1ac32fb42666fe8becc5e5f1fad79c7219249f8261d1e361e311d55"
+  },
   "Pous.SecurityProofs.P2SlackB19Uncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2SlackB19Uncond : Pous.Guarantees.P2SlackB19Uncond"],
@@ -3507,6 +3521,7 @@
    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2SlackB19Uncond": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2SlackFamilyFreeBlocks": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
+   "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
    "Pous.SecurityProofs.P2SlackFamilyUncond": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pouw.Guarantees.PearlCSampledByDeadline": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
@@ -3682,6 +3697,16 @@
    "Nci.Assumptions.PartialSumsIncompressible": {
     "status": "falsified",
     "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
+   },
+   "Pous.P2.Assumptions.P2RingAuditSecure": {
+    "status": "open",
+    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
+    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k, and at L >= 2^30 for k <= 88, which its tests prove."
+   },
+   "Pous.P2.Assumptions.P2RingReducesToM1p": {
+    "status": "open",
+    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
+    "why": "Every ring-model responder against P2 at k = 105 is matched up to 2^-130 by an m1p responder with 128 more bits per block (P2-M1-SGI); open, and it implies P2RingAuditSecure, so a refutation of that is one of this."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
@@ -4079,6 +4104,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4116,6 +4142,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4137,6 +4164,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4171,6 +4199,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4255,6 +4284,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4275,6 +4305,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
@@ -4327,10 +4358,60 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
    ]
+  },
+  "Definitions.Pous.P2.Cost": {
+   "digest": "0f92c989cf95e0d319f2906b71aff0dde15a26ca302a18bc6a203caa57afe05f",
+   "definitions": {
+    "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
+    "Pous.KeyPart": "eb2c163914e5f40399b790ce38d8b0b48f7d0fad1e64fb11d449ca855d26baee",
+    "Pous.KeyPart.casesOn": "375a0d9e029bcfc70d9ac29ef48397c6cf38fd9549c752a66d2a47d19378d042",
+    "Pous.KeyPart.mask": "e048a8fb29b211cbb2adffb86ccedff56175199c02f0391c3d5a26d029558457",
+    "Pous.KeyPart.offset": "24de27e50b1f3edf5f685460cae0eb7c7157f767754d603d97afade22f953be9",
+    "Pous.KeyPart.rec": "5c2146a898b968eae1a4561b83f2740d6526a03be63296507ea86ab04996cabb",
+    "Pous.OddLabeling": "13c546c720dcea535ac7749b5929b317f1d34e052bed62248d7008b3e75df6a3",
+    "Pous.Prog.RingBounded": "52e3e55117db8dd0134cba49966e0ee7828c77124b6919be721584f1a9c93295",
+    "Pous.Prog.keyWork": "fca873b0cd0311e31091ce9f1d955fa525d941390b46d911d6570a98c57d1cca",
+    "Pous.Prog.mulDepth": "2d3f6426d2aa42f2f0b8ec83e165188fddc797b862ce0cc52ee55363491ac15a",
+    "Pous.Prog.ringWork": "a12afa7dcacf5e834d065f18e7cfd243eb42fe71e3102932a69239495519f09a",
+    "Pous.RingQry": "e3a429afd76b7fc7b7869b9090ef184bdf7e2cc617b8f307a613938eee9ab589",
+    "Pous.RingQry.add": "3d2987d195d620a4b1c7b8644da193d191d8734ad02b97d3d88fd2b65e812d56",
+    "Pous.RingQry.casesOn": "73c5693553d36d335d2f53b8f13b4c365aab8224a84a0bf8048fbc7fc6fab904",
+    "Pous.RingQry.ctorIdx": "3729880bfd662efeb5cbe8c0276ca0163add350c4b41a923242df9bcd68769b7",
+    "Pous.RingQry.isKey": "2051c13e4aa85364d8ac97ad6767de9e33e29c6c394bb74d681589308714b887",
+    "Pous.RingQry.isKey._sparseCasesOn_1": "9ec38fd29f7ad77a024a9c7354557467e0d6be50b6dfec05cc949402b448b755",
+    "Pous.RingQry.isMul": "e8a7ff3dc7a763a43e53e9822e3d08823d1bd0be202653188bbe2bfd3f2c0d7b",
+    "Pous.RingQry.isMul._sparseCasesOn_1": "ac5983789868e07dfdbcb487ef8577323350fb94376bc329b86c8002566076b3",
+    "Pous.RingQry.key": "89e2dbbc6c106e303a60100cbfe4cf53b43fb5934d62ea9a68b12c364a51db98",
+    "Pous.RingQry.mul": "cc97284a2a2b51d2e0acd983d424bb0f5fe16891de0895a766c992bdb0b8bd55",
+    "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
+    "Pous.RingQry.rec": "662150542c17dd3dfe6e2c8290691104cfa3810300966a3cee749d186b40f683",
+    "Pous.SeqResponderOn": "a3bc66a3ed2ab3aecba132b2032b5631acec15749aca42234627e50ebaea0057",
+    "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
+    "Pous.SimResponderOn": "c457aff17af43873e0491b82782d0fae10e963ff55d7987aa99ea4d2219e3a0b",
+    "Pous.SimResponderOn.prog": "5fbc08c1caef87dcc0ee147520ff272369887fcb366daab96043ee8d9ad9a514",
+    "Pous.decBlock": "52c9d55db46e0fd203f72e1aef72df7c6a353810d3092818fc5dd45148865f4c",
+    "Pous.eltD": "e0d35ad5a621d89317cedcaa1c472e5ca7089a6592f5e80abeed85a2296e66bb",
+    "Pous.encBlock": "ae8a61be28a1724696c809666cbac5784158a6c30d0d19a592ad6b029056045e",
+    "Pous.junkLabel": "1ae6b9885f6c078136edf78b23a90b027f3e84045d4b108ecc969c01ceeefe3c",
+    "Pous.lab": "14b0a991151c821344296df97e7f4e0b433675ba623a887f6baab8b3f3e80733",
+    "Pous.negL": "3178fe1b35681771e41c7545c6278c8dc2cd056b788bf50295dcdcfb2c97770b",
+    "Pous.nthAns": "731fb0d44de3615fef6e976a606836dc0504a2a585acc78fc0c209215c81767d",
+    "Pous.p2ring": "d7ea73b8c6aef42d803bca7a9822a090efc4bdab85d138a5dfb3f4013558d578",
+    "Pous.rhoE": "7b87742b079483bb4646a73b192b63783f6b444d89bddc24fa8e3fee71cd2b1e",
+    "Pous.ringOp": "952205b604d82d005be8e71d6bd28794a4698271744b39d5bbf4ebbc249a29b8",
+    "Pous.ringRO": "36e3e7e17100de2e8636562fbb7a41d0de57db072b605a8ea925994f7b4a6c43",
+    "Pous.seqAcceptsOn": "c8c26fb9cd30569149b52fbfb684d918763a29cbbbf51e2deea009ce7a66b3b5",
+    "Pous.sigmaK": "f5d0511f2e4b58ee2f3ee9ef90efece277371316e9c739685f2f14e419e26ac9",
+    "Pous.simAcceptsOn": "580aa02890e29c4aa2d17307ee9ce271349d1bd90105b0eec0869a5b419bc6e6",
+    "Pous.sqE": "3727f1863cf42a82d1b2940a9ca18c4ff59c2909e3b961c3a0d83c5def7eaaed",
+    "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
+   },
+   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces"]
   },
   "Definitions.Pouw.Barrier.Defs": {
    "digest": "9db794608d3a485fcf68f85932a09e917d482590427dd793fb32d9d1972fefa4",
@@ -11641,6 +11722,14 @@
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
+  "Models.Pous.Assumptions.P2": {
+   "digest": "edba88c5e0e4185e34be487567a74f82b5f676c52926dbcee0ac012da4524803",
+   "definitions": {
+    "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
+    "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
+   },
+   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces"]
+  },
   "Models.Pous.Guarantees": {
    "digest": "f1a77f429299b9f5cbcf96b9d6752b0fbec28b9e95250bdc3e5479427df7e940",
    "definitions": {
@@ -11659,12 +11748,13 @@
    ]
   },
   "Models.Pous.Guarantees.P2": {
-   "digest": "cfff33772a4ed5c146551f9a1c31e013382c22fd45fe7317b806bb633d70816e",
+   "digest": "d66f9220f1b6f770ce28fe6b5df70bc9377d40a2899375044e634ead2791c886",
    "definitions": {
     "Pous.Guarantees.P2ErrorSplitB19Uncond": "33dbfe54712b1673b846f461fba5102a07cc39e17bebd04c496626e5e20f0ce8",
     "Pous.Guarantees.P2MeetsM1pB19Uncond": "5e6b9f544f812c9cf559bc3393bb707c226713af948f5fcec94709ca6d0c7df1",
     "Pous.Guarantees.P2MeetsM1pFamilyUncond": "5f4e1f3cf63263edb6acb56a5da36ca73d16667357cbb6ba17fabda31cb67754",
     "Pous.Guarantees.P2MeetsM1pW8192Uncond": "87ff711708725424195e0b6b38057a66fa3e21dd18c34471574dfd3ad74e05c7",
+    "Pous.Guarantees.P2RingAuditSecureOfReduces": "30d2bf23a3e55e003e53b14f82cdf917bb6422b70be6a005ff1b8a777a669ba7",
     "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
     "Pous.Guarantees.P2SlackFamilyFreeBlocks": "902a58831f71201cb27e6cdd2eb12899621d32c867c0fe282ce1ef3aee9f3198",
     "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
@@ -11674,6 +11764,7 @@
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
     "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
