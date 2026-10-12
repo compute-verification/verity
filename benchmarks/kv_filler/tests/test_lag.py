@@ -42,3 +42,18 @@ def test_windows_spread_pro_rata():
     steps = [step(0.0, 1.0, 0, 0, 0), step(1.0, 3.0, 0, 0, 0)]
     g = lag.windows(steps, [1e9, 4e9], 0.0, 3.0, 1.0, 1.0)
     assert g == [1.0, 2.0, 2.0]
+
+
+def test_draining_slows_only_the_steps_that_drain():
+    steps = [step(0, 0.1, 10, 10, 10), step(0.1, 0.2, 1, 0, 11), step(0.2, 0.3, 1, 0, 12)]
+    r = lag.replay(steps, lag.Rates(decode_GBps=200 * TB / 1e9, prefill_GBps=0.0, idle_GBps=0.0, decode_slowdown=0.5))
+    assert r["plain_bytes"] == [0, 10 * TB, TB]
+    assert abs(r["added_s"] - 0.1) < 1e-12  # the first decode step drains 10 tokens and its own 1; the next drains 1
+    assert abs(r["busy_s"] - 0.3) < 1e-12
+
+
+def test_fused_puts_a_prefill_encode_on_its_step():
+    steps = [step(0, 0.1215, 4096, 4096, 0), step(0.1215, 0.1415, 64, 0, 4096)]
+    f = lag.fused(steps, alone_GBps=3.47, decode_GBps=25.0)
+    assert abs(f["added_s"] - (4096 * TB / 3.47e9 + 64 * TB / 25e9)) < 1e-12
+    assert 0.15 < f["added_s"] < 0.16
