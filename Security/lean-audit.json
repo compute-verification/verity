@@ -447,6 +447,15 @@
    "assumptions": [],
    "type_hash": "544acaaebe8c1a3245a82532f76264ca9a2788539b712c3c394bdc9f1d67c5ea"
   },
+  "Accounting.SecurityProofs.Memory.AddsAdvice": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Memory.AddsAdviceOn": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Memory.AddsIsolated": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Memory.AddsIsolated : Accounting.Guarantees.Memory.AddsIsolated"],
@@ -482,6 +491,9 @@
    "signature": ["Accounting.SecurityProofs.Memory.Counting : Accounting.Guarantees.Memory.Counting"],
    "assumptions": [],
    "type_hash": "38be2c96b0dfcca031464085d1aabc4b6ccf2a4cb146f88d79611faec1ba885f"
+  },
+  "Accounting.SecurityProofs.Memory.CountingAdvice": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -3753,6 +3765,10 @@
    "Accounting.SecurityProofs.Memory.Counting": {
     "function": "Accounting.Memory.fibre",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Memory.CountingAdvice": {
+    "function": "Accounting.Memory.fibreAdvice",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -4089,7 +4105,10 @@
    "Accounting.SecurityProofs.Memory.AddsP2Ring": "frozen (no-function): It is AddsOn at P2's deployed point (105 challenges), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
    "Accounting.SecurityProofs.Memory.AddsIsolated": "frozen (no-function): It is Adds at H = 0 (perfect isolation), about PoUS's abstract audit game and no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsOnIsolated": "frozen (no-function): It is AddsOn at H = 0 (perfect isolation), about PoUS's ring model and no function of the code.",
-   "Accounting.SecurityProofs.Memory.AddsP2RingIsolated": "frozen (no-function): It is AddsP2Ring at H = 0 (perfect isolation), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure."
+   "Accounting.SecurityProofs.Memory.AddsP2RingIsolated": "frozen (no-function): It is AddsP2Ring at H = 0 (perfect isolation), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
+   "Accounting.SecurityProofs.Memory.AddsAdvice": "frozen (no-function): It is Adds with advice: the location reads its value from the state and at most a advice bits, so the advice counts against the bound; about PoUS's abstract audit game and no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsAdviceOn": "frozen (no-function): It is AddsOn with advice (a bits beside the state), about PoUS's ring model and no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring": "frozen (no-function): It is AddsP2Ring with advice (a bits beside the state), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
