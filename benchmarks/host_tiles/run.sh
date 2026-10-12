@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The host CPUs' capacity for registered PoUW tile work: gate bit for bit against the Python reference, then time.
-#   taskset -c 48-95 run.sh PHASE...   PHASE = ncp | pearl | latency (cwd = the source tree: research run --cwd source)
+#   taskset -c 48-95 run.sh PHASE...   PHASE = ncp | pearl | shake | latency (cwd = the source tree: research run --cwd source)
 # Threads are placed one per physical core (OMP_PLACES=cores) for the scaling sweep, then on both hyperthreads of every core.
 # Each phase first records how busy its CPUs were over 2 s (idle_*.txt): a busy CPU is someone else's work, not ours.
 set -uxo pipefail
@@ -11,7 +11,7 @@ lscpu > "$O/lscpu.txt"; numactl -H > "$O/numa.txt" 2>&1; taskset -p $$ > "$O/aff
 lscpu -p=CPU,CORE,SOCKET,NODE > "$O/cpu_topology.txt"; gcc --version | head -1 > "$O/gcc.txt"
 sha256sum $H/*.c $H/*.py $H/run.sh > "$O/sources.sha256"
 P=$(nproc); C=$((P / 2))
-export OMP_PROC_BIND=close
+export OMP_PROC_BIND=close PEARL_PREFETCH=4096
 idle() {  # per-CPU busy fraction over 2 s, for the CPUs this shell may use
   python3 - "$1" <<'PY'
 import os, sys, time
@@ -45,26 +45,26 @@ if [ "$phase" = ncp ]; then
   # compute-bound: each thread its own 768 KiB Y (k = 1024, n = 256), L2-resident across repeats (two per core with SMT)
   for t in 1 2 4 8 12 16 $C; do
     for m in 16 32 64 128; do
-      for ks in 0 128 64 16; do
+      for ks in 0 128 64 32 16; do
         OMP_PLACES=cores OMP_NUM_THREADS=$t NCP_REPEAT=64 "$B/ncp_amx" bench $m 3072 256 $((64 * t)) $ks 20 | tee -a "$O/ncp_resident.jsonl"
       done
     done
   done
   for m in 16 32 64 128; do
-    for ks in 0 128 64 16; do
+    for ks in 0 128 64 32 16; do
       OMP_PLACES=threads OMP_NUM_THREADS=$P NCP_REPEAT=64 "$B/ncp_amx" bench $m 3072 256 $((64 * P)) $ks 20 | tee -a "$O/ncp_resident.jsonl"
     done
   done
   # streaming: 40 weights of k = n = 4096 (Y = 2 GB, six times the LLC), Y read from DRAM every pass
   for t in 1 4 8 12 16 $C; do
     for m in 16 32 64 128; do
-      for ks in 0 128 16; do
+      for ks in 0 128 32 16; do
         OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/ncp_amx" bench $m 12288 4096 40 $ks 5 | tee -a "$O/ncp_stream.jsonl"
       done
     done
   done
   for m in 16 32 64 128; do
-    for ks in 0 128 16; do
+    for ks in 0 128 32 16; do
       OMP_PLACES=threads OMP_NUM_THREADS=$P "$B/ncp_amx" bench $m 12288 4096 40 $ks 5 | tee -a "$O/ncp_stream.jsonl"
     done
   done
@@ -85,10 +85,27 @@ if [ "$phase" = pearl ]; then
   for m in 1 8 16 32 64 128; do
     OMP_PLACES=threads OMP_NUM_THREADS=$P "$B/pearl_c_cpu" bench $m 4096 6144 40 128 3 gauss | tee -a "$O/pearl.jsonl"
   done
+  # what holds small m back: no prefetch, a longer one, and B̃ resident in the LLC (2 weights, 100 MB)
+  for t in 1 $C; do
+    for m in 1 8; do
+      for pf in 0 16384; do
+        PEARL_PREFETCH=$pf OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/pearl_c_cpu" bench $m 4096 6144 40 128 3 gauss | tee -a "$O/pearl_diag.jsonl"
+      done
+      OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/pearl_c_cpu" bench $m 4096 6144 2 128 20 gauss | tee -a "$O/pearl_diag.jsonl"
+    done
+  done
   for m in 16 128; do
     OMP_PLACES=cores OMP_NUM_THREADS=$C "$B/pearl_c_cpu" bench $m 4096 6144 40 128 3 "file:$B/pool.bin" | tee -a "$O/pearl_data.jsonl"
     OMP_PLACES=cores OMP_NUM_THREADS=$C "$B/pearl_c_cpu" bench $m 4096 6144 4 128 1 uniform | tee -a "$O/pearl_data.jsonl"
   done
+fi
+
+if [ "$phase" = shake ]; then
+  # NCP's F1 regenerated instead of read: SHAKE256 (hashlib, OpenSSL's single-buffer Keccak) on 1 core, then one process per core
+  cores=$(python3 -c "import os; c = sorted(os.sched_getaffinity(0)); print(' '.join(map(str, c[::2])))")
+  python3 $H/shake_rate.py 1 | tee -a "$O/shake.jsonl"
+  for c in $cores; do taskset -c $c python3 $H/shake_rate.py 1 > "$B/shake_$c.json" & done; wait
+  cat "$B"/shake_*.json | python3 -c "import json, sys; r = [json.loads(l) for l in sys.stdin]; print(json.dumps({'kernel': 'shake256', 'processes': len(r), 'bytes_per_s': sum(x['bytes_per_s'] for x in r), 'per_core_min': min(x['bytes_per_s'] for x in r)}))" | tee -a "$O/shake.jsonl"
 fi
 
 if [ "$phase" = latency ]; then

@@ -110,11 +110,11 @@ static int8_t e4m3_exp(uint8_t c, int8_t zero) {
   return (int8_t)(ex > 1 ? ex : 1);
 }
 
-typedef struct {
+typedef struct {  // af, ae, an are atom-major, [k / 32][m][32], so each atom's rows stream in order
   int m, k;
-  double *af;      // [m][k] value * 256 (B̃ decodes to value / 256 through FP16)
-  uint32_t *ae;    // [m][k] ea' (ZERO_EXP for a zero code) in all four bytes
-  uint32_t *an;    // [m][k] ea' (+100 for a zero code) in all four bytes
+  double *af;      // value * 256 (B̃ decodes to value / 256 through FP16)
+  uint32_t *ae;    // ea' (ZERO_EXP for a zero code) in all four bytes
+  uint32_t *an;    // ea' (+100 for a zero code) in all four bytes
   const uint8_t *codes;  // [m][k]
 } Arows;
 
@@ -123,11 +123,14 @@ static void prep_a(Arows *A, const uint8_t *codes, int m, int k) {
   A->af = aligned_alloc(64, (size_t)m * k * 8);
   A->ae = aligned_alloc(64, (size_t)m * k * 4);
   A->an = aligned_alloc(64, (size_t)m * k * 4);
-  for (size_t x = 0; x < (size_t)m * k; x++) {
-    A->af[x] = e4m3_value(codes[x]) * 256.0;
-    A->ae[x] = (uint8_t)e4m3_exp(codes[x], ZERO_EXP) * 0x01010101u;
-    A->an[x] = (uint8_t)e4m3_exp(codes[x], 100) * 0x01010101u;
-  }
+  for (int i = 0; i < m; i++)
+    for (int l = 0; l < k; l++) {
+      uint8_t c = codes[(size_t)i * k + l];
+      size_t x = ((size_t)(l / 32) * m + i) * 32 + l % 32;
+      A->af[x] = e4m3_value(c) * 256.0;
+      A->ae[x] = (uint8_t)e4m3_exp(c, ZERO_EXP) * 0x01010101u;
+      A->an[x] = (uint8_t)e4m3_exp(c, 100) * 0x01010101u;
+    }
 }
 
 static void free_a(Arows *A) { free(A->af); free(A->ae); free(A->an); }
@@ -147,17 +150,20 @@ static void init_tables(void) {
   T_MIN0 = _mm512_loadu_si512(n); T_MIN1 = _mm512_loadu_si512(n + 64);
 }
 
-// One atom's B̃ block: 32 rows l of 64 codes -> FP64 (value / 256 via FP16) and the two int8 exponent forms.
+static long prefetch_dist;  // PEARL_PREFETCH: bytes ahead of the block being decoded (0: none)
+
+// One atom's B̃ block: 32 rows l of 64 codes -> FP64 (value / 256 via FP16) and the two int8 exponent forms.  The FP16
+// bits of code c are (sign-extended c << 7) with bit 14 cleared: sign at 15, the code's exponent and mantissa at 13..7.
 static void decode_b(const uint8_t *blk, Bblock *B) {
-  __m512i m7f = _mm512_set1_epi16(0x7F), m80 = _mm512_set1_epi16(0x80);
+  __m512i keep = _mm512_set1_epi16((short)0xBFFF);
   for (int l = 0; l < 32; l++) {
+    if (prefetch_dist) _mm_prefetch((const char *)blk + 64 * l + prefetch_dist, _MM_HINT_T0);
     __m512i c = _mm512_loadu_si512(blk + 64 * l);
     _mm512_store_si512(B->be + 64 * l, _mm512_permutex2var_epi8(T_EXP0, c, T_EXP1));
     _mm512_store_si512(B->bn + 64 * l, _mm512_permutex2var_epi8(T_MIN0, c, T_MIN1));
     for (int h = 0; h < 2; h++) {
-      __m512i w = _mm512_cvtepu8_epi16(h ? _mm512_extracti64x4_epi64(c, 1) : _mm512_castsi512_si256(c));
-      __m512i f = _mm512_or_si512(_mm512_slli_epi16(_mm512_and_si512(w, m7f), 7),
-                                  _mm512_slli_epi16(_mm512_and_si512(w, m80), 8));
+      __m512i w = _mm512_cvtepi8_epi16(h ? _mm512_extracti64x4_epi64(c, 1) : _mm512_castsi512_si256(c));
+      __m512i f = _mm512_and_si512(_mm512_slli_epi16(w, 7), keep);
       double *d = B->bf + 64 * l + 32 * h;
       _mm512_store_pd(d + 0, _mm512_cvtph_pd(_mm_castsi128_ph(_mm512_extracti32x4_epi32(f, 0))));
       _mm512_store_pd(d + 8, _mm512_cvtph_pd(_mm_castsi128_ph(_mm512_extracti32x4_epi32(f, 1))));
@@ -178,9 +184,10 @@ static inline __attribute__((always_inline)) int rows_atom(const int R, const Ar
     mx[r] = _mm512_set1_epi8(-128);
     mn[r] = _mm512_set1_epi8(127);
   }
-  const double *a0 = A->af + (size_t)i0 * k + 32 * t, *a1 = a0 + k;
-  const uint32_t *e0 = A->ae + (size_t)i0 * k + 32 * t, *e1 = e0 + k;
-  const uint32_t *n0 = A->an + (size_t)i0 * k + 32 * t, *n1 = n0 + k;
+  const size_t at = ((size_t)t * A->m + i0) * 32;
+  const double *a0 = A->af + at, *a1 = a0 + 32;
+  const uint32_t *e0 = A->ae + at, *e1 = e0 + 32;
+  const uint32_t *n0 = A->an + at, *n1 = n0 + 32;
   for (int l = 0; l < 32; l++) {
     __m512d av0 = _mm512_set1_pd(a0[l]), av1 = R > 1 ? _mm512_set1_pd(a1[l]) : av0;
     const double *bl = B->bf + 64 * l;
@@ -426,10 +433,10 @@ static int bench(int m, int k, int n, int W, int ks, int reps, const char *data)
   }
   double products = (double)m * k * n * W, wbytes = (double)k * n * W;
   printf("{\"kernel\": \"pearl_c_cpu\", \"data\": \"%s\", \"m\": %d, \"k\": %d, \"n\": %d, \"weights\": %d, \"ks\": %d, "
-         "\"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"products_per_s\": %.4e, "
+         "\"prefetch\": %ld, \"threads\": %d, \"reps\": %d, \"best_s\": %.6f, \"mean_s\": %.6f, \"products_per_s\": %.4e, "
          "\"weight_bytes_per_s\": %.4e, \"weight_bytes_per_s_mean\": %.4e, \"slow_lanes\": %ld, \"slow_fraction\": %.3e, "
          "\"fold\": %llu}\n",
-         data, m, k, n, W, ks, nthreads, reps, best, sum / reps, products / best, wbytes / best, wbytes / (sum / reps), slow,
+         data, m, k, n, W, ks, prefetch_dist, nthreads, reps, best, sum / reps, products / best, wbytes / best, wbytes / (sum / reps), slow,
          slow / (products / 32), (unsigned long long)fold);
   free_a(&A);
   return 0;
@@ -437,6 +444,7 @@ static int bench(int m, int k, int n, int W, int ks, int reps, const char *data)
 
 int main(int argc, char **argv) {
   init_tables();
+  if (getenv("PEARL_PREFETCH")) prefetch_dist = atol(getenv("PEARL_PREFETCH"));
   if (argc >= 3 && !strcmp(argv[1], "gate")) return gate(argv[2], argc >= 4 && !strcmp(argv[3], "scalar"));
   if (argc >= 9 && !strcmp(argv[1], "bench"))
     return bench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), argv[8]);
