@@ -1,5 +1,5 @@
 import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.Fork.CouplingPull
+import Proofs.Flock.C3.Fork.CouplingValue
 
 /-!
 # Piece (a), the coupling: candidate 3's compiled table against its oracle table
