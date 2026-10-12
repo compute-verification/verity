@@ -62,6 +62,7 @@ void sg_ctr_vaes_nt(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_
 void sg_ctr_aesni(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks);
 int sg_ctr_openssl(const uint8_t key[16], uint64_t first, uint8_t* out, uint64_t blocks);
 void sg_flush(const uint8_t* p, uint64_t n);
+void sg_clwb(const uint8_t* p, uint64_t n);
 }
 
 #define OK(x)                                                                                           \
@@ -814,6 +815,7 @@ struct Args {
   bool prover_first = false;                       // foldtwo: the challenger's context waits for the prover's store
   bool challenger_first = false;                   // foldtwo: the prover's context waits for the challenger's buffers
   bool poll = false;                               // foldlive, foldtwo: wait for the fold by polling its end event
+  bool clwb = false;                               // --clwb: cached stores, each slot then written back and left clean
 };
 
 static Device dev;
@@ -1895,7 +1897,24 @@ static void carry_sync(Carry& c) {
 static std::string transport(const Args& a) {
   return std::string(",\"temporal\":") + (a.temporal ? "true" : "false") + ",\"dma_piece\":" +
          std::to_string(a.dma_piece) + ",\"dma_streams\":" + std::to_string(a.dma_piece ? a.dma_streams : 0) +
-         ",\"poll\":" + (a.poll ? "true" : "false");
+         ",\"poll\":" + (a.poll ? "true" : "false") + ",\"clwb\":" + (a.clwb ? "true" : "false");
+}
+
+// One slot of S, k-th of the window, with the generator stores --temporal and --clwb ask for.
+static void gen_slot(const Args& a, const Gen& gen, uint64_t k, uint8_t* hm) {
+  uint8_t* out = hm + k * a.live_slot;
+  (a.temporal ? sg_ctr_vaes : sg_ctr_vaes_nt)(gen.rk, k * (a.live_slot / 16), out, a.live_slot / 16);
+  if (a.clwb) sg_clwb(out, a.live_slot);
+}
+
+// All of S before the clock starts, stored the same way.
+static void gen_ready(const Args& a, const Gen& gen, uint8_t* hm, size_t n) {
+  generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+  if (!a.clwb) return;
+  const size_t per = (n / a.gen_threads + 63) / 64 * 64;
+  parallel(a.gen_threads, cpus, [&](int t) {
+    if (t * per < n) sg_clwb(hm + t * per, std::min(per, n - t * per));
+  });
 }
 
 // carry: the copy engines' rate on foldlive's DMA path with S written before the clock starts, to tell the per-piece
@@ -1916,7 +1935,7 @@ static int mode_carry(const Args& a) {
   uint8_t ks[16];
   fresh(ks, 16);
   Gen gen(ks);
-  generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+  gen_ready(a, gen, hm, n);
   std::unique_ptr<std::atomic<uint32_t>[]> done(new std::atomic<uint32_t>[slots]);
   Carry cy = make_carry(a, n, hi);
   uint4* dout;
@@ -1937,7 +1956,7 @@ static int mode_carry(const Args& a) {
           if (t * per < n) sg_flush(hm + t * per, std::min(per, n - t * per));
         });
       }
-      if (arm == 6 || arm == 7) generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+      if (arm == 6 || arm == 7) gen_ready(a, gen, hm, n);
       if (arm == 8) bw_read_scrub(dev.scrub, SCRUB);
       for (size_t k = 0; k < slots; ++k) done[k].store(epoch, std::memory_order_release);
       OK(cudaDeviceSynchronize());
@@ -2040,7 +2059,7 @@ static int mode_fold_live(const Args& a) {
             if (t * per < n) sg_flush(hm + t * per, std::min(per, n - t * per));
           });
           if (arm >= 2) {
-            generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+            gen_ready(a, gen, hm, n);
             if (a.dma_piece)
               for (size_t k = 0; k < slots; ++k) done[k].store(epoch, std::memory_order_release);
             else
@@ -2061,8 +2080,7 @@ static int mode_fold_live(const Args& a) {
             for (auto& g : gens)
               g->post([&] {
                 for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
-                  (a.temporal ? sg_ctr_vaes : sg_ctr_vaes_nt)(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot,
-                                                              a.live_slot / 16);
+                  gen_slot(a, gen, k, hm);
                   done[k].store(epoch, std::memory_order_release);
                 }
               });
@@ -2225,8 +2243,7 @@ static int fold_two_challenger(const Args& a, Two& sh) {
           for (auto& g : gens)
             g->post([&] {
               for (uint64_t k = next.fetch_add(1); k < slots; k = next.fetch_add(1)) {
-                (a.temporal ? sg_ctr_vaes : sg_ctr_vaes_nt)(gen.rk, k * (a.live_slot / 16), hm + k * a.live_slot,
-                                                            a.live_slot / 16);
+                gen_slot(a, gen, k, hm);
                 done[k].store(epoch, std::memory_order_release);
               }
             });
@@ -2617,6 +2634,7 @@ int main(int argc, char** argv) {
     else if (k == "--prover-first") a.prover_first = true;
     else if (k == "--challenger-first") a.challenger_first = true;
     else if (k == "--poll") a.poll = true;
+    else if (k == "--clwb") a.temporal = a.clwb = true;
     else if (k == "--dma-piece-kib") a.dma_piece = std::stoull(v()) << 10;
     else if (k == "--dma-streams") a.dma_streams = std::stoi(v());
     else if (k == "--mps-challenger-pct") a.mps_challenger_pct = std::stoi(v());

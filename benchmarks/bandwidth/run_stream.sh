@@ -98,7 +98,7 @@ fi
 NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
-HOSTFLAGS=(-O3 -mavx512f -mavx512bw -mvaes -maes)
+HOSTFLAGS=(-O3 -mavx512f -mavx512bw -mvaes -maes -mclwb)
 { "$NVCC" --version; g++ --version | head -1; echo "flags: ${FLAGS[*]}; host: ${HOSTFLAGS[*]}"; } > "$O/build.txt"
 g++ "${HOSTFLAGS[@]}" -c stream_host.cpp -o "$S/stream_host.o" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 "$NVCC" "${FLAGS[@]}" stream.cu "$S/stream_host.o" -o "$S/bwstream" -ldl >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
