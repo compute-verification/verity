@@ -11,7 +11,8 @@
 //             cycle): code a warp can issue faster than integer code, for an L0 that 4 chains leave hidden.
 //   unified   whether code evicts constants: the constant bank chased, N steps of code, the bank chased again.
 //   clevel    where the evicted constants come back from: unified's second chase with and without the other SMs
-//             thrashing L2 in between.
+//             thrashing L2 in between; glevel the same through L2 (its control), and cpollute with other modules'
+//             constants chased in between instead, 64 KiB to 4 MiB of them.
 //   --ur      whether uniform register URn holds a value: urt rewritten (chip_ur.py) into chosen URs.
 //   const     a pointer chase through __constant__ memory (64 KiB, the bank's size), one thread: cycles per load against
 //             the footprint, at strides of 64 and 256 bytes (the line size from the ratio of the knees).
@@ -163,16 +164,18 @@ static std::string clevel_ptx(bool global) {
   std::string s = ptx_head() + (global ? "" : ".const .align 4 .b32 cbank[16384];\n\n") +
                   ".visible .entry clevel(.param .u64 out, .param .u64 cyc, .param .u32 warm, .param .u32 n, "
                   ".param .u32 y, .param .u32 mask, .param .u64 scrub, .param .u64 words, .param .u64 flags, "
-                  ".param .u32 thrash, .param .u64 g)\n{\n"
-                  " .reg .b32 %x<4>, %y, %i, %j, %k, %wm, %n, %m, %t, %th, %c, %b, %nb, %acc, %v;\n"
-                  " .reg .b64 %base, %p, %o, %q, %w, %t0, %t1, %sc, %wd, %fl, %e, %end, %step;\n .reg .pred %z;\n"
+                  ".param .u32 thrash, .param .u64 g, .param .u32 expect, .param .u64 started)\n{\n"
+                  " .reg .b32 %x<4>, %y, %i, %j, %k, %wm, %n, %m, %t, %th, %c, %b, %nb, %acc, %v, %ex;\n"
+                  " .reg .b64 %base, %p, %o, %q, %w, %t0, %t1, %sc, %wd, %fl, %e, %end, %step, %st, %tw, %dt;\n"
+                  " .reg .pred %z;\n ld.param.u32 %ex, [expect];\n ld.param.u64 %st, [started];\n"
                   " ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n ld.param.u32 %wm, [warm];\n"
                   " ld.param.u32 %n, [n];\n ld.param.u32 %y, [y];\n ld.param.u32 %m, [mask];\n"
                   " ld.param.u64 %sc, [scrub];\n ld.param.u64 %wd, [words];\n ld.param.u64 %fl, [flags];\n"
                   " ld.param.u32 %th, [thrash];\n cvta.to.global.u64 %o, %o;\n cvta.to.global.u64 %q, %q;\n"
                   " cvta.to.global.u64 %sc, %sc;\n cvta.to.global.u64 %fl, %fl;\n mov.u32 %b, %ctaid.x;\n"
                   " mov.u32 %nb, %nctaid.x;\n mov.u32 %i, %tid.x;\n setp.ne.u32 %z, %b, 0;\n @%z bra THRASH;\n"
-                  " setp.ge.u32 %z, %i, 32;\n @%z bra DONE;\n" +
+                  " setp.ge.u32 %z, %i, 32;\n @%z bra DONE;\n setp.ne.u32 %z, %i, 0;\n @%z bra W0;\n"
+                  " st.volatile.u32 [%st], 1;\n membar.sys;\nW0:\n" +
                   (global ? " ld.param.u64 %base, [g];\n cvta.to.global.u64 %base, %base;\n" : " mov.u64 %base, cbank;\n") +
                   " and.b32 %j, %i, %m;\n mov.u32 %k, 0;\n"  // warp 0, a per-thread j: both chases LDC
                   "WARM:\n mul.wide.u32 %p, %j, 4;\n add.u64 %p, %p, %base;\n " + ld + " %j, [%p];\n"
@@ -182,8 +185,10 @@ static std::string clevel_ptx(bool global) {
          ", %x" + std::to_string(k) + ", %t;\n";
   ptx_steps(s, CLEVEL_STEPS, 4);
   s += " and.b32 %t, %x0, %m;\n xor.b32 %j, %j, %t;\n setp.eq.u32 %z, %th, 0;\n @%z bra CHASE;\n"
-       " st.volatile.global.u32 [%fl], 1;\n sub.u32 %nb, %nb, 1;\n"
-       "WAIT0:\n ld.volatile.global.u32 %c, [%fl+4];\n setp.lt.u32 %z, %c, %nb;\n @%z bra WAIT0;\n"
+       " st.volatile.global.u32 [%fl], 1;\n mov.u64 %tw, %clock64;\n"
+       "WAIT0:\n ld.volatile.global.u32 %c, [%fl+4];\n setp.ge.u32 %z, %c, %ex;\n @%z bra CHASE;\n"
+       " mov.u64 %dt, %clock64;\n sub.u64 %dt, %dt, %tw;\n setp.lt.u64 %z, %dt, 17179869184;\n @%z bra WAIT0;\n"
+       " st.volatile.global.u32 [%fl+12], 1;\n"
        "CHASE:\n mov.u32 %k, 0;\n mov.u64 %t0, 0;\n"
        "TIMED:\n setp.eq.u32 %z, %k, 1;\n @%z mov.u64 %t0, %clock64;\n mul.wide.u32 %p, %j, 4;\n"
        " add.u64 %p, %p, %base;\n " + ld + " %j, [%p];\n add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %n;\n"
@@ -191,7 +196,7 @@ static std::string clevel_ptx(bool global) {
   ptx_store_chains(s, 4);
   s += " st.global.u32 [%o+512], %j;\n mul.wide.u32 %w, %i, 8;\n add.u64 %w, %w, %q;\n st.global.u64 [%w], %t1;\n"
        " bra DONE;\n"
-       "THRASH:\n setp.eq.u32 %z, %th, 0;\n @%z bra DONE;\n setp.ne.u32 %z, %i, 0;\n @%z bra GO;\n"
+       "THRASH:\n setp.ne.u32 %z, %th, 1;\n @%z bra DONE;\n setp.ne.u32 %z, %i, 0;\n @%z bra GO;\n"
        "WAIT1:\n ld.volatile.global.u32 %c, [%fl];\n setp.eq.u32 %z, %c, 0;\n @%z bra WAIT1;\n"
        "GO:\n barrier.sync 0;\n sub.u32 %c, %b, 1;\n mul.wide.u32 %e, %c, 4;\n mul.lo.u64 %e, %e, %wd;\n"
        " add.u64 %e, %e, %sc;\n mul.wide.u32 %p, %i, 4;\n add.u64 %p, %p, %e;\n mul.lo.u64 %end, %wd, 4;\n"
@@ -203,6 +208,25 @@ static std::string clevel_ptx(bool global) {
        " atom.global.add.u32 %v, [%fl+4], 1;\n"
        "DONE:\n ret;\n}\n";
   return s;
+}
+
+// Constants from other modules between clevel's code and its timed chase: cpoll(flags, n, mask) waits for flags[0]
+// (clevel's code done), chases its own module's bank n loads in its first warp (a per-thread j), then adds its final
+// j to flags[2] and 1 to flags[1].  Its spin gives up after 2^34 cycles and sets flags[3].
+static std::string cpoll_ptx() {
+  return ptx_head() + ".const .align 4 .b32 cbank[16384];\n\n" +
+         ".visible .entry cpoll(.param .u64 flags, .param .u32 n, .param .u32 mask)\n{\n"
+         " .reg .b32 %i, %j, %k, %n, %m, %c;\n .reg .b64 %fl, %p, %base, %t0, %dt;\n .reg .pred %z;\n"
+         " ld.param.u64 %fl, [flags];\n ld.param.u32 %n, [n];\n ld.param.u32 %m, [mask];\n"
+         " cvta.to.global.u64 %fl, %fl;\n mov.u32 %i, %tid.x;\n mov.u64 %t0, %clock64;\n"
+         "WAIT:\n ld.volatile.global.u32 %c, [%fl];\n setp.ne.u32 %z, %c, 0;\n @%z bra GO;\n"
+         " mov.u64 %dt, %clock64;\n sub.u64 %dt, %dt, %t0;\n setp.lt.u64 %z, %dt, 17179869184;\n @%z bra WAIT;\n"
+         " st.volatile.global.u32 [%fl+12], 1;\n bra DONE;\n"
+         "GO:\n mov.u64 %base, cbank;\n and.b32 %j, %i, %m;\n mov.u32 %k, 0;\n"
+         "CHASE:\n mul.wide.u32 %p, %j, 4;\n add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n add.u32 %k, %k, 1;\n"
+         " setp.lt.u32 %z, %k, %n;\n @%z bra CHASE;\n setp.ne.u32 %z, %i, 0;\n @%z bra DONE;\n"
+         " atom.global.add.u32 %c, [%fl+8], %j;\n atom.global.add.u32 %c, [%fl+4], 1;\n"
+         "DONE:\n ret;\n}\n";
 }
 
 // Code that can issue every cycle: icachef(out, cycles, reps, h) is icache with 8 chains of FFMA, x_k = x_k·h + c, one
@@ -359,6 +383,7 @@ static int emit_ptx(const std::string& dir) {
   for (int n : ICACHEF_STEPS) rc |= write_file(dir + "/icachef_" + std::to_string(n) + ".ptx", icachef_ptx(n));
   rc |= write_file(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".ptx", clevel_ptx(false));
   rc |= write_file(dir + "/glevel_" + std::to_string(CLEVEL_STEPS) + ".ptx", clevel_ptx(true));
+  rc |= write_file(dir + "/cpoll_0.ptx", cpoll_ptx());
   rc |= write_file(dir + "/urt.ptx", urt_ptx());
   return rc;
 }
@@ -443,6 +468,8 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool
   OK(cudaMalloc(&flags, 4096));
   OK(cudaMalloc(&scrub, words * 4 * (blocks - 1)));
   OK(cudaMemset(scrub, 0x5A, words * 4 * (blocks - 1)));
+  void* started;
+  OK(cudaMalloc(&started, 4));
   const uint32_t y = 0x2545F491u;
   j += "\"" + name + "\":{\"code_bytes\":" + std::to_string(128 * CLEVEL_STEPS) +
        ",\"const_footprint\":65536,\"stride\":64,\"thrash_bytes\":" + std::to_string(words * 4 * (blocks - 1)) +
@@ -452,7 +479,8 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool
     int warm = 2 * count, loads = 2 * count;
     uint32_t yy = y, mask = 0, th = thrash;
     OK(cudaMemset(flags, 0, 4096));
-    void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th, &bank};
+    uint32_t expect = blocks - 1;
+    void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th, &bank, &expect, &started};
     OK(cudaLaunchKernel((const void*)fn, dim3(blocks), dim3(256), args, 0, 0));
     OK(cudaGetLastError());
     OK(cudaDeviceSynchronize());
@@ -460,12 +488,14 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool
     unsigned long long cy[32];
     OK(cudaMemcpy(got, out, sizeof got, cudaMemcpyDeviceToHost));
     OK(cudaMemcpy(cy, cyc, sizeof cy, cudaMemcpyDeviceToHost));
-    OK(cudaMemcpy(&arrived, flags + 1, 4, cudaMemcpyDeviceToHost));
+    uint32_t fl[4];
+    OK(cudaMemcpy(fl, flags, sizeof fl, cudaMemcpyDeviceToHost));
+    arrived = fl[1];
     uint32_t x0[8], x31[8];
     icache_host(0, CLEVEL_STEPS, 4, 1, y, x0);
     icache_host(31, CLEVEL_STEPS, 4, 1, y, x31);
     if (memcmp(x0, got, 16) || memcmp(x31, got + 124, 16) || got[128] != (uint32_t)(((warm + loads) % count) * sw) ||
-        arrived != (thrash ? (uint32_t)(blocks - 1) : 0u))
+        arrived != (thrash ? (uint32_t)(blocks - 1) : 0u) || fl[3])
       return fail(name + " result, thrash=" + std::to_string(thrash));
     const double c = (double)*std::max_element(cy, cy + 32);
     j += std::string(first ? "" : ",") + "{\"thrash\":" + std::to_string(thrash) + ",\"cycles_per_load\":" +
@@ -475,10 +505,101 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool
   j += "]},";
   OK(cudaLibraryUnload(lib));
   if (global) cudaFree(bank);
+  cudaFree(started);
   cudaFree(out);
   cudaFree(cyc);
   cudaFree(flags);
   cudaFree(scrub);
+  return 0;
+}
+
+// clevel's bank after other modules' constants: between clevel's code and its timed chase, K copies of cpoll (each
+// its own module and 64 KiB bank, one block an SM) chase their banks.  A constant level beside L2 that holds C bytes
+// loses clevel's bank once K·64 KiB passes C; L2 keeps it until K·64 KiB nears L2's size.
+static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
+  constexpr int KMAX = 64;
+  const int count = 65536 / 64, sw = 16, blocks = d.sms;
+  std::vector<uint32_t> img(16384, 0);
+  for (int k = 0; k < count; ++k) img[k * sw] = ((k + 1) % count) * sw;
+  std::vector<void*> banks;
+  auto fill = [&](cudaLibrary_t l) {
+    void* bank;
+    size_t bytes;
+    OK(cudaLibraryGetGlobal(&bank, &bytes, l, "cbank"));
+    OK(cudaMemcpy(bank, img.data(), std::min(bytes, img.size() * 4), cudaMemcpyHostToDevice));
+    banks.push_back(bank);
+  };
+  cudaLibrary_t lib;
+  cudaKernel_t fn = load_kernel(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".cubin", "clevel", &lib);
+  fill(lib);
+  std::vector<cudaLibrary_t> plib(KMAX);
+  std::vector<cudaKernel_t> pfn(KMAX);
+  for (int k = 0; k < KMAX; ++k) {
+    pfn[k] = load_kernel(dir + "/cpoll_0.cubin", "cpoll", &plib[k]);
+    fill(plib[k]);
+  }
+  std::vector<void*> sorted = banks;
+  std::sort(sorted.begin(), sorted.end());
+  if (std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end()) return fail("cpollute: modules share a bank");
+  uint32_t *out, *flags, *hstart;
+  unsigned long long* cyc;
+  void* dstart;
+  OK(cudaMalloc(&out, 1024));
+  OK(cudaMalloc(&cyc, 32 * 8));
+  OK(cudaMalloc(&flags, 4096));
+  OK(cudaHostAlloc((void**)&hstart, 4, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer(&dstart, hstart, 0));
+  cudaStream_t sa, sb;
+  OK(cudaStreamCreateWithFlags(&sa, cudaStreamNonBlocking));
+  OK(cudaStreamCreateWithFlags(&sb, cudaStreamNonBlocking));
+  const uint32_t y = 0x2545F491u;
+  j += "\"cpollute\":{\"code_bytes\":" + std::to_string(128 * CLEVEL_STEPS) +
+       ",\"bank_bytes\":65536,\"stride\":64,\"blocks_per_module\":" + std::to_string(blocks) + ",\"runs\":[";
+  bool first = true;
+  for (int rep = 0; rep < 2; ++rep)
+    for (int K : {0, 1, 2, 4, 8, 16, 32, 64}) {
+      int warm = 2 * count, loads = 2 * count, pn = 2 * count + 1;
+      uint32_t yy = y, mask = 0, th = K ? 2u : 0u, expect = (uint32_t)(K * blocks), pm = 0;
+      uint64_t words = 0;
+      void *scrub = nullptr, *g = nullptr;
+      OK(cudaMemset(flags, 0, 4096));
+      *(volatile uint32_t*)hstart = 0;
+      void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th, &g, &expect, &dstart};
+      OK(cudaLaunchKernel((const void*)fn, dim3(blocks), dim3(256), args, 0, sa));
+      // The modules launch once clevel is resident, so they can't take every SM's slots first and starve it.
+      while (*(volatile uint32_t*)hstart == 0 && cudaStreamQuery(sa) == cudaErrorNotReady) {
+      }
+      for (int k = 0; k < K; ++k) {
+        void* pargs[] = {&flags, &pn, &pm};
+        OK(cudaLaunchKernel((const void*)pfn[k], dim3(blocks), dim3(32), pargs, 0, sb));
+      }
+      OK(cudaGetLastError());
+      OK(cudaDeviceSynchronize());
+      uint32_t got[129], fl[4];
+      unsigned long long cy[32];
+      OK(cudaMemcpy(got, out, sizeof got, cudaMemcpyDeviceToHost));
+      OK(cudaMemcpy(cy, cyc, sizeof cy, cudaMemcpyDeviceToHost));
+      OK(cudaMemcpy(fl, flags, sizeof fl, cudaMemcpyDeviceToHost));
+      uint32_t x0[8], x31[8];
+      icache_host(0, CLEVEL_STEPS, 4, 1, y, x0);
+      icache_host(31, CLEVEL_STEPS, 4, 1, y, x31);
+      if (memcmp(x0, got, 16) || memcmp(x31, got + 124, 16) || got[128] != (uint32_t)(((warm + loads) % count) * sw) ||
+          fl[1] != expect || fl[2] != expect * (uint32_t)((pn % count) * sw) || fl[3])
+        return fail("cpollute result, K=" + std::to_string(K));
+      const double c = (double)*std::max_element(cy, cy + 32);
+      j += std::string(first ? "" : ",") + "{\"modules\":" + std::to_string(K) + ",\"other_bytes\":" +
+           std::to_string(65536 * K) + ",\"cycles_per_load\":" + num(c / (loads - 1)) + "}";
+      first = false;
+    }
+  j += "]},";
+  OK(cudaStreamDestroy(sa));
+  OK(cudaStreamDestroy(sb));
+  for (auto& l : plib) OK(cudaLibraryUnload(l));
+  OK(cudaLibraryUnload(lib));
+  cudaFreeHost(hstart);
+  cudaFree(out);
+  cudaFree(cyc);
+  cudaFree(flags);
   return 0;
 }
 
@@ -840,7 +961,7 @@ int main(int argc, char** argv) {
       fprintf(stderr,
               "usage: bwchip --emit DIR\n"
               "       bwchip --ur URT_CUBIN A B\n"
-              "       bwchip [--out DIR] [--ptx DIR_OF_CUBINS] [--only icache|icache8|unified|icachef|clevel|glevel|const|tlb|l1|l2]\n");
+              "       bwchip [--out DIR] [--ptx DIR_OF_CUBINS] [--only icache|icache8|unified|icachef|clevel|glevel|cpollute|const|tlb|l1|l2]\n");
       return 2;
     }
   }
@@ -875,6 +996,7 @@ int main(int argc, char** argv) {
     sweep("icachef", [&](std::string& s) { return chip::run_icachef(s, ptx_dir); });
     sweep("clevel", [&](std::string& s) { return chip::run_clevel(s, ptx_dir, d, false); });
     sweep("glevel", [&](std::string& s) { return chip::run_clevel(s, ptx_dir, d, true); });
+    sweep("cpollute", [&](std::string& s) { return chip::run_cpollute(s, ptx_dir, d); });
   }
   sweep("const", [&](std::string& s) { return chip::run_const(s); });
   sweep("tlb", [&](std::string& s) { return chip::run_tlb(s); });

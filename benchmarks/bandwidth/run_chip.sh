@@ -49,8 +49,9 @@ mkdir "$S/ptx" "$S/ur"
 ls "$S"/ptx/*.ptx | xargs -P 16 -I{} sh -c '"$1" -arch=sm_120 -O3 "$2" -o "${2%.ptx}.cubin"' _ "$CUDA/bin/ptxas" {}
 sha256sum chip.cu chip_ur.py "$S/bwchip" >> "$O/build.txt"
 
-# Each kernel's steps: icache_N 4 chains of add/xor, icache8_N 8, unified_N and clevel_N 4 (and their two chases
-# per-thread LDCs), icachef_N 8 chains of FFMA with immediates (one instruction a chain a step).
+# Each kernel's steps: icache_N 4 chains of add/xor, icache8_N 8, unified_N, clevel_N and glevel_N 4, icachef_N 8 chains
+# of FFMA with immediates (one instruction a chain a step), cpoll_0 none; unified, clevel and cpoll chase constants
+# per thread (LDC, never the uniform path).
 echo "kernel steps instructions alu_steps code_bytes sha256" > "$O/sass.txt"
 for f in $(ls "$S"/ptx/*_*.cubin | sort -t_ -k1,1 -k2n); do
   k=$(basename "$f" .cubin); n=${k##*_}; kind=${k%_*}
@@ -64,7 +65,7 @@ for f in $(ls "$S"/ptx/*_*.cubin | sort -t_ -k1,1 -k2n); do
   [ "$alu" -ge "$need" ] || { echo "REFUSED: $k.cubin has $alu of $op, under $need"; exit 3; }
   if [ "$kind" = icachef ] && grep -qE 'FFMA [^;]*c\[' "$S/sass.txt"; then
     echo "REFUSED: $k.cubin reads its FFMA constants from a bank"; exit 3; fi
-  case $kind in unified | clevel) if grep -qE 'LDCU UR[0-9]+, c\[0x3\]' "$S/sass.txt"; then
+  case $kind in unified | clevel | cpoll) if grep -qE 'LDCU UR[0-9]+, c\[0x3\]' "$S/sass.txt"; then
     echo "REFUSED: $k.cubin chases through the uniform path"; exit 3; fi ;; esac
 done
 rm -f "$S"/ptx/*.ptx "$S/sass.txt"
