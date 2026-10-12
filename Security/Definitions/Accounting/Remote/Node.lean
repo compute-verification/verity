@@ -37,8 +37,8 @@ structure Node (τ : Type) where
   /-- β_m: each tier's calibrated read ceiling, in bits per tick, the capacity of tier `m`'s port to the node's compute
   (the Links row) -/
   ceil : τ → ℕ
-  /-- R_m: each tier's declared rate, in bits per tick, which the audit's receipts exhaust: R_HBM for an HBM tier, R_host
-  for host DRAM -/
+  /-- R_m: each tier's declared rate, in bits per tick, which the audit's receipts exhaust: R_HBM for an HBM tier,
+  R_host for host DRAM -/
   rate : τ → ℕ
   /-- M_N: the on-chip state of the node's compute (GPU dies, host CPUs, root complex, NIC buffers), in bits -/
   chip : ℕ

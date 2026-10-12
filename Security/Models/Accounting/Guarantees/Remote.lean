@@ -50,9 +50,9 @@ def NodeLevel : Prop :=
     r.Holds (δs + δc + δm + δr + δw + δl + δz) fun ω =>
       (1 - gamma N a ε Wr Φout Wtile) * N.capacity a.T ≤ r.reads ω
 
-/-- **The node-level guarantee's counting form (Mbw at the node).** Under `NodeLevel`'s hypotheses, with `CoLocatedJoint`
-for `CoLocated` and the tiers' ports within their ceilings (`Ports`), the probability that the audit accepts and the
-node determined more than `γ · C_true` bits of data independent of the store, seeds and oracle from its tiers is at
+/-- **The node-level guarantee's counting form (Mbw at the node).** Under `NodeLevel`'s hypotheses, with
+`CoLocatedJoint` for `CoLocated` and the tiers' ports within their ceilings (`Ports`), the probability that the audit
+accepts and the node determined more than `γ · C_true` bits of data independent of the store, seeds and oracle from its tiers is at
 most the errors summed. -/
 def NodeLevelJoint : Prop :=
   ∀ (τ Ω : Type) [Fintype τ] [Fintype Ω] (N : Node τ) (a : Audit) (r : Run N a Ω)
