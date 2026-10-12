@@ -1,6 +1,6 @@
 """HBM bytes a decode step moves, measured: Nsight Compute's DRAM counters over each profiled arm's windows (`serve.py
 --profile-steps`, run under `ncu --profile-from-start off --graph-profiling graph`, exported as OUT/ncu-<tag>.csv with
-`--page raw --print-units base`).
+`--page raw --print-units base`; on sm_120 the counters are `dram__bytes_op_read` and `dram__bytes_op_write`).
 
 A window opens with torch's ``spin_kernel`` and holds a few steady decode steps of one point.  A step's forward is one CUDA
 graph (one profile result reading at least the linear weights); the window's bytes over its graph count are the step's.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import compare
 
-READ, WRITE = "dram__bytes_read.sum", "dram__bytes_write.sum"
+READ, WRITE = "dram__bytes_op_read.sum", "dram__bytes_op_write.sum"
 GRAPH_MIN = 2 << 30
 
 
@@ -25,6 +25,8 @@ def rows(path: Path) -> list[dict]:
     lines = [ln for ln in path.read_text().splitlines() if ln.startswith('"')]
     r = list(csv.reader(lines))
     head, body = r[0], r[2:]
+    if READ not in head or WRITE not in head:
+        raise SystemExit(f"{path.name}: no {READ} / {WRITE} columns (the metrics were not collected)")
     out = []
     for row in body:
         d = dict(zip(head, row))

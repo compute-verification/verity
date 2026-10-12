@@ -43,7 +43,7 @@ export NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu} NCU_ARGS=
 if [ "${MODE:-}" = profile ]; then
   ARMS=${ARMS:-stock enc:2} SERVE_ARGS=${SERVE_ARGS:---profile-steps 2 --steps 16} ARM_MIN=${ARM_MIN:-10}
   NCU_ARGS="--profile-from-start off --graph-profiling graph --cache-control none --clock-control none"
-  NCU_ARGS+=" --metrics dram__bytes_read.sum,dram__bytes_write.sum"
+  NCU_ARGS+=" --metrics dram__bytes_op_read.sum,dram__bytes_op_write.sum"
 fi
 export B PY MODEL VE ARMS=${ARMS:-stock plain enc:2 enc:3 stock} SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-7}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
@@ -99,7 +99,9 @@ fi
     echo "$tag $?" >> "$O/arms.rc"; q "$tag end"
   done'
 if [ "${MODE:-}" = profile ]; then
-  for r in "$O"/ncu-*.ncu-rep; do "$NCU_BIN" --import "$r" --csv --page raw --print-units base > "${r%.ncu-rep}.csv" 2>&1; done
+  for r in "$O"/ncu-*.ncu-rep; do
+    "$NCU_BIN" --import "$r" --csv --page raw --print-units base > "${r%.ncu-rep}.csv" 2>&1 && rm -f "$r"
+  done
   (cd $VE && "$PY" traffic.py "$O") > "$O/traffic.log" 2>&1; rc=$?
   cat "$O/arms.rc" "$O/traffic.log"
   exit $rc
