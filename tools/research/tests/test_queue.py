@@ -92,8 +92,8 @@ class World:
         self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
     def queue(self, **kw) -> Queue:
+        kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
-                     ready=lambda n, h: (n, h) in self.gh.ready,
                      store=self.store, notes=self.tmp / "notes", log=self.logs.append, **kw)
 
     def on_next(self, q: Queue) -> list[int]:
@@ -513,6 +513,33 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
     assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
+
+
+def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
+    """12 Oct: #1736, ejected at 2e050d8b and re-marked there by its owner, stayed off `next` on the ejecting VM's queue alone:
+    the queue state's record of the ejection held it whatever the store's newest mark said."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, head := world.change({"a.txt": "1\n"}))
+    target = label_target(1, head)
+    world.store.add_label(target, vocab.READY, True, "lane-1", ts="2026-10-12T21:00:00Z")
+    labels = StoreLabels(world.store)
+    q = world.queue(ready=labels.ready, marked_at=labels.marked_at)
+    assert [m.pr for m in q.sync()[0]] == [1]
+    q.eject(1, "breaks the repository suite", "ci")
+    members, entries = q.sync()
+    assert members == [] and entries[1].why.startswith("ejected at")
+    world.store.add_label(target, vocab.READY, True, "lane-1", ts="2999-01-01T00:00:00Z")
+    assert [m.pr for m in q.sync()[0]] == [1]
+
+    state = q.load_state()                      # an ejection recorded to the minute, with no withdrawn mark in the store
+    state["ejected"]["1"] = {"head": head, "why": "w", "by": "ci", "at": "2999-01-01T00:00Z"}
+    q.save_state(state)
+    assert q.sync()[0] == [], "a mark from the ejection's own minute may be older than it"
+    state["ejected"]["1"]["at"] = "2998-12-31T23:59Z"
+    q.save_state(state)
+    assert [m.pr for m in q.sync()[0]] == [1]
 
 
 def test_rules_name_the_hold_label_and_refuse_anything_else():
