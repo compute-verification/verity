@@ -813,6 +813,7 @@ struct Args {
   int mps_challenger_pct = 0, mps_prover_pct = 0;  // foldtwo: each process's CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (0: unset)
   bool prover_first = false;                       // foldtwo: the challenger's context waits for the prover's store
   bool challenger_first = false;                   // foldtwo: the prover's context waits for the challenger's buffers
+  bool poll = false;                               // foldlive, foldtwo: wait for the fold by polling its end event
 };
 
 static Device dev;
@@ -1875,18 +1876,33 @@ static void carry(const Args& a, Carry& c, const uint8_t* hm, size_t slots, cons
   }
 }
 
+// --poll: wait for the fold by polling its end event rather than in cudaStreamSynchronize, while the publisher thread
+// may still be issuing copies
+static void wait_fold(const Args& a, cudaStream_t s, cudaEvent_t end) {
+  if (!a.poll) {
+    OK(cudaStreamSynchronize(s));
+    return;
+  }
+  while (cudaEventQuery(end) == cudaErrorNotReady) {
+  }
+  OK(cudaEventSynchronize(end));
+}
+
 static void carry_sync(Carry& c) {
   for (auto& s : c.s) OK(cudaStreamSynchronize(s));
 }
 
 static std::string transport(const Args& a) {
   return std::string(",\"temporal\":") + (a.temporal ? "true" : "false") + ",\"dma_piece\":" +
-         std::to_string(a.dma_piece) + ",\"dma_streams\":" + std::to_string(a.dma_piece ? a.dma_streams : 0);
+         std::to_string(a.dma_piece) + ",\"dma_streams\":" + std::to_string(a.dma_piece ? a.dma_streams : 0) +
+         ",\"poll\":" + (a.poll ? "true" : "false");
 }
 
 // carry: the copy engines' rate on foldlive's DMA path with S written before the clock starts, to tell the per-piece
 // frontier writes, the pieces themselves and the fold beside them apart.  Arms: 0 carry as in a window, 1 the same
-// pieces without the frontier writes, 2 one copy of the whole size, 3 carry beside fold_live reading what it lands.
+// pieces without the frontier writes, 2 one copy of the whole size, 3 carry beside fold_live reading what it lands,
+// 4 as a window does it (a publisher thread issues the pieces while this one waits in cudaStreamSynchronize on the
+// fold), 5 the same with this thread polling an event instead.
 static int mode_carry(const Args& a) {
   if (!a.dma_piece || !slots_ok(a) || !carry_ok(a)) return fail("carry takes --dma-piece-kib, a multiple of the slot");
   int lo, hi;
@@ -1906,21 +1922,35 @@ static int mode_carry(const Args& a) {
   OK(cudaMalloc(&dout, n / 1024 * 16));
   uint32_t* dsteps;
   OK(cudaMalloc(&dsteps, 64 * 4));
-  std::vector<double> gbs[4];
+  Spinner publisher(cpus[1]);
+  cudaEvent_t folded;
+  OK(cudaEventCreateWithFlags(&folded, cudaEventDisableTiming));
+  std::vector<double> gbs[6];
   uint32_t epoch = 0;
   for (int r = 0; r < a.reps; ++r)
-    for (int arm = 0; arm < 4; ++arm) {
+    for (int arm = 0; arm < 6; ++arm) {
       ++epoch;
       for (size_t k = 0; k < slots; ++k) done[k].store(epoch, std::memory_order_release);
       OK(cudaDeviceSynchronize());
       const double t0 = now_s();
-      if (arm == 3)
+      if (arm >= 3) {
         fold_live<<<*std::max_element(a.fold_ctas.begin(), a.fold_ctas.end()), 1024, 0, s_fold>>>(
             (const uint4*)cy.d, n / 1024, dout, cy.front, a.live_slot / 1024, epoch, 0, dsteps);
-      if (arm == 2)
+        OK(cudaEventRecord(folded, s_fold));
+      }
+      if (arm >= 4) {
+        publisher.post([&] { carry(a, cy, hm, slots, done.get(), epoch); });
+        if (arm == 4)
+          OK(cudaStreamSynchronize(s_fold));
+        else
+          while (cudaEventQuery(folded) == cudaErrorNotReady) {
+          }
+        publisher.wait();
+      } else if (arm == 2) {
         OK(cudaMemcpyAsync(cy.d, hm, n, cudaMemcpyHostToDevice, cy.s[0]));
-      else
+      } else {
         carry(a, cy, hm, slots, done.get(), epoch, arm != 1);
+      }
       carry_sync(cy);
       gbs[arm].push_back(n / (now_s() - t0) / 1e9);
       OK(cudaStreamSynchronize(s_fold));
@@ -1928,7 +1958,8 @@ static int mode_carry(const Args& a) {
   write(a, "carry",
         "{\"bytes\":" + std::to_string(n) + ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) +
             ",\"carry_gbs\":" + stats(gbs[0]) + ",\"pieces_gbs\":" + stats(gbs[1]) + ",\"one_copy_gbs\":" +
-            stats(gbs[2]) + ",\"beside_fold_gbs\":" + stats(gbs[3]) + "}");
+            stats(gbs[2]) + ",\"beside_fold_gbs\":" + stats(gbs[3]) + ",\"as_window_gbs\":" + stats(gbs[4]) +
+            ",\"polled_gbs\":" + stats(gbs[5]) + "}");
   return 0;
 }
 
@@ -2038,7 +2069,7 @@ static int mode_fold_live(const Args& a) {
               }
             });
           if (arm == 0) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
-          OK(cudaStreamSynchronize(s_fold));
+          wait_fold(a, s_fold, ft.b);
           const double t1 = now_s();
           for (auto& g : gens) g->wait();
           publisher.wait();
@@ -2200,7 +2231,7 @@ static int fold_two_challenger(const Args& a, Two& sh) {
               __atomic_store_n(frontier, (unsigned long long)epoch << 32 | f, __ATOMIC_RELEASE);
             }
           });
-          OK(cudaStreamSynchronize(s_fold));
+          wait_fold(a, s_fold, ft.b);
           sh.fold_end[i] = now_s();
           for (auto& g : gens) g->wait();
           publisher.wait();
@@ -2575,6 +2606,7 @@ int main(int argc, char** argv) {
     else if (k == "--temporal") a.temporal = true;
     else if (k == "--prover-first") a.prover_first = true;
     else if (k == "--challenger-first") a.challenger_first = true;
+    else if (k == "--poll") a.poll = true;
     else if (k == "--dma-piece-kib") a.dma_piece = std::stoull(v()) << 10;
     else if (k == "--dma-streams") a.dma_streams = std::stoi(v());
     else if (k == "--mps-challenger-pct") a.mps_challenger_pct = std::stoi(v());
