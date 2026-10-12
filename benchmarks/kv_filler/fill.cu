@@ -250,6 +250,7 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
 //   STEP  while a step is open (gate busy > 0): launched beside a step, it ends with it
 //   IDLE  while no step is open and blockIdx < idle_ctas: launched by the thread, it gives way to the next step
 enum Role : int { BASE = 0, STEP = 1, IDLE = 2 };
+constexpr unsigned long long STEP_LINGER_NS = 50000;  // how long a STEP warp waits for the next step
 
 // `limit` bounds `next` so the units taken never lap the ring before the host has logged their epoch; a CTA checks it
 // before taking one unit, so `next` passes it by at most the CTAs in flight.
@@ -286,9 +287,16 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
       const volatile Seq* q = seq;
       const int busy = g->busy;
       const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
-      const bool go = !q->stop && q->next < q->limit && (role == BASE   ? !(busy_ctas == 0 && idle_ctas == 0)
-                                   : role == STEP ? busy > 0
-                                                  : busy <= 0 && blockIdx.x < idle_ctas);
+      const bool open = !q->stop && q->next < q->limit;
+      bool go = open && (role == BASE   ? !(busy_ctas == 0 && idle_ctas == 0)
+                         : role == STEP ? busy > 0
+                                        : busy <= 0 && blockIdx.x < idle_ctas);
+      if (open && !go && role == STEP) {
+        // between pipelined steps the count is 0 for microseconds: a STEP warp returning there would leave the
+        // kernel to dwindle, never relaunched while its last warp reads on
+        const unsigned long long until = globaltimer() + STEP_LINGER_NS;
+        while (!(go = g->busy > 0) && !q->stop && globaltimer() < until) __nanosleep(1000);
+      }
       if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
     }
     s = __shfl_sync(0xffffffffu, s, 0);
