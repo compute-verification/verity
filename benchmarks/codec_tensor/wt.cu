@@ -1041,10 +1041,298 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
   }
 }
 
+// --- ro-blake3/v1 (verity/core/protocols/bandwidth/tags.py) ----------------------------------------------------------
+//
+// y_j = BLAKE3-keyed(K, u64be j ‖ E_j) over E's blocks of TAG_BLOCK bytes, so a full block's message is four whole
+// chunks: a quad of lanes hashes one block, a chunk a lane, and joins the chunks' chaining values with two parent
+// compressions over shuffles (lanes 0 and 2, then lane 0). Every add of the compression is an IMAD by kOne, which moves
+// the adds to the FMA pipe (ra-tag-fast's V1, +32% on sm_120); kOne sits in constant memory so ptxas can't fold it.
+// leaf_c = SHA512(prefix(leaf) ‖ u64be c ‖ 16 tags), five compressions from the prefix's midstate; the root is the
+// RFC 6962 SHA-512 tree over the leaves, a level at a time with the odd last node promoted (the same tree).
+constexpr int TAG_BLOCK = 4088;
+constexpr u32 B3_START = 1, B3_END = 2, B3_PARENT = 4, B3_ROOT = 8, B3_KEYED = 16;
+constexpr u32 B3_IV0 = 0x6A09E667u, B3_IV1 = 0xBB67AE85u, B3_IV2 = 0x3C6EF372u, B3_IV3 = 0xA54FF53Au;
+__constant__ u32 kTagKey[8];
+__constant__ u32 kOne;
+
+__device__ __forceinline__ u32 imad(u32 a, u32 b, u32 c) {
+  u32 d;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  return d;
+}
+__device__ __forceinline__ u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
+
+__device__ __forceinline__ void b3g(u32 &a, u32 &b, u32 &c, u32 &d, u32 x, u32 y, u32 one) {
+  a = imad(b, one, imad(x, one, a));
+  d = __byte_perm(d ^ a, 0, 0x1032);
+  c = imad(d, one, c);
+  b = __funnelshift_r(b ^ c, b ^ c, 12);
+  a = imad(b, one, imad(y, one, a));
+  d = __byte_perm(d ^ a, 0, 0x0321);
+  c = imad(d, one, c);
+  b = __funnelshift_r(b ^ c, b ^ c, 7);
+}
+
+// One compression of m from cv; out (may alias cv) gets the next chaining value, or under ROOT the hash.
+__device__ __forceinline__ void b3(const u32 (&cv)[8], const u32 (&min)[16], u32 counter, u32 len, u32 flags,
+                                   u32 (&out)[8], u32 one) {
+  u32 m[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) m[i] = min[i];
+  u32 v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
+  u32 v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
+#pragma unroll
+  for (int r = 0; r < 7; ++r) {
+    b3g(v0, v4, v8, v12, m[0], m[1], one);
+    b3g(v1, v5, v9, v13, m[2], m[3], one);
+    b3g(v2, v6, v10, v14, m[4], m[5], one);
+    b3g(v3, v7, v11, v15, m[6], m[7], one);
+    b3g(v0, v5, v10, v15, m[8], m[9], one);
+    b3g(v1, v6, v11, v12, m[10], m[11], one);
+    b3g(v2, v7, v8, v13, m[12], m[13], one);
+    b3g(v3, v4, v9, v14, m[14], m[15], one);
+    if (r < 6) {
+      const u32 t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = t[i];
+    }
+  }
+  out[0] = v0 ^ v8;
+  out[1] = v1 ^ v9;
+  out[2] = v2 ^ v10;
+  out[3] = v3 ^ v11;
+  out[4] = v4 ^ v12;
+  out[5] = v5 ^ v13;
+  out[6] = v6 ^ v14;
+  out[7] = v7 ^ v15;
+}
+
+// Message block k of chunk c of a block's message (u64be j ‖ the block's bytes at e, len bytes in all, a multiple of 8).
+__device__ __forceinline__ void tag_words(const uint2 *__restrict__ e, u64 j, int len, int c, int k, u32 (&m)[16]) {
+#pragma unroll
+  for (int h = 0; h < 8; ++h) {
+    const int o = 1024 * c + 64 * k + 8 * h;
+    uint2 v = make_uint2(0u, 0u);
+    if (o == 0)
+      v = make_uint2(bswap32((u32)(j >> 32)), bswap32((u32)j));
+    else if (o < len)
+      v = __ldg(e + (o >> 3) - 1);
+    m[2 * h] = v.x;
+    m[2 * h + 1] = v.y;
+  }
+}
+
+// Block jl's tag (j = its index in E) in lane 0 of the quad, whose lane c hashes chunk c; E's `bytes` end the last block
+// short. A quad past the end loads nothing and its tag is not stored.
+__device__ __forceinline__ void tag_quad(const uint8_t *__restrict__ E, u64 bytes, u64 jl, u64 j, int c, u32 one,
+                                         u32 (&y)[8]) {
+  const u64 e0 = jl * TAG_BLOCK;
+  const int len = e0 < bytes ? (int)(bytes - e0 < (u64)TAG_BLOCK ? bytes - e0 : (u64)TAG_BLOCK) + 8 : 0;
+  const int nch = (len + 1023) >> 10, clen = min(1024, len - 1024 * c), nmb = clen > 0 ? (clen + 63) >> 6 : 0;
+  const uint2 *e = reinterpret_cast<const uint2 *>(E + (e0 < bytes ? e0 : 0));
+  u32 key[8], cv[8], nx[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key[i] = kTagKey[i];
+  tag_words(e, j, len, c, 0, nx);
+#pragma unroll 1
+  for (int k = 0; k < nmb; ++k) {
+    u32 m[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = nx[i];
+    if (k + 1 < nmb) tag_words(e, j, len, c, k + 1, nx);
+    const u32 fl = B3_KEYED | (k == 0 ? B3_START : 0) | (k == nmb - 1 ? B3_END | (nch == 1 ? B3_ROOT : 0) : 0);
+    b3(cv, m, (u32)c, (u32)min(64, clen - 64 * k), fl, cv, one);
+  }
+  u32 m[16], p[8], r[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    m[i] = cv[i];
+    m[8 + i] = __shfl_down_sync(FULL, cv[i], 1);
+  }
+  b3(key, m, 0, 64, B3_KEYED | B3_PARENT | (nch == 2 ? B3_ROOT : 0), p, one);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    m[i] = p[i];
+    m[8 + i] = __shfl_down_sync(FULL, nch == 3 ? cv[i] : p[i], 2);
+  }
+  b3(key, m, 0, 64, B3_KEYED | B3_PARENT | B3_ROOT, r, one);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) y[i] = nch == 1 ? cv[i] : nch == 2 ? p[i] : r[i];
+}
+
+// The tag warps of a CTA: warp t takes the CTA's units t, t + T, ...; unit u is the 8 blocks from 8 (u grid + cta), a
+// quad each, so the device's tag front moves through E as its decode front does. tags[8 jl ..] gets block jl's tag as
+// little-endian words.
+__device__ __forceinline__ void tag_warp(const uint8_t *__restrict__ E, u64 bytes, u64 jbase, int t, int taggers,
+                                         u32 *__restrict__ tags) {
+  const int lane = threadIdx.x & 31, quad = lane >> 2, c = lane & 3;
+  const u64 nblk = (bytes + TAG_BLOCK - 1) / TAG_BLOCK;
+  const u32 one = kOne;
+  for (u64 u = t;; u += taggers) {
+    const u64 jl0 = 8 * (u * gridDim.x + blockIdx.x);
+    if (jl0 >= nblk) break;
+    const u64 jl = jl0 + quad;
+    u32 y[8];
+    tag_quad(E, bytes, jl, jbase + jl, c, one, y);
+    if (c == 0 && jl < nblk) {
+      uint4 *o = reinterpret_cast<uint4 *>(tags + 8 * jl);
+      o[0] = make_uint4(y[0], y[1], y[2], y[3]);
+      o[1] = make_uint4(y[4], y[5], y[6], y[7]);
+    }
+  }
+}
+
+// Compute-only: `steps` chained compressions a thread (the tag's ALU rate, which sets tau).
+__global__ void __launch_bounds__(128) b3_chain_kernel(u64 steps, unsigned long long *xr) {
+  const u32 id = blockIdx.x * blockDim.x + threadIdx.x, one = kOne;
+  u32 cv[8], m[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = kTagKey[i] ^ (id * 0x9E3779B9u + i);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) m[i] = id + 0x01000193u * i;
+#pragma unroll 1
+  for (u64 s = 0; s < steps; ++s) b3(cv, m, (u32)s, 64, B3_KEYED, cv, one);
+  if ((cv[0] ^ cv[5]) == 0x12345679u) atomicXor(xr, (unsigned long long)cv[1]);
+}
+
+#define WT_SHA512_K                                                                                              \
+  {0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL, 0x3956c25bf348b538ULL, \
+   0x59f111f1b605d019ULL, 0x923f82a4af194f9bULL, 0xab1c5ed5da6d8118ULL, 0xd807aa98a3030242ULL, 0x12835b0145706fbeULL, \
+   0x243185be4ee4b28cULL, 0x550c7dc3d5ffb4e2ULL, 0x72be5d74f27b896fULL, 0x80deb1fe3b1696b1ULL, 0x9bdc06a725c71235ULL, \
+   0xc19bf174cf692694ULL, 0xe49b69c19ef14ad2ULL, 0xefbe4786384f25e3ULL, 0x0fc19dc68b8cd5b5ULL, 0x240ca1cc77ac9c65ULL, \
+   0x2de92c6f592b0275ULL, 0x4a7484aa6ea6e483ULL, 0x5cb0a9dcbd41fbd4ULL, 0x76f988da831153b5ULL, 0x983e5152ee66dfabULL, \
+   0xa831c66d2db43210ULL, 0xb00327c898fb213fULL, 0xbf597fc7beef0ee4ULL, 0xc6e00bf33da88fc2ULL, 0xd5a79147930aa725ULL, \
+   0x06ca6351e003826fULL, 0x142929670a0e6e70ULL, 0x27b70a8546d22ffcULL, 0x2e1b21385c26c926ULL, 0x4d2c6dfc5ac42aedULL, \
+   0x53380d139d95b3dfULL, 0x650a73548baf63deULL, 0x766a0abb3c77b2a8ULL, 0x81c2c92e47edaee6ULL, 0x92722c851482353bULL, \
+   0xa2bfe8a14cf10364ULL, 0xa81a664bbc423001ULL, 0xc24b8b70d0f89791ULL, 0xc76c51a30654be30ULL, 0xd192e819d6ef5218ULL, \
+   0xd69906245565a910ULL, 0xf40e35855771202aULL, 0x106aa07032bbd1b8ULL, 0x19a4c116b8d2d0c8ULL, 0x1e376c085141ab53ULL, \
+   0x2748774cdf8eeb99ULL, 0x34b0bcb5e19b48a8ULL, 0x391c0cb3c5c95a63ULL, 0x4ed8aa4ae3418acbULL, 0x5b9cca4f7763e373ULL, \
+   0x682e6ff3d6b2b8a3ULL, 0x748f82ee5defb2fcULL, 0x78a5636f43172f60ULL, 0x84c87814a1f0ab72ULL, 0x8cc702081a6439ecULL, \
+   0x90befffa23631e28ULL, 0xa4506cebde82bde9ULL, 0xbef9a3f7b2c67915ULL, 0xc67178f2e372532bULL, 0xca273eceea26619cULL, \
+   0xd186b8c721c0c207ULL, 0xeada7dd6cde0eb1eULL, 0xf57d4f7fee6ed178ULL, 0x06f067aa72176fbaULL, 0x0a637dc5a2c898a6ULL, \
+   0x113f9804bef90daeULL, 0x1b710b35131c471bULL, 0x28db77f523047d84ULL, 0x32caab7b40c72493ULL, 0x3c9ebe0a15c9bebcULL, \
+   0x431d67c49c100d4cULL, 0x4cc5d4becb3e42b6ULL, 0x597f299cfc657e2aULL, 0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL}
+#define WT_SHA512_IV                                                                                            \
+  {0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL, 0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL, 0x510e527fade682d1ULL, \
+   0x9b05688c2b3e6c1fULL, 0x1f83d9abfb41bd6bULL, 0x5be0cd19137e2179ULL}
+__constant__ u64 kSha512K[80] = WT_SHA512_K;
+__constant__ u64 kSha512Iv[8] = WT_SHA512_IV;
+[[maybe_unused]] static const u64 SHA512_K_HOST[80] = WT_SHA512_K;
+static const u64 SHA512_IV_HOST[8] = WT_SHA512_IV;
+
+struct Mid {
+  u64 h[8];
+};
+
+__host__ __device__ __forceinline__ u64 rotr64(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
+
+// One SHA-512 compression of the big-endian words w (clobbered) into s (`benchmarks/bandwidth/tagger.cu`'s).
+__host__ __device__ __forceinline__ void sha512_compress(u64 s[8], u64 w[16]) {
+#ifdef __CUDA_ARCH__
+  const u64 *K = kSha512K;
+#else
+  const u64 *K = SHA512_K_HOST;
+#endif
+  u64 a = s[0], b = s[1], c = s[2], d = s[3], e = s[4], f = s[5], g = s[6], h = s[7];
+#pragma unroll 1
+  for (int r = 0; r < 80; r += 16) {
+#pragma unroll
+    for (int t = 0; t < 16; ++t) {
+      if (r) {
+        const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
+        w[t] += (rotr64(w15, 1) ^ rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
+                (rotr64(w2, 19) ^ rotr64(w2, 61) ^ (w2 >> 6));
+      }
+      const u64 t1 = h + (rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41)) + ((e & f) ^ (~e & g)) + K[r + t] + w[t];
+      const u64 t2 = (rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+      h = g;
+      g = f;
+      f = e;
+      e = d + t1;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2;
+    }
+  }
+  s[0] += a;
+  s[1] += b;
+  s[2] += c;
+  s[3] += d;
+  s[4] += e;
+  s[5] += f;
+  s[6] += g;
+  s[7] += h;
+}
+
+// The leaves over the tags of blocks [0, nblk), a thread a leaf; each digest as SHA-512's 8 state words.
+__global__ void tag_leaves_kernel(const u32 *__restrict__ tags, u64 nblk, Mid leafmid, u64 *__restrict__ leaves) {
+  const u64 leaf = blockIdx.x * (u64)blockDim.x + threadIdx.x, first = leaf * 16;
+  if (first >= nblk) return;
+  const int n = (int)(nblk - first < 16 ? nblk - first : 16);
+  const int data = 1 + 4 * n, nb = (8 * data + 17 + 127) / 128;
+  const u32 *T = tags + first * 8;
+  u64 s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = leafmid.h[i];
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      u64 v = 0;
+      if (q == 0)
+        v = leaf;
+      else if (q < data)
+        v = ((u64)bswap32(T[2 * (q - 1)]) << 32) | bswap32(T[2 * (q - 1) + 1]);
+      else if (q == data)
+        v = 0x80ULL << 56;
+      if (q == 16 * nb - 1) v = (u64)(128 + 8 + 32 * n) * 8;
+      w[i] = v;
+    }
+    sha512_compress(s, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) leaves[leaf * 8 + i] = s[i];
+}
+
+// SHA512(0x01 ‖ L ‖ R): 129 bytes, two compressions from the IV.
+__device__ __forceinline__ void node_hash(const u64 *L, const u64 *R, u64 *out) {
+  u64 w[16], s[8], prev = 1;
+#pragma unroll
+  for (int k = 0; k < 16; ++k) {
+    const u64 cur = k < 8 ? L[k] : R[k - 8];
+    w[k] = (prev << 56) | (cur >> 8);
+    prev = cur;
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  sha512_compress(s, w);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = 0;
+  w[0] = (prev << 56) | (0x80ULL << 48);
+  w[15] = 129 * 8;
+  sha512_compress(s, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) out[i] = s[i];
+}
+
+__global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ in, u64 n, u64 *__restrict__ out) {
+  const u64 i = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (i >= (n + 1) / 2) return;
+  if (2 * i + 1 < n)
+    node_hash(in + 16 * i, in + 16 * i + 8, out + 8 * i);
+  else
+#pragma unroll
+    for (int k = 0; k < 8; ++k) out[8 * i + k] = in[16 * i + k];
+}
+
 // --- the fused decode GEMM --------------------------------------------------------------------------------------------
 //
-// The last warp's lane 0 bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps
+// Warp D + 1's lane 0 bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps
 // decode them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each.
+// The warps after D + 1, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
 // The CTA's tasks are one sequence of words (task i's word w is word TW i + w), cut into units of 32: decoder warp d
 // takes units d, d + D, ..., lane l a unit's word l. A lane loads its word, decodes it, and writes its payload (stage
 // bytes PB w ..) only once every word of the task is loaded, since a payload overwrites the stored bytes of the words
@@ -1091,7 +1379,8 @@ __device__ __forceinline__ void put_payload(uint8_t *st, int o, const u32 (&y)[N
 template <int K, int NB8, bool PARTIALS>
 __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
-    u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps) {
+    u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
+    u64 tag_base) {
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
@@ -1112,6 +1401,11 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   __syncthreads();
   const int ntasks = nbs > g0 ? (nbs - g0 + groups - 1) / groups : 0;
   const u64 q0 = (u64)g0 * nchunks + kc, gq = (u64)groups * nchunks;   // task i is the store's task q0 + i gq
+
+  if (warp > decoders + 1) {
+    tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, warp - decoders - 2, blockDim.x / 32 - decoders - 2, tags);
+    return;
+  }
 
   if (warp == decoders + 1) {
     if (lane == 0) {
@@ -1227,7 +1521,7 @@ extern "C" {
 int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
   out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
-  out[13] = FUSED_SPAN;
+  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK;
   return 0;
 }
 
@@ -1296,6 +1590,8 @@ int wt_chain(int what, int k, int ilp, u64 steps, unsigned long long *xr, int gr
 #define F(K) chain_kernel<2, K, 1><<<grid, 128, 0, s>>>(steps, xr)
     WT_K_SWITCH(k, F)
 #undef F
+  } else if (what == 4) {
+    b3_chain_kernel<<<grid, 128, 0, s>>>(steps, xr);
   } else if (what == 3) {
     if constexpr (!TC_OK) return 5;
     if (ilp == 1) tc_chain_kernel<1><<<grid, TC_WARPS * 32, 0, s>>>(steps, xr);
@@ -1340,19 +1636,20 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 #undef G
 }
 
-// The fused decode GEMM at k rounds: `decoders` decoder warps, an MMA warp and a producer, `stages` stored stages;
-// tsteps as fused_kernel's.
+// The fused decode GEMM at k rounds: `decoders` decoder warps, an MMA warp, a producer and `taggers` tag warps (block
+// jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps as fused_kernel's.
 int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
-             int decoders, int stages, int groups, const u32 *tsteps, int *launched, cudaStream_t s) {
-  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN ||
-      decoders + 2 > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW)
+             int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
+             int *launched, cudaStream_t s) {
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
+      decoders + 2 + taggers > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
-  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2) * 32;
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers) * 32;
   auto go = [&](auto kern, int smem) -> int {
     return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
       kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
-                                               stages, tsteps);
+                                               stages, tsteps, tags, tag_base);
     });
   };
 #define G(KK, NB) \
@@ -1363,6 +1660,44 @@ int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int
   GN(2);
 #undef GN
 #undef G
+}
+
+// ro-blake3/v1 for one window: K as BLAKE3's 8 little-endian key words, and the leaves' prefix block
+// Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from.
+static Mid g_leafmid;
+
+int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
+  u64 w[16];
+  for (int i = 0; i < 16; ++i) {
+    u64 v = 0;
+    for (int b = 0; b < 8; ++b) v = (v << 8) | leaf_prefix[8 * i + b];
+    w[i] = v;
+  }
+  for (int i = 0; i < 8; ++i) g_leafmid.h[i] = SHA512_IV_HOST[i];
+  sha512_compress(g_leafmid.h, w);
+  const u32 one = 1;
+  if (cudaMemcpyToSymbol(kTagKey, key, 8 * 4) || cudaMemcpyToSymbol(kOne, &one, 4)) return 2;
+  return cudaDeviceSynchronize() ? 3 : 0;
+}
+
+// leaves (ceil(nblk / 16) digests of 8 u64) from the tags of blocks [0, nblk).
+int wt_tag_leaves(const u32 *tags, u64 nblk, u64 *leaves, cudaStream_t s) {
+  const u64 n = (nblk + 15) / 16;
+  tag_leaves_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(tags, nblk, g_leafmid, leaves);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The tree over the n leaves at nodes[0 ..], each level after the one below it; *root gets the root's node index.
+int wt_tag_tree(u64 *nodes, u64 n, unsigned long long *root, cudaStream_t s) {
+  u64 off = 0;
+  while (n > 1) {
+    const u64 up = (n + 1) / 2;
+    tag_level_kernel<<<(unsigned)((up + 127) / 128), 128, 0, s>>>(nodes + 8 * off, n, nodes + 8 * (off + n));
+    off += n;
+    n = up;
+  }
+  *root = off;
+  return cudaGetLastError() ? 4 : 0;
 }
 
 int wt_spin(long long cycles, cudaStream_t s) {

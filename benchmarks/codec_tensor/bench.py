@@ -34,9 +34,15 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import tagging as TG  # noqa: E402
 import wide as W  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/codec-tensor/bench/seed").digest()
+TAG_SEED = hashlib.sha256(b"verity/codec-tensor/bench/tag-seed").digest()   # the window's sigma
+TAG_BASE = (1 << 32) + 3                                                      # E's index of a layer's first block
+B3_PER_BLOCK = (67, 72)        # compressions a block (4,096 message bytes): the fewest (64 chunk, 3 parent), and the
+                               # tag warps' (4 lanes, 16 + 2 each)
+LAYERS = 32                    # Llama-3.1-8B's, for the tree's share of a layer
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
@@ -65,18 +71,23 @@ class Lib:
         so.wt_chain.argtypes = [i, i, i, q, v, i, v]
         so.wt_mix.argtypes = [q, q, i, v, i, v]
         so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
-        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v, v]
+        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
+        so.wt_set_tag.argtypes = [v, v]
+        so.wt_tag_leaves.argtypes = [v, q, v, v]
+        so.wt_tag_tree.argtypes = [v, q, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 14)()
+        cs = (ctypes.c_int * 15)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb, self.fused_warps, self.fused_span) = list(cs)
+         self.sb, self.fused_warps, self.fused_span, self.tag_block) = list(cs)
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
         if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
                                                              W.TASK_WORDS[f.name] * f.word_bytes):
             raise RuntimeError(f"{path}: constants {list(cs)} are not wide.py's {f}")
+        if self.tag_block != TG.TAG_BLOCK:
+            raise RuntimeError(f"{path}: tag blocks of {self.tag_block} bytes, tagging.py's are {TG.TAG_BLOCK}")
         self.name = f.name
         self.tc = self.tc_mmas > 0
 
@@ -127,6 +138,13 @@ def limbs_bytes(x: int, nl: int) -> bytes:
 
 def to_dev(torch, data: bytes):
     return torch.frombuffer(bytearray(data), dtype=torch.uint8).cuda()
+
+
+def set_tag(lib: Lib) -> None:
+    """ro-blake3/v1's key and leaf prefix at TAG_SEED into the library."""
+    k = ctypes.create_string_buffer(TG.key(TAG_SEED))
+    pre = ctypes.create_string_buffer(TG.leaf_prefix(TAG_SEED))
+    lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
 
 
 def set_key(lib: Lib, torch, key: W.Key) -> None:
@@ -367,24 +385,88 @@ def parse(spec: str) -> list[tuple[int, ...]]:
     return [tuple(int(v) for v in c.split("x")) for c in spec.split(",") if c]
 
 
-def fused_cfgs(lib: Lib, spec: str) -> list[tuple[int, int]]:
-    """`auto`: the most decoder warps the field's register count allows with the most stages that fit at M = 32, the
-    same with fewer stages, and two fewer decoders; else DECODERSxSTAGES, each checked against wt_fused's bounds."""
+def fused_cfgs(lib: Lib, spec: str) -> list[tuple[int, int, int]]:
+    """DECODERSxSTAGESxTAGGERS (TAGGERS 0 if left out), each checked against wt_fused's bounds. `auto`: untagged, the
+    most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave
+    more L1); tagged, 2, 4 and 6 of those warps tag instead, at 4 fewer stages."""
     smax = (SMEM_PER_BLOCK - 4 * 8 * 528) // (lib.sb + 32)
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":
-        cfgs = [(dmax, smax), (dmax, max(need(dmax), smax - 4)), (dmax - 2, smax)]
+        cfgs = [(dmax, max(need(dmax), smax - 4), 0), (dmax, max(need(dmax), smax - 6), 0)]
+        cfgs += [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (2, 4, 6) if dmax - t >= lib.fused_span]
     else:
-        cfgs = parse(spec)
+        cfgs = [c if len(c) == 3 else (*c, 0) for c in parse(spec)]
     out = []
-    for d, st in cfgs:
-        if not (lib.fused_span <= d <= dmax and need(d) <= st <= smax):
-            raise SystemExit(f"{lib.name}: fused {d}x{st} is outside {lib.fused_span} <= D <= {dmax}, "
+    for d, st, t in cfgs:
+        if not (lib.fused_span <= d and d + t <= dmax and need(d) <= st <= smax and t >= 0):
+            raise SystemExit(f"{lib.name}: fused {d}x{st}x{t} is outside {lib.fused_span} <= D, D + T <= {dmax}, "
                              f"ceil(32 D / TW) <= stages <= {smax}")
-        if (d, st) not in out:
-            out.append((d, st))
+        if (d, st, t) not in out:
+            out.append((d, st, t))
     return out
+
+
+def fused_name(k: int, cfg) -> str:
+    return f"fused_k{k}_d{cfg[0]}s{cfg[1]}t{cfg[2]}"
+
+
+def host_bytes(t) -> bytes:
+    h = t.contiguous().cpu()
+    return ctypes.string_at(h.data_ptr(), h.numel() * h.element_size())
+
+
+def digests(mem: bytes) -> list[bytes]:
+    """The device's SHA-512 digests (8 state words each, as u64 in memory) as bytes."""
+    return [b"".join(int.from_bytes(mem[i + 8 * w:i + 8 * w + 8], "little").to_bytes(8, "big") for w in range(8))
+            for i in range(0, len(mem), 64)]
+
+
+def tag_reference(store, label: str) -> dict:
+    """The store's tags at TAG_SEED from block index TAG_BASE: tags.py on a sample (the first and last blocks and some
+    between), and every block with the PyPI blake3 when it is installed, which must agree on the sample."""
+    sb = host_bytes(store)
+    n = TG.block_count(len(sb))
+    rng = random.Random(len(sb))
+    sample = sorted({*range(min(4, n)), *range(max(0, n - 4), n), *(rng.randrange(n) for _ in range(8))})
+    ref = {jl: TG.tag(TAG_SEED, TAG_BASE + jl, TG.block(sb, jl)) for jl in sample}
+    fast = TG.tags_fast(sb, TAG_BASE, TAG_SEED)
+    if fast is not None and any(fast[jl] != y for jl, y in ref.items()):
+        raise SystemExit(f"{label}: the PyPI blake3 disagrees with tags.py")
+    return {"blocks": n, "sample": ref, "all": b"".join(fast) if fast is not None else None}
+
+
+def tags_ok(tb: bytes, ref: dict) -> bool:
+    if any(tb[32 * jl:32 * jl + 32] != y for jl, y in ref["sample"].items()):
+        return False
+    if ref["all"] is not None:
+        return tb == ref["all"]
+    return all(tb[32 * i:32 * i + 32] != b"\xff" * 32 for i in range(ref["blocks"]))
+
+
+def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int) -> dict:
+    """The device's leaves over its tags and its tree's root, against tags.py's leaves and the RFC 6962 root."""
+    nleaves = -(-nblk // TG.PER_LEAF)
+    leaves = torch.empty(nleaves * 64, dtype=torch.uint8, device="cuda")
+    lib.call("wt_tag_leaves", ptr(tags_dev), nblk, ptr(leaves), st)
+    nodes = torch.zeros((2 * nleaves + 64) * 64, dtype=torch.uint8, device="cuda")
+    nodes[:nleaves * 64] = leaves
+    ri = ctypes.c_ulonglong(0)
+    lib.call("wt_tag_tree", ptr(nodes), nleaves, ctypes.addressof(ri), st)
+    torch.cuda.synchronize()
+    tb = host_bytes(tags_dev)
+    want = TG.leaves(TAG_SEED, [tb[32 * i:32 * i + 32] for i in range(nblk)])
+    got = digests(host_bytes(leaves))
+    root = digests(host_bytes(nodes[ri.value * 64:(ri.value + 1) * 64]))[0]
+    return {"leaves": nleaves, "leaves_ok": got == want, "root_ok": root == TG.root(want), "root": root.hex()}
+
+
+def tree_time(lib: Lib, torch, n: int, reps: int) -> dict:
+    """The tree over n leaves (E's, all layers), timed."""
+    nodes = torch.randint(0, 255, ((2 * n + 64) * 64,), dtype=torch.uint8, device="cuda")
+    ri = ctypes.c_ulonglong(0)
+    ts = timed(torch, lambda: lib.call("wt_tag_tree", ptr(nodes), n, ctypes.addressof(ri), stream(torch)), reps)
+    return {"leaves": n, "median_s": statistics.median(ts), "times_s": ts}
 
 
 def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, cfgs, fused_cfgs,
@@ -406,12 +488,17 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     gx = torch.Generator(device="cuda").manual_seed(5)
     xs = {mb: torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn) for mb in batches}
     res = {"N": n, "K": kd, "weight_bytes": n * kd, "store_bytes": stores[ks[0]].numel(), "gate": {}, "times": {}}
+    nblk = TG.block_count(res["store_bytes"])
+    tagged = [c for c in fused_cfgs if c[2]]
+    tags_dev = torch.empty(nblk * 32, dtype=torch.uint8, device="cuda")
+    refs = {k: tag_reference(stores[k], f"{lib.name} {name} k={k}") for k in ks} if tagged else {}
+    res["tag_blocks"] = nblk
 
     def groups_for(mode, k, mb, cfg):
         launched = ctypes.c_int(0)
         if mode == 3:
-            lib.call("wt_fused", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, None, ctypes.byref(launched),
-                     st)
+            lib.call("wt_fused", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, cfg[2], None, None, 0,
+                     ctypes.byref(launched), st)
         else:
             lib.call("wt_gemm", mode, None, None, None, mb, n, kd, 0, cfg[0], cfg[1], 0, 0, None,
                      ctypes.byref(launched), st)
@@ -420,7 +507,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     def call(mode, k, wbuf, x, y, partials, cfg, knob=0, groups=0, steps=None):
         if mode == 3:
             lib.call("wt_fused", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
-                     cfg[0], cfg[1], groups, ptr(steps), None, st)
+                     cfg[0], cfg[1], groups, cfg[2], ptr(steps), ptr(tags_dev) if cfg[2] else None, TAG_BASE, None, st)
         else:
             lib.call("wt_gemm", mode, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, int(partials),
                      cfg[0], cfg[1], groups, knob, ptr(xr), None, st)
@@ -441,7 +528,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         pp = torch.zeros(nch * mb * n, dtype=torch.float32, device="cuda")
         call(0, 1, plain, x, pp, True, cfgs[0])
         err = float(((pp.view(nch, mb, n).sum(0) - ref).abs() / scale).max())
-        entry = {"plain_vs_torch_rel": err, "equal_plain": {}}
+        entry = {"plain_vs_torch_rel": err, "equal_plain": {}, "tags": {}}
         for cfg in cfgs[1:]:
             pf = torch.zeros_like(pp)
             call(0, 1, plain, x, pf, True, cfg)
@@ -451,8 +538,15 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             for cfg in fused_cfgs:
                 gr, sp = steps_for(k, mb, cfg)
                 pf = torch.zeros_like(pp)
+                tags_dev.fill_(0xFF)
                 call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
-                entry["equal_plain"][f"fused_k{k}_d{cfg[0]}s{cfg[1]}"] = bool(torch.equal(pf, pp))
+                entry["equal_plain"][fused_name(k, cfg)] = bool(torch.equal(pf, pp))
+                if cfg[2]:
+                    torch.cuda.synchronize()
+                    entry["tags"][fused_name(k, cfg)] = tags_ok(host_bytes(tags_dev), refs[k])
+                    if "commit" not in res and entry["tags"][fused_name(k, cfg)]:
+                        res["commit"] = commit_gate(lib, torch, tags_dev, nblk, st)
+                        log(f"commit gate {lib.name} {name}: {res['commit']}")
         for knob in mma_knobs:
             pf = torch.zeros_like(pp)
             call(1, 1, plain, x, pf, True, cfgs[0], knob=knob)
@@ -461,10 +555,13 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             pf = torch.zeros_like(pp)
             call(2, 1, plain, x, pf, True, cfgs[0], knob=knob)
             entry["equal_plain"][f"imad{knob}"] = bool(torch.equal(pf, pp))
-        entry["ok"] = err < 1e-5 and all(entry["equal_plain"].values())
+        entry["ok"] = (err < 1e-5 and all(entry["equal_plain"].values()) and all(entry["tags"].values())
+                       and (not tagged or (res.get("commit", {}).get("leaves_ok") and res["commit"]["root_ok"])))
         res["gate"][mb] = entry
         log(f"gemm gate {lib.name} {name} M={mb}: {'ok' if entry['ok'] else 'FAIL'} (plain rel {err:.1e}) "
-            + ("" if entry["ok"] else str({k: v for k, v in entry["equal_plain"].items() if not v})))
+            + (f", tags {sum(entry['tags'].values())}/{len(entry['tags'])}" if tagged else "")
+            + ("" if entry["ok"] else str({k: v for d in (entry["equal_plain"], entry["tags"]) for k, v in d.items()
+                                           if not v})))
         if not entry["ok"]:
             res["ok"] = False
             return res
@@ -502,12 +599,14 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             gr, sp = steps_for(k, mb, cfg) if mode == 3 else (groups_for(mode, k, mb, cfg), None)
             spp = ptr(sp) if sp is not None else None
             xrp = ptr(xr)
+            tp = ptr(tags_dev) if mode == 3 and cfg[2] else None
 
             def f():
                 rc = 0
                 if mode == 3:
                     for p in ps:
-                        rc |= so.wt_fused(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, spp, None, st)
+                        rc |= so.wt_fused(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, cfg[2], spp, tp, TAG_BASE,
+                                          None, st)
                 else:
                     for p in ps:
                         rc |= so.wt_gemm(mode, p, xp, yp, mb, n, kd, 0, cfg[0], cfg[1], gr, knob, xrp, None, st)
@@ -524,12 +623,24 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             if rc:
                 raise RuntimeError("wt_empty")
 
+        nleaves = -(-nblk // TG.PER_LEAF)
+        leaves = torch.empty(nleaves * 64, dtype=torch.uint8, device="cuda")
+
+        def arm_leaves():
+            rc = 0
+            for _ in range(copies):
+                rc |= so.wt_tag_leaves(ptr(tags_dev), nblk, ptr(leaves), st)
+            if rc:
+                raise RuntimeError("wt_tag_leaves")
+
         arms = {"cublas": arm_cublas, "empty": arm_empty}
+        if tagged:
+            arms["leaves"] = arm_leaves
         for cfg in cfgs:
             arms[f"plain_c{cfg[0]}s{cfg[1]}"] = arm(0, 1, cfg)
         for k in ks:
             for cfg in fused_cfgs:
-                arms[f"fused_k{k}_d{cfg[0]}s{cfg[1]}"] = arm(3, k, cfg)
+                arms[fused_name(k, cfg)] = arm(3, k, cfg)
         for knob in mma_knobs:
             arms[f"mma{knob}"] = arm(1, 1, cfgs[0], knob)
         for knob in imad_knobs:
@@ -556,10 +667,15 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                             "plain_best_s": plain_best, "host_enqueue_max_s": max(max(v) for v in host.values()),
                             "ratio_vs_native": {a: med[a] / native for a in med},
                             "ratio_vs_plain0": {a: med[a] / med[f"plain_c{cfgs[0][0]}s{cfgs[0][1]}"] for a in med}}
-        fb = {k: min((med[f"fused_k{k}_d{c[0]}s{c[1]}"], f"d{c[0]}s{c[1]}") for c in fused_cfgs) for k in ks}
+        def best(k, want_tags):
+            cs = [c for c in fused_cfgs if bool(c[2]) == want_tags]
+            return min((med[fused_name(k, c)], fused_name(k, c)[7:]) for c in cs) if cs else (float("nan"), "-")
+
         log(f"gemm {lib.name} {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain best {plain_best * 1e6:.1f} us; "
             f"native {native * 1e6:.1f} us; "
-            + ", ".join(f"fused k{k} {fb[k][0] / native:.2f}x ({fb[k][1]})" for k in ks)
+            + ", ".join(f"fused k{k} {best(k, False)[0] / native:.2f}x ({best(k, False)[1]}), tagged "
+                        f"{best(k, True)[0] / native:.2f}x ({best(k, True)[1]})" for k in ks)
+            + (f", leaves {med['leaves'] / native:.3f}" if tagged else "")
             + "; mma " + " ".join(f"{kn}:{med[f'mma{kn}'] / native:.2f}" for kn in mma_knobs)
             + "; imad " + " ".join(f"{kn}:{med[f'imad{kn}'] / native:.2f}" for kn in imad_knobs))
     del ring, wring, stores, plain, w
@@ -601,7 +717,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lib", action="append", required=True, help="a wt.cu build")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--phases", default="rates,decode,gemm")
+    ap.add_argument("--phases", default="rates,decode,b3,gemm")
     ap.add_argument("--store-gib", type=float, default=2.0)
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--gate-words", type=int, default=256)
@@ -611,7 +727,7 @@ def main() -> int:
     ap.add_argument("--gemm-ks", default="1")
     ap.add_argument("--plain", default="4x4,8x8", help="plain kernel CONSUMERSxSTAGES")
     ap.add_argument("--fused", default="auto",
-                    help="fused kernel DECODERSxSTAGES, or auto (per field: its most decoder warps and stages, and fewer)")
+                    help="fused kernel DECODERSxSTAGES[xTAGGERS], or auto (fused_cfgs)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
     a = ap.parse_args()
@@ -631,6 +747,8 @@ def main() -> int:
         (out_dir / "codec-tensor.json").write_text(json.dumps(res, indent=1))
 
     libs = [Lib(p) for p in a.lib]
+    for lib in libs:
+        set_tag(lib)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     phases = set(a.phases.split(","))
@@ -671,6 +789,18 @@ def main() -> int:
             e["decode"] = standalone_decode(lib, torch, int(a.store_gib * (1 << 30)), sms, a.reps, log)
             res["ok"] &= all(v["ok"] for v in e["decode"].values())
             save()
+    if "b3" in phases:
+        xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+        r = max((dict(calibrated(torch, lambda s: libs[0].call("wt_chain", 4, 1, 1, s, ptr(xr), sms * m, stream(torch)),
+                                 sms * m * 128, 0.08, a.reps), grid_per_sm=m) for m in (4, 8, 16)),
+                key=lambda v: v["per_s"])
+        r["bytes_per_s"] = {n: r["per_s"] * 4096 / c for n, c in zip(("fewest", "tag_warps"), B3_PER_BLOCK)}
+        r["tau"] = {n: res["read"]["gbps"] * 1e9 / v for n, v in r["bytes_per_s"].items()}
+        res["b3"] = r
+        log(f"b3: {r['per_s']:.3e} compressions/s, {r['bytes_per_s']['fewest'] / 1e12:.2f} TB/s of message at the "
+            f"fewest compressions ({r['bytes_per_s']['tag_warps'] / 1e12:.2f} at the tag warps'), tau per stored pass "
+            f"{r['tau']['fewest']:.3f}")
+        save()
     if "gemm" in phases:
         names = a.gemm_libs.split(",") if a.gemm_libs else [l.name for l in libs]
         ks = [int(k) for k in a.gemm_ks.split(",")]
@@ -685,6 +815,11 @@ def main() -> int:
                               fused_cfgs(lib, a.fused), *knobs)
                 e["gemm"][name] = g
                 res["ok"] &= g.get("ok", False)
+                save()
+            if res["ok"] and any(c[2] for c in fused_cfgs(lib, a.fused)):
+                nl = LAYERS * sum(-(-g["tag_blocks"] // TG.PER_LEAF) for g in e["gemm"].values())
+                e["tree"] = tree_time(lib, torch, nl, a.reps)
+                log(f"tree {lib.name}: {nl} leaves (E, {LAYERS} layers) in {e['tree']['median_s'] * 1e6:.0f} us")
                 save()
             knobs = ([], [])
     save()

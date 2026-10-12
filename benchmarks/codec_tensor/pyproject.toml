@@ -4,3 +4,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test_tagging checks the store's tags against the bandwidth audit's ro-blake3/v1 (tags.py and the stdlib modules it
+# imports).
+inputs = ["verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
+          "verity/ml/__init__.py", "verity/ml/crypto/__init__.py", "verity/ml/crypto/blake3.py", "verity/ml/randomness"]
