@@ -566,11 +566,53 @@ def test_the_audit_runs_lake_with_the_cache_off():
     spec.loader.exec_module(A)
     e = A.lake_env()
     assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off")
+    A.ARTIFACTS = Path("/node/lean-artifacts")                       # check's audit: the node's own, read and never written
+    e = A.lake_env()
+    assert "LAKE_ARTIFACT_CACHE" not in e and (e["LAKE_CACHE_DIR"], e["LEAN_CACHE"]) == ("/node/lean-artifacts", "off")
 
 
 # ---------------------------------------------------------------- through Lake
 
 LAKE = shutil.which("lake") or (str(Path.home() / ".elan/bin/lake") if (Path.home() / ".elan/bin/lake").exists() else None)
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
+    """A kept build holds one tree's modules per package per node: check r20261012-023815-e641 rebuilt 640 of
+    `Security/Proofs`' 1,096 modules (2,404 s of a 2,922 s check) because nebius-2's kept build came from an older tree. Lake,
+    reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
+    LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg,
+                    ignore=shutil.ignore_patterns(".lake"))
+    store = tmp_path / "artifacts"
+    build = lambda: subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
+                                   env=LC.lake_env())
+    build()
+    arts = LA.LakeArtifacts(store)
+    assert arts.put({pkg}) > 0
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    was = {f: f.read_bytes() for f in lib.rglob("*.olean")}
+    thms = pkg / "Control" / "Thms.lean"
+    text = thms.read_text()
+    thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
+    build()                                                           # without the cache: compiled
+    assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
+    thms.write_text(text)
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    build()
+    for f, b in was.items():
+        assert f.read_bytes() == b
+    trace = json.loads((lib / "Control" / "Thms.trace").read_text())
+    assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
+    assert not any(f.name.endswith(".tmp") for f in store.rglob("*"))
 
 
 @pytest.mark.slow

@@ -543,6 +543,105 @@ class WarmBuilds:
                 _move(src, home)
 
 
+#: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go
+ARTIFACTS_CAP = 20 << 30
+ARTIFACT = re.compile(r"[0-9a-f]{16}\.[a-z.]+")
+
+
+class LakeArtifacts:
+    """The node's Lake artifact cache, in Lake's own layout (`artifacts/<hash>.<ext>`, `outputs/<package>/<input hash>.json`).
+    Every audit's builds read it (`check.lake_env`) and never write it; after an audit, each module of a package whose audit
+    passed goes in from its build's trace. A module version any earlier passing audit on this node built is then restored
+    whatever tree comes next, not only the one its package's kept build (`WarmBuilds`) came from. Lake keys a module's
+    outputs by its input hash (its source, its imports' outputs, the toolchain and the options), and the audit still checks
+    every statement against the restored `.olean` files and replays every declaration through the kernel."""
+
+    def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
+        self.store, self.cap = store, cap
+
+    def put(self, pkgs: set[Path]) -> int:
+        """Store the modules of ``pkgs``' builds; the number the cache lacked. A module goes in only when each output its
+        trace names is in the build with that hash (`<file>.hash`), its outputs before the entry naming them."""
+        self.store.mkdir(parents=True, exist_ok=True)
+        with open(self.store / "lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            n = sum(self._module(pkg, t) for pkg in sorted(pkgs) for t in sorted((pkg / ".lake/build/lib/lean").rglob("*.trace")))
+            self.prune()
+        return n
+
+    def _module(self, pkg: Path, trace: Path) -> bool:
+        build = pkg / ".lake" / "build"
+        try:
+            d = json.loads(trace.read_text())
+            scope = json.loads((pkg / "lake-manifest.json").read_text())["name"]
+        except (OSError, ValueError, KeyError):
+            return False
+        out, h = d.get("outputs"), d.get("depHash")
+        if not isinstance(out, dict) or not isinstance(h, str):
+            return False
+        mod = str(trace.relative_to(build / "lib" / "lean"))[: -len(".trace")]
+        files = {}
+        for name in _strings(out):
+            if not ARTIFACT.fullmatch(name):
+                continue
+            digest, ext = name.split(".", 1)
+            f = build / ("ir" if ext in ("c", "bc", "ltar") else "lib/lean") / f"{mod}.{ext}"
+            try:
+                if (f.parent / f"{f.name}.hash").read_text().strip() != digest:
+                    return False
+            except OSError:
+                return False
+            files[name] = f
+        if not files:
+            return False
+        arts = self.store / "artifacts"
+        arts.mkdir(exist_ok=True)
+        for name, f in files.items():
+            dst = arts / name
+            if dst.exists():
+                os.utime(dst)
+                continue
+            tmp = arts / f".{name}.{os.getpid()}.tmp"
+            try:
+                os.link(f, tmp)
+            except OSError:
+                shutil.copyfile(f, tmp)
+            os.chmod(tmp, 0o444)
+            os.replace(tmp, dst)
+        entry = self.store / "outputs" / scope / f"{h}.json"
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        new = not entry.exists()
+        tmp = entry.parent / f".{h}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(out))
+        os.replace(tmp, entry)
+        return new
+
+    def prune(self) -> int:
+        """Remove the least recently stored artifacts while those only the cache holds exceed the cap, and the entries no
+        newer than them; the number of artifacts removed. An entry whose output is gone is a miss, so Lake rebuilds."""
+        arts = [(s.st_mtime, s.st_size if s.st_nlink == 1 else 0, f) for f in (self.store / "artifacts").glob("*")
+                if (s := f.stat())]
+        own = sum(size for _, size, _ in arts)
+        if own <= self.cap:
+            return 0
+        n, horizon = 0, 0.0
+        for mtime, size, f in sorted(arts):
+            if own <= self.cap * 3 // 4:
+                break
+            f.unlink(missing_ok=True)
+            own, n, horizon = own - size, n + 1, mtime
+        for e in (self.store / "outputs").glob("*/*.json"):
+            if e.stat().st_mtime <= horizon:
+                e.unlink(missing_ok=True)
+        return n
+
+
+def _strings(j) -> list[str]:
+    if isinstance(j, str):
+        return [j]
+    return [s for v in (j.values() if isinstance(j, dict) else j if isinstance(j, list) else ()) for s in _strings(v)]
+
+
 def _move(src: Path, dst: Path) -> None:
     try:
         os.replace(src, dst)
@@ -638,6 +737,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     builds = WarmBuilds(deps.parent / "lean-builds")
+    artifacts = LakeArtifacts(deps.parent / "lean-artifacts")
     passed: set[Path] = set()
     audited: list[str] = []
     failed: list[str] = []
@@ -654,7 +754,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
-                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay")]),
+                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay"),
+                                                "--artifacts", str(artifacts.store)]),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
@@ -677,7 +778,12 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     finally:
         warm.give_back(passed)
         if not fresh:
-            builds.give_back(work, {work / p for p in audited if p in reports and not reports[p].get("failures")})
+            kept = {work / p for p in audited if p in reports and not reports[p].get("failures")}
+            try:
+                log(f"lean-audit: {artifacts.put(kept)} module version(s) new in the artifact cache")
+            except OSError as e:
+                log(f"lean-audit: the artifact cache was not written: {e}")
+            builds.give_back(work, kept)
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 

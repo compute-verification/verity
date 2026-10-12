@@ -25,7 +25,7 @@ spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT 
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: a stand-in for tools/verity/lean/check.py --build PKG... [--replay-cache D] --out O, run in the scratch tree: each named package
+#: a stand-in for tools/verity/lean/check.py --build PKG... [--replay-cache D --artifacts D] --out O, run in the scratch tree: each named package
 #: fails when a file its policy names under "reads" is missing (an input the key would not cover) or a package it requires by
 #: path is not in the tree, fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
@@ -33,7 +33,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
@@ -243,6 +243,58 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     assert _run(tmp_path, 4)[0] == 1 and not (store / ka).exists()     # a failed: its build is dropped, not kept
     (root / "pkg/a/lean-toolchain").write_text("v2\n")
     assert LA.build_key("pkg/a", root) != ka
+
+
+def _built(pkg: Path, mod: str, outputs: dict[str, str]) -> None:
+    """A module of ``pkg``'s build as Lake leaves it: each output beside its `<file>.hash`, and the trace naming them."""
+    build = pkg / ".lake" / "build"
+    for ext, h in outputs.items():
+        f = build / ("ir" if ext == "c" else "lib/lean") / f"{mod}.{ext}"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"{mod}.{ext} {h}")
+        (f.parent / f"{f.name}.hash").write_text(h)
+    trace = build / "lib/lean" / f"{mod}.trace"
+    trace.write_text(json.dumps({"depHash": hashlib.sha256(mod.encode()).hexdigest()[:16], "outputs": {
+        "o": [f"{outputs['olean']}.olean"], "m": False, "i": f"{outputs['ilean']}.ilean", "c": f"{outputs['c']}.c"}}))
+
+
+def test_the_artifact_cache_takes_a_module_only_with_every_output_it_names(tmp_path):
+    """Lake restores a module from the cache by its input hash; an entry naming an output the cache lacks is a miss. A module
+    whose build holds an output under another hash than its trace names (an edit after the build) stays out."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    _built(pkg, "P/A", {"olean": "a" * 16, "ilean": "b" * 16, "c": "c" * 16})
+    _built(pkg, "P/B", {"olean": "d" * 16, "ilean": "e" * 16, "c": "f" * 16})
+    (pkg / ".lake/build/lib/lean/P/B.olean.hash").write_text("0" * 16)
+    arts = LA.LakeArtifacts(tmp_path / "store")
+    assert arts.put({pkg}) == 1 and arts.put({pkg}) == 0
+    store = tmp_path / "store"
+    assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c"]
+    entry, = (store / "outputs" / "p").iterdir()
+    assert entry.name == hashlib.sha256(b"P/A").hexdigest()[:16] + ".json"
+    assert json.loads(entry.read_text())["o"] == ["a" * 16 + ".olean"]
+    assert (store / "artifacts" / ("a" * 16 + ".olean")).read_text() == "P/A.olean " + "a" * 16
+
+
+def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_alone_holds(tmp_path):
+    store = tmp_path / "store"
+    (store / "artifacts").mkdir(parents=True)
+    (store / "outputs" / "p").mkdir(parents=True)
+    kept = tmp_path / "kept.olean"
+    kept.write_bytes(b"k" * 100)
+    os.link(kept, store / "artifacts" / "shared.olean")              # a kept build holds it too: no disk of the cache's own
+    for i in range(4):
+        f, e = store / "artifacts" / f"{i}.olean", store / "outputs" / "p" / f"{i}.json"
+        f.write_bytes(b"x" * 10)
+        e.write_text("{}")
+        os.utime(f, (i + 10, i + 10))
+        os.utime(e, (i + 10, i + 10))
+    os.utime(store / "artifacts" / "shared.olean", (1, 1))
+    assert LA.LakeArtifacts(store, cap=40).prune() == 0
+    assert LA.LakeArtifacts(store, cap=30).prune() == 3               # 40 > 30: the shared one goes first, then 0 and 1
+    assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["2.olean", "3.olean"] and kept.is_file()
+    assert sorted(f.name for f in (store / "outputs" / "p").iterdir()) == ["2.json", "3.json"]
 
 
 def test_a_package_whose_sources_sit_beside_it_keeps_its_build(tmp_path):
