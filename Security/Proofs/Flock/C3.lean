@@ -4,6 +4,7 @@ import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.SrcClauses
 import Proofs.Flock.C3.Compose.Custody
+import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
@@ -38,8 +39,9 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
   `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
-  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), and the fixed decoder at which n6 states the
-  read facts (`C3/Compose/Decoder.lean`).
+  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), the fixed decoder at which n6 states the
+  read facts (`C3/Compose/Decoder.lean`), and `SrcOK`'s decode fixed point where each stage plays on its steps to the
+  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3), and its read fact on
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source
