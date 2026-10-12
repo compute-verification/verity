@@ -293,8 +293,8 @@ def sessions(draw, signer: AtLeaf | None = None) -> Session:
     spends = draw(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
     tampered = draw(st.sets(st.integers(0, k - 1), max_size=1))
     clock = Clock(draw(st.integers(0, 2 ** 40)))
-    c = mc.MemoryChallenger(tree, signer, limit_ns=limit, block_bytes=block_bytes, binding=draw(st.sampled_from(SETUP_ROOTS)),
-                            clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
+                            binding=draw(st.sampled_from(SETUP_ROOTS)), clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()

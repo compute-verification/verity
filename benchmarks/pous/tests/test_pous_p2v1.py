@@ -711,8 +711,8 @@ def test_a_lean_verdict_that_cannot_load_stops_the_audit_before_any_signer_opens
     monkeypatch.setattr(live, "lms_signer", lambda *_a, **_k: pytest.fail("the signer was opened"))
     with pytest.raises(ModuleNotFoundError, match="verity_difftest"):
         _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms", lms_key=tmp_path / "key",
-                            sessions_out=tmp_path / "sessions.json")
-    assert not (tmp_path / "key").exists() and not (tmp_path / "sessions.json").exists()
+                            sessions_out=tmp_path / "sessions.json", session_log_path=tmp_path / "session-log")
+    assert not any((tmp_path / f).exists() for f in ("key", "sessions.json", "session-log"))
 
 
 def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused(tmp_path, monkeypatch):
@@ -753,21 +753,31 @@ class _SparseTree:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
 
 
-def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
-    """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
-    issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping."""
+def _deployed_signer(tmp_path):
+    """An S1 signer at `lms.DEPLOYED` over `_SparseTree`, its leaf state in `tmp_path`, for one session."""
     from verity.ml.crypto import lms
     from verity.core.protocols.pous import memory_challenger as mc
-    from verity.core.protocols.pous.schemes import p2
 
-    live = _live()
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    signer = mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+
+
+def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
+    """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
+    issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping.  The
+    session's id is in the session log, made with the new key."""
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous.schemes import p2
+
+    live, signer = _live(), _deployed_signer(tmp_path)
     monkeypatch.setattr(live, "lms_signer", lambda d, workers=1: signer)
-    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms", lms_key=tmp_path)
+    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms",
+                                        lms_key=tmp_path / "key", session_log_path=tmp_path / "session-log")
     assert answered == 105 and doc["signer"]["scheme"] == mc.LMS and doc["signer"]["test"] is False
+    session = bytes.fromhex(doc["records"][0]["public"]["commitment"]["session"])
+    assert doc["signer"]["session_log"] == str(tmp_path / "session-log") and session in mc.SessionLog(tmp_path / "session-log")
     assert doc["audits"] == doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 1
     assert doc["records"][0]["public"]["verdict"] == {"accepted": True} and doc["profile"] is not None
     from verity.core.protocols.pous import schemes
@@ -777,6 +787,33 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     assert ctl == {"sessions": 1, "unedited_accepted": 1, "flipped_rejected": 1, "edited_rejected": 1, "passed": True}
     with pytest.raises(ValueError, match="'lms' with a key directory"):
         _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms")
+
+
+def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_needs_its_log(tmp_path, monkeypatch):
+    """`--session-log FILE`: an LMS-signed audit refuses to start without one or with one inside `--lms-key`, and for a
+    key that exists (its `seed` there) it refuses a missing log before any session, with no leaf spent and no log made."""
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.schemes import p2
+
+    live, signer = _live(), _deployed_signer(tmp_path)
+    monkeypatch.setattr(live, "lms_signer", lambda d, workers=1: signer)
+    scheme, key, log = schemes.get("p2-16448/v4"), tmp_path / "key", tmp_path / "session-log"
+
+    def audit(**kw):
+        return live.audit("127.0.0.1", 0, scheme, b"s" * 24, bytes(64 * scheme.params.blocks), audits=1, pings=1,
+                          limit_ns=500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=live.LogicalClock(), signer="lms", lms_key=key,
+                          **kw)
+
+    with pytest.raises(ValueError, match="takes the memory challenger's session log"):
+        audit()
+    with pytest.raises(ValueError, match="inside the key's directory"):
+        audit(session_log_path=key / "sessions")
+    key.mkdir()
+    (key / "seed").write_bytes(bytes(64))
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        audit(session_log_path=log)
+    assert not log.exists() and json.loads((tmp_path / "state").read_text())["next"] == 0
 
 
 def test_decode_bench_result_names_device_rate_setup_and_keys_agreement(tmp_path):

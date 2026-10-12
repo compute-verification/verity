@@ -4,10 +4,12 @@ rounds unsigned.
 
 A session has four steps:
 
-1. **Commit.** Before the session the memory challenger draws its `k` indices from its own secret
+1. **Commit.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
+   session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
+   session's first challenge.  Before the session the memory challenger draws its `k` indices from its own secret
    (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
-   root and hm96 key together with the session's parameters and the root the setup published for the `C*` it audits
-   (`SessionCommitment`).
+   root and hm96 key together with the session's id and parameters and the root the setup published for the `C*` it
+   audits (`SessionCommitment`).
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
@@ -60,11 +62,15 @@ refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
@@ -87,6 +93,7 @@ COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
 COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
 RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
+SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_SCHEMA = "pous/round-record/v2"
 TEST_PREFIX = "test/"
@@ -361,14 +368,92 @@ def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental:
     raise ValueError(f"no certificate of {scheme.name} covers k = {k} within {limit_ns} ns ({why})")
 
 
+class SessionLogError(RuntimeError):
+    """A refusal to open a session: its log is missing or unreadable, or the session's id is already in it."""
+
+
+_SESSION_ID = re.compile(rb"[0-9a-f]{64}")
+
+
+class SessionLog:
+    """The session ids a memory challenger has used, in a file of its own (never in its signer's key directory) that
+    fails closed.  The file is `SESSION_LOG`'s line, then one used id a line in lowercase hex.  Opening refuses a log that
+    is missing or unreadable: a first line that is not `SESSION_LOG`, a line that is not an id, an id twice, or a last
+    line cut short.  `claim` takes the file's lock, reads it again, refuses an id already in it and appends the id,
+    fsynced, before it returns.  Nothing here rewrites or truncates the file, and `create` refuses one that exists; a
+    restore of the file from a snapshot is past what a file can see."""
+
+    def __init__(self, path: str | os.PathLike) -> None:
+        self.path = Path(path)
+        self._read()
+
+    @staticmethod
+    def create(path: str | os.PathLike) -> None:
+        """A new log, with no id used; refused when the file exists."""
+        p = Path(path)
+        try:
+            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            raise SessionLogError(f"{p} exists: a session log is never made again") from None
+        try:
+            os.write(fd, SESSION_LOG.encode() + b"\n")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        d = os.open(p.parent, os.O_RDONLY)
+        try:
+            os.fsync(d)
+        finally:
+            os.close(d)
+
+    def _read(self) -> frozenset[bytes]:
+        try:
+            lines = self.path.read_bytes().split(b"\n")
+        except FileNotFoundError:
+            raise SessionLogError(f"{self.path}: missing") from None
+        except OSError as e:
+            raise SessionLogError(f"{self.path}: unreadable ({type(e).__name__})") from None
+        ids = lines[1:-1]
+        if (lines[0] != SESSION_LOG.encode() or lines[-1] != b""
+                or not all(_SESSION_ID.fullmatch(x) for x in ids) or len(set(ids)) != len(ids)):
+            raise SessionLogError(f"{self.path}: unreadable (not a {SESSION_LOG} log of distinct ids, each on a whole line)")
+        return frozenset(bytes.fromhex(x.decode()) for x in ids)
+
+    def __contains__(self, session: bytes) -> bool:
+        return session in self._read()
+
+    def claim(self, session: bytes) -> None:
+        """Record `session` as used, fsynced, before this returns; refused when it is already used."""
+        if len(session) != 32:
+            raise ValueError("a session id is 32 bytes")
+        try:
+            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND)
+        except FileNotFoundError:
+            raise SessionLogError(f"{self.path}: missing") from None
+        except OSError as e:
+            raise SessionLogError(f"{self.path}: unwritable ({type(e).__name__})") from None
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            if session in self._read():
+                raise SessionLogError(f"session {session.hex()} is in {self.path}: the memory challenger runs one session "
+                                      "under an id")
+            line = session.hex().encode() + b"\n"
+            if os.write(fd, line) != len(line):
+                raise SessionLogError(f"{self.path}: a short write")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
 class MemoryChallenger:
     """One session of the memory challenger over `coins`, judged against `limit_ns`, signed by `signer`, bound to
-    `binding`, the setup's root of the `C*` it audits (module docstring).  `challenge()` reveals the next index and reads
-    the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round ends the session;
-    `close()` signs it once."""
+    `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
+    `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
+    index and reads the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round
+    ends the session; `close()` signs it once."""
 
-    def __init__(self, coins: CoinTree, signer: Signer, *, limit_ns: int, block_bytes: int, binding: bytes,
-                 clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
+    def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
+                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
         if limit_ns <= 0 or block_bytes <= 0:
             raise ValueError("a session's limit and answer size are positive")
         if len(binding) != DIGEST_BYTES:
@@ -377,6 +462,7 @@ class MemoryChallenger:
             resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
+        log.claim(coins.session)
         self.coins, self.signer, self.clock = coins, signer, clock
         self.commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
                                             block_bytes, binding)
@@ -496,6 +582,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger",
-           "Round", "SessionCommitment", "SignedSession", "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf",
-           "covering_certificate", "lms_verify", "message", "records_root", "register", "verdict", "verify_coin"]
+           "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner",
+           "MemoryChallenger", "Round", "SessionCommitment", "SessionLog", "SessionLogError", "SignedSession", "Signer",
+           "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf", "covering_certificate", "lms_verify", "message",
+           "records_root", "register", "verdict", "verify_coin"]
