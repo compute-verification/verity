@@ -222,3 +222,12 @@ def test_rate_x_pools_the_lowest_round_at_the_max_clock_and_the_floor():
     p = {"b": 1536, "k": 1, "x": 2000.0, "batch": 1}
     assert F.adversary([p], rates=r)[0]["x"] == 1358.5
     assert F.step({"y_total": 2.0, "d": 2.5}, None, 0.1) == 2.5 and F.step({"y_total": 2.0}, None, 0.1) == 2.1
+
+
+def test_an_untagged_point_is_never_on_the_frontier():
+    base = {"schema": F.SCHEMA, "lane": "x", "b": 768, "k": 1, "batch": 1, "y_decode": 0.1, "y_tag": 0.0,
+            "y_commit": 0.0, "x": 1e6, "tau": 0.0}
+    untagged = dict(base, arithmetic="cuda-int32/p768/wt.cu", y_total=1.1)
+    committed = dict(base, arithmetic="cuda-int32/p768/wt.cu/sketch16/commit", y_total=1.5)
+    pts = F.check([untagged, committed])
+    assert F.frontier(pts, 0.005, idle=0.1)[1]["y_total"] == 1.5

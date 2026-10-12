@@ -263,11 +263,18 @@ def sketch_twins(points: list[dict], cost: dict[int, float], tau: float = 0.0) -
     return out
 
 
+def tagged(p: dict) -> bool:
+    """The point tags and commits what it reads (a tag or commit measured, or named in its arithmetic, as an end-to-end
+    point's "/sketch16/commit"); an untagged one certifies nothing and is never on the frontier."""
+    a = p["arithmetic"]
+    return "untagged" not in a and (p["y_tag"] > 0 or p["y_commit"] > 0 or "/sketch" in a or "commit" in a)
+
+
 def frontier(points: list[dict], budget: float, d: float | None = None, idle: float = IDLE_8B,
              boost: float = BOOST) -> dict[int, dict | None]:
     best = {}
     for p in points:
-        if p.get("reference") or x_eff(p, boost) < x_star_of(p, budget, d, idle):
+        if not admissible(p, budget, d, idle, boost):
             continue
         b = best.get(p["batch"])
         if b is None or p["y_total"] < b["y_total"]:
@@ -295,7 +302,7 @@ def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = 
 
 
 def admissible(p: dict, budget: float, d: float | None = None, idle: float = IDLE_8B, boost: float = BOOST) -> bool:
-    return not p.get("reference") and x_eff(p, boost) >= x_star_of(p, budget, d, idle)
+    return not p.get("reference") and tagged(p) and x_eff(p, boost) >= x_star_of(p, budget, d, idle)
 
 
 def best_per_config(points: list[dict], budget: float | None = None, d: float | None = None, idle: float = IDLE_8B,
@@ -378,7 +385,7 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in colors.values()]
     handles += [plt.Rectangle((0, 0), 1, 1, facecolor="none", edgecolor="k"),
                 plt.Rectangle((0, 0), 1, 1, color="k", alpha=0.35), boundary]
-    ax.legend(handles, [*colors, "modelled (hollow)", "x < x* (pale)",
+    ax.legend(handles, [*colors, "modelled (hollow)", "x < x*, or untagged (pale)",
                         f"y = τ − {idle:g} + ({budget:g} − ingress)·x: x* at d = y + {idle:g}\n"
                         f"(τ {tau_ref:.3f}, ingress {ingress_ref * 100:.3f}%: batch {batches[0]}'s frontier)"],
               loc="upper left", fontsize=8)
