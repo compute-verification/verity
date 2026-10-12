@@ -447,7 +447,7 @@ theorem B2WindowAudit : Guarantees.B2WindowAudit := by
     (List.ofFn x.2.2) 0 _) hx
 
 theorem B2WindowP2Ring : Guarantees.B2WindowP2Ring := by
-  intro D Q L ℓ hsec W A₁ Wd hℓ hlat hspan hbud
-  exact B2WindowAudit _ _ _ _ _ _ _ _ _ hsec W A₁ Wd hℓ hlat hspan hbud
+  intro D Q L T ℓ hsec W A₁ Wd hℓ hT hlat hspan hbud
+  exact B2WindowAudit _ _ _ _ _ _ _ _ _ hsec W A₁ Wd hℓ hlat (fun W pp j σ i => (hspan W pp j σ i).trans hT) hbud
 
 end Accounting.SecurityProofs

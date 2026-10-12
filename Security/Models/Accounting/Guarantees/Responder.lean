@@ -44,7 +44,8 @@ at each challenge tick is a function of its state at the previous one and of wha
   `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`.
   `B2WindowAudit`: so under `AuditSecureOn … N D Q L`, a location that starts in an `N`-bit state and answers with such
   windows, each within `(Q, L)`, answers every challenge with probability at most `δ + ε`; `B2WindowP2Ring`, the same at
-  P2's deployed point under `P2RingAuditSecure D Q L`, with `δ + 2^-129 + 2^-130`. What is not stated yet: the windows
+  P2's deployed point under `P2RingAuditSecure D Q L`, with `δ + 2^-129 + 2^-130`, paced: one challenge every `T` ticks
+  and every multiplication at least `ℓ` ticks, with `T ≤ D·ℓ`. What is not stated yet: the windows
   read off a strategy's runs (oracle locations on `Actual.Run`, `Wd` from `CausalFrom` with the state's content, the
   help and the answers in flight coded into `N` bits).
 
@@ -229,11 +230,14 @@ def B2WindowAudit : Prop :=
             0 (List.ofFn x.2.2) (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
           List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) ≤ δ + ε
 
-/-- **`B2WindowAudit` at P2's deployed point.** Under `P2RingAuditSecure D Q L` (P2 in the ring model, 2,054 payload
-bytes per block, 105 challenges, state bound `⌊ρ·|C|⌋`), a location meeting `B2WindowAudit`'s hypotheses with a
-`⌊ρ·|C|⌋`-bit state answers every challenge with its block with probability at most `δ + 2^-129 + 2^-130`. -/
+/-- **`B2WindowAudit` at P2's deployed point, paced.** Under `P2RingAuditSecure D Q L` (P2 in the ring model, 2,054
+payload bytes per block, 105 challenges, state bound `⌊ρ·|C|⌋`), with one challenge every `T` ticks (`T = Δ + RTT`;
+each window spans at most `T`) and every multiplication reaching its querier at least `ℓ > 0` ticks after it is asked,
+where `T ≤ D·ℓ` (the latency form of sequential speed, `ℓ ≥ (Δ + RTT)/D_p` at `D = D_p`): a location that starts in a
+`⌊ρ·|C|⌋`-bit state and answers with such windows, each within `(Q, L)`, answers every challenge with its block with
+probability at most `δ + 2^-129 + 2^-130`. -/
 def B2WindowP2Ring : Prop :=
-  ∀ D Q L ℓ : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+  ∀ D Q L T ℓ : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
     ∀ (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
       (A₁ : Pous.Preprocessor (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432)
         ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ))
@@ -243,8 +247,9 @@ def B2WindowP2Ring : Prop :=
         Fin (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).B →
         RingWindow (2 ^ 19) 16448 (Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ ×
           Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ))),
-      0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry (2 ^ 19) 16448), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
-      (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
+      0 < ℓ → T ≤ D * ℓ →
+      (∀ W pp j σ i (q : Pous.RingQry (2 ^ 19) 16448), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
+      (∀ W pp j σ i, (Wd W pp j σ i).span ≤ T) →
       (∀ (ω : (Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) W pp j σ i,
         (Wd W pp j σ i).keys ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ Q ∧
         (Wd W pp j σ i).ops ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ L) →
