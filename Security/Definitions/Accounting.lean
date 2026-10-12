@@ -5,7 +5,8 @@ import Definitions.Accounting.Tag
 import Definitions.Accounting.Actual
 import Definitions.Accounting.Physical
 import Definitions.Accounting.Localization
+import Definitions.Accounting.Bridge
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, how
-PoUW's game realizes its compute audit, the actual circuit, its physical assumptions and a challenge's reach, and the
-tags and sketches the audits read. -/
+PoUW's game realizes its compute audit, the actual circuit, its physical assumptions, a challenge's reach and the
+device's schedule it induces, and the tags and sketches the audits read. -/

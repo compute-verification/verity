@@ -3,6 +3,7 @@ import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
+import Proofs.Accounting.Actual.Device
 
 /-!
 # The actual circuit's guarantees
@@ -19,4 +20,6 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Localization.lean`: `Localization` at `e = 0`: what a challenge reaches only through `X` reaches the rest of
   the prover only through `X`'s egress, and not at all when `X` sends it nothing of the challenge.
+* `Actual/Device.lean`: the bridge to the device model: the schedule the actual circuit induces fits the device
+  (`fits`, `fits_of_feasible`).
 -/
