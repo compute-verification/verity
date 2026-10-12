@@ -14,6 +14,8 @@
 //           then FOLD 1's fold: fewer integer-ALU instructions beside the same multiplies.
 //   FOLD 6  FOLD 4's Karatsuba level over FOLD 5's 8-limb squares.
 //   FOLD 7  FOLD 5's square, then a fold of one 64-bit multiply-add a limb.
+//   FOLD 8, 9   FOLD 6 held to 6 and 7 blocks of 128 a SM (80 and 72 registers), where its 96 registers allow 5.
+//   FOLD 10     FOLD 5 held to 8 blocks a SM (64 registers), where its 72 allow 7.
 // All keep x lazily below 2^512; the host reduces below p.
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
@@ -362,8 +364,8 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   }
   u32 t[2 * NL];
   if (FOLD == 4) sqr_kara<false>(a, t);
-  else if (FOLD == 6) sqr_kara<true>(a, t);
-  else if (FOLD == 5 || FOLD == 7) sqr_dbl(a, t);
+  else if (FOLD == 6 || FOLD == 8 || FOLD == 9) sqr_kara<true>(a, t);
+  else if (FOLD == 5 || FOLD == 7 || FOLD == 10) sqr_dbl(a, t);
   else sqr_cols(a, t);
   if (FOLD == 0) fold_cols(t, x);
   else if (FOLD == 2) fold_shift(t, x);
@@ -372,7 +374,7 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
 }
 
 template <int FOLD, int ILP>
-__global__ void __launch_bounds__(128) chain(u32 *xs, int n, int K) {
+__device__ __forceinline__ void chain_body(u32 *xs, int n, int K) {
   const int w0 = (blockIdx.x * blockDim.x + threadIdx.x) * ILP;
   if (w0 >= n) return;
   u32 x[ILP][NL];
@@ -395,6 +397,13 @@ __global__ void __launch_bounds__(128) chain(u32 *xs, int n, int K) {
 #pragma unroll
     for (int k = 0; k < NL; ++k) xs[(size_t)k * n + w0 + j] = x[j][k];
 }
+
+// ptxas allocates differently under an explicit minimum of blocks, even 1, so only FOLD 8-10 name one.
+template <int FOLD, int ILP>
+__global__ void __launch_bounds__(128) chain(u32 *xs, int n, int K) { chain_body<FOLD, ILP>(xs, n, K); }
+
+template <int FOLD, int ILP, int MIN_BLOCKS>
+__global__ void __launch_bounds__(128, MIN_BLOCKS) chain_held(u32 *xs, int n, int K) { chain_body<FOLD, ILP>(xs, n, K); }
 
 // The pipe probe: what fraction of the FMA-heavy pipe a warp keeps busy with the column square's instructions when no
 // carry chain orders them. PROBE 0: W 64-bit multiply-adds (`mad.wide.u32`) and A 32-bit adds an iteration over CH
@@ -489,6 +498,9 @@ static Kernel kernel(int fold, int ilp) {
 #define K_(F, I) if (fold == F && ilp == I) return sq::chain<F, I>;
   K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2) K_(5, 1) K_(5, 2) K_(6, 1) K_(7, 1) K_(7, 2)
 #undef K_
+#define H_(F, I, B) if (fold == F && ilp == I) return sq::chain_held<F, I, B>;
+  H_(8, 1, 6) H_(9, 1, 7) H_(10, 1, 8)
+#undef H_
   fprintf(stderr, "no kernel for fold %d ilp %d\n", fold, ilp);
   exit(2);
 }
