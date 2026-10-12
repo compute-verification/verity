@@ -208,6 +208,8 @@ def _takes_rare(f: K.Field, op: int, a: int, b: int) -> bool:
         return bool(b & 1) and (a & m32) > (1 << 32) - c
     if op == 3:
         return a >> (n - 32) == m32
+    if op == 5:
+        return (a ^ b) >> (n - 32) == m32
     s1 = (a * a & ((1 << n) - 1)) + c * (a * a >> n)
     return (s1 & m32) + (s1 >> n) * c > m32
 

@@ -456,16 +456,18 @@ __device__ __forceinline__ void round_constant(int j, u32 (&c)[NL]) {
 }
 
 // σ_K(x) = x ^ K when that is below p, else x, x canonical: x ^ K >= p needs its limbs above the lowest all ones and
-// its lowest at least 2^32 - c (rare), when the XOR is undone.
-__device__ __forceinline__ void sigma(u32 (&x)[NL]) {
+// its lowest at least 2^32 - c, when the XOR is undone. Its top limb all ones (probability 2^-32) is the one test on
+// the fast path.
+__device__ __forceinline__ void sigma(u32 (&x)[NL], const u32 (&m)[NL]) {
 #pragma unroll
-  for (int k = 0; k < NL; ++k) x[k] ^= kMask[k];
+  for (int k = 0; k < NL; ++k) x[k] ^= m[k];
+  if (__builtin_expect(x[NL - 1] != 0xffffffffu, 1)) return;
   u32 all = x[1];
 #pragma unroll
-  for (int k = 2; k < NL; ++k) all &= x[k];
+  for (int k = 2; k < NL - 1; ++k) all &= x[k];
   if (all == 0xffffffffu && x[0] >= 0u - CF) {
 #pragma unroll
-    for (int k = 0; k < NL; ++k) x[k] ^= kMask[k];
+    for (int k = 0; k < NL; ++k) x[k] ^= m[k];
   }
 }
 
@@ -476,7 +478,7 @@ __device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
 #pragma unroll 1
   for (int j = 0; j < k; ++j) {
     u32 c[NL];
-    if (MASK && j > 0) sigma(x);
+    if (MASK && j > 0) sigma(x, kMask);
     round_constant(j, c);
     add_mod(x, c);
     if (STREAM) tweak(i, t);
@@ -494,7 +496,7 @@ __device__ __forceinline__ void decode_word_t(u32 (&x)[NL], const u32 (&t)[NL], 
     rho_inv(x);
     sub_mod(x, c);
     sub_mod(x, t);
-    if (MASK && j > 0) sigma(x);
+    if (MASK && j > 0) sigma(x, kMask);
   }
 }
 
@@ -576,7 +578,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const u32 *__restrict__ in,
 }
 
 // The field's primitives a word a thread, for the gate at their rare carries: op 0 add_mod(a, b), 1 sub_mod(a, b),
-// 2 neg_if(a, b odd), 3 canon(a), 4 sqr(a).
+// 2 neg_if(a, b odd), 3 canon(a), 4 sqr(a), 5 sigma(a) with b as K.
 __global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict__ a, const u32 *__restrict__ b,
                                                    u32 *__restrict__ out, int n) {
   const int w = blockIdx.x * WPB + threadIdx.x;
@@ -588,6 +590,7 @@ __global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict
   else if (op == 1) sub_mod(x, y);
   else if (op == 2) neg_if(x, y[0] & 1);
   else if (op == 3) canon(x);
+  else if (op == 5) sigma(x, y);
   else {
     sqr(x, y);
     copy(x, y);
@@ -1287,7 +1290,7 @@ int kv_decode_occ(const void *in, uint64_t n, uint64_t base, int k, int grid, un
 }
 
 int kv_prim(int op, const void *a, const void *b, void *out, int n, cudaStream_t s) {
-  if (op < 0 || op > 4 || n < 1) return -1;
+  if (op < 0 || op > 5 || n < 1) return -1;
   kv::prim_kernel<<<(n + kv::WPB - 1) / kv::WPB, kv::WPB, 0, s>>>(op, (const uint32_t *)a, (const uint32_t *)b,
                                                                   (uint32_t *)out, n);
   return launched();
