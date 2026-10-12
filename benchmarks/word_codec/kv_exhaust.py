@@ -171,7 +171,7 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
         cell = {"batch": b, "context": ctx, "layer": layer, "equal": {}, "sketch": {}, "z": {}, "receipts": {},
                 "block_receipts": {}, "half_block_receipts": {}}
         for k in ks:
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             lib.call("kv_encode", B.ptr(pad), B.ptr(enc), pad.numel() // f.word_bytes, 0, k, 0, st)
             encl = enc.view(b, ctx, layers, tle)[:, :, layer].cpu().numpy()
             for sp in SPLITS:
@@ -286,7 +286,7 @@ def attn_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: int |
         cell = {"batch": b, "context": ctx, "layers": layers, "splits": list(SPLITS), "equal": {}, "rel_err": {},
                 "mma_vs_fma": 0.0}
         for k in ks:
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             lib.call("kv_encode", B.ptr(pad), B.ptr(enc), pad.numel() // f.word_bytes, 0, k, 0, st)
             for layer in (0, layers - 1):
                 kk, vv = kvl[:, :, layer, 0].double(), kvl[:, :, layer, 1].double()
@@ -414,7 +414,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     log(f"exhaust {lib.name} B={b} ctx={ctx} L={layers}: store {store.numel() / 1e9:.1f} GB, read {rd['gbps']:.0f} GB/s")
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     for k in ks:
-        B.set_key(lib, K.key(f.name, B.SEED, k))
+        B.set_key(lib, B.lib_key(lib, k))
         bad = floor_gate(lib, torch, store, n_words, k, [sms * mult for mult in (4, 8, 16)], st)
         if bad:
             cell["floor"][k] = {"ok": False, "bad_grids": bad}
@@ -448,7 +448,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
         tg = torch.empty(nvec, 8, dtype=torch.int32, device="cuda")
     for fm in forms_of(sh, only):
         for k in ([1] if fm in RTOL else ks):
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             if fm in RECEIPT:
                 lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
             per = {}
@@ -704,7 +704,7 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
         t_gemm = statistics.median([both(True, None, 1) for _ in range(reps)])
         row = {"gemm_s": t_gemm, "gemm_gbps": w_bytes / t_gemm / 1e9, "words": n, "bytes": n * f.word_bytes, "k": {}}
         for k in ks:
-            B.set_key(lib, K.key(f.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             kr = {"sm_s": n / enc_rates[k]["per_s"], "grids": {}}
             for gr in WRITE_GRIDS:
                 grid = gr * sms
@@ -870,7 +870,7 @@ def main() -> int:
             g = attn_gate(lib, torch, m, [(2, 100), (24, 100)], ks[:1], log, layers_override=2)
             rg = receipt_gate(lib, torch, m, [(2, 100)], ks[:1], log, layers_override=2)
             res["ok"] &= all(c["ok"] for c in g.values()) and all(c["ok"] for c in rg.values())
-            B.set_key(lib, K.key(lib.field.name, B.SEED, ks[0]))
+            B.set_key(lib, B.lib_key(lib, ks[0]))
             bad = floor_gate(lib, torch, B.random_words(torch, 5000, lib.field, 1), 5000, ks[0], [3], B.stream(torch))
             log(f"floor gate {lib.name} k={ks[0]}: " + (f"FAIL at grids {bad}" if bad else "ok"))
             res["ok"] &= not bad and prim_gate(lib, torch, log)["ok"]
@@ -888,7 +888,7 @@ def main() -> int:
         rc_setup(lib, RC_SEED)
         for fm in forms_of(sh, only):
             k = 1 if fm in RTOL else ks[0]
-            B.set_key(lib, K.key(lib.field.name, B.SEED, k))
+            B.set_key(lib, B.lib_key(lib, k))
             if fm in RECEIPT:
                 lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
             attn_call(lib, st, store, fm, q, o, part, b, ctx, 1, 0, a.ncu_splits, k)

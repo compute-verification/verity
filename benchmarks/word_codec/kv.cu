@@ -55,11 +55,17 @@ constexpr bool STREAM = NL > 24;
 #define KV_KARATSUBA 0
 #endif
 constexpr bool KARATSUBA = KV_KARATSUBA;
+// KV_MASK=1: `kv.py`'s masked word, σ_K (kMask) between consecutive rounds.
+#ifndef KV_MASK
+#define KV_MASK 0
+#endif
+constexpr bool MASK = KV_MASK;
 static_assert(NBITS % 32 == 0 && NL % 4 == 0 && CF % 4 == 1 && CF < (1u << 16) && (CF - 1) / 4 < (1u << LOW_BITS),
               "p = 2^n - c");
 
 __constant__ u32 kC[KMAX][NL];
 __constant__ u32 kTau[NL];
+__constant__ u32 kMask[NL];
 
 __device__ __forceinline__ void mac(u32 *r, u32 a, u32 b) {
   asm("mad.lo.cc.u32 %0, %3, %4, %0;\n\tmadc.hi.cc.u32 %1, %3, %4, %1;\n\taddc.u32 %2, %2, 0;"
@@ -450,6 +456,20 @@ __device__ __forceinline__ void round_constant(int j, u32 (&c)[NL]) {
   for (int k = 0; k < NL; ++k) c[k] = kC[j][k];
 }
 
+// σ_K(x) = x ^ K when that is below p, else x, x canonical: x ^ K >= p needs its limbs above the lowest all ones and
+// its lowest at least 2^32 - c (rare), when the XOR is undone.
+__device__ __forceinline__ void sigma(u32 (&x)[NL]) {
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] ^= kMask[k];
+  u32 all = x[1];
+#pragma unroll
+  for (int k = 2; k < NL; ++k) all &= x[k];
+  if (all == 0xffffffffu && x[0] >= 0u - CF) {
+#pragma unroll
+    for (int k = 0; k < NL; ++k) x[k] ^= kMask[k];
+  }
+}
+
 // Past 768 bits the tweak is recomputed each round, so it isn't held through the root.
 __device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
   u32 t[NL];
@@ -457,6 +477,7 @@ __device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
 #pragma unroll 1
   for (int j = 0; j < k; ++j) {
     u32 c[NL];
+    if (MASK && j > 0) sigma(x);
     round_constant(j, c);
     add_mod(x, c);
     if (STREAM) tweak(i, t);
@@ -474,6 +495,7 @@ __device__ __forceinline__ void decode_word_t(u32 (&x)[NL], const u32 (&t)[NL], 
     rho_inv(x);
     sub_mod(x, c);
     sub_mod(x, t);
+    if (MASK && j > 0) sigma(x);
   }
 }
 
@@ -1768,6 +1790,14 @@ int kv_bits() { return kv::NBITS; }
 int kv_kmax() { return kv::KMAX; }
 
 int kv_karatsuba() { return kv::KARATSUBA; }
+
+int kv_mask() { return kv::MASK; }
+
+// K: NL little-endian limbs, a b-bit constant (not reduced mod p).
+int kv_set_mask(const uint32_t *mask) {
+  if (cudaMemcpyToSymbol(kv::kMask, mask, sizeof(uint32_t) * kv::NL) != cudaSuccess) return launched();
+  return 0;
+}
 
 // c: k round constants of NL little-endian limbs each, then tau.
 int kv_set_key(const uint32_t *c, int k, const uint32_t *tau) {
