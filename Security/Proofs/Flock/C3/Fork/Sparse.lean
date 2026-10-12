@@ -284,6 +284,7 @@ theorem sparseError_eq (A : Arith F K) (hA : A.Correct) (sh : SparseShape) :
     ring
   · norm_num
 
+omit [DecidableEq K] in
 /-- `sparse_sound`'s count, coin by coin. -/
 theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : SparsePub F sh)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : Witness sh.mReg) (h : Fin 64 → F)
