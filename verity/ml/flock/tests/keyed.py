@@ -120,6 +120,7 @@ def _code(roots: tuple[str, ...]) -> tuple[str, frozenset]:
             elif isinstance(n, ast.ImportFrom):
                 base = ".".join(package[:len(package) + 1 - n.level] + [n.module or ""]).strip(".") if n.level else n.module
                 todo += [base, *(f"{base}.{a.name}" for a in n.names)]
+    env.discard("VERITY_FLOCK_CACHE")  # where entries are kept, not what is built
     return json.dumps([sorted((n, _file(f)) for n, f in seen.items()), _file(ROOT / "uv.lock"), sys.version, sys.platform,
                        [(v, os.environ.get(v)) for v in sorted(env)]]), frozenset(seen.values())
 
