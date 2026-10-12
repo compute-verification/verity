@@ -138,9 +138,7 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     return st
   else do
     if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
-    let st ← Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
-    checkIdentifier st identifier
-    return st
+    Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
 verifier's own `K` and work table, which a work draw's law is held to, `stratified` its own `K` for a stratified draw,
