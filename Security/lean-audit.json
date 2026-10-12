@@ -456,17 +456,29 @@
    "assumptions": [],
    "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27"
   },
+  "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.CovertResidual": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.CovertResidual : Accounting.Guarantees.CovertResidual"],
    "assumptions": [],
    "type_hash": "89a050fbdfa6a718cc71e69413c2ea03e70e9cb47076c42b6531b9acf5047a64"
   },
+  "Accounting.SecurityProofs.CovertResidualPerRun": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Joint": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Joint : Accounting.Guarantees.Joint"],
    "assumptions": [],
    "type_hash": "2349616973612a78bdb833e74d98a7ec19326ddf536e89213964f9e18066707f"
+  },
+  "Accounting.SecurityProofs.JointPerRun": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.PouwEndToEndPerRun": {
+   "owner": "@memory-accounting"
   },
   "Bandwidth.SecurityProofs.AuditRO": {
    "owner": "@memory-accounting",
@@ -3735,6 +3747,10 @@
    "Accounting.SecurityProofs.Joint": "frozen (no-function): It composes the compute, bandwidth and capacity audits' guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CovertResidual": "frozen (no-function): Like Joint, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.ComputeOfPouw": "frozen (conjecture,no-function,hash): It carries Pouw.SecurityProofs.EndToEnd, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
+   "Accounting.SecurityProofs.PouwEndToEndPerRun": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEnd per run, a consequence of the named open conjecture TT when the cost model truncates (Accounting.BudgetAbort, Security/Definitions/Accounting/PerRun.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal, not over a Lean function.",
+   "Accounting.SecurityProofs.ComputeOfPouwPerRun": "frozen (conjecture,no-function,hash): It carries PouwEndToEndPerRun, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
+   "Accounting.SecurityProofs.JointPerRun": "frozen (no-function): Like Joint, it composes the three audits' per-run guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.CovertResidualPerRun": "frozen (no-function): Like JointPerRun, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-device, bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device."
   },
   "conjectures": {
