@@ -19,11 +19,13 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Windows.lean`: `Windows`, the capacity form: the windows divide the developer's region into IUs of at most
   `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
-* `Actual/Localization.lean`: `Localization`, over strategies: with the rest's state and outside reads fixed, what the
-  rest does is a prefix-causal table keyed by what `X` sent it, of at most `2^e` entries; `localization_wires`, the
-  per-run lemma on wires; memory over continuations bounds each run's state (`memory_of_memoryOver`).
+* `Actual/Localization.lean`: `Localization`, over admissible strategies: with what the rest can tell at the window's
+  start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by what `X` sent
+  it, of at most `2^e` entries; `localization_wires`, the per-run lemma on wires; memory over continuations bounds each
+  run's state (`memory_of_memoryOver`).
 * `Actual/Device.lean`: the bridge to the device model: the schedule the actual circuit induces fits the device
   (`fits`, `fits_of_feasible`) and charges what an account's gates use (`covers_ingress`, `covers_work`).
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
-  `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; causality's global form from the local one.
+  `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; the state over continuations is a function of what the location can tell
+  (`stateOver_congr`), and causality's global form (`global_of_admissible`).
 -/

@@ -2,15 +2,16 @@ import Models.Accounting.Guarantees.Localization
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Physical
 import Proofs.Accounting.Actual.Split
+import Proofs.Accounting.Actual.Confidence
 
 /-!
 # Localization, proved
 
-`Localization`, over strategies, is function composition. Outside `Y` is `X` and the leaves in neither
-(`compl_eq_union`), so what the rest reads from outside during `[t₀, u)` is what `X` sent it then and what the rest
-heard from elsewhere, the window's restriction to `u` (`crossing_union`, `crossing_window`); with the state fixed,
-causality from `t₀` makes what the rest does then a function of what `X` sent. The table picks a run for each key, and
-the count is the image's. `memory_of_memoryOver`: memory over continuations bounds each run's state.
+`Localization`, over strategies, is function composition. What the rest reads from outside before `u ≤ t₁`
+(`crossing_split`) is what it read before `t₀` (part of what it can tell at `t₀`), what `X` sent it during `[t₀, u)`,
+and what it heard from the leaves in neither during `W`, cut at `u`. With its inputs fixed, causality's global form
+(`global_of_admissible`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for
+each key, and the count is the image's. `memory_of_memoryOver`: memory over continuations bounds each run's state.
 
 `localization_wires` is the per-run lemma (not the model's `e = 0`, which reads the strategy): under causality a gate
 downstream of `C` runs at or after `C`'s ticks (`le_t_of_downstream`), so one that `A[Y, W]` reads runs during `W`; and
@@ -94,31 +95,24 @@ theorem localization_wires {ℓ : L → L → ℕ} (hc : A.Causal ℓ) {C : Fins
     refine region a ((mem_region A).2 ⟨hai, hy, le_t_of_downstream A hc h₀ had, ?_⟩) had
     exact ((Nat.le_add_right _ _).trans (hc g a hag)).trans_lt ((mem_region A).1 hg).2.2.2
 
-theorem crossing_union {L : Type*} (R : Actual.Run L) (P Q Y : Set L) (I : Set ℕ) :
-    R.crossing (P ∪ Q) Y I = R.crossing P Y I ∪ R.crossing Q Y I := by
+/-- What `Y` reads from outside before `u ≤ t₁`, for `X` apart from `Y`: what it read before `t₀` (cut at `u`), what it
+read from `X` during `[t₀, u)`, and what it read from the leaves in neither during `[t₀, t₁)` (cut at `u`). -/
+theorem crossing_split {L : Type*} (R : Actual.Run L) {X Y : Finset L} (h : Disjoint X Y) {t₀ u t₁ : ℕ}
+    (hu : u ≤ t₁) : R.crossing (↑Y)ᶜ ↑Y (Set.Iio u) = R.crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) ∩ {p | p.1 < u} ∪
+      (R.crossing ↑X ↑Y (Set.Ico t₀ u) ∪ R.crossing (↑X ∪ ↑Y)ᶜ ↑Y (Set.Ico t₀ t₁) ∩ {p | p.1 < u}) := by
   ext p
-  simp only [Actual.Run.crossing, Set.mem_union, Set.mem_ofPred_eq]
+  simp only [Actual.Run.crossing, Set.mem_union, Set.mem_inter_iff, Set.mem_ofPred_eq, Set.mem_Iio, Set.mem_Ico]
   constructor
-  · rintro ⟨g, a, h, hP | hQ, hY, hI, rfl⟩
-    exacts [Or.inl ⟨g, a, h, hP, hY, hI, rfl⟩, Or.inr ⟨g, a, h, hQ, hY, hI, rfl⟩]
-  · rintro (⟨g, a, h, hP, hY, hI, rfl⟩ | ⟨g, a, h, hQ, hY, hI, rfl⟩)
-    exacts [⟨g, a, h, Or.inl hP, hY, hI, rfl⟩, ⟨g, a, h, Or.inr hQ, hY, hI, rfl⟩]
-
-theorem crossing_window {L : Type*} (R : Actual.Run L) (P Y : Set L) {t₀ u t₁ : ℕ} (hu : u ≤ t₁) :
-    R.crossing P Y (Set.Ico t₀ u) = R.crossing P Y (Set.Ico t₀ t₁) ∩ {p | p.1 < u} := by
-  ext p
-  simp only [Actual.Run.crossing, Set.mem_inter_iff, Set.mem_ofPred_eq, Set.mem_Ico]
-  constructor
-  · rintro ⟨g, a, h, hP, hY, hI, rfl⟩
-    exact ⟨⟨g, a, h, hP, hY, ⟨hI.1, hI.2.trans_le hu⟩, rfl⟩, hI.2⟩
-  · rintro ⟨⟨g, a, h, hP, hY, hI, rfl⟩, hlt⟩
-    exact ⟨g, a, h, hP, hY, ⟨hI.1, hlt⟩, rfl⟩
-
-theorem compl_eq_union {L : Type*} {X Y : Finset L} (h : Disjoint X Y) : (↑Y : Set L)ᶜ = ↑X ∪ (↑X ∪ ↑Y)ᶜ := by
-  ext l
-  by_cases hx : l ∈ X
-  · simp [hx, Finset.disjoint_left.1 h hx]
-  · simp [hx]
+  · rintro ⟨g, a, hr, ha, hg, ht, rfl⟩
+    by_cases h0 : R.A.t g < t₀
+    · exact Or.inl ⟨⟨g, a, hr, ha, hg, h0, rfl⟩, ht⟩
+    by_cases hx : R.A.x a ∈ (↑X : Set L)
+    · exact Or.inr (Or.inl ⟨g, a, hr, hx, hg, ⟨not_lt.1 h0, ht⟩, rfl⟩)
+    · exact Or.inr (Or.inr ⟨⟨g, a, hr, fun hm => hm.elim hx ha, hg, ⟨not_lt.1 h0, ht.trans_le hu⟩, rfl⟩, ht⟩)
+  · rintro (⟨⟨g, a, hr, ha, hg, h0, rfl⟩, ht⟩ | ⟨g, a, hr, ha, hg, ht, rfl⟩ | ⟨⟨g, a, hr, ha, hg, ht, rfl⟩, hlt⟩)
+    · exact ⟨g, a, hr, ha, hg, ht, rfl⟩
+    · exact ⟨g, a, hr, fun hy => Finset.disjoint_left.1 h ha hy, hg, ht.2, rfl⟩
+    · exact ⟨g, a, hr, fun hy => ha (Or.inr hy), hg, hlt, rfl⟩
 
 /-- Memory over continuations bounds each run's state: the per-run state is in the state over continuations. -/
 theorem memory_of_memoryOver {Ω L : Type*} {S : Ω → Actual.Run L} {𝒳 : Set (Finset L)} {M : Finset L → ℕ}
@@ -135,18 +129,19 @@ theorem memory_of_memoryOver {Ω L : Type*} {S : Ω → Actual.Run L} {𝒳 : Se
 end Actual
 
 theorem Localization : Guarantees.Localization := by
-  intro L Ω S X Y t₀ t₁ hXY hc hs hv
+  intro L Ω S X Y t₀ t₁ hXY hA hh hv
+  have hin : ∀ r r', (S r).inputs ↑Y = (S r').inputs ↑Y := fun r r' => congrArg Prod.fst (hh r r')
+  have hpre : ∀ r r', (S r).crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) = (S r').crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) :=
+    fun r r' => congrArg (fun p => p.2.2) (hh r r')
   have key : ∀ u ≤ t₁, ∀ r r', (S r).crossing ↑X ↑Y (Set.Ico t₀ u) = (S r').crossing ↑X ↑Y (Set.Ico t₀ u) →
-      (S r).acts ↑Y (Set.Ico t₀ u) = (S r').acts ↑Y (Set.Ico t₀ u) := by
+      (S r).acts ↑Y (Set.Iio u) = (S r').acts ↑Y (Set.Iio u) := by
     intro u hu r r' hx
-    refine hc Y t₀ u r r' (hs r r') ?_
-    rw [Actual.compl_eq_union hXY, Actual.crossing_union, Actual.crossing_union, hx,
-      Actual.crossing_window (S r) ((↑X ∪ ↑Y)ᶜ) _ hu,
-      Actual.crossing_window (S r') ((↑X ∪ ↑Y)ᶜ) _ hu, hv r r']
+    refine Actual.global_of_admissible hA Y hin u r r' ?_
+    rw [Actual.crossing_split (S r) hXY hu, Actual.crossing_split (S r') hXY hu, hpre r r', hx, hv r r']
   have table : ∀ u ≤ t₁, ∃ T : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ),
-      ∀ r, (S r).acts ↑Y (Set.Ico t₀ u) = T ((S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := by
+      ∀ r, (S r).acts ↑Y (Set.Iio u) = T ((S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := by
     intro u hu
-    have hf : Function.FactorsThrough (fun r => (S r).acts ↑Y (Set.Ico t₀ u))
+    have hf : Function.FactorsThrough (fun r => (S r).acts ↑Y (Set.Iio u))
         (fun r => (S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := fun r r' h => key u hu r r' h
     exact ⟨Function.extend _ _ fun _ => (∅, ∅), fun r => (hf.extend_apply _ r).symm⟩
   refine ⟨table, fun e he => ?_⟩
