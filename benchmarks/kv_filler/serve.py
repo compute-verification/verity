@@ -21,7 +21,8 @@ over every token a step writes, from one scratch buffer into another (vLLM's pag
 prices it: a prompt's tokens on the step's own stream after its forward, so the step absorbs them; a decode token's on
 a least-priority side stream at `--encode-grid` CTAs once the forward has written it, so it is encoded beside the next
 step (`encode_lag_ms`: from written to encoded; `encode_records`: each decode encode's written and encoded seconds on
-the GPU's clock, and its tokens). The codec passes its gate against `kv.encode_word` first.
+the GPU's clock, and its tokens). `--encode-grid 0` encodes decode tokens in their own step too, as prompts are. The
+codec passes its gate against `kv.encode_word` first.
 
 Each policy runs in each receipt mode of `--modes` (read, b3, sk16: `topup.cu`'s). A window's registered bytes are
 the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM head, and each
@@ -150,7 +151,8 @@ def main() -> int:
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
                     help="tokens of one seeded prefix before every prompt, with prefix caching on (0: none, caching off)")
-    ap.add_argument("--encode-grid", type=int, default=128, help="CTAs of a decode step's encode on the side stream")
+    ap.add_argument("--encode-grid", type=int, default=128,
+                    help="CTAs of a decode step's encode on the side stream (0: on the step's own stream, full grid)")
     a = ap.parse_args()
     encode_ks = set()
     for p in a.policies:
@@ -316,12 +318,15 @@ def main() -> int:
         pre = sum(n for n in ns.values() if n > 1)
         dec = sum(n for n in ns.values() if n == 1)
         main = torch.cuda.current_stream()
-        if pre:
-            codec.encode(enc_src.data_ptr(), enc_dst.data_ptr(), pre * TOKEN_WORDS, cur["enc_base"], k,
+        inline = 0 if a.encode_grid else dec
+        if pre or inline:
+            codec.encode(enc_src.data_ptr(), enc_dst.data_ptr(), (pre + inline) * TOKEN_WORDS, cur["enc_base"], k,
                          main.cuda_stream)
-            cur["enc_base"] += pre * TOKEN_WORDS
+            cur["enc_base"] += (pre + inline) * TOKEN_WORDS
             cur["enc_prefill_tokens"] += pre
-        if dec:
+            cur["enc_decode_tokens"] += inline
+        if dec and not inline:
+            cur["enc_decode_tokens"] += dec
             written = mark()
             eside.wait_event(written)
             off = pre * KV_TOKEN_BYTES
@@ -369,7 +374,8 @@ def main() -> int:
                 continue
             cur.clear()
             cur["steps"], cur["gpu"] = [], []
-            cur["encode_k"], cur["enc_base"], cur["enc"], cur["enc_prefill_tokens"] = ek, 0, [], 0
+            cur["encode_k"], cur["enc_base"], cur["enc"] = ek, 0, []
+            cur["enc_prefill_tokens"] = cur["enc_decode_tokens"] = 0
             if ek:
                 codec.set_key(K.key("p512", RUN_SEED, ek))
             if a.shared_prefix:
@@ -460,7 +466,7 @@ def main() -> int:
                    "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps}
             if ek:
                 run.update({"encode_k": ek, "encode_prefill_tokens": cur["enc_prefill_tokens"],
-                            "encode_decode_tokens": sum(n for *_, n in cur["enc"]),
+                            "encode_decode_tokens": cur["enc_decode_tokens"], "encode_decode_inline": not a.encode_grid,
                             "encode_records": [[round(base.elapsed_time(w) / 1e3, 6),
                                                 round(base.elapsed_time(d) / 1e3, 6), n] for w, d, n in cur["enc"]],
                             "encode_lag_ms": {"median": statistics.median(lag), "p90": lag[int(0.9 * (len(lag) - 1))],
@@ -473,8 +479,9 @@ def main() -> int:
                 f"{w1.get('mean', 0):.3f} p10 {w1.get('p10', 0):.3f} min {w1.get('min', 0):.3f} of R; GPU busy "
                 f"{gpu_busy:.1f} s in {len(gpu_steps)} model steps" + (
                     f"; encoded {run['encode_prefill_tokens']} prompt tokens in their steps and "
-                    f"{run['encode_decode_tokens']} decode tokens beside the next, {lag[len(lag) // 2]:.2f} ms "
-                    f"(max {lag[-1]:.2f}) after written" if ek and lag else ""))
+                    f"{run['encode_decode_tokens']} decode tokens " + (
+                        f"beside the next, {lag[len(lag) // 2]:.2f} ms (max {lag[-1]:.2f}) after written" if lag
+                        else "in their steps") if ek else ""))
             save()
     log("done")
     return 0

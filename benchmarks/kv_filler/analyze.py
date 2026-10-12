@@ -181,7 +181,7 @@ def main() -> int:
         s = json.loads(path.read_text())
         pool = s["args"]["pool"]
         ident = {"source": str(path), "seed": s["args"]["seed"], "async_scheduling": s.get("async_scheduling"),
-                 "shared_prefix": s["args"].get("shared_prefix", 0)}
+                 "shared_prefix": s["args"].get("shared_prefix", 0), "encode_grid": s["args"].get("encode_grid")}
         for run in s["runs"]:
             eta = shortfall(phases(run["step_records"]), run["seconds"], s["weight_bytes_per_step"],
                             run["filler_bytes"], R, gpu_steps=run.get("gpu_steps"))
