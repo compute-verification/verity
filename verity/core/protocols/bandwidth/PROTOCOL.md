@@ -1,8 +1,10 @@
 # The bandwidth audit, v0
 
 Status: v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
-`f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6) and fixed `T` and
-`s`; its conditions are met at `84fc4199d`, whose re-grant is pending. The Python reference and verifier are `audit.py`
+`f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), fixing `T` and
+`s`, then objected at `5c62196c1` (art:dbbce953a1916411304d1f4558010b6c18cbcb4b69c2c514e32ca83a2bc6b9c5): windows over
+one store could share a key across verifiers, tags and restarts, and the verifier accepted a store not salted for its
+device. The fixes (§2, §3) await its re-review, and no rate is certified until it grants. The Python reference and verifier are `audit.py`
 and `tags.py`, pinned by `tests/vectors.json`; the GPU tagger is `benchmarks/bandwidth`, checked bit for bit against
 them and timed on the RTX PRO 6000 (§6). The guarantee is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of
 `Security/`'s guarantees, proved as `Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane
@@ -41,9 +43,10 @@ At the deployed point, `ε_s = 1/64`, `s = 1,849`, `h = 256` (`ro-blake3/v1`), `
 | `λ` | 33,030,185 bits = 4,128,774 bytes, 0.38% of `E` |
 | error | `2^-42.01` (samples) + `2^-245.1` (guesses) + `2^-41` (compression) ≤ `2^-40.42` |
 
-`G = 0`, because `Params` refuses `T + RTT` at or past one rebuild (§5). `S` and `c` are the device's (§5); at
-`T = 1.2 ms` and `RTT = 0`, `I` is 741,353,308 bytes, 68.8% of `E`, 618 GB/s (§6). `audit.bound` computes `I` and the
-error; `test_bound_is_the_guarantee_at_the_proofs_point` checks it against the formula.
+`G = 0`, because `Params` refuses `T + RTT` at or past one rebuild (§5). `S` and `c` are the device's (§5).
+`audit.bound` computes `I` and the error, and §6 evaluates it at the measured `S` and `c`; that is the formula's
+arithmetic, not a certified rate, and none is quoted until the red team grants.
+`test_bound_is_the_guarantee_at_the_proofs_point` checks `bound` against the formula.
 
 `gf31-poly/v1` is an uncertified fast check: nothing bounds a device's ingress through it (§4), and `bound` refuses it.
 
@@ -257,8 +260,8 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
      `Σ_i I_i ≥ Σ_i k·b − Σ_i S_i − c_ext − Σ_i λ` bits, except with probability the sum of the devices' errors,
      where `c_ext` counts only links from outside the set. Traffic between the set's devices stays inside it, so a
      helper's slack is counted and the residual disappears. For `m` RTX PRO 6000s, each on its own PCIe link,
-     `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is `m` times the per-device figure: 741,353,308 bytes a
-     device at `T = 1.2 ms`, certified for the set's total, not for any one device. AuditRO is stated for one store;
+     `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is `m` times the per-device figure, which then bounds the
+     set's total, not any one device. AuditRO is stated for one store;
      this reading needs it for `m` stores sampled separately, which is not in Lean yet.
   2. **Per device, for isolated devices only.** `I ≥ k·b − S − c − λ` for one device whose side links carry nothing
      computed from any copy of its store during the window. This is the statement AuditRO makes now. A device that is
@@ -271,14 +274,12 @@ paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
 
 `T` must cover the honest prover's elapsed time on the verifier's clock with margin, and leave `T + RTT` under the
 rebuild floor. The parameters: **`ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`**, which leaves up to 0.5 ms for `RTT`,
-fixed by the red team's grant of `f18c1854a`.
+fixed by the red team at `f18c1854a`.
 
-**The certified rate** (code at `84fc4199d`; red team: granted with conditions at `f18c1854a`,
-art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6, conditions met at `84fc4199d`, re-grant
-pending): an accepted window at `T = 1.2 ms`, with an on-node verifier and no round-trip allowance, certifies
-741,353,308 bytes (68.8% of `E`), 618 GB/s, except with probability `2^-40.42`; with a 0.3 ms round-trip allowance,
-722,448,693 bytes (67.0%), 482 GB/s. It is a per-device figure for an isolated device, or each device's share of a
-co-audited set's total, depending on which reading of `bandwidth-device` Daniel picks (§5).
+**No certified rate is quoted.** The red team objected at `5c62196c1` (Status), and no rate is certified until it
+grants a head. The last table of this section is `bound` evaluated at the measured parameters, the formula's
+arithmetic for the red team to check; whichever reading of `bandwidth-device` Daniel picks (§5) decides whether such a
+figure is per device or a share of a co-audited set's total.
 
 The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
 timed lease, SM clock 2,085 to 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and
@@ -335,17 +336,17 @@ device that skips 1% or 5% of the blocks was rejected in every run, for every ta
 probability `0.99^1849 ≈ 2^-26.8` or `0.95^1849 ≈ 2^-136.8`.
 
 `bound` at `s = 1,849`, `q ≤ 2^64`, `S = 239,992,832` bytes and `cap_side = 63.0 GB/s` (error `2^-40.42`
-throughout):
+throughout), the formula's arithmetic and not a certified rate:
 
 | `T` | `RTT` | `I` | share of `E` | `I / (T + RTT)` |
 |---|---|---|---|---|
 | 1.0 ms | 0 | 753,956,385 bytes | 69.9% | 754 GB/s |
-| **1.2 ms** | **0** | **741,353,308 bytes** | **68.8%** | **618 GB/s** |
+| 1.2 ms | 0 | 741,353,308 bytes | 68.8% | 618 GB/s |
 | 1.2 ms | 0.3 ms | 722,448,693 bytes | 67.0% | 482 GB/s |
 | 1.4 ms | 0 | 728,750,231 bytes | 67.6% | 521 GB/s |
 | 1.708 ms (the largest `Params` allows) | 0 | 709,337,901 bytes | 65.8% | 415 GB/s |
 
-At `T = 1.2 ms` the certified rate is 42% of the raw read rate (1,476 GB/s). Of `E`'s 1,078 MB, the chip's storage
+At `T = 1.2 ms`, `bound`'s `I / T` is 42% of the raw read rate (1,476 GB/s). Of `E`'s 1,078 MB, the chip's storage
 takes 240 MB (22.3%), the side link 76 MB (7.0%), the sample 17 MB (1.6%) and `λ` 4.1 MB (0.38%); the rest of the gap
 from the raw rate is the time the honest pass and its margin take beyond a raw read.
 
