@@ -21,10 +21,10 @@ what it read before `a` (fixed), what `X` sent it during `[a, b)` and what the c
 signals those links deliver at their ends outside `X` (`crossing_signal`). The certifiers' wires to `O` read during
 `[a, b)` left them before `b` (`crossing_sent`, by causality): before `a`, a function of the certifiers' inputs and of
 what they read before `a`, both fixed, or during `[a, b)`, a function of their record before `b` and of their jitter
-word on `[a, b)`'s buckets (`TrustedUnits`), the record before `a` being fixed (`seen_filter_lt`). So what `O` does is
-a function of the record placed during `[a, b)`, of the jitter word on those buckets and of the uncertified links'
-signals during `[a, b)`, which take at most (the number of records placed in `[a, b)`) × `χ^{buckets}` ×
-`2^{β°_X (b − a)}` values (`Alphabet`, `encard_range_le`).
+word on `[a, b)`'s buckets (`TrustedUnits`), the record before `a` being part of the certifiers' fixed history
+(`seen_record_lt`, `seen_filter_lt`). So what `O` does is a function of the record placed during `[a, b)`, of the
+jitter word on those buckets and of the uncertified links' signals during `[a, b)`, which take at most (the number of
+records placed in `[a, b)`) × `χ^{buckets}` × `2^{β°_X (b − a)}` values (`Alphabet`, `encard_range_le`).
 -/
 
 namespace Accounting.SecurityProofs
@@ -131,6 +131,20 @@ theorem crossing_signal {L E : Type*} [Fintype E] {R R' : Actual.Run L} {ends : 
   · rw [ht']
     exact ht
   · rw [ht', hy', ho, hp]
+
+/-- The certifiers' record placed before `t`, as seen, is what of their gates placed before `t` sits in a record cell:
+part of what they can tell at `t` (`history`). -/
+theorem seen_record_lt {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells : L → Set ℕ) (t : ℕ) :
+    R.seen '' ↑((R.record cert cells).filter fun g => R.A.t g < t) =
+      R.before cert t ∩ {p | p.2.2.1 ∈ cells p.2.1} := by
+  ext p
+  simp only [Set.mem_image, Finset.coe_filter, Actual.Run.record, Finset.mem_filter, Finset.mem_univ, true_and,
+    Set.mem_ofPred_eq, Set.mem_inter_iff, Actual.Run.before]
+  constructor
+  · rintro ⟨g, ⟨⟨hx, hc⟩, ht⟩, rfl⟩
+    exact ⟨⟨g, hx, ht, rfl⟩, hc⟩
+  · rintro ⟨⟨g, hx, ht, rfl⟩, hc⟩
+    exact ⟨g, ⟨⟨hx, hc⟩, ht⟩, rfl⟩
 
 /-- The gates of `F` placed before `b`, as seen, are those placed before `a` or during `[a, b)`, cut to ticks
 before `b`. -/
@@ -248,7 +262,7 @@ theorem B4 : Guarantees.B4 := by
   let sig : ↥B × ↥(Finset.Ico a b) → Ω → Set (ℕ × L × ℕ × ℕ × ℕ) := fun i r =>
     (S r).signal (link r) i.1 (Actual.outer ends X i.1) i.2
   let rec_ : Ω → Set (ℕ × L × ℕ × ℕ × ℕ) := fun r =>
-    (S r).seen '' ↑((record r).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)
+    (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)
   have hfac : ∀ r r', (rec_ r, (fun k : ↥K => J r k), fun i => sig i r) =
       (rec_ r', (fun k : ↥K => J r' k), fun i => sig i r') →
       (S r).acts O (Set.Ico a b) = (S r').acts O (Set.Ico a b) := by
@@ -263,7 +277,9 @@ theorem B4 : Guarantees.B4 := by
     have hs1 : (S r).sent ↑cert (Set.Ico a b) = (S r').sent ↑cert (Set.Ico a b) :=
       hJ a b r r' (by
           rw [Actual.seen_filter_lt (S r) _ a b, Actual.seen_filter_lt (S r') _ a b]
-          exact congrArg (· ∩ {p | p.1 < b}) (congrArg₂ (· ∪ ·) (hh r r').2.2 hrec))
+          refine congrArg (· ∩ {p | p.1 < b}) (congrArg₂ (· ∪ ·) ?_ hrec)
+          rw [Actual.seen_record_lt, Actual.seen_record_lt,
+            show (S r).before cert a = (S r').before cert a from congrArg (fun p => p.2.1) (hh r r').1])
         fun t ht => congrFun hj ⟨bucket t, mem_image_of_mem _ (Finset.mem_Ico.2 ht)⟩
     have hcert : (S r).crossing ↑cert ↑O (Set.Ico a b) = (S r').crossing ↑cert ↑O (Set.Ico a b) := by
       rw [Actual.crossing_sent (S r) (hr r).1 hcO, Actual.crossing_sent (S r') (hr r').1 hcO, hs0, hs1]
@@ -273,9 +289,9 @@ theorem B4 : Guarantees.B4 := by
           congrFun hsig ⟨⟨e, he⟩, ⟨u, Finset.mem_Ico.2 hu⟩⟩).antisymm
         (Actual.crossing_signal (hr r').2 (hr r).2 hXc fun e he u hu =>
           (congrFun hsig ⟨⟨e, he⟩, ⟨u, Finset.mem_Ico.2 hu⟩⟩).symm)
-    have hOin : ∀ r r', (S r).inputs ↑O = (S r').inputs ↑O := fun r r' => congrArg Prod.fst (hh r r').2.1
+    have hOin : ∀ r r', (S r).inputs ↑O = (S r').inputs ↑O := fun r r' => congrArg Prod.fst (hh r r').2
     have hOpre : (S r).crossing (↑O)ᶜ ↑O (Set.Iio a) = (S r').crossing (↑O)ᶜ ↑O (Set.Iio a) :=
-      congrArg (fun p => p.2.2) (hh r r').2.1
+      congrArg (fun p => p.2.2) (hh r r').2
     have hall : (S r).acts O (Set.Iio b) = (S r').acts O (Set.Iio b) := by
       refine Actual.global_of_causal hc O hOin b r r' ?_
       rw [Actual.crossing_split (S r) hXO (t₀ := a) (le_refl b),

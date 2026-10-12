@@ -3,7 +3,7 @@ import Definitions.Accounting.Confidence
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.5), sections 1 and 3.
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.6), sections 1 and 3.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
 certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
@@ -27,11 +27,11 @@ leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified*
 `egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
 
 Four constraints read what the circuit doesn't carry, taken as parameters: which link each wire runs on (`link`), which
-paths of `A` compute a P2 root (`root`, a predicate on paths), the certifiers' leaves (`cert`) and records (`record`),
-the trusted devices' leaves (`𝒱`) with what the protocol says each of their gates does (`Spec`), and the buckets of
-ticks over which a certifier's jitter is counted. `Hardware` bundles the parameters that don't depend on `A`, and
-`Annotation A` those of the constraints on one run that name its gates; `TrustedUnits` takes each run's `Spec` and
-record.
+paths of `A` compute a P2 root (`root`, a predicate on paths), the certifiers' leaves (`cert`) and record cells
+(`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
+what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a certifier's jitter is
+counted. `Hardware` bundles the parameters that don't depend on `A`, and `Annotation A` those of the constraints on one
+run that name its gates; `TrustedUnits` takes each run's `Spec`.
 -/
 
 namespace Accounting
@@ -93,21 +93,29 @@ structure Spec where
 
 end Placed
 
-/-- **Trusted devices** (v2.4), across a strategy `S`: in every run, every computed gate placed in `𝒱` reads what the
+open Classical in
+/-- **The certifiers' record** in a run (v2.6): the gates at the certifiers' leaves `cert` in the record cells each
+declares (`cells y` at the leaf `y`, `Hardware.record`). A certifier's record is what it holds, not a set chosen per
+run, so the record placed before `t` is part of what the certifiers can tell at `t` (`history`). -/
+noncomputable def Actual.Run.record {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells : L → Set ℕ) :
+    Finset (Fin R.A.N) :=
+  univ.filter fun g => R.A.x g ∈ cert ∧ R.A.cell g ∈ cells (R.A.x g)
+
+/-- **Trusted devices** (v2.6), across a strategy `S`: in every run, every computed gate placed in `𝒱` reads what the
 protocol (`spec r`) says and computes as it says, and the certifiers' leaves `cert` lie in `𝒱` (W1); and for some jitter
 word `J`, one of `χ = 2^jitter` classes a bucket of ticks (`bucket`) in each run, what the certifiers send outside
-themselves from the gates they place during `[a, b)`, values and ticks (`sent`), is a function of their record as they
-keep it, placed before `b` (`record r`, its gates as seen, so whatever timing it logs is counted there; a send during
-`[a, b)` can't read a later record) and of the jitter word on the buckets of `[a, b)` (W2 and J). What a certifier
-reads is unconstrained. -/
+themselves from the gates they place during `[a, b)`, values and ticks (`sent`), is a function of their record placed
+before `b` (their gates in the record cells `record`, `Actual.Run.record`, as seen, so whatever timing it logs is
+counted there; a send during `[a, b)` can't read a later record) and of the jitter word on the buckets of `[a, b)` (W2
+and J). What a certifier reads is unconstrained. -/
 def TrustedUnits {Ω L : Type*} (S : Ω → Actual.Run L) (𝒱 cert : Finset L) (spec : ∀ r, (S r).A.Spec)
-    (record : ∀ r, Finset (Fin (S r).A.N)) (bucket : ℕ → ℕ) (jitter : ℕ) : Prop :=
+    (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter : ℕ) : Prop :=
   cert ⊆ 𝒱 ∧
   (∀ r g, (S r).A.x g ∈ 𝒱 → (S r).A.isInput g = false →
     (S r).A.reads g = (spec r).reads g ∧ (S r).A.op g = (spec r).op g) ∧
   ∃ J : Ω → ℕ → Fin (2 ^ jitter), ∀ a b r r',
-    (S r).seen '' ↑((record r).filter fun g => (S r).A.t g < b) =
-      (S r').seen '' ↑((record r').filter fun g => (S r').A.t g < b) →
+    (S r).seen '' ↑(((S r).record cert record).filter fun g => (S r).A.t g < b) =
+      (S r').seen '' ↑(((S r').record cert record).filter fun g => (S r').A.t g < b) →
     (∀ t ∈ Set.Ico a b, J r (bucket t) = J r' (bucket t)) →
     (S r).sent ↑cert (Set.Ico a b) = (S r').sent ↑cert (Set.Ico a b)
 
@@ -135,7 +143,8 @@ end Links
 /-- The hardware a run's physical assumptions are about: the tree's locations `units`, the latencies, each location's
 compute `compute` (`Φ`) and memory `M` (work a tick and bits), the links `E` with their ends and capacities `β` (bits a
 tick), the span `tRoot` (`t_root`) of a P2 root's computation, the certifiers' leaves, the trusted devices' leaves, the
-buckets of ticks and the jitter bits a bucket. -/
+buckets of ticks, the jitter bits a bucket, and the record cells `record y` each certifier's leaf `y` declares (v2.6:
+its record is its gates in them, `Actual.Run.record`). -/
 structure Hardware (L : Type*) (E : Type*) where
   units : Set (Finset L)
   ℓ : L → L → ℕ
@@ -148,6 +157,7 @@ structure Hardware (L : Type*) (E : Type*) where
   trusted : Finset L
   bucket : ℕ → ℕ
   jitter : ℕ
+  record : L → Set ℕ
 
 /-- **A spatial unit**: a location all of whose boundary links are certified, `β°_X = 0`. -/
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
