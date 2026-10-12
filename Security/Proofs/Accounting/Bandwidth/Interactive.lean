@@ -164,6 +164,115 @@ theorem atOracle_ingress (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O',
 
 end InteractiveDevice
 
+/-! ## Bounded only where it runs
+
+A device built from an actual circuit is bounded only in the worlds it runs in, where physics bounds what it reads,
+while `InteractiveDevice.bounded` asks for every world. `IChip.cap` ends a program at the step that would exceed a
+budget, which bounds it in every world and changes nothing in a world where it was within budget. So a program
+bounded on its runs is an interactive device (`InteractiveDevice.ofRuns`) with the same tags and ingress on them. -/
+
+namespace IChip
+
+variable {N b h : ℕ} {α : Type}
+
+/-- `p` with budgets of `c` side reads, `G` regenerations and `q` queries: a step past its budget ends the program
+with `d`. -/
+def cap (d : α) : ℕ → ℕ → ℕ → IChip N b h α → IChip N b h α
+  | _, _, _, done a => done a
+  | c, G, q + 1, tag x k => tag x fun y => cap d c G q (k y)
+  | _, _, 0, tag _ _ => done d
+  | c, G, q, ingress a k => ingress a fun β => cap d c G q (k β)
+  | c + 1, G, q, side a k => side a fun β => cap d c G q (k β)
+  | 0, _, _, side _ _ => done d
+  | c, G + 1, q, regen j k => regen j fun x => cap d c G q (k x)
+  | _, 0, _, regen _ _ => done d
+  | c, G, q, send β p => send β (cap d c G q p)
+
+theorem cap_bounded (d : α) (w : IWorld N b h) (p : IChip N b h α) (c G q : ℕ) (v : List Bool) :
+    (cap d c G q p).sideBits w v ≤ c ∧ (cap d c G q p).regens w v ≤ G ∧ ((cap d c G q p).queries w v).length ≤ q := by
+  induction p generalizing c G q v with
+  | done a => simp [cap, sideBits, regens, queries]
+  | tag x k ih =>
+    cases q with
+    | zero => simp [cap, sideBits, regens, queries]
+    | succ q =>
+      obtain ⟨h1, h2, h3⟩ := ih (w.oracle x) c G q v
+      simp only [cap, sideBits, regens, queries, List.length_cons]
+      exact ⟨h1, h2, by omega⟩
+  | ingress a k ih => simpa [cap, sideBits, regens, queries] using ih (w.mem a) c G q v
+  | side a k ih =>
+    cases c with
+    | zero => simp [cap, sideBits, regens, queries]
+    | succ c =>
+      obtain ⟨h1, h2, h3⟩ := ih (w.side v a) c G q v
+      simp only [cap, sideBits, regens, queries]
+      exact ⟨by omega, h2, h3⟩
+  | regen j k ih =>
+    cases G with
+    | zero => simp [cap, sideBits, regens, queries]
+    | succ G =>
+      obtain ⟨h1, h2, h3⟩ := ih (w.block j) c G q v
+      simp only [cap, sideBits, regens, queries]
+      exact ⟨h1, by omega, h3⟩
+  | send β p ih => simpa [cap, sideBits, regens, queries] using ih c G q (β :: v)
+
+theorem cap_eq (d : α) (w : IWorld N b h) (p : IChip N b h α) (c G q : ℕ) (v : List Bool)
+    (hs : p.sideBits w v ≤ c) (hr : p.regens w v ≤ G) (hq : (p.queries w v).length ≤ q) :
+    (cap d c G q p).run w v = p.run w v ∧ (cap d c G q p).ingressBits w v = p.ingressBits w v := by
+  induction p generalizing c G q v with
+  | done a => simp [cap]
+  | tag x k ih =>
+    simp only [queries, List.length_cons] at hq
+    obtain ⟨q, rfl⟩ : ∃ q', q = q' + 1 := ⟨q - 1, by omega⟩
+    simp only [sideBits, regens] at hs hr
+    simpa [cap, run, ingressBits] using ih (w.oracle x) c G q v hs hr (by omega)
+  | ingress a k ih =>
+    simp only [sideBits, regens, queries] at hs hr hq
+    obtain ⟨h1, h2⟩ := ih (w.mem a) c G q v hs hr hq
+    simp only [cap, run, ingressBits]
+    exact ⟨h1, by rw [h2]⟩
+  | side a k ih =>
+    simp only [sideBits, regens, queries] at hs hr hq
+    obtain ⟨c, rfl⟩ : ∃ c', c = c' + 1 := ⟨c - 1, by omega⟩
+    simpa [cap, run, ingressBits] using ih (w.side v a) c G q v (by omega) hr hq
+  | regen j k ih =>
+    simp only [sideBits, regens, queries] at hs hr hq
+    obtain ⟨G, rfl⟩ : ∃ G', G = G' + 1 := ⟨G - 1, by omega⟩
+    simpa [cap, run, ingressBits] using ih (w.block j) c G q v hs (by omega) hq
+  | send β p ih =>
+    simp only [sideBits, regens, queries] at hs hr hq
+    simpa [cap, run, ingressBits] using ih c G q (β :: v) hs hr hq
+
+end IChip
+
+namespace InteractiveDevice
+
+variable {N b h S c G q : ℕ}
+
+/-- **A program bounded on its runs as an interactive device**: state, device memory, side sources and a chip program
+whose run, in the world of every store and oracle, reads at most `c` side bits, regenerates at most `G` blocks and
+makes at most `q` queries. The device runs the program capped at those budgets. -/
+def ofRuns (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
+    (side : Store N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h)) :
+    InteractiveDevice N b h S c G q where
+  state := state
+  mem := mem
+  side := side
+  chip st := (chip st).cap (fun _ _ => false) c G q
+  bounded st w := IChip.cap_bounded _ w (chip st) c G q []
+
+theorem ofRuns_run (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
+    (side : Store N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h))
+    (E : Store N b) (O : Oracle N b h)
+    (hb : (chip (state E)).sideBits ⟨O, mem E, side E O, E⟩ [] ≤ c ∧ (chip (state E)).regens ⟨O, mem E, side E O, E⟩ [] ≤ G ∧
+      ((chip (state E)).queries ⟨O, mem E, side E O, E⟩ []).length ≤ q) :
+    (ofRuns (c := c) (G := G) (q := q) state mem side chip).tags E O = (chip (state E)).run ⟨O, mem E, side E O, E⟩ [] ∧
+      (ofRuns (c := c) (G := G) (q := q) state mem side chip).ingress E O =
+        (chip (state E)).ingressBits ⟨O, mem E, side E O, E⟩ [] :=
+  IChip.cap_eq _ _ (chip (state E)) c G q [] hb.1 hb.2.1 hb.2.2
+
+end InteractiveDevice
+
 namespace SecurityProofs
 
 open InteractiveDevice
