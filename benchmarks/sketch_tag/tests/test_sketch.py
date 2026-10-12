@@ -138,22 +138,29 @@ def test_sign_fragments_are_the_mma_operand(bits, k):
     nn = 32 * m * t
     sb = S.sign_bits(SEED, k, nn)
     frag = S.sign_fragments(sb, m, t)
-    spl = 128 // k
-    assert frag.size == t * -(-m // spl) * 32 * 16
+    gr = S.sign_groups(k, m)
+    assert frag.size == t * gr * 32 * 16 and 24 * gr >= 2 * m * (k // 8) > 24 * (gr - 1)
     want = S.sketch(S.vectors(store, n, kd, bits, t), S.signs(SEED, k, nn))
     assert np.array_equal(S.sketch_from_fragments(store, n, kd, bits, t, frag, k), want)
-    # the packing's formula, bit by bit
+    # the packing's formula, bit by bit, and the device's byte permute of it
     words = frag.view("<u4")
+    assert not any(int(w) & 0x88888888 for w in words)
+    lo, hi = (0xFF01FF01, 0xFFFF0101, 0x01010101), (0xFF01FF01, 0xFFFF0101, 0xFFFFFFFF)
     rng = random.Random(k + bits)
     for _ in range(200):
-        i, s, lane, blk, h, q = (rng.randrange(t), rng.randrange(m), rng.randrange(32), rng.randrange(k // 8),
-                                 rng.randrange(2), rng.randrange(4))
+        i, s, lane, blk = rng.randrange(t), rng.randrange(m), rng.randrange(32), rng.randrange(k // 8)
         g, tq = lane >> 2, lane & 3
-        u, sl = divmod(s, spl)
-        pair = sl * (k // 8) + blk
-        word = words[((i * -(-m // spl) + u) * 32 + lane) * 4 + pair // 4]
-        bit = int(word) >> (8 * q + 2 * (pair % 4) + h) & 1
-        assert bit == sb[8 * blk + g, 32 * (i * m + s) + 16 * h + 4 * tq + q]
+        for h in range(2):
+            r = 2 * (s * (k // 8) + blk) + h
+            u, c = divmod(r // 6, 4)
+            word = int(words[((i * gr + u) * 32 + lane) * 4 + c])
+            sel, e = word >> 16 * ((r % 6) // 3) & 0xFFFF, r % 3
+            pool = lo[e].to_bytes(4, "little") + hi[e].to_bytes(4, "little")
+            reg = bytes(pool[sel >> 4 * q & 7] for q in range(4))
+            for q in range(4):
+                bit = word >> (16 * ((r % 6) // 3) + 4 * q + e) & 1
+                assert bit == sb[8 * blk + g, 32 * (i * m + s) + 16 * h + 4 * tq + q]
+                assert reg[q] == (0xFF if bit else 0x01)
 
 
 def test_tag_is_blake3_keyed_under_the_name():

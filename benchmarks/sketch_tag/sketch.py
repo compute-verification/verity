@@ -145,34 +145,40 @@ def root(seed: bytes, ys: list[bytes]) -> bytes:
     return tree_root(leaves(seed, ys))
 
 
+def sign_groups(k: int, m: int) -> int:
+    """A task's sign words a lane, in groups of four: its 2 m k/8 registers, six a word."""
+    return -(-(-(-(2 * m * (k // 8)) // 6)) // 4)
+
+
 def sign_fragments(bits_kn: np.ndarray, m: int, t: int) -> np.ndarray:
-    """The device's copy of S, packed for the B operand: for tile task i, step group u (spl = 128 / k steps, a task's
-    steps padded to MP = ⌈m / spl⌉ spl) and lane l = 4 g + tq, four u32 words (16 bytes, at ((i · MP / spl + u) · 32 + l)
-    · 16). Pair p = (s mod spl) · k/8 + blk of step s = u spl + (s mod spl) is word p / 4, bit 8 q + 2 (p mod 4) + h:
-    S[8 blk + g][32 (i m + s) + 16 h + 4 tq + q], h = 0 for register b0 and 1 for b1 (a 1 bit is −1). A register is then
-    ((w >> 2 (p mod 4) + h) & 0x01010101) · 0xFE + 0x01010101."""
+    """The device's copy of S, packed for the B operand: for tile task i, word group u < `sign_groups` and lane
+    l = 4 g + tq, four u32 words (16 bytes, at ((i · groups + u) · 32 + l) · 16), a lane's words 4 u + 0..3 in order.
+    Register r = 2 (s k/8 + blk) + h of step s (h = 0 for b0, 1 for b1) is word r / 6, its byte q at bit
+    16 ⌊(r mod 6) / 3⌋ + 4 q + (r mod 3): S[8 blk + g][32 (i m + s) + 16 h + 4 tq + q] (a 1 bit is −1; bit 3 of every
+    nibble is 0). A register is then one byte permute: prmt(lo_e, hi_e, w or w >> 16) with e = r mod 3 and (lo, hi) =
+    (0xFF01FF01, 0xFF01FF01), (0xFFFF0101, 0xFFFF0101), (0x01010101, 0xFFFFFFFF), each nibble's bit e picking 0xFF."""
     k, n = bits_kn.shape
     if k not in KS or n != 32 * m * t:
         raise ValueError("S is k × 32 m T")
-    spl, kb = 128 // k, k // 8
-    mp = -(-m // spl) * spl
+    kb, gr = k // 8, sign_groups(k, m)
+    regs, words = 2 * m * kb, 4 * gr
     s = bits_kn.reshape(kb, 8, t, m, 2, 4, 4)                       # blk, g, i, s, h, tq, q
-    s = np.concatenate([s, np.zeros((kb, 8, t, mp - m, 2, 4, 4), np.uint8)], axis=3)
-    s = s.reshape(kb, 8, t, mp // spl, spl, 2, 4, 4)                # blk, g, i, u, sl, h, tq, q
-    s = s.transpose(2, 3, 1, 6, 4, 0, 5, 7)                         # i, u, g, tq, sl, blk, h, q
-    s = s.reshape(t, mp // spl, 8, 4, 4, 4, 2, 4)                   # i, u, g, tq, word, j, h, q  (p = 4 word + j)
-    s = s.transpose(0, 1, 2, 3, 4, 7, 5, 6)                         # bit 8 q + 2 j + h
+    s = s.transpose(2, 1, 5, 3, 0, 4, 6).reshape(t, 8, 4, regs, 4)  # i, g, tq, r, q
+    s = np.concatenate([s, np.zeros((t, 8, 4, 6 * words - regs, 4), np.uint8)], axis=3)
+    s = s.reshape(t, 8, 4, words, 2, 3, 4).transpose(0, 1, 2, 3, 4, 6, 5)   # i, g, tq, word, half, q, e
+    s = np.concatenate([s, np.zeros((t, 8, 4, words, 2, 4, 1), np.uint8)], axis=6)   # nibble bit 3
+    s = s.reshape(t, 32, gr, 4, 32).transpose(0, 2, 1, 3, 4)        # i, u, lane, word, bit
     return np.packbits(np.ascontiguousarray(s).reshape(-1, 8), axis=1, bitorder="little").reshape(-1)
 
 
 def fragment_signs(frag: np.ndarray, k: int, m: int, t: int) -> np.ndarray:
     """`sign_fragments`' inverse on the B operand's positions: (task i, step s, column c, tq, blk, h, q) in {−1, +1}."""
-    spl, kb = 128 // k, k // 8
-    mp = -(-m // spl) * spl
+    kb, gr = k // 8, sign_groups(k, m)
+    regs, words = 2 * m * kb, 4 * gr
     b = np.unpackbits(frag.reshape(-1, 1), axis=1, bitorder="little")
-    b = b.reshape(t, mp // spl, 8, 4, 4, 4, 4, 2)                   # i, u, g, tq, word, q, j, h
-    b = b.transpose(0, 1, 2, 3, 4, 6, 7, 5).reshape(t, mp // spl, 8, 4, spl, kb, 2, 4)   # i, u, g, tq, sl, blk, h, q
-    b = b.transpose(0, 1, 4, 2, 3, 5, 6, 7).reshape(t, mp, 8, 4, kb, 2, 4)[:, :m]
+    b = b.reshape(t, gr, 32, 4, 2, 4, 4)[..., :3]                   # i, u, lane, word, half, q, e
+    b = b.transpose(0, 2, 1, 3, 4, 6, 5).reshape(t, 8, 4, 6 * words, 4)[:, :, :, :regs]   # i, g, tq, r, q
+    b = b.reshape(t, 8, 4, m, kb, 2, 4).transpose(0, 3, 1, 2, 4, 5, 6)   # i, s, g, tq, blk, h, q
     return 1 - 2 * b.astype(np.int64)
 
 

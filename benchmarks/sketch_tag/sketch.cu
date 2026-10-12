@@ -8,9 +8,9 @@
 // A run of RUN tasks (RUN divides T) is one unit of the warp-specialized schedule: RUN = T stores the tile's sketch, RUN < T
 // adds it atomically (exact: int32 addition is order-free), so a small layer still spreads over the device.
 //
-// Signs: the B fragments' bits, packed per (tile task i, step group u, lane) as 4 u32 words (`sketch.sign_fragments`,
-// MP steps a task, 128 / k a group): pair p = (s mod 128/k) k/8 + blk of a group holds b0's four signs at bits 8 q + 2 (p
-// mod 4) and b1's at the next bit of word p / 4, so a register is ((w >> sh) & 0x01010101) * 0xFE + 0x01010101.
+// Signs: the B fragments' bits, packed per (tile task i, word group u, lane) as 4 u32 words (`sketch.sign_fragments`):
+// register r = 2 (s k/8 + blk) + h of step s is word r / 6, its byte q's sign at bit 16 ((r mod 6) / 3) + 4 q + r mod 3,
+// so a register is one byte permute of two constants under that half of the word (`sgn`).
 //
 // The tag: ro-sketch-blake3/v0, BLAKE3-keyed(K, u64be j ‖ the k int32 little-endian), K from the name's prefix; leaves
 // (16 tags, one tile) and the tree are benchmarks/bandwidth/tagger.cu's.
@@ -31,7 +31,7 @@ __host__ __device__ constexpr int steps() { return KR > 0 ? (8 * LANE_WORDS + 15
 template <int KS>
 __host__ __device__ constexpr int chains() { return SK_CHAINS / (KS / 8) > 1 ? SK_CHAINS / (KS / 8) : 1; }
 template <int KR, int KS>
-__host__ __device__ constexpr int sgroups() { return (steps<KR>() + 128 / KS - 1) / (128 / KS); }
+__host__ __device__ constexpr int sgroups() { return ((2 * steps<KR>() * (KS / 8) + 5) / 6 + 3) / 4; }
 
 __device__ __forceinline__ void mma_s8(int (&d)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
   asm volatile(
@@ -40,16 +40,24 @@ __device__ __forceinline__ void mma_s8(int (&d)[4], const uint32_t (&a)[4], uint
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
 }
 
-__device__ __forceinline__ uint32_t sgn(uint32_t w, int sh) { return ((w >> sh) & 0x01010101u) * 0xFEu + 0x01010101u; }
+// Sign register r: each selector nibble's bit e = r mod 3 picks 0xFF (bit 3 is 0, so no sign replication).
+__device__ __forceinline__ uint32_t sgn(const uint32_t* sw, int r) {
+  const uint32_t w = sw[r / 6], sel = (r % 6) < 3 ? w : w >> 16, e = r % 3;
+  const uint32_t lo = e == 0 ? 0xFF01FF01u : e == 1 ? 0xFFFF0101u : 0x01010101u;
+  const uint32_t hi = e == 0 ? 0xFF01FF01u : e == 1 ? 0xFFFF0101u : 0xFFFFFFFFu;
+  uint32_t d;
+  asm("prmt.b32 %0, %1, %2, %3;" : "=r"(d) : "r"(lo), "r"(hi), "r"(sel));
+  return d;
+}
 
 // Step s's k/8 sign MMAs; sw holds the task's packed sign words (4 a group).
 template <int KS>
 __device__ __forceinline__ void sketch_step(int (&acc)[KS / 8][4], const uint32_t (&a)[4], const uint32_t* sw, int s) {
-  constexpr int SPL = 128 / KS, KB = KS / 8;
+  constexpr int KB = KS / 8;
 #pragma unroll
   for (int blk = 0; blk < KB; ++blk) {
-    const int p = (s % SPL) * KB + blk, w = 4 * (s / SPL) + p / 4, sh = 2 * (p % 4);
-    mma_s8(acc[blk], a, sgn(sw[w], sh), sgn(sw[w], sh + 1));
+    const int r = 2 * (s * KB + blk);
+    mma_s8(acc[blk], a, sgn(sw, r), sgn(sw, r + 1));
   }
 }
 
