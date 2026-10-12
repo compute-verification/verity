@@ -115,6 +115,32 @@ def test_round_trip(name, rounds):
 
 
 @pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("rounds", [1, 2, 3])
+def test_masked_round_trip(name, rounds):
+    plain, k = K.key(name, SEED, rounds), K.key(name, SEED, rounds, mask=True)
+    f = k.field
+    assert k.c == plain.c and k.tau == plain.tau and plain.mask is None
+    assert k.mask.bit_length() <= f.n and abs(k.mask.bit_count() - f.n / 2) < f.n / 8
+    rng = random.Random(rounds)
+    for i, m in enumerate(_edges(f) + [rng.randrange(f.p)]):
+        y = K.encode_word(m, 1000 + i, k)
+        assert 0 <= y < f.p and K.decode_word(y, 1000 + i, k) == m
+        assert (y == K.encode_word(m, 1000 + i, plain)) == (rounds == 1)
+
+
+def test_sigma_is_an_involution_on_the_field():
+    k = K.key("p512", SEED, 2, mask=True)
+    p = k.field.p
+    rejected = p ^ k.mask
+    near = [rejected, rejected ^ 1, (p - 1) ^ k.mask, 0, p - 1, k.mask % p]
+    for x in near + [random.Random(3).randrange(p) for _ in range(64)]:
+        x %= p
+        s = k.sigma(x)
+        assert 0 <= s < p and k.sigma(s) == x
+    assert rejected < p and k.sigma(rejected) == rejected
+
+
+@pytest.mark.parametrize("name", NAMES)
 def test_every_word_of_finite_bf16_or_e4m3_is_a_payload(name):
     f = K.field(name)
     s = f.word_bytes
@@ -182,6 +208,8 @@ def _takes_rare(f: K.Field, op: int, a: int, b: int) -> bool:
         return bool(b & 1) and (a & m32) > (1 << 32) - c
     if op == 3:
         return a >> (n - 32) == m32
+    if op == 5:
+        return (a ^ b) >> (n - 32) == m32
     s1 = (a * a & ((1 << n) - 1)) + c * (a * a >> n)
     return (s1 & m32) + (s1 >> n) * c > m32
 

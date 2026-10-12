@@ -171,6 +171,17 @@ def rho(x: list[int], f: Field) -> list[int]:
     return s
 
 
+def sigma(x: list[int], m: list[int], f: Field) -> list[int]:
+    """kv.cu's sigma: x ^ m, undone when its top limb is all ones, the limbs between all ones too and its lowest at
+    least 2^32 - c."""
+    v = [a ^ b for a, b in zip(_lazy(x, f), m)]
+    if v[-1] != U32:
+        return v
+    if all(w == U32 for w in v[1:-1]) and v[0] >= (1 << 32) - f.c:
+        return [a ^ b for a, b in zip(v, m)]
+    return v
+
+
 def rho_inv(y: list[int], f: Field) -> list[int]:
     q = canon(sqr(y, f), f)
     return neg(q, f) if y[0] & 1 else q
@@ -224,13 +235,13 @@ def decode_word(y: int, i: int, c: tuple[int, ...], tau: int, f: Field) -> int:
     return from_limbs(x)
 
 
-PRIMS = ("add_mod", "sub_mod", "neg_if", "canon", "sqr")  # kv.cu's kv_prim ops, in order
+PRIMS = ("add_mod", "sub_mod", "neg_if", "canon", "sqr", "sigma")  # kv.cu's kv_prim ops, in order
 
 
 def rare_cases(f: Field, rng, searches: int = 300_000) -> dict[int, list[tuple[int, int]]]:
-    """Inputs (a, b) for each of PRIMS that take its rare branch (a carry or borrow past limb 0, or canon's
-    subtraction of p), beside edges and random words. neg_if negates a when b is odd; the square's rare fold is
-    searched for, at most `searches` tries."""
+    """Inputs (a, b) for each of PRIMS that take its rare branch (a carry or borrow past limb 0, canon's
+    subtraction of p, or σ_b's test of a ^ b against p), beside edges and random words. neg_if negates a when b is
+    odd; the square's rare fold is searched for, at most `searches` tries."""
     p, c, n = f.p, f.c, f.n
     top = (1 << n) - 1
 
@@ -258,15 +269,22 @@ def rare_cases(f: Field, rng, searches: int = 300_000) -> dict[int, list[tuple[i
         s1 = (a * a & top) + c * (a * a >> n)
         if (s1 & U32) + (s1 >> n) * c > U32:
             sq.append((a, 0))
+    sig = []
+    for t in (p, p + 1, top, p - 1, top ^ (1 << 32), top ^ (1 << (n - 33)), top ^ 1, (1 << n) - (1 << 32)):
+        k = rng.randrange(1 << n)
+        while t ^ k >= p:
+            k = rng.randrange(1 << n)
+        sig.append((t ^ k, k))
     for _ in range(8):
         add.append((rng.randrange(p), rng.randrange(p)))
+        sig.append((rng.randrange(p), rng.randrange(1 << n)))
         sub.append((rng.randrange(p), rng.randrange(p)))
         neg_.append((rng.randrange(p), rng.randrange(2)))
         can.append((rng.randrange(1 << n), 0))
         sq.append((rng.randrange(1 << n), 0))
     for a, b in add + sub:
         assert 0 <= a < p and 0 <= b < p, (a, b)
-    return {0: add, 1: sub, 2: neg_, 3: can, 4: sq}
+    return {0: add, 1: sub, 2: neg_, 3: can, 4: sq, 5: sig}
 
 
 def prim_want(f: Field, op: int, a: int, b: int) -> int:
@@ -279,6 +297,8 @@ def prim_want(f: Field, op: int, a: int, b: int) -> int:
         return f.p - a if b & 1 else a
     if op == 3:
         return a % f.p
+    if op == 5:
+        return a ^ b if a ^ b < f.p else a
     return from_limbs(sqr(to_limbs(a, f), f))
 
 
@@ -292,4 +312,6 @@ def prim_twin(f: Field, op: int, a: int, b: int) -> int:
         return from_limbs(neg(la, f)) if b & 1 else a
     if op == 3:
         return from_limbs(canon(la, f))
+    if op == 5:
+        return from_limbs(sigma(la, lb, f))
     return from_limbs(sqr(la, f))

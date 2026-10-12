@@ -78,6 +78,9 @@ class Lib:
         so.kv_karatsuba.restype = i
         self.field = K.field(name.split("-")[0])
         self.karatsuba = so.kv_karatsuba()
+        self.mask = hasattr(so, "kv_mask") and so.kv_mask() != 0
+        if self.mask:
+            so.kv_set_mask.argtypes = [v]
         if so.kv_bits() != self.field.n:
             raise RuntimeError(f"{name}: the library is built for {so.kv_bits()} bits")
         self.kmax = so.kv_kmax()
@@ -121,11 +124,20 @@ def queued(lib: Lib, torch, fn, cycles: int = SPIN_CYCLES) -> float:
     return a.elapsed_time(b) / 1e3
 
 
+def lib_key(lib: Lib, k: int) -> K.Key:
+    return K.key(lib.field.name, SEED, k, mask=lib.mask)
+
+
 def set_key(lib: Lib, key: K.Key) -> None:
+    if lib.mask != (key.mask is not None):
+        raise ValueError(f"{lib.name}: a {'masked' if lib.mask else 'plain'} library takes a key of its kind")
     s = key.field.word_bytes
     c = ctypes.create_string_buffer(b"".join(v.to_bytes(s, "little") for v in key.c), s * key.rounds)
     t = ctypes.create_string_buffer(key.tau.to_bytes(s, "little"), s)
     lib.call("kv_set_key", ctypes.cast(c, ctypes.c_void_p), key.rounds, ctypes.cast(t, ctypes.c_void_p))
+    if lib.mask:
+        m = ctypes.create_string_buffer(key.mask.to_bytes(s, "little"), s)
+        lib.call("kv_set_mask", ctypes.cast(m, ctypes.c_void_p))
 
 
 def to_device(torch, words: list[int], f: K.Field):
@@ -174,7 +186,7 @@ def gate(lib: Lib, torch, ks, n_ref: int, n_words: int, log) -> dict:
     out = {}
     st = stream(torch)
     for k in ks:
-        key = K.key(f.name, SEED, k)
+        key = lib_key(lib, k)
         set_key(lib, key)
         bad_enc, bad_dec = [], []
         for base in GATE_BASES:
@@ -239,7 +251,7 @@ def chain(lib: Lib, torch, what: int, k: int, ilp: int, sms: int, reps: int, tar
 
 
 def rates(lib: Lib, torch, ks, sms: int, reps: int, log) -> dict:
-    set_key(lib, K.key(lib.field.name, SEED, lib.kmax))
+    set_key(lib, lib_key(lib, lib.kmax))
     sq = {ilp: chain(lib, torch, 0, 1, ilp, sms, reps) for ilp in (1, 2)}
     out = {"square": sq, "square_s": max(r["per_s"] for r in sq.values()), "decode": {}, "encode": {}}
     for k in ks:
@@ -275,7 +287,8 @@ def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
             out.append({"schema": RATES_SCHEMA, "lane": "ra-word-codec", "b": f.n, "field": f"2^{f.n}-{f.c}",
                         "lib": lib.name, "k": int(k),
                         "arithmetic": "cuda-int32/thread-per-word/column"
-                        + ("/karatsuba-1" if lib.karatsuba else "/streamed-fold" if f.limbs > 24 else ""),
+                        + ("/karatsuba-1" if lib.karatsuba else "/streamed-fold" if f.limbs > 24 else "")
+                        + ("/mask-xor" if lib.mask else ""),
                         "squarings_per_s": r["square_s"], "sm_clocks_per_squaring": res["sms"] * hz / r["square_s"],
                         "roots_per_s": e["per_s"] * int(k), "encode_words_per_s": e["per_s"],
                         "root_over_squaring_floor": e["per_s"] * int(k) / r["encode_floor_words_s"],
@@ -296,7 +309,7 @@ def store_rates(lib: Lib, torch, store, ks, sms: int, reps: int, read_gbps: floa
     st = stream(torch)
     out = {}
     for k in ks:
-        set_key(lib, K.key(f.name, SEED, k))
+        set_key(lib, lib_key(lib, k))
         enc = timed(torch, lambda: lib.call("kv_encode", ptr(store), ptr(y), n, 0, k, sms * 8, st), 1, warm=0)[0]
         xr.zero_()
         lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * 8, ptr(xr), st)
@@ -329,7 +342,7 @@ def token_encode(lib: Lib, torch, ks, batches, reps: int, enc_rates: dict, log) 
     st = stream(torch)
     out = {}
     for k in ks:
-        set_key(lib, K.key(f.name, SEED, k))
+        set_key(lib, lib_key(lib, k))
         out[k] = {}
         for b in batches:
             n = tw * b
@@ -367,7 +380,7 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
     sh = attn_shape(lib)
     if (sh["heads"], sh["kv_heads"], sh["head_dim"]) != (64, K.KV_HEADS, K.HEAD_DIM) or sh["tlw"] != K.token_layer_words(lib.field):
         raise RuntimeError(f"{lib.name}: kv_attn_shape {sh} is not kv.py's")
-    set_key(lib, K.key(lib.field.name, SEED, k))
+    set_key(lib, lib_key(lib, k))
     st = stream(torch)
     tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
     scale = math.log2(math.e) / math.sqrt(K.HEAD_DIM)
