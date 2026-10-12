@@ -415,18 +415,21 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     start, and every other warp tags once its own work is done) or DECODERSxSTAGESx-1xK_S (the decoders sketch at
     k_s over tiles of `sketch_t` tasks, stages < 2 sketch_t), each checked against
     wt_fused_sketch's bounds. `auto`: untagged, the most decoder warps the field's registers allow at 4 and 6 stages
-    fewer than fit at M = 32 (fewer stages leave more L1); tagged, 0 and 2 of those warps tagging from the start, at 4
-    fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 2, 3 and 4 fewer stages (the sketch's
-    buffers already take some). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on
-    early tasks of random CTAs, unexplained, so auto leaves them out."""
+    fewer than fit at M = 32 (fewer stages leave more L1) and at all of them, and 2 fewer warps at 2 fewer stages
+    (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its best); tagged, 0 and 2 of those warps tagging
+    from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 0, 2, 3 and 4
+    fewer stages (the sketch's buffers already take some). Four or more tag warps (with the decoders that leave) fail
+    some gates in some runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
     smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (lib.sb + 40)  # noqa: E731
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":
-        cfgs = [(dmax, max(need(dmax), smax(0) - 4), -1), (dmax, max(need(dmax), smax(0) - 6), -1)]
+        cfgs = [(dmax, max(need(dmax), smax(0) - f), -1) for f in (4, 6, 0)]
+        if dmax - 2 >= lib.fused_span:
+            cfgs.append((dmax - 2, max(need(dmax - 2), smax(0) - 2), -1))
         cfgs += [(dmax - t, max(need(dmax - t), smax(0) - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
         for ks in (int(v) for v in sketch.split(",") if v):
-            cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (2, 3, 4)]
+            cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (0, 2, 3, 4)]
     else:
         cfgs = parse(spec)
     out = []
