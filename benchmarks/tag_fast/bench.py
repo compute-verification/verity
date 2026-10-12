@@ -735,6 +735,9 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
+# Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped).
+CAP_PLANS = {"p": {}, "po": {"qkv": 0, "o": 0, "gate_up": 0, "down": 0}, "px": {"qkv": 0, "o": 0, "gate_up": 0},
+             "py": {"qkv": 0, "o": 0, "gate_up": 0, "down": 1}}
 TRACE_BATCHES = (1, 8)
 
 
@@ -752,8 +755,9 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     tagpL    tagrL as such a chain: each launch's chunk ends overlap the next launch's loads; its tags must equal
              tagrL's, or it is dropped
     commitpL tagpL, then commitsL's leaves and tree
-    nativepo, tagpoL, commitpoL  nativep, tagpL and commitpL with each launch at most ceil(CTAs / SMs) CTAs an SM
-At TRACE_BATCHES, nativep, tagp4, nativepo and tagpo4 once more with tf.cu's trace (globaltimer stamps a launch),
+    nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
+             ceil(CTAs / SMs) + plan[shape] CTAs an SM (nativepy not run)
+At TRACE_BATCHES, nativepo, tagpo4, tagpx4 and tagpy4 once more with tf.cu's trace (globaltimer stamps a launch),
 summarized per shape.
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
@@ -804,9 +808,10 @@ summarized per shape.
 
         ctr = torch.zeros(len(names) * layout.LAYERS, dtype=torch.int32, device="cuda")
 
-        def seq_pdl(g=None, trace=None, cap=False):
+        def seq_pdl(g=None, trace=None, plan=None):
             """g0kr1 (g None) or tagr's launches through tf_fused3p, launch q waiting on ctr[q - 1] (and tracing into
-            trace[q] if given); cap: each launch at most ceil(CTAs / SMs) CTAs an SM."""
+            trace[q] if given); each shape in plan at most ceil(CTAs / SMs) + plan[name] CTAs an SM."""
+            plan = plan or {}
             lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_TAGS)
             fs, off, prev = [lambda: (ctr.zero_(), 0)[1]], 0, 0
             order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
@@ -817,7 +822,7 @@ summarized per shape.
                 wc = ptr(ctr) + 4 * (q - 1) if q else 0
                 tr = ptr(trace) + 8 * TR_WORDS * q if trace is not None else 0
                 grid = (n // 16 // 4) * (k // (layout.TILE_COLS * layout.CHUNK_TILES))
-                occ = -(-grid // sms) if cap else 0
+                occ = -(-grid // sms) + plan[name] if name in plan else 0
                 fs.append(lambda n=n, k=k, pl=pl, name=name, tp=tp, off=off, wc=wc, wn=prev, q=q, tr=tr, occ=occ:
                           lib.so.tf_fused3p(lanes, mode, ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp, mb,
                                             n, k, off, wc, wn, ptr(ctr) + 4 * q, int(q > 0), occ, tr, stream(torch)))
@@ -840,7 +845,8 @@ summarized per shape.
             return f
 
         arms = {"native": run(seq(lambda name: timing[name]["batches"][mb]["native_arm"]), "native"),
-                "nativep": run(seq_pdl(), "nativep"), "nativepo": run(seq_pdl(cap=True), "nativepo")}
+                **{f"native{p}": run(seq_pdl(None, None, plan), f"native{p}") for p, plan in CAP_PLANS.items()
+                   if p != "py"}}
         picks, gates = {}, {}
         for g in groups:
             picks[g] = {name: best(name, f"t{g}k") for name in names}
@@ -876,7 +882,7 @@ summarized per shape.
             torch.cuda.synchronize()
             want = tbs[g].clone()
             gates[g] = {}
-            steps = [("tagp", seq_pdl(g)), ("tagpo", seq_pdl(g, cap=True))]
+            steps = [(f"tag{p}", seq_pdl(g, None, plan)) for p, plan in CAP_PLANS.items()]
             for what, fs in steps:
                 f = run(fs, f"{what}{g}")
                 tbs[g].zero_()
@@ -888,7 +894,7 @@ summarized per shape.
                     + ("" if ok else f", {int((tbs[g].view(-1, 32) != want.view(-1, 32)).any(1).sum())} differ") + ")")
                 if ok:
                     arms[f"{what}{g}"] = f
-            for p in ("p", "po"):
+            for p in CAP_PLANS:
                 if gates[g][f"tag{p}"]:
                     def commitp(f=arms[f"tag{p}{g}"], g=g):
                         f()
@@ -903,15 +909,15 @@ summarized per shape.
         med = r["median_s"]
         if mb in TRACE_BATCHES:
             r["trace"] = {}
-            for arm, g, cap in (("nativep", None, False), ("tagp4", 4, False), ("nativepo", None, True),
-                                ("tagpo4", 4, True)):
+            for arm, g, plan in (("nativepo", None, CAP_PLANS["po"]), ("tagpo4", 4, CAP_PLANS["po"]),
+                                 ("tagpx4", 4, CAP_PLANS["px"]), ("tagpy4", 4, CAP_PLANS["py"])):
                 if arm not in arms:
                     continue
                 tr = torch.zeros(len(names) * layout.LAYERS, TR_WORDS, dtype=torch.int64, device="cuda")
                 tr[:, 0] = tr[:, 3] = -1
                 with torch.cuda.stream(hp):
                     arms[arm]()
-                    run(seq_pdl(g, tr, cap), arm)()
+                    run(seq_pdl(g, tr, plan), arm)()
                 torch.cuda.synchronize()
                 r["trace"][arm] = trace_summary(tr.cpu().tolist(), names)
                 log(f"trace M={mb} {arm}: " + "; ".join(f"{name} " + " ".join(f"{key} {v:.2f}" for key, v in t.items())
@@ -1009,7 +1015,7 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
     return out
 
 
-STAGE_PAIRS = (("tag", "commit"), ("tag", "commits"), ("tagp", "commitp"), ("tagpo", "commitpo"))
+STAGE_PAIRS = (("tag", "commit"), ("tag", "commits"), *((f"tag{p}", f"commit{p}") for p in CAP_PLANS))
 
 
 def stage_points(res: dict, batches, run: str | None) -> list[dict]:
