@@ -162,9 +162,20 @@ only the words mod p (`w`, `w + p` and `w + 2p` agree), 15,934 of a block's 16,4
 | `ε_s`, `s` | 1/64, 1,849 | `audit.EPSILON`, `audit.SAMPLES` (`samples_for(N, -42)`) |
 | `q` | at most `2^40` oracle queries in a window | `audit.QUERIES_LOG2`; the RTX PRO 6000 makes about `2^26` BLAKE3 compressions in 1.7 ms |
 | `λ` | `40·k + 41` bits | `audit.SLACK_LOG2`: `C(q, k)/2^λ ≤ q^k/2^λ = 2^-41` |
-| `S` | 208,142,336 bytes (19.3% of `E`) | `S_chip`: 128 MiB of L2 and 188 SMs × (256 KiB of registers + 128 KiB of L1 and shared memory), from the device's properties (`device.json`) |
+| `S` | 239,992,832 bytes (22.3% of `E`) | `S_chip` (`summarize.s_chip_bytes`, from the device's properties in `device.json`): 128 MiB of L2; for each of 188 SMs, 256 KiB of registers, 128 KiB of L1 and shared memory, and 160 KiB of other stores; then 1 MiB at the chip level (see below) |
 | `c` | `cap_side · (T + RTT)`, `cap_side` = 63.0 GB/s | the GPU's PCIe Gen 5 x16 link at its raw rate, 32 GT/s × 16 lanes at 128b/130b; measured 56.6 GB/s host to device, 51.4 GB/s zero-copy (§6) |
 | `G` | 0 | `Params` refuses `T + RTT ≥ 2 · ROOT_CALL_NS = 1,708,058 ns`, the fastest cooperating P2 root; one root, not two, so a device holding a block's inner root rebuilds nothing |
+
+`S` counts every on-chip store a resident kernel can hold data in across `σ`, at its raw capacity. Beside L2, the
+register files and L1 and shared memory, each SM has instruction caches (about 4 KB of L0 per SMSP and 64 KB of L1),
+constant caches, uniform registers (256 bytes a warp) and a TLB; a kernel can load constants before `σ`, or hold data
+as instruction immediates that it runs before `σ` and again, hitting in the cache, after. The chip has copy-engine,
+PCIe and memory-controller buffers and video engines. The instruction caches' sizes are measured on an RTX PRO 5000
+(GB202, sm_120, the RTX PRO 6000's die) in [Dissecting SM_120](https://zartbot.github.io/micro_arch/nvidia/sm_120/),
+chapter 7; the allowance of 160 KiB a SM and 1 MiB for the chip is the red team's
+(art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), and it costs 31.9 MB (3.0% of `E`). sm_120
+has no Tensor Memory (the same reference, chapter 14), so there is no term for it. Measuring the caches on the
+RTX PRO 6000 (code- and constant-footprint latency sweeps) could tighten the allowance.
 
 The claims registry (`verity.core.claims`, on #1806's branch) names what a deployment rests on:
 
@@ -279,9 +290,10 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 4. **The store's leaves are PoUS's, not P2 spec §4's.** `vk`'s leaf is the 99-byte little-endian leaf of
    `pous.verifier`; the P2 spec's is 107 bytes, big-endian (`benchmarks/pous/p2_v1/wire.py`). The audit uses what PoUS
    uses on `main` and inherits its resolution.
-5. **`S_chip` counts L2, the register files and L1 and shared memory.** Smaller on-chip stores (instruction and
-   constant caches, copy-engine buffers) are left out. A red team should confirm that none of them can hold a useful
-   share of `E` across a window's start.
+5. **`S_chip` counts every on-chip store** (§5): L2, the register files, L1 and shared memory, and an allowance of
+   160 KiB a SM and 1 MiB for the chip for the instruction and constant caches, uniform registers, TLBs and chip-level
+   buffers, the red team's. The instruction caches are a third party's measurements on another GB202 card; measuring
+   them on the RTX PRO 6000 is open.
 6. **Openings disclose sampled blocks** of `C*` (an encoding of `W`) to the verifier; the memory challenger already
    holds `vk` and publishes only verdicts, so nothing leaves it.
 7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. The import

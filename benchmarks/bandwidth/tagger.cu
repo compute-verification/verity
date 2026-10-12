@@ -1045,16 +1045,13 @@ int main(int argc, char** argv) {
     FILE* f = open_out(dir, "device.json");
     char uuid[64];
     snprintf(uuid, sizeof uuid, "GPU-%s", hex((const uint8_t*)prop.uuid.bytes, 16).c_str());
-    const double sm_bytes = (double)prop.regsPerMultiprocessor * 4 + 128.0 * 1024;
     fprintf(f,
             "{\"name\": \"%s\", \"uuid_hex\": \"%s\", \"cc\": \"%d.%d\", \"total_global_bytes\": %zu, \"l2_bytes\": %d, "
             "\"persisting_l2_max_bytes\": %d, \"sms\": %d, \"regs_per_sm\": %d, \"smem_per_sm_bytes\": %zu, "
-            "\"smem_per_block_optin_bytes\": %zu, \"l1_smem_per_sm_bytes_assumed\": 131072, \"bus_width_bits\": %d, "
-            "\"pci_bus_id\": %d, \"s_chip_bytes\": %.0f, \"s_chip_formula\": \"l2 + sms * (regs_per_sm * 4 + 128 KiB)\"}\n",
+            "\"smem_per_block_optin_bytes\": %zu, \"bus_width_bits\": %d, \"pci_bus_id\": %d}\n",
             prop.name, uuid, prop.major, prop.minor, prop.totalGlobalMem, prop.l2CacheSize, prop.persistingL2CacheMaxSize,
             prop.multiProcessorCount, prop.regsPerMultiprocessor, prop.sharedMemPerMultiprocessor,
-            prop.sharedMemPerBlockOptin, bus_width, prop.pciBusID,
-            (double)prop.l2CacheSize + prop.multiProcessorCount * sm_bytes);
+            prop.sharedMemPerBlockOptin, bus_width, prop.pciBusID);
     fclose(f);
   }
 
