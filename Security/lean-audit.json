@@ -426,9 +426,9 @@
    "why": "a guarantee is stated over resource accounting's definitions, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses"
   },
   "Definitions.Accounting.Bandwidth": {
-   "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
+   "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Confidence", "Definitions.Accounting.Bandwidth"],
    "except": [],
-   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof"
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
   },
   "Models.Accounting.Guarantees.Bandwidth": {
    "imports": [
@@ -603,11 +603,29 @@
    "assumptions": [],
    "type_hash": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e"
   },
+  "Bandwidth.SecurityProofs.B3": {
+   "owner": "@memory-accounting"
+  },
+  "Bandwidth.SecurityProofs.B3Capacity": {
+   "owner": "@memory-accounting"
+  },
+  "Bandwidth.SecurityProofs.B3CapacityRO": {
+   "owner": "@memory-accounting"
+  },
+  "Bandwidth.SecurityProofs.B3RO": {
+   "owner": "@memory-accounting"
+  },
   "Bandwidth.SecurityProofs.HonestPasses": {
    "owner": "@memory-accounting",
    "signature": ["Bandwidth.SecurityProofs.HonestPasses : Bandwidth.Guarantees.HonestPasses"],
    "assumptions": [],
    "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9"
+  },
+  "Bandwidth.SecurityProofs.Mbw": {
+   "owner": "@memory-accounting"
+  },
+  "Bandwidth.SecurityProofs.MbwCapacity": {
+   "owner": "@memory-accounting"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -4145,7 +4163,13 @@
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
    "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
    "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound.",
-   "Bandwidth.SecurityProofs.AuditJoint": "frozen (no-function,hash): As AuditRO, for a device whose layout also reads n bits z, uniform and independent of the store, which its chip outputs (Security/Definitions/Accounting/Bandwidth/Joint.lean): the compression over the pair (store, z) moves the floor up by n, so an accept gives n <= ingress - cert_bw at AuditRO's error (Mbw, bandwidth additivity by counting)."
+   "Bandwidth.SecurityProofs.AuditJoint": "frozen (no-function,hash): As AuditRO, for a device whose layout also reads n bits z, uniform and independent of the store, which its chip outputs (Security/Definitions/Accounting/Bandwidth/Joint.lean): the compression over the pair (store, z) moves the floor up by n, so an accept gives n <= ingress - cert_bw at AuditRO's error (Mbw, bandwidth additivity by counting).",
+   "Bandwidth.SecurityProofs.B3": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from the store and the oracle to Accounting.Actual.Run) causal from every tick (CausalFrom), with the chip's ports' constraints (Alphabet, PassiveMemory, OracleLocation, and every wire into the chip on a port of HBM, the rest or the oracle: Security/Definitions/Accounting/Bandwidth/Causal.lean) as hypotheses that are not on the premises list, rather than a function's acceptance; it is AuditInteractive's bound at S = M + 1 and c = beta_side * T for the chip of such a run (the console's B3 at e > 0, m * b less for relayed tags).",
+   "Bandwidth.SecurityProofs.B3RO": "frozen (no-function,world-unlisted): As B3, when the rest's ports' signals don't depend on the oracle, at AuditInteractiveRO's bound with no relayed-tag term (the console's B3 at e = 0: the chip read at least k * b - M_chip - 1 - c_side - lam bits from HBM).",
+   "Bandwidth.SecurityProofs.B3Capacity": "frozen (no-function,world-unlisted): As B3, with HBM hearing only the chip (HearsChip: what HBM's ports deliver is a function of the store and of what the chip did) in place of passive memory, and every tick's HBM signal counted at its ports' capacities summed (B3's capacity form).",
+   "Bandwidth.SecurityProofs.B3CapacityRO": "frozen (no-function,world-unlisted): As B3RO, in B3Capacity's capacity form.",
+   "Bandwidth.SecurityProofs.Mbw": "frozen (no-function,world-unlisted): As B3RO, for a strategy over the store, n bits z (uniform and independent of the store and the oracle) and the oracle, whose chip's view (its content at the window's start and what crosses into it in the window) determines z: the floor moves up by n, so an accept gives n <= reads - cert_bw at AuditRO's error (the console's Mbw, bandwidth additivity by counting, on a strategy's runs).",
+   "Bandwidth.SecurityProofs.MbwCapacity": "frozen (no-function,world-unlisted): As Mbw, in B3Capacity's capacity form: an accept gives n <= beta_HBM * T - cert_bw."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

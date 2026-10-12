@@ -19,7 +19,8 @@ every `z`, and `Interface.observe_eq` replays each `z`'s run. `audit_joint` is t
 
 `splits_of_links_joint` is `Causal.splits_of_links` for such a strategy, with passive memory and the oracle as a
 location over the pair `(store, z)`; `audit_links_joint` is `audit_joint` from the links, and `audit_capacity_joint`
-its capacity form (`n ≤ βm T − cert_bw`).
+its capacity form (`n ≤ βm T − cert_bw`): the guarantees `Bandwidth.Guarantees.Mbw` and `MbwCapacity`
+(`Security/Models/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
 
 namespace Bandwidth
@@ -307,5 +308,23 @@ theorem audit_capacity_joint (S : (Store N b × Bits n) × Oracle N b h → Actu
   nlinarith
 
 end SecurityProofs.Causal
+
+namespace SecurityProofs
+
+/-- **Mbw on a strategy's runs, from the links** (`Bandwidth.Guarantees.Mbw`). -/
+theorem Mbw : Guarantees.Mbw := by
+  intro L K _ N b h n S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports wd hpm Q hq hor h0 ζ hζ τ
+    s k lam
+  exact Causal.audit_links_joint S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports wd hpm Q hq hor
+    h0 ζ hζ τ s k lam
+
+/-- **Mbw in the capacity form** (`Bandwidth.Guarantees.MbwCapacity`). -/
+theorem MbwCapacity : Guarantees.MbwCapacity := by
+  intro L K _ N b h n S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports hhc Q hq hor h0 ζ hζ τ s k
+    lam
+  exact Causal.audit_capacity_joint S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports hhc Q hq hor
+    h0 ζ hζ τ s k lam
+
+end SecurityProofs
 
 end Bandwidth

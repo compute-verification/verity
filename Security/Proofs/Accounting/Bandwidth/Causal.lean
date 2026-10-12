@@ -2,6 +2,7 @@ import Mathlib
 import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Actual.Transducer
 import Definitions.Accounting.Actual.Source
+import Models.Accounting.Guarantees.Bandwidth.Causal
 
 /-!
 # B3 on a strategy causal from every tick: the chip as a `Ticked.Chip`
@@ -29,15 +30,16 @@ signal ignores the oracle, and `audit_ingress` reads HBM's widths as ingress fro
 
 `splits_of_links` derives `Splits` when every wire into the chip runs on a port of HBM, of the rest or of the oracle:
 the rest's ports from the model's `Alphabet` (their signals at a tick are one of `2^{βs}`, `βs` their capacities summed),
-and the other two from what the model has yet to state:
+and the other two from the chip's ports' constraints (`Security/Definitions/Accounting/Bandwidth/Causal.lean`):
 - `PassiveMemory`: HBM's ports deliver a function of the store and of what the chip did, at most `2^{wd}` signals for
   each such `a`, `wd` the width the chip's requests fix;
 - `OracleLocation`: the oracle's ports deliver a function of what the chip did and of the oracle's answers to the
   queries that fixes.
-`audit_links` and `audit_links_ro` are B3 from these. `audit_capacity` is the capacity form, with only `HearsChip` (HBM's
-ports deliver a function of the store and of what the chip did) in place of `PassiveMemory`: with HBM's links alphabets
-it gives passive memory at `βm` bits a tick (`passiveMemory_of_hearsChip`), and the bound holds at `βm T` in place of
-`∑ wd`.
+`audit_links` and `audit_links_ro` are B3 from these. `audit_capacity` and `audit_capacity_ro` are the capacity form,
+with only `HearsChip` (HBM's ports deliver a function of the store and of what the chip did) in place of
+`PassiveMemory`: with HBM's links alphabets it gives passive memory at `βm` bits a tick (`passiveMemory_of_hearsChip`),
+and the bound holds at `βm T` in place of `∑ wd`. The four are the guarantees `Bandwidth.Guarantees.B3`, `B3RO`,
+`B3Capacity` and `B3CapacityRO` (`Security/Models/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
 
 namespace Bandwidth
@@ -47,12 +49,6 @@ open Accounting Accounting.SecurityProofs.Actual
 open scoped ENNReal
 
 namespace Causal
-
-/-- What a location does during an interval, as `Actual.Run.acts` gives it. -/
-abbrev Acts (L : Type*) := Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ)
-
-/-- What crosses into a location at a tick, as `Actual.Run.crossing` gives it. -/
-abbrev Cross (L : Type*) := Set (ℕ × L × ℕ × L × ℕ × ℕ)
 
 /-- **The chip's links in the window**, at tick `u` after the chip did `a` since the window's start: HBM's reply has
 `width u a` bits, bit `j` being `hbm E u a j`; the rest's signal has bit `j` `side E O u a j`; the oracle answers the
@@ -188,37 +184,6 @@ def Splits {L : Type*} {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.R
 def reads {L : Type*} {N b h : ℕ} (I : Interface L N b h) (S : Store N b × Oracle N b h → Actual.Run L) (X : Finset L)
     (t₀ T : ℕ) (r : Store N b × Oracle N b h) : ℕ :=
   ∑ i ∈ Finset.range T, I.width (t₀ + i) ((S r).acts ↑X (Set.Ico t₀ (t₀ + i)))
-
-/-- **Passive memory** at HBM's ports over the window: what they deliver to the chip at each tick `u` is a function `G`
-of the strategy's input other than the oracle (the store, or the store and `z` for Mbw) and of what the chip did since
-`t₀`, and given what the chip did, `a`, takes at most `2^{wd u a}` values: a reply carries only its values, at the
-width the chip's requests fix. -/
-def PassiveMemory {L K ε : Type*} {N b h : ℕ} (S : ε × Oracle N b h → Actual.Run L)
-    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (hbmPorts : List (K × L))
-    (wd : ℕ → Acts L → ℕ) : Prop :=
-  ∃ G : ε → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ)),
-    (∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
-      G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))) ∧
-    ∀ u a, (Set.range fun E => G E u a).encard ≤ ((2 ^ wd u a : ℕ) : ℕ∞)
-
-/-- **HBM hears only the chip** at its ports over the window: what they deliver to the chip at each tick `u` is a
-function `G` of the strategy's input other than the oracle and of what the chip did since `t₀` (the capacity form's
-passive memory: no width). -/
-def HearsChip {L K ε : Type*} {N b h : ℕ} (S : ε × Oracle N b h → Actual.Run L)
-    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (hbmPorts : List (K × L)) : Prop :=
-  ∃ G : ε → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ)),
-    ∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
-      G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
-
-/-- **The oracle as a location** at its ports over the window: what they deliver to the chip at each tick `u` is a
-function of what the chip did since `t₀`, `a`, and of the oracle's answers to the queries `Q u a`. -/
-def OracleLocation {L K ε : Type*} {N b h : ℕ} (S : ε × Oracle N b h → Actual.Run L)
-    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (orPorts : List (K × L))
-    (Q : ℕ → Acts L → List (Fin N × Bits b)) : Prop :=
-  ∃ R : ℕ → Acts L → List (Bits h) → List (Set (ℕ × L × ℕ × ℕ)),
-    ∀ E O, ∀ i < T, portSignals S link orPorts (E, O) (t₀ + i) =
-      R (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
-        ((Q (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))).map O)
 
 end Causal
 
@@ -501,6 +466,57 @@ theorem audit_capacity (S : Store N b × Oracle N b h → Actual.Run L) (hc : Ca
   have := hx.2
   nlinarith
 
+/-- **B3 from the links, in the capacity form at `e = 0`**: as `audit_links_ro`, with HBM hearing only the chip in place
+of passive memory, and every tick's HBM signal counted at `βm` bits, its ports' capacities summed. -/
+theorem audit_capacity_ro (S : Store N b × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*} (β : K → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T M qt : ℕ)
+    (hM : ∀ r, (S r).mem X t₀ ≤ M) (hpre : ∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀)
+    (hbmPorts sidePorts orPorts : List (K × L))
+    (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X →
+      (link r g a, (S r).A.x g) ∈ hbmPorts ++ sidePorts ++ orPorts)
+    (hhc : HearsChip S link X t₀ T hbmPorts)
+    (Q : ℕ → Acts L → List (Fin N × Bits b)) (hq : ∀ u a, (Q u a).length ≤ qt)
+    (hor : OracleLocation S link X t₀ T orPorts Q)
+    (h0 : ∀ E O O' u, portSignals S link sidePorts (E, O) u = portSignals S link sidePorts (E, O') u)
+    (τ : Acts L → Fin N → Bits h) (s k lam : ℕ) :
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
+          (hbmPorts.map fun p => β p.1).sum * T + (M + 1) + (sidePorts.map fun p => β p.1).sum * T + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (((T * qt).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam := by
+  refine (pr_mono fun x hx => ⟨hx.1, ?_⟩).trans (audit_links_ro S hc β link hα X t₀ T M qt hM hpre hbmPorts
+    sidePorts orPorts hports _ (passiveMemory_of_hearsChip S β link hα X t₀ T hbmPorts hhc) Q hq hor h0 τ s k lam)
+  simp only [Finset.sum_const, Finset.card_range, smul_eq_mul]
+  have := hx.2
+  nlinarith
+
 end SecurityProofs.Causal
+
+namespace SecurityProofs
+
+/-- **B3, the bandwidth audit on a strategy's runs, from the links** (`Bandwidth.Guarantees.B3`). -/
+theorem B3 : Guarantees.B3 := by
+  intro L K _ N b h S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports wd hpm Q hq hor τ s k m lam
+  exact Causal.audit_links S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports wd hpm Q hq hor τ s k m
+    lam
+
+/-- **B3 at `e = 0`** (`Bandwidth.Guarantees.B3RO`). -/
+theorem B3RO : Guarantees.B3RO := by
+  intro L K _ N b h S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports wd hpm Q hq hor h0 τ s k lam
+  exact Causal.audit_links_ro S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports wd hpm Q hq hor h0
+    τ s k lam
+
+/-- **B3 in the capacity form** (`Bandwidth.Guarantees.B3Capacity`). -/
+theorem B3Capacity : Guarantees.B3Capacity := by
+  intro L K _ N b h S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports hhc Q hq hor τ s k m lam
+  exact Causal.audit_capacity S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports hhc Q hq hor τ s k
+    m lam
+
+/-- **B3 in the capacity form at `e = 0`** (`Bandwidth.Guarantees.B3CapacityRO`). -/
+theorem B3CapacityRO : Guarantees.B3CapacityRO := by
+  intro L K _ N b h S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports hhc Q hq hor h0 τ s k lam
+  exact Causal.audit_capacity_ro S hc β link hα X t₀ T M qt hM hpre hbmPorts sidePorts orPorts hports hhc Q hq hor h0
+    τ s k lam
+
+end SecurityProofs
 
 end Bandwidth
