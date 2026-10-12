@@ -19,11 +19,16 @@ words:
 - `attn`: a pass over every layer, each form at each split count, queued behind a spin, its best split count's time.
   Plain forms read the words as bf16 (their arithmetic's time doesn't depend on the values); encoded forms decode them.
   The read side's overhead a KV byte, in reads of the stored bytes at R, is (encoded - read) / read, and against the
-  same family's plain form (encoded - plain) / read; each is fitted over k as c k - h.
+  same family's plain form (encoded - plain) / read; each is fitted over k as c k - h. Against the floor: c(k) is the
+  floor's time in reads over k (the decode a byte a round, where the decode is compute-bound), and each encoded form's
+  h = c k - its overhead, the share of the decode hidden under the read. The floor is also timed at OCC_CTAS CTAs an
+  SM (fewer decoder warps), against the encoded forms' occupancy.
 
 `write`: the step's new tokens' encode (batch x layers x a token-layer's words) at each k: alone (queued behind a spin),
 at the compute-only rate, and beside the step's weight GEMM (cuBLASLt FP8 at the model's linears, every layer's own
-cold weights) on a second stream of lower priority, at several grids, against the GEMM alone.
+cold weights) on a second stream of lower priority, at several grids, against the GEMM alone; then with CARVEOUTS SMs
+taken from the GEMM (torch's SM carveout, cuBLASLt's SM count target) and the encode at CARVE_GRIDS CTAs a carved-out
+SM: the GEMM alone on the rest, and both.
 """
 from __future__ import annotations
 
@@ -55,6 +60,10 @@ SPLITS = (1, 2, 4, 8, 16)
 RTOL = {0: 1e-3, 3: 8e-3}  # the tensor-core form rounds P to bf16
 SPIN = 60_000_000
 WRITE_GRIDS = (0, 1, 2, 4)  # the encode's grid beside the GEMM: a thread a word (0), or this many CTAs an SM
+CARVEOUTS = (24, 47, 94)  # SMs taken from the GEMM (cuBLASLt's SM count target) for the encode beside it
+CARVE_GRIDS = (1, 2, 4, 6)  # the encode's CTAs a carved-out SM
+OCC_CTAS = (2, 3, 4)  # the read-and-decode's floor at this many CTAs an SM
+FLOOR_CTA_WARPS = 4  # kv.cu's WPB / 32
 
 
 def shape(lib: B.Lib) -> dict:
@@ -159,6 +168,36 @@ def floor_gate(lib: B.Lib, torch, store, n_words: int, k: int, grids, st) -> lis
     return [g for g in grids if checksum(g) != want]
 
 
+def floor_occ(lib: B.Lib, torch, store, n_words: int, k: int, sms: int, reps: int, r: float, st) -> dict:
+    """The read-and-decode at OCC_CTAS CTAs an SM, each checksum-gated against one word a thread's; r the read in
+    bytes/s."""
+    v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
+    lib.so.kv_decode_occ.argtypes = [v, q, q, i, i, v, i, v, v]
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    xr.zero_()
+    lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, 0, B.ptr(xr), st)
+    torch.cuda.synchronize()
+    want = int(xr.item()) & 0xFFFFFFFF
+    out = {}
+    for c in OCC_CTAS:
+        got, best = ctypes.c_int(0), None
+        for mult in (1, 2, 4):
+            def run():
+                lib.call("kv_decode_occ", B.ptr(store), n_words, 0, k, sms * c * mult, B.ptr(xr), c, ctypes.byref(got),
+                         st)
+            xr.zero_()
+            run()
+            torch.cuda.synchronize()
+            if int(xr.item()) & 0xFFFFFFFF != want:
+                return {"ok": False, "ctas": c, "grid_per_sm": c * mult}
+            ts = B.timed(torch, run, reps)
+            if best is None or statistics.median(ts) < best[1]:
+                best = (mult, statistics.median(ts), ts)
+        out[c] = {"ctas_per_sm": got.value, "warps_per_sm": got.value * FLOOR_CTA_WARPS, "grid_per_sm": c * best[0],
+                  "s": best[1], "times_s": best[2], "over_read": best[1] * r / store.numel()}
+    return {"ok": True, "by_ctas": out}
+
+
 def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sms: int, log) -> dict:
     sh, f = shape(lib), lib.field
     heads, layers, tle = sh["heads"], m["layers"], sh["tle"]
@@ -186,10 +225,17 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                          reps)
             if best is None or statistics.median(ts) < best[1]:
                 best = (mult, statistics.median(ts), ts)
+        occ = floor_occ(lib, torch, store, n_words, k, sms, reps, r, st)
         cell["floor"][k] = {"grid_per_sm": best[0], "s": best[1], "times_s": best[2],
-                            "over_read": best[1] * r / store.numel()}
+                            "over_read": best[1] * r / store.numel(), "occupancy": occ}
+        if not occ["ok"]:
+            cell["floor"][k]["ok"] = False
+            log(f"exhaust {lib.name} B={b} ctx={ctx} k={k}: read-and-decode checksum FAIL at {occ['ctas']} CTAs an SM")
+        else:
+            log(f"exhaust {lib.name} B={b} ctx={ctx} k={k}: read-and-decode by decoder warps an SM, " + ", ".join(
+                f"{v['warps_per_sm']} {v['over_read']:.3f}x" for v in occ["by_ctas"].values()))
     log(f"exhaust {lib.name} B={b} ctx={ctx}: read-and-decode " + ", ".join(
-        f"k={k} {v['over_read']:.3f}x the read" for k, v in cell["floor"].items() if "s" in v))
+        f"k={k} {v['over_read']:.3f}x the read" for k, v in cell["floor"].items() if v.get("ok", True)))
     q = (torch.randn(b, heads, K.HEAD_DIM, device="cuda") * 0.1).to(torch.bfloat16).contiguous()
     o = torch.empty(b, heads, K.HEAD_DIM, dtype=torch.float32, device="cuda")
     part = part_buffer(torch, sh, b)
@@ -219,10 +265,13 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
         for k, row in fe.items():
             row["overhead_vs_read"] = row["over_read"] - 1.0
             row["overhead_vs_plain"] = (row["s"] - fp["s"]) / t_read
+            if cell["floor"].get(k, {}).get("ok", True) and k in cell["floor"]:
+                row["h"] = cell["floor"][k]["over_read"] - row["overhead_vs_read"]
         fe["fit_vs_read"] = fit(ks, [fe[k]["overhead_vs_read"] for k in ks])
         fe["fit_vs_plain"] = fit(ks, [fe[k]["overhead_vs_plain"] for k in ks])
     ks_f = [k for k, v in cell["floor"].items() if v.get("ok", True)]
     cell["ok"] = len(ks_f) == len(cell["floor"])
+    cell["c"] = {k: cell["floor"][k]["over_read"] / k for k in ks_f}
     cell["floor_fit"] = fit(ks_f, [cell["floor"][k]["over_read"] - 1.0 for k in ks_f])
     log(f"exhaust {lib.name} B={b} ctx={ctx}: overhead a KV byte over the read, " + "; ".join(
         f"{FORMS[fm]} " + ", ".join(f"k={k} {cell['forms'][FORMS[fm]][k]['overhead_vs_read']:+.3f}" for k in ks)
@@ -305,12 +354,33 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
             kr["best_grid"] = best
             kr["alone_s"] = min(v["alone_s"] for v in kr["grids"].values())
             kr["exposed_s"] = kr["grids"][best]["with_gemm_s"] - t_gemm
+            kr["carveouts"] = {}
+            for co in CARVEOUTS:
+                torch._C._set_sm_carveout_experimental(co)
+                try:
+                    both(True, None, k)
+                    t_gc = statistics.median([both(True, None, k) for _ in range(reps)])
+                    cr = {"gemm_s": t_gc, "grids": {}}
+                    for gr in CARVE_GRIDS:
+                        t_both = statistics.median([both(True, co * gr, k) for _ in range(reps)])
+                        cr["grids"][gr] = {"grid": co * gr, "with_gemm_s": t_both,
+                                           "hidden_share": (t_gemm + kr["alone_s"] - t_both) / kr["alone_s"]}
+                finally:
+                    torch._C._set_sm_carveout_experimental(None)
+                cr["best_grid"] = min(cr["grids"], key=lambda g_: cr["grids"][g_]["with_gemm_s"])
+                cr["exposed_s"] = cr["grids"][cr["best_grid"]]["with_gemm_s"] - t_gemm
+                kr["carveouts"][co] = cr
+            kr["exposed_carved_s"] = min(v["exposed_s"] for v in kr["carveouts"].values())
             row["k"][k] = kr
             log(f"write {lib.name} B={b} k={k}: {n * f.word_bytes / 1e6:.1f} MB; encode alone {kr['alone_s'] * 1e3:.2f} ms "
                 f"(compute-only rate {kr['sm_s'] * 1e3:.2f} ms); GEMM alone {t_gemm * 1e3:.2f} ms "
                 f"({row['gemm_gbps']:.0f} GB/s); beside it " + ", ".join(
                     f"grid {g_}: +{(v['with_gemm_s'] - t_gemm) * 1e3:.2f} ms ({v['hidden_share']:.0%} hidden)"
                     for g_, v in kr["grids"].items()))
+            log(f"write {lib.name} B={b} k={k}: with SMs carved out of the GEMM, " + "; ".join(
+                f"{co} SMs: GEMM {cr['gemm_s'] * 1e3:.2f} ms, both {cr['grids'][cr['best_grid']]['with_gemm_s'] * 1e3:.2f}"
+                f" ms at {cr['best_grid']} CTAs an SM (+{cr['exposed_s'] * 1e3:.2f} ms over the whole GEMM, "
+                f"{cr['grids'][cr['best_grid']]['hidden_share']:.0%} hidden)" for co, cr in kr["carveouts"].items()))
         out[b] = row
         del xs, words, y
     del ws
@@ -336,7 +406,8 @@ def model_check(res: dict, lib_name: str, m: dict) -> dict:
             out["rows"].append({"batch": b, "context": ctx, "k": k, "f_kv": f_kv, "step_read_s": step_read,
                                 "predicted": f_kv * k * x1 / ctx if x1 else None,
                                 "measured_alone": kr["alone_s"] / step_read,
-                                "measured_exposed": kr["exposed_s"] / step_read})
+                                "measured_exposed": kr["exposed_s"] / step_read,
+                                "measured_exposed_carved": kr["exposed_carved_s"] / step_read})
     return out
 
 
@@ -444,7 +515,8 @@ def main() -> int:
             for row in lr["model_check"]["rows"]:
                 log(f"model {lib.name} B={row['batch']} ctx={row['context']} k={row['k']}: f_KV k x1/ctx "
                     f"{row['predicted']:.4f} against the encode alone {row['measured_alone']:.4f} and exposed beside "
-                    f"the GEMM {row['measured_exposed']:.4f} (reads of the step's bytes)")
+                    f"the GEMM {row['measured_exposed']:.4f}, {row['measured_exposed_carved']:.4f} with SMs carved out "
+                    "(reads of the step's bytes)")
     (out_dir / "kv-exhaust.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, libs, out_dir)
     log("done" if res["ok"] else "FAILED")

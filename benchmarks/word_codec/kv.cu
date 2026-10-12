@@ -1203,6 +1203,25 @@ int kv_decode(const void *in, void *out, uint64_t n, uint64_t base, int k, int g
   return launched();
 }
 
+// kv_decode at most ctas CTAs an SM (padded with dynamic shared memory the kernel never reads): the read-and-decode
+// at a given decoder occupancy. *got is the CTAs an SM the occupancy calculator grants.
+int kv_decode_occ(const void *in, uint64_t n, uint64_t base, int k, int grid, unsigned long long *xr, int ctas,
+                  int *got, cudaStream_t s) {
+  if (k < 1 || k > kv::KMAX || ctas < 1 || grid < 1) return -1;
+  int dev, per_sm, reserved;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&per_sm, cudaDevAttrMaxSharedMemoryPerMultiprocessor, dev);
+  cudaDeviceGetAttribute(&reserved, cudaDevAttrReservedSharedMemoryPerBlock, dev);
+  cudaFuncAttributes fa;
+  cudaFuncGetAttributes(&fa, kv::decode_kernel);
+  const int smem = (per_sm / ctas - reserved - (int)fa.sharedSizeBytes) / 128 * 128;
+  if (smem < 0) return -1;
+  cudaFuncSetAttribute(kv::decode_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(got, kv::decode_kernel, kv::WPB, smem);
+  kv::decode_kernel<<<grid, kv::WPB, smem, s>>>((const uint32_t *)in, nullptr, n, base, k, xr);
+  return launched();
+}
+
 int kv_read(const void *store, uint64_t bytes, unsigned long long *xr, int grid, cudaStream_t s) {
   kv::read_kernel<<<grid, 256, 0, s>>>((const uint4 *)store, bytes / 16, xr);
   return launched();
