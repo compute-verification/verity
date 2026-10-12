@@ -82,13 +82,7 @@ theorem holoTableCL_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     simp only [holoSteps, List.append_assoc]
   rw [e]
   unfold holoTableCL
-  first
-  | exact ⟨_, playsT_recv_bind (playsT_draw_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
-      by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩⟩
-  | exact ⟨_, playsT_recv_bind (playsT_draw_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
-      by simp only [hv.1, hv.2.1, hv.2.2, Bool.true_and, decide_eq_true_eq]; exact hok⟩
-  | exact ⟨_, .send cap₀ (.coin pts (FlockVBridge.InnerAccepts.playsT_bind hint
-        (FlockVBridge.InnerAccepts.playsT_bind hrp (.send os (.ret _))))),
-      by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩⟩
+  exact ⟨_, playsT_recv_bind (playsT_draw_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
+    by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩⟩
 
 end FlockC3.Compose
