@@ -9166,7 +9166,7 @@
    ]
   },
   "Flock.Opening": {
-   "digest": "63f7cf1e3f5f8533392628015a10189af8c3b3e7cbdb55f371f78073c36707c8",
+   "digest": "a26e9c07defc927a95f0248ff4254c3223cddc33cb6776929c464f9e4cd648b8",
    "definitions": {
     "Flock.Switched": "ab51335d203312040bc05912a91f459319c734c08662a19e2d93f83e9be9f98c",
     "Flock.Switched.gamma": "a5ab9b996012f030de79f33fdfffa47fb701d9cdd706c7ecb70a7e394acef4ca",
@@ -9176,7 +9176,7 @@
     "Flock.basis": "ad0a979d975bb1072b95ee9e4c6daef5f09e4d29a5ce1fb2e43b43e9900aacd6",
     "Flock.basisForClaim": "be70df075c2d30d599136eded3db07fb38ea9f413620a0bbf5fcb6fb51f3c179",
     "Flock.mulColumns": "fb4f3f5d3674f617039ecbaf6b0f7a1b6a67a16b4eb67c8dc409e83b92eae6ef",
-    "Flock.ringSwitch": "87fa68afdd557e70b0e440edf5a58b49207c15bd8a8c6eb3013348a2af42e2a8"
+    "Flock.ringSwitch": "22d2cb107109365c4d8496a90b3d782f016cac1568bc5a0e0c73b4274da6ac8a"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -19426,7 +19426,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "VStar.Parts": {
-   "digest": "7a0c750ec7b4c0cfc319ac2670784f60d3b6fc00f29f2b76497257f107db9585",
+   "digest": "b63e8fbd7976118f61d561dea5920e5fada99d70002d6cca2ed3041bd5ec84ef",
    "definitions": {
     "VStar.MAX_LONE_SLOTS": "a7960e5a1459bccc9608de6e5dd0a46d717cbab6daa85fba0dfda7710a596dd9",
     "VStar.MAX_REGIONS": "f7d26ff7ba89d9b94e279fc032f65a4f9b023fff56301635fc251c5603673770",
@@ -19435,7 +19435,7 @@
     "VStar.Part.S": "8e50cf67eaa2c657dc0e8e5b236a5bc339878d0f4ec124a7398656ee8ffd36ce",
     "VStar.instInhabitedPart": "e215d87b2f9955d3c1d7abd933aab7d2565dfebf0b840db02a37ed223f6fbbdf",
     "VStar.instInhabitedPart.default": "7e2dd574d56b8214b3c154f5cdfac76851187843ea96a7b4609d753eebe4d0d2",
-    "VStar.parts": "7bba29fd478cb1f408dea084e4cfd9a88aa0721a205be4a97ba7fd26df22013e",
+    "VStar.parts": "808e4bb82f2fb5c4296d7635c699ca21e51d92cc0d1e620a9a6ad7be919ceedc",
     "VStar.regions": "d3e6d856b09e45cf9ce725eda871f594bef063a7557f844032c01c5b826b1590",
     "VStar.slots": "d5f486d42a0dd4b18e887e8e87610de9f7bfb3753ca18f48c182809f49adcc4d",
     "VStar.sortDedup": "4853310772e8f8c5eee009c13fa239720ca67086fedd3606cf04d40abe4bb872",
