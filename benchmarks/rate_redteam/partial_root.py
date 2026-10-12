@@ -6,7 +6,7 @@ y = H·2^x + u with u < 2^x: then c·u + w ≡ r (mod p) with c = 2H·2^x, r = �
 For x < b/3 that linear congruence has one small solution, which Gauss reduction of a 2-dimensional lattice and
 Babai rounding find. `rate-codec-work` prices rebuilding those x bits at x/b of a root.
 
-`uv run --no-project --with gmpy2 --with python-flint python partial_root.py [WORDS]` prints one JSON line a
+`uv run --no-project --with gmpy2 --with python-flint python partial_root.py [WORDS [FIELD ...]]` prints one JSON line a
 (field, x): the share of words completed and checked against ρ, the reduction's iteration count, and the time of
 the completion against a root (both in C through gmpy2 / FLINT, the completion's control flow in Python).
 """
@@ -22,7 +22,8 @@ import flint
 import gmpy2
 from gmpy2 import mpz
 
-FIELDS = {"p512": (512, 569), "p768": (768, 825), "p1536": (1536, 3453), "p2048": (2048, 1557)}
+FIELDS = {"p512": (512, 569), "p640": (640, 305), "p768": (768, 825), "p1024": (1024, 105), "p1536": (1536, 3453),
+          "p2048": (2048, 1557)}
 
 
 def rho(a: mpz, p: mpz, e: mpz) -> mpz:
@@ -80,9 +81,10 @@ def complete(h: mpz, x: int, a: mpz, p: mpz, reducer: str) -> tuple[mpz | None, 
     return None, iters
 
 
-def main(words: int) -> None:
+def main(words: int, fields: list[str]) -> None:
     rng = random.Random(1)
-    for name, (n, cc) in FIELDS.items():
+    for name in fields:
+        n, cc = FIELDS[name]
         p = mpz((1 << n) - cc)
         e = (p + 1) // 4
         batch = [mpz(rng.randrange(int(p))) for _ in range(words)]
@@ -107,4 +109,4 @@ def main(words: int) -> None:
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 200)
+    main(int(sys.argv[1]) if len(sys.argv) > 1 else 200, sys.argv[2:] or list(FIELDS))

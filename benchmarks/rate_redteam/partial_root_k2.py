@@ -6,7 +6,7 @@ monic quartic f(u) ≡ 0 (mod p). Linearizing z_i = u^i (i = 1..4, z_i < 2^(ix))
 four small unknowns, a 4-dimensional lattice with a closest-vector target, which LLL and Babai rounding solve for
 x < b/10. `rate-codec-work` per bit prices x bits of a k = 2 word at 2x/b of a root.
 
-`uv run --no-project --with gmpy2 --with python-flint python partial_root_k2.py [WORDS]` prints one JSON line a
+`uv run --no-project --with gmpy2 --with python-flint python partial_root_k2.py [WORDS [FIELD ...]]` prints one JSON line a
 (field, x): words completed and checked against the encode, and the completion's time over one root.
 """
 
@@ -55,11 +55,10 @@ def complete(h: mpz, x: int, a: mpz, cp: mpz, p: mpz) -> mpz | None:
     return None
 
 
-def main(words: int) -> None:
+def main(words: int, fields: list[str]) -> None:
     rng = random.Random(2)
-    for name, (n, cc) in FIELDS.items():
-        if n < 1536:
-            continue
+    for name in fields:
+        n, cc = FIELDS[name]
         p = mpz((1 << n) - cc)
         e = (p + 1) // 4
         batch = [(mpz(rng.randrange(int(p))), mpz(rng.randrange(int(p)))) for _ in range(words)]
@@ -99,4 +98,4 @@ def main(words: int) -> None:
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 100)
+    main(int(sys.argv[1]) if len(sys.argv) > 1 else 100, sys.argv[2:] or list(FIELDS))
