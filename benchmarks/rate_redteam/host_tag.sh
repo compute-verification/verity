@@ -8,14 +8,19 @@ set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 D=benchmarks/rate_redteam
 PY=
-for c in python3 /workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python; do
-  if command -v "$c" >/dev/null && "$c" -c 'import blake3' 2>/dev/null; then PY=$c; break; fi
+for c in python3 /workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python \
+         /workspace/*/.venv/bin/python /workspace/*/*/.venv/bin/python "$HOME"/*/.venv/bin/python; do
+  if [ -x "$(command -v "$c")" ] && "$c" -c 'import blake3' 2>/dev/null; then PY=$c; break; fi
 done
 if [ -z "$PY" ]; then
+  UV=$(command -v uv || ls "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv" 2>/dev/null | head -1)
+  [ -n "$UV" ] || { echo "no Python with blake3 and no uv"; exit 6; }
   T=$(mktemp -d /tmp/rate-redteam-py.XXXXXX); trap 'rm -rf "$T"' EXIT
-  python3 -m pip install -q --target "$T" blake3 > "$O/pip.log" 2>&1 || { tail -20 "$O/pip.log"; exit 6; }
-  export PYTHONPATH="$T"; PY=python3
+  { "$UV" venv -q "$T/v" && "$UV" pip install -q --python "$T/v/bin/python" blake3; } > "$O/uv.log" 2>&1 \
+    || { tail -20 "$O/uv.log"; exit 6; }
+  PY=$T/v/bin/python
 fi
+echo "python: $PY" > "$O/python.txt"
 lscpu > "$O/lscpu.txt"
 "$PY" $D/host_tag.py gate > "$O/gate.log" 2>&1 || { cat "$O/gate.log"; exit 2; }
 "$PY" $D/host_tag.py bench --procs 1 12 24 48 --out "$O/host-tag.json" > "$O/bench.log" 2>&1 || exit 3
