@@ -3,7 +3,7 @@ held as p512 words (`wt.cu`: the fused decode, ro-sketch-blake3/v0 at k_s = 16 a
 and tree), and a bf16 KV cache that fills the rest of the GPU's memory at `--batch` sequences, held as p512 words and
 decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
 `kv_append`, all layers in one launch on a second stream, beside the step). The same step on plain data (each linear's
-fastest native FP8 GEMM, plain attention, a plain append) is its denominator, and a native pass (a read of every byte
+fastest native FP8 GEMM, the faster plain attention form, a plain append) is its denominator, and a native pass (a read of every byte
 the step reads) its unit. Writes `step.json` and `step.log` under `--out`, and in a `research run` its `result.json`.
 
 Nothing is timed before its gate passed:
@@ -12,9 +12,9 @@ Nothing is timed before its gate passed:
 - each linear of the model at M = batch (`bench.gemm_case`): the fused kernel's partial sums equal the plain kernel's
   bit for bit at every k and config, the plain kernel's within FP32 rounding of torch's, and every sketch vector, tag,
   leaf and root; its per-linear timings pick the configs the step runs;
-- attention at the step's batch × context (two layers): `kv_attn` over the encoded cache, in both forms and at every
-  split count tried, equals the plain form bit for bit at each k, and the plain form is within `kv_bench.ATTN_RTOL` of
-  float64 attention (on a few sequences);
+- attention at the step's batch × context (two layers): `kv_attn` over the encoded cache, in each encoded form (the
+  CUDA-core forms 1 and 2, the tensor-core forms 4 and 5) and at every split count tried, equals its plain form (0 or
+  3) bit for bit at each k, and each plain form is within RTOL of float64 attention (on a few sequences);
 - the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words.
 
 The step itself runs on random stored words (the decode, the sketch and the MMAs take the same time on any words), so
@@ -58,6 +58,10 @@ TINY = (2, {"qkv": (384, 512), "o": (512, 512), "gate_up": (1024, 512), "down": 
 ORDER = ("qkv", "o", "gate_up", "down")          # a layer's linears; attention runs after qkv
 PLAIN_CFGS = "4x4,8x8"
 MODEL_TERMS = {"c": (0.54, 0.59), "h": 0.30, "x1": 230.0, "x1_pooled": 175.0, "tau": 0.04}
+HEADS = {"8b": 32, "70b": 64}    # query heads; kv.cu's build (KV_QHEADS) must match
+FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3}      # each encoded form's output equals its plain form's bit for bit
+RTOL = {0: KB.ATTN_RTOL, 3: 8e-3}        # the tensor-core form rounds P to bf16
 
 
 def model_shapes(name: str):
@@ -69,6 +73,23 @@ def splits_for(b: int, ctx: int, tt: int, sms: int) -> list[int]:
     """kv_bench's split counts for a cell: batch × splits about 1, 2, 4 or 8 CTAs an SM, a split at least 1 or 8 tiles."""
     return sorted({max(1, min(-(-ctx // (t * tt)), -(-c * sms // b)))
                    for c in KB.ATTN_CTAS_PER_SM for t in KB.ATTN_SPLIT_TILES})
+
+
+def forms_of(sh: dict) -> tuple[list[int], list[int]]:
+    """kv_attn's plain and encoded forms in this build (the tensor-core ones where the field's words tile a head)."""
+    return ([0, 3], [1, 2, 4, 5]) if sh["mma"] else ([0], [1, 2])
+
+
+def split_cands(sh: dict, b: int, ctx: int, sms: int) -> dict[int, list[int]]:
+    """Per form the split counts tried: a CUDA-core CTA is a split of a sequence (all KV heads, tiles of TT tokens), a
+    tensor-core CTA a split of one KV head (tiles of MT tokens)."""
+    fma = splits_for(b, ctx, sh["tt"], sms)
+    mma = splits_for(b * sh["kv_heads"], ctx, sh["mt"], sms) if sh["mma"] else []
+    return {fm: (mma if fm >= 3 else fma) for fm in sum(forms_of(sh), [])}
+
+
+def part_floats(sh: dict, b: int, cands: dict[int, list[int]]) -> int:
+    return b * max(sp * (sh["mw"] if fm >= 3 else 1) for fm, c in cands.items() for sp in c) * sh["part"]
 
 
 # --- gates -------------------------------------------------------------------------------------------------------------
@@ -106,23 +127,26 @@ def gate_append(kv, torch, ks, log) -> dict:
     return {"ok": ok, "k": out}
 
 
-def gate_attention(kv, torch, b: int, ctx: int, ks, splits, sms: int, log) -> dict:
+def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
     """kv_attn at the step's batch × context over two layers (the step's index rule, layer 1): each encoded form equals
-    the plain form bit for bit at each k and split count, and the plain form is within ATTN_RTOL of float64 attention on
-    the first few sequences."""
+    its plain form (PLAIN_OF) bit for bit at each k and split count, and each plain form is within RTOL of float64
+    attention on the first few sequences."""
     sh = KB.attn_shape(kv)
     tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
     if tle != tl:
         raise RuntimeError(f"{kv.name}: a token-layer's words take {tle} bytes, not {tl}: the step wants p512")
+    plains, encs = forms_of(sh)
+    cands = split_cands(sh, b, ctx, sms)
     layers, layer, nref = 2, 1, min(b, 4)
     st = KB.stream(torch)
     g = torch.Generator(device="cuda").manual_seed(b * 7919 + ctx)
     plain = torch.randn(b * ctx * layers * tl // 2, dtype=torch.bfloat16, device="cuda", generator=g)
     scale = math.log2(math.e) / math.sqrt(K.HEAD_DIM)
     q = (torch.randn(b, sh["heads"], K.HEAD_DIM, device="cuda", generator=g) * scale).to(torch.bfloat16).contiguous()
-    part = torch.empty(b * max(splits) * sh["part"], dtype=torch.float32, device="cuda")
-    o_p = torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
-    o_e = torch.empty_like(o_p)
+    part = torch.empty(part_floats(sh, b, cands), dtype=torch.float32, device="cuda")
+    o_p = {(fm, sp): torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
+           for fm in plains for sp in cands[fm]}
+    o_e = torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
 
     def run(store, form, o, sp, k):
         kv.call("kv_attn", KB.ptr(store), form, KB.ptr(q), KB.ptr(o), KB.ptr(part), b, ctx, layers, layer, sp, k, st)
@@ -134,11 +158,12 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, splits, sms: int, log) -> di
     p = torch.exp2(s - s.amax(-1, keepdim=True))
     ref = torch.einsum("bgqt,btgd->bgqd", p / p.sum(-1, keepdim=True), vv).reshape(nref, sh["heads"], K.HEAD_DIM)
     del kk, vv, s, p
-    rel = 0.0
-    for sp in splits:
-        run(plain, 0, o_p, sp, 1)
+    rel = {FORMS[fm]: 0.0 for fm in plains}
+    for (fm, sp), o in o_p.items():
+        o.fill_(float("nan"))
+        run(plain, fm, o, sp, 1)
         torch.cuda.synchronize()
-        rel = max(rel, float((o_p[:nref].double() - ref).abs().max() / ref.abs().max()))
+        rel[FORMS[fm]] = max(rel[FORMS[fm]], float((o[:nref].double() - ref).abs().max() / ref.abs().max()))
     del ref
     enc = torch.empty_like(plain.view(torch.uint8))
     n_words = enc.numel() // kv.field.word_bytes
@@ -146,19 +171,20 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, splits, sms: int, log) -> di
     for k in ks:
         KB.set_key(kv, K.key(kv.field.name, KB.SEED, k))
         kv.call("kv_encode", KB.ptr(plain), KB.ptr(enc), n_words, 0, k, sms * 8, st)
-        for sp in splits:
-            run(plain, 0, o_p, sp, k)
-            for form in KB.ATTN_FORMS:
+        for form in encs:
+            for sp in cands[form]:
                 o_e.fill_(float("nan"))
                 run(enc, form, o_e, sp, k)
                 torch.cuda.synchronize()
-                equal[f"k{k}_form{form}_sp{sp}"] = bool(torch.equal(o_p, o_e))
-    ok = rel <= KB.ATTN_RTOL and all(equal.values())
-    log(f"gate attention B={b} ctx={ctx}: {'ok' if ok else 'FAIL'} (plain rel err {rel:.1e} on {nref} sequences; "
-        f"{sum(equal.values())}/{len(equal)} encoded = plain, k {list(ks)}, forms {list(KB.ATTN_FORMS)}, splits {splits})")
+                equal[f"k{k}_form{form}_sp{sp}"] = bool(torch.equal(o_p[(PLAIN_OF[form], sp)], o_e))
+    ok = all(rel[FORMS[fm]] <= RTOL[fm] for fm in plains) and all(equal.values())
+    log(f"gate attention B={b} ctx={ctx}: {'ok' if ok else 'FAIL'} (plain rel err "
+        + ", ".join(f"{n} {v:.1e}" for n, v in rel.items()) + f" on {nref} sequences; {sum(equal.values())}/"
+        f"{len(equal)} encoded = their plain form, k {list(ks)}, forms {encs}, splits "
+        + ", ".join(f"{fm}: {c}" for fm, c in cands.items()) + ")")
     del plain, enc, q, part, o_p, o_e, kvl
     torch.cuda.empty_cache()
-    return {"ok": ok, "rel_err": rel, "equal": equal, "splits": splits, "layers": layers}
+    return {"ok": ok, "rel_err": rel, "equal": equal, "splits": cands, "layers": layers}
 
 
 def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log) -> tuple[dict, list, list]:
@@ -191,8 +217,10 @@ def pick(g: dict, b: int, ks, fused, plain) -> dict:
 class Step:
     """The step's buffers and its launches, each enqueued on the current stream (and the append's stream)."""
 
-    def __init__(self, wt, kv, torch, model: str, b: int, ctx: int, ks, picks: dict, sketch_t: int, log) -> None:
+    def __init__(self, wt, kv, torch, model: str, b: int, m: int, ctx: int, ks, picks: dict, sketch_t: int,
+                 log) -> None:
         self.wt, self.kv, self.torch, self.b, self.ctx, self.ks, self.T = wt, kv, torch, b, ctx, list(ks), sketch_t
+        self.m = m
         self.layers, shapes, lm = model_shapes(model)
         self.shapes = {**shapes, "lm_head": lm}
         self.picks = picks
@@ -207,22 +235,22 @@ class Step:
             o += n * kd
         self.w_bytes = o
         self.kv_bytes = b * ctx * self.layers * K.TOKEN_LAYER_BYTES
-        log(f"step: {model}, B={b}, ctx={ctx}: weights {self.w_bytes / 1e9:.2f} GB, KV {self.kv_bytes / 1e9:.2f} GB")
+        log(f"step: {model}, B={b} (linears at M={m}), ctx={ctx}: weights {self.w_bytes / 1e9:.2f} GB, KV {self.kv_bytes / 1e9:.2f} GB")
         self.W = torch.empty(self.w_bytes, dtype=torch.uint8, device="cuda")
         self.W.random_(0, 256)
         self.KV = torch.empty(self.kv_bytes, dtype=torch.uint8, device="cuda")
         for c in torch.split(self.KV, 1 << 33):
             c.random_(0, 256)
         g = torch.Generator(device="cuda").manual_seed(17)
-        self.x = {kd: torch.randn(b, kd, device="cuda", generator=g).to(torch.float8_e4m3fn)
+        self.x = {kd: torch.randn(m, kd, device="cuda", generator=g).to(torch.float8_e4m3fn)
                   for kd in {kd for _, kd in self.shapes.values()}}
-        self.mpad = 16 * -(-b // 16)
+        self.mpad = 16 * -(-m // 16)
         self.xc = {}
         for kd, x in self.x.items():
             xc = torch.zeros(self.mpad, kd, device="cuda").to(torch.float8_e4m3fn)
-            xc[:b] = x
+            xc[:m] = x
             self.xc[kd] = xc
-        self.y = {n: torch.zeros(b, n, dtype=torch.float32, device="cuda") for n, _ in self.shapes.values()}
+        self.y = {n: torch.zeros(m, n, dtype=torch.float32, device="cuda") for n, _ in self.shapes.values()}
         self.one = torch.ones((), device="cuda")
         self.wv = {}
         for (l, name), o in self.off.items():
@@ -232,15 +260,15 @@ class Step:
         self.q = (torch.randn(b, self.sh["heads"], K.HEAD_DIM, device="cuda", generator=g) * scale).to(
             torch.bfloat16).contiguous()
         self.o_attn = torch.empty(b, self.sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
-        self.split_cands = splits_for(b, ctx, self.sh["tt"], torch.cuda.get_device_properties(0).multi_processor_count)
-        self.part = torch.empty(b * max(self.split_cands) * self.sh["part"], dtype=torch.float32, device="cuda")
+        self.split_cands = split_cands(self.sh, b, ctx, torch.cuda.get_device_properties(0).multi_processor_count)
+        self.part = torch.empty(part_floats(self.sh, b, self.split_cands), dtype=torch.float32, device="cuda")
         self.new_all = KB.random_words(torch, b * self.layers * self.tlw, f, 21)
         self.new_one = KB.random_words(torch, b * self.tlw, f, 22)
         self.xr = torch.zeros(1, dtype=torch.int64, device="cuda")
         self.s2 = torch.cuda.Stream()
         self.ev = [torch.cuda.Event() for _ in range(self.layers + 2)]
-        self.splits = {}          # (form, k) -> split count; form 0 plain
-        self.form = {}            # k -> the encoded attention form the step runs
+        self.splits = {}          # (form, k) -> split count; k = 0 the plain forms
+        self.form = {}            # k -> the attention form the step runs (k = 0: the faster plain form)
         self._launch_params()
 
     # launch parameters --------------------------------------------------------------------------------------------
@@ -259,7 +287,7 @@ class Step:
                 for var in ("sketch", "untagged"):
                     cfg = tuple(self.picks[name]["k"][k][var])
                     launched = ctypes.c_int(0)
-                    wt.call("wt_fused_sketch", k, None, None, None, self.b, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
+                    wt.call("wt_fused_sketch", k, None, None, None, self.m, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
                             None, 0, cfg[3], None, None, self.T, ctypes.byref(launched), st)
                     gr = launched.value // (kd // 512)
                     steps = BW.tsteps(wt, torch, self.keys[k], cfg[0], gr, kd // 512)
@@ -279,7 +307,7 @@ class Step:
             if nat != "cublas":
                 c, s = (int(v) for v in nat[len("plain_c"):].split("s"))
                 launched = ctypes.c_int(0)
-                wt.call("wt_gemm", 0, None, None, None, self.b, n, kd, 0, c, s, 0, 0, None, ctypes.byref(launched), st)
+                wt.call("wt_gemm", 0, None, None, None, self.m, n, kd, 0, c, s, 0, 0, None, ctypes.byref(launched), st)
                 self.plain_prm[name] = (c, s, launched.value // (kd // 512))
 
     # launches -----------------------------------------------------------------------------------------------------
@@ -296,7 +324,7 @@ class Step:
         y = self.y[n]
         y.zero_()
         rc = self.wt.so.wt_gemm(0, self.W.data_ptr() + self.off[(l, name)], self.x[kd].data_ptr(), y.data_ptr(),
-                                self.b, n, kd, 0, c, s, gr, 0, self.xr.data_ptr(), None, BW.stream(self.torch))
+                                self.m, n, kd, 0, c, s, gr, 0, self.xr.data_ptr(), None, BW.stream(self.torch))
         if rc:
             raise RuntimeError(f"wt_gemm {name}: error {rc}")
 
@@ -308,7 +336,7 @@ class Step:
         o = self.off[(l, name)]
         to = self.tag_off[(k, l, name)]
         rc = self.wt.so.wt_fused_sketch(
-            k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.b, n, kd, o // self.wt.s, 0, cfg[0],
+            k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
             cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + 32 * to if sketch else None,
             BW.TAG_BASE + to, 16 if sketch else 0, self.signs.data_ptr() if sketch else None, None, self.T, None,
             BW.stream(self.torch))
@@ -323,7 +351,7 @@ class Step:
         self.wt.call("wt_tag_tree", self.nodes.data_ptr(), -(-n // BW.TG.PER_LEAF), ctypes.addressof(ri), st)
 
     def attn(self, l: int, form: int, k: int, splits: int | None = None) -> None:
-        sp = splits if splits is not None else self.splits[(form, k if form else 0)]
+        sp = splits if splits is not None else self.splits[(form, k)]
         rc = self.kv.so.kv_attn(self.KV.data_ptr(), form, self.q.data_ptr(), self.o_attn.data_ptr(),
                                 self.part.data_ptr(), self.b, self.ctx, self.layers, l, sp, k,
                                 BW.stream(self.torch))
@@ -367,7 +395,7 @@ class Step:
                         self.s2.wait_event(self.ev[l])
                         self.append(k, l, 1, self.s2.cuda_stream)
                     if "A" in parts:
-                        self.attn(l, self.form[k] if enc else 0, k)
+                        self.attn(l, self.form[k], k)
         if "W" in parts or "u" in parts:
             self.lin_enc(self.layers, "lm_head", k, sketch) if enc else self.lin_plain(self.layers, "lm_head")
             if sketch:
@@ -390,15 +418,17 @@ def queued(wt, torch, fn, cycles: int) -> tuple[float, float]:
 
 
 def choose_splits(S: Step, torch, reps: int, cycles: int, log) -> dict:
-    """Per attention form (plain, and each encoded form at each k) the split count whose pass over every layer is the
-    fastest, at the step's shape on the step's cache; per k the faster encoded form."""
+    """Per attention form (each plain form, and each encoded form at each k) the split count whose pass over every layer
+    is the fastest, at the step's shape on the step's cache; per k the fastest form (k = 0: plain)."""
     out = {}
+    plains, encs = forms_of(S.sh)
     for k in [0] + S.ks:
         if k:
             S.set_keys(k)
-        for form in ([0] if k == 0 else list(KB.ATTN_FORMS)):
+        forms = encs if k else plains
+        for form in forms:
             per = {}
-            for sp in S.split_cands:
+            for sp in S.split_cands[form]:
                 def fn(sp=sp, form=form, k=k):
                     for l in range(S.layers):
                         S.attn(l, form, max(k, 1), sp)
@@ -407,12 +437,11 @@ def choose_splits(S: Step, torch, reps: int, cycles: int, log) -> dict:
             best = min(per, key=per.get)
             S.splits[(form, k)] = best
             out[f"form{form}_k{k}"] = {"splits_s": per, "best": best, "best_s": per[best]}
-        if k:
-            S.form[k] = min(KB.ATTN_FORMS, key=lambda fm: out[f"form{fm}_k{k}"]["best_s"])
-            out[f"k{k}_form"] = S.form[k]
-        log(f"splits k={k}: " + ", ".join(f"{key} {v['best']} ({v['best_s'] * 1e3:.2f} ms)" for key, v in out.items()
-                                          if key.endswith(f"_k{k}") and isinstance(v, dict))
-            + (f"; form {S.form[k]}" if k else ""))
+        S.form[k] = min(forms, key=lambda fm: out[f"form{fm}_k{k}"]["best_s"])
+        out[f"k{k}_form"] = S.form[k]
+        log(f"splits k={k}: " + ", ".join(f"{FORMS[fm]} {out[f'form{fm}_k{k}']['best']} "
+                                          f"({out[f'form{fm}_k{k}']['best_s'] * 1e3:.2f} ms)" for fm in forms)
+            + f"; form {FORMS[S.form[k]]}")
     return out
 
 
@@ -493,6 +522,10 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="8b", choices=["8b", "70b", "tiny"])
     ap.add_argument("--batch", type=int, default=32)
+    ap.add_argument("--gemm-m", type=int, default=0,
+                    help="the linears' M (0: the batch; the fused kernel takes at most 32): past 32, attention and the "
+                         "append run at the batch and the linears at this M, a proxy where both native and fused "
+                         "linears are bound by the weights' read and decode, not the MMA")
     ap.add_argument("--ctx", type=int, default=0, help="0: as many tokens as fill the memory left after the weights")
     ap.add_argument("--margin-gib", type=float, default=2.5, help="memory left free for the step's other buffers")
     ap.add_argument("--ks", default="1,2,3")
@@ -515,6 +548,9 @@ def main() -> int:
     import torch
 
     ks = [int(v) for v in a.ks.split(",")]
+    m = a.gemm_m or a.batch
+    if m > 32:
+        raise SystemExit(f"the fused kernel's M is at most 32, not {m}: pass --gemm-m 32")
     if a.model == "tiny":   # the sanitizer's smoke run: gemm_case's L2-defeating ring would be thousands of copies
         BW.L2_DEFEAT_BYTES = 0
     wt = BW.Lib(a.wt_lib)
@@ -523,18 +559,23 @@ def main() -> int:
     kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
     if wt.n != 512 or kv.field.n != 512 or max(ks) > min(wt.kmax, kv.kmax):
         raise SystemExit(f"want p512 builds with k up to {max(ks)}: wt {wt.n} bits kmax {wt.kmax}, kv {kv.field.n}")
+    ash = KB.attn_shape(kv)
+    if HEADS.get(a.model, ash["heads"]) != ash["heads"]:
+        raise SystemExit(f"{a.kv_lib} has {ash['heads']} query heads, {a.model} {HEADS[a.model]}: build KV_QHEADS")
     BW.set_tag(wt)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     layers, shapes, lm = model_shapes(a.model)
     all_shapes = {**shapes, "lm_head": lm}
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model_name": a.model,
-           "batch": a.batch, "ks": ks, "args": vars(a), "ok": True, "gate": {}}
+           "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}}
 
     def save() -> None:
         (out_dir / "step.json").write_text(json.dumps(res, indent=1, default=str))
 
-    log(f"{props.name}: {sms} SMs, {props.total_memory / 2**30:.1f} GiB; {a.model} B={a.batch} k {ks}")
+    res["attn_shape"] = ash
+    log(f"{props.name}: {sms} SMs, {props.total_memory / 2**30:.1f} GiB; {a.model} B={a.batch} (linears at M={m}) k {ks}; "
+        f"kv_attn {ash}")
     res["gate"]["layout"] = BW.gate_layout(torch, log)
     res["gate"]["wt_codec"] = {k: BW.gate_codec(wt, torch, k, 256, log) for k in ks}
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
@@ -547,7 +588,7 @@ def main() -> int:
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
 
-    gemm, fused, plain = gate_gemm(wt, torch, all_shapes, a.batch, ks, a.gemm_reps, a.sketch_t, log)
+    gemm, fused, plain = gate_gemm(wt, torch, all_shapes, m, ks, a.gemm_reps, a.sketch_t, log)
     res["gemm"] = gemm
     res["ok"] = all(g.get("ok") for g in gemm.values()) and len(gemm) == len(all_shapes)
     save()
@@ -555,7 +596,7 @@ def main() -> int:
         log("a GEMM gate failed: nothing timed")
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
-    picks = {name: pick(g, a.batch, ks, fused, plain) for name, g in gemm.items()}
+    picks = {name: pick(g, m, ks, fused, plain) for name, g in gemm.items()}
     res["picks"] = picks
     for name, p in picks.items():
         log(f"pick {name}: native {p['native']}; " + ", ".join(
@@ -574,8 +615,7 @@ def main() -> int:
     res["f_w"] = 1 - res["f_kv"]
     log(f"fill: {free / 1e9:.2f} GB free; weights {w_bytes / 1e9:.2f} GB, KV {res['kv_bytes'] / 1e9:.2f} GB at ctx "
         f"{ctx} (f_KV {res['f_kv']:.3f})")
-    splits = splits_for(a.batch, ctx, KB.attn_shape(kv)["tt"], sms)
-    res["gate"]["attention"] = gate_attention(kv, torch, a.batch, a.gate_ctx or ctx, ks, splits, sms, log)
+    res["gate"]["attention"] = gate_attention(kv, torch, a.batch, a.gate_ctx or ctx, ks, sms, log)
     save()
     if not res["gate"]["attention"]["ok"]:
         res["ok"] = False
@@ -583,7 +623,7 @@ def main() -> int:
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
 
-    S = Step(wt, kv, torch, a.model, a.batch, ctx, ks, picks, a.sketch_t, log)
+    S = Step(wt, kv, torch, a.model, a.batch, m, ctx, ks, picks, a.sketch_t, log)
     free_after, _ = torch.cuda.mem_get_info()
     res["free_after"] = free_after
     res["stored_bytes"] = S.w_bytes + S.kv_bytes
