@@ -72,7 +72,7 @@ theorem openRel_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape
     (hcoin : u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => c[i]!).map (coinArr fOf)) :
     ∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened := by
   obtain ⟨rsr', rs', k₂', _lgr, _lg, h₁', -, rfl⟩ := opening_parts hrun
-  obtain ⟨rfl, rfl, rfl⟩ : rsr = rsr' ∧ rs = rs' ∧ k₂ = k₂' := by simpa [h₁] using h₁'
+  obtain ⟨⟨rfl, rfl⟩, rfl⟩ : (rsr = rsr' ∧ rs = rs') ∧ k₂ = k₂' := by simpa [h₁] using h₁'
   rw [(FlockSoundness.Refine.fast100_dims _ _ (shape_spec hsh).2).2]
   exact openRel_of_plays h₁ (fun x hx => hz x (by simp [hx])) hne ha hshape hT hcl hpl hmsg hcoin
 
