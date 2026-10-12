@@ -8,7 +8,7 @@
 //                                               squaring's work and the MMAs' each sized to about 25 ms alone
 #define SQFLOOR_NO_MAIN
 #include "sqfloor.cu"
-    10|
+
 namespace {
 
 template <int CH>
