@@ -9,12 +9,14 @@
 #     --declared-output 'out/*' -- taskset -c 48-95 bash benchmarks/link_pricing/run_nic.sh
 #
 # GPUS: the indices gpu-lease may take (default 4,5,6,7: NUMA node 1's, beside the NIC).  GID: the RoCE v2 IPv4 GID index (3).
+# PART=ibgda runs only the NVSHMEM put.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate.jsonl (rdma_gate), nic.jsonl (perftest rows),
 # nsys.jsonl, nic_*.log, ibgda_*.log, port_counters.txt.
 set -uo pipefail
 cd "$(dirname "$0")"
 export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
 GID=${GID:-3}
+export PART=${PART:-all}
 D=mlx5_0
 
 if [ "${1:-}" = leased ]; then
@@ -41,7 +43,7 @@ if [ "${1:-}" = leased ]; then
     grep '^{' "$O/g_$name.log" | sed "s/^{/{\"test\": \"$name\", \"rc\": $rc, /" | tee -a "$O/gate.jsonl"
     [ $rc = 0 ] || tail -3 "$O/g_$name.log"
   }
-  if [ -x "$G" ]; then
+  if [ -x "$G" ] && [ "$PART" = all ]; then
     gt host_to_host_write --op write --src host --dst host
     gt gpu_to_host_write nsys --op write --src gpu --dst host
     gt host_to_gpu_write nsys --op write --src host --dst gpu
@@ -74,25 +76,28 @@ if [ "${1:-}" = leased ]; then
     local rc=$?
     wait $sp
     local row
-    row=$(grep -E '^ *[0-9]+ +[0-9]+ +[0-9.]+ +[0-9.]+ +[0-9.]+' "$O/nic_${name}.log" | tail -1)
+    row=$(grep -E '^[[:space:]]*[0-9]+[[:space:]]+[0-9]+[[:space:]]+[0-9.]+[[:space:]]+[0-9.]+[[:space:]]+[0-9.]+' "$O/nic_${name}.log" | tail -1)
     echo "{\"test\": \"$name\", \"tool\": \"$tool\", \"server\": \"$sargs\", \"client\": \"$cargs\", \"rc\": $rc, \"row\": \"$(echo $row)\"}" |
       tee -a "$O/nic.jsonl"
   }
   big="-s 1048576 -q 8"
-  pt host_to_host_write ib_write_bw "$big" "$big"
-  pt host_to_host_write_bidir ib_write_bw "$big -b" "$big -b"
-  pt gpu_to_host_write ib_write_bw "$big" "$big --use_cuda=0"
-  pt host_to_gpu_write ib_write_bw "$big --use_cuda=0" "$big"
-  pt gpu_to_host_write_dmabuf ib_write_bw "$big" "$big --use_cuda=0 --use_cuda_dmabuf"
-  pt host_reads_gpu ib_read_bw "$big --use_cuda=0" "$big"
+  if [ "$PART" = all ]; then
+    pt host_to_host_write ib_write_bw "$big" "$big"
+    pt host_to_host_write_bidir ib_write_bw "$big -b" "$big -b"
+    pt gpu_to_host_write ib_write_bw "$big" "$big --use_cuda=0"
+    pt host_to_gpu_write ib_write_bw "$big --use_cuda=0" "$big"
+    pt gpu_to_host_write_dmabuf ib_write_bw "$big" "$big --use_cuda=0 --use_cuda_dmabuf"
+    pt host_reads_gpu ib_read_bw "$big --use_cuda=0" "$big"
+  fi
   # GPU-initiated: NVSHMEM's IBGDA put between the two leased GPUs with P2P disabled, so every put crosses the NIC
   PT=/usr/bin/nvshmem_13/perftest
   ls -R "$PT" > "$O/nvshmem_perftests.txt" 2>&1
-  BIN=$(find "$PT" -name 'shmem_put_bw*' -type f | head -1)
-  echo "{\"nvshmem_binary\": \"${BIN:-none}\"}" | tee -a "$O/nic.jsonl"
+  BIN=$(find "$PT" -name 'shmem_put_bw' -type f | head -1)
+  LIB=$(dirname "$(find /usr/lib /usr/lib64 /usr/local /opt -name 'libnvshmem_host.so.3' 2> /dev/null | head -1)")
+  echo "{\"nvshmem_binary\": \"${BIN:-none}\", \"lib\": \"$LIB\"}" | tee -a "$O/nic.jsonl"
   if [ -n "$BIN" ]; then
     for transport in ibgda ibrc; do
-      env NVSHMEM_DISABLE_P2P=1 NVSHMEM_HCA_LIST=$D:1 NVSHMEM_IB_GID_INDEX=$GID NVSHMEM_BOOTSTRAP=PMI \
+      env LD_LIBRARY_PATH="$LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" NVSHMEM_DISABLE_P2P=1 NVSHMEM_HCA_LIST=$D:1 NVSHMEM_IB_GID_INDEX=$GID NVSHMEM_BOOTSTRAP=PMI \
         NVSHMEM_IB_ENABLE_IBGDA=$([ $transport = ibgda ] && echo 1 || echo 0) \
         NVSHMEM_DEBUG=INFO timeout 120 /usr/bin/nvshmem_13/nvshmrun -n 2 -ppn 2 "$BIN" -b 4096 -e 4194304 -f 4 \
         > "$O/ibgda_$transport.log" 2>&1
