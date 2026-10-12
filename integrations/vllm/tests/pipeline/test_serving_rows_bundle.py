@@ -2,7 +2,8 @@
 with RoPE_v1 rows (D=64) executed honestly, its members committed by the production CPU committer and sealed into a replay bundle with
 its registered weights, then the verifier's partition (every RoPE head) read back through the bundle opened against the Commit's record.
 The registration passes `registration.check` against the verifier's own copies (its population program, the run root of record, the
-public bodies), every hidden row is the served value, and a partition digest or a binding map that is not the record's is refused."""
+public bodies), every hidden row is the served value, and a partition digest, a template or a binding map that is not the record's is
+refused."""
 from __future__ import annotations
 
 import json
@@ -72,6 +73,10 @@ def test_a_partition_or_binding_map_that_is_not_the_records_is_refused(tmp_path)
     pf = json.loads(c["partition"].read_text())
     c["partition"].write_text(json.dumps(dict(pf, partition_digest="00" * 64)))
     with pytest.raises(ValueError, match="not the verifier's"):
+        DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "w1")
+    # a template is matched by its descriptor id, so a RoPE head of another D is no member of these rows
+    c["partition"].write_text(json.dumps(dict(pf, templates=["RoPEHead_v1{D=128}"])))
+    with pytest.raises(LookupError, match=r"no rows of RoPEHead_v1\{D=128\}"):
         DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "w1")
     c["partition"].write_text(json.dumps(pf))
     bm = c["out"] / "binding_map_p1.json"
