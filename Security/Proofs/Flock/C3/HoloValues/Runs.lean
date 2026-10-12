@@ -11,7 +11,8 @@ V*'s index for them.
 
 * `holoRs_of_residuals`: `rs_of_residuals` on the record with its empty round filtered out (V*'s view; `verifierRows`
   is unchanged by the filter, `ofRounds_filter`), read back at the record (`filter_getElem!_after`, `rsRounds_shift`).
-* `LigShift`, a stub: V*'s Ligerito run on coins with one more round in front returns the same one round later.
+* `LigShift`: V*'s Ligerito run on coins with one more round in front returns the same one round later (`ligShift`,
+  `Shift.lean`).
 * `holoHlg_of_frames`: `hlg_of_frames` from `LigShift`, with `ligerito_of_run` at V*'s coins behind a round of one
   coin (`#[#[0]]`), which the record fits from Ligerito's first round on (`fits_from`).
 -/
@@ -147,10 +148,9 @@ theorem holoRs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : 
 
 /-! ## Ligerito -/
 
-/-- **Stub: V*'s Ligerito run behind one more round** (150–200 lines). On coins with one more round of some coins in
-front, V*'s Ligerito returns the same from one round later: `Coins.ofRounds` keeps that round, so its round `k + 1` is
-the shorter coins' round `k`, and `coinVec`, which alone reads the counter (RecAlgebra.lean:55–61), draws the same. Its
-proof is an invariant over `LM`, written like `Conss.CS` (`VBridge/Family/Opened.lean`). -/
+/-- **V*'s Ligerito run behind one more round** (`ligShift`, `Shift.lean`). On coins with one more round of some coins
+in front, V*'s Ligerito returns the same from one round later: `Coins.ofRounds` keeps that round, so its round `k + 1`
+is the shorter coins' round `k`, and `coinVec`, which alone reads the counter (RecAlgebra.lean:55–61), draws the same. -/
 def LigShift : Prop :=
   ∀ (sch : Flock.Schedule) (M : Messages F128) (s₀ : LSt F128) (k k' : ℕ) (c : Array (Array F128)) (x : Array F128)
     (out : (Array F256 × Array (Array F256) × ℕ) × LSt F128), x.size ≠ 0 →

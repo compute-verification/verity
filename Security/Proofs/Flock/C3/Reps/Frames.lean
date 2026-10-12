@@ -1,11 +1,12 @@
 import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.C3.HoloValues.Runs
+import Proofs.Flock.C3.HoloValues.Shift
 
 /-!
 # The record's frames at the holo shape (`FramesOfVals`)
 
 `unitFrames_holo`: a rep unit's `UnitFrames` at values `v`, from E's preconditions, `LigShift` and `HoloFramed`, the
-facts no check here establishes. `framesOfVals_holo` is `FramesOfVals` from them at every rep.
+facts no check here establishes. `framesOfVals_holo` is `FramesOfVals` from them at every rep, and
+`framesOfVals_holo'` the same from `HoloFramed` alone (`ligShift`).
 -/
 
 namespace FlockC3.Reps
@@ -139,6 +140,15 @@ theorem framesOfVals_holo (hsh : FlockC3.HoloValues.LigShift)
     (h : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => ∃ dom, HoloFramed sh (rep Lb i) (vals Lb i) dom) :
     FramesOfVals zs dg N k Rw sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   (h R ω t R₂ τ o hA i halg hacc).elim fun _ H => unitFrames_holo hsh halg hacc H
+
+/-- **`FramesOfVals` at holo** when every rep unit's values meet `HoloFramed` at some domain (`framesOfVals_holo` at
+`ligShift`). -/
+theorem framesOfVals_holo' {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (h : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => ∃ dom, HoloFramed sh (rep Lb i) (vals Lb i) dom) :
+    FramesOfVals zs dg N k Rw sh rep vals :=
+  framesOfVals_holo FlockC3.HoloValues.ligShift h
 
 end
 
