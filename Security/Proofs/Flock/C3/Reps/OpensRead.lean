@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Reps.StepsTie
 import Proofs.Flock.C3.Reps.Vals
+import Proofs.Flock.C3.Compose.LastRead
 
 /-!
 # The reps' openings, read from the layers' read wires
@@ -59,16 +60,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
-
-/-- **The source's openings at stratum `s` are read from every read wire** (H's form): two accepted outer proofs whose
-layers agree on every read wire have the same `os.1 s`. -/
-def OpensReadAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) (s : ℕ) : Prop :=
-  ∀ R ω t R₂ τ o R' ω' t' R₂' τ' o', FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
-    FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' →
-    (∀ j g, ReadW Vs j g → layers zs dg N k Rw R ω t R₂ τ j g = layers zs dg N k Rw R' ω' t' R₂' τ' j g) →
-    (src R ω t (layers zs dg N k Rw R ω t R₂ τ)).os.1 s = (src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')).os.1 s
 
 /-- **Hypothesis: the values' openings are read off the layers at `W`**: at every accepted outer proof, rep `i`'s
 opened row and siblings at level `ℓ`, query `q` are `rd i ℓ q` of the layers' bits on the read wires of `W i`

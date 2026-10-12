@@ -1,8 +1,7 @@
 import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.C3.Fork.Sound
-import Proofs.Flock.Recursive.ForkInnerC
+import Proofs.Flock.Recursive.RegExtract
 
 /-!
 # The recursive audit at candidate 3: its proof
@@ -14,22 +13,22 @@ In (i), as in `PublicAudit`'s:
 * where some index has no session that types, the event is empty (`prob_sessionsR_untypable`);
 * at a statement Lean's verifier doesn't build, or inputs at candidate 3 it refuses (`AcceptsC3`: V*'s list, the inner
   transcript against R's registration, check 5's sparse refusals), the event is empty (its first conjunct);
-* at one it builds, the class checks pass (`classOk_of_accepts`), and candidate 3's table at the executable's
-  parameters is sound in fork form (piece (a), `FlockC3.Fork.holoForkSound_holoAt`), here at the checked sessions
-  (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
-* the hidden statement is R's registration (`xR` with the registrant's openings `_hreg`), a constant of the run, and the
-  raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`), where the
-  event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole histories `recGame` plays
-  (`acceptsV_checked`);
+* at one it builds, the class checks pass (`classOk_of_accepts`), and gap 2 holds at the word the prover's runs open
+  (`zk_sessions_recursive_fork_reg`, `Recursive/RegExtract.lean`, a stub: the extraction from piece (a)'s runs), here at
+  the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
+* the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
+  (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
+  `verifies_zsOf`), where the event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole
+  histories `recGame` plays (`acceptsV_checked`);
 * `_hob` is read where the event parses a session's file into scope (`loads_of_verifiesV`, `scope_of_accepts`).
 
 Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
-gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerC`).
+gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerC`, which the stub's proof reads).
 
 `_hstk` is not read here: VBridgeC is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
-(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`, which gives VBridgeC at the checked sessions, its decoder reading the
-last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and VBridgeC from the typed
-sessions to the checked ones.
+(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`, which gives VBridgeC at the checked sessions, so far at a fixed word,
+its decoder reading the last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and
+VBridgeC from the typed sessions to the checked ones.
 
 (ii) is `RecursiveFirewallPrivate`.
 -/
@@ -152,7 +151,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins xR hreg _hstk ish Vs zr hCust _im _hIC
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
     bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -168,7 +167,6 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   · exact Or.inl (le_antisymm ((prob_mono_outcome _ σ fun o _ h => absurd h.1.1 hacc).trans (prob_false _ σ).le)
       (zero_le ..))
   refine Or.inr ⟨hT, ?_⟩
-  have hin := FlockC3.Fork.holoForkSound_holoAt T CT hp (classOk_of_accepts hacc.acceptsStmt)
   have hr' : ∀ R ω t R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg')
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).dj
       (Flock.Guarantees.custodied zr hCust hT R ω t R₂ j).y₀ S' R') i k ≤ ρ := by
@@ -179,15 +177,12 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_innerC hA3
+  rcases zk_sessions_recursive_fork_reg T CT hp (classOk_of_accepts hacc.acceptsStmt) hA3
     (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT σ)
-    (fun _ _ => Subtype.mk xR hreg) wmsg Sk cmt msg
-    (hbr hT) Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) hin
-    (Nat.succ_pos r) (schedInner_lastFree T CT _ _ _ _)
-    (fun x => clashPickHL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp) x)
+    wmsg Sk cmt msg cap (hbr hT)
     with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
@@ -197,7 +192,11 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
       (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ¬ (holoInnerAt T CT st hp).holds (Subtype.mk xR hreg))
+        ¬ (holoInnerAt T CT st hp).holds (Flock.Guarantees.regStmt T CT st hp
+          (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
+            hCust hT) dg N k Rw wmsg
+          (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
+            hCust hT σ) cap o.1 o.2.1))
       (fun o ho => ho.2.1) (fun o hlen hall ho =>
         ⟨acceptsV_checked (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
           (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
