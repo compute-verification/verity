@@ -5,26 +5,26 @@ import Mathlib.Data.Set.Card
 /-!
 # Runs, strategies and the confidence set (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.2), sections 2 ("Runs"), 4, 5 and 6. A *run*
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.3), sections 2 ("Runs"), 4, 5 and 6. A *run*
 (`Actual.Run`) is an actual circuit with its gates' values, each computed gate's value its operation on the values it
-reads (faithfulness). A gate is seen as its tick, leaf, width and value (`Actual.Run.seen`), so runs of different
-circuits compare. The verifier at leaves `V` sees its gates (`view`). A *strategy* maps coins `r : Ω` to a run.
+reads (faithfulness), and what each leaf holds at the start of each tick (`held`, constrained by `Placed.Holding`). A
+gate is seen as its tick, leaf, width and value (`Actual.Run.seen`), so runs of different circuits compare. The verifier
+at leaves `V` sees its gates (`view`). A location's *state* at `t` (`Run.state`, of width `Run.mem`) is what its leaves
+hold and what is in flight between them; `Run.Memory` bounds it per run. A *strategy* maps coins `r : Ω` to a run.
 
 What crosses from one set of leaves to another, read during `I`, is `crossing` (arrival tick, reader's leaf, source as
-seen). What a location `X` does during `I` (`acts`) is its gates placed during `I` and what it sends from them (`sent`,
-keyed by the source's tick: the sender chooses what crosses, to whom and when). What `X` can tell at `t` (`history`) is
-its input gates (`inputs`), its gates placed before `t` (`before`) and what it read from outside before `t`; runs alike
-in it are, for `X`, each other's continuations at `t`. The *state over continuations* (`stateOver`) is what `X` must
-hold at `t` for every continuation. A strategy is *causal from every tick* (`CausalFrom`) when what `X` does during
-`[t, u)` is a function of that state and of what `X` reads from outside during `[t, u)`, and *admissible*
-(`Admissible`) when it is a restriction of one that is (fixing coins keeps admissibility, not `CausalFrom`). Memory over
-continuations (`MemoryOver`) and links as alphabets (`Alphabet`, by `signal`) are further hypotheses on a strategy.
+seen). What a location `X` does during `I` (`acts`) is its gates placed during `I`, what it sends from them (`sent`,
+keyed by the source's tick: the sender chooses what crosses, to whom and when) and what its leaves hold at the end of
+each tick of `I`. A strategy is *causal from every tick* (`CausalFrom`) when what `X` does during `[t, u)` is a function
+of its state at `t`, as seen, and of what it reads from outside during `[t, u)`; the state is the run's own, so fixing
+coins keeps it. What `X` can tell at `t` (`history`: its inputs, its gates before `t` and what it read from outside
+before `t`) and links as alphabets (`Alphabet`, by `signal`) are further hypotheses on a strategy.
 
-A guarantee `E` is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every admissible strategy with runs in
-`𝓕` whose prover's inputs (every input gate off `V`) don't depend on the coins accepts with `¬E` on at most a `δ`
-fraction of the coins, uniform over a finite `Ω`. The *confidence set* `𝓒(v)` (`confidence`) is the feasible runs with
-view `v` meeting every guarantee. For a quantity `μ` of a run: `req μ 𝓕 P` is the least `μ` of a feasible run that
-implements `P`, `Additive` says every run of a set that implements `P` has `μ ≥ cert + req`, and the residual is
+A guarantee `E` reads a strategy and a coin (a property of the run, or of how the strategy varies with the coins). It
+is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every strategy causal from every tick with runs in `𝓕`
+whose prover's inputs (every input gate off `V`) don't depend on the coins accepts with `¬E` on at most a `δ` fraction
+of the coins, uniform over a finite `Ω`. For a quantity `μ` of a run: `req μ 𝓕 P` is the least `μ` of a feasible run
+that implements `P`, `Additive` says every run of a set that implements `P` has `μ ≥ cert + req`, and the residual is
 `min(cap, obs) − cert`.
 -/
 
@@ -32,11 +32,22 @@ namespace Accounting
 
 open Finset
 
-/-- **A run**: an actual circuit and its gates' values, each computed gate's its operation on what it reads. -/
+/-- **Holding** (v2.3): `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
+and an input or placed before `t`; `y`'s inputs are held at tick 0; and a gate of `y` that `y` reads at a later tick is
+held at `y` at the start of every tick from the one after its placement (from 0 for an input) to the reading one. -/
+def Placed.Holding {L : Type*} (A : Placed L) (held : L → ℕ → Finset (Fin A.N)) : Prop :=
+  (∀ y t, ∀ a ∈ held y t, A.x a = y ∧ (A.isInput a = true ∨ A.t a < t)) ∧
+  (∀ a, A.isInput a = true → a ∈ held (A.x a) 0) ∧
+  ∀ g, ∀ a ∈ A.reads g, A.x a = A.x g → ∀ s, (A.isInput a = true ∨ A.t a < s) → s ≤ A.t g → a ∈ held (A.x g) s
+
+/-- **A run**: an actual circuit and its gates' values, each computed gate's its operation on what it reads, and what
+each leaf holds at the start of each tick. -/
 structure Actual.Run (L : Type*) where
   A : Placed L
   val : A.Transcript
   faithful : ∀ g, A.isInput g = false → val g = A.op g val
+  held : L → ℕ → Finset (Fin A.N)
+  holding : A.Holding held
 
 namespace Actual.Run
 
@@ -54,6 +65,18 @@ def before (X : Finset L) (t : ℕ) : Set (ℕ × L × ℕ × ℕ) := {p | ∃ g
 /-- The input gates placed at leaves of `X`. -/
 def inputs (X : Set L) : Set (ℕ × L × ℕ × ℕ) := {p | ∃ g, R.A.isInput g = true ∧ R.A.x g ∈ X ∧ p = R.seen g}
 
+open Classical in
+/-- **The state** of `X` at `t` (v2.3): what its leaves hold at the start of `t`, and what is in flight between them,
+the gates of `X` outside `A[X, [t, ∞)]` that `A[X, [t, ∞)]` reads. -/
+noncomputable def state (X : Finset L) (t : ℕ) : Finset (Fin R.A.N) :=
+  univ.filter fun a => (∃ y ∈ X, a ∈ R.held y t) ∨ (a ∈ R.A.into (R.A.region X (Set.Ici t)) ∧ R.A.x a ∈ X)
+
+/-- `mem X t`: the width of `X`'s state at `t`. -/
+noncomputable def mem (X : Finset L) (t : ℕ) : ℕ := R.A.width (R.state X t)
+
+/-- **Memory** (v2.3), per run: each `X ∈ 𝒳` has a state of at most `M X` bits at every tick. -/
+def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop := ∀ X ∈ 𝒳, ∀ t, R.mem X t ≤ M X
+
 /-- What crosses from the leaves `X` to the leaves `Y`, read during `I`: each wire as its arrival tick, its reader's
 leaf and its source as seen. -/
 def crossing (X Y : Set L) (I : Set ℕ) : Set (ℕ × L × ℕ × L × ℕ × ℕ) :=
@@ -66,12 +89,15 @@ that arrives after `t` is not something `X` does from `t`. -/
 def sent (X : Set L) (I : Set ℕ) : Set (ℕ × L × ℕ × L × ℕ × ℕ) :=
   {p | ∃ g a, a ∈ R.A.reads g ∧ R.A.x a ∈ X ∧ R.A.x g ∉ X ∧ R.A.t a ∈ I ∧ p = (R.A.t g, R.A.x g, R.seen a)}
 
-/-- What the location `X` does during `I`: its gates placed during `I`, and what it sends from them. -/
-def acts (X : Set L) (I : Set ℕ) : Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) :=
-  ({p | ∃ g, R.A.x g ∈ X ∧ R.A.t g ∈ I ∧ p = R.seen g}, R.sent X I)
+/-- What the location `X` does during `I`: its gates placed during `I`, what it sends from them, and what its leaves
+hold at the end of each tick `v` of `I` (at the start of `v + 1`). -/
+def acts (X : Set L) (I : Set ℕ) :
+    Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ) :=
+  ({p | ∃ g, R.A.x g ∈ X ∧ R.A.t g ∈ I ∧ p = R.seen g}, R.sent X I,
+    {p | ∃ y v a, y ∈ X ∧ v ∈ I ∧ a ∈ R.held y (v + 1) ∧ p = (v, R.seen a)})
 
 /-- What the location `X` can tell at `t`: its input gates, its gates placed before `t`, and what it read from outside
-before `t`, with arrival ticks. Runs alike in it are, for `X`, each other's continuations at `t`. -/
+before `t`, with arrival ticks. -/
 def history (X : Finset L) (t : ℕ) :
     Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) :=
   (R.inputs ↑X, R.before X t, R.crossing (↑X)ᶜ ↑X (Set.Iio t))
@@ -83,35 +109,13 @@ def signal {E : Type*} (link : Fin R.A.N → Fin R.A.N → E) (e : E) (y : L) (u
 
 end Actual.Run
 
-open Classical in
-/-- **The state over continuations** of `X` at `t` in the run `S r` (v2.2): its gates outside `A[X, [t, ∞)]` (its
-inputs and its gates placed before `t`) that `A[X, [t, ∞)]` reads in some continuation of `S r` for `X` at `t` (a run
-of `S` with the same `history X t`), matched by how they are seen: what `X` must hold at `t`, not knowing which of it
-it will read. With `r' = r` it holds the per-run state. -/
-noncomputable def stateOver {Ω L : Type*} (S : Ω → Actual.Run L) (X : Finset L) (t : ℕ) (r : Ω) :
-    Finset (Fin (S r).A.N) :=
-  univ.filter fun a => (S r).A.x a ∈ X ∧ a ∉ (S r).A.region X (Set.Ici t) ∧
-    ∃ r', (S r').history X t = (S r).history X t ∧
-      ∃ a' ∈ (S r').A.into ((S r').A.region X (Set.Ici t)), (S r').seen a' = (S r).seen a
-
-/-- **Causality from every tick** (v2.2), in prefix form: in a strategy `S`, what each location `X` does during
-`[t, u)` is a function of its state over continuations at `t` and of what it reads from outside during `[t, u)`, with
-arrival ticks. -/
+/-- **Causality from every tick** (v2.3), in prefix form: in a strategy `S`, what each location `X` does during
+`[t, u)` is a function of its state at `t`, as seen, and of what it reads from outside during `[t, u)`, with arrival
+ticks. The state is the run's own, so a restriction of a strategy causal from every tick is too. -/
 def CausalFrom {Ω L : Type*} (S : Ω → Actual.Run L) : Prop :=
-  ∀ (X : Finset L) t u r r', (S r).seen '' ↑(stateOver S X t r) = (S r').seen '' ↑(stateOver S X t r') →
+  ∀ (X : Finset L) t u r r', (S r).seen '' ↑((S r).state X t) = (S r').seen '' ↑((S r').state X t) →
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico t u) = (S r').crossing (↑X)ᶜ ↑X (Set.Ico t u) →
     (S r).acts ↑X (Set.Ico t u) = (S r').acts ↑X (Set.Ico t u)
-
-/-- **An admissible strategy** (v2.2): a restriction `S' ∘ ι` of a strategy `S'` causal from every tick, its states
-over continuations computed in `S'`. Fixing some of an admissible strategy's coins leaves it admissible; `CausalFrom`
-alone doesn't survive that, since fixing coins shrinks the runs a location can't tell apart. -/
-def Admissible {Ω L : Type*} (S : Ω → Actual.Run L) : Prop :=
-  ∃ (Ω' : Type) (S' : Ω' → Actual.Run L) (ι : Ω → Ω'), CausalFrom S' ∧ ∀ r, S r = S' (ι r)
-
-/-- **Memory over continuations** (v2.2): in every run of `S`, each `X ∈ 𝒳` holds at most `M X` bits of state over
-continuations at every tick. -/
-def MemoryOver {Ω L : Type*} (S : Ω → Actual.Run L) (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
-  ∀ r, ∀ X ∈ 𝒳, ∀ t, (S r).A.width (stateOver S X t r) ≤ M X
 
 /-- **A link is an alphabet** (v2.2), across the runs of `S`: each way, at each tick, link `e` delivers one of at most
 `2^{β e}` signals (delivering nothing is one of them). -/
@@ -121,17 +125,12 @@ def Alphabet {Ω L E : Type*} (S : Ω → Actual.Run L) (β : E → ℕ) (link :
 
 open Classical in
 /-- **`E` is sound at `δ`** against the feasible runs `𝓕`, for the verifier at `V` accepting on `acc` of its view with
-coins uniform over `Ω`: every admissible strategy with runs in `𝓕` whose input gates off `V` don't depend on the coins
-has `Pr_r[acc ∧ ¬E] ≤ δ`. -/
+coins uniform over `Ω`: every strategy causal from every tick with runs in `𝓕` whose input gates off `V` don't depend on
+the coins has `Pr_r[acc ∧ ¬E] ≤ δ`. `E` reads the strategy and the coin. -/
 def Sound {L : Type*} (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L) (acc : Set (ℕ × L × ℕ × ℕ) → Prop)
-    (E : Actual.Run L → Prop) (δ : ℝ) : Prop :=
-  ∀ S : Ω → Actual.Run L, (∀ r, S r ∈ 𝓕) → Admissible S → (∀ r r', (S r).inputs (↑V)ᶜ = (S r').inputs (↑V)ᶜ) →
-    ((univ.filter fun r => acc ((S r).view V) ∧ ¬E (S r)).card : ℝ) ≤ δ * Fintype.card Ω
-
-/-- **The confidence set** `𝓒(v)`: the feasible runs with the view `v` at `V` that meet every guarantee `E i`. -/
-def confidence {L ι : Type*} (𝓕 : Set (Actual.Run L)) (V : Finset L) (E : ι → Actual.Run L → Prop)
-    (v : Set (ℕ × L × ℕ × ℕ)) : Set (Actual.Run L) :=
-  {R | R ∈ 𝓕 ∧ R.view V = v ∧ ∀ i, E i R}
+    (E : (Ω → Actual.Run L) → Ω → Prop) (δ : ℝ) : Prop :=
+  ∀ S : Ω → Actual.Run L, (∀ r, S r ∈ 𝓕) → CausalFrom S → (∀ r r', (S r).inputs (↑V)ᶜ = (S r').inputs (↑V)ᶜ) →
+    ((univ.filter fun r => acc ((S r).view V) ∧ ¬E S r).card : ℝ) ≤ δ * Fintype.card Ω
 
 /-- `req_μ(P)`: the least `μ` of a run of `𝓕` that implements `P` (`impl`), `⊤` when none does. -/
 noncomputable def req {L : Type*} (μ : Actual.Run L → ℕ) (𝓕 : Set (Actual.Run L)) (impl : Actual.Run L → Prop) : ℕ∞ :=
