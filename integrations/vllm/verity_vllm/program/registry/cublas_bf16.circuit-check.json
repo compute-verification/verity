@@ -1,0 +1,7 @@
+{
+ "definitions": {
+  "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 46428
+  }
+ }
+}
