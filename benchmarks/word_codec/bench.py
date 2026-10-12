@@ -12,12 +12,14 @@ Nothing is timed before its gate passed, in this order:
   advancing), the bare squaring (best over ILP 1-8), the GF(2^31 - 1) Horner step of the bandwidth tag;
 - `gemm`: at Llama-3.1-8B's linears and batch 1-32, the fused kernel's partial sums equal the plain kernel's bit for bit
   at every k and both are within FP32 rounding of torch's; then interleaved reps of cuBLASLt FP8 (`torch._scaled_mm`), the
-  plain FP8 kernel and the fused kernel at each k, each in two forms (one task a warp, `wc_gemm`; persistent with the
-  next half-task's loads in flight, `wc_gemm_pipe`), every call on cold weights (a ring of copies past the L2), each
-  arm queued behind a spin kernel so the device runs it back to back, beside an empty kernel at the GEMM's grid.
-  Native is the fastest of cuBLASLt and the two plain kernels. The fused GEMM runs with the fastest-decoding library
+  plain FP8 kernel and the fused kernel at each k, each in three forms (one task a warp, `wc_gemm`; persistent with the
+  next half-task's loads in flight, `wc_gemm_pipe`; warp-specialized, a producer warp filling a shared-memory ring for
+  consumer warps, `wc_gemm_ws`, at each `--ws` configuration), every call on cold weights (a ring of copies past the
+  L2), each arm queued behind a spin kernel so the device runs it back to back, beside an empty kernel at the GEMM's
+  grid. Native is the fastest of cuBLASLt and the plain kernels. The fused GEMM runs with the fastest-decoding library
   of 56 payload bits a word (`gemm`) and with each library of another packing (`gemm_<name>`, e.g. `-DWC_PB=60`).
-`--mode ncu-decode` / `ncu-gemm` run one call of each kernel for Nsight Compute and time nothing.
+`--gemm-only` skips `read`, `decode` and `rates`. `--mode ncu-decode` / `ncu-gemm` run one call of each kernel for
+Nsight Compute and time nothing.
 """
 from __future__ import annotations
 
@@ -58,12 +60,13 @@ class Lib:
         so.wc_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v]
         so.wc_gemm_constants.argtypes = [v]
         so.wc_gemm_pipe.argtypes = [i, v, v, v, i, i, i, q, i, i, v, v]
+        so.wc_gemm_ws.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v]
         so.wc_spin.argtypes = [ctypes.c_longlong, v]
         so.wc_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 7)()
+        cs = (ctypes.c_int * 8)()
         so.wc_gemm_constants(cs)
         self.constants = list(cs)
-        self.bits = self.constants[6]
+        self.bits, self.kmax = self.constants[6], self.constants[7]
         lw = C.lane_words(self.bits)
         if self.constants[:5] != [C.LANES, C.TASK_TILES, lw, lw * C.LANES, C.TASK_COLS]:
             raise RuntimeError(f"{name}: layout constants {self.constants} are not codec.py's")
@@ -169,7 +172,7 @@ def gate_codec(lib: Lib, torch, n_random: int, log) -> dict:
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     out = {}
     sample = list(range(len(edges))) + rng.sample(range(len(edges), n_random), 120)
-    for k in range(1, KMAX + 1):
+    for k in range(1, lib.kmax + 1):
         key = C.key(SEED, k)
         set_key(lib, torch, key)
         lib.call("wc_encode", ptr(m), ptr(y), m.numel(), base, k, 64, stream(torch))
@@ -299,7 +302,11 @@ def fp8_weights(torch, n: int, kd: int, seed: int):
     return w
 
 
-def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log) -> dict:
+def ws_name(cfg) -> str:
+    return f"c{cfg[0]}s{cfg[1]}"
+
+
+def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, ws_cfgs=()) -> dict:
     w = fp8_weights(torch, n, kd, 100 + n + kd)
     wb = w.view(torch.uint8)
     plain = plain_layout(wb)
@@ -322,7 +329,10 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     res = {"N": n, "K": kd, "weight_bytes": n * kd, "store_bytes": nwords * 8, "gate": {}, "times": {}}
 
     def run(k, wbuf, x, y, partials, pipe=False):
-        if pipe:
+        if isinstance(pipe, tuple):
+            lib.call("wc_gemm_ws", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
+                     int(partials), pipe[0], pipe[1], 0, None, stream(torch))
+        elif pipe:
             lib.call("wc_gemm_pipe", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
                      int(partials), 0, None, stream(torch))
         else:
@@ -338,20 +348,25 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         plain_sum = pp.view(nch, mb, n).sum(0)
         scale = (x.float().abs() @ w.float().abs().t()).clamp_min(1e-30)
         err = float(((plain_sum - ref).abs() / scale).max())
-        entry = {"plain_vs_torch_rel": err, "fused_equal_plain": {}, "pipe_equal_plain": {}}
+        entry = {"plain_vs_torch_rel": err, "fused_equal_plain": {}, "pipe_equal_plain": {}, "ws_equal_plain": {}}
+        forms = [(False, "fused_equal_plain"), (True, "pipe_equal_plain")] + [(c, "ws_equal_plain") for c in ws_cfgs]
         for k in [0, *ks]:
-            for pipe, key in ((False, "fused_equal_plain"), (True, "pipe_equal_plain")):
-                if k == 0 and not pipe:
+            for pipe, key in forms:
+                if k == 0 and pipe is False:
                     continue
                 pf = torch.zeros_like(pp)
                 run(k, plain if k == 0 else stores[k], x, pf, True, pipe)
-                entry[key][k] = bool(torch.equal(pf, pp))
+                entry[key][f"{k}_{ws_name(pipe)}" if isinstance(pipe, tuple) else k] = bool(torch.equal(pf, pp))
         ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
         run(ks[-1], stores[ks[-1]], x, ya, False)
         entry["fused_atomic_vs_torch_rel"] = float(((ya - ref).abs() / scale).max())
         ya.zero_()
         run(ks[-1], stores[ks[-1]], x, ya, False, True)
         entry["pipe_atomic_vs_torch_rel"] = float(((ya - ref).abs() / scale).max())
+        for cfg in ws_cfgs:
+            ya.zero_()
+            run(ks[-1], stores[ks[-1]], x, ya, False, cfg)
+            entry.setdefault("ws_atomic_vs_torch_rel", {})[ws_name(cfg)] = float(((ya - ref).abs() / scale).max())
         try:
             yc = torch._scaled_mm(x, w.t(), torch.ones((), device="cuda"), torch.ones((), device="cuda"),
                                   out_dtype=torch.float32)
@@ -359,7 +374,9 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         except Exception as exc:  # noqa: BLE001
             entry["cublas_error"] = repr(exc)[:300]
         entry["ok"] = (err < 1e-5 and all(entry["fused_equal_plain"].values()) and all(entry["pipe_equal_plain"].values())
-                       and entry["fused_atomic_vs_torch_rel"] < 1e-5 and entry["pipe_atomic_vs_torch_rel"] < 1e-5)
+                       and all(entry["ws_equal_plain"].values())
+                       and entry["fused_atomic_vs_torch_rel"] < 1e-5 and entry["pipe_atomic_vs_torch_rel"] < 1e-5
+                       and all(v < 1e-5 for v in entry.get("ws_atomic_vs_torch_rel", {}).values()))
         res["gate"][mb] = entry
         log(f"gemm gate {name} M={mb}: {'ok' if entry['ok'] else 'FAIL'} (plain rel {err:.1e})")
         if not entry["ok"]:
@@ -426,6 +443,21 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     raise RuntimeError(f"wc_gemm_pipe k={k} M={mb}: error {rc}")
             return f
 
+        def arm_ws(k, cfg):
+            ps = [ptr(b) for b in ring["plain" if k == 0 else k]]
+            launched = ctypes.c_int(0)
+            lib.call("wc_gemm_ws", k, ps[0], xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, ctypes.byref(launched), st)
+            groups = launched.value // nch
+            grids[f"w{k}_{ws_name(cfg)}"] = launched.value
+
+            def f():
+                rc = 0
+                for p in ps:
+                    rc |= so.wc_gemm_ws(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, st)
+                if rc:
+                    raise RuntimeError(f"wc_gemm_ws k={k} {ws_name(cfg)} M={mb}: error {rc}")
+            return f
+
         def arm_empty():
             rc = 0
             for _ in range(copies):
@@ -434,9 +466,13 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 raise RuntimeError(f"wc_empty: error {rc}")
 
         arms = {"cublas": arm_cublas, "plain": arm(0), "plain_pipe": arm_pipe(0), "empty": arm_empty}
+        for cfg in ws_cfgs:
+            arms[f"plain_ws_{ws_name(cfg)}"] = arm_ws(0, cfg)
         for k in ks:
             arms[f"k{k}"] = arm(k)
             arms[f"p{k}"] = arm_pipe(k)
+            for cfg in ws_cfgs:
+                arms[f"w{k}_{ws_name(cfg)}"] = arm_ws(k, cfg)
         for f in arms.values():
             f()
         torch.cuda.synchronize()
@@ -451,18 +487,22 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 host[a].append(h)
         med = {a: statistics.median(v) for a, v in times.items()}
         host_max = max(max(v) for v in host.values())
-        native = min(med["cublas"], med["plain"], med["plain_pipe"])
+        native = min(med[a] for a in med if a in ("cublas", "plain", "plain_pipe") or a.startswith("plain_ws_"))
         net = {a: (med[a] - med["empty"]) / (med["plain"] - med["empty"]) for a in med if a != "empty"}
         res["times"][mb] = {"median_s": med, "times_s": times, "cublas_m": mpad, "host_enqueue_max_s": host_max,
                             "host_bound": host_max > 0.8 * spin_s, "pipe_grids": grids,
                             "native_s": native, "ratio_vs_native": {a: med[a] / native for a in med},
                             "ratio_vs_plain": {a: med[a] / med["plain"] for a in med},
                             "ratio_vs_plain_net_of_empty": net,
-                            "gbps_stored": {a: (nwords * 8 if a[0] in "kp" and a[1:].isdigit() else n * kd) / med[a] / 1e9
+                            "gbps_stored": {a: (nwords * 8 if a[0] in "kpw" and a[1].isdigit() else n * kd) / med[a] / 1e9
                                             for a in med if a != "empty"}}
+        ws_best = {k: min((med[f"w{k}_{ws_name(c)}"], ws_name(c)) for c in ws_cfgs) for k in ks} if ws_cfgs else {}
         log(f"gemm {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain {med['plain'] * 1e6:.1f} us, "
-            f"plain_pipe {med['plain_pipe'] * 1e6:.1f} us, empty {med['empty'] * 1e6:.1f} us; vs native "
-            + ", ".join(f"k{k} {med[f'k{k}'] / native:.2f}x/{med[f'p{k}'] / native:.2f}x" for k in ks)
+            f"plain_pipe {med['plain_pipe'] * 1e6:.1f} us, "
+            + "".join(f"plain_ws_{ws_name(c)} {med[f'plain_ws_{ws_name(c)}'] * 1e6:.1f} us, " for c in ws_cfgs)
+            + f"empty {med['empty'] * 1e6:.1f} us; native {native * 1e6:.1f} us; vs native "
+            + ", ".join(f"k{k} {med[f'k{k}'] / native:.2f}x/{med[f'p{k}'] / native:.2f}x"
+                        + (f"/ws {ws_best[k][0] / native:.2f}x {ws_best[k][1]}" if ws_cfgs else "") for k in ks)
             + (" HOST-BOUND" if host_max > 0.8 * spin_s else ""))
     del ring, wring, stores, plain, w
     torch.cuda.empty_cache()
@@ -518,6 +558,10 @@ def main() -> int:
     ap.add_argument("--theta", type=float, default=0.21,
                     help="the tensor cores' encode capacity over the CUDA cores': MMA-bound, four squarings a "
                          "mma.m16n8k32 at 4e14 MAC/s against 1.8e12 squarings/s")
+    ap.add_argument("--ws", default="2x2,4x3,4x4,8x4,8x6",
+                    help="the warp-specialized GEMM's configurations, CONSUMERSxSTAGES, comma-separated ('' for none)")
+    ap.add_argument("--gemm-only", action="store_true",
+                    help="after the gates, only the GEMM: no read, decode, rates or analysis")
     a = ap.parse_args()
 
     import torch
@@ -536,6 +580,7 @@ def main() -> int:
     sms = props.multi_processor_count
     ks = [int(k) for k in a.ks.split(",")]
     batches = [int(b) for b in a.batches.split(",")]
+    ws_cfgs = [tuple(int(v) for v in c.split("x")) for c in a.ws.split(",") if c]
     store_words = int(a.store_gib * (1 << 30)) // 8 // 2 * 2
 
     if a.mode == "ncu-decode":
@@ -562,7 +607,8 @@ def main() -> int:
             for mb in batches:
                 x = torch.randn(mb, kd, device="cuda").to(torch.float8_e4m3fn)
                 y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
-                for fn, extra in (("wc_gemm", ()), ("wc_gemm_pipe", (0, None))):
+                forms = [("wc_gemm", ()), ("wc_gemm_pipe", (0, None))] + [("wc_gemm_ws", (*c, 0, None)) for c in ws_cfgs]
+                for fn, extra in forms:
                     lib.call(fn, 0, ptr(plain), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, *extra, stream(torch))
                     for k in ks:
                         lib.call(fn, k, ptr(pay), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, *extra,
@@ -584,7 +630,32 @@ def main() -> int:
         log("a gate failed: nothing timed")
         (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
         return 5
+    if a.gemm_only:
+        gemm_lib = next((l for l in libs if l.bits == C.PAYLOAD_BITS), libs[0])
+    else:
+        gemm_lib = measure(res, libs, torch, a, sms, store_words, log, out_dir)
+    res["gemm_lib"] = gemm_lib.name
+    for lib in [gemm_lib, *(l for l in libs if l.bits != gemm_lib.bits)]:
+        key = "gemm" if lib is gemm_lib else f"gemm_{lib.name}"
+        res[key] = {}
+        log(f"gemm with {lib.name} ({lib.bits} payload bits a word)")
+        for name in a.shapes.split(","):
+            n, kd = SHAPES[name]
+            g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, ws_cfgs)
+            g["zeroing_s"] = {mb: gemm_zeroing(torch, n, mb, a.reps) for mb in batches}
+            g["payload_bits"] = lib.bits
+            res[key][name] = g
+            res["ok"] &= g.get("ok", False)
+            (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
+    (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
+    write_result(res, libs, out_dir)
+    log("done" if res["ok"] else "done with a failed gate")
+    return 0 if res["ok"] else 5
 
+
+def measure(res: dict, libs: list[Lib], torch, a, sms: int, store_words: int, log, out_dir: Path) -> Lib:
+    """The read rate, the tag, the compute-only rates, the standalone decode and the analysis, into res; returns the
+    fastest-decoding library of 56 payload bits a word, the GEMM's."""
     store = torch.randint(0, 1 << 61, (store_words,), dtype=torch.int64, device="cuda")
     res["read"] = read_rate(libs[0], torch, store, sms, a.reps)
     log(f"read {res['read']['gbps']:.0f} GB/s over {store_words * 8 / 2**30:.1f} GiB")
@@ -612,26 +683,8 @@ def main() -> int:
             f" floor {row.get('floor', {}).get('rebuild', float('nan')):.4f} free {row['free']['rebuild']:.4f}"
             f" free-floor {row['free_floor']['rebuild']:.4f}")
     (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
-
     narrow = [l for l in libs if l.bits == C.PAYLOAD_BITS]
-    gemm_lib = max(narrow, key=lambda l: res["libs"][l.name]["rates"]["decode"][KMAX]["per_s"])
-    res["gemm_lib"] = gemm_lib.name
-    for lib in [gemm_lib, *(l for l in libs if l.bits != C.PAYLOAD_BITS)]:
-        key = "gemm" if lib is gemm_lib else f"gemm_{lib.name}"
-        res[key] = {}
-        log(f"gemm with {lib.name} ({lib.bits} payload bits a word)")
-        for name in a.shapes.split(","):
-            n, kd = SHAPES[name]
-            g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log)
-            g["zeroing_s"] = {mb: gemm_zeroing(torch, n, mb, a.reps) for mb in batches}
-            g["payload_bits"] = lib.bits
-            res[key][name] = g
-            res["ok"] &= g.get("ok", False)
-            (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
-    (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
-    write_result(res, libs, out_dir)
-    log("done" if res["ok"] else "done with a failed gate")
-    return 0 if res["ok"] else 5
+    return max(narrow, key=lambda l: res["libs"][l.name]["rates"]["decode"][KMAX]["per_s"])
 
 
 def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
@@ -639,8 +692,8 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
-    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}]
-    for k in range(1, KMAX + 1):
+    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
+    for k in range(1, KMAX + 1) if "analysis" in res else ():
         ms.append({"name": f"decode_k{k}", "value": max(res["libs"][l.name]["decode"][k].get("gbps_stored", 0.0)
                                                        for l in libs), "unit": "GB/s"})
         row = res["analysis"]["k"][k]
