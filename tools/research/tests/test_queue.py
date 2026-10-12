@@ -467,7 +467,8 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
     """12 Oct: `research queue status` on architecture's VM, run without `--marked-after`, listed week-old marks (#1145, #1736)
-    as admitted though drive, with its cutoff, never took them.  The cutoff is `marked_after` in the rules on `main`."""
+    as admitted though drive, with its cutoff, never took them.  The cutoff is `marked_after` in the rules on `main`, and a PR whose
+    mark it ignores says so, so its owner re-marks it or closes it (12 Oct: circuits' #1784, #1786, #1801 sat unseen)."""
     import research.queue as Qm
 
     cfg = world.tmp / "store.toml"
@@ -486,8 +487,9 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     argv = ["queue", "status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin),
             "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
     assert research_main(argv) == 0
-    got = {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)}
-    assert got == {1: "waiting", 2: "ready"}
+    got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
+    assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
+    assert got[2][0] == "ready"
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 

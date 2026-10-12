@@ -215,13 +215,23 @@ class StoreLabels:
     def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None):
         self.store, self.log, self.since = store, log, since
         self._pulled: set[int] = set()
+        self._newest: dict[tuple[int, str], object] = {}
 
     def ready(self, pr: int, head: str) -> bool:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
         given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue until the owner
         marks it again or pushes a new head (12 Oct: #1824's ejection lived in the ejecting VM's state, and drive re-admitted it)."""
         labs = sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts)
+        self._newest[(pr, head)] = labs[-1] if labs else None
         return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
+
+    def before_cutoff(self, pr: int, head: str) -> str | None:
+        """When the newest `ready` label `ready` read on `pr:{n}@{head}` is `true` but older than ``since``, its time: a mark
+        drive ignores, which `status` names so the owner re-marks or closes the PR (12 Oct: #1784, #1786, #1801)."""
+        lab = self._newest.get((pr, head))
+        if lab is None or self.since is None or str(lab.value).lower() != "true" or lab.ts >= self.since:
+            return None
+        return lab.ts
 
     def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
         """{head: its ``key`` labels} for each head of pull request ``pr`` but ``head`` that has some, after pulling every head's
@@ -285,9 +295,11 @@ def _message(pr: PR) -> str:
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
-                 auth: tuple[str, ...] = (), first: tuple[int, ...] = ()):
+                 auth: tuple[str, ...] = (), first: tuple[int, ...] = (),
+                 before_cutoff: Callable[[int, str], str | None] | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
+        self.before_cutoff = before_cutoff
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
@@ -387,7 +399,12 @@ class Queue:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
             elif ejected and ejected["head"] == p.head:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
-            elif not self.ready(p.number, p.head):
+            elif self.ready(p.number, p.head):
+                pass
+            elif self.before_cutoff and (when := self.before_cutoff(p.number, p.head)):
+                e.state, e.why = "waiting", (f"ignored: marked before cutoff (its ready mark at {p.head[:8]} is from {when}, "
+                                             f"before `marked_after`): re-mark it or close it")
+            else:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
             e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
@@ -1047,7 +1064,8 @@ def main(argv: list[str]) -> int:
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
-                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n))
+                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n),
+                  before_cutoff=labels.before_cutoff)
         lock = _lock(a.workdir)  # noqa: F841
         if not a.marked_after:
             if a.rules is None:
