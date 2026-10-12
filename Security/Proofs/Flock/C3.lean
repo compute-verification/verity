@@ -1,10 +1,22 @@
 import Proofs.Flock.C3.Fork.Sound
+import Proofs.Flock.C3.Compose.Bridge
+import Proofs.Flock.C3.VStarList.Statements
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
 
-`Flock.Guarantees.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3`) is proved from piece (a); the others give its
-non-vacuity. Each piece has its own directory and namespace, and `README.md` beside this file is the gap list.
+`Flock.Guarantees.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3`) is proved from piece (a); pieces (b)–(h)
+discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'s statements over the verifier's list
+(`_hob`). Each piece has its own directory and namespace, and `README.md` beside this file is the gap list.
 
-* (a) `C3/Fork/`, `FlockC3.Fork`: candidate 3's table is sound in fork form.
+* (a) `C3/Fork/`, `FlockC3.Fork`: candidate 3's table is sound in fork form (`holoForkSound_holoAt`).
+* (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
+  `holoTableCL_plays`) and VBridge from the stages' obligations (`vbridge_c3`).
+* (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`).
+* (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`).
+* (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`).
+* (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`).
+* (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`).
+* (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParses_of_list`) and R's
+  shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`).
 -/
