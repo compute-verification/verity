@@ -500,6 +500,12 @@
    "assumptions": [],
    "type_hash": "a21adbd046d00882c1e70e700d64da16422d54a36bf8750774eecbb17dc8992c"
   },
+  "Accounting.SecurityProofs.RateAuditSketch": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditTensorSketch": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateAuditWindows": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateAuditWindows : Accounting.Guarantees.RateAuditWindows"],
@@ -555,6 +561,9 @@
    ],
    "assumptions": [],
    "type_hash": "3826b46366b899e55a3083d468bae586354658a2e785f88f40dd75e38c0577e0"
+  },
+  "Accounting.SecurityProofs.SketchBinds": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
    "owner": "@memory-accounting",
@@ -4124,6 +4133,9 @@
    "Accounting.SecurityProofs.RateAuditWindows": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAudit, it bounds acceptance of abstract chip programs in the random-oracle model, one per window and each any function of the other windows' coins (Security/Definitions/Accounting/RateAudit.lean), not the rate audit's code.",
    "Accounting.SecurityProofs.RateHonest": "completeness: an honest device (no on-chip state or free side sources, a link carrying exactly the certified stream, N queries, nothing rebuilt) is accepted on every store, stream, oracle and sample with footprint and ingress exactly N * b and compute N * c_tag, so RateAudit's event is not vacuous and the gap between N * b and its floor is in the lock",
    "Accounting.SecurityProofs.RateOfAudit": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAudit, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditJoint.lean), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.RateAuditSketch": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags hash the certified stream and a digest of each tile, for a device that obtains sectors only whole and as they are (Security/Definitions/Accounting/RateAuditSketch.lean), with the device's bounds (held sectors within S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the digest, the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-sketch-verbatim, bandwidth-instantiation and random-oracle carry it to a deployed device.",
+   "Accounting.SecurityProofs.RateAuditTensorSketch": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditSketch, it bounds acceptance of an abstract chip program in the random-oracle model, at the tensor-core sketch's digest (Accounting.RateSketch.sketch), not the rate audit's code.",
+   "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",

@@ -155,6 +155,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Rate codec work: on the stated device, rebuilding k words of E that it neither holds nor reads, from setup and "
           "the weights they encode, costs at least k * c_enc units of compute, with no amortization across words",
           "Rate codec work", "measured"),
+    # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
+    # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
+    # reading or sending something other than E's sectors as they are
+    Entry("rate-sketch-verbatim", "model",
+          "Rate sketch verbatim device model: the rate device model for a sketch-then-hash tag, with on-chip state, device "
+          "memory, the side link and rebuilding each returning whole sectors of E or of the certified stream as they are, "
+          "the sectors on chip chosen before the signs, so nothing the device holds, reads or takes in is a function of "
+          "several sectors; a host that computes sketches after the signs are revealed and sends them over the link is "
+          "outside it", "Rate sketch verbatim"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "

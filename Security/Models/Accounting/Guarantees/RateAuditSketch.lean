@@ -1,0 +1,96 @@
+import Definitions.Accounting.RateAuditSketch
+
+/-!
+# The rate audit with a sketch-then-hash tag (trusted)
+
+The game is `Security/Definitions/Accounting/RateAuditSketch.lean`; proofs are in
+`Security/Proofs/Accounting/RateAudit/Sketch.lean`. No named assumption: the device's bounds (on-chip state `S`, side
+link `L`, oracle queries `q`, the compute budget `F` at `c_tag` per tag and `c_enc` per rebuilt sector) and its class,
+a device that obtains sectors only whole and verbatim, define what the guarantees quantify over; the claims registry
+carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
+
+* `RateAuditSketch`: in one window, for any digest, an accepted device's footprint reaches the floor except with
+  probability `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.
+* `SketchBinds`: signs that bind sectors make the tensor-core sketch's fiber `1`.
+* `RateAuditTensorSketch`: the two at the deployed tag, 32-byte sectors and INT8 sketches into INT32 accumulators.
+-/
+
+namespace Accounting.Guarantees
+
+open Accounting Accounting.RateSketch
+open Pous (Bits pr)
+open scoped ENNReal
+
+/-- **The rate audit with a sketch-then-hash tag, for a device that reads sectors verbatim.** For every digest
+`dig σ` of a tile of `m` sectors of a finite type `X` (`w` bits each in the accounting), and every device of
+`RateSketch.Device`'s class (on-chip state of at most `S` bits of held sectors, a side link that carries at most `L`
+bits per window, at most `q` oracle queries), over uniform data (a store of `N` tiles and a certified stream of `ρ`
+sectors), uniform signs `σ`, a fresh oracle with `h`-bit tags and `s` sampled tiles, and for every compute budget `F`,
+at `c_tag` per tag and `c_enc` per rebuilt sector, and every `g`: the probability that the verifier accepts, the run's
+compute is within `F`, and its footprint falls short of the floor (`RateSketch.floor`),
+
+  `footprint · c_enc < k·m·w·c_enc − (S + (L − ρ·w))·c_enc − (F − k·c_tag)·w`,
+
+is at most
+
+  `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.
+
+**The reading.** Divide by `c_enc` and by `|E| = N·m·w`, with `k = ⌈(1 − ε_s)·N⌉`: an accepted device's footprint is
+at least `(1 − μ)·|E|` bits except with probability `ε = (1 − ε_s)^s + s·2^-h + Pr_σ[g < fib_σ] + q·g/|X|`, where
+`μ = ε_s + (S + c_free)/|E| + (F − k·c_tag)/(N·m·c_enc)` and `c_free = L − ρ·w` is the side capacity the certified
+stream leaves free. Unlike `RateAudit`'s, the floor has no compression slack `λ`: in this class a sector the device did
+not obtain is one it does not know at all. The digest enters only through `fib_σ`, the min-entropy that one unread
+sector leaves in it (`2^-w·fib_σ` per query is the guess): binding signs give `fib_σ = 1` (`SketchBinds`), and the
+signs' chance of not binding is the per-window `Pr_σ[g < fib_σ]`, once, not per query.
+
+**The proof** (`Accounting.SecurityProofs.RateAuditSketch`) follows `RateAudit`'s. A sampled tile passes because the
+device queried the oracle at its digest under the stream, or by a guessed tag (`2^-h` per sampled tile); the sample
+misses the tiles never queried with chance `((k − 1)/N)^s`. A correct query for a tile one of whose sectors, or one of
+the stream's, the run never obtained (held, read, taken in or rebuilt) is a guess: resampling that sector leaves the
+run as it is, so at most `g` of its `|X|` values make the query right (`q·g/|X|` over the queries). Otherwise the `k`
+queried tiles and the stream are `k·m + ρ` sectors the run obtained: at most `S/w` held, `footprint/w` read, `L/w` over
+the link, and the rest rebuilt at `c_enc` each from the `F − k·c_tag` that tagging leaves.
+
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the rate audit's code computes. -/
+def RateAuditSketch : Prop :=
+  ∀ (N m ρ h S L q w s k F cTag cEnc g : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig]
+    [Fintype Dg] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg) (A : RateSketch.Device N m ρ h S L q w X Sig Dg),
+    pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
+        A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
+          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : Sig => g < fib dig σ) +
+        ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
+
+/-- **Binding signs make the tensor-core sketch's fiber `1`.** For signs whose block on every sector is injective on
+INT8 sectors (`SectorsBind`), two contents of one sector that give one sketch, with the rest of the tile fixed, are
+equal: their difference changes each coordinate by at most `2·32·128 < 2^32`, so the INT32 accumulators see it
+exactly. Proof: `Accounting.SecurityProofs.SketchBinds`.
+
+Frozen (no-function, hash): a property of the sketch's definition at signs that bind, which the deployed tag's code
+evaluates on hardware, not in Lean. -/
+def SketchBinds : Prop :=
+  ∀ (k m : ℕ) (σ : SketchSigns k m), SectorsBind σ → fib (sketch (k := k) (m := m)) σ ≤ 1
+
+/-- **The rate audit at the deployed sketch-then-hash tag.** `RateAuditSketch` for 32-byte sectors (`w = 256`), uniform
+`k_s × n` signs and the tensor-core sketch into INT32 accumulators, at `g = 1` with `SketchBinds`: an accepted device's
+footprint reaches the floor except with probability
+
+  `((k − 1)/N)^s + s/2^h + Pr_σ[¬ SectorsBind σ] + q/2^256`.
+
+**The reading.** At `k_s = 64` the signs bind but for the chance that some sector's `64 × 32` block of uniform signs
+has a column dependency, a number of the signs' law that is evaluated outside Lean. At `k_s = 16` no block binds, and
+the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
+`Accounting.SecurityProofs.RateAuditTensorSketch`, from the two.
+
+Frozen (no-function, hash): like `RateAuditSketch`, a bound in the random-oracle model over abstract chip programs. -/
+def RateAuditTensorSketch : Prop :=
+  ∀ (N m ρ h S L q s k F cTag cEnc ks : ℕ)
+    (A : RateSketch.Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))),
+    pr (fun x : Data N m ρ Sector × Coins N ρ h s Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) =>
+        A.Accepts sketch x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
+          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m 256 ρ S L F cTag cEnc k)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : SketchSigns ks m => ¬ SectorsBind σ) +
+        (q : ℝ≥0∞) / 2 ^ 256
+
+end Accounting.Guarantees
