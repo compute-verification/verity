@@ -22,7 +22,7 @@ using namespace wc;
 static const char* const NAME = "ro-sketch-blake3/v0";
 
 #ifndef SK_CHAINS
-#define SK_CHAINS 4
+#define SK_CHAINS 8
 #endif
 
 template <int KR>
