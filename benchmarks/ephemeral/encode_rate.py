@@ -22,7 +22,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True, help="the directory holding kv.py and kv_bench.py")
     ap.add_argument("--lib", required=True, help="kv.cu built at KV_FIELD = 512")
-    ap.add_argument("--ks", default="1,2")
+    ap.add_argument("--ks", default="1,2,3", help="k = 3 is where the stated guarantees are; k = 2 the upgrade")
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
