@@ -130,6 +130,7 @@ import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.W1Checks
+import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.PearlC.WholeCircuit
 import Proofs.Pouw.PearlC.TileCheck8
 import Proofs.Pouw.PearlC.TileCheck8Words

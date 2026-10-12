@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -78,6 +79,7 @@ import tempfile
 import time
 import tomllib
 import urllib.request
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -543,6 +545,237 @@ class WarmBuilds:
                 _move(src, home)
 
 
+#: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go
+ARTIFACTS_CAP = 20 << 30
+ARTIFACT = re.compile(r"[0-9a-f]{16}\.[a-z.]+")
+#: a bundle's members: Lake's cache layout, nothing else
+MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|outputs/(?!\.\.?/)[A-Za-z0-9_.-]+/[0-9a-f]{16}\.json")
+#: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
+BUNDLE_CAP = 3 << 30
+#: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
+SHARED = "lean-artifacts/"
+#: how many of the newest recorded checks' bundles the launcher sends
+SHARED_LIMIT = 12
+
+
+class LakeArtifacts:
+    """The node's Lake artifact cache, in Lake's own layout (`artifacts/<hash>.<ext>`, `outputs/<package>/<input hash>.json`).
+    Every audit's builds read it (`check.lake_env`) and never write it; after an audit, each module of a package whose audit
+    passed goes in from its build's trace. A module version any earlier passing audit on this node built is then restored
+    whatever tree comes next, not only the one its package's kept build (`WarmBuilds`) came from. Lake keys a module's
+    outputs by its input hash (its source, its imports' outputs, the toolchain and the options), and the audit still checks
+    every statement against the restored `.olean` files and replays every declaration through the kernel.
+
+    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
+    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A bundle is
+    trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
+
+    def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
+        self.store, self.cap = store, cap
+        #: (entry, its outputs) of each module version this object stored that the cache lacked
+        self.added: list[tuple[str, list[str]]] = []
+
+    def _lock(self):
+        self.store.mkdir(parents=True, exist_ok=True)
+        f = open(self.store / "lock", "w")
+        fcntl.flock(f, fcntl.LOCK_EX)
+        return f
+
+    def put(self, pkgs: set[Path]) -> int:
+        """Store the modules of ``pkgs``' builds; the number the cache lacked. A module goes in only when each output its
+        trace names is in the build with that hash (`<file>.hash`), its outputs before the entry naming them."""
+        with self._lock():
+            n = sum(self._module(pkg, t) for pkg in sorted(pkgs) for t in sorted((pkg / ".lake/build/lib/lean").rglob("*.trace")))
+            self.prune()
+        return n
+
+    def _module(self, pkg: Path, trace: Path) -> bool:
+        build = pkg / ".lake" / "build"
+        try:
+            d = json.loads(trace.read_text())
+            scope = json.loads((pkg / "lake-manifest.json").read_text())["name"]
+        except (OSError, ValueError, KeyError):
+            return False
+        out, h = d.get("outputs"), d.get("depHash")
+        if not isinstance(out, dict) or not isinstance(h, str):
+            return False
+        mod = str(trace.relative_to(build / "lib" / "lean"))[: -len(".trace")]
+        files = {}
+        for name in _strings(out):
+            if not ARTIFACT.fullmatch(name):
+                continue
+            digest, ext = name.split(".", 1)
+            f = build / ("ir" if ext in ("c", "bc", "ltar") else "lib/lean") / f"{mod}.{ext}"
+            try:
+                if (f.parent / f"{f.name}.hash").read_text().strip() != digest:
+                    return False
+            except OSError:
+                return False
+            files[name] = f
+        if not files:
+            return False
+        arts = self.store / "artifacts"
+        arts.mkdir(exist_ok=True)
+        for name, f in files.items():
+            dst = arts / name
+            if dst.exists():
+                os.utime(dst)
+                continue
+            tmp = arts / f".{name}.{os.getpid()}.tmp"
+            try:
+                os.link(f, tmp)
+            except OSError:
+                shutil.copyfile(f, tmp)
+            os.chmod(tmp, 0o444)
+            os.replace(tmp, dst)
+        entry = self.store / "outputs" / scope / f"{h}.json"
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        new = not entry.exists()
+        tmp = entry.parent / f".{h}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(out))
+        os.replace(tmp, entry)
+        if new:
+            self.added.append((f"outputs/{scope}/{h}.json", sorted(files)))
+        return new
+
+    def bundle(self, dest: Path, cap: int = BUNDLE_CAP) -> int:
+        """Write the module versions `added` as a gzipped tar at ``dest``, each with every output it names, outputs before
+        entries, up to ``cap`` bytes uncompressed; the number of entries written (none: no file)."""
+        with self._lock():
+            todo, size, names = [], 0, set()
+            for entry, outs in self.added:
+                try:
+                    more = sum((self.store / "artifacts" / n).stat().st_size for n in outs if n not in names)
+                    more += (self.store / entry).stat().st_size
+                except OSError:
+                    continue
+                if size + more > cap:
+                    break
+                todo.append((entry, outs))
+                names.update(outs)
+                size += more
+            if not todo:
+                return 0
+            tmp = dest.with_name(f".{dest.name}.tmp")
+            with tarfile.open(tmp, "w:gz", compresslevel=1) as t:
+                for n in sorted(names):
+                    t.add(self.store / "artifacts" / n, arcname=f"artifacts/{n}", recursive=False)
+                for entry, _ in todo:
+                    t.add(self.store / entry, arcname=entry, recursive=False)
+            os.replace(tmp, dest)
+        return len(todo)
+
+    def take(self, urls: dict[str, str], log=print) -> int:
+        """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
+        sha256, and unpacked member by member, each a file of Lake's layout (`MEMBER`) that the cache lacks, outputs before
+        the entries naming them; a file here is never replaced. The number of entries added. A bundle that fails is skipped,
+        and its modules are built; one whose bytes fail (not the sha256 named, or not unpackable) is marked taken, since they
+        never change. The URL is never logged: it grants a read until it expires."""
+        want = {k[len(SHARED):]: u for k, u in sorted(urls.items()) if k.startswith(SHARED)}
+        taken = self.store / "taken"
+        want = {h: u for h, u in want.items() if re.fullmatch(r"[0-9a-f]{64}", h) and not (taken / h).exists()}
+        if not want:
+            return 0
+        taken.mkdir(parents=True, exist_ok=True)
+        t0, n = time.monotonic(), 0
+
+        def get(h: str, url: str) -> Path | None:
+            part = self.store / f".{h}.{os.getpid()}.part"
+            try:
+                d = hashlib.sha256()
+                with urllib.request.urlopen(url, timeout=120) as r, open(part, "wb") as f:
+                    for chunk in iter(lambda: r.read(1 << 20), b""):
+                        d.update(chunk)
+                        f.write(chunk)
+                if d.hexdigest() == h:
+                    return part
+                log(f"lean-audit: artifact bundle {h[:12]} is not the one named; skipped")
+                (taken / h).touch()
+            except OSError as e:
+                log(f"lean-audit: artifact bundle {h[:12]} could not be fetched ({getattr(e, 'code', None) or type(e).__name__})")
+            part.unlink(missing_ok=True)
+            return None
+
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            parts = dict(zip(want, ex.map(lambda h: get(h, want[h]), want)))
+        with self._lock():
+            for h, part in parts.items():
+                if part is None:
+                    continue
+                try:
+                    n += self._unpack(part)
+                    (taken / h).touch()
+                except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as e:
+                    log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
+                    (taken / h).touch()
+                except OSError as e:
+                    log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
+                finally:
+                    part.unlink(missing_ok=True)
+            self.prune()
+        log(f"lean-audit: {n} module version(s) taken from {sum(p is not None for p in parts.values())} of {len(want)} "
+            f"artifact bundle(s) in {time.monotonic() - t0:.0f} s")
+        return n
+
+    def _unpack(self, part: Path) -> int:
+        n, entries = 0, []
+        with tarfile.open(part, "r:gz") as t:
+            for m in t:
+                if not m.isfile() or not MEMBER.fullmatch(m.name):
+                    continue
+                if m.name.startswith("outputs/"):
+                    entries.append((m.name, t.extractfile(m).read()))
+                    continue
+                dst = self.store / m.name
+                if dst.exists():
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+                with t.extractfile(m) as src, open(tmp, "wb") as f:
+                    shutil.copyfileobj(src, f)
+                os.chmod(tmp, 0o444)
+                os.replace(tmp, dst)
+        for name, data in entries:
+            dst = self.store / name
+            try:
+                outs = [v for v in _strings(json.loads(data)) if ARTIFACT.fullmatch(v)]
+            except ValueError:
+                continue
+            if dst.exists() or not outs or not all((self.store / "artifacts" / v).exists() for v in outs):
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+            tmp.write_bytes(data)
+            os.replace(tmp, dst)
+            n += 1
+        return n
+
+    def prune(self) -> int:
+        """Remove the least recently stored artifacts while those only the cache holds exceed the cap, and the entries no
+        newer than them; the number of artifacts removed. An entry whose output is gone is a miss, so Lake rebuilds."""
+        arts = [(s.st_mtime, s.st_size if s.st_nlink == 1 else 0, f) for f in (self.store / "artifacts").glob("*")
+                if (s := f.stat())]
+        own = sum(size for _, size, _ in arts)
+        if own <= self.cap:
+            return 0
+        n, horizon = 0, 0.0
+        for mtime, size, f in sorted(arts):
+            if own <= self.cap * 3 // 4:
+                break
+            f.unlink(missing_ok=True)
+            own, n, horizon = own - size, n + 1, mtime
+        for e in (self.store / "outputs").glob("*/*.json"):
+            if e.stat().st_mtime <= horizon:
+                e.unlink(missing_ok=True)
+        return n
+
+
+def _strings(j) -> list[str]:
+    if isinstance(j, str):
+        return [j]
+    return [s for v in (j.values() if isinstance(j, dict) else j if isinstance(j, list) else ()) for s in _strings(v)]
+
+
 def _move(src: Path, dst: Path) -> None:
     try:
         os.replace(src, dst)
@@ -638,6 +871,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     builds = WarmBuilds(deps.parent / "lean-builds")
+    artifacts = LakeArtifacts(deps.parent / "lean-artifacts")
     passed: set[Path] = set()
     audited: list[str] = []
     failed: list[str] = []
@@ -650,11 +884,16 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         if not fresh:
             for p in sorted({*audited, *(d for q in audited for d in path_deps(q))}):
                 builds.take(work, p, p in audited, log)
+            try:
+                artifacts.take(urls or {}, log)
+            except OSError as e:
+                log(f"lean-audit: no artifact bundle taken: {e}")
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
-                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay")]),
+                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay"),
+                                                "--artifacts", str(artifacts.store)]),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
@@ -677,7 +916,16 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     finally:
         warm.give_back(passed)
         if not fresh:
-            builds.give_back(work, {work / p for p in audited if p in reports and not reports[p].get("failures")})
+            kept = {work / p for p in audited if p in reports and not reports[p].get("failures")}
+            try:
+                log(f"lean-audit: {artifacts.put(kept)} module version(s) new in the artifact cache")
+                if os.environ.get("RESEARCH_RUN_DIR") and artifacts.added:
+                    dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
+                                if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
+                    log(f"lean-audit: {artifacts.bundle(dest)} of them bundled for other nodes ({dest.name})")
+            except OSError as e:
+                log(f"lean-audit: the artifact cache was not written: {e}")
+            builds.give_back(work, kept)
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
@@ -745,12 +993,38 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
     want = {deps_key(ROOT / p) for p in packages(COMMON.tracked_files(ROOT) or [])}
     pinned = {k: v for k, v in pins().items() if k in want}
     try:
-        r = load_remote() if pinned else None
+        r = load_remote()
     except ConfigError:
         r = None
     if not hasattr(r, "presign"):
         return {}
-    return {k: r.presign(object_key(v["sha256"]), ttl_s) for k, v in sorted(pinned.items())}
+    return {**{k: r.presign(object_key(v["sha256"]), ttl_s) for k, v in sorted(pinned.items())},
+            **{SHARED + h: r.presign(object_key(h), ttl_s) for h in shared_bundles()}}
+
+
+def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
+    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
+    most ``limit``: only a recorded run's, as `gather_verdicts` takes only theirs. Empty when the store can't be read: each
+    node then reuses only what it built."""
+    from research.store.local import LocalStore
+
+    out: list[str] = []
+    try:
+        store = store or LocalStore()
+        if store.remote is not None:
+            store.refresh(attempts_only=True)
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
+                               (4 * limit,))
+        for (rid,) in rows:
+            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+            for f in store.listing(art) if art else []:
+                if re.fullmatch(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz", f["path"]) and f["remote"] and f["sha256"] not in out:
+                    out.append(f["sha256"])
+            if len(out) >= limit:
+                break
+    except Exception as e:  # noqa: BLE001  (no bundle: each node reuses only what it built)
+        print(f"lean-audit: no artifact bundles listed from the store ({type(e).__name__}: {e})", file=sys.stderr)
+    return out[:limit]
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
