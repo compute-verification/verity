@@ -1,6 +1,7 @@
 import Definitions.Accounting.Device
 import Definitions.Accounting.Joint
 import Definitions.Accounting.Pouw
+import Definitions.Accounting.Memory
 import Definitions.Accounting.Tag
 import Definitions.Accounting.Actual
 import Definitions.Accounting.Physical
