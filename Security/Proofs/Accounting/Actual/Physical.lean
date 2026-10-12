@@ -8,8 +8,8 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 * `forward_of_causal`: causality at any latency makes wires run forward in time inside every location, the form the
   split needs.
 * `ingress_le`, `egress_le`: under `Links`, `in_X(I), out_X(I) ≤ β_X |I|`. A gate that `A[X, I]` reads from outside `X`
-  reaches it on a link across `X`'s boundary, read during `I`; a gate of `A[X, I]` read outside `X` leaves on one, sent
-  during `I`.
+  reaches it on a link across `X`'s boundary, read during `I` at the link's end inside `X` (`inner`); a gate of `A[X, I]`
+  read outside `X` leaves on one, sent during `I` to its end outside (`outer`). Each counts one way of each link.
 * `computeRate_one`: compute rate at a pricing of at least one per computed gate bounds the number of gates, compute
   rate at one per gate.
 -/
@@ -41,6 +41,23 @@ theorem mem_boundary {E : Type*} [Fintype E] {ends : E → L × L} {X : Finset L
   simp only [boundary, mem_filter, mem_univ, true_and]
   rcases he with he | he <;> rw [he] <;> simp [hx, hy]
 
+open Classical in
+/-- The end of link `e` in `X` (its second end, when its first isn't), and the other: for a link across `X`'s boundary,
+the end inside and the end outside. -/
+noncomputable def inner {E : Type*} (ends : E → L × L) (X : Finset L) (e : E) : L :=
+  if (ends e).1 ∈ X then (ends e).1 else (ends e).2
+
+open Classical in
+@[inherit_doc inner]
+noncomputable def outer {E : Type*} (ends : E → L × L) (X : Finset L) (e : E) : L :=
+  if (ends e).1 ∈ X then (ends e).2 else (ends e).1
+
+theorem inner_outer {E : Type*} {ends : E → L × L} {X : Finset L} {e : E} {x y : L} (hx : x ∉ X) (hy : y ∈ X)
+    (he : ends e = (x, y) ∨ ends e = (y, x)) : inner ends X e = y ∧ outer ends X e = x := by
+  classical
+  unfold inner outer
+  rcases he with he | he <;> rw [he] <;> simp [hx, hy]
+
 /-- **Ingress is at most `β_X` a tick**: `in_X([a, b)) ≤ β_X (b − a)`. -/
 theorem ingress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
     (h : A.Links ends β link) (X : Finset L) (a b : ℕ) :
@@ -48,15 +65,17 @@ theorem ingress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ
   classical
   unfold Placed.ingress linkCapacity
   rw [Finset.sum_mul]
-  refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans (Finset.sum_le_sum fun e _ => (h.2 e a b).1))
+  refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans
+    (Finset.sum_le_sum fun e _ => (h.2 e (inner ends X e) a b).1))
   intro c hc
   obtain ⟨hc, hcX⟩ := mem_filter.1 hc
   obtain ⟨-, g, hg, hcg⟩ := (mem_into A).1 hc
   obtain ⟨-, hgX, hgt⟩ := (mem_region A).1 hg
   have hne : A.x c ≠ A.x g := fun h' => hcX (h' ▸ hgX)
-  refine mem_biUnion.2 ⟨link g c, mem_boundary hcX hgX (h.1 g c hcg hne), ?_⟩
+  have he := (h.1 g c hcg hne).2
+  refine mem_biUnion.2 ⟨link g c, mem_boundary hcX hgX he, ?_⟩
   simp only [Placed.readOn, mem_filter, mem_univ, true_and]
-  exact ⟨g, hcg, hne, rfl, hgt⟩
+  exact ⟨g, hcg, hne, rfl, (inner_outer hcX hgX he).1.symm, hgt⟩
 
 /-- **Egress is at most `β_X` a tick**: `out_X([a, b)) ≤ β_X (b − a)`. -/
 theorem egress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
@@ -65,15 +84,16 @@ theorem egress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ}
   classical
   unfold Placed.egress linkCapacity
   rw [Finset.sum_mul]
-  refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans (Finset.sum_le_sum fun e _ => (h.2 e a b).2))
+  refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans
+    (Finset.sum_le_sum fun e _ => (h.2 e (outer ends X e) a b).2))
   intro g hg
   obtain ⟨hg, k, hkX, hgk⟩ := mem_filter.1 hg
   obtain ⟨-, hgX, hgt⟩ := (mem_region A).1 hg
   have hne : A.x g ≠ A.x k := fun h' => hkX (h' ▸ hgX)
-  have he := h.1 k g hgk hne
-  refine mem_biUnion.2 ⟨link k g, mem_boundary hkX hgX he.symm, ?_⟩
+  have he := (h.1 k g hgk hne).2.symm
+  refine mem_biUnion.2 ⟨link k g, mem_boundary hkX hgX he, ?_⟩
   simp only [Placed.sentOn, mem_filter, mem_univ, true_and]
-  exact ⟨hgt, k, hgk, hne, rfl⟩
+  exact ⟨hgt, k, hgk, hne, rfl, (inner_outer hkX hgX he).2.symm⟩
 
 /-- **Pricing at least one per gate bounds the gates**: compute rate at a pricing `π ≥ 1` on computed gates is compute
 rate at one per gate. -/
