@@ -115,14 +115,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean), which states the code half only;
-    # no attestation hardware backs it.  Its host-held state half is Daniel's widening of 11 Oct
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's challenger) runs "
-          "its stated code on its Nebius host, and the host keeps the device's host-held state as written: it never "
-          "restores that state from a snapshot, a backup or another older copy, and never restarts the device onto "
-          "host-held state older than what the device has run. That state is the LMS leaf state, PoUS's session-id log, "
-          "the bandwidth audit's challenger state and the network certifier's state",
+          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
           "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
