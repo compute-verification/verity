@@ -9,7 +9,10 @@
 #     --declared-output 'out/*' --env GPU_LEASE_WHO=ra-rate-redteam -- taskset -c 48-95 bash benchmarks/rate_redteam/contend.sh
 #
 # Env: CHALLENGER (the challenger's CPUs, one thread a physical core; default 48,50,...,76), TENANT (the tenant's CPUs;
-# default 78-95, both threads of the other physical cores), TENANT_MIB (each tenant thread's buffers, 256), REPS (3).
+# default 78-95, both threads of the other physical cores), PHYS=1 (pick both at lease time instead: NEED idle physical
+# cores, default 13, for the challenger and every other idle CPU of 48-95 for the tenant), GEN (foldtwo's generators,
+# 10), STORES (`cached`, the configuration of record's `--temporal`, and/or `nt`; default cached), TENANT_MIB (each
+# tenant thread's buffers, 256), REPS (3).
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, host.txt, gpu.txt, env.txt, smi.csv, gates.json, gen_<arm>.json,
 # fold_two_<arm><rep>.json, tenant_<arm><rep>.json (the tenant's bandwidth), busy_<arm><rep>.txt (each CPU's busy share).
 set -euo pipefail
@@ -40,8 +43,31 @@ if [ "${1:-}" = leased ]; then
   HOG=
   cleanup() { [ -n "$HOG" ] && kill "$HOG" 2> /dev/null; kill $SMI 2> /dev/null || true; }
   trap cleanup EXIT
-  echo "challenger $CHALLENGER; tenant $TENANT" >> "$O/host.txt"
   echo "at lease: $(busy)" >> "$O/host.txt"
+  # PHYS=1: the challenger on the first NEED physical cores of 48-95 whose threads were both idle for a second (one
+  # thread of each), the tenant on every other idle CPU of 48-95 outside those cores, as run_stream.sh's PHYS=1 picks.
+  if [ -n "${PHYS:-}" ]; then
+    read -r CHALLENGER TENANT < <("$PY" -c '
+import time, sys
+need = int(sys.argv[1])
+def stat():
+    return {int(l.split()[0][3:]): [int(x) for x in l.split()[1:]] for l in open("/proc/stat") if l[3].isdigit()}
+def cpus(s):
+    return [c for p in s.strip().split(",") for c in range(int(p.split("-")[0]), int(p.split("-")[-1]) + 1)]
+a = stat(); time.sleep(1); b = stat()
+busy = {c: 1 - (b[c][3] + b[c][4] - a[c][3] - a[c][4]) / max(1, sum(b[c]) - sum(a[c])) for c in a}
+mine = range(48, 96)
+sib = {c: cpus(open(f"/sys/devices/system/cpu/cpu{c}/topology/thread_siblings_list").read()) for c in mine}
+idle = [c for c in mine if c == min(sib[c]) and all(s in mine and busy[s] < 0.1 for s in sib[c])]
+chal = idle[:need]
+held = {s for c in chal for s in sib[c]}
+ten = [c for c in mine if c not in held and busy[c] < 0.1]
+print(",".join(map(str, chal)), ",".join(map(str, ten)))' "${NEED:-13}")
+    [ "$(echo "$CHALLENGER" | tr ',' '\n' | wc -l)" -ge "${NEED:-13}" ] ||
+      { echo "REFUSED: PHYS=1 but fewer than ${NEED:-13} idle physical cores ($CHALLENGER)"; exit 3; }
+    [ -n "$TENANT" ] || { echo "REFUSED: PHYS=1 left no idle CPU for the tenant"; exit 3; }
+  fi
+  echo "challenger $CHALLENGER; tenant $TENANT" >> "$O/host.txt"
   taskset -pc "$CHALLENGER" $$ > /dev/null
   MPS_CPUS=$(echo "$CHALLENGER" | tr ',' '\n' | tail -n 2 | paste -sd,)
   common=(--out "$O" --blocks 524288 --reps 7 --windows 20 --sizes-mib 80 --piece 1048576 --gen-threads 16)
@@ -62,16 +88,21 @@ if [ "${1:-}" = leased ]; then
     taskset -c "$MPS_CPUS" nvidia-cuda-mps-control -d
   trap 'cleanup; echo quit | CUDA_MPS_PIPE_DIRECTORY=$MPSDIR nvidia-cuda-mps-control; sleep 1;
         nvidia-smi -i "$UUID" --query-compute-apps=pid,process_name,used_memory --format=csv > "$O/mps_after.txt" 2>&1' EXIT
-  fold=(--mode foldtwo "${common[@]}" --windows 40 --live 10 --temporal --fold-ctas 8 --deadline-us 1150
+  fold=(--mode foldtwo "${common[@]}" --windows 40 --live "${GEN:-10}" --fold-ctas 8 --deadline-us 1150
         --challenger-first --mps-dir "$MPSDIR")
   rc=0
+  # STORES: the generators' stores, cached (`--temporal`, the configuration of record) and/or non-temporal
   for rep in $(seq "${REPS:-3}"); do
-    for arm in quiet tenant; do
-      [ $arm = tenant ] && tenant_on "$arm$rep"
-      busy > "$O/busy_$arm$rep.txt"
-      CUDA_VISIBLE_DEVICES=0 "$S/bwstream" "${fold[@]}" --suffix "_$arm$rep" ||
-        { r=$?; echo "foldtwo $arm$rep exited $r"; [ $rc = 0 ] && rc=$r; }
-      [ $arm = tenant ] && tenant_off
+    for st in ${STORES:-cached}; do
+      for arm in quiet tenant; do
+        name=$arm$rep; [ "$st" = nt ] && name=${arm}_nt$rep
+        [ $arm = tenant ] && tenant_on "$name"
+        busy > "$O/busy_$name.txt"
+        extra=(); [ "$st" = cached ] && extra=(--temporal)
+        CUDA_VISIBLE_DEVICES=0 "$S/bwstream" "${fold[@]}" "${extra[@]}" --suffix "_$name" ||
+          { r=$?; echo "foldtwo $name exited $r"; [ $rc = 0 ] && rc=$r; }
+        [ $arm = tenant ] && tenant_off
+      done
     done
   done
   exit $rc
