@@ -300,6 +300,25 @@ def test_first_goes_above_the_train_a_running_check_covers_and_cancels_nothing(w
     assert h.cancelled == []
 
 
+def test_a_train_whose_check_ended_before_its_attempt_reached_the_store_keeps_its_place(world, monkeypatch):
+    """12 Oct 19:47Z: 5897 passed, and the tick that ran in the seconds before its attempt reached the store took its train for
+    ended, restacked `next` under `--first 1826` and dropped the pass."""
+    import time as _time
+
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    (rid,) = h.run_state
+    h.run_state[rid] = ("done", 0, _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(h.clock)))
+    world.gh.put(9, world.change({"fix.txt": "fix\n"}))
+    h.q.first = (9,)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 9, 3] and h.q.chain()[1].commit == running
+
+
 def test_a_conflict_is_told_to_the_lander_and_the_lane_that_owns_the_pr(world, monkeypatch):
     """12 Oct: drive's ejection posts named only the lander's subteam, so an owner heard of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or

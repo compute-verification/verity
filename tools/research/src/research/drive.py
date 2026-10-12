@@ -338,13 +338,18 @@ class Driver:
             q.log(f"research queue drive: {why}")
             return why
         # before the sync: a rebuild takes a failed commit off `next`, and its failure would go untold (12 Oct 17:23Z: 3d11's)
+        # and a train whose check is running, or has ended without its attempt in the store yet, keeps its place (19:47Z: a
+        # rebuild in the seconds between 5897's end and its attempt's publication dropped a passing check)
         chain, main = q.chain(), _out(self.repo, "rev-parse", "origin/main")
+        q.hold = 0
         for i, m in enumerate(chain):
-            if m.commit in drive["launched"] and (v := self.verdict(m.commit, main, drive)).state == "failed":
+            if m.commit not in drive["launched"]:
+                continue
+            v = self.verdict(m.commit, main, drive)
+            if v.state == "failed":
                 self.failed(drive, m, chain[: i + 1], v)
-        live = {c for c, v in drive["launched"].items()
-                if any(st in ACTIVE and st != "unknown" for st, _, _ in self.states(self.repo, v["ids"]).values())}
-        q.hold = max((i + 1 for i, m in enumerate(q.chain()) if m.commit in live), default=0)
+            elif v.state == "running":
+                q.hold = i + 1
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         for n, c in state.get("conflicts", {}).items():
