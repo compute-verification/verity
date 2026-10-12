@@ -12,6 +12,8 @@
 //   FOLD 4  one level of Karatsuba over the column square (the red team's `sqr_kara`), then FOLD 1's fold.
 //   FOLD 5  the off-diagonal products' columns chained by their carries, one doubling, the squares in one chain,
 //           then FOLD 1's fold: fewer integer-ALU instructions beside the same multiplies.
+//   FOLD 6  FOLD 4's Karatsuba level over FOLD 5's 8-limb squares.
+//   FOLD 7  FOLD 5's square, then a fold of one 64-bit multiply-add a limb.
 // All keep x lazily below 2^512; the host reduces below p.
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
@@ -230,32 +232,49 @@ __device__ __forceinline__ void sqr_fused(const u32 (&a)[NL], u32 (&x)[NL]) {
 // starting at the previous one's carry (so a column ends in no add), give S = sum_{i<j} a_i a_j 2^(32(i+j)) < 2^1023;
 // then y = 2 S + sum a_i^2 2^(64 i) in one carry chain (a funnel shift a word for the doubling, the squares as
 // multiply-adds), then FOLD 1's fold.
-__device__ __forceinline__ void sqr_dbl(const u32 (&a)[NL], u32 (&y)[2 * NL]) {
-  u32 s[2 * NL];
+template <int N>
+__device__ __forceinline__ void sqr_dbl_n(const u32 (&a)[N], u32 (&y)[2 * N]) {
+  u32 s[2 * N];
   u32 c0 = 0, c1 = 0;
   s[0] = 0;
 #pragma unroll
-  for (int m = 1; m < 2 * NL - 2; ++m) {
+  for (int m = 1; m < 2 * N - 2; ++m) {
     u32 r[3] = {c0, c1, 0};
 #pragma unroll
-    for (int i = (m < NL ? 0 : m - NL + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
     s[m] = r[0];
     c0 = r[1];
     c1 = r[2];
   }
-  s[2 * NL - 2] = c0;
-  s[2 * NL - 1] = c1;
-  u32 d[2 * NL];
+  s[2 * N - 2] = c0;
+  s[2 * N - 1] = c1;
+  u32 d[2 * N];
   d[0] = 0;
 #pragma unroll
-  for (int k = 1; k < 2 * NL; ++k) d[k] = __funnelshift_l(s[k - 1], s[k], 1);
+  for (int k = 1; k < 2 * N; ++k) d[k] = __funnelshift_l(s[k - 1], s[k], 1);
   y[0] = madlo_cc(a[0], a[0], d[0]);
   y[1] = madchi_cc(a[0], a[0], d[1]);
 #pragma unroll
-  for (int i = 1; i < NL; ++i) {
+  for (int i = 1; i < N; ++i) {
     y[2 * i] = madclo_cc(a[i], a[i], d[2 * i]);
     y[2 * i + 1] = madchi_cc(a[i], a[i], d[2 * i + 1]);
   }
+}
+
+__device__ __forceinline__ void sqr_dbl(const u32 (&a)[NL], u32 (&y)[2 * NL]) { sqr_dbl_n<NL>(a, y); }
+
+// FOLD 7's fold: x_k = t_k + c t_(NL+k) + the previous limb's high word, each limb one 64-bit multiply-add (one
+// IMAD.WIDE in place of FOLD 1's IMAD and IMAD.HI) and a two-word add; the last high word h <= c folds as in FOLD 1.
+__device__ __forceinline__ void fold_wide(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
+  u32 h = 0;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    const u64 p = (u64)t[NL + k] * CF + t[k];
+    const u32 lo = (u32)p, hi = (u32)(p >> 32);
+    x[k] = add_cc(lo, h);
+    h = addc(hi, 0u);
+  }
+  if (add_small(x, h * CF)) add_small(x, CF);
 }
 
 template <int N>
@@ -285,6 +304,7 @@ __device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u3
 // FOLD 4: one level of Karatsuba (the red team's `sqr_kara` at 512 bits): a = a1 2^256 + a0, a^2 = C 2^512 +
 // (A + C - D) 2^256 + A with A = a0^2, C = a1^2, D = (a0 - a1)^2, three 8-limb column squares (108 products in place of
 // 136), then FOLD 1's fold. M = A + C - D = 2 a0 a1 < 2^513: 16 limbs and a top bit m.
+template <bool DBL>
 __device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
   constexpr int H = NL / 2;
   u32 x0[H], x1[H], d[H], e[H];
@@ -303,9 +323,15 @@ __device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
 #pragma unroll
   for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
   u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H];
-  sqr_cols_n<H>(x0, A);
-  sqr_cols_n<H>(x1, C);
-  sqr_cols_n<H>(d, D);
+  if (DBL) {
+    sqr_dbl_n<H>(x0, A);
+    sqr_dbl_n<H>(x1, C);
+    sqr_dbl_n<H>(d, D);
+  } else {
+    sqr_cols_n<H>(x0, A);
+    sqr_cols_n<H>(x1, C);
+    sqr_cols_n<H>(d, D);
+  }
   M[0] = add_cc(A[0], C[0]);
 #pragma unroll
   for (int k = 1; k < 2 * H; ++k) M[k] = addc_cc(A[k], C[k]);
@@ -335,12 +361,14 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
     return;
   }
   u32 t[2 * NL];
-  if (FOLD == 4) sqr_kara(a, t);
-  else if (FOLD == 5) sqr_dbl(a, t);
+  if (FOLD == 4) sqr_kara<false>(a, t);
+  else if (FOLD == 6) sqr_kara<true>(a, t);
+  else if (FOLD == 5 || FOLD == 7) sqr_dbl(a, t);
   else sqr_cols(a, t);
   if (FOLD == 0) fold_cols(t, x);
-  else if (FOLD == 1 || FOLD == 4 || FOLD == 5) fold_ptx(t, x);
-  else fold_shift(t, x);
+  else if (FOLD == 2) fold_shift(t, x);
+  else if (FOLD == 7) fold_wide(t, x);
+  else fold_ptx(t, x);
 }
 
 template <int FOLD, int ILP>
@@ -459,7 +487,7 @@ static void fill(std::vector<uint32_t> &h, int n) {
 using Kernel = void (*)(uint32_t *, int, int);
 static Kernel kernel(int fold, int ilp) {
 #define K_(F, I) if (fold == F && ilp == I) return sq::chain<F, I>;
-  K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2) K_(5, 1) K_(5, 2)
+  K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2) K_(5, 1) K_(5, 2) K_(6, 1) K_(7, 1) K_(7, 2)
 #undef K_
   fprintf(stderr, "no kernel for fold %d ilp %d\n", fold, ilp);
   exit(2);
