@@ -189,14 +189,19 @@ class GitHub:
 class Rules:
     hold_label: str = "hold"
     source: str = RULES
+    #: ready marks older than this don't count (`--marked-after` overrides it), so every VM's queue admits what drive admits
+    marked_after: str | None = None
 
     @classmethod
     def parse(cls, text: str, source: str = RULES) -> "Rules":
         doc = tomllib.loads(text)
-        unknown = set(doc) - {"hold_label"}
+        unknown = set(doc) - {"hold_label", "marked_after"}
         if unknown:
             raise QueueError(f"{source}: unknown keys {sorted(unknown)}")
-        return cls(doc.get("hold_label", "hold"), source)
+        cut = doc.get("marked_after")
+        if cut is not None and not (isinstance(cut, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cut)):
+            raise QueueError(f"{source}: marked_after {cut!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
+        return cls(doc.get("hold_label", "hold"), source, cut)
 
 
 def label_target(pr: int, head: str) -> str:
@@ -991,7 +996,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
-                                                                           "or after this time (a cutoff the driver announces)")
+                                                                           "or after this time (default: `marked_after` in the rules file)")
     ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
                                                                     "order, ahead of members that keep their place (a fix the next "
                                                                     "train needs)")
@@ -1035,6 +1040,11 @@ def main(argv: list[str]) -> int:
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n))
         lock = _lock(a.workdir)  # noqa: F841
+        if not a.marked_after:
+            if a.rules is None:
+                q._clone()
+                q.fetch()
+            labels.since = q.rules().marked_after
         if a.command == "status":
             entries = q.status()
             if a.json:

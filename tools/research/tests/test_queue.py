@@ -465,6 +465,33 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
     assert StoreLabels(LocalStore(tmp_path / "q5")).ready(12, head) is True          # until its owner marks it again
 
 
+def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
+    """12 Oct: `research queue status` on architecture's VM, run without `--marked-after`, listed week-old marks (#1145, #1736)
+    as admitted though drive, with its cutoff, never took them.  The cutoff is `marked_after` in the rules on `main`."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    (world.dev / "ci" / "queue.toml").write_text(RULES + 'marked_after = "2026-10-12T06:00:00Z"\n')
+    _git(world.dev, "commit", "-qam", "the cutoff")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    lane = LocalStore(world.tmp / "lane")
+    for n, ts in ((1, "2026-10-05T09:00:00Z"), (2, "2026-10-12T07:00:00Z")):
+        world.gh.put(n, head := world.change({f"{n}.txt": "x\n"}), ready=False)
+        lane.add_label(label_target(n, head), vocab.READY, True, f"lane-{n}", ts=ts)
+        assert labels_sync.push_targets(lane, [label_target(n, head)])["failed"] == []
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin),
+            "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
+    assert research_main(argv) == 0
+    got = {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)}
+    assert got == {1: "waiting", 2: "ready"}
+    assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
+    assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
+
+
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     """12 Oct: #1824's ejection lived in the ejecting VM's queue state; drive, on another VM, rebuilt `next` with it."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
