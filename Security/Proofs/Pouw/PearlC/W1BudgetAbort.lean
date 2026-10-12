@@ -95,10 +95,11 @@ theorem exec_mono (dv : W1Device) (h : Positive dv) :
         intro mid hc hf
         obtain ⟨k1, k2⟩ := exec_mono dv h k t mid
         exact ⟨by linarith [h.1], ((List.prefix_append _ _).trans hf).trans k2⟩
+      let st1 : St := ⟨st.mem, st.fetched ++ [p].filter preSalt, st.cost + dv.prices.int32⟩
       simp only [exec]
       split_ifs
-      · exact key _ (exec_mono dv h b true _).1 (exec_mono dv h b true _).2
-      · exact key _ (exec_mono dv h a true _).1 (exec_mono dv h a true _).2
+      · exact key _ (exec_mono dv h b true st1).1 (exec_mono dv h b true st1).2
+      · exact key _ (exec_mono dv h a true st1).1 (exec_mono dv h a true st1).2
 
 /-- Every word outside the pre-salt regions is below 256: the salt's bytes and zeros. -/
 def Small (M : Mem) : Prop := ∀ a : Addr, preSalt a = false → M a < 256
@@ -212,9 +213,9 @@ theorem copy_ticket (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ 
     (final dv salt copyAct U act []).mem (ticketAt 0 0 0) = w32 (act 0 0 0) := by
   simp [final, copyAct, exec, Instr.exec, init, actAt, ticketAt, w32]
 
+open Classical in
 /-- **W1 doesn't truncate**: given positive prices, a one-unit workload whose first activation word is 256 or more, and
 oracles under which `copyAct`'s unit 0 is correct and isn't, no program of W1 is `copyAct` aborted at budget 0. -/
-open Classical in
 theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R S) (salt : S → List ℕ)
     (U : Workload) (act : ℕ → Codes) (s : S) (H₁ H₂ : Q → R) (hN : U.layout.N = 1) (hm : 0 < (U.layout.shape 0).m)
     (hk : 0 < (U.layout.shape 0).k) (hbig : 256 ≤ w32 (act 0 0 0))
@@ -260,8 +261,12 @@ theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R
       exact_mod_cast Nat.one_le_iff_ne_zero.mpr hne
     have := mul_le_mul_of_nonneg_left h1 hdv.2.2.2.2.1.le
     linarith [hdv.2.2.2.2.1]
-  have hfetch : (final dv (salt s) p' U act []).fetched = [] :=
-    List.dedup_eq_nil.mp (List.eq_nil_of_length_eq_zero hlen)
+  have hfetch : (final dv (salt s) p' U act []).fetched = [] := by
+    have hd := List.eq_nil_of_length_eq_zero hlen
+    rcases hf : (final dv (salt s) p' U act []).fetched with _ | ⟨a, l⟩
+    · rfl
+    · have ha : a ∈ (final dv (salt s) p' U act []).fetched.dedup := List.mem_dedup.mpr (by simp [hf])
+      simp [hd] at ha
   have hcost : (final dv (salt s) p' U act []).cost = 0 := by
     rw [hlen, Nat.cast_zero, mul_zero, add_zero] at hq
     linarith
