@@ -17,10 +17,10 @@ on decode steps, as its two kernels reduce K (vLLM d9105ea80 `kernels/linear/cut
         the dot on each W row: one token row of the router logits
 
 on words (`F32Fma_v1`, `F32Mul_v1`, `F32Add_v1`, `DotBf16`'s step), and each one's v2 the same body on bits (`F32Add_v3`, the
-step's Boolean version; its ``word`` the v1, so `boolean.boolean_version` finds it).  The dotprod's steps on bits are traced from
-the bf16 words (`LlBf16FmaStep_v2`, `LlBf16MulAddStep_v2`, whose word views `LlBf16FmaStep_v1`, `LlBf16MulAddStep_v1` widen and
-then call `F32Fma_v1`, or `F32Mul_v1` and `F32Add_v1`), so the widened operands' 16 zero bits fold into the gates: `F32Fma_v3`
-and `F32Mul_v3` on widened words would recompute the same constant gates in every step.  vLLM's sm_90
+step's Boolean version; its ``word`` the v1, so `boolean.boolean_version` finds it).  The dotprod's step on bits is one element
+Definition traced from the bf16 words, as `boolean_dense`'s are: `LlBf16FmaStep_v1` (`F32Fma_v1` on the widened words) when
+FMA = 1, else `LlBf16MulAddStep_v1` (`F32Mul_v1`, then `F32Add_v1`), so the widened operands' 16 zero bits fold into its gates,
+where `F32Fma_v3` or `F32Mul_v3` on widened words would compute the same constant gates again in every step.  vLLM's sm_90
 dispatch at GLM-5.3's gate (K 6144, N 256): M <= 4 the dotprod at BS 128 (VEC 8, so 6 tiles of 1024); M 9 and 11 the split-K at
 SPLIT_K 8, else SPLIT_K 6 (TILE_K 256, WARPS 4, `mma.sync.m16n8k16`, `HopperBF16WgmmaDot16_v1`); `bf16_gemm_check.dispatch_sm90`,
 beside the numpy models.  The H200's kernels are pinned by `tests/properties/glm53_bf16_gemm_capture_gpu.py`, which also decides
@@ -39,8 +39,7 @@ from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array
 
 __all__ = ["LlBf16DotprodDot", "LlBf16DotprodDotWord", "LlBf16DotprodGemm", "LlBf16DotprodGemmWord", "LlBf16FmaStep",
-           "LlBf16FmaStepWord", "LlBf16MulAddStep", "LlBf16MulAddStepWord", "LlBf16SplitKDot", "LlBf16SplitKDotWord",
-           "LlBf16SplitKGemm", "LlBf16SplitKGemmWord", "WARP"]
+           "LlBf16MulAddStep", "LlBf16SplitKDot", "LlBf16SplitKDotWord", "LlBf16SplitKGemm", "LlBf16SplitKGemmWord", "WARP"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 WARP = 32
@@ -62,35 +61,18 @@ def _bits_zero(B) -> Coll:
     return Coll(F32, broadcast(space, idx, leaf, 32))
 
 
-def _step_type(X, T):
-    return lambda S: ((("x", X), ("w", X), ("acc", T)), T)
-
-
-def _fma_step(B, S, x, w, acc):
-    """The dotprod's contracted step: ``fma(f32(x), f32(w), acc)``, one FFMA."""
-    return B.call(W.F32Fma, B.call(P.Bf16ToF32, x), B.call(P.Bf16ToF32, w), acc)
-
-
-def _mul_add_step(B, S, x, w, acc):
-    """The dotprod's uncontracted step: ``acc + f32(x) * f32(w)``, an FMUL then an FADD."""
-    return B.call(W.F32Add, acc, B.call(W.F32Mul, B.call(P.Bf16ToF32, x), B.call(P.Bf16ToF32, w)))
-
-
-LlBf16FmaStepWord = CompositeDefinition("LlBf16FmaStep", 1, (), _step_type(P.BF16, P.F32), _fma_step, doc=_fma_step.__doc__,
-                                        conformance=CONFORMANCE)
-LlBf16MulAddStepWord = CompositeDefinition("LlBf16MulAddStep", 1, (), _step_type(P.BF16, P.F32), _mul_add_step,
-                                           doc=_mul_add_step.__doc__, conformance=CONFORMANCE)
 _STEP_PARAMS = (("x", BF16), ("w", BF16), ("acc", F32))
-LlBf16FmaStep = definition("LlBf16FmaStep", 2, lambda C, x, w, acc: fp.f32_fma(C, fp.bf16_to_f32(x), fp.bf16_to_f32(w), acc),
-                           _STEP_PARAMS, F32, word=bind(LlBf16FmaStepWord), doc=f"{_fma_step.__doc__} (on bits)",
+LlBf16FmaStep = definition("LlBf16FmaStep", 1, lambda C, x, w, acc: fp.f32_fma(C, fp.bf16_to_f32(x), fp.bf16_to_f32(w), acc),
+                           _STEP_PARAMS, F32, doc="fma(f32(x), f32(w), acc), one FFMA: F32Fma_v1 on the widened words",
                            conformance=CONFORMANCE)
 LlBf16MulAddStep = definition(
-    "LlBf16MulAddStep", 2,
+    "LlBf16MulAddStep", 1,
     lambda C, x, w, acc: fp.f32_add(C, acc, fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(w), ir_nan=True), ir_nan=True),
-    _STEP_PARAMS, F32, word=bind(LlBf16MulAddStepWord), doc=f"{_mul_add_step.__doc__} (on bits)", conformance=CONFORMANCE)
+    _STEP_PARAMS, F32, doc="acc + f32(x) * f32(w), an FMUL then an FADD: F32Mul_v1's and F32Add_v1's NaN words",
+    conformance=CONFORMANCE)
 
 WORD = {"zero": _word_zero, "widen": P.Bf16ToF32, "fma": W.F32Fma, "mul": W.F32Mul, "add": W.F32Add}
-#: on bits the dotprod calls one traced step per element on the bf16 words (`LlBf16FmaStep_v2`, `LlBf16MulAddStep_v2` by FMA)
+#: on bits the dotprod calls one step per element on the bf16 words, by FMA
 BITS = {"zero": _bits_zero, "add": EW.F32Add, "step": {1: LlBf16FmaStep, 0: LlBf16MulAddStep}}
 
 
