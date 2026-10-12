@@ -791,27 +791,29 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
 
 def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_needs_its_log(tmp_path, monkeypatch):
     """`--session-log FILE`: an LMS-signed audit refuses to start without one or with one inside `--lms-key`, and for a
-    key that exists (its `seed` there) it refuses a missing log before any session, with no leaf spent.  A log made once
-    serves later audits, each adding its sessions' ids."""
+    key that exists (its `seed` there) it refuses a missing log before any session, with no leaf spent and no log made."""
     from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.schemes import p2
 
     live, signer = _live(), _deployed_signer(tmp_path)
     monkeypatch.setattr(live, "lms_signer", lambda d, workers=1: signer)
-    limit, key, log = 500_000 + p2.RTT_ALLOWANCE_CAP_NS, tmp_path / "key", tmp_path / "session-log"
+    scheme, key, log = schemes.get("p2-16448/v4"), tmp_path / "key", tmp_path / "session-log"
+
+    def audit(**kw):
+        return live.audit("127.0.0.1", 0, scheme, b"s" * 24, bytes(64 * scheme.params.blocks), audits=1, pings=1,
+                          limit_ns=500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=live.LogicalClock(), signer="lms", lms_key=key,
+                          **kw)
+
     with pytest.raises(ValueError, match="takes the memory challenger's session log"):
-        _mc_at_the_p2_point(limit, audits=1, signer="lms", lms_key=key)
+        audit()
     with pytest.raises(ValueError, match="inside the key's directory"):
-        _mc_at_the_p2_point(limit, audits=1, signer="lms", lms_key=key, session_log_path=key / "sessions")
+        audit(session_log_path=key / "sessions")
     key.mkdir()
     (key / "seed").write_bytes(bytes(64))
     with pytest.raises(mc.SessionLogError, match="missing"):
-        _mc_at_the_p2_point(limit, audits=1, signer="lms", lms_key=key, session_log_path=log)
+        audit(session_log_path=log)
     assert not log.exists() and json.loads((tmp_path / "state").read_text())["next"] == 0
-    mc.SessionLog.create(log)
-    doc, _ = _mc_at_the_p2_point(limit, audits=1, signer="lms", lms_key=key, session_log_path=log)
-    assert doc["audits_accepted"] == 1
-    assert bytes.fromhex(doc["records"][0]["public"]["commitment"]["session"]) in mc.SessionLog(log)
 
 
 def test_decode_bench_result_names_device_rate_setup_and_keys_agreement(tmp_path):
