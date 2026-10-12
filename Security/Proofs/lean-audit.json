@@ -6,7 +6,7 @@
   "Proofs.Pouw",
   "Proofs.NetworkCertifier",
   "Proofs.Flock",
-  "Proofs.Accounting.Bandwidth"
+  "Proofs.Accounting"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

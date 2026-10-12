@@ -39,11 +39,11 @@ abbrev zcOf (p : ZerocheckProof) (r : Array F128) (z : F128) (rho : Array F128) 
 abbrev lcOf (p : LincheckProof) (rp : F128) (ts : Array F128) : Flock.LcOut :=
   { w := dot (skipWeights rp) p.zPartial, rPrime := rp, rIn := ts.reverse }
 
-/-- Ring switching's batched value `T = Σ_k γ_k·β_k` (Opening.lean:88). -/
+/-- Ring switching's batched value `T = Σ_k γ_k·β_k` (Opening.lean:86). -/
 abbrev rsT (claims : Array Claim) (rs : Array (Array F128)) (rpp : ℕ → Array F128) (gamma : Array F128) : F128 :=
   dot gamma ((List.range claims.size).map fun k => dot (eqTable (rpp k)) (tOf rs[k]!)).toArray
 
-/-- Ring switching's switched claims (Opening.lean:89). -/
+/-- Ring switching's switched claims (Opening.lean:87). -/
 abbrev rsSws (claims : Array Claim) (rpp : ℕ → Array F128) (gamma : Array F128) : Array Switched :=
   (Array.range claims.size).map fun k => ({ gamma := gamma[k]!, rpp := rpp k, z := claims[k]!.x.extract 1 } : Switched)
 
