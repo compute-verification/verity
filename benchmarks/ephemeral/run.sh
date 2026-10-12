@@ -7,9 +7,11 @@
 #     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-ephemeral \
 #     --env ARMS='70b:16:0:node 8b:8:0:node' -- taskset -c 48-95 bash benchmarks/ephemeral/run.sh
 #
-# ARMS: MODEL:LAYERS:MODE:HOW, MODEL 8b or 70b (the checkpoints' configs on node 2; weights are dummy), LAYERS 0 for the
-# checkpoint's depth, MODE 0 (no torch.compile, full decode graphs) or c (vLLM's default compilation and fusion passes),
-# HOW node (ncu per kernel), graph (ncu per CUDA graph) or time (no profiler: step times and the HBM read rate).
+# ARMS: MODEL:LAYERS:MODE:HOW[:TP], MODEL 8b or 70b (the checkpoints' configs on node 2; weights are dummy), LAYERS 0 for
+# the checkpoint's depth, MODE 0 (no torch.compile, full decode graphs) or c (vLLM's default compilation and fusion passes),
+# HOW node (ncu per kernel), graph (ncu per CUDA graph) or time (no profiler: step times and the HBM read rate), TP the
+# tensor parallelism (default 1; tag MODELtpTP): one process a rank, ncu on rank 0 only, so a collective it profiles runs
+# once against live peers (one pass, no replay).  GPUS (default 1) is the lease, at least every arm's TP.
 # BATCHES, CONTEXTS and ARM_MIN (default 12 minutes an arm) pass through.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -25,15 +27,18 @@ M70=$(ls -d /workspace/hf/hub/models--unsloth--Meta-Llama-3.1-70B/snapshots/*/ |
 export NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu} PY M8 M70 ARMS=${ARMS:?} ARM_MIN=${ARM_MIN:-12}
 export BATCHES=${BATCHES:-1,4,16,64} CONTEXTS=${CONTEXTS:-2048,8192,32768}
 # shellcheck disable=SC2016
-gpu-lease 1 --wait --max-min "${MAXMIN:-28}" -- bash -c '
-  UUID=${GPU_LEASE_UUID%%,*}; export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*}
-  nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,clocks.mem,memory.used --format=csv,noheader -i "$UUID" \
-    > "$O/gpu.txt"
+gpu-lease "${GPUS:-1}" --wait --max-min "${MAXMIN:-28}" -- bash -c '
+  LEASED=$CUDA_VISIBLE_DEVICES
+  for u in ${GPU_LEASE_UUID//,/ }; do
+    nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,clocks.mem,memory.used --format=csv,noheader -i "$u"
+  done > "$O/gpu.txt"
   for arm in $ARMS; do
-    IFS=: read -r m layers mode how <<< "$arm"
-    tag=${m}-L${layers}-${mode}-${how}
+    unset RANK LOCAL_RANK WORLD_SIZE MASTER_ADDR MASTER_PORT
+    IFS=: read -r m layers mode how tp <<< "$arm"
+    tp=${tp:-1}; tag=${m}-L${layers}-${mode}-${how}; [ "$tp" -gt 1 ] && tag=${m}tp${tp}-L${layers}-${mode}-${how}
+    export CUDA_VISIBLE_DEVICES=$(cut -d, -f1-"$tp" <<< "$LEASED")
     model=$M8; [ "$m" = 70b ] && model=$M70
-    A=(--model "$model" --layers "$layers" --batches "$BATCHES" --contexts "$CONTEXTS")
+    A=(--model "$model" --layers "$layers" --batches "$BATCHES" --contexts "$CONTEXTS" --tp "$tp")
     [ "$mode" = c ] && A+=(--compiled)
     P=()
     case $how in
@@ -42,9 +47,15 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-28}" -- bash -c '
                      --metrics dram__bytes_op_read.sum,dram__bytes_op_write.sum -f -o "$O/ncu-$tag") ;;
       time) A+=(--steps 32 --read-rate) ;;
     esac
+    [ "$tp" -gt 1 ] && export RANK=0 LOCAL_RANK=0 WORLD_SIZE=$tp MASTER_ADDR=127.0.0.1 MASTER_PORT=$((29500 + RANDOM % 2000))
+    for ((r = 1; r < tp; r++)); do
+      RANK=$r LOCAL_RANK=$r timeout "$((ARM_MIN * 60))" "$PY" benchmarks/ephemeral/steps.py "${A[@]}" \
+        --out "$O/$tag.json" > "$O/$tag.rank$r.log" 2>&1 &
+    done
     timeout "$((ARM_MIN * 60))" "${P[@]}" "$PY" benchmarks/ephemeral/steps.py "${A[@]}" --out "$O/$tag.json" \
       > "$O/$tag.log" 2>&1
-    echo "$tag $?" >> "$O/arms.rc"
+    rc=$?; wait
+    echo "$tag $rc" >> "$O/arms.rc"
   done'
 for r in "$O"/ncu-*.ncu-rep; do
   [ -e "$r" ] || continue

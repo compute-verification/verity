@@ -7,7 +7,8 @@ splits by point.  Without ncu the same windows are harmless and the steps are ti
 `attribute.py` reads per-layer and per-step bytes off the kernels and scales to the full depth.  Dummy weights move the
 same bytes as real ones (decode GEMMs, attention and greedy sampling don't branch on values).  The record holds what the
 design registers (each FP8 linear's weight, the KV cache) and what it doesn't (the BF16 lm_head and embedding table), so
-`attribute.py` can split the step's DRAM bytes.
+`attribute.py` can split the step's DRAM bytes.  Under ``--tp`` every rank runs this script with the same points, and
+the record is rank 0's: its shards, its KV heads and its card's bytes.
 """
 from __future__ import annotations
 
@@ -98,8 +99,9 @@ def read_rate(gib: float = 8.0, reps: int = 5) -> float:
     return gib * (1 << 30) / best
 
 
-def budget(model, cache, hf) -> dict:
-    """Bytes the step reads once (weights by kind) and the KV cache's bytes a token, from the engine's own tensors."""
+def budget(model, cache, hf, kv_heads: int) -> dict:
+    """Bytes the step reads once (weights by kind) and the KV cache's bytes a token, from the engine's own tensors: under
+    tensor parallelism, this rank's shards and its `kv_heads`."""
     from vllm.model_executor.layers.linear import LinearBase
     linears, scales, n_lin = 0, 0, 0
     for _, m in model.named_modules():
@@ -120,7 +122,7 @@ def budget(model, cache, hf) -> dict:
         "linear_bytes": linears, "linear_scale_bytes": scales, "linears": n_lin,
         "lm_head_bytes": lm.numel() * lm.element_size(), "lm_head_dtype": str(lm.dtype),
         "embed_bytes": emb.numel() * emb.element_size(), "tied": lm.data_ptr() == emb.data_ptr(),
-        "kv_bytes_per_token_layer": 2 * hf.num_key_value_heads * head_dim * kv_elem,
+        "kv_bytes_per_token_layer": 2 * kv_heads * head_dim * kv_elem,
         "layers": hf.num_hidden_layers,
     }
 
@@ -139,8 +141,12 @@ def main() -> None:
     ap.add_argument("--max-batched-tokens", type=int, default=16384,
                     help="the prefill chunk (70B's MLP activation over 32k tokens is 3.5 GiB, past what 0.93 leaves)")
     ap.add_argument("--read-rate", action="store_true", help="measure HBM read bandwidth after the points")
+    ap.add_argument("--tp", type=int, default=1,
+                    help="tensor parallelism, one process a rank (vLLM's external_launcher: RANK, LOCAL_RANK, WORLD_SIZE, "
+                         "MASTER_ADDR, MASTER_PORT); rank 0 writes --out, the others --out.rankR")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
+    rank = int(os.environ.get("RANK", "0"))
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [int(x) for x in args.contexts.split(",")]
     capture = sorted(set(batches))
@@ -169,6 +175,8 @@ def main() -> None:
           "kv_cache_dtype": args.kv_cache_dtype, "enforce_eager": False, "compilation_config": cc}
     if args.layers:
         kw["hf_overrides"] = {"num_hidden_layers": args.layers}
+    if args.tp > 1:
+        kw.update(tensor_parallel_size=args.tp, distributed_executor_backend="external_launcher")
     t0 = time.perf_counter()
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t0:.1f} s")
@@ -192,21 +200,24 @@ def main() -> None:
         return update_from_output
     hooks.wrap(sched, "update_from_output", make)
 
-    props = torch.cuda.get_device_properties(0)
+    props = torch.cuda.get_device_properties(torch.cuda.current_device())
     pc = getattr(vc.compilation_config, "pass_config", None)
     result = {
-        "model": args.model, "layers_override": args.layers, "compiled": args.compiled, "vllm": vllm.__version__,
+        "model": args.model, "layers_override": args.layers, "compiled": args.compiled, "tp": args.tp, "rank": rank,
+        "vllm": vllm.__version__,
         "torch": torch.__version__, "gpu": props.name, "sms": props.multi_processor_count,
         "l2_bytes": getattr(props, "L2_cache_size", None), "kv_tokens": kv_tokens, "block_size": int(cache.block_size),
         "kv_cache_dtype": str(cache.cache_dtype), "attention": attn, "compilation": cc,
         "pass_config": str(pc) if pc is not None else None, "async_scheduling": getattr(vc.scheduler_config,
                                                                                          "async_scheduling", None),
-        "budget": budget(model, cache, hf),
+        "budget": budget(model, cache, hf, vc.model_config.get_num_kv_heads(vc.parallel_config)),
         "model_shape": {"layers": hf.num_hidden_layers, "hidden": hf.hidden_size, "heads": hf.num_attention_heads,
                         "kv_heads": hf.num_key_value_heads, "intermediate": hf.intermediate_size, "vocab": hf.vocab_size},
         "points": [], "profile_steps": args.profile_steps, "profiled": window.windows,
     }
     out = Path(args.out)
+    if rank:
+        out = out.with_name(f"{out.name}.rank{rank}")
 
     def save() -> None:
         out.write_text(json.dumps(result, indent=1))

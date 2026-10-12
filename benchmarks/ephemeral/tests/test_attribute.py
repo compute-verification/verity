@@ -97,6 +97,23 @@ def test_attention_kernel_is_not_the_lm_head_however_large():
     assert A.classify(once, 1.0, 500) == "embed"
 
 
+def test_tensor_parallel_all_reduces_scale_with_depth_and_the_logits_gather_does_not():
+    nccl = "ncclDevKernel_AllReduce_Sum_bf16_RING_LL(ncclDevKernelArgsStorage<4096ul>)"
+    custom = "void vllm::cross_device_reduce_1stage<__nv_bfloat16, 2>(vllm::RankData *, vllm::RankSignals, int)"
+    gather = "ncclDevKernel_AllGather_RING_LL(ncclDevKernelArgsStorage<4096ul>)"
+    assert {A.classify(n, 1.0, 500) for n in (nccl, custom)} == {"allreduce"}
+    assert A.classify(gather, 1.0, 500) == "collective"
+    rows = []
+    for _ in range(4):
+        rows += [(GEMM, 250.0, 0.0), (nccl, 6.0, 4.0), (MHA, 2.0, 0.0), (custom, 6.0, 4.0)]
+    rows += [(LM, 500.0, 0.0), (gather, 3.0, 3.0)]
+    s = A.split(arm(layers=4), {"batch": 1, "context": 0, "tokens_open": 1, "tokens_close": 1}, A.windows(
+        A.rows_from_text(ncu_csv([(SPIN, 0, 0)] + rows)))[0])
+    assert s["classes"]["allreduce"]["read"] == pytest.approx(48)
+    assert s["full_depth"]["ephemeral_ex_lm"] == pytest.approx(32 * 12 + 3)
+    assert s["full_depth"]["write"] == pytest.approx(32 * 8 + 3)
+
+
 def test_attn_bytes_attribute(tmp_path: Path):
     res = {"cells": [{"batch": 2, "context": 64, "plain_bytes": 1000, "encoded_bytes": 1000}],
            "windows": [{"batch": 2, "context": 64, "form": 3, "splits": 4, "layers": 2, "partial_bytes_max": 8},

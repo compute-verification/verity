@@ -30,6 +30,10 @@ FULL_LAYERS = {8192: 80, 4096: 32}
 CLASSES = [
     ("marker", r"spin_kernel"),
     ("graph", r"^graph$"),
+    # tensor parallelism: two all-reduces a layer (one more for the embedding, counted as a layer's), and the logits'
+    # gather once a step
+    ("allreduce", r"AllReduce|cross_device_reduce|all_reduce|allreduce|[Oo]ne_?[Ss]hot|[Tt]wo_?[Ss]hot|multimem"),
+    ("collective", r"nccl|AllGather|all_gather|SendRecv"),
     ("kv_write", r"reshape_and_cache|concat_and_cache"),
     ("attention", r"kernel_mha|xqa|flashinfer|BatchDecode|BatchPrefill|[Aa]ttention|flash_fwd|fmha|paged_attention|merge_state|"
                   r"VariableLength|unified_attention|kernel_paged|decode_kernel|split_kv"),
@@ -45,7 +49,7 @@ CLASSES = [
                 r"gumbel|exponential|penalt"),
     ("embed", r"embedding|index_select|indexSelect|gather"),
 ]
-LAYERED = ("graph", "gemm", "attention", "kv_write", "norm", "quant", "act", "rope", "triton")
+LAYERED = ("graph", "gemm", "attention", "kv_write", "norm", "quant", "act", "rope", "triton", "allreduce")
 
 
 def classify(name: str, read: float, lm_head_bytes: int) -> str:
@@ -164,7 +168,7 @@ def attribute_dir(out: Path) -> tuple[list[dict], list[str], int]:
             timed = next((p for p in arm["points"] if p["batch"] == pt["batch"] and p["context"] == pt["context"]), {})
             s = split(arm, pt, w)
             result.append({"tag": tag, "layers": arm["budget"]["layers"], "compiled": arm["compiled"],
-                           **pt, "step_ms_under_ncu": timed.get("step_ms"), **s})
+                           "tp": arm.get("tp", 1), **pt, "step_ms_under_ncu": timed.get("step_ms"), **s})
     return result, fails, profiled
 
 
