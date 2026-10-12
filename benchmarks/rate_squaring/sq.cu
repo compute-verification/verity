@@ -17,8 +17,10 @@
 //   FOLD 8, 9   FOLD 6 held to 6 and 7 blocks of 128 a SM (80 and 72 registers), where its 96 registers allow 5.
 //   FOLD 10     FOLD 5 held to 8 blocks a SM (64 registers), where its 72 allow 7.
 //   FOLD 11, 12 two and three Karatsuba levels over FOLD 5's squares (NL/4- and NL/8-limb), then FOLD 1's fold.
+//   FOLD 13, 14 FOLD 6 and FOLD 5 held to one more block of 128 a SM than their registers allow, at 768 bits (5 and 6)
+//               and 1,024 (3 and 4): a sub-partition's 16K registers hold floor(512 / registers) warps.
 // All keep x lazily below 2^512; the host reduces below p. Other widths build with -DSQ_BITS=768 -DSQ_C=825 or
-// -DSQ_BITS=1024 -DSQ_C=105 (`kv.py`'s primes), with the forms that matter there (FOLD 1, 5, 6, 7, 11, 12 at ILP 1).
+// -DSQ_BITS=1024 -DSQ_C=105 (`kv.py`'s primes), with the forms that matter there (FOLD 1, 5, 6, 7, 11-14 at ILP 1).
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
 //   sq time FOLD ILP K TPB WAVES REPS   timed launches at the occupancy's blocks a SM times WAVES
@@ -380,10 +382,10 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   }
   u32 t[2 * NL];
   if (FOLD == 4) sqr_kara<false>(a, t);
-  else if (FOLD == 6 || FOLD == 8 || FOLD == 9) sqr_kara<true>(a, t);
+  else if (FOLD == 6 || FOLD == 8 || FOLD == 9 || FOLD == 13) sqr_kara<true>(a, t);
   else if (FOLD == 11) sqr_kara<true, 2>(a, t);
   else if (FOLD == 12) sqr_kara<true, 3>(a, t);
-  else if (FOLD == 5 || FOLD == 7 || FOLD == 10) sqr_dbl(a, t);
+  else if (FOLD == 5 || FOLD == 7 || FOLD == 10 || FOLD == 14) sqr_dbl(a, t);
   else sqr_cols(a, t);
   if (FOLD == 0) fold_cols(t, x);
   else if (FOLD == 2) fold_shift(t, x);
@@ -514,12 +516,16 @@ static void fill(std::vector<uint32_t> &h, int n) {
 using Kernel = void (*)(uint32_t *, int, int);
 static Kernel kernel(int fold, int ilp) {
 #define K_(F, I) if (fold == F && ilp == I) return sq::chain<F, I>;
+#define H_(F, I, B) if (fold == F && ilp == I) return sq::chain_held<F, I, B>;
 #if SQ_BITS == 512
   K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2) K_(5, 1) K_(5, 2) K_(6, 1) K_(7, 1) K_(7, 2)
-#define H_(F, I, B) if (fold == F && ilp == I) return sq::chain_held<F, I, B>;
   H_(8, 1, 6) H_(9, 1, 7) H_(10, 1, 8)
-#undef H_
+#elif SQ_BITS == 768
+  H_(13, 1, 5) H_(14, 1, 6)
+#elif SQ_BITS == 1024
+  H_(13, 1, 3) H_(14, 1, 4)
 #endif
+#undef H_
   K_(1, 1) K_(5, 1) K_(6, 1) K_(7, 1) K_(11, 1) K_(12, 1)
 #undef K_
   fprintf(stderr, "no kernel for fold %d ilp %d\n", fold, ilp);
