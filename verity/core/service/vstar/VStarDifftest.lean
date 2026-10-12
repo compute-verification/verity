@@ -142,6 +142,7 @@ def statementsFn (j : Json) : Except String Json := do
     | .inner _ _ p => do pure (Json.mkObj ([("name", (s.name : Json)), ("dir", (s.dir : Json)), ("instances", (s.instances : Json)),
         ("S", ((← jsonSha256 p.S.toJson) : Json)), ("ports", (p.S.ports.length : Json)), ("res_of", natsJson p.res),
         ("v_of", natsJson p.v)] ++ (← gfSummary p.S.gf)))
+    | s => throw s!"{s.name}: not one of statements' kinds"
   pure (Json.arr out)
 
 /-- Each of V*'s algebra statements over an inner session of shape `(m, k_log, claims)`: its name and whether the Lean
