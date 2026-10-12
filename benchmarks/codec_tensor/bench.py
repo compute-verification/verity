@@ -21,7 +21,10 @@ Nothing is timed before its gate passed, in this order:
   ro-blake3/v1, gated on every
   vector's sketch (a float32 GPU reference with TF32 off, exact), every tag (PyPI blake3, `tags.py` on a sample), and
   the leaves and root. A diagnostic build (`WT_SK_DIAG`, named `<field>-diag<bits>`) drops parts of the sketch to time
-  them: its partial sums are gated, its sketches and tags are not.
+  them: its partial sums are gated, its sketches and tags are not. At full slot `auto` adds the receipt on two sketch
+  warps of its own (T = -2); before its GEMMs, `gate_pass` checks the per-pass key (red team F29: `wt_pass` derives
+  pass j's seed, signs, key and leaves' prefix on the device from root_(j−1)), and once a linear one such launch runs
+  under a pass's key and is gated at that pass's seed (`pass_keyed`).
 """
 from __future__ import annotations
 
@@ -85,7 +88,10 @@ class Lib:
         so.wt_mix.argtypes = [q, q, i, v, i, v]
         so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
         so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, v, v]
+        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
+        so.wt_set_pass.argtypes = [v, i, i]
+        so.wt_pass.argtypes = [ctypes.c_uint, v, v, i, v]
+        so.wt_pass_state.argtypes = [v]
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
         so.wt_set_tag.argtypes = [v, v]
@@ -414,17 +420,20 @@ def parse(spec: str) -> list[tuple[int, ...]]:
 
 def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list[tuple[int, int, int, int]]:
     """(D, stages, T, k_s): DECODERSxSTAGES (untagged, T = -1), DECODERSxSTAGESxT (tagged: T tag warps from the
-    start, and every other warp tags once its own work is done) or DECODERSxSTAGESx-1xK_S (the decoders sketch at
-    k_s over tiles of `sketch_t` tasks, stages < 2 sketch_t), each checked against
-    wt_fused_sketch's bounds. `auto`: untagged, the most decoder warps the field's registers allow at 4 and 6 stages
-    fewer than fit at M = 32 (fewer stages leave more L1) and at all of them, and 2 fewer warps at 2 fewer stages
-    (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its best); tagged, 0 and 2 of those warps tagging
-    from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 0, 2, 3 and 4
-    fewer stages (the sketch's buffers already take some). Four or more tag warps (with the decoders that leave) fail
-    some gates in some runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
-    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (lib.sb + 40)  # noqa: E731
+    start, and every other warp tags once its own work is done), DECODERSxSTAGESx-1xK_S (the decoders sketch at
+    k_s over tiles of `sketch_t` tasks, stages < 2 sketch_t) or DECODERSxSTAGESx-2x16 (two sketch warps of their own
+    sketch and hash, beside D decoders: full slot, k_s = 16; at M > 16 only if D + 4 fit the field's warps), each
+    checked against wt_fused_sketch's bounds. `auto`: untagged, the most decoder warps the field's registers allow at
+    4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1) and at all of them, and 2 fewer warps at 2
+    fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its best); tagged, 0 and 2 of those
+    warps tagging from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 0, 2,
+    3 and 4 fewer stages (the sketch's buffers already take some), and at k_s = 16 and full slot the two sketch warps
+    beside all of them and beside 2 fewer, at 0 and 2 fewer stages. Four or more tag warps (with the decoders that
+    leave) fail some gates in some runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
+    smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (lib.sb + 48)  # noqa: E731
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
+    full_slot = lib.pb == lib.s
     if spec == "auto":
         cfgs = [(dmax, max(need(dmax), smax(0) - f), -1) for f in (4, 6, 0)]
         if dmax - 2 >= lib.fused_span:
@@ -432,25 +441,41 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
         cfgs += [(dmax - t, max(need(dmax - t), smax(0) - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
         for ks in (int(v) for v in sketch.split(",") if v):
             cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (0, 2, 3, 4)]
+            if ks == 16 and full_slot:
+                cfgs += [(d, min(2 * sketch_t - 1, max(need(d), smax(ks) - f)), -2, ks)
+                         for d in (dmax, dmax - 2) if d >= lib.fused_span for f in (0, 2)]
     else:
         cfgs = parse(spec)
     out = []
     for c in cfgs:
         if len(c) not in (2, 3, 4):
-            raise SystemExit(f"fused {c}: DxS, DxSxT or DxSx-1xK_S")
+            raise SystemExit(f"fused {c}: DxS, DxSxT, DxSx-1xK_S or DxSx-2x16")
         d, st, t, ks = tuple(c) + (-1, 0)[len(c) - 2:]
-        if not (lib.fused_span <= d and d + max(t, 0) <= dmax and need(d) <= st <= smax(ks) and t >= -1
-                and ks in (0, 16, 64) and (ks == 0 or (t == -1 and st < 2 * sketch_t))):
+        if not (lib.fused_span <= d and d + max(t, 0) <= dmax and need(d) <= st <= smax(ks) and t >= -2
+                and ks in (0, 16, 64) and (ks == 0 or (t in (-1, -2) and st < 2 * sketch_t))
+                and (t != -2 or (ks == 16 and full_slot))):
             raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dmax}, "
-                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T and "
-                             f"stages < {2 * sketch_t}")
+                             f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T (or T = -2: two "
+                             f"sketch warps, k_s = 16, full slot) and stages < {2 * sketch_t}")
         if (d, st, t, ks) not in out:
             out.append((d, st, t, ks))
     return out
 
 
+def sketch_warps(cfg) -> int:
+    return 2 if cfg[2] == -2 else 0
+
+
+def fused_fits(lib: Lib, k: int, mb: int, n: int, kd: int, cfg, sketch_t: int) -> bool:
+    """wt_fused_sketch takes cfg at M = mb (two sketch warps beside D decoders need D + 4 warps past M = 16)."""
+    launched = ctypes.c_int(0)
+    return lib.so.wt_fused_sketch(k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, max(cfg[2], 0), None, None,
+                                  0, cfg[3], None, None, sketch_t, sketch_warps(cfg), ctypes.byref(launched),
+                                  None) == 0
+
+
 def fused_name(k: int, cfg) -> str:
-    return (f"fused_k{k}_d{cfg[0]}s{cfg[1]}" + (f"t{cfg[2]}" if cfg[2] >= 0 else "")
+    return (f"fused_k{k}_d{cfg[0]}s{cfg[1]}" + (f"t{cfg[2]}" if cfg[2] >= 0 else "") + ("w2" if cfg[2] == -2 else "")
             + (f"sk{cfg[3]}" if cfg[3] else ""))
 
 
@@ -487,8 +512,8 @@ def tags_ok(tb: bytes, ref: dict) -> bool:
     return all(tb[32 * i:32 * i + 32] != b"\xff" * 32 for i in range(ref["blocks"]))
 
 
-def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int, leaves_of=TG.leaves) -> dict:
-    """The device's leaves over its tags and its tree's root, against tags.py's leaves (ro-blake3/v1's, or
+def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int, leaves_of=TG.leaves, seed: bytes = TAG_SEED) -> dict:
+    """The device's leaves over its tags and its tree's root, against tags.py's leaves at `seed` (ro-blake3/v1's, or
     `leaves_of`'s) and the RFC 6962 root."""
     nleaves = -(-nblk // TG.PER_LEAF)
     leaves = torch.empty(nleaves * 64, dtype=torch.uint8, device="cuda")
@@ -499,10 +524,57 @@ def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int, leaves_of=TG.leav
     lib.call("wt_tag_tree", ptr(nodes), nleaves, ctypes.addressof(ri), st)
     torch.cuda.synchronize()
     tb = host_bytes(tags_dev)
-    want = leaves_of(TAG_SEED, [tb[32 * i:32 * i + 32] for i in range(nblk)])
+    want = leaves_of(seed, [tb[32 * i:32 * i + 32] for i in range(nblk)])
     got = digests(host_bytes(leaves))
     root = digests(host_bytes(nodes[ri.value * 64:(ri.value + 1) * 64]))[0]
     return {"leaves": nleaves, "leaves_ok": got == want, "root_ok": root == TG.root(want), "root": root.hex()}
+
+
+def root_words(root: bytes) -> bytes:
+    """A 64-byte digest as the device holds a tree node: 8 SHA-512 state words, u64 little-endian in memory."""
+    return b"".join(int.from_bytes(root[8 * w:8 * w + 8], "big").to_bytes(8, "little") for w in range(8))
+
+
+def set_pass(lib: Lib, sketch_t: int, sigma: bytes = TAG_SEED) -> int:
+    """wt_set_pass at the window's σ for ro-sketch-blake3/v0 at k_s = 16 over tiles of sketch_t tasks; returns n."""
+    n = SKT.vector_bytes(lib.sb, sketch_t)
+    sg = ctypes.create_string_buffer(sigma)
+    lib.call("wt_set_pass", ctypes.addressof(sg), 16, n)
+    return n
+
+
+def pass_state(lib: Lib) -> dict:
+    out = ctypes.create_string_buffer(160)
+    lib.call("wt_pass_state", ctypes.addressof(out))
+    b = out.raw
+    return {"seed": b[:32], "k_s": b[32:64], "key": b[64:96]}
+
+
+def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4) -> dict:
+    """wt_pass (red team F29: pass j's receipt keyed by s_j = pass_seed(σ, j, root_(j−1))) against Python at random
+    j and roots: s_j, K_S, the tag key, the signs (sign_fragments of sign_bits(s_j)) and, through wt_tag_leaves over
+    random tags, the leaves' prefix (commit_gate at s_j)."""
+    n, m, st = set_pass(lib, sketch_t), SKT.steps(lib.sb), stream(torch)
+    signs = torch.empty(sketch_t * m * 32, dtype=torch.int32, device="cuda")
+    rng = random.Random(29)
+    rows = []
+    for t in range(trials):
+        j = (0, (1 << 32) - 1)[t] if t < 2 else rng.randrange(1 << 32)
+        root = rng.randbytes(64)
+        lib.call("wt_pass", j, ptr(to_dev(torch, root_words(root))), ptr(signs), sketch_t, st)
+        torch.cuda.synchronize()
+        got = pass_state(lib)
+        seed = SKT.pass_seed(TAG_SEED, j, root)
+        ks = SKT.randomness().derive(seed, SKT.SIGN_DOMAIN, {"tag": SKT.NAME, "k": 16, "n": n}).value
+        want = SKT.sign_fragments(SKT.sign_bits(seed, 16, n), m, sketch_t)
+        ys = [rng.randbytes(32) for _ in range(40)]
+        c = commit_gate(lib, torch, to_dev(torch, b"".join(ys)), len(ys), st, SKT.leaves, seed)
+        rows.append({"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == ks, "key": got["key"] == SKT.key(seed),
+                     "signs": bool(np.array_equal(signs.cpu().numpy().view(np.uint32), want)),
+                     "leaves": c["leaves_ok"], "root": c["root_ok"]})
+    ok = all(all(v for a, v in r.items() if a != "j") for r in rows)
+    log(f"pass gate {lib.name}: {'ok' if ok else 'FAIL'} over {trials} (j, root): {rows if not ok else ''}")
+    return {"ok": ok, "trials": rows, "n": n}
 
 
 def mismatch(pf, pp, nch: int, mb: int, n: int, groups: int) -> dict:
@@ -634,21 +706,47 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             sk_bufs[gr] = torch.empty(nvec * 32, dtype=torch.uint8, device="cuda")
         return sk_bufs[gr], nvec
 
-    def sketch_ref(k, s, gr):
-        """Every vector's sketch on the device (float32, exact), and its tags with the PyPI blake3 (tags.py on a
-        sample, which must agree)."""
-        if (k, s, gr) not in sk_refs:
+    def sketch_ref(k, s, gr, seed=TAG_SEED):
+        """Every vector's sketch at `seed` on the device (float32, exact), and its tags with the PyPI blake3 (tags.py
+        on a sample, which must agree)."""
+        if (k, s, gr, seed) not in sk_refs:
             vs = SKT.vectors_torch(torch, stores[k], n // 16, nch, lib.sb, gr, sketch_t)
-            ref = SKT.sketch_torch(torch, vs, sk[s]["bits"])
+            bits = sk[s]["bits"] if seed == TAG_SEED else SKT.sign_bits(seed, s, SKT.vector_bytes(lib.sb, sketch_t))
+            ref = SKT.sketch_torch(torch, vs, bits)
             del vs
             host = ref.cpu().numpy().astype(np.int64)
             pick = sorted({0, len(host) - 1, *random.Random(s + gr).sample(range(len(host)), 6)})
-            sample = {v: SKT.tags_of(TAG_SEED, host[v:v + 1], TAG_BASE + v)[0] for v in pick}
-            ys = SKT.tags_fast(TAG_SEED, host, TAG_BASE)
+            sample = {v: SKT.tags_of(seed, host[v:v + 1], TAG_BASE + v)[0] for v in pick}
+            ys = SKT.tags_fast(seed, host, TAG_BASE)
             if ys is not None and any(ys[v] != y for v, y in sample.items()):
                 raise SystemExit(f"{lib.name} {name}: the PyPI blake3 disagrees with tags.py on the sketch tags")
-            sk_refs[(k, s, gr)] = {"sk": ref, "tags": b"".join(ys) if ys is not None else None, "sample": sample}
-        return sk_refs[(k, s, gr)]
+            sk_refs[(k, s, gr, seed)] = {"sk": ref, "tags": b"".join(ys) if ys is not None else None,
+                                         "sample": sample}
+        return sk_refs[(k, s, gr, seed)]
+
+    def pass_keyed(k, mb, x, pp, cfg, gr, sp):
+        """cfg (two sketch warps) under pass j's key: wt_pass writes the signs and the key from a random root_(j−1),
+        and the launch's sketches, tags, leaves and root must be ro-sketch-blake3/v0's at pass_seed(σ, j, root)."""
+        j, root = 7, random.Random(n + kd + mb).randbytes(64)
+        seed = SKT.pass_seed(TAG_SEED, j, root)
+        set_pass(lib, sketch_t)
+        signs = torch.empty_like(sk[16]["signs"])
+        lib.call("wt_pass", j, ptr(to_dev(torch, root_words(root))), ptr(signs), sketch_t, st)
+        tb_dev, nvec = sk_tags_for(gr)
+        tb_dev.fill_(0xFF)
+        skb = torch.full((nvec * 16,), -1, dtype=torch.int32, device="cuda")
+        pf = torch.zeros_like(pp)
+        call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp, skout=skb, signs=signs)
+        torch.cuda.synchronize()
+        r = sketch_ref(k, 16, gr, seed)
+        out = {"cfg": fused_name(k, cfg), "j": j, "partials": bool(torch.equal(pf, pp)),
+               "sketch": bool(torch.equal(skb.view(nvec, 16), r["sk"])), "tags": sketch_tags_ok(host_bytes(tb_dev), r)}
+        c = commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves, seed)
+        out.update(leaves=c["leaves_ok"], root=c["root_ok"])
+        out["ok"] = all(v for a, v in out.items() if a not in ("cfg", "j"))
+        sk_refs.pop((k, 16, gr, seed))
+        set_sketch_tag(lib)
+        return out
 
     def sketch_tags_ok(tb: bytes, r: dict) -> bool:
         if any(tb[32 * v:32 * v + 32] != y for v, y in r["sample"].items()):
@@ -659,19 +757,20 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         launched = ctypes.c_int(0)
         if mode == 3:
             lib.call("wt_fused_sketch", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, max(cfg[2], 0), None,
-                     None, 0, cfg[3], None, None, sketch_t, ctypes.byref(launched), st)
+                     None, 0, cfg[3], None, None, sketch_t, sketch_warps(cfg), ctypes.byref(launched), st)
         else:
             lib.call("wt_gemm", mode, None, None, None, mb, n, kd, 0, cfg[0], cfg[1], 0, 0, None,
                      ctypes.byref(launched), st)
         return launched.value // nch
 
-    def call(mode, k, wbuf, x, y, partials, cfg, knob=0, groups=0, steps=None, skout=None):
+    def call(mode, k, wbuf, x, y, partials, cfg, knob=0, groups=0, steps=None, skout=None, signs=None):
         if mode == 3:
             tp = ptr(sk_tags_for(groups)[0]) if cfg[3] else ptr(tags_dev) if cfg[2] >= 0 else None
+            sg = signs if signs is not None else sk[cfg[3]]["signs"] if cfg[3] else None
             lib.call("wt_fused_sketch", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
                      int(partials), cfg[0], cfg[1], groups, max(cfg[2], 0), ptr(steps), tp, TAG_BASE, cfg[3],
-                     ptr(sk[cfg[3]]["signs"]) if cfg[3] else None, ptr(skout) if skout is not None else None, sketch_t,
-                     None, st)
+                     ptr(sg) if sg is not None else None, ptr(skout) if skout is not None else None, sketch_t,
+                     sketch_warps(cfg), None, st)
         else:
             lib.call("wt_gemm", mode, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, int(partials),
                      cfg[0], cfg[1], groups, knob, ptr(xr), None, st)
@@ -700,7 +799,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         for k in ks:
             set_key(lib, torch, keys[k])
             for cfg in fused_cfgs:
-                if cfg[3] == 64 and k != 1:
+                if (cfg[3] == 64 and k != 1) or not fused_fits(lib, k, mb, n, kd, cfg, sketch_t):
                     continue
                 gr, sp = steps_for(k, mb, cfg)
                 bad, sk_bad = [], []
@@ -737,6 +836,10 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     if "sketch_commit" not in res and not sk_bad:
                         res["sketch_commit"] = commit_gate(lib, torch, tb_dev, nvec, st, SKT.leaves)
                         log(f"sketch commit gate {lib.name} {name}: {nvec} vectors, {res['sketch_commit']}")
+                    if sketch_warps(cfg) and not lib.diag and not sk_bad and "pass_keyed" not in res:
+                        res["pass_keyed"] = pass_keyed(k, mb, x, pp, cfg, gr, sp)
+                        entry["tags"][fused_name(k, cfg) + "_pass"] = res["pass_keyed"]["ok"]
+                        log(f"pass-keyed gate {lib.name} {name} M={mb}: {res['pass_keyed']}")
                     res["sketch_tags"] = nvec
                     set_tag(lib)
                 entry["equal_plain"][fused_name(k, cfg)] = not bad
@@ -822,6 +925,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             tp = ptr(tags_dev) if mode == 3 and cfg[2] >= 0 else None
             nt = max(cfg[2], 0) if mode == 3 else 0
             sks, sgp = (cfg[3], ptr(sk[cfg[3]]["signs"])) if mode == 3 and cfg[3] else (0, None)
+            skw = sketch_warps(cfg) if mode == 3 else 0
             if sks:
                 tp = ptr(sk_tags_for(gr)[0])
 
@@ -830,7 +934,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 if mode == 3:
                     for p in ps:
                         rc |= so.wt_fused_sketch(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, nt, spp, tp,
-                                                 TAG_BASE, sks, sgp, None, sketch_t, None, st)
+                                                 TAG_BASE, sks, sgp, None, sketch_t, skw, None, st)
                 else:
                     for p in ps:
                         rc |= so.wt_gemm(mode, p, xp, yp, mb, n, kd, 0, cfg[0], cfg[1], gr, knob, xrp, None, st)
@@ -852,7 +956,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             arms[f"plain_c{cfg[0]}s{cfg[1]}"] = arm(0, 1, cfg)
         for k in ks:
             for cfg in fused_cfgs:
-                if not (cfg[3] == 64 and k != 1):
+                if not (cfg[3] == 64 and k != 1) and fused_fits(lib, k, mb, n, kd, cfg, sketch_t):
                     arms[fused_name(k, cfg)] = arm(3, k, cfg)
         for knob in mma_knobs:
             arms[f"mma{knob}"] = arm(1, 1, cfgs[0], knob)
@@ -880,8 +984,9 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                             "plain_best_s": plain_best, "host_enqueue_max_s": max(max(v) for v in host.values()),
                             "ratio_vs_native": {a: med[a] / native for a in med},
                             "ratio_vs_plain0": {a: med[a] / med[f"plain_c{cfgs[0][0]}s{cfgs[0][1]}"] for a in med}}
-        def best(k, want_tags, s=0):
-            cs = [c for c in fused_cfgs if (c[2] >= 0) == want_tags and c[3] == s and fused_name(k, c) in med]
+        def best(k, want_tags, s=0, w=0):
+            cs = [c for c in fused_cfgs if (c[2] >= 0) == want_tags and c[3] == s and sketch_warps(c) == w
+                  and fused_name(k, c) in med]
             return min((med[fused_name(k, c)], fused_name(k, c)[7:]) for c in cs) if cs else (float("nan"), "-")
 
         log(f"gemm {lib.name} {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain best {plain_best * 1e6:.1f} us; "
@@ -890,6 +995,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                         f"{best(k, True)[0] / native:.2f}x ({best(k, True)[1]})" for k in ks)
             + "".join(f", sketch {s} k{k} {best(k, False, s)[0] / native:.2f}x ({best(k, False, s)[1]})"
                       for s in sorted({c[3] for c in sketched}) for k in ks if s == 16 or k == 1)
+            + "".join(f", sketch warps k{k} {best(k, False, 16, 2)[0] / native:.2f}x ({best(k, False, 16, 2)[1]})"
+                      for k in ks if any(sketch_warps(c) for c in sketched))
             + "; mma " + " ".join(f"{kn}:{med[f'mma{kn}'] / native:.2f}" for kn in mma_knobs)
             + "; imad " + " ".join(f"{kn}:{med[f'imad{kn}'] / native:.2f}" for kn in imad_knobs))
     del ring, wring, stores, plain, w
@@ -909,6 +1016,7 @@ def layer_ratios(gemm: dict, batches, ks) -> dict:
         for k in ks:
             kinds = [(f"fused_k{k}", r"_d\d+s\d+$"), (f"fused_k{k}_tagged", r"t\d+$")]
             kinds += [(f"fused_k{k}_sketch{s}", rf"sk{s}$") for s in (16, 64)]
+            kinds += [(f"fused_k{k}_sketch16_decoders", r"s\d+sk16$"), (f"fused_k{k}_sketch16_warps", r"w2sk16$")]
             for label, pat in kinds:
                 arms = [[v for a, v in m.items() if a.startswith(f"fused_k{k}_") and re.search(pat, a)] for m in meds]
                 if all(arms):
@@ -1065,6 +1173,12 @@ def main() -> int:
         for lib in [l for l in libs if l.name in names]:
             e = res["libs"][lib.name]
             e["gemm"] = {}
+            if any(sketch_warps(c) for c in fused_cfgs(lib, a.fused, a.sketch, a.sketch_t)) and not lib.diag:
+                e["gate_pass"] = gate_pass(lib, torch, a.sketch_t, log)
+                set_tag(lib)
+                res["ok"] &= e["gate_pass"]["ok"]
+                if not e["gate_pass"]["ok"]:
+                    continue
             for name in a.shapes.split(",") if a.shapes else shapes:
                 n, kd = shapes[name]
                 g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain),

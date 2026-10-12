@@ -16,6 +16,7 @@ S        k × n signs: K_S = derive(σ, SIGN_DOMAIN, {"tag": NAME, "k": k, "n": 
 sketch   σ_v = S · e_v over the integers (|σ_v[c]| ≤ 128 n < 2^24), k int32 little-endian words
 y_v      BLAKE3-keyed(K, u64be (jbase + v) ‖ σ_v), K = tags.Blake3Tag(name=NAME).key(σ); leaves (16 tags a leaf) and
          the RFC 6962 SHA-512 root as `tagging`
+pass j   all of the above at σ_j = pass_seed(σ, j, root_(j−1)) (wt.cu's wt_pass, on the device after pass j − 1's root)
 ~~~
 
 The partition follows the launch (groups), which the prover states with the window: a tile's sketch stays in its CTA
@@ -24,6 +25,7 @@ every stored byte is in exactly one vector.
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 
 import numpy as np
@@ -31,6 +33,7 @@ import tagging as TG
 
 NAME = "ro-sketch-blake3/v0"
 SIGN_DOMAIN = "verity/bandwidth/sketch-signs/v0"
+PASS_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
 KS = (16, 32, 64)
 STEP = 512
 ROWS = 16
@@ -61,6 +64,15 @@ def vector_bytes(sb: int, t: int) -> int:
 def tiles_per_cta(nbs: int, groups: int, t: int) -> int:
     per = -(-nbs // groups)
     return -(-per // t)
+
+
+def pass_seed(sigma: bytes, j: int, root: bytes) -> bytes:
+    """Pass j's seed from the window's σ and the previous pass's root (red team F29): its receipt is this module's at
+    that seed, so the signs are fresh every pass and exist only once root_(j−1) does. The first 32 bytes of
+    `remote_bandwidth.receipts.seed` (ra-remote-driver's chain; a tag's seed is 32 bytes)."""
+    if len(sigma) != 32 or len(root) != 64 or not 0 <= j < 1 << 32:
+        raise ValueError("σ is 32 bytes, the root 64 and j a u32")
+    return hashlib.sha512(PASS_DOMAIN + sigma + j.to_bytes(4, "big") + root).digest()[:32]
 
 
 def sign_bits(seed: bytes, k: int, n: int) -> np.ndarray:

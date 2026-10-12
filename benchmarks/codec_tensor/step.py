@@ -16,7 +16,10 @@ Nothing is timed before its gate passed:
 - attention at the step's batch × context (two layers): `kv_attn` over the encoded cache, in each encoded form (the
   CUDA-core forms 1 and 2, the tensor-core forms 4 and 5) and at every split count tried, equals its plain form (0 or
   3) bit for bit at each k, and each plain form is within RTOL of float64 attention (on a few sequences);
-- the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words.
+- the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words;
+- the per-pass key (red team F29, `bench.gate_pass`): each sketched step starts with `wt_pass`, which derives pass j's
+  seed pass_seed(σ, j, root_(j−1)), signs, key and leaves' prefix on the device from the previous step's root (the
+  first from a registration root); `gate_chain` checks two consecutive steps' link.
 
 The step itself runs on random stored words (the decode, the sketch and the MMAs take the same time on any words), so
 the weights and the cache fill the memory once. Arms, interleaved over `--reps`, each queued behind a spin:
@@ -214,7 +217,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
 
 
 def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log) -> tuple[dict, list, list]:
-    fused = [c for c in BW.fused_cfgs(wt, "auto", "16", sketch_t) if c[2] == -1]
+    fused = [c for c in BW.fused_cfgs(wt, "auto", "16", sketch_t) if c[2] in (-1, -2)]
     plain = BW.parse(PLAIN_CFGS)
     out = {}
     for name, (n, kd) in shapes.items():
@@ -226,15 +229,20 @@ def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log
 
 def pick(g: dict, b: int, ks, fused, plain) -> dict:
     """A linear's arms for the step from its gemm_case timings at M = b: native (cuBLASLt or the plain kernel, the
-    faster), and per k the fastest sketched and untagged fused configs."""
+    faster), and per k the fastest sketched (by the decoders or by two sketch warps) and untagged fused configs."""
     med = g["times"][b]["median_s"]
     nat = min(["cublas"] + [f"plain_c{c}s{s}" for c, s in plain], key=lambda a: med[a])
     out = {"native": nat, "native_s": med[nat], "k": {}}
     for k in ks:
-        sk = min((c for c in fused if c[3] == 16), key=lambda c: med[BW.fused_name(k, c)])
-        un = min((c for c in fused if c[3] == 0), key=lambda c: med[BW.fused_name(k, c)])
+        ran = [c for c in fused if BW.fused_name(k, c) in med]
+        sk = min((c for c in ran if c[3] == 16), key=lambda c: med[BW.fused_name(k, c)])
+        un = min((c for c in ran if c[3] == 0), key=lambda c: med[BW.fused_name(k, c)])
         out["k"][k] = {"sketch": list(sk), "sketch_s": med[BW.fused_name(k, sk)], "untagged": list(un),
                        "untagged_s": med[BW.fused_name(k, un)]}
+        dec = [c for c in ran if c[3] == 16 and not BW.sketch_warps(c)]
+        if dec:
+            best = min(dec, key=lambda c: med[BW.fused_name(k, c)])
+            out["k"][k]["sketch_decoders"], out["k"][k]["sketch_decoders_s"] = list(best), med[BW.fused_name(k, best)]
     return out
 
 
@@ -303,6 +311,10 @@ class Step:
         st = BW.stream(torch)
         bits = SKT.sign_bits(BW.TAG_SEED, 16, SKT.vector_bytes(wt.sb, self.T))
         self.signs = torch.from_numpy(SKT.sign_fragments(bits, SKT.steps(wt.sb), self.T).view(np.int32)).cuda()
+        BW.set_pass(wt, self.T)
+        self.pass_j = 0
+        self.root0 = BW.to_dev(torch, BW.root_words(hashlib.sha512(b"verity/codec-tensor/step/registration").digest()))
+        self.root_ptr = self.root0.data_ptr()       # root_(j−1): the registration's, then each commit's
         self.keys = {k: W.key(wt.field.name, BW.SEED, k) for k in self.ks}
         self.prm = {}
         self.tag_off = {}
@@ -314,7 +326,7 @@ class Step:
                     cfg = tuple(self.picks[name]["k"][k][var])
                     launched = ctypes.c_int(0)
                     wt.call("wt_fused_sketch", k, None, None, None, self.m, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
-                            None, 0, cfg[3], None, None, self.T, ctypes.byref(launched), st)
+                            None, 0, cfg[3], None, None, self.T, BW.sketch_warps(cfg), ctypes.byref(launched), st)
                     gr = launched.value // (kd // 512)
                     steps = BW.tsteps(wt, torch, self.keys[k], cfg[0], gr, kd // 512)
                     nvec = wt.so.wt_sketch_vectors(n, kd, gr, self.T) if cfg[3] else 0
@@ -364,10 +376,14 @@ class Step:
         rc = self.wt.so.wt_fused_sketch(
             k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
             cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + 32 * to if sketch else None,
-            BW.TAG_BASE + to, 16 if sketch else 0, self.signs.data_ptr() if sketch else None, None, self.T, None,
-            BW.stream(self.torch))
+            BW.TAG_BASE + to, 16 if sketch else 0, self.signs.data_ptr() if sketch else None, None, self.T,
+            BW.sketch_warps(cfg), None, BW.stream(self.torch))
         if rc:
             raise RuntimeError(f"wt_fused_sketch {name} k={k}: error {rc}")
+
+    def begin_pass(self) -> None:
+        """Pass j's signs, key and leaves' prefix from root_(j−1) (wt_pass, on the stream behind the last commit)."""
+        self.wt.call("wt_pass", self.pass_j, self.root_ptr, self.signs.data_ptr(), self.T, BW.stream(self.torch))
 
     def commit(self, k: int) -> None:
         st = BW.stream(self.torch)
@@ -375,6 +391,32 @@ class Step:
         self.wt.call("wt_tag_leaves", self.tags.data_ptr(), n, self.nodes.data_ptr(), st)
         ri = ctypes.c_ulonglong(0)
         self.wt.call("wt_tag_tree", self.nodes.data_ptr(), -(-n // BW.TG.PER_LEAF), ctypes.addressof(ri), st)
+        self.root_ptr, self.pass_j = self.nodes.data_ptr() + 64 * ri.value, self.pass_j + 1
+
+    def gate_chain(self, k: int, log) -> dict:
+        """Two sketched passes (the linears and the commit): pass j + 1's seed, key and signs on the device are
+        pass_seed(σ, j + 1, root_j) of pass j's root as committed, and its first leaves are at that seed."""
+        torch, wt = self.torch, self.wt
+        self.set_keys(k)
+        self.step(k, "none", "W")
+        torch.cuda.synchronize()
+        off = self.root_ptr - self.nodes.data_ptr()
+        root = BW.digests(BW.host_bytes(self.nodes[off:off + 64]))[0]
+        j = self.pass_j
+        self.step(k, "none", "W")
+        torch.cuda.synchronize()
+        got = BW.pass_state(wt)
+        seed = SKT.pass_seed(BW.TAG_SEED, j, root)
+        n = SKT.vector_bytes(wt.sb, self.T)
+        want = SKT.sign_fragments(SKT.sign_bits(seed, 16, n), SKT.steps(wt.sb), self.T)
+        ys = BW.host_bytes(self.tags[:64 * 32])
+        leaves = SKT.leaves(seed, [ys[32 * i:32 * i + 32] for i in range(64)])
+        out = {"j": j, "seed": got["seed"] == seed, "key": got["key"] == SKT.key(seed),
+               "signs": bool(np.array_equal(self.signs.cpu().numpy().view(np.uint32), want)),
+               "leaves": BW.digests(BW.host_bytes(self.nodes[:4 * 64])) == leaves}
+        out["ok"] = all(v for a, v in out.items() if a != "j")
+        log(f"chain gate k={k}: {out}")
+        return out
 
     def attn(self, l: int, form: int, k: int, splits: int | None = None) -> None:
         sp = splits if splits is not None else self.splits[(form, k)]
@@ -419,6 +461,8 @@ class Step:
             self.append(k, 0, self.layers, self.s2.cuda_stream)
         elif append == "serial":
             self.append(k, 0, self.layers, main.cuda_stream)
+        if sketch and ("W" in parts):
+            self.begin_pass()
         for l in range(self.layers):
             for name in ORDER:
                 if "W" in parts or "u" in parts:
@@ -637,9 +681,12 @@ def main() -> int:
     res["gate"]["wt_codec"] = {k: BW.gate_codec(wt, torch, k, 256, log) for k in ks}
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
     res["gate"]["append"] = gate_append(kv, torch, ks, log)
+    res["gate"]["pass"] = BW.gate_pass(wt, torch, a.sketch_t, log)
+    BW.set_tag(wt)
     res["ok"] = (res["gate"]["layout"]["ok"] and res["gate"]["wt_prims"]["ok"]
                  and all(g["ok"] for g in res["gate"]["wt_codec"].values())
-                 and all(g["ok"] for g in res["gate"]["kv_codec"].values()) and res["gate"]["append"]["ok"])
+                 and all(g["ok"] for g in res["gate"]["kv_codec"].values()) and res["gate"]["append"]["ok"]
+                 and res["gate"]["pass"]["ok"])
     save()
     if not res["ok"]:
         log("a codec gate failed: nothing timed")
@@ -687,6 +734,13 @@ def main() -> int:
     res["stored_bytes"] = S.w_bytes + S.kv_bytes
     log(f"allocated: {res['stored_bytes'] / 1e9:.2f} GB stored, {free_after / 1e9:.2f} GB left free of "
         f"{total / 1e9:.2f}")
+    res["gate"]["chain"] = S.gate_chain(ks[0], log)
+    save()
+    if not res["gate"]["chain"]["ok"]:
+        res["ok"] = False
+        log("the pass chain's gate failed: nothing timed")
+        write_result(res, out_dir, [a.wt_lib, a.kv_lib])
+        return 5
     clock = BW.sm_clock(wt, torch)
     res["clock_hz"] = clock
 
