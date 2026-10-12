@@ -81,7 +81,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, NB8 == 8 ? 2 : WW_OCC)
   ZCursor zc{};
   uint4 rz[4];
   if constexpr (BIND != UNBOUND && BIND != PLAIN) {
-    zc = {zprev, (uint32_t)(((uint64_t)blockIdx.x * s4) % z4), (2048u * warp + 4u * lane) % s4, 128u % s4, s4, z4};
+    zc = {zprev, (blockIdx.x * s4) % z4, (2048u * warp + 4u * lane) % s4, 128u % s4, s4, z4};
 #pragma unroll
     for (int e = 0; e < 4; ++e) rz[e] = zc.next();
   }
@@ -238,10 +238,10 @@ int rb_gemm(int mode, int k, const uint32_t* E, const uint8_t* x, float* y, int 
   const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS);
   uint32_t z4 = 0, s4 = 0;
   if (mode != rb::UNBOUND && mode != rb::PLAIN) {
-    if (!zprev || Nz < 1 || Nz % 4) return 1;
+    if (!zprev || Nz < 1 || Nz % 4 || (uint64_t)Mb * Nz >= (1ull << 32)) return 1;
     z4 = (uint32_t)Mb * (uint32_t)Nz;
-    s4 = 4 * ((z4 + 4u * grid - 1) / (4u * grid));
-    if (s4 > 8192) return 1;
+    s4 = (uint32_t)(4 * (((uint64_t)z4 + 4ull * grid - 1) / (4ull * grid)));
+    if (s4 > 8192 || (uint64_t)grid * s4 >= (1ull << 32)) return 1;
   }
   bw::Key3 key = {};
   if (seed) key = rb::named_key(seed, mode == rb::UNBOUND ? SKETCH_NAME : BOUND_NAME);

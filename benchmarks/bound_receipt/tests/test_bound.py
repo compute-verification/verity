@@ -51,7 +51,9 @@ def test_shapes_and_the_kernel_constants():
         BR.batch_blocks(65)
     src = (HERE.parent / "bound.cu").read_text()
     assert f'BOUND_NAME[] = "{BR.NAME}"' in src
-    assert "s4 = 4 * ((z4 + 4u * grid - 1) / (4u * grid));" in src and "(2048u * warp + 4u * lane) % s4, 128u % s4" in src
+    assert "s4 = (uint32_t)(4 * (((uint64_t)z4 + 4ull * grid - 1) / (4ull * grid)));" in src
+    assert "(blockIdx.x * s4) % z4, (2048u * warp + 4u * lane) % s4, 128u % s4" in src
+    assert "if (s4 > 8192 || (uint64_t)grid * s4 >= (1ull << 32)) return 1;" in src
     assert "return Mb <= 8 ? 1 : Mb <= 16 ? 2 : Mb <= 32 ? 4 : 8;" in src
 
 
