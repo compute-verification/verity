@@ -147,9 +147,12 @@ def main() -> None:
     cc: dict = {"cudagraph_capture_sizes": capture}
     if not args.compiled:
         cc.update({"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY"})
-    kw = {"model": args.model, "load_format": "dummy", "quantization": "fp8", "max_num_seqs": max(capture),
-          "enable_prefix_caching": False, "seed": 0, "max_model_len": max(contexts) + args.steps + 64,
-          "max_num_batched_tokens": args.max_batched_tokens, "gpu_memory_utilization": args.mem,
+    # the warmup's dummy batch (max_num_batched_tokens) must fit max_num_seqs x max_model_len, or FlashInfer's autotune
+    # reads past its buffers
+    seqs, max_len = max(64, *capture), max(contexts) + args.steps + 64
+    kw = {"model": args.model, "load_format": "dummy", "quantization": "fp8", "max_num_seqs": seqs,
+          "enable_prefix_caching": False, "seed": 0, "max_model_len": max_len,
+          "max_num_batched_tokens": min(args.max_batched_tokens, seqs * max_len), "gpu_memory_utilization": args.mem,
           "kv_cache_dtype": args.kv_cache_dtype, "enforce_eager": False, "compilation_config": cc}
     if args.layers:
         kw["hf_overrides"] = {"num_hidden_layers": args.layers}
