@@ -426,7 +426,7 @@ def _c3(m: int, k: int, c: int, sparse: tuple, r: tuple) -> list[list]:
     from verity_flock import rec_outer as O
     from verity_flock import rec_sparse as SP
 
-    sh = A.Shape(*r, salt_len=0, opening_only=True)
+    sh = A.Shape(r[0], 6, r[1], salt_len=0, opening_only=True)
     return (_v_star(m, k, c) + [[SP.unit_name(SP.Shape(*sparse)), 2]]
             + [[O.stacked_name(1 << lv.lanes, lv.d - lv.cap), lv.q] for lv in sh.sched.levels]
             + [[f"rec-opening/m{r[0]}-c{r[1]}-p{j}", 1] for j in range(len(RR.parts(RR.spec(sh))))])
@@ -532,7 +532,7 @@ def test_r_openings_circuit_file_is_v_stars(tmp_path):
     for byte as candidate 3's statement 10, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
     minutes and 2.2 GB (each side builds the opening's unit): no cheaper test writes Lean's opening unit, so none
     other catches its bytes drifting from the one the prover commits and the Lean verifier recomputes."""
-    sh = A.Shape(*R_SHAPE, salt_len=0, opening_only=True)
+    sh = A.Shape(R_SHAPE[0], 6, R_SHAPE[1], salt_len=0, opening_only=True)
     [p] = RR.parts(RR.spec(sh))
     st = RR.statement(p.S, "rec-opening/m23-c2-p0", 1)
     own = _staged(tmp_path / "open", st.text, st.part, st.program)
