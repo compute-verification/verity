@@ -125,6 +125,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
   owns it. From an owner's ready mark to `main` moving (the prep, the merge check, the landing, the sweep, the spec DM),
   no agent acts unless the automation refuses; the lander handles what it refuses (a conflict, a failed check, a
   revert), and infra hosts it.
+- 2026-10-11 (relayed by top): the store has no API server. Writers and guards use the bucket, and displays query an
+  index derived from it. D2–D4 (the keys, private metadata in the index, what is public) are as in the design,
+  note:verity-top/20261011T1758Z-draft-store-contract.
 - 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
   on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
   through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
