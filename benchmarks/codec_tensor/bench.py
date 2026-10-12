@@ -78,6 +78,7 @@ class Lib:
         so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
         so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
         so.wt_set_tag.argtypes = [v, v]
+        so.wt_set_dbg.argtypes = [v]
         so.wt_tag_leaves.argtypes = [v, q, v, v]
         so.wt_tag_tree.argtypes = [v, q, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
@@ -517,8 +518,50 @@ def commit_time(lib: Lib, torch, nblk: int, reps: int) -> dict:
             "leaves_times_s": tl, "tree_times_s": tt}
 
 
+def dump_words(lib: Lib, dbg, plain, store, key, gq: int, stages: int) -> dict:
+    """What the fused MMA warp consumed (a WT_DEBUG_DUMP build's dbg, plain fragment bytes a task) where it differs from
+    the plain store: per bad word (task q, word w), its differing 16-byte chunks and whether its bytes are the stored
+    word, zero, the payload of another word (the CTA's tasks q + j gq that share or neighbour its stage) or the decode
+    of its stored word under another tweak index."""
+    f, tb = lib.field, W.TASK_BYTES
+    pb, s, tw = f.payload_bytes, lib.s, lib.tw
+    dt, pt = dbg.view(-1, tb), plain.view(-1, tb)
+    badt = (dt != pt).any(1).nonzero().flatten().tolist()
+    out = {"tasks": len(badt), "first_tasks": badt[:8], "words": []}
+    for q in badt[:3]:
+        d, p = host_bytes(dt[q]), host_bytes(pt[q])
+        bw = sorted({o // pb for o in range(tb) if d[o] != p[o]})
+        out.setdefault("bad_words", {})[q] = bw
+        for w in bw[:4]:
+            lo, hi = w * pb, min((w + 1) * pb, tb)
+            got = d[lo:hi]
+            sw = host_bytes(store[(q * tw + w) * s:(q * tw + w + 1) * s])
+            rec = {"q": q, "w": w, "diff_bytes": sum(a != b for a, b in zip(got, p[lo:hi])),
+                   "chunks": sorted({(lo + o) // 16 for o in range(hi - lo) if got[o] != p[lo + o]}), "is": []}
+            if got == bytes(hi - lo):
+                rec["is"].append("zero")
+            for j in range(-stages - 1, stages + 2):
+                q2 = q + j * gq
+                if 0 <= q2 < pt.shape[0]:
+                    if j and got == host_bytes(pt[q2][lo:hi]):
+                        rec["is"].append(f"plain q{j:+d}gq")
+                    if got == host_bytes(store[q2 * tw * s + lo:q2 * tw * s + hi]):
+                        rec["is"].append(f"stored q{j:+d}gq")
+            y = W.bytes_word(sw, f)
+            for dj in [*range(-3, 4), *(m * tw for m in (-1, 1)), *(m * tw * gq for m in (-2, -1, 1, 2))]:
+                if dj:
+                    try:
+                        m = W.decode_word(y, q * tw + w + dj, key)
+                    except ValueError:
+                        continue
+                    if m.to_bytes(pb, "little")[:hi - lo] == got:
+                        rec["is"].append(f"decoded at index{dj:+d}")
+            out["words"].append(rec)
+    return out
+
+
 def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, cfgs, fused_cfgs,
-              mma_knobs, imad_knobs, gate_reps: int = 1) -> dict:
+              mma_knobs, imad_knobs, gate_reps: int = 1, dump: bool = False) -> dict:
     g = torch.Generator(device="cuda").manual_seed(100 + n + kd)
     w = (torch.randn(n, kd, device="cuda", generator=g) * 0.25).to(torch.float8_e4m3fn)
     plain = plain_layout(w.view(torch.uint8))
@@ -594,6 +637,18 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     if not torch.equal(pf, pp):
                         bad.append(mismatch(pf, pp, nch, mb, n, gr))
                 entry["equal_plain"][fused_name(k, cfg)] = not bad
+                if bad and dump:
+                    dbg = torch.zeros_like(plain)
+                    lib.call("wt_set_dbg", ptr(dbg))
+                    pf = torch.zeros_like(pp)
+                    call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
+                    torch.cuda.synchronize()
+                    lib.call("wt_set_dbg", None)
+                    dw = dump_words(lib, dbg, plain, stores[k], keys[k], gr * nch, cfg[1])
+                    dw["partials_equal"] = torch_equal(pf, pp)
+                    entry.setdefault("dump", {})[fused_name(k, cfg)] = dw
+                    log(f"dump {lib.name} {name} M={mb} {fused_name(k, cfg)}: {dw}")
+                    del dbg
                 if bad:
                     entry.setdefault("mismatch", {})[fused_name(k, cfg)] = {"failed": len(bad), "of": gate_reps,
                                                                             "first": bad[:3]}
@@ -798,6 +853,8 @@ def main() -> int:
     ap.add_argument("--plain", default="4x4,8x8", help="plain kernel CONSUMERSxSTAGES")
     ap.add_argument("--fused", default="auto",
                     help="fused kernel DECODERSxSTAGES[xTAGGERS], or auto (fused_cfgs)")
+    ap.add_argument("--dump", action="store_true",
+                    help="after a failed fused gate, rerun it once dumping the MMA warp's operands (WT_DEBUG_DUMP build)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
     a = ap.parse_args()
@@ -897,7 +954,7 @@ def main() -> int:
             for name in a.shapes.split(",") if a.shapes else shapes:
                 n, kd = shapes[name]
                 g = gemm_case(lib, torch, name, n, kd, batches, ks, a.reps, log, parse(a.plain),
-                              fused_cfgs(lib, a.fused), *knobs, gate_reps=a.gate_reps)
+                              fused_cfgs(lib, a.fused), *knobs, gate_reps=a.gate_reps, dump=a.dump)
                 e["gemm"][name] = g
                 res["ok"] &= g.get("ok", False)
                 save()

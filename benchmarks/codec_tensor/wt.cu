@@ -71,6 +71,9 @@ constexpr int SB = TW * S;                              // a task's stored bytes
 __constant__ u32 kC[MAXK][NL];
 __constant__ u32 kTau[NL];
 __constant__ u32 kP[NL];
+#ifdef WT_DEBUG_DUMP
+__device__ uint8_t *g_dbg;   // the fused MMA warp's operand bytes, TASK_BYTES a store task
+#endif
 
 __host__ __device__ constexpr int bitlen(u64 x) { return x ? 1 + bitlen(x >> 1) : 0; }
 
@@ -1724,6 +1727,13 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       uint4 wv[TASK_TILES];
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
+#ifdef WT_DEBUG_DUMP
+      if (g_dbg) {
+        uint4 *o = reinterpret_cast<uint4 *>(g_dbg + (q0 + (u64)i * gq) * TASK_BYTES) + lane;
+#pragma unroll
+        for (int tt = 0; tt < TASK_TILES; ++tt) o[tt * LANES] = wv[tt];
+      }
+#endif
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
@@ -1931,6 +1941,14 @@ int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int
 // ro-blake3/v1 for one window: K as BLAKE3's 8 little-endian key words, and the leaves' prefix block
 // Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from.
 static Mid g_leafmid;
+
+int wt_set_dbg(uint8_t *p) {
+#ifdef WT_DEBUG_DUMP
+  return cudaMemcpyToSymbol(g_dbg, &p, sizeof p) ? 2 : 0;
+#else
+  return p ? 5 : 0;
+#endif
+}
 
 int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   u64 w[16];
