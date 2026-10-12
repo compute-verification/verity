@@ -1,0 +1,10 @@
+import Proofs.Accounting.Actual.Split
+
+/-!
+# The actual circuit's guarantees
+
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security/Definitions/Accounting/Actual.lean`):
+
+* `Actual/Split.lean`: what a region reads from outside itself is what its unit carried in plus what crossed its
+  boundary.
+-/
