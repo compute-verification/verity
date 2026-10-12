@@ -80,7 +80,7 @@ def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
   let (some words, some leaves, some b) := (nat? (getD j "words"), nat? (getD j "leaves"), nat? (getD j "word_bits"))
     | throw "words, leaves or word_bits is not a natural number"
-  return Json.str (Flock.hexOf (← Registered.domain program value words leaves b))
+  return Json.str (Flock.hexOf (← Flock.Registered.domain program value words leaves b))
 
 /-- `{"draw", "population", "law"}`, the population an integer and the law an object, to `check_draw`'s codes. -/
 def checkDraw (j : Json) : V Json := do
