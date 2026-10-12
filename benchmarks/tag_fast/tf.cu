@@ -249,8 +249,9 @@ __device__ __forceinline__ void g(uint32_t& a, uint32_t& b, uint32_t& c, uint32_
 }
 
 // One compression; `out` gets the first 8 words of the output (the next chaining value, or under ROOT the hash). It may
-// alias `cv`. ROUNDS < 7 is not BLAKE3: a reduced-round cost probe, uncertified.
-template <int V, int ROUNDS = 7>
+// alias `cv`. ROUNDS < 7 is not BLAKE3: a reduced-round cost probe, uncertified. ROLL: the rounds in a loop (the message
+// permutation as moves), a seventh of the code, for paths whose instruction fetch costs more than their issue.
+template <int V, int ROUNDS = 7, bool ROLL = false>
 __device__ __forceinline__ void b3(const uint32_t cv[8], const uint32_t min[16], uint32_t counter, uint32_t len,
                                    uint32_t flags, uint32_t out[8], const Mul& k) {
   uint32_t m[16];
@@ -258,8 +259,7 @@ __device__ __forceinline__ void b3(const uint32_t cv[8], const uint32_t min[16],
   for (int i = 0; i < 16; ++i) m[i] = min[i];
   uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
   uint32_t v8 = IV0, v9 = IV1, v10 = IV2, v11 = IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
-#pragma unroll
-  for (int r = 0; r < ROUNDS; ++r) {
+  auto round = [&]() {
     g<V>(v0, v4, v8, v12, m[0], m[1], k);
     g<V>(v1, v5, v9, v13, m[2], m[3], k);
     g<V>(v2, v6, v10, v14, m[4], m[5], k);
@@ -268,11 +268,25 @@ __device__ __forceinline__ void b3(const uint32_t cv[8], const uint32_t min[16],
     g<V>(v1, v6, v11, v12, m[10], m[11], k);
     g<V>(v2, v7, v8, v13, m[12], m[13], k);
     g<V>(v3, v4, v9, v14, m[14], m[15], k);
-    if (r < ROUNDS - 1) {
-      const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13],
-                              m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+  };
+  auto permute = [&]() {
+    const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13],
+                            m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
 #pragma unroll
-      for (int i = 0; i < 16; ++i) m[i] = t[i];
+    for (int i = 0; i < 16; ++i) m[i] = t[i];
+  };
+  if constexpr (ROLL) {
+#pragma unroll 1
+    for (int r = 0; r < ROUNDS - 1; ++r) {
+      round();
+      permute();
+    }
+    round();
+  } else {
+#pragma unroll
+    for (int r = 0; r < ROUNDS; ++r) {
+      round();
+      if (r < ROUNDS - 1) permute();
     }
   }
   out[0] = v0 ^ v8;
@@ -563,7 +577,7 @@ __device__ __forceinline__ void cp_wait() {
   asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory");
 }
 
-template <int V, int L, int R = 7>
+template <int V, int L, int R = 7, bool RA = false>
 struct ChunkTag {
   static_assert(L == 1 || L == 2 || L == 4 || L == 8, "a block is 1, 2, 4 or 8 lanes' chunks");
   uint32_t cv[8], d0, d1;  // d0 d1: the lane's first 8 bytes (the next lane's P, or the tail chunk)
@@ -585,7 +599,7 @@ struct ChunkTag {
       m[1] = pos ? p1 : bswap32((uint32_t)j);
     }
     const uint32_t fl = KEYED | (qd == 0 ? START : 0) | (qd == 15 ? END : 0);
-    b3<V, R>(cv, m, (uint32_t)pos, 64, fl, cv, k);
+    b3<V, R, RA>(cv, m, (uint32_t)pos, 64, fl, cv, k);
   }
 
   // The tail chunk (the lane's first 8 bytes), once d0 d1 are known; the block's is lane L - 1's.
@@ -597,7 +611,7 @@ struct ChunkTag {
     for (int i = 0; i < 16; ++i) m[i] = 0;
     m[0] = d0;
     m[1] = d1;
-    b3<V, R>(key, m, (uint32_t)L, 8u, KEYED | START | END, tl, k);
+    b3<V, R, true>(key, m, (uint32_t)L, 8u, KEYED | START | END, tl, k);
   }
 
   // The tag, in lanes with pos 0. Step 0: the tail chunk (every lane at L = 1, lane L - 1 otherwise) and the parents of
@@ -623,8 +637,8 @@ struct ChunkTag {
         m[8 + i] = tl ? 0u : o;
       }
       uint32_t out[8];
-      b3<V, R>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT) | (last ? ROOT : 0), out,
-            k);
+      b3<V, R, true>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u,
+                     KEYED | (tl ? START | END : PARENT) | (last ? ROOT : 0), out, k);
 #pragma unroll
       for (int i = 0; i < 8; ++i) {
         if (st == 0) tail[i] = out[i];
@@ -666,7 +680,7 @@ __device__ __forceinline__ void cta_finish(uint32_t* sh, const uint32_t (&cv)[8]
       uint32_t m[16];
 #pragma unroll
       for (int i = 0; i < 16; ++i) m[i] = sh[r * 16 + i];
-      b3<V, R>(key, m, 0u, 64u, KEYED | PARENT, o, k);
+      b3<V, R, true>(key, m, 0u, 64u, KEYED | PARENT, o, k);
     }
     __syncthreads();
     if (r < n) {
@@ -683,7 +697,7 @@ __device__ __forceinline__ void cta_finish(uint32_t* sh, const uint32_t (&cv)[8]
       m[i] = sh[r * 8 + i];
       m[8 + i] = tls[r * 8 + i];
     }
-    b3<V, R>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
+    b3<V, R, true>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
     uint4* out = reinterpret_cast<uint4*>(tags + (c0 + r) * 8);
     out[0] = make_uint4(o[0], o[1], o[2], o[3]);
     out[1] = make_uint4(o[4], o[5], o[6], o[7]);
@@ -841,8 +855,8 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
 // so the CTAs of an SM load different SMSPs). 5 warp-compressions a CTA at L = 4 instead of 12.
 constexpr int F3_FINISH_BYTES = FW * 32 * 8 * 4 + FW * 32 * 8 * 4 + FW * 32 * 2 * 4;
 
-template <int V, int L>
-__device__ __forceinline__ void f3_finish(uint32_t* sh, const ChunkTag<V, L>& ct, int pos, int bid, uint32_t* tags,
+template <int V, int L, class CT>
+__device__ __forceinline__ void f3_finish(uint32_t* sh, const CT& ct, int pos, int bid, uint32_t* tags,
                                           uint64_t c0, const Mul& k) {
   static_assert(L >= 2, "at L = 1 every lane's finish (its tail and root) is already whole");
   constexpr int T = FW * 32, NB = T / L;
@@ -868,7 +882,7 @@ __device__ __forceinline__ void f3_finish(uint32_t* sh, const ChunkTag<V, L>& ct
       const bool tl = r >= np;
 #pragma unroll
       for (int i = 0; i < 16; ++i) m[i] = tl ? (i < 2 ? ds[(r - np) * 2 + i] : 0u) : sh[r * 16 + i];
-      b3<V>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT), o, k);
+      b3<V, 7, true>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT), o, k);
     }
     __syncthreads();
     if (r < np + NB) {
@@ -886,7 +900,7 @@ __device__ __forceinline__ void f3_finish(uint32_t* sh, const ChunkTag<V, L>& ct
       uint32_t m[16];
 #pragma unroll
       for (int i = 0; i < 16; ++i) m[i] = sh[r * 16 + i];
-      b3<V>(key, m, 0u, 64u, KEYED | PARENT, o, k);
+      b3<V, 7, true>(key, m, 0u, 64u, KEYED | PARENT, o, k);
     }
     __syncthreads();
     if (r < n) {
@@ -903,7 +917,7 @@ __device__ __forceinline__ void f3_finish(uint32_t* sh, const ChunkTag<V, L>& ct
       m[i] = sh[r * 8 + i];
       m[8 + i] = tls[r * 8 + i];
     }
-    b3<V>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
+    b3<V, 7, true>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
     uint4* out = reinterpret_cast<uint4*>(tags + (c0 + r) * 8);
     out[0] = make_uint4(o[0], o[1], o[2], o[3]);
     out[1] = make_uint4(o[4], o[5], o[6], o[7]);
@@ -944,7 +958,7 @@ struct TailJob {
       uint32_t cv[8] = {c0.x, c0.y, c0.z, c0.w, c1.x, c1.y, c1.z, c1.w};
       uint32_t m[16] = {q[0].x, q[0].y, q[0].z, q[0].w, q[1].x, q[1].y, q[1].z, q[1].w,
                         q[2].x, q[2].y, q[2].z, q[2].w, q[3].x, q[3].y, q[3].z, q[3].w};
-      b3<V>(cv, m, (uint32_t)pos, 64, KEYED | END, h, k);
+      b3<V, 7, true>(cv, m, (uint32_t)pos, 64, KEYED | END, h, k);
       return;
     }
     const int st = ph - 1;
@@ -958,8 +972,8 @@ struct TailJob {
       m[i] = tl0 ? (i == 0 ? d0 : i == 1 ? d1 : 0u) : h[i];
       m[8 + i] = tl0 ? 0u : o;
     }
-    b3<V>(key, m, tl0 ? (uint32_t)L : 0u, tl0 ? 8u : 64u, KEYED | (tl0 ? START | END : PARENT) | (last ? ROOT : 0), out,
-          k);
+    b3<V, 7, true>(key, m, tl0 ? (uint32_t)L : 0u, tl0 ? 8u : 64u,
+                   KEYED | (tl0 ? START | END : PARENT) | (last ? ROOT : 0), out, k);
     if (st == 0 || pos != L - 1) {
 #pragma unroll
       for (int i = 0; i < 8; ++i) h[i] = out[i];
@@ -980,7 +994,7 @@ struct TailJob {
 // L >= 2) in the shared memory of x's rows, which the CTA no longer reads. DF (MODE_TAGS, one quad ahead): warp gw of
 // the grid finishes tl's deferred warps gw, gw + the grid's warps, ..., one phase an iteration from the second quad on
 // (the rest after the loop), and with DOWN defers its own ends to cvo and dout instead of finishing them.
-template <int V, int L, int NB8, int MODE, int PD, bool PK = false, bool DF = false, bool DOWN = false>
+template <int V, int L, int NB8, int MODE, int PD, bool PK = false, bool DF = false, bool DOWN = false, bool RA = false>
 __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                             float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N, int Kd,
                                             uint64_t jbase, unsigned int* __restrict__ xr, const Tail tl = Tail{},
@@ -1017,7 +1031,7 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
   float acc[NB8][4];
 #pragma unroll
   for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
-  ChunkTag<V, L> ct;
+  ChunkTag<V, L, 7, RA> ct;
   if constexpr (TAG) ct.begin();
   auto step = [&](const uint4 (&q)[4], int qd) {
     if constexpr (GEMM) {
@@ -1098,20 +1112,20 @@ __device__ __forceinline__ void fused3_body(int bid, const uint4* __restrict__ w
   }
 }
 
-template <int V, int L, int NB8, int MODE, int PD, bool PK = false>
+template <int V, int L, int NB8, int MODE, int PD, bool PK = false, bool RA = false>
 __global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                          float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                          int N, int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
-  fused3_body<V, L, NB8, MODE, PD, PK>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr);
+  fused3_body<V, L, NB8, MODE, PD, PK, false, false, RA>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, xr);
 }
 
-template <int V, int L, int NB8, bool DOWN>
+template <int V, int L, int NB8, bool DOWN, bool RA>
 __global__ void __launch_bounds__(FW * 32, 5) fused3d_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const Tail tl, uint4* cvo,
                                                           uint2* dout) {
-  fused3_body<V, L, NB8, MODE_TAGS, 1, false, true, DOWN>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, nullptr, tl,
-                                                           cvo, dout);
+  fused3_body<V, L, NB8, MODE_TAGS, 1, false, true, DOWN, RA>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, nullptr,
+                                                               tl, cvo, dout);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1520,12 +1534,14 @@ static int configure3(const void* kern, int M) {
   return 0;
 }
 
-// The chunk-block GEMM in registers (fused3_kernel): lanes L; mode GEMM or tags; pd quads ahead (1 or 2); pk the packed
-// CTA finish (tags, L 4 or 8, one quad ahead). M <= 32, N a multiple of 16 FW, K of 2,048. 3: form not built; 4: x's M
+// The chunk-block GEMM in registers (fused3_kernel): lanes L; mode GEMM or tags; pd quads ahead (1 or 2); pk 1 the packed
+// CTA finish, 2 the rolled absorb (tags, L 4 or 8, one quad ahead). M <= 32, N a multiple of 16 FW, K of 2,048. 3: form not built; 4: x's M
 // rows exceed a CTA's shared memory.
 int tf_fused3(int lanes, int mode, int pd, int pk, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M,
               int N, int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
-  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || mode < 0 || mode > 3 || (pk && mode != MODE_TAGS)) return 1;
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || mode < 0 || mode > 3 || pk < 0 || pk > 2 ||
+      (pk && mode != MODE_TAGS))
+    return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
   if (mode == MODE_GEMM) lanes = 1;
   Kern2 kern = nullptr;
@@ -1533,16 +1549,17 @@ int tf_fused3(int lanes, int mode, int pd, int pk, const void* w, const uint8_t*
     F3(fused3_kernel, 1, 0, 1) F3(fused3_kernel, 1, 0, 2) F3(fused3_kernel, 1, 1, 1) F3(fused3_kernel, 1, 1, 2)
     F3(fused3_kernel, 4, 1, 1) F3(fused3_kernel, 4, 1, 2) F3(fused3_kernel, 8, 1, 1) F3(fused3_kernel, 8, 1, 2)
   } else if (pd == 1) {
-#define F3K(L)                                                                                                         \
-  if (lanes == L)                                                                                                      \
-    kern = nb8 == 1 ? fused3_kernel<1, L, 1, MODE_TAGS, 1, true>                                                       \
-                    : nb8 == 2 ? fused3_kernel<1, L, 2, MODE_TAGS, 1, true> : fused3_kernel<1, L, 4, MODE_TAGS, 1, true>;
-    F3K(4) F3K(8)
+#define F3K(L, PK, RA)                                                                                                 \
+  if (lanes == L && pk == (PK ? 1 : 2))                                                                                \
+    kern = nb8 == 1   ? fused3_kernel<1, L, 1, MODE_TAGS, 1, PK, RA>                                                   \
+           : nb8 == 2 ? fused3_kernel<1, L, 2, MODE_TAGS, 1, PK, RA>                                                   \
+                      : fused3_kernel<1, L, 4, MODE_TAGS, 1, PK, RA>;
+    F3K(4, true, false) F3K(8, true, false) F3K(4, false, true) F3K(8, false, true)
 #undef F3K
   }
   if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
-  const int smem = pk ? std::max(M * CXS, F3_FINISH_BYTES) : M * CXS;
+  const int smem = pk == 1 ? std::max(M * CXS, F3_FINISH_BYTES) : M * CXS;
   kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
   return cudaGetLastError() ? 2 : 0;
 }
@@ -1551,8 +1568,9 @@ int tf_fused3(int lanes, int mode, int pd, int pk, const void* w, const uint8_t*
 
 // tf_fused3's t{lanes}kr1 (lanes 4 or 8) with deferred chunk ends: the previous launch's (its weights pw, chaining
 // values pcv, tail bytes pd and tags ptags, shape pN x pKd; pw null for none) finished inside this one's loop, and this
-// launch's own deferred to cvo and dout (2 FW 32 uint4 and FW 32 / lanes uint2 a CTA) if own_defer, else finished.
-int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
+// launch's own deferred to cvo and dout (2 FW 32 uint4 and FW 32 / lanes uint2 a CTA) if own_defer, else finished;
+// rolled: the rolled absorb (lanes 4).
+int tf_fused3d(int lanes, int own_defer, int rolled, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N,
                int Kd, uint64_t jbase, void* cvo, void* dout, const void* pw, const void* pcv, const void* pd,
                uint32_t* ptags, int pN, int pKd, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (lanes != 4 && lanes != 8) || (own_defer && !(cvo && dout)) ||
@@ -1573,11 +1591,15 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
   using KernD = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, const Tail, uint4*,
                          uint2*);
   KernD kern = nullptr;
-#define F3D(L, D)                                                                                                      \
-  if (lanes == L && !!own_defer == D)                                                                                  \
-    kern = nb8 == 1 ? fused3d_kernel<1, L, 1, D> : nb8 == 2 ? fused3d_kernel<1, L, 2, D> : fused3d_kernel<1, L, 4, D>;
-  F3D(4, false) F3D(4, true) F3D(8, false) F3D(8, true)
+#define F3D(L, D, RA)                                                                                                  \
+  if (lanes == L && !!own_defer == D && !!rolled == RA)                                                                \
+    kern = nb8 == 1   ? fused3d_kernel<1, L, 1, D, RA>                                                                 \
+           : nb8 == 2 ? fused3d_kernel<1, L, 2, D, RA>                                                                 \
+                      : fused3d_kernel<1, L, 4, D, RA>;
+  F3D(4, false, false) F3D(4, true, false) F3D(8, false, false) F3D(8, true, false) F3D(4, false, true)
+  F3D(4, true, true)
 #undef F3D
+  if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
   kern<<<(N / 16 / FW) * (Kd / CCOLS), FW * 32, M * CXS, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, tl,
                                                                 (uint4*)cvo, (uint2*)dout);
