@@ -2,6 +2,7 @@ import Proofs.Flock.C3.HoloValues.Reps
 import Proofs.Flock.C3.HoloValues.Shape
 import Proofs.Flock.C3.HoloValues.ZcLc
 import Proofs.Flock.C3.Compose.Honest
+import Proofs.Flock.C3.Compose.Plays
 import Proofs.Flock.Soundness.Refine.Paths
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Table
@@ -37,35 +38,7 @@ namespace Read
 
 open FlockSoundness FlockSoundness.Game
 open FlockVBridge.InnerAccepts (firstSteps)
-open FlockC3.Compose (repsOf)
-
-/-- **A game plays on at most one prefix of a tape**, to one output. -/
-theorem playsT_prefix {α : Type} {g : Game α} {p : List Step} {a : α} (ha : PlaysT g p a) :
-    ∀ {p' : List Step} {a' : α} {l : List Step}, PlaysT g p' a' → p <+: l → p' <+: l → p' = p ∧ a' = a := by
-  induction ha with
-  | ret a => exact fun h _ _ => h.ret_inv
-  | send m _ ih =>
-      intro p' a' l h hp hp'
-      cases p' with
-      | nil => cases h
-      | cons s p' =>
-          obtain ⟨m', rfl, hk⟩ := h.send_inv
-          obtain ⟨t, rfl⟩ := hp
-          obtain ⟨e, hq⟩ := List.cons_prefix_cons.mp hp'
-          obtain rfl : m' = m := eq_of_heq (Sigma.mk.inj (Sum.inl.inj e)).2
-          obtain ⟨rfl, rfl⟩ := ih hk (List.prefix_append _ t) hq
-          exact ⟨rfl, rfl⟩
-  | coin x _ ih =>
-      intro p' a' l h hp hp'
-      cases p' with
-      | nil => cases h
-      | cons s p' =>
-          obtain ⟨x', rfl, hk⟩ := h.coin_inv
-          obtain ⟨t, rfl⟩ := hp
-          obtain ⟨e, hq⟩ := List.cons_prefix_cons.mp hp'
-          obtain rfl : x' = x := eq_of_heq (Sigma.mk.inj (Sum.inr.inj e)).2
-          obtain ⟨rfl, rfl⟩ := ih hk (List.prefix_append _ t) hq
-          exact ⟨rfl, rfl⟩
+open FlockC3.Compose (repsOf playsT_prefix)
 
 theorem firstSteps_prefix : ∀ {p p' : List Step}, firstSteps p <+: firstSteps p' → p <+: p'
   | [], _, _ => List.nil_prefix
