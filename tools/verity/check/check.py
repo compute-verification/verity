@@ -77,7 +77,7 @@ doesn't name:
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
                     (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
-                    slot.py's CHECK_SLOT_MEM_GB): every registered Definition and template
+                    slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it: every registered Definition and template
                     (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
@@ -957,6 +957,17 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 
+#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: in r20261012-155204-6475, pytest and lean-audit
+#: held 160 to 350 between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+SIBLINGS_GB = 350
+
+
+def cc_mem_gb(slot_gb: int, beside: bool) -> int:
+    """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot."""
+    return max(slot_gb - SIBLINGS_GB, slot_gb // 4) if beside else slot_gb
+
+
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
@@ -968,6 +979,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     if only is not None:
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
+    beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
@@ -980,7 +992,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", m] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
+          *(["--mem-gb", str(cc_mem_gb(int(m), beside))] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),

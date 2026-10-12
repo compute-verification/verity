@@ -470,6 +470,22 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     monkeypatch.setenv("VERITY_SKIP_STORE", "1")
     assert CHECK.main([]) == 2
 
+def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs_beside_it(tmp_path, monkeypatch):
+    """12 Oct 17:41Z: an unsharded check (r20261012-155204-6475) gave circuit-check the slot's whole 560 GiB while pytest and
+    lean-audit held 160 to 350 GiB beside it, and the kernel OOM-killed a 141 GiB circuit-check worker."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only):
+        [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
+        return cc[1][cc[1].index("--mem-gb") + 1]
+
+    assert mem(None) == mem(["circuit-check", "pytest"]) == mem(["circuit-check", "lean-build"]) == "210"
+    assert mem(["flock-circuit-build", "circuit-check", "flock-rust-tests"]) == "560"
+    assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
+
+
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
@@ -477,7 +493,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
-    assert cc[1][cc[1].index("--mem-gb") + 1] == "560", "a slot's mem= caps circuit-check's own budget"
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
