@@ -290,6 +290,31 @@ __global__ void __launch_bounds__(256) chain_b3(uint64_t steps, bw::Key3 key, un
   atomicXor(xr, (unsigned long long)acc);
 }
 
+// The commit's SHA-512 compression: UU chains a thread, one compression of a 128-byte block a step, the state the next
+// block's first half.
+template <int UU>
+__global__ void __launch_bounds__(256) chain_sha512(uint64_t steps, unsigned long long* xr) {
+  const uint64_t id = blockIdx.x * blockDim.x + threadIdx.x;
+  uint64_t h[UU][8];
+#pragma unroll
+  for (int u = 0; u < UU; ++u)
+#pragma unroll
+    for (int i = 0; i < 8; ++i) h[u][i] = (id * UU + u) * 0x9E3779B97F4A7C15ull + i;
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < UU; ++u) {
+      uint64_t w[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) w[i] = i < 8 ? h[u][i] : s + i;
+      bw::compress(h[u], w);
+    }
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < UU; ++u) acc ^= h[u][0];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
 // --- the FP8 GEMM, plain and fused ----------------------------------------------------------------------------------
 
 __device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
@@ -959,6 +984,12 @@ int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned 
       case 1: chain_b3<1><<<grid, 256, 0, s>>>(steps, key, xr); break;
       case 2: chain_b3<2><<<grid, 256, 0, s>>>(steps, key, xr); break;
       case 4: chain_b3<4><<<grid, 256, 0, s>>>(steps, key, xr); break;
+      default: return 1;
+    }
+  } else if (what == 5) {
+    switch (ilp) {
+      case 1: chain_sha512<1><<<grid, 256, 0, s>>>(steps, xr); break;
+      case 2: chain_sha512<2><<<grid, 256, 0, s>>>(steps, xr); break;
       default: return 1;
     }
   } else {
