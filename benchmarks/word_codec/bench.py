@@ -569,14 +569,14 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     raise RuntimeError(f"wc_gemm_ws k={k} {ws_name(cfg)} M={mb}: error {rc}")
             return f
 
-        def arm_tag(k, cfg, decode, commit):
+        def arm_tag(k, cfg, decode, commit, tag=True):
             """Call i tags into cm[i mod 2]; with commit, its committers hash the leaves of cm[(i + 1) mod 2]'s tags,
-            the previous call's."""
+            the previous call's. Without decode or tag, the kernel on the encoded store alone (the base)."""
             ps = [ptr(b) for b in ring[k]]
             c = n_committers(cfg) if commit else 0
             launched = ctypes.c_int(0)
             lib.call("wc_gemm_ws_tag", k, ps[0], xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, ctypes.byref(launched),
-                     decode, TAG_SEED, 0, cm[0].tags, c, cm[1].tags if c else None, blocks if c else 0,
+                     decode, TAG_SEED, 0, cm[0].tags if tag else None, c, cm[1].tags if c else None, blocks if c else 0,
                      cm[1].leaves if c else None, st)
             groups = launched.value // nch
             fn = so.wc_gemm_ws_tag
@@ -585,8 +585,9 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 rc = 0
                 for i, p in enumerate(ps):
                     a, b = cm[i % 2], cm[1 - i % 2]
-                    rc |= fn(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, decode, TAG_SEED, 0, a.tags,
-                             c, b.tags if c else None, blocks if c else 0, b.leaves if c else None, st)
+                    rc |= fn(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, decode, TAG_SEED, 0,
+                             a.tags if tag else None, c, b.tags if c else None, blocks if c else 0,
+                             b.leaves if c else None, st)
                 if rc:
                     raise RuntimeError(f"wc_gemm_ws_tag k={k} {ws_name(cfg)} M={mb}: error {rc}")
             return f
@@ -617,6 +618,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 arms[f"t{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 0, False)
                 arms[f"dt{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 1, False)
                 arms[f"dtc{k}_{ws_name(cfg)}"] = arm_tag(k, cfg, 1, True)
+        for cfg in tag_cfgs:
+            arms[f"base_{ws_name(cfg)}"] = arm_tag(ks[0], cfg, 0, False, tag=False)
         if tag_cfgs:
             arms["commit_leaves"] = arm_leaves
         for f in arms.values():
@@ -640,16 +643,18 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                             "native_s": native, "ratio_vs_native": {a: med[a] / native for a in med},
                             "ratio_vs_plain": {a: med[a] / med["plain"] for a in med},
                             "ratio_vs_plain_net_of_empty": net,
-                            "gbps_stored": {a: (nwords * 8 if re.match(r"(k|p|w|t|dt|dtc)\d", a) else n * kd) / med[a] / 1e9
+                            "gbps_stored": {a: (nwords * 8 if re.match(r"(k|p|w|t|dt|dtc)\d|base_", a) else n * kd)
+                                            / med[a] / 1e9
                                             for a in med if a not in ("empty", "commit_leaves")}}
         for k in ks:
             for cfg in tag_cfgs:
                 c = ws_name(cfg)
                 d, t, dt, dtc = (med[f"{a}{k}_{c}"] for a in ("w", "t", "dt", "dtc"))
                 res["times"][mb].setdefault("stack", {})[f"{k}_{c}"] = {
-                    "native_s": native, "decode_s": d, "tag_only_s": t, "decode_tag_s": dt, "decode_tag_commit_s": dtc,
-                    "commit_leaves_standalone_s": med["commit_leaves"]}
-                log(f"stack {name} M={mb} k={k} {c}: decode {d / native:.3f}x, +tag {dt / native:.3f}x, "
+                    "native_s": native, "base_s": med[f"base_{c}"], "decode_s": d, "tag_only_s": t, "decode_tag_s": dt,
+                    "decode_tag_commit_s": dtc, "commit_leaves_standalone_s": med["commit_leaves"]}
+                log(f"stack {name} M={mb} k={k} {c}: base {med[f'base_{c}'] / native:.3f}x, decode {d / native:.3f}x, "
+                    f"+tag {dt / native:.3f}x, "
                     f"+leaves {dtc / native:.3f}x (tag alone {t / native:.3f}x; standalone leaves "
                     f"{med['commit_leaves'] / native:.3f} of native)")
         ws_best = {k: min((med[f"w{k}_{ws_name(c)}"], ws_name(c)) for c in ws_cfgs) for k in ks} if ws_cfgs else {}
@@ -697,10 +702,11 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
     above the leaves is the window pass's time in proportion to the blocks."""
     cw = res.get("commit_window")
     rates_of = {l.name: res["libs"][l.name].get("rates", {}) for l in libs}
-    enc_best = {}
+    enc_best, dec_best = {}, {}
     for r in rates_of.values():
-        for k, e in r.get("encode", {}).items():
-            enc_best[int(k)] = max(enc_best.get(int(k), 0.0), e["per_s"])
+        for best, what in ((enc_best, "encode"), (dec_best, "decode")):
+            for k, e in r.get(what, {}).items():
+                best[int(k)] = max(best.get(int(k), 0.0), e["per_s"])
     b3_best = max((r["b3"]["compressions_s"] for r in rates_of.values() if "b3" in r), default=None)
     points = []
     for key in [k for k in res if k == "gemm" or k.startswith("gemm_") and isinstance(res[k], dict)]:
@@ -711,7 +717,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
         for mb in first.get("times", {}):
             stacks = [g["times"][mb].get("stack", {}) for g in cases.values()]
             for k in sorted({int(s.split("_")[0]) for st in stacks for s in st}):
-                tot = {"native": 0.0, "d": 0.0, "t": 0.0, "dt": 0.0, "dtc": 0.0}
+                tot = {"native": 0.0, "base": 0.0, "d": 0.0, "t": 0.0, "dt": 0.0, "dtc": 0.0}
                 shapes, blocks = {}, 0
                 for name, g in cases.items():
                     st = g["times"][mb].get("stack", {})
@@ -720,8 +726,8 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                         break
                     cfg, v = min(cfgs.items(), key=lambda kv: kv[1]["decode_tag_commit_s"])
                     shapes[name] = {"cfg": cfg.split("_", 1)[1], **v}
-                    for a, f in (("native", "native_s"), ("d", "decode_s"), ("t", "tag_only_s"), ("dt", "decode_tag_s"),
-                                 ("dtc", "decode_tag_commit_s")):
+                    for a, f in (("native", "native_s"), ("base", "base_s"), ("d", "decode_s"), ("t", "tag_only_s"),
+                                 ("dt", "decode_tag_s"), ("dtc", "decode_tag_commit_s")):
                         tot[a] += v[f]
                     blocks += g["blocks"]
                 else:
@@ -731,16 +737,18 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                     pt = {"lane": "ra-word-codec", "codec": "sloth-p61", "b": 61, "field": "2^61-1", "lib": lib.name,
                           "payload_bits": lib.bits, "k": k, "batch": int(mb), "arith": "cuda-int", "measured": True,
                           "tag": "ro-blake3/v1", "per_leaf": 16, "tree_measured": tree is not None,
-                          "y": fused / nat, "y_decode": tot["d"] / nat, "y_decode_tag": tot["dt"] / nat,
-                          "y_tag_alone": tot["t"] / nat,
-                          "stack": {"native": 1.0, "decode": (tot["d"] - nat) / nat, "tag": (tot["dt"] - tot["d"]) / nat,
-                                    "commit": (fused - tot["dt"]) / nat},
+                          "y": fused / nat, "y_base": tot["base"] / nat, "y_decode": tot["d"] / nat,
+                          "y_decode_tag": tot["dt"] / nat, "y_tag_alone": tot["t"] / nat,
+                          "stack": {"base": tot["base"] / nat, "decode": (tot["d"] - tot["base"]) / nat,
+                                    "tag": (tot["dt"] - tot["d"]) / nat, "commit": (fused - tot["dt"]) / nat},
                           "native_step_s": nat, "fused_step_s": fused, "tree_s": tree, "blocks": blocks,
                           "words": blocks * lw, "shapes": shapes}
                     if k in enc_best:
                         enc_s = blocks * lw / enc_best[k]
                         pt["encode_s"] = enc_s
                         pt["x_native"], pt["x_fused"] = enc_s / nat, enc_s / fused
+                    if k in dec_best:
+                        pt["delta_native"] = blocks * lw / dec_best[k] / nat
                     if b3_best:
                         tag_s = blocks * B3_LANE_COMPRESSIONS / b3_best
                         pt["tau_native"], pt["tau_fused"] = tag_s / nat, tag_s / fused
@@ -748,9 +756,19 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                         pt["mu_rebuild_fused"] = (1 - pt["tau_fused"]) / pt["x_fused"]
                         pt["mu_rebuild_native"] = (1 - pt["tau_native"]) / pt["x_native"]
                     points.append(pt)
+    shared = [{"schema": "verity/codec-frontier-point/v0", "lane": "ra-word-codec", "b": 61, "k": p["k"],
+               "arithmetic": f"cuda-int32/mersenne61/{p['lib']}/pb{p['payload_bits']}/ws", "batch": p["batch"],
+               "y_total": p["y"], "y_base": p["stack"]["base"], "y_decode": p["stack"]["decode"],
+               "y_tag": p["stack"]["tag"], "y_commit": p["stack"]["commit"], "x": p["x_native"],
+               "delta": p.get("delta_native"), "tau": p["tau_native"], "measured": True,
+               "label": f"Sloth p61, {p['payload_bits']}-bit packing, warp-specialized, "
+                        + ",".join(sorted({s['cfg'] for s in p['shapes'].values()})),
+               "run": os.environ.get("RESEARCH_RUN_ID"), "art": None}
+              for p in points if "x_native" in p and "tau_native" in p]
     return {"schema": "verity/word-codec/frontier-points/v0", "run_id": os.environ.get("RESEARCH_RUN_ID"),
             "layers": LAYERS, "shapes": {k: list(v) for k, v in SHAPES.items()}, "encode_words_s": enc_best,
-            "b3_compressions_s": b3_best, "commit_window": cw, "points": points}
+            "decode_words_s": dec_best, "b3_compressions_s": b3_best, "commit_window": cw, "points": points,
+            "shared": shared}
 
 
 def gemm_zeroing(torch, n: int, mb: int, reps: int) -> float:
@@ -907,7 +925,8 @@ def main() -> int:
     if tag_cfgs and res["ok"]:
         res["commit_window"] = commit_window(gemm_lib, torch, a.reps, log)
         fr = frontier_points(res, libs)
-        (out_dir / "frontier-points.json").write_text(json.dumps(fr, indent=1))
+        res["frontier"] = fr
+        (out_dir / "codec-frontier-points.json").write_text(json.dumps(fr["shared"], indent=1))
         for p in fr["points"]:
             log(f"point {p['lib']} k={p['k']} M={p['batch']}: y {p['y']:.3f} (decode +{p['stack']['decode']:.3f}, tag "
                 f"+{p['stack']['tag']:.3f}, commit +{p['stack']['commit']:.3f}); x_native {p.get('x_native', 0):.1f}, "
