@@ -124,6 +124,91 @@ def store_words(n: int, k: int, bits: int) -> int:
     return tasks(n, k) * lane_words(bits) * LANES
 
 
+# --- ra-codec-wide's store (`benchmarks/word_codec/wide.py`): a lane's 2048 bits as L words of `payload` bits, each word
+# `limbs` u32 limbs, limb e of word w of lane l of task q at u32 index 32·limbs·(L·q + w) + 32·e + l -------------------
+
+def wide_lane_words(payload: int) -> int:
+    return -(-8 * LANE_BYTES // payload)
+
+
+def _wide_limbs(payload: int, limbs: int, device: torch.device):
+    """Each (word, limb)'s bit offset in the lane stream, as (u32 index, shift), and its mask."""
+    lw = wide_lane_words(payload)
+    if not 0 < payload <= 32 * limbs:
+        raise ValueError(f"{payload} payload bits don't fit {limbs} limbs")
+    off = torch.tensor([w * payload + 32 * e for w in range(lw) for e in range(limbs)], dtype=torch.int64, device=device)
+    mask = torch.tensor([(1 << max(0, min(32, payload - 32 * e))) - 1 for _ in range(lw) for e in range(limbs)],
+                        dtype=torch.int64, device=device)
+    return off // 32, off % 32, mask, (lw * payload + 31) // 32 + 1
+
+
+def _u32(s: torch.Tensor) -> torch.Tensor:
+    """(..., 256) uint8 -> (..., 64) int64 little-endian u32."""
+    return s.contiguous().view(torch.int32).to(torch.int64) & 0xFFFFFFFF
+
+
+def _i32(v: torch.Tensor) -> torch.Tensor:
+    return torch.where(v >= 1 << 31, v - (1 << 32), v).to(torch.int32)
+
+
+def wide_pack(s: torch.Tensor, payload: int, limbs: int) -> torch.Tensor:
+    """(..., 256) uint8 lane streams -> (..., L, limbs) int64 limbs (each < 2^32) of the lane's payloads."""
+    t, sh, mask, width = _wide_limbs(payload, limbs, s.device)
+    u = torch.zeros(*s.shape[:-1], width, dtype=torch.int64, device=s.device)
+    u[..., :LANE_BYTES // 4] = _u32(s)
+    lo, hi = u[..., t] >> sh, (u[..., t + 1] & ((1 << sh) - 1)) << (32 - sh)
+    return ((lo | hi) & mask).view(*s.shape[:-1], wide_lane_words(payload), limbs)
+
+
+def wide_unpack(v: torch.Tensor, payload: int) -> torch.Tensor:
+    """`wide_pack`'s inverse: (..., L, limbs) int64 limbs -> (..., 256) uint8."""
+    lead, limbs = v.shape[:-2], v.shape[-1]
+    if v.shape[-2] != wide_lane_words(payload):
+        raise ValueError(f"a lane is {wide_lane_words(payload)} words at {payload} bits")
+    t, sh, mask, width = _wide_limbs(payload, limbs, v.device)
+    x = v.reshape(*lead, -1) & mask
+    u = torch.zeros(*lead, width, dtype=torch.int64, device=v.device)
+    u.index_add_(-1, t, (x << sh) & 0xFFFFFFFF)
+    u.index_add_(-1, t + 1, x >> (32 - sh))
+    return _i32(u[..., :LANE_BYTES // 4]).contiguous().view(torch.uint8)
+
+
+def wide_payloads(w: torch.Tensor, payload: int, limbs: int, chunk: int = 2048) -> torch.Tensor:
+    """W's payloads in the wide store's order, flat int32 (`wide.store_bytes(wide.fragment_payloads(...))`)."""
+    s = fragment_stream(w)
+    out = torch.empty(s.shape[0], wide_lane_words(payload), limbs, LANES, dtype=torch.int32, device=s.device)
+    for q in range(0, s.shape[0], chunk):
+        out[q:q + chunk] = _i32(wide_pack(s[q:q + chunk], payload, limbs).permute(0, 2, 3, 1))
+    return out.view(-1)
+
+
+def wide_unpayload(p: torch.Tensor, n: int, k: int, payload: int, limbs: int, chunk: int = 2048) -> torch.Tensor:
+    """W (n × k uint8) from its payloads in the wide store's order."""
+    v = p.view(tasks(n, k), wide_lane_words(payload), limbs, LANES)
+    s = torch.empty(v.shape[0], LANES, LANE_BYTES, dtype=torch.uint8, device=p.device)
+    for q in range(0, v.shape[0], chunk):
+        s[q:q + chunk] = wide_unpack(v[q:q + chunk].permute(0, 3, 1, 2).to(torch.int64) & 0xFFFFFFFF, payload)
+    return unfragment(s, n, k)
+
+
+def wide_store_words(n: int, k: int, payload: int) -> int:
+    return tasks(n, k) * wide_lane_words(payload) * LANES
+
+
+def wide_word(store: torch.Tensor, i: int, limbs: int) -> int:
+    """Word i of a flat wide store (int32), as an integer."""
+    v = store[[32 * limbs * (i >> 5) + 32 * e + (i & 31) for e in range(limbs)]].tolist()
+    return sum((x & 0xFFFFFFFF) << (32 * e) for e, x in enumerate(v))
+
+
+def wide_block(store: torch.Tensor, j: int, lane_words: int, limbs: int) -> bytes:
+    """Block j of the bandwidth audit's tag (lane j mod 32's words of task j div 32, each little-endian)."""
+    q, lane = divmod(j, LANES)
+    rec = store[q * LANES * lane_words * limbs:(q + 1) * LANES * lane_words * limbs].view(lane_words * limbs, LANES)
+    return rec[:, lane].contiguous().cpu().numpy().tobytes()
+
+
 __all__ = ["LANES", "LANE_BYTES", "PACKINGS", "TASK_COLS", "TASK_TILES", "TILE_ROWS", "check_shape", "fragment_stream",
            "lane_words", "pack", "payloads", "plain_fragments", "store_words", "tasks", "unfragment", "unpack", "unpayload",
-           "unplain"]
+           "unplain", "wide_block", "wide_lane_words", "wide_pack", "wide_payloads", "wide_store_words", "wide_unpack",
+           "wide_unpayload", "wide_word"]

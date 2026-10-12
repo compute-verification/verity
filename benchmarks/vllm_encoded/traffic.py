@@ -60,7 +60,8 @@ def main() -> int:
             fails.append(f"{a['tag']}: {len(ws)} profile windows for {len(a['profiled'])} profiled points")
             continue
         inst = a["install"]
-        weights = inst["store_bytes"] if a["arm"] == "enc" else inst["plain_bytes"]
+        weights = inst["store_bytes"] if a["arm"] in ("enc", "wide") else inst["plain_bytes"]
+        tags = inst["plain_bytes"] // 8 if a.get("tag") else 0
         for pt, w in zip(a["profiled"], ws):
             graphs = sum(r["read"] >= GRAPH_MIN for r in w)
             if not graphs:
@@ -70,7 +71,7 @@ def main() -> int:
             total = rd + wr
             timed = next((p for p in a["points"] if p["batch"] == pt["batch"] and p["context"] == pt["context"]), {})
             analytic = compare.working_set(a["model_shape"], pt["batch"], pt["context"] + timed.get("max_tokens", 0) / 2,
-                                           weights, a["arm"] == "enc")
+                                           weights, a["arm"] != "stock", tags)
             result.append({
                 "tag": a["tag"], "arm": a["arm"], "k": a["k"], "compiled": bool(a.get("compiled")), **pt,
                 "graphs": graphs, "results": len(w), "read_bytes": rd, "write_bytes": wr, "total_bytes": total,

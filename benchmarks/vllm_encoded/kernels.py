@@ -8,7 +8,10 @@ BF16 (`ve_reduce`), so a plain and an encoded linear over the same weight return
 decodes the layer into a scratch FP8 matrix for vLLM's CUTLASS GEMM: prefill is compute-bound and isn't what's timed.
 
 Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a later fused kernel (a tag stage, a wider
-codec) is another `Lib` whose `ve_gemm` takes the same arguments.
+codec) is another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs ra-codec-wide's fused GEMM instead
+(`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19 or 2^521 − 1, and with a tag
+seed set the bandwidth audit's ro-blake3/v1 tag of every block of encoded words it reads); its chunk sums have the same
+layout, so `ve_reduce` turns them into the same BF16.
 """
 from __future__ import annotations
 
@@ -24,15 +27,23 @@ import torch
 HERE = Path(__file__).resolve().parent
 WORD_CODEC = HERE.parent / "word_codec"
 MAX_ROWS = 32
-FORMS = ("simple", "pipe", "ws")
+FORMS = ("simple", "pipe", "ws", "wide")
+
+
+def _load(name: str, file: str):
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, WORD_CODEC / file)
+        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
 
 
 def _codec():
-    if "wc_codec" not in sys.modules:
-        spec = importlib.util.spec_from_file_location("wc_codec", WORD_CODEC / "codec.py")
-        mod = sys.modules["wc_codec"] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules["wc_codec"]
+    return _load("wc_codec", "codec.py")
+
+
+def _wide():
+    return _load("wc_wide", "wide.py")
 
 
 def stream() -> int:
@@ -78,18 +89,84 @@ class Lib:
         return key
 
 
+class WideLib:
+    """One build of `wide.cu` (one field, `WW_BITS`): its key, its tag seed and the tag buffer its GEMMs write."""
+
+    def __init__(self, path: str | Path) -> None:
+        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+        self.path = str(path)
+        so = self.so = ctypes.CDLL(self.path)
+        so.ww_constants.argtypes = [v]
+        so.ww_set_key.argtypes = [v, i, v, v, v, v]
+        so.ww_decode.argtypes = [v, v, q, q, i, v, i, v]
+        so.ww_encode.argtypes = [v, v, q, q, i, i, v]
+        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, i, v]
+        so.ww_gemm_occupancy.argtypes = [i, i, i, i]
+        cs = (ctypes.c_int * 10)()
+        so.ww_constants(cs)
+        self.constants = list(cs)
+        self.bits, self.limbs, self.payload, self.lane_words, self.kmax = (cs[0], cs[1], cs[2], cs[3], cs[7])
+        self.field = _wide().field(self.bits)
+        f = self.field
+        if ((self.limbs, self.payload, self.lane_words, cs[4], cs[5]) !=
+                (f.limbs, f.payload, layout.wide_lane_words(f.payload), layout.LANES, layout.TASK_TILES)):
+            raise RuntimeError(f"{path}: constants {self.constants} are not wide.py's and layout.py's")
+        self.sms = torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
+        self.key = None
+        self.tag_seed: bytes | None = None
+        self._seed = None
+        self.tags: torch.Tensor | None = None
+
+    def call(self, fn: str, *args) -> None:
+        rc = getattr(self.so, fn)(*args)
+        if rc:
+            raise RuntimeError(f"{Path(self.path).name}: {fn} error {rc}")
+
+    def set_key(self, seed: bytes, k: int):
+        wide, f = _wide(), self.field
+        key = wide.key(f, seed, k)
+
+        def arr(vals):
+            return (ctypes.c_uint32 * len(vals))(*vals)
+
+        c, tau = arr([x for cj in key.c for x in wide.limbs(cj, f)]), arr(wide.limbs(key.tau, f))
+        if f.three_mod_four:
+            self.call("ww_set_key", c, k, tau, None, None, None)
+        else:
+            i_, c1 = wide.SQRT_M1, wide.C1
+            self.call("ww_set_key", c, k, tau, arr(wide.limbs(i_, f)), arr(wide.limbs(c1, f)),
+                      arr(wide.limbs(c1 * i_ % f.p, f)))
+        self.key = key
+        return key
+
+    def set_tag(self, seed: bytes | None) -> None:
+        """Tag every block the GEMMs read under ro-blake3/v1 with this window seed (None: no tag)."""
+        if seed is not None and len(seed) != 32:
+            raise ValueError("a tag seed is 32 bytes")
+        self.tag_seed, self._seed = seed, None if seed is None else ctypes.create_string_buffer(seed, 32)
+
+    def tag_buffer(self, blocks: int) -> torch.Tensor:
+        """The tags of one call's blocks (32 bytes a block), shared by every linear as the step's partial sums are."""
+        if self.tags is None or self.tags.numel() < 8 * blocks:
+            self.tags = torch.empty(8 * blocks, dtype=torch.int32, device="cuda")
+        return self.tags
+
+
 @dataclass(frozen=True)
 class Config:
-    """One GEMM form and its launch: `groups` CTA groups a chunk for the persistent forms (0: as many as fit), and the
-    warp-specialized form's consumer warps and ring stages."""
+    """One GEMM form and its launch: `groups` CTA groups a chunk for the persistent forms (0: as many as fit), the
+    warp-specialized form's consumer warps and ring stages, and the wide GEMM's L2 prefetch distance in CTAs."""
 
     form: int
     groups: int = 0
     consumers: int = 0
     stages: int = 0
+    ahead: int = 0
 
     @property
     def name(self) -> str:
+        if self.form == 3:
+            return "wide" + (f"-ahead{self.ahead}" if self.ahead else "")
         return FORMS[self.form] + (f"-{self.consumers}x{self.stages}" if self.form == 2 else "")
 
 
@@ -128,11 +205,17 @@ class Linear:
     def nbytes(self) -> int:
         return self.store.numel() * self.store.element_size()
 
+    def default(self) -> Config:
+        return Config(0)
+
+    def candidates(self, m: int) -> list[Config]:
+        return candidates(self.lib, self.k, m, self.nchunks)
+
     def config(self, m: int) -> Config:
         for mm in sorted(self.configs):
             if mm >= m:
                 return self.configs[mm]
-        return Config(0)
+        return self.default()
 
     def gemm(self, x8: torch.Tensor, cfg: Config | None = None, partials: bool = True,
              part: torch.Tensor | None = None) -> torch.Tensor:
@@ -143,9 +226,12 @@ class Linear:
             part = (torch.empty if partials else torch.zeros)(shape, dtype=torch.float32, device=x8.device)
         elif tuple(part.shape) != shape or part.dtype != torch.float32 or not part.is_contiguous() or not partials:
             raise ValueError(f"partials buffer {tuple(part.shape)} {part.dtype} for {shape}")
-        self.lib.call("ve_gemm", cfg.form, self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n, self.kd,
-                      self.base, int(partials), cfg.groups, cfg.consumers, cfg.stages, stream())
+        self._launch(cfg, x8, part, partials)
         return part
+
+    def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
+        self.lib.call("ve_gemm", cfg.form, self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n,
+                      self.kd, self.base, int(partials), cfg.groups, cfg.consumers, cfg.stages, stream())
 
     def reduce(self, part: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         """BF16 out of the chunks' sums; ``xs`` is one activation scale or one a row (FP32, contiguous)."""
@@ -206,6 +292,67 @@ class EncodedLinear(Linear):
         self.payloads = None
 
 
+class WideLinear(Linear):
+    """Only the wide field's words: `store` (int32) holds W's payloads (`layout.wide_payloads`) encoded k rounds under the
+    wide lib's key at word indices base, base + 1, ... (k = 0: the payloads themselves, the wide kernel's plain operand).
+    With the lib's tag seed set, each GEMM also writes the ro-blake3/v1 tag of block j = base / L + 32·task + lane (that
+    lane's L encoded words) to the lib's tag buffer.  `lib` (a `ve.cu` build) only reduces the chunk sums."""
+
+    def __init__(self, lib: Lib, wlib: WideLib, w: torch.Tensor, weight_scale: torch.Tensor, k: int, base: int,
+                 grid: int = 0) -> None:
+        super().__init__(lib, *w.shape, weight_scale)
+        if k and (wlib.key is None or wlib.key.rounds != k or not 1 <= k <= wlib.kmax):
+            raise ValueError(f"the wide lib's key is not set for k = {k}")
+        if base % (layout.LANES * wlib.lane_words):
+            raise ValueError("a wide store starts at a multiple of 32·L words")
+        self.wlib, self.k, self.base, self.bits = wlib, k, base, wlib.payload
+        self.words = layout.wide_store_words(self.n, self.kd, wlib.payload)
+        self.blocks = self.words // wlib.lane_words
+        payloads = layout.wide_payloads(w, wlib.payload, wlib.limbs)
+        if k:
+            self.store = torch.empty_like(payloads)
+            wlib.call("ww_encode", payloads.data_ptr(), self.store.data_ptr(), self.words, base, k, grid or 4 * wlib.sms,
+                      stream())
+        else:
+            self.store = payloads
+        self.payloads = payloads
+
+    @property
+    def tag_block_base(self) -> int:
+        return self.base // self.wlib.lane_words
+
+    def default(self) -> Config:
+        return Config(3)
+
+    def candidates(self, m: int) -> list[Config]:
+        occ = self.wlib.so.ww_gemm_occupancy(self.k, m, int(self.wlib.tag_seed is not None), 1)
+        return [Config(3)] + ([Config(3, ahead=occ * self.wlib.sms)] if occ > 0 else [])
+
+    def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
+        if cfg.form != 3:
+            raise ValueError(f"the wide GEMM has one form, not {cfg.name}")
+        w = self.wlib
+        tags = w.tag_buffer(self.blocks).data_ptr() if w.tag_seed is not None else None
+        w.call("ww_gemm", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd,
+               self.base, int(partials), w._seed, tags, cfg.ahead, stream())
+
+    def decoded(self) -> torch.Tensor:
+        if not self.k:
+            return self.store
+        out = torch.empty_like(self.store)
+        xr = torch.zeros(1, dtype=torch.int64, device=self.store.device)
+        self.wlib.call("ww_decode", self.store.data_ptr(), out.data_ptr(), self.words, self.base, self.k, xr.data_ptr(),
+                       4 * self.wlib.sms, stream())
+        return out
+
+    def dense(self) -> torch.Tensor:
+        return layout.wide_unpayload(self.decoded(), self.n, self.kd, self.wlib.payload, self.wlib.limbs).view(
+            torch.float8_e4m3fn)
+
+    def drop_payloads(self) -> None:
+        self.payloads = None
+
+
 #: the linears ``ve_enc::linear`` dispatches to, by index
 LINEARS: list[Linear] = []
 
@@ -220,5 +367,5 @@ def _(x8: torch.Tensor, xs: torch.Tensor, idx: int) -> torch.Tensor:
     return x8.new_empty((x8.shape[0], LINEARS[idx].n), dtype=torch.bfloat16)
 
 
-__all__ = ["FORMS", "LINEARS", "MAX_ROWS", "Config", "EncodedLinear", "Lib", "Linear", "PlainLinear", "candidates",
-           "linear_op", "stream"]
+__all__ = ["FORMS", "LINEARS", "MAX_ROWS", "Config", "EncodedLinear", "Lib", "Linear", "PlainLinear", "WideLib",
+           "WideLinear", "candidates", "linear_op", "stream"]

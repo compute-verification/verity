@@ -6,6 +6,9 @@ Arms:
   plain     every linear through `ve.cu`'s fused GEMM over plain FP8 fragments (k = 0): the native kernel of this harness
   enc       every linear through the fused GEMM over codec words only (k rounds of Sloth at p = 2^61 - 1); the plaintext
             weight is freed before vLLM profiles memory, so decode runs with no plaintext copy of any linear in HBM
+  wide      the same with ra-codec-wide's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19 or
+            2^521 - 1, k rounds, k = 0 its plain payloads), with ``--tag`` also tagging every block of words it reads
+            (ro-blake3/v1, the bandwidth audit's tag) as decode runs
 
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
@@ -14,8 +17,9 @@ quantization before it is compiled as in the stock arm).
 The plain and encoded arms install at the end of the model runner's `load_model` (before memory profiling, compilation and
 graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
 gives the same partial sums bit for bit (encoded against plain at every capture size), the plain sums agree with a float
-product, the encoded store decodes to the payloads on the device and in `codec.py`, and (encoded arm) no FP8 or plain
-fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
+product, the encoded store decodes to the payloads on the device and in `codec.py` (`wide.py`), sampled tags equal the
+bandwidth audit's reference (`verity.core.protocols.bandwidth.tags`), and (encoded arms) no FP8 or plain fragment tensor
+of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
 (`gate`), which `compare.py` requires to be bit-identical between plain and encoded arms (token ids and log-probs).
 
 A decode step's time is the interval between two consecutive scheduler updates that both scheduled exactly B decode tokens
@@ -46,6 +50,8 @@ import torch
 
 CAPTURE = [1, 4, 8, 16, 32]
 SEED = hashlib.sha512(b"ra-vllm-encoded/key/v0").digest()[:32]
+TAG_SEED = hashlib.sha256(b"ra-vllm-encoded/tag-seed/v0").digest()
+TAG = "ro-blake3/v1"
 GATE_PROMPTS = [
     "The capital of France is",
     "Write a haiku about memory bandwidth.",
@@ -99,14 +105,23 @@ class Install:
         if not layers:
             raise RuntimeError("no FP8 linear layers to install over")
         lib = K.Lib(args.lib)
-        k = args.k if args.arm == "enc" else 0
-        if k:
+        wide = args.arm == "wide"
+        k = args.k if args.arm in ("enc", "wide") else 0
+        wlib = K.WideLib(args.wide_lib) if wide else None
+        if wide:
+            if k:
+                wlib.set_key(SEED, k)
+            if args.tag:
+                wlib.set_tag(TAG_SEED)
+                wlib.tag_buffer(max(layout.wide_store_words(m.output_size_per_partition, m.input_size_per_partition,
+                                                            wlib.payload) // wlib.lane_words for _, m in layers))
+        elif k:
             lib.set_key(SEED, k)
         torch.cuda.synchronize()
         alloc0 = torch.cuda.memory_allocated()
         gen = torch.Generator(device="cuda")
-        cands: dict[tuple[int, int], list[K.Config]] = {}
-        gates = {"layers": 0, "configs_checked": 0, "python_words": 0, "max_rel_err": 0.0}
+        cands: dict[tuple, list[K.Config]] = {}
+        gates = {"layers": 0, "configs_checked": 0, "python_words": 0, "tags_checked": 0, "max_rel_err": 0.0}
         base, plain_bytes, store_bytes, encode_s = 0, 0, 0, 0.0
         self.hooks = Hooks(tag="ra-vllm-encoded")
         for idx, (name, layer) in enumerate(layers):
@@ -118,10 +133,10 @@ class Install:
             if ws.numel() != 1:
                 raise RuntimeError(f"{name}: weight scale {tuple(ws.shape)} is not per tensor")
             plain = K.PlainLinear(lib, w, ws)
-            if k:
+            if k or wide:
                 torch.cuda.synchronize()
                 te = time.perf_counter()
-                lin = K.EncodedLinear(lib, w, ws, k, base)
+                lin = K.WideLinear(lib, wlib, w, ws, k, base) if wide else K.EncodedLinear(lib, w, ws, k, base)
                 torch.cuda.synchronize()
                 encode_s += time.perf_counter() - te
             else:
@@ -131,10 +146,11 @@ class Install:
             for m in CAPTURE:
                 x8 = rand_fp8(m, kd, gen)
                 ref = plain.gemm(x8, K.Config(0))
-                for kk, op in ((0, plain), (k, lin)) if k else ((0, plain),):
-                    for cfg in cands.setdefault((kk, m, nch), K.candidates(lib, kk, m, nch)):
+                for op in (plain, lin) if lin is not plain else (plain,):
+                    for cfg in cands.setdefault((type(op).__name__, op.k, m, nch), op.candidates(m)):
                         if not bits_equal(op.gemm(x8, cfg), ref):
-                            raise RuntimeError(f"gate: {name} k={kk} {cfg.name} M={m}: partial sums differ from plain simple")
+                            raise RuntimeError(f"gate: {name} {type(op).__name__} k={op.k} {cfg.name} M={m}: partial sums "
+                                               "differ from plain simple")
                         gates["configs_checked"] += 1
                 if m == 4:
                     exact = x8.float() @ w.float().t()
@@ -142,20 +158,18 @@ class Install:
                     gates["max_rel_err"] = max(gates["max_rel_err"], err)
                     if err > 1e-3:
                         raise RuntimeError(f"gate: {name}: fused sums are {err:.2e} off the float product")
-            if k:
+            if wide and wlib.tag_seed is not None:
+                gates["tags_checked"] += check_tags(lin, name, args.python_tags)
+            if k or wide:
                 if not torch.equal(lin.decoded(), lin.payloads):
                     raise RuntimeError(f"gate: {name}: the store does not decode to its payloads")
                 if not torch.equal(lin.dense().view(torch.uint8), w.view(torch.uint8)):
                     raise RuntimeError(f"gate: {name}: the decoded weight is not the weight")
-                codec = K._codec()
-                rng = random.Random(idx)
-                store = lin.store.view(torch.int64)
-                for j in [rng.randrange(store.numel()) for _ in range(args.python_words)]:
-                    if codec.decode_word(int(store[j]), base + j, lib.key, lib.bits) != int(lin.payloads[j]):
-                        raise RuntimeError(f"gate: {name}: codec.py decodes word {base + j} otherwise")
-                gates["python_words"] += args.python_words
+                if k:
+                    check_words(lin, name, idx, args.python_words)
+                    gates["python_words"] += args.python_words
                 lin.drop_payloads()
-                base += lin.store.numel()
+                base += lin.words if wide else lin.store.numel()
                 del plain
             elif not torch.equal(lin.dense().view(torch.uint8), w.view(torch.uint8)):
                 raise RuntimeError(f"gate: {name}: the plain fragments are not the weight")
@@ -174,12 +188,17 @@ class Install:
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
         alloc1 = torch.cuda.memory_allocated()
-        selection = self.select(lib, k)
+        selection = self.select()
         scan = plaintext_scan(min(lin.n * lin.kd for _, lin in self.linears))
         if k and (scan["fp8"] or scan["uint8"]):
             raise RuntimeError(f"gate: plaintext left in the process: {scan}")
+        codec = ({"field": wlib.field.name, "word_bits": wlib.bits, "payload_bits": wlib.payload, "limbs": wlib.limbs,
+                  "lane_words": wlib.lane_words, "wide_lib": Path(args.wide_lib).name, "kmax": wlib.kmax,
+                  "tag": TAG if wlib.tag_seed is not None else None}
+                 if wide else {"field": "p61", "word_bits": 61, "payload_bits": lib.bits, "tag": None})
         self.record = {
-            "arm": args.arm, "k": k, "lib": Path(args.lib).name, "bits": lib.bits, "kmax": lib.kmax, "layers": len(layers),
+            "arm": args.arm, "k": k, "lib": Path(args.lib).name, "bits": codec["payload_bits"], "kmax": lib.kmax,
+            "codec": codec, "layers": len(layers),
             "plain_bytes": plain_bytes, "store_bytes": store_bytes, "store_over_plain": store_bytes / plain_bytes,
             "words": base, "encode_s": encode_s, "allocated_before": alloc0, "allocated_after": alloc1,
             "allocated_delta": alloc1 - alloc0, "plaintext_scan": scan, "gates": gates, "selection": selection,
@@ -189,7 +208,7 @@ class Install:
         }
         log("installed", json.dumps({k_: v for k_, v in self.record.items() if k_ != "selection"}))
 
-    def select(self, lib: K.Lib, k: int) -> list[dict]:
+    def select(self) -> list[dict]:
         """Each shape's GEMM config at each capture size: the fastest candidate over all of the shape's layers in turn (so
         the weights stream from HBM, not L2)."""
         groups: dict[tuple[int, int], list[K.Linear]] = {}
@@ -199,11 +218,10 @@ class Install:
         gen.manual_seed(7)
         out = []
         for (n, kd), lins in groups.items():
-            nch = kd // layout.TASK_COLS
             for m in CAPTURE:
                 x8 = rand_fp8(m, kd, gen)
                 times = {}
-                for cfg in K.candidates(lib, k, m, nch):
+                for cfg in lins[0].candidates(m):
                     times[cfg] = time_config(lins, x8, cfg, self.args.select_trials)
                 best = min(times, key=times.get)
                 for lin in lins:
@@ -213,6 +231,38 @@ class Install:
                 log(f"select n={n} k={kd} m={m}: {best.name} {times[best]:.1f} us", {c.name: round(t, 1) for c, t in times.items()})
         torch.cuda.empty_cache()
         return out
+
+
+def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
+    """``n`` sampled words of the store decode to their payloads in the Python reference (`codec.py` or `wide.py`)."""
+    rng = random.Random(idx)
+    if isinstance(lin, K.WideLinear):
+        wide, w = K._wide(), lin.wlib
+        for j in [rng.randrange(lin.words) for _ in range(n)]:
+            y, want = layout.wide_word(lin.store, j, w.limbs), layout.wide_word(lin.payloads, j, w.limbs)
+            if wide.decode_word(y, lin.base + j, w.key, w.payload) != want:
+                raise RuntimeError(f"gate: {name}: wide.py decodes word {lin.base + j} otherwise")
+        return
+    codec, store = K._codec(), lin.store.view(torch.int64)
+    for j in [rng.randrange(store.numel()) for _ in range(n)]:
+        if codec.decode_word(int(store[j]), lin.base + j, lin.lib.key, lin.lib.bits) != int(lin.payloads[j]):
+            raise RuntimeError(f"gate: {name}: codec.py decodes word {lin.base + j} otherwise")
+
+
+def check_tags(lin: K.WideLinear, name: str, n: int) -> int:
+    """The last GEMM's tags of ``n`` sampled blocks and the last block equal the bandwidth audit's ro-blake3/v1 of the
+    block's encoded words at its index."""
+    from verity.core.protocols.bandwidth import tags
+    w = lin.wlib
+    torch.cuda.synchronize()
+    keyed = tags.get(TAG).keyed(w.tag_seed)
+    rng = random.Random(lin.base)
+    js = sorted({lin.blocks - 1, *(rng.randrange(lin.blocks) for _ in range(n))})
+    got = w.tags[:8 * lin.blocks].view(-1, 8)[js].cpu().numpy()
+    for j, t in zip(js, got):
+        if t.tobytes() != keyed(lin.tag_block_base + j, layout.wide_block(lin.store, j, w.lane_words, w.limbs)):
+            raise RuntimeError(f"gate: {name}: block {lin.tag_block_base + j}'s tag is not {TAG}'s")
+    return len(js)
 
 
 def apply(idx: int, quant):
@@ -347,11 +397,14 @@ def steady(rec: list, b: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", choices=("stock", "plain", "enc"), required=True)
+    ap.add_argument("--arm", choices=("stock", "plain", "enc", "wide"), required=True)
     ap.add_argument("--compiled", action="store_true",
                     help="vLLM's default compilation (torch.compile, piecewise and full CUDA graphs) instead of mode 0")
     ap.add_argument("--k", type=int, default=2)
-    ap.add_argument("--lib", help="a build of ve.cu (plain and enc arms)")
+    ap.add_argument("--lib", help="a build of ve.cu (plain, enc and wide arms; the wide arm reduces with it)")
+    ap.add_argument("--wide-lib", help="a build of wide.cu (wide arm)")
+    ap.add_argument("--tag", action="store_true", help="wide arm: tag every block the GEMMs read (ro-blake3/v1)")
+    ap.add_argument("--python-tags", type=int, default=3, help="sampled tags a layer checked against the reference")
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
     ap.add_argument("--batches", default="1,4,8,16,32")
@@ -380,9 +433,9 @@ def main() -> None:
 
     hooks = Hooks(tag="ra-vllm-encoded")
     install = Install(args)
-    if args.arm in ("plain", "enc"):
-        if not args.lib:
-            ap.error("--lib is required for the plain and enc arms")
+    if args.arm in ("plain", "enc", "wide"):
+        if not args.lib or (args.arm == "wide") != bool(args.wide_lib):
+            ap.error("--lib is required for the plain, enc and wide arms, and --wide-lib for the wide arm only")
         hook_runner(hooks, install)
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
@@ -410,7 +463,8 @@ def main() -> None:
 
     props = torch.cuda.get_device_properties(0)
     result = {
-        "arm": args.arm, "compiled": args.compiled, "k": args.k if args.arm == "enc" else 0, "model": args.model,
+        "arm": args.arm, "compiled": args.compiled, "k": args.k if args.arm in ("enc", "wide") else 0,
+        "tag": TAG if args.arm == "wide" and args.tag else None, "model": args.model,
         "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,
         "sms": props.multi_processor_count, "startup_s": startup_s, "kv_tokens": kv_tokens,

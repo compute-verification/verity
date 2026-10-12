@@ -92,3 +92,50 @@ def test_decoded_reference_words():
     for i in rnd.sample(range(len(p)), 16):
         y = codec.encode_word(p[i], 1000 + i, key)
         assert codec.decode_word(y, 1000 + i, key) == p[i]
+
+
+_wspec = importlib.util.spec_from_file_location("wc_wide", HERE.parents[1] / "word_codec" / "wide.py")
+wide = sys.modules["wc_wide"] = importlib.util.module_from_spec(_wspec)
+_wspec.loader.exec_module(wide)
+
+
+@pytest.mark.parametrize("bits", sorted(wide.FIELDS))
+@pytest.mark.parametrize("n,k", SHAPES[:2])
+def test_wide_payloads_are_wides(n, k, bits):
+    f = wide.field(bits)
+    w = matrix(n, k, 13 * n + bits)
+    ref = wide.store_bytes(wide.fragment_payloads(bytes(w.flatten().tolist()), n, k, f), f)
+    got = layout.wide_payloads(w, f.payload, f.limbs, chunk=3)
+    assert got.dtype == torch.int32 and got.numpy().tobytes() == ref
+    assert got.numel() == layout.wide_store_words(n, k, f.payload) * f.limbs
+    assert torch.equal(layout.wide_unpayload(got, n, k, f.payload, f.limbs, chunk=3), w)
+
+
+@pytest.mark.parametrize("bits", sorted(wide.FIELDS))
+def test_wide_pack_round_trips_extreme_bytes(bits):
+    f = wide.field(bits)
+    s = torch.full((3, 256), 0xFF, dtype=torch.uint8)
+    s[1] = 0
+    s[2, ::2] = 0x80
+    v = layout.wide_pack(s, f.payload, f.limbs)
+    assert v.shape == (3, f.lane_words(), f.limbs) == (3, layout.wide_lane_words(f.payload), f.limbs)
+    for row, words in zip(s, v.tolist()):
+        assert [sum(x << (32 * e) for e, x in enumerate(limbs)) for limbs in words] == wide.pack(bytes(row.tolist()),
+                                                                                                 f.payload)
+    assert torch.equal(layout.wide_unpack(v, f.payload), s)
+
+
+@pytest.mark.parametrize("bits", sorted(wide.FIELDS))
+def test_wide_limb_index_reads_the_store(bits):
+    """`layout.wide_word` reads word i of a flat store as `wide.store_bytes` lays it out (the device gate's reader)."""
+    f = wide.field(bits)
+    w = matrix(16, 1024, 5 + bits)
+    lanes = wide.fragment_payloads(bytes(w.flatten().tolist()), 16, 1024, f)
+    store = layout.wide_payloads(w, f.payload, f.limbs)
+    rnd = random.Random(bits)
+    lw = f.lane_words()
+    for _ in range(12):
+        q, lane, wi = rnd.randrange(len(lanes) // 32), rnd.randrange(32), rnd.randrange(lw)
+        i = wide.word_index(q, lane, wi, lw)
+        assert layout.wide_word(store, i, f.limbs) == lanes[32 * q + lane][wi]
+    assert layout.wide_block(store, 33, lw, f.limbs) == b"".join(y.to_bytes(4 * f.limbs, "little") for y in lanes[33])

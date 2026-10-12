@@ -10,7 +10,9 @@
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
-# any arm with +c compiled as vLLM serves by default (serve.py --compiled);
+# ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
+# ro-blake3/v1 tag of every block read, as decode runs), any arm with +c compiled as vLLM serves by default (serve.py
+# --compiled); wide.cu is built for each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring);
 # SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
@@ -33,19 +35,27 @@ for lib in ${LIBSET:-pb56 pb60}; do
   # shellcheck disable=SC2086
   nvcc "${FLAGS[@]}" ${DEFS[$lib]} -o "$B/ve-$lib.so" $VE/ve.cu > "$O/ve-$lib.ptxas" 2>&1 &
 done
+[ "${MODE:-}" = profile ] && ARMS=${ARMS:-stock enc:2}
+ARMS=${ARMS:-stock plain enc:2 enc:3 stock}
+WIDE=$(for a in $ARMS; do case $a in wide:*) a=${a#wide:}; echo "${a%%:*}" ;; esac; done | sort -u)
+for bits in $WIDE; do
+  nvcc "${FLAGS[@]}" -I benchmarks/bandwidth -DWW_BITS="$bits" -DWW_SQR=1 -DWW_KMAX="${WW_KMAX:-2}" -o "$B/ww-p$bits.so" \
+    benchmarks/word_codec/wide.cu > "$O/ww-p$bits.ptxas" 2>&1 &
+done
 wait || true
 for lib in ${LIBSET:-pb56 pb60}; do [ -e "$B/ve-$lib.so" ] || { tail -30 "$O/ve-$lib.ptxas"; exit 4; }; done
+for bits in $WIDE; do [ -e "$B/ww-p$bits.so" ] || { tail -30 "$O/ww-p$bits.ptxas"; exit 4; }; done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 (cd $VE && "$PY" -m pytest -q -p no:cacheprovider tests) > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 "$PY" -c 'import json, sys; d = json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ("model", "revision", "vllm", "torch")}))' \
   "$WORK/ready.json" > "$O/ready.json"
 export NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu} NCU_ARGS=
 if [ "${MODE:-}" = profile ]; then
-  ARMS=${ARMS:-stock enc:2} SERVE_ARGS=${SERVE_ARGS:---profile-steps 2 --steps 16} ARM_MIN=${ARM_MIN:-10}
+  SERVE_ARGS=${SERVE_ARGS:---profile-steps 2 --steps 16} ARM_MIN=${ARM_MIN:-10}
   NCU_ARGS="--profile-from-start off --graph-profiling graph --cache-control none --clock-control none"
   NCU_ARGS+=" --metrics dram__bytes_op_read.sum,dram__bytes_op_write.sum"
 fi
-export B PY MODEL VE ARMS=${ARMS:-stock plain enc:2 enc:3 stock} SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-7}
+export B PY MODEL VE ARMS SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-7}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 if [ "${MODE:-}" = selftest ]; then
@@ -87,6 +97,8 @@ fi
     IFS=: read -r name k lib <<< "$arm"
     case $name in
       enc) A=(--arm enc --k "$k" --lib "$B/ve-${lib:-pb56}.so"); tag=enc$k${lib:+-$lib} ;;
+      wide) A=(--arm wide --k "${lib%%:*}" --lib "$B/ve-pb56.so" --wide-lib "$B/ww-p$k.so"); tag=w$k-${lib%%:*}
+            case $lib in *:tag) A+=(--tag); tag+=t ;; esac ;;
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac
