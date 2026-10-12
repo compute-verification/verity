@@ -53,7 +53,7 @@ class Lib(WB.Lib):
         super().__init__(name, path)
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
         so = self.so
-        so.sk_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, v, i, i, v, v, i, v]
+        so.sk_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, v, i, i, v, v, i, ctypes.c_char_p, i, v, q, q, v, i, v]
         so.sk_hash.argtypes = [i, v, q, ctypes.c_char_p, q, v, i, v]
         so.sk_leaves.argtypes = [v, q, ctypes.c_char_p, v]
         cs = (ctypes.c_int * 8)()
@@ -87,6 +87,8 @@ class Sketch:
         self.nvec = 16 * self.tiles
         self.sk = torch.zeros(self.nvec * ks, dtype=torch.int32, device="cuda")
         self.commit = WB.Commit(lib, torch, self.nvec)
+        self.sk2 = torch.zeros_like(self.sk)
+        self.commit2 = WB.Commit(lib, torch, self.nvec)
         nbs, nch = n // 16, kd // C.TASK_COLS
         groups = -(-nbs // self.t)
         # the longest run that still gives every consumer warp of the device two runs
@@ -97,14 +99,18 @@ class Sketch:
 
 
 def gemm(lib: Lib, torch, kr: int, ks: int, wbuf, x, y, n: int, kd: int, partials: bool, cfg, t: int, run: int,
-         frag=None, sk=None, decode: int = 1, groups: int = 0, launched=None) -> None:
+         frag=None, sk=None, decode: int = 1, groups: int = 0, launched=None, commit=None, committers: int = 0) -> None:
+    """One sk_gemm call; commit = (a previous call's sketch tensor, its vectors, a Commit, clear) for `committers` warps
+    a CTA to hash."""
+    csk, cnvec, cws = (WB.ptr(commit[0]), commit[1], commit[2].ptr) if commit else (None, 0, None)
     lib.call("sk_gemm", kr, ks, WB.ptr(wbuf), WB.ptr(x.view(torch.uint8)), WB.ptr(y), x.shape[0], n, kd, 0,
              int(partials), cfg[0], cfg[1], groups, launched, t, run, WB.ptr(frag) if frag is not None else None,
-             WB.ptr(sk) if sk is not None else None, decode, WB.stream(torch))
+             WB.ptr(sk) if sk is not None else None, decode, SKETCH_SEED, committers if commit else 0, csk, cnvec, 0,
+             cws, int(commit[3]) if commit else 0, WB.stream(torch))
 
 
 def gate_sketch(lib: Lib, torch, sko: Sketch, store_np: np.ndarray, n: int, kd: int, kr: int, wbuf, x, pp, cfg,
-                full_tags: bool, log) -> dict:
+                full_tags: bool, committers: int, log) -> dict:
     out = {"n": sko.n, "T": sko.t, "run": sko.run, "vectors": sko.nvec}
     ref = S.sketch_f64(S.vectors(store_np, n, kd, sko.bits, sko.t), S.signs(SKETCH_SEED, sko.ks, sko.n))
     out["max_abs"] = int(np.abs(ref).max())
@@ -141,8 +147,24 @@ def gate_sketch(lib: Lib, torch, sko: Sketch, store_np: np.ndarray, n: int, kd: 
         leaves = S.leaves(SKETCH_SEED, ys)
         out["leaves_ok"] = sko.commit.leaf_list() == leaves
         out["root_ok"] = bytes(root) == WB.rfc6962_root(leaves)
+    # the committer warps: call 1 sketches into sk, call 2 into sk2 while hashing sk into commit2
+    sko.sk.zero_()
+    sko.sk2.zero_()
+    y = torch.zeros_like(pp)
+    gemm(lib, torch, kr, sko.ks, wbuf, x, y, n, kd, True, cfg, sko.t, sko.run, sko.frag, sko.sk)
+    y.zero_()
+    clear = sko.run < sko.t
+    gemm(lib, torch, kr, sko.ks, wbuf, x, y, n, kd, True, cfg, sko.t, sko.run, sko.frag, sko.sk2,
+         commit=(sko.sk, sko.nvec, sko.commit2, clear), committers=committers)
+    torch.cuda.synchronize()
+    dev2 = sko.sk2.cpu().numpy().reshape(sko.nvec, sko.ks).astype(np.int64)
+    out["committers"] = {"n": committers, "y_equal_plain": bool(torch.equal(y, pp)),
+                         "sketch_equal": bool(np.array_equal(dev2, ref)), "tags_equal": sko.commit2.tag_list() == ys,
+                         "leaves_equal": sko.commit2.leaf_list() == sko.commit.leaf_list(),
+                         "cleared": (not bool(sko.sk.any())) if clear else True}
     out["ok"] = (all(out[f"run{r}"]["y_equal_plain"] and out[f"run{r}"]["sketch_equal"] for r in {sko.t, sko.run})
-                 and out["bad_tags"] == 0 and out["leaves_ok"] and out["root_ok"] and out["cleared"])
+                 and out["bad_tags"] == 0 and out["leaves_ok"] and out["root_ok"] and out["cleared"]
+                 and all(out["committers"].values()))
     return out
 
 
@@ -197,7 +219,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
             for (lay, ks, nt), sko in sks.items():
                 kr, wbuf = layouts[lay]
                 g = gate_sketch(lib, torch, sko, store_np[lay], n, kd, kr, wbuf, x, pp, cfg,
-                                full_tags=name == a.full_tags, log=log)
+                                full_tags=name == a.full_tags, committers=a.committers, log=log)
                 entry.setdefault("sketch", {})[f"{lay}_{sko.name()}"] = g
                 log(f"sketch gate {name} {lay} k={ks} n={sko.n} (T={sko.t}, run {sko.run}): "
                     f"{'ok' if g['ok'] else 'FAIL'} ({g['vectors']} vectors, {g['tags_checked']} tags, "
@@ -292,7 +314,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
             lc = ctypes.c_int(0)
             fp, skp = (WB.ptr(sko.frag), WB.ptr(sko.sk)) if ks else (None, None)
             lib.call("sk_gemm", kr, ks, ps[0], xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, ctypes.byref(lc), sko.t,
-                     sko.run, fp, skp, decode, st)
+                     sko.run, fp, skp, decode, SKETCH_SEED, 0, None, 0, 0, None, 0, st)
             groups = lc.value // nch
             launched[f"{lay}_{ks}_{sko.n_target}"] = lc.value
             nvec, cptr, tags = sko.nvec, sko.commit.ptr, sko.commit.tags
@@ -302,12 +324,36 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                 rc = 0
                 for p in ps:
                     rc |= so.sk_gemm(kr, ks, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, sko.t,
-                                     sko.run, fp, skp, decode, st)
+                                     sko.run, fp, skp, decode, SKETCH_SEED, 0, None, 0, 0, None, 0, st)
                     if stack:
                         rc |= so.sk_hash(ks, skp, nvec, SKETCH_SEED, 0, tags, clear, st)
                         rc |= so.sk_leaves(cptr, nvec, SKETCH_SEED, st)
                 if rc:
                     raise RuntimeError(f"sk_gemm {lay} {ks}: error {rc}")
+            return f
+
+        def arm_fused(lay, sko, ks):
+            """Call i sketches into buffer i mod 2 while its committer warps hash buffer (i + 1) mod 2, the previous
+            call's, into that buffer's commit (tags and leaves)."""
+            kr = layouts[lay][0]
+            ps = [WB.ptr(b) for b in ring[lay]]
+            fp = WB.ptr(sko.frag)
+            bufs = [(WB.ptr(sko.sk), sko.commit2.ptr), (WB.ptr(sko.sk2), sko.commit.ptr)]
+            clear = int(sko.run < sko.t)
+            lc = ctypes.c_int(0)
+            lib.call("sk_gemm", kr, ks, ps[0], xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, ctypes.byref(lc), sko.t,
+                     sko.run, fp, bufs[0][0], 1, SKETCH_SEED, a.committers, bufs[1][0], sko.nvec, 0, bufs[1][1], clear,
+                     st)
+            groups = lc.value // nch
+
+            def f():
+                rc = 0
+                for i, p in enumerate(ps):
+                    cur, prev = bufs[i % 2], bufs[1 - i % 2]
+                    rc |= so.sk_gemm(kr, ks, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, sko.t, sko.run,
+                                     fp, cur[0], 1, SKETCH_SEED, a.committers, prev[0], sko.nvec, 0, prev[1], clear, st)
+                if rc:
+                    raise RuntimeError(f"sk_gemm fused {lay} {ks}: error {rc}")
             return f
 
         def arm_hash(lay, sko, leaves_only=False):
@@ -347,6 +393,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                     continue
                 arms[f"sk_{lay}_{sko.name()}"] = arm_sk(lay, sko, ks)
                 arms[f"stack_{lay}_{sko.name()}"] = arm_sk(lay, sko, ks, stack=True)
+                arms[f"fused_{lay}_{sko.name()}"] = arm_fused(lay, sko, ks)
                 if mb == a.batches[0]:
                     arms[f"hash_{lay}_{sko.name()}"] = arm_hash(lay, sko)
                     if ks == a.ks[0]:
@@ -371,12 +418,13 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
         res["times"][mb] = {"median_s": med, "times_s": times, "native_s": native, "launched": launched,
                             "host_enqueue_max_s": host_max, "host_bound": host_max > 0.8 * spin_s,
                             "ratio_vs_native": {k: v / native for k, v in med.items()}}
-        best = {lay: min((med[f"stack_{lay}_{s.name()}"], s.name()) for (l2, _, _), s in sks.items() if l2 == lay)
-                for lay in layouts}
+        best = {lay: min((min(med[f"stack_{lay}_{s.name()}"], med[f"fused_{lay}_{s.name()}"]) / native, s.name())
+                         for (l2, _, _), s in sks.items() if l2 == lay) for lay in layouts}
         log(f"gemm {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain_ws {med['plain_ws'] * 1e6:.1f} us, "
             f"native {native * 1e6:.1f} us; base_plain {med['base_plain'] / native:.3f}x; "
             + "; ".join(f"sk_{lay}_{s.name()} {med[f'sk_{lay}_{s.name()}'] / native:.3f}x"
                         f" stack {med[f'stack_{lay}_{s.name()}'] / native:.3f}x"
+                        f" fused {med[f'fused_{lay}_{s.name()}'] / native:.3f}x"
                         for (lay, ks, nt), s in sks.items() if s.name() == f"16_4096")
             + (f"; dec_enc {med['dec_enc'] / native:.3f}x, dt_enc {med['dt_enc'] / native:.3f}x, "
                f"dtc_enc {med['dtc_enc'] / native:.3f}x" if "enc" in layouts else "")
@@ -399,7 +447,7 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
             for ks in a.ks:
                 for nt in a.ns:
                     tot = {"native": 0.0, "base": 0.0, "dec": 0.0, "sk": 0.0, "hash": 0.0, "leaves": 0.0, "stack": 0.0,
-                           "dt": 0.0, "dtc": 0.0}
+                           "fused": 0.0, "dt": 0.0, "dtc": 0.0}
                     ok = True
                     for name, g in cases.items():
                         tm = g.get("times", {}).get(mb)
@@ -414,6 +462,7 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                         tot["hash"] += first[f"hash_{lay}_{ks}_{nt}"]
                         tot["leaves"] += first[f"leaves_{lay}_{nt}"]
                         tot["stack"] += med[f"stack_{lay}_{ks}_{nt}"]
+                        tot["fused"] += med[f"fused_{lay}_{ks}_{nt}"]
                         if lay == "enc":
                             tot["dt"] += med["dt_enc"]
                             tot["dtc"] += med["dtc_enc"]
@@ -425,7 +474,9 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                           "b": 61 if lay == "enc" else 8, "k": a.kr if lay == "enc" else 0,
                           "arithmetic": f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/{lib.name}/pb{lib.bits}"
                                         if lay == "enc" else f"cuda-int8-mma/sketch-k{ks}-n{sk0['n']}/plain",
-                          "batch": int(mb), "y_total": tot["stack"] / nat - 1,
+                          "batch": int(mb), "y_total": min(tot["stack"], tot["fused"]) / nat - 1,
+                          "commit_mode": "fused" if tot["fused"] <= tot["stack"] else "separate",
+                          "y_total_separate": tot["stack"] / nat - 1, "y_total_fused": tot["fused"] / nat - 1,
                           "y_base": tot["base"] / nat - 1, "y_decode": (tot["dec"] - tot["base"]) / nat,
                           "y_tag": (tot["sk"] - tot["dec"]) / nat + tot["hash"] / nat,
                           "y_sketch": (tot["sk"] - tot["dec"]) / nat, "y_hash": tot["hash"] / nat,
@@ -433,13 +484,38 @@ def frontier(res: dict, lib: Lib, a) -> list[dict]:
                           "x": None, "delta": None, "tau": tot["hash"] / nat, "measured": True,
                           "label": f"sketch-then-hash k={ks} n={sk0['n']} ({'encoded' if lay == 'enc' else 'plain'})",
                           "sketch_k": ks, "sketch_n": sk0["n"], "hashed_fraction": 4 * ks / sk0["n"],
-                          "native_step_s": nat, "stack_step_s": tot["stack"],
+                          "native_step_s": nat, "stack_step_s": tot["stack"], "fused_step_s": tot["fused"],
                           "run": os.environ.get("RESEARCH_RUN_ID"), "art": None}
                     if lay == "enc":
                         pt["y_fullbyte_tag"] = (tot["dt"] - tot["dec"]) / nat
                         pt["y_fullbyte_total"] = tot["dtc"] / nat - 1
                     points.append(pt)
     return points
+
+
+def write_result(ok: bool, points: list[dict], libs: list[Lib], out: Path) -> None:
+    """`research/result/v0.1` in $RESEARCH_RUN_DIR (`tools/research/src/research/result.py`), when the run has one."""
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if not run_dir or not run_id:
+        return
+    ms = []
+    for p in points:
+        lay = "enc" if p["b"] == 61 else "plain"
+        stem = f"{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}"
+        ms += [{"name": f"y_{f}_{stem}", "value": p[f"y_{f}"], "unit": "1"}
+               for f in ("total", "total_fused", "total_separate", "sketch", "hash", "commit") if p.get(f"y_{f}") is not None]
+    rel = os.path.relpath(out, run_dir)
+    files = [f"{rel}/sketch-tag.json", f"{rel}/codec-frontier-points.json", f"{rel}/bench.log"]
+    doc = {"schema": "research/result/v0.1", "run_id": run_id,
+           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
+                                    "seed": SKETCH_SEED.hex()},
+           "validation": {"status": "passed" if ok else "failed", "checker": "sketch-tag gates",
+                          "detail": "y = plain FP8 kernel's, sketch = sketch.py's int64 over every vector, "
+                                    "tags/leaves/root = ro-sketch-blake3/v0's", "evidence": files},
+           "measurements": ms, "measurement_files": files, "artifacts": files}
+    tmp = Path(run_dir) / "result.json.tmp"
+    tmp.write_text(json.dumps(doc, indent=1))
+    os.replace(tmp, Path(run_dir) / "result.json")
 
 
 def main() -> int:
@@ -453,6 +529,7 @@ def main() -> int:
     ap.add_argument("--ns", default="1024,4096,16384")
     ap.add_argument("--consumers", type=int, default=4)
     ap.add_argument("--per-consumer", type=int, default=2)
+    ap.add_argument("--committers", type=int, default=2, help="committer warps a CTA in the fused arm")
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--full-tags", default="o", help="the linear whose every tag is checked against the reference")
     ap.add_argument("--mode", default="bench", choices=["bench", "ncu"])
@@ -515,13 +592,7 @@ def main() -> int:
     (out / "codec-frontier-points.json").write_text(json.dumps(
         {"schema": "verity/sketch-tag/frontier-points/v0", "run_id": res["run_id"], "layers": LAYERS,
          "shapes": {k: list(v) for k, v in SHAPES.items()}, "points": points}, indent=1))
-    rd = os.environ.get("RESEARCH_RUN_DIR")
-    if rd:
-        summary = {"ok": ok, "points": len(points)}
-        best = [p for p in points if p["sketch_k"] == 16]
-        if best:
-            summary["best_y_total_k16"] = min(p["y_total"] for p in best)
-        (Path(rd) / "result.json").write_text(json.dumps(summary, indent=1))
+    write_result(ok, points, libs, out)
     log(f"done: ok={ok}, {len(points)} points")
     return 0 if ok else 1
 
