@@ -225,8 +225,10 @@ What each kind rests on:
     among \(Q\) (above), so \(\Pr_S[g < \text{fib}_S]\) is counted \(Q\) times, by the union bound.
   - **The 16 rows.** At \(k_s = 16\) no \(16 \times 32\) block of signs is injective (Siegel's lemma). So
     `SketchBinds` doesn't apply, and the bound is read at the sketch's largest fiber \(g\), whose law over the signs
-    isn't evaluated yet. At \(k_s = 64\) the signs bind except for a column dependency (`RateAuditTensorSketch`), at
-    256 bytes a block.
+    isn't evaluated yet. A sector's block of rank \(r\) has fibers of at most \(256^{32-r}\): \(r\) of the sector's
+    bytes are fixed by the others and the sketch, whose sums never wrap. So at \(g = 2^{8(32-r)}\) the guess is
+    \(q/2^{8r}\), and \(\Pr_S[g < \text{fib}_S]\) is at most the chance that some sector's block has rank below \(r\).
+    At \(k_s = 64\) the signs bind except for a column dependency (`RateAuditTensorSketch`), at 256 bytes a block.
 
   #1849's tag is \(H(R, t, \text{dig}_S(e_t))\): the stream \(R\) is hashed verbatim, beside the tile's sketch. Here
   \(z\) enters before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires. XOR with a fixed
