@@ -121,8 +121,8 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
                        capture_output=True, text=True)
 
 
-def merge_thread_post(text: str) -> bool:
-    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", "ci", "--thread", _merge_thread(), "--to", LANDER,
+def merge_thread_post(text: str, to: tuple[str, ...] = (LANDER,)) -> bool:
+    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", "ci", "--thread", _merge_thread(), "--to", *to,
                         "--quiet", "--text", text], capture_output=True, text=True)
     return r.returncode == 0
 
@@ -145,7 +145,7 @@ def _utc(ts: str | None) -> float | None:
 class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
-                 states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str], bool] = merge_thread_post,
+                 states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         if launch is train_launch:
@@ -297,16 +297,18 @@ class Driver:
 
     # -- refusals
 
-    def refuse(self, drive: dict, key: str, text: str) -> None:
-        """Tell the lander once per key; with --shadow, only log it."""
+    def refuse(self, drive: dict, key: str, text: str, handle: str | None = None) -> None:
+        """Tell the lander once per key, and ``handle``, the PR's owning lane, beside it so the owner hears without a relay;
+        with --shadow, only log it."""
         if key in drive["told"]:
             return
+        to = (LANDER, *([f"@{handle}"] if handle and f"@{handle}" != LANDER else []))
         if self.q.shadow:
-            self.q.log(f"research queue drive: would tell the lander: {text} [shadow]")
+            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [shadow]")
             return
-        if self.post(f"{LANDER} queue: {text}"):
+        if self.post(f"{' '.join(to)} queue: {text}", to):
             drive["told"].append(key)
-        self.q.log(f"research queue drive: told the lander: {text}")
+        self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
 
     # -- the tick
 
@@ -335,7 +337,8 @@ class Driver:
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         for n, c in state.get("conflicts", {}).items():
-            self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}")
+            self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}",
+                        c.get("handle"))
         on_chain = {m.commit for m in members}
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run:

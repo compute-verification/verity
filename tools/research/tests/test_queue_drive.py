@@ -22,7 +22,7 @@ class Harness:
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
-                        post=lambda text: self.posts.append(text) or True, now=lambda: self.clock,
+                        post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids))
 
     def launch(self, repo, commit, machine, agreement):
@@ -202,7 +202,7 @@ def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):
     _check(world, monkeypatch, _git(world.origin, "rev-parse", "refs/heads/queue-shadow"), ("false",))
     h.tick()
     assert not h.launched and not h.posts and _git(world.origin, "rev-parse", "main") == before
-    assert any("would tell the lander" in s for s in world.logs)
+    assert any("would tell @old-circuits-and-proofs" in s for s in world.logs)
 
 
 def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_path, monkeypatch):
@@ -286,3 +286,31 @@ def test_first_goes_above_the_train_a_running_check_covers_and_cancels_nothing(w
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2, 9, 3] and h.q.chain()[1].commit == running
     assert h.cancelled == []
+
+
+def test_a_conflict_is_told_to_the_lander_and_the_lane_that_owns_the_pr(world, monkeypatch):
+    """12 Oct: drive's ejection posts named only the lander's subteam, so an owner heard of a conflict through a relay.  The
+    owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or
+    the agent whose id ends in the branch's suffix."""
+    import dataclasses
+    import json
+
+    agent = "bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79"
+    reg = {"handles": [{"handle": "circuits", "holder": f"the circuits coordinator ({agent})"},
+                       {"handle": "infra", "holder": "infra (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)"}]}
+    main = world.change({".agents/skills/using-slack/registry.json": json.dumps(reg)})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append((text, to)) or True
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, world.change({"a.txt": "two\n"}), body="Lane `catalog`.")
+    world.gh.prs[2] = dataclasses.replace(world.gh.prs[2], branch="cursor/catalog-8c79")
+    h.tick()
+    assert [to for _, to in sent] == [("@old-circuits-and-proofs", "@circuits")]
+    assert sent[0][0].startswith("@old-circuits-and-proofs @circuits queue: #2 at ")
+    q = h.q
+    for pr, want in ((dataclasses.replace(world.gh.prs[2], body=f"[agent]({agent})", branch=""), "circuits"),
+                     (dataclasses.replace(world.gh.prs[2], body="Lane `infra`.", branch=""), "infra"),
+                     (dataclasses.replace(world.gh.prs[2], branch="cursor/x-0000"), None)):
+        assert q.handle(pr) == want

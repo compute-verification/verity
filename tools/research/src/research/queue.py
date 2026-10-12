@@ -94,6 +94,7 @@ RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
+REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
@@ -142,12 +143,13 @@ class PR:
     draft: bool = False
     labels: tuple[str, ...] = ()
     base: str = "main"
+    branch: str = ""
 
     @classmethod
     def from_api(cls, d: dict) -> "PR":
         return cls(number=int(d["number"]), head=d["head"]["sha"], title=d.get("title") or "", body=d.get("body") or "",
                    draft=bool(d.get("draft")), labels=tuple(sorted(x["name"] for x in d.get("labels") or [])),
-                   base=(d.get("base") or {}).get("ref", "main"))
+                   base=(d.get("base") or {}).get("ref", "main"), branch=d["head"].get("ref") or "")
 
     @property
     def owner(self) -> str | None:
@@ -225,6 +227,11 @@ class StoreLabels:
         self._newest[(pr, head)] = labs[-1] if labs else None
         return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
 
+    def marked_by(self, pr: int, head: str) -> str | None:
+        """Who wrote the newest `ready` label `ready` read on `pr:{n}@{head}`."""
+        lab = self._newest.get((pr, head))
+        return None if lab is None else lab.by
+
     def before_cutoff(self, pr: int, head: str) -> str | None:
         """When the newest `ready` label `ready` read on `pr:{n}@{head}` is `true` but older than ``since``, its time: a mark
         drive ignores, which `status` names so the owner re-marks or closes the PR (12 Oct: #1784, #1786, #1801)."""
@@ -296,10 +303,11 @@ class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (), first: tuple[int, ...] = (),
-                 before_cutoff: Callable[[int, str], str | None] | None = None):
+                 before_cutoff: Callable[[int, str], str | None] | None = None,
+                 marked_by: Callable[[int, str], str | None] | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
-        self.before_cutoff = before_cutoff
+        self.before_cutoff, self.marked_by = before_cutoff, marked_by
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
@@ -456,6 +464,26 @@ class Queue:
               if set(files) & set(_out(self.workdir, "diff", "--name-only", f"{m.commit}^1", m.commit).split())]
         return None, f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
 
+    def handle(self, pr: PR) -> str | None:
+        """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
+        lane its body names, the agent id it carries, the ready mark's author, else the agent whose id ends in its branch's
+        suffix (`cursor/<name>-4292`); None when none of them is a handle."""
+        r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
+        try:
+            reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
+        except (ValueError, AttributeError):
+            return None
+        names = {h.get("handle") for h in reg if isinstance(h, dict)}
+        holders = {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
+                   for a in AGENT_RE.findall(str(h.get("holder", "")))}
+        by = self.marked_by(pr.number, pr.head) if self.marked_by else None
+        suffix = pr.branch.rpartition("-")[2] if "-" in pr.branch else ""
+        tail = sorted({n for a, n in holders.items() if len(suffix) == 4 and a.endswith(suffix)})
+        for c in (pr.owner, holders.get(pr.owner or ""), by, tail[0] if len(tail) == 1 else None):
+            if c in names:
+                return c
+        return None
+
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         self._clone()
         state = self.load_state()
@@ -480,7 +508,7 @@ class Queue:
             if commit is None:
                 e.state, e.why = "refused", why
                 dropped.add(n)
-                conflicts[str(n)] = {"head": e.pr.head, "why": why}
+                conflicts[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
                 self.notify(e, "conflict", why, state, dry_run)
                 continue
             tip = commit
@@ -1065,7 +1093,7 @@ def main(argv: list[str]) -> int:
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n),
-                  before_cutoff=labels.before_cutoff)
+                  before_cutoff=labels.before_cutoff, marked_by=labels.marked_by)
         lock = _lock(a.workdir)  # noqa: F841
         if not a.marked_after:
             if a.rules is None:
