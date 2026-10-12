@@ -21,7 +21,8 @@ In (i), as in `PublicAudit`'s:
   event's checks at candidate 3 (`ChecksVR`) keep every session's own list (`acceptsV_checked`).
 
 `_hstk` is not read here: VBridge is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
-(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`).
+(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`), which gives VBridge at the typed sessions and so at the checked ones
+(`vbridge_checked`).
 
 (ii) is `RecursiveFirewallPrivate`.
 -/
@@ -67,6 +68,45 @@ theorem acceptsV_checked {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} 
   rw [← own_keepOwn (Flock.Guarantees.custodied zr hC h R ω t o.1 j)
     (Flock.Guarantees.ChecksC3 ish cs coins j (bind j) rows) hp] at hj
   exact hj
+
+open Classical in
+/-- **A kept session accepts only what its session accepts**: its own list is the session's, or `freshOwn`, which
+accepts nothing (`not_acceptsZKR_fresh`). -/
+theorem acceptsZKR_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
+    {P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
+      FlockSoundness.Discharge.Exec.Transcript → Prop} {t : FlockSoundness.Discharge.Exec.Transcript}
+    (h : AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t) :
+    AcceptsZKR z.I z.own t := by
+  by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+  · rw [own_keepOwn z P hp] at h
+    exact h
+  · have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right hp
+    rw [hf] at h
+    exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t h).elim
+
+/-- **VBridge at the typed sessions gives it at the checked sessions**, which accept only what the typed sessions accept
+(`acceptsZKR_of_keepOwn`) and whose reads, layers and commit strings are theirs: `FlockC3.Compose.hbr_honest`
+discharges `_hbr` through it. -/
+theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
+    {coins : Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
+    {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg}
+    {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg}
+    (hb : Flock.Premises.VBridge (Flock.Guarantees.custodied zr hC h) dg N k Rw x wmsg Sk cmt msg) :
+    Flock.Premises.VBridge (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h) dg N k Rw x wmsg Sk cmt
+      msg := by
+  obtain ⟨hoff, hcm, hdec, hfull⟩ := hb
+  refine ⟨fun R ω t R₂ hbad τ o ho => hoff R ω t R₂ hbad τ o fun j =>
+      ⟨acceptsZKR_of_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
+        (P := Flock.Guarantees.ChecksC3 ish cs coins j (bind j) rows) (ho j).1, (ho j).2⟩,
+    fun i R ω t e he R₂ j ⟨tr, htr⟩ => hcm i R ω t e he R₂ j ⟨tr, acceptsZKR_of_keepOwn
+      (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
+      (P := Flock.Guarantees.ChecksC3 ish cs coins j (bind j) rows) htr⟩, hdec, hfull⟩
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
 theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
