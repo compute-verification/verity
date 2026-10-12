@@ -283,3 +283,20 @@ def test_frontier_at_the_floor():
     off = F.apart_off(2048)[0]
     _, wide = F.pick(F.options(G.LLAMA_70B, 1, F.e_codec(2048, 1, off), off=off))
     assert p["gamma_decode_free"] - wide["gamma_decode_free"] < 0.0015 and wide["slowdown"] > p["slowdown"] + 0.15
+
+
+def test_built_point():
+    """The point's codec as ra-codec-tensor built it: its untagged step lands inside the predicted decode bracket at the
+    locked clock, its tag (0.44) above the modelled 0.227, and γ_bw stays under 1% with no assumption on W at the pipe
+    floor at batch 1 and 32 (the red team's 12:22Z reprice: 0.87% / 0.79%)."""
+    lo, hi = F.apart_off(1536)
+    assert F.fused_y(1536, 1, lo) < F.FUSED_1536_Y[0] < F.fused_y(1536, 1, hi)
+    assert F.SKETCH_1536_Y[0] - F.FUSED_1536_Y[0] == pytest.approx(0.443) and F.TAG < 0.443
+    b1, b32 = F.built(), F.built(batch=32)
+    assert b1["gamma_bw"] == pytest.approx(0.0045, abs=1e-4)
+    assert b1["gamma_decode_free"] == pytest.approx(0.0086, abs=1e-4)
+    assert b1["slowdown"] == pytest.approx(2.30, abs=0.01)
+    assert b32["gamma_bw"] == pytest.approx(0.0073, abs=1e-4)
+    assert b32["gamma_decode_free"] == pytest.approx(0.0077, abs=1e-4)
+    assert b32["slowdown"] == pytest.approx(2.58, abs=0.01)
+    assert F.built(ops=1.0)["gamma_decode_free"] > 0.01 > F.built(batch=32, ops=1.0)["gamma_decode_free"]

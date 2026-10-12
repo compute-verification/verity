@@ -2,8 +2,9 @@
 
 `python -m model.frontier [OPS] [BATCH] [MODEL]` from `benchmarks/word_codec` prints, for each E codec, γ_bw with W
 registered / with no assumption on W, the step slowdown and the served one, with the KV option the 5% rule picks;
-1023 bits at 7.13x the issue bound is the measured thread-per-word kernel; 1536 and 2048 need a kernel not yet built,
-fused thread-per-word (extrapolated, past the measured bracket) or with its decode apart (from measured squarings).
+1023 bits at 7.13x the issue bound is the measured thread-per-word kernel; 1536 and 2048 are modelled fused
+thread-per-word (extrapolated, past the measured bracket) or with their decode apart (from measured squarings), and
+`built` prices 1536 at the step of the kernel since built.
 The adversary squares at the measured pipes' floor (`pipe_ops`, 1.36-1.45x the issue bound), or at OPS times the issue
 bound when OPS is given (1.0 for an algorithm past Karatsuba that issues no more than it). Costs are in passes at the
 locked clock, as measured; the adversary runs at the max clock (κ = KAPPA), the honest at either.
@@ -29,6 +30,10 @@ FUSED_768_Y = 1.159
 FUSED_768_Y32 = 1.386
 FUSED_512_Y = 1.051
 FUSED_1023_Y = 2.025
+# The point's codec as ra-codec-tensor built it (r20261012-115146-b886): 2^1536 − 3453 fused at k = 1 on 6 decoder
+# warps, batch 1 / 32, untagged and with the k_s = 16 sketch tag and the commit [measured].
+FUSED_1536_Y = (1.96, 1.92)
+SKETCH_1536_Y = (2.403, 2.421)
 # Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits ra-word-codec's 2.81e10/s,
 # 1,536 and 2,048 the red team's F22 (r20261012-102430-ee3a: 8.3e9/s, 5.05e9/s with one level of Karatsuba).
 SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 5.05e9)}
@@ -172,12 +177,12 @@ def kv_codec(bits: int, batch: int, off: float = OFF_ISSUE[0]) -> g.Codec:
 
 
 def options(shape: g.Shape, batch: int, c: g.Codec, ops: float | None = None, kv_widths=(1536, 2048),
-            kappa: float = KAPPA, off: float = OFF_ISSUE[0]) -> dict[str, dict]:
+            kappa: float = KAPPA, off: float = OFF_ISSUE[0], tag: float = TAG) -> dict[str, dict]:
     """Every KV option at E's codec `c` (its own prime at k_KV rounds, or a wider KV prime at one, its kernel `off`
     times the issue bound), the adversary at the floor on both (`sq`'s `ops`)."""
     bits = math.ceil(c.p_bits)
     adv = g.at_floor(c, sq(bits, ops))
-    c = replace(c, y=c.y + TAG)
+    c = replace(c, y=c.y + tag)
     common = dict(idle=IDLE[shape.name], theta=g.WIDE_THETA["p767"], out_tokens=OUT_TOKENS, adversary=adv,
                   kappa=kappa)
     out = {f"k{kr}": g.Point(shape, batch, 4096, True, c, kv_rounds=kr, kv_extra=kv_attn(kr), **common).terms()
@@ -238,6 +243,15 @@ def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None
     end of `apart_off`), the KV cache at the 5% rule's pick."""
     off = apart_off(1536)[0] if off is None else off
     return pick(options(shape, batch, e_codec(1536, batch, off, clock_mhz), ops, off=off))[1]
+
+
+def built(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None) -> dict:
+    """The point's codec as built: E on 2^1536 − 3453 at its measured step and tag (batch 1, or 32 from batch 32 up),
+    the decode's ALU read off the batch-1 step through `y_of_eps`, the honest at the locked clock it was timed at."""
+    i = int(batch >= 32)
+    off = (FUSED_1536_Y[0] - FUSED_768_Y + g.WIDE["p767"].eps) / sq(1536)
+    c = replace(e_codec(1536, batch, off), y=FUSED_1536_Y[i])
+    return pick(options(shape, batch, c, ops, off=off, tag=SKETCH_1536_Y[i] - FUSED_1536_Y[i]))[1]
 
 
 if __name__ == "__main__":
