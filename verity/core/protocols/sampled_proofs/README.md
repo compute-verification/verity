@@ -67,8 +67,10 @@ The proof service runs the two-stage audit whose first stage checks every proof 
 with `check="all"`). Not built yet: a second draw (a count `k`), the security function and its red-team review
 (decision 41), and composition checks such as PoUW's tiles per proof unit matching this partition (the IR checks
 refinement, `verity.ml.circuits.partition.validate_refinement`).
-Serving does not yet commit with the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
-captured from serving, and says so (`window.kind = "stand-in"`).
+Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
+captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchmarks/one_stage/a5.py`) registers a served
+Commit's own window, its serving rows written from the sealed replay bundle opened against the run's record
+(`verity-vllm serving-rows`); the link from those roots to the record's vllm-v1 roots is the committer's opening, not proof.
 
 ## Where things are
 
@@ -105,8 +107,9 @@ captured from serving, and says so (`window.kind = "stand-in"`).
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn units. The vLLM integration
-  commits serving rows with the registration and served domains of `one_stage` (`verity_vllm.commit.serving_rows`); its
-  replay challenge is its own (`verity_vllm.commit.challenge`).
+  commits serving rows with the registration and served domains of `one_stage` (`verity_vllm.commit.serving_rows`, in the
+  Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
+  (`verity_vllm.commit.challenge`).
 
 Tests: `uv run tools/verity/check/suites.py verity-sampled-proofs`.
 
