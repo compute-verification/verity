@@ -10,7 +10,8 @@ too):
   direct-sum conjecture W. On-chip sources and HBM sources give the same saving per unit of compute (see `saving`),
   so the term is s_word · f_cap, s_word the share of its slot a rebuilt word saves (`s_word`). s_c, the payload's
   compressibility, is an assumption about data the operator chooses: a compressor bounds it from one side only. W can
-  be registered with its s_c; the prompts can't, so the KV cache's payloads count as free (`rebuild_free_kv`).
+  be registered with its s_c; the prompts can't, so the KV cache's payloads count as free (`rebuild`), and the KV
+  words may take a codec and rounds of their own (`Point.kv_codec`, `Point.kv_rounds`).
 - `mu_slot`: slot bits that carry no information (the top 3 bits of a word mod 2^61 − 1), which an adversary drops.
 - `mu_sample`: wrong sketches the verifier's spot checks miss, for a time-averaged claim with total rejection.
 - `mu_lambda`: the random oracle's guessing allowance per tile (AuditRO's λ).
@@ -230,6 +231,15 @@ WIDE_THETA = {"p255": 85 / 83 - 1, "p511": 233 / 219 - 1, "m521": 0.0, "p767": 4
 WIDE_HIDDEN_Y = {"p255": max(1.05, 1420 / 1429), "p511": 1420 / 1195, "m521": 1420 / 1100, "p767": 1420 / 930}
 
 
+def extrapolated(bits: int) -> Codec:
+    """A full-slot word wider than any measured, from p511 and p767: ε linear in the bits, r at p767's r per bit (r
+    per bit has grown with the width, so rε, the adversary's encode, is if anything low), y p767's with ε's
+    difference. 2^1536 − 3453 and 2^2048 − 1557 (one head's BF16 K or V row a word) are the full-slot primes."""
+    p767 = WIDE["p767"]
+    eps = p767.eps + (p767.eps - WIDE["p511"].eps) * (bits - 768) / 256
+    return Codec(eps, p767.r * bits / 768, p767.y + eps - p767.eps, p767.tau, bits, bits, bits)
+
+
 @dataclass(frozen=True)
 class Point:
     shape: Shape
@@ -239,6 +249,8 @@ class Point:
     codec: Codec
     s_c: float = 0.19  # FP8 weights per payload byte: measured 0.17 (8B, art:23672ef9), 0.19 (70B, art:f989de1d)
     kv_rounds: int = 1  # Sloth rounds on the KV cache's words, k for E: its payloads are free, so it may want more
+    kv_codec: Codec | None = None  # the KV words' codec, at one round (E's when None); its ε, r and slot are used
+    out_tokens: int = 0  # tokens a sequence generates, over which its prompt's KV encode is spread (0: not counted)
     kappa: float = 1.0
     theta: float = 0.0
     other: float = 0.0  # μ_sample + μ_λ (+ μ_side, zero under isolation)
@@ -252,28 +264,37 @@ class Point:
         act = self.act_crossing * self.shape.activation_bytes(self.batch)
         cert = e + kv if self.kv_certified else e
         a, b = e / cert, (kv / cert if self.kv_certified else 0.0)
-        # d, the window in passes of the certified bytes: E's fused pass, the KV cache's (each extra round adds its
-        # decode) or its uncertified read at the native rate, and the idle time; the adversary may spend all of it.
-        y_kv = c.y + (self.kv_rounds - 1) * c.eps if self.kv_certified else 1.0
-        d = (c.y * e + y_kv * kv + self.idle * e) / cert
+        kc = self.kv_codec or c
+        enc_kv = self.kv_rounds * kc.r * kc.eps  # passes to encode a pass of KV words
+        new = self.batch * self.shape.kv_bytes_per_token() if self.kv_certified else 0.0
+        # d, the window in passes of the certified bytes: E's fused pass, the KV cache's (E's fused step with the KV
+        # codec's decode in place of E's) or its uncertified read at the native rate, the encode of the step's new
+        # KV words, and the idle time; the adversary may spend all of it.
+        y_kv = c.y + self.kv_rounds * kc.eps - c.eps if self.kv_certified else 1.0
+        d = (c.y * e + y_kv * kv + enc_kv * new + self.idle * e) / cert
+        # The prompts' KV words, encoded at prefill, outside the decode windows: passes of the certified bytes.
+        prefill = enc_kv * (kv - new) / cert
         budget = d * self.kappa * (1 + self.theta) - c.tau
         chip = mu_chip(cert)
-        slot = mu_slot(c.p_bits, c.slot_bits)
-        enc_kv = self.kv_rounds * c.r * c.eps
+        slot = a * mu_slot(c.p_bits, c.slot_bits) + b * mu_slot(kc.p_bits, kc.slot_bits)
         # W is registered with its s_c, so the E words kept are decoded; the prompts aren't, so no KV word is.
         rebuilt = min(1.0 - chip, rebuild(budget, c.eps * a, [(a, (c.r - 1) * c.eps, s_word(c, self.s_c)),
-                                                              (b, enc_kv, s_word(c, 1.0))]))
+                                                              (b, enc_kv, s_word(kc, 1.0))]))
         # Without the assumption on s_c (an unvetted model): every payload free, nothing decoded.
         rebuilt_free = min(1.0 - chip, rebuild(budget, 0.0, [(a, c.r * c.eps, s_word(c, 1.0)),
-                                                              (b, enc_kv, s_word(c, 1.0))]))
+                                                              (b, enc_kv, s_word(kc, 1.0))]))
         q_honest = e + kv + act
         stock = (e + kv) / e + self.idle
+        served = d + (prefill / self.out_tokens if self.out_tokens else 0.0)
 
         def gamma(lost: float) -> float:
             return 1 - cert * (1 - min(1.0, lost)) / q_honest
 
         return {
             "slowdown": (d * cert / e) / stock,
+            # With each prompt's encode spread over the tokens it generates; stock's prefill is left out, so high.
+            "slowdown_served": (served * cert / e) / stock,
+            "prefill_passes": prefill,
             "E_GB": e / 1e9,
             "kv_GB": kv / 1e9,
             "fits": e + kv <= M_DEVICE,

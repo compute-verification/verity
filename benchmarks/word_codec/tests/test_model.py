@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 import sys
 from dataclasses import replace
@@ -15,9 +16,15 @@ sys.path.insert(0, str(HERE.parent))
 from model import gamma as G  # noqa: E402
 
 
+SMALL_PRIMES = [q for q in range(2, 5000) if all(q % f for f in range(2, int(q**0.5) + 1))]
+SIEVE = math.prod(SMALL_PRIMES)
+
+
 def is_prime(n: int, rounds: int = 40) -> bool:
-    if n < 4:
-        return n in (2, 3)
+    if n < 5000:
+        return n in SMALL_PRIMES
+    if math.gcd(n, SIEVE) != 1:
+        return False
     d, s = n - 1, 0
     while d % 2 == 0:
         d, s = d // 2, s + 1
@@ -49,12 +56,13 @@ def test_mu_chip_by_model():
     assert chip[2] == pytest.approx(0.0032, abs=5e-4)
 
 
-@pytest.mark.parametrize("bits,c", [(64, 189), (128, 173), (256, 189), (512, 569), (768, 825), (1024, 105)])
+@pytest.mark.parametrize("bits,c", [(64, 189), (128, 173), (256, 189), (512, 569), (768, 825), (1024, 105),
+                                    (1536, 3453), (2048, 1557)])
 def test_full_slot_primes(bits, c):
     """Each is the smallest c with 2^bits − c prime and ≡ 3 mod 4, so Sloth's square root (x^((p+1)/4)) works."""
     p = (1 << bits) - c
     assert is_prime(p) and p % 4 == 3
-    assert not any(is_prime((1 << bits) - d) and ((1 << bits) - d) % 4 == 3 for d in range(1, c))
+    assert not any(d % 4 == 1 and is_prime((1 << bits) - d) for d in range(1, c))
     assert G.mu_slot(bits - 2.0**-50, bits) < 1e-15
 
 
@@ -143,6 +151,33 @@ def test_free_kv_payloads():
     assert four["mu_rebuild"] < t["mu_rebuild"] / 3 and four["slowdown"] < 1.04 * t["slowdown"]
     packed = G.Point(G.LLAMA_70B, 1, 4096, True, G.packed(G.MEASURED[3]), idle=0.10, kv_rounds=4).terms()
     assert packed["gamma_bw"] == pytest.approx(0.0106, abs=3e-4)
+
+
+def test_extrapolated_wide_words():
+    assert G.extrapolated(768).eps == pytest.approx(G.WIDE["p767"].eps) and G.extrapolated(768).r == 503
+    assert G.extrapolated(512).eps == pytest.approx(G.WIDE["p511"].eps)
+    k = G.extrapolated(2048)
+    assert k.eps == pytest.approx(1.68) and k.r * k.eps == pytest.approx(2253, abs=1) and G.mu_slot(2048, 2048) == 0
+
+
+def test_kv_codec_and_its_encode():
+    """The KV words' codec apart from E's. The honest encodes each KV word once (a new token's in its step, the
+    prompt's at prefill) at the price E_c = k_KV·rε the adversary pays to rebuild one in a window; at 70B batch 8
+    a 1536-bit KV codec at one round beats E's 512-bit one at four on both γ_bw and the step."""
+    c = replace(G.WIDE["p511"], tau=0.011, p_bits=512, payload_bits=512)
+    th = G.WIDE_THETA["p511"]
+    base = G.Point(G.LLAMA_70B, 8, 4096, True, c, idle=0.10, theta=th, out_tokens=512)
+    assert replace(base, kv_codec=c).terms() == base.terms()
+    rounds = replace(base, kv_rounds=4).terms()
+    wide = replace(base, kv_codec=replace(G.extrapolated(1536), tau=0.011)).terms()
+    assert wide["gamma_bw"] < rounds["gamma_bw"] - 4e-4 and wide["slowdown"] < rounds["slowdown"] - 0.2
+    e, kv = rounds["E_GB"], rounds["kv_GB"]
+    a, b = e / (e + kv), kv / (e + kv)
+    e_c = 4 * c.r * c.eps
+    assert rounds["prefill_passes"] == pytest.approx(e_c * b * 4095 / 4096)
+    budget = rounds["d"] * (1 + th) - c.tau
+    assert rounds["mu_rebuild"] == pytest.approx((budget - c.eps * a) / e_c)  # KV words first, and not all of them
+    assert rounds["slowdown_served"] > rounds["slowdown"] + 0.2
 
 
 def test_at_batch():
