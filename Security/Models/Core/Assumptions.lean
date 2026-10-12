@@ -42,8 +42,8 @@ auditor's hardware on a machine its host provider runs and the prover doesn't co
 Nebius host, and its host never restores an earlier copy of the state the device keeps there. `run device x` is
 everything the device does on input `x`: what it emits, and how it uses its clock and its keys. The host changes none of
 it. Nothing attests this, since no attestation hardware stands behind the device: it is trust in the auditor's device
-and its host provider, Nebius, never in a host the prover controls. It doesn't say the keys stay secret: a protocol that relies on
-the device's signatures proves its claim or finds, from the run, a forgery under the device's key.
+and its host provider, Nebius, never in a host the prover controls. It doesn't say the keys stay secret: a protocol that
+relies on the device's signatures proves its claim or finds, from the run, a forgery under the device's key.
 
 This definition states only the part about one run. The state the device keeps on its host outlasts a run, which a
 statement of one run can't name; a property that relies on it names it in its docstring and takes no premise for it. -/
