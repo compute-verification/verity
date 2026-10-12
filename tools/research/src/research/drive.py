@@ -6,8 +6,9 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    the commit still lands when the commits `main` gained share no file with it (`Skipped-check:` names them).  Then
    `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`.
-3. Check `next`'s tip: `train.sh TIP MACHINE`, with `--agreement` when the tip changes a `lean-audit.json` (the lander's rule;
-   train.sh itself sends the build for C-Flock's paths), while fewer than `max_running` of its launches are outstanding.
+3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
+   tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
+   itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run.
 
 What it refuses goes to the lander in the merge thread, once per commit or head: a failed check, a conflict, a check that ran
 and passed but lacks a step the gate needs, a launch that registered no run.  The lander ejects the PR that broke it
@@ -99,11 +100,11 @@ def _utc(ts: str | None) -> float | None:
 
 
 class Driver:
-    def __init__(self, q: Queue, *, on: str, max_running: int = 2,
+    def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time):
-        self.q, self.on, self.max_running = q, on, max_running
+        self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         self.launch, self.states, self.post, self.now = launch, states, post, now
         self.repo = q.workdir
 
@@ -257,42 +258,49 @@ class Driver:
             self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}")
         on_chain = {m.commit for m in members}
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
-        what = f"landed #{landed.pr}" if landed else ""
-        if members:
-            tip = members[-1]
-            prs = " ".join(f"#{m.pr}" for m in members)
-            main = _out(self.repo, "rev-parse", "origin/main")
-            v = self.verdict(tip.commit, main, drive)
+        what = [f"landed #{landed.pr}"] if landed else []
+        main = _out(self.repo, "rev-parse", "origin/main")
+        running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
+        for i in self.trains(len(members)):
+            m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
+            v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
-                self.refuse(drive, f"failed:{tip.commit}", f"`{q.branch}`'s tip {tip.commit[:12]} ({prs}) failed its check: {v.why}. "
-                                                          "Eject the PR that broke it (`research queue eject N --reason ...`); "
-                                                          "the next sync rebuilds without it")
-                what = what or f"tip {tip.commit[:12]} failed"
-            elif v.state == "running":
-                what = what or f"tip {tip.commit[:12]} ({prs}): check {v.attempt} running"
-            elif v.state == "none":
-                running = [c for c in drive["launched"] if c != tip.commit
-                           and self.verdict(c, main, drive).state == "running"]
-                agreement = needs_agreement(self.repo, main, tip.commit)
-                if len(running) >= self.max_running:
-                    what = what or f"tip {tip.commit[:12]} waits: {len(running)} checks of `{q.branch}` running"
-                elif dry_run or q.shadow:
-                    q.log(f"research queue drive: would launch train.sh {tip.commit[:12]} {self.on}"
-                          + (" --agreement" if agreement else "") + f" ({prs})" + (" [shadow]" if q.shadow else ""))
-                    what = what or f"would check {tip.commit[:12]}"
-                else:
-                    ids, tail = self.launch(self.repo, tip.commit, self.on, agreement)
-                    if ids:
-                        drive["launched"][tip.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
-                        q.log(f"research queue drive: checking {tip.commit[:12]} ({prs}): {' '.join(ids)}"
-                              + (" with agreement" if agreement else ""))
-                        what = what or f"launched {' '.join(ids)}"
-                    else:
-                        self.refuse(drive, f"launch:{tip.commit}", f"train.sh {tip.commit[:12]} {self.on} registered no run: {tail}")
-                        what = what or "launch failed"
-            else:
-                what = what or f"tip {tip.commit[:12]} passed ({v.attempt}); it lands next tick"
+                self.refuse(drive, f"failed:{m.commit}", f"{m.commit[:12]} on `{q.branch}` ({prs}) failed its check: {v.why}. "
+                                                        "Eject the PR that broke it (`research queue eject N --reason ...`); "
+                                                        "the next sync rebuilds without it")
+                what.append(f"{m.commit[:12]} failed")
+                break                                       # every train above it holds the failure too
+            if v.state == "passed":
+                what.append(f"{m.commit[:12]} passed ({v.attempt}): it lands next tick")
+                continue
+            if v.state == "running":
+                what.append(f"{m.commit[:12]} ({prs}): {v.attempt} running")
+                continue
+            if running >= self.max_running:
+                what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running")
+                break
+            agreement = needs_agreement(self.repo, main, m.commit)
+            if dry_run or q.shadow:
+                q.log(f"research queue drive: would launch train.sh {m.commit[:12]} {self.on}"
+                      + (" --agreement" if agreement else "") + f" ({prs})" + (" [shadow]" if q.shadow else ""))
+                what.append(f"would check {m.commit[:12]}")
+                running += 1
+                continue
+            ids, tail = self.launch(self.repo, m.commit, self.on, agreement)
+            if not ids:
+                self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run: {tail}")
+                what.append("launch failed")
+                break
+            drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
+            q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else ""))
+            what.append(f"launched {' '.join(ids)}")
+            running += 1
         if not dry_run:
             q.save_state(state)
-        q.log(f"research queue drive: {what or 'nothing queued'}")
-        return what or "idle"
+        q.log(f"research queue drive: {'; '.join(what) or 'nothing queued'}")
+        return "; ".join(what) or "idle"
+
+    def trains(self, n: int) -> list[int]:
+        """The members whose commits get a check: every `train_size`-th one and the tip, each train stacked on the one below, so a
+        failure holds up only the PRs from its train up, and the trains below it still land."""
+        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1}) if n else []

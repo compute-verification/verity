@@ -148,6 +148,21 @@ def test_a_launch_that_ended_without_an_attempt_is_lost_after_the_grace_and_one_
     assert len(h.posts) == 1 and "no attempt reached the store" in h.posts[0]
 
 
+def test_next_is_checked_in_stacked_trains_and_a_failed_train_holds_up_only_the_ones_above_it(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 3
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt"), (5, "e.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    members = h.q.chain()
+    assert [c for c, _, _ in h.launched] == [members[1].commit, members[3].commit, members[4].commit]
+    _check(world, monkeypatch, members[1].commit)
+    _check(world, monkeypatch, members[3].commit, ("false",))
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == members[1].commit       # the train below the failure lands
+    assert len(h.posts) == 1 and f"{members[3].commit[:12]} on `next` (#3 #4) failed" in h.posts[0]
+
+
 def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):
     h = Harness(world, monkeypatch, shadow=True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))

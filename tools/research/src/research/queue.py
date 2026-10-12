@@ -12,9 +12,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`)
-    research queue drive --on MACHINE [--max-running N] [--dry-run]
+    research queue drive --on MACHINE [--max-running N] [--train-size N] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next`'s tip with train.sh, tell the lander what it refuses
+                                                   check `next` in trains with train.sh, tell the lander what it refuses
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -45,7 +45,7 @@ which files conflict and which queued PRs touched them.
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
 `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).  `drive`
-(`research.drive`) is the loop's tick that needs no agent: it launches the check of `next`'s tip, lands what passed (onto a
+(`research.drive`) is the loop's tick that needs no agent: it launches the checks of `next`'s trains, lands what passed (onto a
 moved `main` too, when the two share no file) and tells the lander what it refuses.
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
@@ -970,6 +970,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once")
+    ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
     a = ap.parse_args(argv)
     if a.dry_run and a.command not in ("sync", "land", "drive"):
         ap.error(f"--dry-run is for sync, land and drive only: `{a.command}` would act for real")
@@ -1023,7 +1024,7 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             from .drive import Driver
 
-            Driver(q, on=a.on, max_running=a.max_running).tick(dry_run=a.dry_run)
+            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
