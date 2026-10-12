@@ -536,6 +536,192 @@ __global__ void __launch_bounds__(FW * 32) plain_kernel(const uint4* __restrict_
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Chunk blocks (layout.py's chunk_tag): a lane's 16 bytes of 64 consecutive tiles, D (1,024 bytes), is one BLAKE3 chunk,
+// and L consecutive lanes' chunks are one block of L KiB. The block's bytes are each lane's D rotated left by 8 bytes,
+// E_j = D_0[8:] D_0[:8] ... D_(L-1)[8:] D_(L-1)[:8], so that in u64be j || E_j chunk i is P_i || D_i[8:] with P_0 = u64be j
+// and P_i = D_(i-1)[:8], whole in lane i once lane i - 1's first tile has landed; the 8-byte tail chunk is
+// D_(L-1)[:8]. A lane hashes its chunk (16 compressions), then the warp runs log2 L + 1 more in lock step (2 at L = 1):
+// the tail and the first parents, the further parents, and the root over the L chunks' subtree and the tail.
+//
+//   unit u = s * (N / 16) + nb       tiles 64 s .. 64 s + 63 of row block nb (span-major: a CTA's warps are consecutive)
+//   block j = jbase + (32 / L) u + lane / L
+//
+// The weights stream through a ring of ST quads (4 tiles, 2 KiB a warp) in shared memory, each lane copying its own
+// 16 bytes with cp.async, so ST - 1 quads are in flight without holding registers.
+
+constexpr int CHUNK_TILES = 64, CCOLS = 32 * CHUNK_TILES, CXS = CCOLS + 16, QUAD_BYTES = 4 * 32 * 16;
+
+__device__ __forceinline__ void cp16(void* smem, const void* g) {
+  const uint32_t s = (uint32_t)__cvta_generic_to_shared(smem);
+  asm volatile("cp.async.cg.shared.global.L2::256B [%0], [%1], 16;" ::"r"(s), "l"(g) : "memory");
+}
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
+template <int N>
+__device__ __forceinline__ void cp_wait() {
+  asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory");
+}
+
+template <int V, int L>
+struct ChunkTag {
+  static_assert(L == 1 || L == 2 || L == 4 || L == 8, "a block is 1, 2, 4 or 8 lanes' chunks");
+  uint32_t cv[8], d0, d1;  // d0 d1: the lane's first 8 bytes (the next lane's P, or the tail chunk)
+
+  __device__ __forceinline__ void begin() {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) cv[i] = kKey[i];
+  }
+
+  // Quad qd: tiles 4 qd .. 4 qd + 3 of the unit; pos = lane % L, j the block's index.
+  __device__ __forceinline__ void absorb(const uint4 (&t)[4], int qd, int pos, uint64_t j, const Mul& k) {
+    uint32_t m[16] = {t[0].x, t[0].y, t[0].z, t[0].w, t[1].x, t[1].y, t[1].z, t[1].w,
+                      t[2].x, t[2].y, t[2].z, t[2].w, t[3].x, t[3].y, t[3].z, t[3].w};
+    if (qd == 0) {
+      d0 = t[0].x;
+      d1 = t[0].y;
+      const uint32_t p0 = __shfl_up_sync(FULL, d0, 1), p1 = __shfl_up_sync(FULL, d1, 1);
+      m[0] = pos ? p0 : bswap32((uint32_t)(j >> 32));
+      m[1] = pos ? p1 : bswap32((uint32_t)j);
+    }
+    const uint32_t fl = KEYED | (qd == 0 ? START : 0) | (qd == 15 ? END : 0);
+    b3<V>(cv, m, (uint32_t)pos, 64, fl, cv, k);
+  }
+
+  // The tag, in lanes with pos 0. Step 0: the tail chunk (every lane at L = 1, lane L - 1 otherwise) and the parents of
+  // lane pairs; steps 1 .. log2 L - 1: the parents at distance 2^step; the last: the root over the subtree and the tail.
+  __device__ __forceinline__ void finish(uint32_t y[8], int pos, const Mul& k) {
+    constexpr int STEPS = L == 1 ? 2 : L == 2 ? 2 : L == 4 ? 3 : 4;
+    uint32_t key[8], h[8], tail[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      key[i] = kKey[i];
+      h[i] = cv[i];
+      tail[i] = 0;
+    }
+#pragma unroll 1
+    for (int st = 0; st < STEPS; ++st) {
+      const bool last = st == STEPS - 1, tl = st == 0 && (L == 1 || pos == L - 1);
+      const int d = last ? L - 1 : 1 << st;
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 8; ++i) {
+        const uint32_t o = __shfl_down_sync(FULL, last ? tail[i] : h[i], d);
+        m[i] = tl ? (i == 0 ? d0 : i == 1 ? d1 : 0u) : h[i];
+        m[8 + i] = tl ? 0u : o;
+      }
+      uint32_t out[8];
+      b3<V>(key, m, tl ? (uint32_t)L : 0u, tl ? 8u : 64u, KEYED | (tl ? START | END : PARENT) | (last ? ROOT : 0), out,
+            k);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) {
+        if (st == 0) tail[i] = out[i];
+        if (!(L == 1 && st == 0)) h[i] = out[i];
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < 8; ++i) y[i] = h[i];
+  }
+};
+
+// W warps a CTA on consecutive row blocks of one span s (x's 2,048 columns of it in shared memory), each warp one unit.
+// Modes and PARTIALS as fused_kernel's; tags at tags[8 (j - jbase)] from the block's first lane.
+template <int V, int L, int NB8, int MODE, int W, int ST, bool PARTIALS>
+__global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
+                                                       float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N,
+                                                       int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
+  constexpr bool GEMM = MODE != MODE_TAGONLY, TAG = MODE != MODE_GEMM;
+  extern __shared__ __align__(16) uint8_t smem[];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g8 = lane >> 2, tq = lane & 3;
+  uint8_t* xs = smem;
+  uint8_t* ring = smem + (GEMM ? NB8 * 8 * CXS : 0) + warp * ST * QUAD_BYTES + lane * 16;
+  const int rts = N / 16, per_span = rts / W;
+  const int s = blockIdx.x / per_span, nb = (blockIdx.x % per_span) * W + warp;
+  const uint4* wp = wstore + ((size_t)nb * (Kd / 32) + (size_t)s * CHUNK_TILES) * LANES + lane;
+  auto issue = [&](int qd) {
+    if (qd < 16) {
+      uint8_t* dst = ring + (qd % ST) * QUAD_BYTES;
+#pragma unroll
+      for (int i = 0; i < 4; ++i) cp16(dst + i * 512, wp + (4 * qd + i) * LANES);
+    }
+    cp_commit();
+  };
+#pragma unroll
+  for (int p = 0; p < ST - 1; ++p) issue(p);
+  if constexpr (GEMM) {
+    for (int e = threadIdx.x; e < NB8 * 8 * CCOLS / 16; e += W * 32) {
+      const int b = e / (CCOLS / 16), c = e % (CCOLS / 16);
+      uint4 v = make_uint4(0, 0, 0, 0);
+      if (b < M) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)s * CCOLS) + c);
+      *reinterpret_cast<uint4*>(xs + b * CXS + 16 * c) = v;
+    }
+    __syncthreads();
+  }
+  const Mul k = muls();
+  const uint64_t u = (uint64_t)s * rts + nb;
+  const int pos = lane % L;
+  const uint64_t jl = u * (32 / L) + lane / L;
+  float acc[NB8][4];
+#pragma unroll
+  for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+  ChunkTag<V, L> ct;
+  if constexpr (TAG) ct.begin();
+
+#pragma unroll 1
+  for (int qd = 0; qd < 16; ++qd) {
+    issue(qd + ST - 1);
+    cp_wait<ST - 1>();
+    const uint8_t* src = ring + (qd % ST) * QUAD_BYTES;
+    uint4 q[4];
+#pragma unroll
+    for (int i = 0; i < 4; ++i) q[i] = *reinterpret_cast<const uint4*>(src + i * 512);
+    if constexpr (GEMM) {
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        const uint32_t a[4] = {q[i].x, q[i].y, q[i].z, q[i].w};
+        const int col = 32 * (4 * qd + i) + 4 * tq;
+#pragma unroll
+        for (int j = 0; j < NB8; ++j) {
+          const uint8_t* row = xs + (8 * j + g8) * CXS;
+          mma_e4m3(acc[j], a, *reinterpret_cast<const uint32_t*>(row + col),
+                   *reinterpret_cast<const uint32_t*>(row + col + 16));
+        }
+      }
+    }
+    if constexpr (TAG) ct.absorb(q, qd, pos, jbase + jl, k);
+  }
+  cp_wait<0>();
+
+  if constexpr (TAG) {
+    uint32_t t[8];
+    ct.finish(t, pos, k);
+    if constexpr (MODE == MODE_SINK) {
+      uint32_t a = pos ? 0u : t[0] ^ t[1] ^ t[2] ^ t[3] ^ t[4] ^ t[5] ^ t[6] ^ t[7];
+#pragma unroll
+      for (int dd = 16; dd; dd >>= 1) a ^= __shfl_xor_sync(FULL, a, dd);
+      if (lane == 0) atomicXor(xr, a);
+    } else if (pos == 0) {
+      uint4* o = reinterpret_cast<uint4*>(tags + jl * 8);
+      o[0] = make_uint4(t[0], t[1], t[2], t[3]);
+      o[1] = make_uint4(t[4], t[5], t[6], t[7]);
+    }
+  }
+  if constexpr (GEMM) {
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+      for (int e = 0; e < 4; ++e) {
+        const int n = nb * 16 + g8 + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+        if (b < M) {
+          if constexpr (PARTIALS)
+            y[((size_t)s * M + b) * N + n] = acc[j][e];
+          else
+            atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // The commitment: #1805's leaves (16 tags, u64be leaf || 512 bytes after the leaf prefix's midstate: five compressions)
 // and its RFC 6962 tree (benchmarks/bandwidth/tagger.cu). leaf0 is the first leaf's index in the store.
 
@@ -848,6 +1034,37 @@ int tf_fused(int v, int span, int mode, int pd, int partials, const void* w, con
   kern<<<grid, FW * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
   return cudaGetLastError() ? 2 : 0;
 }
+
+#define F2(L, MODE, W, ST, P)                                                                                    \
+  if (lanes == L && mode == MODE && wc == W && stages == ST && partials == P) {                                \
+    if (nb8 == 1) kern = fused2_kernel<1, L, 1, MODE, W, ST, P>;                                               \
+    if (nb8 == 2) kern = fused2_kernel<1, L, 2, MODE, W, ST, P>;                                               \
+    if (nb8 == 4) kern = fused2_kernel<1, L, 4, MODE, W, ST, P>;                                               \
+  }
+
+// The chunk-block GEMM (fused2_kernel, BLAKE3 variant 1). lanes: L, a block's chunks; mode as tf_fused's; wc: warps a
+// CTA (2 or 4); stages: the ring's quads. M <= 32, N a multiple of 16 wc, K of 2,048.
+int tf_fused2(int lanes, int mode, int wc, int stages, int partials, const void* w, const uint8_t* x, float* y,
+              uint32_t* tags, int M, int N, int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
+  if (M < 1 || M > 32 || (wc != 2 && wc != 4) || N % (16 * wc) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
+  const int nb8 = mode == MODE_TAGONLY ? 1 : M <= 8 ? 1 : M <= 16 ? 2 : 4;
+  void (*kern)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*) = nullptr;
+  if (mode == MODE_GEMM) lanes = 1;
+  // GEMM only: both CTA sizes at 4 and 6 stages, per-span sums at 4 warps and 4 stages
+  F2(1, 0, 4, 4, false) F2(1, 0, 2, 4, false) F2(1, 0, 4, 6, false) F2(1, 0, 2, 6, false) F2(1, 0, 4, 4, true)
+  // + tags: every L at 4 warps and 4 stages; L = 4 at 2 warps, at 6 stages and with per-span sums
+  F2(1, 1, 4, 4, false) F2(2, 1, 4, 4, false) F2(4, 1, 4, 4, false) F2(8, 1, 4, 4, false)
+  F2(4, 1, 2, 4, false) F2(4, 1, 4, 6, false) F2(4, 1, 4, 4, true)
+  // + sink, and tags only
+  F2(4, 2, 4, 4, false) F2(1, 3, 4, 4, false) F2(4, 3, 4, 4, false)
+  if (!kern) return 3;
+  const int smem = (mode == MODE_TAGONLY ? 0 : nb8 * 8 * CXS) + wc * stages * QUAD_BYTES;
+  if (smem > 48 * 1024 && cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2;
+  const int grid = (N / 16 / wc) * (Kd / CCOLS);
+  kern<<<grid, wc * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
+  return cudaGetLastError() ? 2 : 0;
+}
+#undef F2
 
 int tf_plain(const void* w, const uint8_t* x, float* y, int M, int N, int Kd, int partials, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % TASK_COLS) return 1;

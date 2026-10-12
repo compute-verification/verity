@@ -71,6 +71,48 @@ def test_blocks_permute_the_store(span):
                 assert first == (nb * tiles + s * span) * 32 + lane
 
 
+@pytest.mark.parametrize("lanes", layout.GROUPS)
+def test_chunk_tag_is_the_reference(lanes):
+    rng = random.Random(100 + lanes)
+    tag = tags.Blake3Tag()
+    keyed, key = tag.keyed(SEED), tag.key(SEED)
+    for j in (0, 7, (1 << 33) + 17, (1 << 64) - 1, rng.getrandbits(64)):
+        ds = [rng.randbytes(1024) for _ in range(lanes)]
+        block = b"".join(d[8:] + d[:8] for d in ds)
+        assert layout.chunk_tag(key, j, ds) == keyed(j, block) == blake3.keyed(key, j.to_bytes(8, "big") + block)
+
+
+def test_chunk_tag_refuses_other_shapes():
+    with pytest.raises(ValueError, match="lanes' 1,024 bytes"):
+        layout.chunk_tag(bytes(32), 0, [bytes(1024)] * 3)
+    with pytest.raises(ValueError, match="lanes' 1,024 bytes"):
+        layout.chunk_tag(bytes(32), 0, [bytes(512)])
+
+
+@pytest.mark.parametrize("lanes", layout.GROUPS)
+def test_chunk_blocks_permute_the_store(lanes):
+    """Every 16-byte piece lands in one chunk block; block j's first lane is the kernel's, its D rotated by 8 bytes."""
+    n, k = 32, 2 * 64 * 32
+    pieces = n * k // 16
+    store = b"".join(i.to_bytes(16, "little") for i in range(pieces))
+    bl = layout.chunk_blocks(store, n, k, lanes)
+    assert len(bl) == layout.chunk_block_count(n, k, lanes)
+    ds = [seg[-8:] + seg[:-8] for blk in bl for seg in (blk[i:i + 1024] for i in range(0, len(blk), 1024))]
+    seen = sorted(int.from_bytes(d[16 * i:16 * i + 16], "little") for d in ds for i in range(64))
+    assert seen == list(range(pieces))
+    rts, tiles = n // 16, k // 32
+    for s in range(layout.chunk_spans(k)):
+        for nb in range(rts):
+            u = s * rts + nb
+            for lane in range(0, 32, lanes):
+                j = u * (32 // lanes) + lane // lanes
+                d0 = (nb * tiles + s * 64) * 32 + lane
+                # E_j opens with D_0[8:]: the high half of the lane's first piece, then its second piece
+                assert bl[j][:8] == d0.to_bytes(16, "little")[8:]
+                assert bl[j][8:24] == (d0 + 32).to_bytes(16, "little")
+                assert bl[j][1016:1024] == d0.to_bytes(16, "little")[:8]
+
+
 def test_tree_root_is_rfc6962():
     rng = random.Random(9)
     for count in (1, 2, 3, 5, 16, 17, 33):
@@ -95,3 +137,4 @@ def test_kernel_constants_match_the_reference():
 def test_store_blocks_count_one_step():
     per_layer = (6144 + 4096 + 28672) * 4096 + 4096 * 14336
     assert layout.store_blocks(32) == 32 * per_layer // 512 == 2 * layout.store_blocks(64)
+    assert [layout.store_chunk_blocks(g) for g in layout.GROUPS] == [32 * per_layer // (1024 * g) for g in layout.GROUPS]

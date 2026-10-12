@@ -14,6 +14,17 @@ y_j      = BLAKE3-keyed(K, u64be j || E_j)  ro-blake3/v1, verity/core/protocols/
 so the blocks are a fixed permutation of the store's bytes, and the warp that multiplies a unit's tiles hashes them from
 its registers.  `lane_tag` is the kernel's order of work on one block: a compression per four tiles, the last 8 bytes
 of each quad carried into the next, then the tail chunk and the parents.
+
+Chunk blocks (`fused2_kernel`) make a lane's 16 bytes of 64 tiles, D, one BLAKE3 chunk, and `lanes` consecutive lanes
+one block of `lanes` KiB, each D rotated left by 8 bytes so that chunk i of `u64be j || E_j` is whole in lane i:
+
+~~~text
+unit u   = s * (N / 16) + nb               tiles 64 s .. 64 s + 63 of row block nb
+block j  = jbase + (32 / lanes) u + lane / lanes
+E_j      = D_0[8:] D_0[:8] ... D_(L-1)[8:] D_(L-1)[:8]    chunk i = P_i || D_i[8:], P_0 = u64be j, P_i = D_(i-1)[:8]
+~~~
+
+`chunk_tag` is the kernel's order of work: the chunks, the 8-byte tail D_(L-1)[:8], the parents and the root.
 """
 
 from __future__ import annotations
@@ -104,6 +115,65 @@ def lane_tag(key: bytes, j: int, block: bytes) -> bytes:
     return _bytes(blake3.compress(kw, _bytes(cv) + _bytes(t), 0, 64, keyed | blake3.PARENT | blake3.ROOT)[:8])
 
 
+CHUNK_TILES = 64  # a lane's 16 bytes of 64 tiles: one BLAKE3 chunk
+GROUPS = (1, 2, 4, 8)  # lanes (chunks) a chunk block takes
+
+
+def chunk_spans(k: int) -> int:
+    if k % (TILE_COLS * CHUNK_TILES):
+        raise ValueError(f"K is a multiple of {TILE_COLS * CHUNK_TILES}")
+    return k // (TILE_COLS * CHUNK_TILES)
+
+
+def chunk_block_count(n: int, k: int, lanes: int) -> int:
+    if lanes not in GROUPS:
+        raise ValueError(f"a chunk block is one of {GROUPS} lanes")
+    return n // 16 * chunk_spans(k) * LANES // lanes
+
+
+def lane_chunks(store: bytes, n: int, k: int) -> list[bytes]:
+    """Every lane's 1,024 bytes D in `tf.cu`'s unit order: unit u = s * (n / 16) + nb, then lane."""
+    tiles = k // TILE_COLS
+    out = []
+    for s in range(chunk_spans(k)):
+        for nb in range(n // 16):
+            for lane in range(LANES):
+                at = [((nb * tiles + t) * LANES + lane) * LANE_BYTES
+                      for t in range(s * CHUNK_TILES, (s + 1) * CHUNK_TILES)]
+                out.append(b"".join(store[a:a + LANE_BYTES] for a in at))
+    return out
+
+
+def chunk_blocks(store: bytes, n: int, k: int, lanes: int) -> list[bytes]:
+    """Every chunk block, in index order: `lanes` consecutive lanes' D, each rotated left by 8 bytes."""
+    if lanes not in GROUPS:
+        raise ValueError(f"a chunk block is one of {GROUPS} lanes")
+    ds = lane_chunks(store, n, k)
+    return [b"".join(d[8:] + d[:8] for d in ds[i:i + lanes]) for i in range(0, len(ds), lanes)]
+
+
+def chunk_tag(key: bytes, j: int, ds: Sequence[bytes]) -> bytes:
+    """`tf.cu`'s `ChunkTag` on one block from its lanes' D; equal to `blake3.keyed(key, u64be j || E_j)`."""
+    if len(ds) not in GROUPS or any(len(d) != 16 * CHUNK_TILES for d in ds):
+        raise ValueError(f"a chunk block is one of {GROUPS} lanes' 1,024 bytes")
+    kw = _words(key)
+    keyed = blake3.KEYED_HASH
+    cvs = []
+    for i, d in enumerate(ds):
+        msg = (j.to_bytes(8, "big") if i == 0 else ds[i - 1][:8]) + d[8:]
+        cv = kw
+        for c in range(16):
+            fl = keyed | (blake3.CHUNK_START if c == 0 else 0) | (blake3.CHUNK_END if c == 15 else 0)
+            cv = tuple(blake3.compress(cv, msg[64 * c:64 * c + 64], i, 64, fl)[:8])
+        cvs.append(cv)
+    tail = blake3.compress(kw, ds[-1][:8] + bytes(56), len(ds), 8,
+                           keyed | blake3.CHUNK_START | blake3.CHUNK_END)[:8]
+    while len(cvs) > 1:
+        cvs = [tuple(blake3.compress(kw, _bytes(cvs[i]) + _bytes(cvs[i + 1]), 0, 64, keyed | blake3.PARENT)[:8])
+               for i in range(0, len(cvs), 2)]
+    return _bytes(blake3.compress(kw, _bytes(cvs[0]) + _bytes(tail), 0, 64, keyed | blake3.PARENT | blake3.ROOT)[:8])
+
+
 def node_hash(left: bytes, right: bytes) -> bytes:
     return hashlib.sha512(b"\x01" + left + right).digest()
 
@@ -124,3 +194,8 @@ def tree_root(leaves: Sequence[bytes]) -> bytes:
 def store_blocks(span: int) -> int:
     """Blocks of every linear of Llama-3.1-8B's 32 layers at this span (the store one step's tags cover)."""
     return LAYERS * sum(block_count(n, k, span) for n, k in SHAPES.values())
+
+
+def store_chunk_blocks(lanes: int) -> int:
+    """`store_blocks` for chunk blocks of `lanes` lanes."""
+    return LAYERS * sum(chunk_block_count(n, k, lanes) for n, k in SHAPES.values())

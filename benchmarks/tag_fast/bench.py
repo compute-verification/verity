@@ -10,16 +10,20 @@ Gates; a failed gate times nothing (exit 5):
             0xFF first) is reference.py's, every leaf too and the root; the sink form's XOR is the reference tags';
             a control under another seed matches no block; at every batch the GEMM's per-span sums with and without the
             tag are equal bit for bit and within FP32 rounding of torch's product, and every timed form's output is too
+Block maps (`--maps`): lane spans 32 and 64 (fused_kernel, layout.blocks) and chunk blocks k1 .. k8 (fused2_kernel,
+layout.chunk_blocks: 1 to 8 KiB); the gates above run on each.
 Timings, every call on cold weights (rings of copies past the L2), each arm queued behind a spin kernel and the arms
 interleaved rep by rep (the word codec's method, benchmarks/word_codec/bench.py):
-  per shape and batch  cuBLASLt FP8 (torch._scaled_mm), the word codec's plain FP8 GEMM, tf.cu's GEMM without the tag
-            (g: two load depths), with the tag to memory (t: variants and depths), with the tag and its leaves (c), with
-            the tag XORed into one word (s), and an empty kernel; native is the fastest of cuBLASLt and the plain GEMMs
+  per shape and batch  cuBLASLt FP8 (torch._scaled_mm), the word codec's plain FP8 GEMM, tf.cu's GEMMs without the tag
+            (g), with the tag to memory (t), with the tag XORed into one word (s), and an empty kernel; native is the
+            fastest of cuBLASLt and the GEMMs without the tag
   per shape  the tag alone (o) and a streaming read of the store
   device    compression chains (BLAKE3's variants; at 4 and 5 rounds, uncertified; Keccak-p[1600, 12]; SHA-512), the
-            tree over one step's leaves, and the leaves over one step's tags at once
-y_tag is Σ fused / Σ native over the four linears at one batch (layer-weighted), y_commit the same with the leaves.
-Writes OUT/tag-fast.json and OUT/bench.log.
+            tree over one step's leaves, and the leaves over one step's tags at once, for every map
+  step      32 layers on distinct weights: native, tags, tags + leaves + tree, and tags with each layer's leaves
+            overlapped on a second stream (time_step), for chunk maps `--step-groups`
+y_tag is Σ fused / Σ native over the four linears at one batch (layer-weighted); the step's y is its time over the
+native step's, so its commit arms are y_commit. Writes OUT/tag-fast.json and OUT/bench.log.
 """
 
 from __future__ import annotations
@@ -48,9 +52,12 @@ SEED2 = bytes(range(1, 33))
 BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
 SPIN_CYCLES = 20_000_000
-TAG_FORMS = ((0, 1), (1, 1), (3, 1), (1, 2))  # (variant, load depth) of the timed tag forms
+TAG_FORMS = ((0, 1), (1, 1), (3, 1), (1, 2))  # (variant, load depth) of the gated lane-span tag forms
+TIME_FORMS = ((1, 1), (1, 2))  # of the timed ones (V0 and V3 lose to V1: runs r20261012-071350-8a3e, -072130-5f82)
 MODE_GEMM, MODE_TAGS, MODE_SINK, MODE_TAGONLY = 0, 1, 2, 3
-FORM = re.compile(r"(?P<stage>[gtcso])(?P<span>\d+)(?:v(?P<v>\d+))?p(?P<pd>\d+)$")  # an arm of tf.cu's kernels
+# an arm of tf.cu's kernels: lane spans g32p1, t32v1p2 (span, variant, load depth); chunk blocks t4kw4s4 (lanes, warps
+# a CTA, stages)
+FORM = re.compile(r"(?P<stage>[gtcso])(?P<span>\d+)(?:(?P<k>k)w(?P<w>\d+)s(?P<st>\d+)|(?:v(?P<v>\d+))?p(?P<pd>\d+))$")
 
 
 def forms(arms, stage: str) -> list[str]:
@@ -63,6 +70,7 @@ class Lib:
         so = ctypes.CDLL(path)
         sig = {
             "tf_init": [v, v], "tf_fused": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
+            "tf_fused2": [i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_chain": [i, i, i, u64, v, i, i, v], "tf_b3_one": [i, v, v, v], "tf_keccak_one": [v, v],
             "tf_read": [v, u64, v, i, v], "tf_spin": [ctypes.c_longlong, v], "tf_empty": [i, v],
@@ -130,6 +138,22 @@ def fused(lib: Lib, torch, v, span, mode, pd, partials, w, x, y, tags_buf, m, n,
              ptr(y), ptr(tags_buf), m, n, k, jbase, ptr(xr), stream(torch))
 
 
+def fused2(lib: Lib, torch, lanes, mode, wc, st, partials, w, x, y, tags_buf, m, n, k, jbase, xr=None):
+    lib.call("tf_fused2", lanes, mode, wc, st, int(partials), ptr(w), ptr(x.view(torch.uint8)) if x is not None else 0,
+             ptr(y), ptr(tags_buf), m, n, k, jbase, ptr(xr), stream(torch))
+
+
+def is_chunk(key) -> bool:
+    return str(key)[0] == "k"
+
+
+# chunk forms: (lanes, warps a CTA, stages) of the tag forms, of the GEMM-only forms, of the tag-only and sink forms
+CHUNK_TAG_FORMS = {1: ((4, 4),), 2: ((4, 4),), 4: ((4, 4), (2, 4), (4, 6)), 8: ((4, 4),)}
+CHUNK_GEMM_FORMS = ((4, 4), (2, 4), (4, 6), (2, 6))
+CHUNK_ONLY = (1, 4)
+CHUNK_SINK = 4
+
+
 def leaf_bytes(nodes, count: int) -> bytes:
     """GPU leaves (u64 words of SHA-512's state) as digests."""
     return nodes[:8 * count].cpu().numpy().astype(">u8").tobytes()
@@ -190,23 +214,43 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             torch.cuda.synchronize()
             e[label] = bool(torch.equal(tb, want))
 
-        for v, pd in TAG_FORMS:
-            check(f"o_v{v}p{pd}", lambda: fused(lib, torch, v, span, MODE_TAGONLY, pd, 0, plain, None, None, tb, 1, n,
-                                                k, jb))
-            for mb in (1, 16, 32):
-                y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
-                check(f"t_v{v}p{pd}_m{mb}", lambda: fused(lib, torch, v, span, MODE_TAGS, pd, 0, plain, xs[mb], y, tb,
-                                                          mb, n, k, jb))
         y = torch.zeros(32, n, dtype=torch.float32, device="cuda")
         xr = torch.zeros(1, dtype=torch.int32, device="cuda")
-        for mb in (1, 16, 32):
-            xr.zero_()
-            fused(lib, torch, 1, span, MODE_SINK, 1, 0, plain, xs[mb], y, None, mb, n, k, jb, xr)
-            e[f"s_v1p1_m{mb}"] = (int(xr.item()) & 0xFFFFFFFF) == xor_reduce(torch, want)
+        if is_chunk(span):
+            lanes = int(span[1:])
+            if lanes in CHUNK_ONLY:
+                check("o_w4s4", lambda: fused2(lib, torch, lanes, MODE_TAGONLY, 4, 4, 0, plain, None, None, tb, 1, n, k,
+                                               jb))
+            for wc, st in CHUNK_TAG_FORMS[lanes]:
+                for mb in (1, 16, 32):
+                    check(f"t_w{wc}s{st}_m{mb}", lambda: fused2(lib, torch, lanes, MODE_TAGS, wc, st, 0, plain, xs[mb],
+                                                                y, tb, mb, n, k, jb))
+            if lanes == CHUNK_SINK:
+                for mb in (1, 16, 32):
+                    xr.zero_()
+                    fused2(lib, torch, lanes, MODE_SINK, 4, 4, 0, plain, xs[mb], y, None, mb, n, k, jb, xr)
+                    e[f"s_w4s4_m{mb}"] = (int(xr.item()) & 0xFFFFFFFF) == xor_reduce(torch, want)
+
+            def produce():
+                fused2(lib, torch, lanes, MODE_TAGS, 4, 4, 0, plain, xs[1], y, tb, 1, n, k, jb)
+        else:
+            for v, pd in TAG_FORMS:
+                check(f"o_v{v}p{pd}", lambda: fused(lib, torch, v, span, MODE_TAGONLY, pd, 0, plain, None, None, tb, 1,
+                                                    n, k, jb))
+                for mb in (1, 16, 32):
+                    check(f"t_v{v}p{pd}_m{mb}", lambda: fused(lib, torch, v, span, MODE_TAGS, pd, 0, plain, xs[mb], y,
+                                                              tb, mb, n, k, jb))
+            for mb in (1, 16, 32):
+                xr.zero_()
+                fused(lib, torch, 1, span, MODE_SINK, 1, 0, plain, xs[mb], y, None, mb, n, k, jb, xr)
+                e[f"s_v1p1_m{mb}"] = (int(xr.item()) & 0xFFFFFFFF) == xor_reduce(torch, want)
+
+            def produce():
+                fused(lib, torch, 1, span, MODE_TAGONLY, 1, 0, plain, None, None, tb, 1, n, k, jb)
         # leaves and root
         nleaves = count // 16
         nodes = torch.zeros(int(lib.so.tf_tree_nodes(nleaves)) * 8, dtype=torch.int64, device="cuda")
-        fused(lib, torch, 1, span, MODE_TAGONLY, 1, 0, plain, None, None, tb, 1, n, k, jb)
+        produce()
         lib.call("tf_leaves", ptr(tb), count, r["leaf0"], ptr(nodes), stream(torch))
         lib.call("tf_tree", ptr(nodes), nleaves, stream(torch))
         torch.cuda.synchronize()
@@ -215,7 +259,7 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
         # control: another seed's tags match no block
         lib.call("tf_init", SEED2, None)
         tb.fill_(0xFF)
-        fused(lib, torch, 1, span, MODE_TAGONLY, 1, 0, plain, None, None, tb, 1, n, k, jb)
+        produce()
         torch.cuda.synchronize()
         same = int((tb.view(count, 32) == want.view(count, 32)).all(1).sum())
         e["control_matches"] = same
@@ -225,7 +269,8 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
         res["ok"] &= ok
         log(f"gate {name} span {span}: {'ok' if ok else 'FAIL'} ({count} blocks"
             + ("" if ok else f"; {[key for key, v in e.items() if v is False]}, control {same}") + ")")
-    spans = list(ref)
+    spans = [s for s in ref if not is_chunk(s)]
+    chunked = any(is_chunk(s) for s in ref)
     wt32 = wf.float().t()
     wa32 = wt32.abs()
     for mb in batches:
@@ -233,6 +278,24 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
         refp = x.float() @ wt32
         scale = (x.float().abs() @ wa32).clamp_min(1e-30)
         e = {}
+        if chunked:
+            nsp = layout.chunk_spans(k)
+            p0 = torch.zeros(nsp * mb * n, dtype=torch.float32, device="cuda")
+            p1 = torch.zeros_like(p0)
+            tb = torch.empty(layout.chunk_block_count(n, k, 1) * 32, dtype=torch.uint8, device="cuda")
+            fused2(lib, torch, 1, MODE_GEMM, 4, 4, 1, plain, x, p0, None, mb, n, k, 0)
+            fused2(lib, torch, 4, MODE_TAGS, 4, 4, 1, plain, x, p1, tb, mb, n, k, 0)
+            e["partials_equal_k"] = bool(torch.equal(p0, p1))
+            e["partials_rel_k"] = float(((p0.view(nsp, mb, n).sum(0) - refp).abs() / scale).max())
+            forms = [(f"g0kw{wc}s{st}", (1, MODE_GEMM, wc, st)) for wc, st in CHUNK_GEMM_FORMS]
+            forms += [(f"t{lanes}kw{wc}s{st}", (lanes, MODE_TAGS, wc, st)) for lanes, fs in CHUNK_TAG_FORMS.items()
+                      for wc, st in fs]
+            forms += [(f"s{CHUNK_SINK}kw4s4", (CHUNK_SINK, MODE_SINK, 4, 4))]
+            xr = torch.zeros(1, dtype=torch.int32, device="cuda")
+            for label, (lanes, mode, wc, st) in forms:
+                ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
+                fused2(lib, torch, lanes, mode, wc, st, 0, plain, x, ya, tb, mb, n, k, 0, xr)
+                e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
         for span in spans:
             nsp = k // (32 * span)
             p0 = torch.zeros(nsp * mb * n, dtype=torch.float32, device="cuda")
@@ -275,8 +338,8 @@ def small_reference(torch, n: int, k: int, jbase: int) -> tuple:
     keyed = tags.Blake3Tag().keyed(SEED)
     head = tags.leaf_head(tags.Blake3Tag(), SEED)
     ref = {}
-    for span in (32, 64):
-        bl = R.block_view(plain, n, k, span)
+    for span in (32, 64, "k1", "k2", "k4", "k8"):
+        bl = R.map_view(plain, n, k, str(span))
         count = bl.shape[0]
         ys = [keyed(jbase + j, bytes(bl[j].numpy())) for j in range(count)]
         lv = [tags.leaf_hash(head, jbase // 16 + c, ys[16 * c:16 * c + 16]) for c in range(count // 16)]
@@ -291,9 +354,14 @@ def load_ref(torch, refdir: Path, name: str, expect: dict) -> tuple:
     w8 = torch.frombuffer(bytearray((refdir / f"w-{name}.bin").read_bytes()), dtype=torch.uint8).view(n, k)
     ref = {}
     for span, s in ent["spans"].items():
-        ref[int(span)] = {**s, "tags": (refdir / f"tags-{name}-{span}.bin").read_bytes(),
-                          "leaves": (refdir / f"leaves-{name}-{span}.bin").read_bytes()}
+        ref[map_key(span)] = {**s, "tags": (refdir / f"tags-{name}-{span}.bin").read_bytes(),
+                              "leaves": (refdir / f"leaves-{name}-{span}.bin").read_bytes()}
     return w8, ref
+
+
+def map_key(s: str):
+    """A block map's key: a lane span as an int, a chunk map ("k4") as its name."""
+    return s if is_chunk(s) else int(s)
 
 
 def to_device_ref(torch, ref: dict) -> dict:
@@ -302,7 +370,7 @@ def to_device_ref(torch, ref: dict) -> dict:
 
 # --- timings -----------------------------------------------------------------------------------------------------------
 
-def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> dict:
+def time_shape(lib: Lib, torch, name, n, k, w8, maps, batches, reps, log) -> dict:
     plain = R.plain_layout(w8).contiguous()
     wf = w8.view(torch.float8_e4m3fn)
     copies = max(2, -(-L2_DEFEAT_BYTES // (n * k)))
@@ -310,9 +378,11 @@ def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> di
     wring = [wf] + [wf.clone() for _ in range(copies - 1)]
     rp = [ptr(b) for b in ring]
     st, so = stream(torch), lib.so
+    spans = [s for s in maps if not is_chunk(s)]
+    groups = [int(s[1:]) for s in maps if is_chunk(s)]
     blocks = {s: layout.block_count(n, k, s) for s in spans}
     tbuf = {s: torch.empty(blocks[s] * 32, dtype=torch.uint8, device="cuda") for s in spans}
-    nodes = {s: torch.empty(blocks[s] // 16 * 8, dtype=torch.int64, device="cuda") for s in spans}
+    ctb = torch.empty(layout.chunk_block_count(n, k, 1) * 32, dtype=torch.uint8, device="cuda")
     xr = torch.zeros(1, dtype=torch.int32, device="cuda")
     read_grid = 8 * torch.cuda.get_device_properties(0).multi_processor_count
     res = {"N": n, "K": k, "copies": copies, "batches": {}, "standalone": {}}
@@ -344,10 +414,23 @@ def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> di
             rc |= so.tf_empty((n // 64) * (k // 1024), st)
         check(rc, "empty")
 
+    def arm_o2(lanes):
+        tp = ptr(ctb)
+
+        def f():
+            rc = 0
+            for p in rp:
+                rc |= so.tf_fused2(lanes, MODE_TAGONLY, 4, 4, 0, p, 0, 0, tp, 1, n, k, 0, 0, st)
+            check(rc, f"tag-only k{lanes}")
+        return f
+
     arms = {"read": arm_read, "empty": arm_empty_o}
     for span in spans:
-        for v, pd in TAG_FORMS:
+        for v, pd in TIME_FORMS:
             arms[f"o{span}v{v}p{pd}"] = arm_o(span, v, pd)
+    for lanes in groups:
+        if lanes in CHUNK_ONLY:
+            arms[f"o{lanes}kw4s4"] = arm_o2(lanes)
     res["standalone"] = interleave(lib, torch, arms, reps, copies)
     med = res["standalone"]["median_s"]
     log(f"{name} standalone: read {n * k / med['read'] / 1e9:.0f} GB/s; "
@@ -381,17 +464,24 @@ def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> di
                 rc |= so.tf_plain(p, xp, yp, mb, n, k, 0, st)
             check(rc, "plain")
 
-        def arm_f(span, v, mode, pd, leaves=False):
-            tp, npp, cnt = ptr(tbuf[span]), ptr(nodes[span]), blocks[span]
-            xrp = ptr(xr)
+        def arm_f(span, v, mode, pd):
+            tp, xrp = ptr(tbuf[span]), ptr(xr)
 
             def f():
                 rc = 0
                 for p in rp:
                     rc |= so.tf_fused(v, span, mode, pd, 0, p, xp, yp, tp, mb, n, k, 0, xrp, st)
-                    if leaves:
-                        rc |= so.tf_leaves(tp, cnt, 0, npp, st)
                 check(rc, f"fused {span} v{v} m{mode} p{pd}")
+            return f
+
+        def arm_f2(lanes, mode, wc, stages):
+            tp, xrp = ptr(ctb), ptr(xr)
+
+            def f():
+                rc = 0
+                for p in rp:
+                    rc |= so.tf_fused2(lanes, mode, wc, stages, 0, p, xp, yp, tp, mb, n, k, 0, xrp, st)
+                check(rc, f"fused2 k{lanes} m{mode} w{wc} s{stages}")
             return f
 
         def arm_empty():
@@ -404,10 +494,17 @@ def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> di
         for span in spans:
             for pd in (1, 2):
                 arms[f"g{span}p{pd}"] = arm_f(span, 0, MODE_GEMM, pd)
-            for v, pd in TAG_FORMS:
+            for v, pd in TIME_FORMS:
                 arms[f"t{span}v{v}p{pd}"] = arm_f(span, v, MODE_TAGS, pd)
-            arms[f"c{span}v1p1"] = arm_f(span, 1, MODE_TAGS, 1, leaves=True)
             arms[f"s{span}v1p1"] = arm_f(span, 1, MODE_SINK, 1)
+        if groups:
+            for wc, stages in CHUNK_GEMM_FORMS:
+                arms[f"g0kw{wc}s{stages}"] = arm_f2(1, MODE_GEMM, wc, stages)
+        for lanes in groups:
+            for wc, stages in CHUNK_TAG_FORMS[lanes]:
+                arms[f"t{lanes}kw{wc}s{stages}"] = arm_f2(lanes, MODE_TAGS, wc, stages)
+            if lanes == CHUNK_SINK:
+                arms[f"s{lanes}kw4s4"] = arm_f2(lanes, MODE_SINK, 4, 4)
         r = interleave(lib, torch, arms, reps, copies)
         med = r["median_s"]
         native_arms = ["cublas", "plain"] + forms(med, "g")
@@ -416,10 +513,9 @@ def time_shape(lib: Lib, torch, name, n, k, w8, spans, batches, reps, log) -> di
                   "ratio": {a: med[a] / native for a in med}})
         res["batches"][mb] = r
         best_t = min(forms(med, "t"), key=lambda a: med[a])
-        best_c = min(forms(med, "c"), key=lambda a: med[a])
         log(f"{name} M={mb}: native {native * 1e6:.1f} us ({r['native_arm']}; cublas {med['cublas'] * 1e6:.1f}, plain "
-            f"{med['plain'] * 1e6:.1f}, g32p1 {med.get('g32p1', 0) * 1e6:.1f}); best tag {best_t} {med[best_t] / native:.3f}x, "
-            f"best commit {best_c} {med[best_c] / native:.3f}x; "
+            f"{med['plain'] * 1e6:.1f}, " + ", ".join(f"{a} {med[a] * 1e6:.1f}" for a in forms(med, "g"))
+            + f"); best tag {best_t} {med[best_t] / native:.3f}x; "
             + ", ".join(f"{a} {med[a] / native:.3f}" for a in forms(med, "t") + forms(med, "s"))
             + (" HOST-BOUND" if r["host_bound"] else ""))
     del ring, wring
@@ -473,7 +569,7 @@ def commit_costs(lib: Lib, torch, spans, reps: int, log) -> dict:
     """One step's leaves over every tag of the store at once, and its tree, at each span."""
     out = {}
     for span in spans:
-        count = layout.store_blocks(span)
+        count = layout.store_chunk_blocks(int(span[1:])) if is_chunk(span) else layout.store_blocks(span)
         nleaves = count // 16
         tb = torch.randint(0, 1 << 30, (count * 8,), dtype=torch.int32, device="cuda")
         nodes = torch.zeros(int(lib.so.tf_tree_nodes(nleaves)) * 8, dtype=torch.int64, device="cuda")
@@ -482,63 +578,213 @@ def commit_costs(lib: Lib, torch, spans, reps: int, log) -> dict:
         tt = statistics.median(timed(torch, lambda: lib.call("tf_tree", ptr(nodes), nleaves, stream(torch)), reps))
         out[span] = {"blocks": count, "leaves": nleaves, "leaves_s": tl, "tree_s": tt}
         log(f"commit span {span}: one step's {count} tags -> {nleaves} leaves {tl * 1e3:.2f} ms, tree {tt * 1e3:.2f} ms")
-        del tb, nodes
-        torch.cuda.empty_cache()
     return out
 
 
+STEP_GROUPS = (4, 8)
+
+
+def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_ptr, jbase, xr):
+    """One launch of a timed arm on one layer's copy of a shape (plain layout `pl`, row-major `wf`)."""
+    so, xp, yp, xrp = lib.so, ptr(x.view(torch.uint8)), ptr(y), ptr(xr)
+    if arm == "cublas":
+        one = torch.ones((), device="cuda")
+        wt = wf.t()
+        return lambda: (torch._scaled_mm(xc, wt, one, one, out_dtype=torch.bfloat16), 0)[1]
+    if arm == "plain":
+        return lambda: so.tf_plain(ptr(pl), xp, yp, mb, n, k, 0, stream(torch))
+    m = FORM.match(arm)
+    mode = {"g": MODE_GEMM, "t": MODE_TAGS, "s": MODE_SINK}[m["stage"]]
+    if m["k"]:
+        lanes, wc, st = int(m["span"]) or 1, int(m["w"]), int(m["st"])
+        return lambda: so.tf_fused2(lanes, mode, wc, st, 0, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp,
+                                    stream(torch))
+    span, v, pd = int(m["span"]), int(m["v"] or 0), int(m["pd"])
+    return lambda: so.tf_fused(v, span, mode, pd, 0, ptr(pl), xp, yp, tags_ptr, mb, n, k, jbase, xrp, stream(torch))
+
+
+def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, reps: int, log) -> dict:
+    """One decode step: 32 layers' four linears, each layer on its own copy of the weights (7 GB, past every cache).
+
+    native   each shape's fastest native arm at this batch (cuBLASLt, the plain GEMM or a GEMM-only form)
+    tagL     each shape's fastest chunk form of L lanes, tags to one step-wide buffer at their store offsets
+    commitL  tagL, then the leaves over the whole step's tags in one launch, then the tree
+    overlapL tagL with each layer's leaves on a low-priority stream behind the layer's last linear, then the tree
+    """
+    names = list(layout.SHAPES)
+    copies = {name: [] for name in names}
+    for name in names:
+        n, k, w8 = weights[name]
+        plain = R.plain_layout(w8).contiguous()
+        wf = w8.view(torch.float8_e4m3fn)
+        copies[name] = [(plain.clone(), wf.clone()) for _ in range(layout.LAYERS)]
+        del plain
+    hp = torch.cuda.Stream(priority=-1)
+    side = torch.cuda.Stream(priority=0)
+    xr = torch.zeros(1, dtype=torch.int32, device="cuda")
+    per_layer = {g: sum(layout.chunk_block_count(n, k, g) for n, k in layout.SHAPES.values()) for g in groups}
+    tbs = {g: torch.empty(layout.store_chunk_blocks(g) * 32, dtype=torch.uint8, device="cuda") for g in groups}
+    nleaves = {g: layout.store_chunk_blocks(g) // 16 for g in groups}
+    nodes = {g: torch.zeros(int(lib.so.tf_tree_nodes(nleaves[g])) * 8, dtype=torch.int64, device="cuda")
+             for g in groups}
+    events = [torch.cuda.Event() for _ in range(layout.LAYERS)]
+    out = {}
+    gx = torch.Generator(device="cuda").manual_seed(6)
+    for mb in batches:
+        xs, xcs, ys = {}, {}, {}
+        for name in names:
+            n, k, _ = weights[name]
+            xs[name] = torch.randn(mb, k, device="cuda", generator=gx).to(torch.float8_e4m3fn)
+            mpad = timing[name]["batches"][mb]["cublas_m"]
+            xcs[name] = xs[name]
+            if mpad != mb:
+                xcs[name] = torch.zeros(mpad, k, device="cuda").to(torch.float8_e4m3fn)
+                xcs[name][:mb] = xs[name]
+            ys[name] = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
+
+        def seq(pick, g=None):
+            """The step's launches: pick(name) is the arm of each shape, tags at their offsets in tbs[g]."""
+            fs, off = [], 0
+            for layer in range(layout.LAYERS):
+                for name in names:
+                    n, k, _ = weights[name]
+                    pl, wf = copies[name][layer]
+                    tp = ptr(tbs[g]) + 32 * off if g else 0
+                    fs.append(launcher(lib, torch, pick(name), n, k, mb, timing[name]["batches"][mb]["cublas_m"], pl,
+                                       wf, xs[name], xcs[name], ys[name], tp, off, xr))
+                    if g:
+                        off += layout.chunk_block_count(n, k, g)
+            return fs
+
+        def best(name, prefix):
+            med = timing[name]["batches"][mb]["median_s"]
+            return min((a for a in med if a.startswith(prefix)), key=lambda a: med[a])
+
+        def run(fs, what):
+            def f():
+                rc = 0
+                for fn in fs:
+                    rc |= fn() or 0
+                if rc:
+                    raise RuntimeError(f"step {what}: error {rc}")
+            return f
+
+        arms = {"native": run(seq(lambda name: timing[name]["batches"][mb]["native_arm"]), "native")}
+        picks = {}
+        for g in groups:
+            picks[g] = {name: best(name, f"t{g}k") for name in names}
+            tag_fs = seq(lambda name: picks[g][name], g)
+            arms[f"tag{g}"] = run(tag_fs, f"tag{g}")
+
+            def commit(tag_fs=tag_fs, g=g):
+                run(tag_fs, f"commit{g}")()
+                lib.call("tf_leaves", ptr(tbs[g]), nleaves[g] * 16, 0, ptr(nodes[g]), stream(torch))
+                lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
+
+            def overlap(tag_fs=tag_fs, g=g):
+                per = len(names)
+                lc = per_layer[g] // 16
+                for layer in range(layout.LAYERS):
+                    run(tag_fs[per * layer:per * (layer + 1)], f"overlap{g}")()
+                    events[layer].record(hp)
+                    side.wait_event(events[layer])
+                    lib.call("tf_leaves", ptr(tbs[g]) + 32 * per_layer[g] * layer, per_layer[g], lc * layer,
+                             ptr(nodes[g]) + 64 * lc * layer, side.cuda_stream)
+                hp.wait_stream(side)
+                lib.call("tf_tree", ptr(nodes[g]), nleaves[g], stream(torch))
+
+            arms[f"commit{g}"] = commit
+            arms[f"overlap{g}"] = overlap
+        with torch.cuda.stream(hp):
+            r = interleave(lib, torch, arms, reps, 1)
+        med = r["median_s"]
+        nat_sum = layout.LAYERS * sum(timing[name]["batches"][mb]["native_s"] for name in names)
+        r.update({"picks": picks, "native_sum_s": nat_sum, "y": {a: med[a] / med["native"] for a in med}})
+        out[mb] = r
+        log(f"step M={mb}: native {med['native'] * 1e3:.3f} ms (32 x the shapes' medians {nat_sum * 1e3:.3f}); "
+            + ", ".join(f"{a} {med[a] / med['native']:.3f}" for a in med if a != "native")
+            + (" HOST-BOUND" if r["host_bound"] else ""))
+    return out
+
+
+def block_bytes(arm: str) -> int:
+    m = FORM.match(arm)
+    return 1024 * int(m["span"]) if m["k"] else 16 * int(m["span"])
+
+
 def summarize(res: dict, batches, spans) -> dict:
+    """Layer-weighted y of every arm (one form for every shape), y_tag the best tag form, tuned the best form of each
+    block map per shape; the step's y from time_step."""
     shapes = res["timing"]
-    lw = {}
+    lw, tuned = {}, {}
     for mb in batches:
         nat = sum(shapes[s]["batches"][mb]["native_s"] for s in shapes)
         arms = shapes[next(iter(shapes))]["batches"][mb]["median_s"].keys()
         lw[mb] = {a: sum(shapes[s]["batches"][mb]["median_s"][a] for s in shapes) / nat for a in arms}
         lw[mb]["native_s"] = nat
-    summary = {"layer_weighted": lw, "y_tag": {}, "y_commit": {}, "y_sink": {}, "tree_share": {}}
+        tuned[mb] = {}
+        for bb in sorted({block_bytes(a) for a in forms(arms, "t")}):
+            pick = {s: min((a for a in forms(arms, "t") if block_bytes(a) == bb),
+                           key=lambda a, s=s: shapes[s]["batches"][mb]["median_s"][a]) for s in shapes}
+            tuned[mb][bb] = {"y": sum(shapes[s]["batches"][mb]["median_s"][pick[s]] for s in shapes) / nat,
+                             "picks": pick}
+    summary = {"layer_weighted": lw, "tuned": tuned, "y_tag": {}, "y_sink": {}, "step": {}}
     for mb in batches:
         r = lw[mb]
-        for key, pre in (("y_tag", "t"), ("y_commit", "c"), ("y_sink", "s")):
+        for key, pre in (("y_tag", "t"), ("y_sink", "s")):
             best = min(forms(r, pre), key=lambda a: r[a])
             summary[key][mb] = {"arm": best, "y": r[best]}
-        step = layout.LAYERS * r["native_s"]
-        summary["tree_share"][mb] = {s: res["commit"][s]["tree_s"] / step for s in spans}
+        if "step" in res:
+            summary["step"][mb] = res["step"][mb]["y"]
     return summary
 
 
 def points(res: dict, batches, run: str | None) -> list[dict]:
-    """One frontier point per batch and form: the tag stage's slowdown over native, layer-weighted."""
+    """Frontier points: each tag form's layer-weighted y over native, each block map tuned per shape, and the step's."""
     out = []
-    lw = res["summary"]["layer_weighted"]
+    s = res["summary"]
+    base = {"lane": "ra-tag-fast", "tag": "ro-blake3/v1", "certified": True, "run": run}
     for mb in batches:
-        for a, y in lw[mb].items():
-            if not (m := FORM.match(a)) or m["stage"] not in "tcs":
+        for a, y in s["layer_weighted"][mb].items():
+            if not (m := FORM.match(a)) or m["stage"] not in "ts":
                 continue
-            span = int(m["span"])
-            out.append({"lane": "ra-tag-fast", "tag": "ro-blake3/v1", "certified": True, "block_bytes": 16 * span,
-                        "form": a, "stage": {"t": "tag", "c": "tag+leaves", "s": "tag-sink"}[a[0]], "batch": mb,
-                        "y": y, "run": run})
+            out.append({**base, "block_bytes": block_bytes(a), "form": a, "batch": mb, "y": y,
+                        "stage": {"t": "tag", "s": "tag-sink"}[m["stage"]], "weighting": "layer"})
+        for bb, t in s["tuned"][mb].items():
+            out.append({**base, "block_bytes": bb, "form": "per-shape best", "batch": mb, "y": t["y"], "stage": "tag",
+                        "weighting": "layer", "picks": t["picks"]})
+        for a, y in s["step"].get(mb, {}).items():
+            if a == "native":
+                continue
+            what, g = re.fullmatch(r"([a-z]+)(\d+)", a).groups()
+            out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
+                        "stage": {"tag": "tag", "commit": "tag+commit", "overlap": "tag+commit overlapped"}[what]})
     return out
 
 
-NCU_FORMS = (("g", 0, MODE_GEMM, 1), ("t", 0, MODE_TAGS, 1), ("t", 1, MODE_TAGS, 1), ("t", 3, MODE_TAGS, 1),
-             ("o", 1, MODE_TAGONLY, 1))
+NCU_FORMS = (("g", 0, MODE_GEMM, 1), ("t", 1, MODE_TAGS, 1), ("t", 1, MODE_TAGS, 2))
+NCU_CHUNK_FORMS = ((1, MODE_GEMM, 4, 4), (1, MODE_TAGS, 4, 4), (4, MODE_TAGS, 4, 4), (4, MODE_TAGS, 2, 4),
+                   (8, MODE_TAGS, 4, 4))
 
 
-def ncu_mode(lib: Lib, torch, shapes, batches, spans) -> int:
+def ncu_mode(lib: Lib, torch, shapes, batches, maps) -> int:
     lib.call("tf_init", SEED, None)
     for name in shapes:
         n, k = layout.SHAPES[name]
         w8 = torch.randint(0, 256, (n, k), dtype=torch.uint8, device="cuda") & 0x77
         plain = R.plain_layout(w8).contiguous()
+        tb = torch.empty(layout.chunk_block_count(n, k, 1) * 32, dtype=torch.uint8, device="cuda")
         for mb in batches:
             x = torch.randn(mb, k, device="cuda").to(torch.float8_e4m3fn)
             y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
             lib.call("tf_plain", ptr(plain), ptr(x.view(torch.uint8)), ptr(y), mb, n, k, 0, stream(torch))
-            for span in spans:
-                tb = torch.empty(layout.block_count(n, k, span) * 32, dtype=torch.uint8, device="cuda")
-                for _, v, mode, pd in NCU_FORMS:
-                    fused(lib, torch, v, span, mode, pd, 0, plain, x, y, tb, mb, n, k, 0)
+            for span in maps:
+                if not is_chunk(span):
+                    for _, v, mode, pd in NCU_FORMS:
+                        fused(lib, torch, v, span, mode, pd, 0, plain, x, y, tb, mb, n, k, 0)
+            if any(is_chunk(s) for s in maps):
+                for lanes, mode, wc, st in NCU_CHUNK_FORMS:
+                    fused2(lib, torch, lanes, mode, wc, st, 0, plain, x, y, tb, mb, n, k, 0)
     torch.cuda.synchronize()
     return 0
 
@@ -551,7 +797,8 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=9)
     ap.add_argument("--shapes", default=",".join(layout.SHAPES))
     ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
-    ap.add_argument("--spans", default="32,64")
+    ap.add_argument("--maps", default="32,64,k1,k2,k4,k8", help="block maps: lane spans, chunk blocks kL")
+    ap.add_argument("--step-groups", default=",".join(map(str, STEP_GROUPS)), help="chunk maps the step times ('' none)")
     ap.add_argument("--mode", default="all", choices=["all", "ncu"],
                     help="ncu: each profiled form once on random weights, nothing gated or timed (under Nsight Compute)")
     a = ap.parse_args()
@@ -570,7 +817,8 @@ def main() -> int:
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     batches = [int(b) for b in a.batches.split(",")]
-    spans = [int(s) for s in a.spans.split(",")]
+    spans = [map_key(s) for s in a.maps.split(",")]
+    step_groups = [int(g) for g in a.step_groups.split(",") if g]
     shapes = a.shapes.split(",")
     if a.mode == "ncu":
         return ncu_mode(lib, torch, shapes, batches, spans)
@@ -617,14 +865,18 @@ def main() -> int:
         n, k, w8 = weights[name]
         res["timing"][name] = time_shape(lib, torch, name, n, k, w8, spans, batches, a.reps, log)
         (out_dir / "tag-fast.json").write_text(json.dumps(res, indent=1, default=str))
+    if len(shapes) == len(layout.SHAPES) and step_groups:
+        res["step"] = time_step(lib, torch, weights, res["timing"], batches, step_groups, a.reps, log)
     if len(shapes) == len(layout.SHAPES):
         res["summary"] = summarize(res, batches, spans)
         res["points"] = points(res, batches, res["run"])
         for mb in batches:
             s = res["summary"]
-            log(f"layer-weighted M={mb}: y_tag {s['y_tag'][mb]['y']:.3f} ({s['y_tag'][mb]['arm']}), y_commit "
-                f"{s['y_commit'][mb]['y']:.3f} ({s['y_commit'][mb]['arm']}), sink {s['y_sink'][mb]['y']:.3f}, "
-                f"tree per step " + ", ".join(f"span {sp} {v:.2%}" for sp, v in s["tree_share"][mb].items()))
+            log(f"layer-weighted M={mb}: y_tag {s['y_tag'][mb]['y']:.3f} ({s['y_tag'][mb]['arm']}), sink "
+                f"{s['y_sink'][mb]['y']:.3f} ({s['y_sink'][mb]['arm']}); per-shape best by block bytes "
+                + ", ".join(f"{bb} {t['y']:.3f}" for bb, t in s["tuned"][mb].items())
+                + ("; step " + ", ".join(f"{a} {y:.3f}" for a, y in s["step"][mb].items() if a != "native")
+                   if mb in s["step"] else ""))
     (out_dir / "tag-fast.json").write_text(json.dumps(res, indent=1, default=str))
     log("done")
     return 0
