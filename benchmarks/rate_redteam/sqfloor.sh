@@ -33,22 +33,22 @@ LEASE=(gpu-lease 1 --wait --max-min "${MAXMIN:-15}" --)
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.draw \
     --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   "$B/sqfloor" clock > "$O/clock-before.json" 2>&1
-  for f in 0 1; do
+  for f in 0 1 2; do
     for k in 1 777 1000; do
       "$B/sqfloor" gate $f $k 512 > "$B/gate-$f-$k.txt" 2>> "$O/errors.txt" || echo "gate $f $k rc $?" >> "$O/errors.txt"
       python3 $D/sqfloor_gate.py < "$B/gate-$f-$k.txt" > "$O/gate-f$f-k$k.json" 2>&1
     done
   done
-  for f in 0 1; do
-    for tpb in 64 128; do
-      for w in 1 2 4; do
+  for f in 0 1 2; do
+    for tpb in 128; do
+      for w in 2 4; do
         "$B/sqfloor" time $f 4000 $tpb $w 5 >> "$O/time.jsonl" 2>> "$O/errors.txt" || echo "time $f $tpb $w rc $?" >> "$O/errors.txt"
       done
     done
   done
   "$B/sqfloor" clock > "$O/clock-after.json" 2>&1
   nvidia-smi --query-gpu=clocks.sm,power.draw --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-  for f in 0 1; do
+  for f in 0 1 2; do
     ncu --section ComputeWorkloadAnalysis --section InstructionStats --section Occupancy --csv --page details \
       -k regex:chain -c 1 "$B/sqfloor" time $f 400 128 2 1 > "$O/ncu-f$f.csv" 2>&1 || echo "ncu $f rc $?" >> "$O/errors.txt"
     ncu --metrics smsp__inst_executed.sum,sm__inst_executed_pipe_alu.sum,sm__inst_executed_pipe_fma.sum,sm__inst_executed_pipe_fmaheavy.sum,sm__inst_executed_pipe_fmalite.sum,smsp__issue_active.avg.pct_of_peak_sustained_active \

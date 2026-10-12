@@ -1,12 +1,15 @@
 // Squarings mod p = 2^768 - 825 on the CUDA cores (sm_120), a thread a word: the codec lanes' column form beside a row
-// form, to bound how far their squaring sits above a tuned one (the rebuild's x is the adversary's squaring rate).
+// form and a Karatsuba form, to bound how far their squaring sits above a tuned one (the rebuild's x is the
+// adversary's squaring rate).
 //
 // Form 0 is ra-word-codec's `kv.cu` at KV_FIELD = 768 (`cursor/ra-word-codec-10bf`, acd61664f): column by column, each
 // unordered pair once, a three-word accumulator (three instructions a product), then two folds of 2^768 = 825.
 // Form 1 is the row form: each row's low halves in one carry chain and its high halves in a second, so a product costs
 // two instructions and no third accumulator word; the doubling and the squares are one chain each; the fold is two
 // chains and a single multiply-add (a fold that carries out leaves the value below 2^20, so the second never does).
-// Both keep x lazily below 2^768; the host reduces below p.
+// Form 2 is one level of Karatsuba over form 0's columns: x = x1 2^384 + x0, x^2 = C 2^768 + (A + C - D) 2^384 + A with
+// A = x0^2, C = x1^2, D = (x0 - x1)^2, three 12-limb squares (234 products in place of 300), then form 0's fold.
+// All keep x lazily below 2^768; the host reduces below p.
 //
 //   sqfloor gate FORM K N          N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
 //   sqfloor time FORM K TPB WAVES REPS   timed launches at the occupancy's blocks a SM times WAVES
@@ -36,13 +39,14 @@ __device__ __forceinline__ void add3(u32 *r, u32 a, u32 b) {
       : "r"(a), "r"(b));
 }
 
-__device__ __forceinline__ void sqr_cols(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+template <int N>
+__device__ __forceinline__ void sqr_cols_n(const u32 (&a)[N], u32 (&t)[2 * N]) {
   u32 c0 = 0, c1 = 0;
 #pragma unroll
-  for (int m = 0; m < 2 * NL - 1; ++m) {
+  for (int m = 0; m < 2 * N - 1; ++m) {
     u32 r[3] = {0, 0, 0};
 #pragma unroll
-    for (int i = (m < NL ? 0 : m - NL + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
     r[2] = (r[2] << 1) | (r[1] >> 31);
     r[1] = (r[1] << 1) | (r[0] >> 31);
     r[0] <<= 1;
@@ -52,8 +56,10 @@ __device__ __forceinline__ void sqr_cols(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
     c0 = r[1];
     c1 = r[2];
   }
-  t[2 * NL - 1] = c0;
+  t[2 * N - 1] = c0;
 }
+
+__device__ __forceinline__ void sqr_cols(const u32 (&a)[NL], u32 (&t)[2 * NL]) { sqr_cols_n<NL>(a, t); }
 
 __device__ __forceinline__ void fold_cols(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
   u64 v = 0;
@@ -145,6 +151,56 @@ __device__ __forceinline__ void fold_rows(const u32 (&t)[2 * NL], u32 (&x)[NL]) 
   asm volatile("mad.lo.u32 %0, %1, %2, %0;" : "+r"(x[0]) : "r"(e), "r"(c));
 }
 
+#define ADD_CC(d, a, b) asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(d) : "r"(a), "r"(b))
+#define ADDC_CC(d, a, b) asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(d) : "r"(a), "r"(b))
+#define SUB_CC(d, a, b) asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(d) : "r"(a), "r"(b))
+#define SUBC_CC(d, a, b) asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(d) : "r"(a), "r"(b))
+#define BORROW_MASK(d) asm volatile("subc.u32 %0, 0, 0;" : "=r"(d))
+
+// M = A + C - D = 2 x0 x1 is below 2^769: 2H limbs and a top bit m.
+__device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+  constexpr int H = NL / 2;
+  u32 x0[H], x1[H], d[H], e[H], mask;
+#pragma unroll
+  for (int k = 0; k < H; ++k) {
+    x0[k] = a[k];
+    x1[k] = a[H + k];
+  }
+  SUB_CC(d[0], x0[0], x1[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) SUBC_CC(d[k], x0[k], x1[k]);
+  BORROW_MASK(mask);
+  SUB_CC(e[0], x1[0], x0[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) SUBC_CC(e[k], x1[k], x0[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H], m;
+  sqr_cols_n<H>(x0, A);
+  sqr_cols_n<H>(x1, C);
+  sqr_cols_n<H>(d, D);
+  ADD_CC(M[0], A[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) ADDC_CC(M[k], A[k], C[k]);
+  CARRY(m);
+  SUB_CC(M[0], M[0], D[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) SUBC_CC(M[k], M[k], D[k]);
+  asm volatile("subc.u32 %0, %0, 0;" : "+r"(m));
+#pragma unroll
+  for (int k = 0; k < 2 * H; ++k) {
+    t[k] = A[k];
+    t[2 * H + k] = C[k];
+  }
+  ADD_CC(t[H], t[H], M[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) ADDC_CC(t[H + k], t[H + k], M[k]);
+  ADDC_CC(t[3 * H], t[3 * H], m);
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H - 1; ++k) ADDCC0(t[k]);
+  ADDC0(t[4 * H - 1]);
+}
+
 template <int FORM>
 __global__ void __launch_bounds__(128) chain(u32 *xs, int n, int K) {
   const int w = blockIdx.x * blockDim.x + threadIdx.x;
@@ -158,9 +214,12 @@ __global__ void __launch_bounds__(128) chain(u32 *xs, int n, int K) {
     if (FORM == 0) {
       sqr_cols(x, t);
       fold_cols(t, x);
-    } else {
+    } else if (FORM == 1) {
       sqr_rows(x, t);
       fold_rows(t, x);
+    } else {
+      sqr_kara(x, t);
+      fold_cols(t, x);
     }
   }
 #pragma unroll
@@ -199,12 +258,11 @@ static void fill(std::vector<uint32_t> &h, int n) {
     for (int k = 0; k < sq::NL; ++k) h[(size_t)k * n + w] = (uint32_t)splitmix(s);
 }
 
+using Kernel = void (*)(uint32_t *, int, int);
+static Kernel kernel(int form) { return form == 0 ? sq::chain<0> : form == 1 ? sq::chain<1> : sq::chain<2>; }
+
 static void launch(int form, uint32_t *d, int n, int K, int tpb) {
-  const int blocks = (n + tpb - 1) / tpb;
-  if (form == 0)
-    sq::chain<0><<<blocks, tpb>>>(d, n, K);
-  else
-    sq::chain<1><<<blocks, tpb>>>(d, n, K);
+  kernel(form)<<<(n + tpb - 1) / tpb, tpb>>>(d, n, K);
   CK(cudaGetLastError());
 }
 
@@ -269,12 +327,9 @@ int main(int argc, char **argv) {
     cudaDeviceProp prop;
     CK(cudaGetDeviceProperties(&prop, 0));
     int per_sm = 0;
-    if (form == 0)
-      CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, sq::chain<0>, tpb, 0));
-    else
-      CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, sq::chain<1>, tpb, 0));
+    CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kernel(form), tpb, 0));
     cudaFuncAttributes attr;
-    CK(form == 0 ? cudaFuncGetAttributes(&attr, sq::chain<0>) : cudaFuncGetAttributes(&attr, sq::chain<1>));
+    CK(cudaFuncGetAttributes(&attr, kernel(form)));
     const int n = prop.multiProcessorCount * per_sm * tpb * waves;
     std::vector<uint32_t> h;
     fill(h, n);
