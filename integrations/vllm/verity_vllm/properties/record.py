@@ -47,6 +47,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "names at M <= 16 and cuBLAS past it, and under the split-K-off cuBLAS switch every f32 gate word equals "
              "LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or GemmF32Out_v1, every lm_head-shard and "
              "wk_weights_proj word core's Gemm_v2, and every q_nope / v absorb word BatchedGemm_v1, bit for bit."),
+    Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v1",
+             "On the capture's 8 Hopper GPUs, GLM-5.3's fused_allreduce_rms_norm runs FlashInfer's MNNVL all-reduce + residual add + "
+             "RMSNorm up to 42 tokens at the strategy mnnvl_shot names, every normed and residual word equals "
+             "AllReduceRmsNormMnnvl_v1 at the shot's decided FMA, and under VLLM_ALLREDUCE_USE_SYMM_MEM=0 every "
+             "tensor_model_parallel_all_reduce to 682 tokens runs vLLM's custom all-reduce at custom_stage and every word equals "
+             "AllReduceCustom_v1, bit for bit, on every rank."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v1",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
