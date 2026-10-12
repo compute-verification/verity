@@ -31,7 +31,7 @@ theorem vbridge_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteA
     (hop : HOpening F dg N k Rw) (hlv : HRegLevels F dg N k Rw)
     (hcm : VCommits F.zs F.Sk F.cmt) (hdec : VDecodesR F.wmsg (fun _ _ a b => a = b) F.Sk F.msg)
     (hfull : VFullR (holoInnerAt T CT st hp).r F.Sk) :
-    Flock.Assumptions.VBridge (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => ⟨xR, hreg⟩) F.wmsg F.Sk
+    Flock.Assumptions.VBridge (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => Subtype.mk xR hreg) F.wmsg F.Sk
       F.cmt F.msg := by
   sorry
 

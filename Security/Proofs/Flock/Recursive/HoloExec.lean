@@ -155,10 +155,11 @@ noncomputable def holoError (e : ExecHolo) : ℝ :=
 /-! ### Clashes -/
 
 /-- The reps' part of a run's output, as the compiled table's. -/
-def OutHL.circ (o : OutHL F D Sl) : OutCL F D Sl := ⟨o.accepted, o.cap₀, o.pend, o.opens, o.salts⟩
+def _root_.FlockSoundness.Model.OutHL.circ (o : OutHL F D Sl) : OutCL F D Sl :=
+  ⟨o.accepted, o.cap₀, o.pend, o.opens, o.salts⟩
 
 /-- R's part of a run's output, as a compiled table's whose rep 0 is R's stream, at the registered cap `cap`. -/
-def OutHL.reg (o : OutHL F D Sl) (cap : Cap D) : OutCL F D Sl :=
+def _root_.FlockSoundness.Model.OutHL.reg (o : OutHL F D Sl) (cap : Cap D) : OutCL F D Sl :=
   ⟨o.accepted, cap, (o.pendR, PendL.reject), fun _ => o.opens 2, fun _ => o.salts 2⟩
 
 /-- **A run opens R's level 0 to a row other than the registered word's**: one of R's level-0 openings verifies against
