@@ -56,14 +56,19 @@ theorem toOption_ok {A : Type} [DecidableEq A] {x : Except String A} {a : A}
     simp only [Except.toOption, bne_iff_ne, ne_eq, Decidable.not_not, Option.some.injEq] at h
     rw [h]
 
+/-- Claim `k`'s point at its rep's sparse coins `sc`: the sparse point, zero-padded to R's `m`. -/
+def coinPt (c3 : RecCoins.C3) (sh : Shape) (sc : RecCoins.SparseCoins) : Array F128 :=
+  let pt := sc.rounds.extract 0 c3.sparse.nu ++ sc.zetaP ++ sc.rho
+  pt ++ Array.replicate (sh.m - pt.size) 0
+
 /-- Claim `k` of R's opening as `RecCoins.opening` builds it at the shape `sh`: rep `k`'s sparse point, zero-padded to
-R's `m`, its skip weights and the rest; its value zero, a row of `rec-claim` that w holds. -/
+R's `m` (`coinPt`), its skip weights and the rest; its value zero, a row of `rec-claim` that w holds. -/
 def coinClaim (c3 : RecCoins.C3) (unit : String) (sh : Shape) (k : Nat) : V (AClaim Lin) := do
   let sc ← RecCoins.sparseCoins c3 unit k
   let pt := sc.rounds.extract 0 c3.sparse.nu ++ sc.zetaP ++ sc.rho
   if pt.size < RecSparse.PRE_ROUNDS || pt.size > sh.m then
     throw s!"rec-coins: {unit}: rep {k}'s claim point has {pt.size} coordinates, R's m is {sh.m}"
-  let pt := pt ++ Array.replicate (sh.m - pt.size) 0
+  let pt := coinPt c3 sh sc
   pure ({ value := RecAlgebra.instValLin.zero, skip := eqTable (pt.extract 0 RecSparse.PRE_ROUNDS),
           x := pt.extract RecSparse.PRE_ROUNDS pt.size } : RecAlgebra.AClaim RecAlgebra.Lin)
 
@@ -76,6 +81,26 @@ theorem coinClaim_zero {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat}
   · cases h
   · cases h
     rfl
+
+/-- **What `coinClaim` built**: at rep `k`'s sparse coins, the padded point has R's `m` coordinates, at least the
+skip's, and the claim's skip weights and rest are its first `PRE_ROUNDS` and the others. -/
+theorem coinClaim_ok {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat} {a : AClaim Lin}
+    (h : coinClaim c3 unit sh k = .ok a) :
+    ∃ sc, RecCoins.sparseCoins c3 unit k = .ok sc ∧ (coinPt c3 sh sc).size = sh.m ∧ RecSparse.PRE_ROUNDS ≤ sh.m ∧
+      a.skip = eqTable ((coinPt c3 sh sc).extract 0 RecSparse.PRE_ROUNDS) ∧
+      a.x = (coinPt c3 sh sc).extract RecSparse.PRE_ROUNDS (coinPt c3 sh sc).size := by
+  unfold coinClaim at h
+  obtain ⟨sc, hsc, h⟩ := FlockVBridge.PartS.bind_ok h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hb
+    cases h
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt, gt_iff_lt] at hb
+    obtain ⟨h1, h2⟩ := hb
+    refine ⟨sc, hsc, ?_, by omega, rfl, rfl⟩
+    simp only [coinPt, Array.size_append, Array.size_replicate] at h1 h2 ⊢
+    omega
 
 /-- **(n4 item 2 and (b)) What `RecCoins.opening` accepted**: R's stacked shape, its two claims (value zero),
 `RecOpening.run` on the symbolic messages and those claims at some coins (`run_of_inline`), the passes from `kappa`
