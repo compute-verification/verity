@@ -39,8 +39,8 @@ c1 (W); h2 builds on #1847's list.
 Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of `VStarFamily`'s
 free fields. n0 fixes the decoder (`C3Family.honest`, `C3/Compose/Honest.lean`): `run` decodes the inner transcript's
 steps stage by stage on the prefix each stage's game plays (`decodeRun`), `row` is the verifier's `fixedRow` at its
-hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved) is the guarantee's `_hbr`
-at it; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is free, and every stage reads `dec`'s messages, so a
+hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved) is VBridge at it, and the
+guarantee's `_hbr` through `vbridge_checked`; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is free, and every stage reads `dec`'s messages, so a
 stage does not follow from the public rows: perturb one message on a stage's rounds and every stage still plays a
 prefix of the same length while that stage's verdict fails (Worker S's counterexample, at rep 0's `v₂`). So each stage
 is its read fact (its rounds' messages on the tape are its prover's for a witness its verifier row accepts), from which
@@ -68,7 +68,7 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty) while V*'s sessions can accept there, so it holds only once `VBridge` is read at whole histories or the
   family's sessions refuse a short one.
-* `hchk` (`ChecksPubRows`): n1b, below.
+* `hchk` (`ChecksPubRows`): n1b's `checkPubRows`, once `hbr_honest` is at the checked family (below).
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
 * `hspsh` (`SparseAtShape`): the verifier's shape check (H, round 5).
@@ -77,10 +77,14 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 * `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
   and is what n6's `RegLevelsRead` reads.
 
-* n1b, the V* session checks: VBridge reads V*'s sessions' acceptance as `AcceptsZKR`, which does not include the
-  checks the verifier makes of them under `--rec-inner` (`checkPubRows`, check 5's, `checkStmt`). `hchk`
-  (`ChecksPubRows`) is the first; the guarantee's event says the verifier accepted, but VBridge is a premise at every
-  outcome, so either VBridge's acceptance gains those checks or the event's acceptance reaches the sessions (L, to size).
+* n1b, the V* session checks (round 5, in the event): VBridge reads V*'s sessions' acceptance as `AcceptsZKR`, which
+  does not include the checks the verifier makes of them under `--rec-inner`. The guarantee's event now carries them
+  per session (`ChecksVR`, `ChecksC3`: `checkStmt` with `checkOwn`, check 5's `RecCoins.check` at `c3Of` and
+  `checkPubRows`), and VBridge, the forks and the bound are at the checked sessions (`checkedC3`: each typed session
+  kept where an accepted transcript passes `ChecksC3`, `freshOwn` elsewhere; `checkedT` its prover), whose games are
+  the typed sessions'. `vbridge_checked` gives VBridge at `checkedC3` from VBridge at the typed sessions, so
+  `hbr_honest` still discharges `_hbr`. Left: `hbr_honest` at the checked family itself, where `hchk` and `hspsh`
+  are the kept sessions' checks (`checkPubRows`, and H's `SparseAtShape` from `checkStmt`) instead of hypotheses.
 * n1c, the record–history link: `row` reads the verifier's fixed record `tr`, while the history `t` ranges, so
   `hheld` (`HeldIs`: at each accepted history the held row is `t`'s commitment) needs custody of `tr` as the live
   history's record, beside `RecordCustody`: stated as `Compose.InnerRecordCustody` (`C3/Compose/Custody.lean`, at
