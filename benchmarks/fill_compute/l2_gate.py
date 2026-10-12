@@ -2,7 +2,8 @@
 more L2 sectors than its outputs declare (`lts__t_sectors_op_write.sum`) and makes no more atomic sectors than its fold and
 queue declare (`lts__t_sectors_op_atom.sum` + `lts__t_sectors_op_red.sum`); there are no partials to declare.
 
-The verdict is per kernel (`by_kernel`, what an arm is judged by) and per store mode (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
+The verdict is per kernel (`by_kernel`, what an arm is judged by: every repeat of its launch passes; `spread` the least
+and most write sectors over the repeats) and per store mode (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
 can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not. A `control` launch
 (no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs (13-15 a launch on
 sm_120, r20261012-231033-73f3), and each judged launch is allowed its own kernel's control floor beside its declared sectors
@@ -66,7 +67,10 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     for r in judged:
         by_store[r["store"]] = by_store.get(r["store"], True) and r["pass"]
     return {"status": "REFUSED" if bad else "passed", "by_store": {s: "passed" if p else "REFUSED" for s, p in by_store.items()},
-            "by_kernel": {r["kernel"]: "passed" if r["pass"] else "REFUSED" for r in judged},
+            "by_kernel": {k: "passed" if all(r["pass"] for r in judged if r["kernel"] == k) else "REFUSED"
+                          for k in dict.fromkeys(r["kernel"] for r in judged)},
+            "spread": {k: [min(ws), max(ws)] for k in dict.fromkeys(r["kernel"] for r in judged)
+                       for ws in [[r["write_sectors"] for r in judged if r["kernel"] == k]]},
             "refusals": bad, "launches": out,
             "controls": [{k: r[k] for k in ("kernel", "write_sectors", "atom_sectors", "declared_atom_sectors")} for r in out
                          if r.get("control")],

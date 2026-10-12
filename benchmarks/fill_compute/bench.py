@@ -70,6 +70,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PEAK_E4M3, PEAK_BF16, PEAK_MHZ = 807.2e12, 403.7e12, 2100.0
 RASTER, TILE, PEEL_ROW = 8, 64, 128
+L2_REPEATS = 3
 STORES = {"all": 0, "y": 1, "fold": 2}
 CAP = 1.0 / 1000
 
@@ -718,7 +719,9 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     atomic sectors its outputs declare: C~, U (FP32) and y (BF16) of each tile (`all`), y (`y`) or nothing (`fold`), plus the
     log's u64 a tile (a sector each); atomics: a warp's two fold words for each of a tile's 8 warps (`fold`), the queue
     counter's add a tile plus the one each CTA takes past the end (persistent). The 128 x 128 tile's rows are `STORE@128`.
-    Controls (`control`, not judged): each kernel at no tiles, whose sectors are the launch's own, not its outputs'."""
+    Controls (`control`, not judged): each kernel at no tiles, whose sectors are the launch's own, not its outputs'. Each
+    judged launch runs L2_REPEATS times: the persistent kernels' writes have exceeded their outputs by 271-2,144 sectors in
+    some measurements and not others (r20261012-224930-ae0c, r20261012-232748-546d), and the repeats show how often."""
     f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
     rows = []
@@ -728,7 +731,7 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
         suffix = "" if T == TILE else "128"
         for store, code in STORES.items():
             for persist in (0, 1):
-                for n in (4 * sms, 0):
+                for n in (4 * sms,) * L2_REPEATS + (0,):
                     f.poison()
                     torch.cuda.synchronize()
                     lib.fill(persist, code, sms, f.args(0, n), lo, f.minb)
