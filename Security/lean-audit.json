@@ -13902,9 +13902,9 @@
    ]
   },
   "Proofs.Flock.Recursive.AuditC3": {
-   "digest": "2d461ee295de4782dbc575cbb74cbbb715ff9e1e58c2df47c5991b8ac80fe51e",
+   "digest": "e002407d55105a66755495112f1589ec92d15665cc234989c5306eadc200394b",
    "definitions": {
-    "Flock.Guarantees.RecursiveAuditC3": "c469ca264749a6796b60c40d1647b87a0d2089f5b74c3794d2999aaad2b2f01d"
+    "Flock.Guarantees.RecursiveAuditC3": "e4143d2a14c77331232be510937fc42050e599d775fa8e9357441549ac9ef9f4"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
@@ -14116,7 +14116,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.HoloExec": {
-   "digest": "5e80988a51162c7cf402f9534324afe3eb7ab81715b7cc7b02d4cc324aaf5569",
+   "digest": "c99ab792b6e80dd4f45cc09fd95edc20dd4d71e525375a6a96e0f0352ac3a6f4",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.ClashHL": "cf6eaa2c83985618f755e75620bffa461559a051a904fe7b2d2000974bc1a08b",
     "FlockSoundness.Discharge.Recursion.ExecHolo": "a5d0f5bb9ab7ad14b847badb37db7f315c16b088d400f391e02e43322e5a98a2",
@@ -14125,7 +14125,7 @@
     "FlockSoundness.Discharge.Recursion.ExecHolo.rsch": "fe734dcc3894c50e51a7fc43ce6bed6b39b39504dbe795890fd8fdceb63a4838",
     "FlockSoundness.Discharge.Recursion.ExecHolo.sch": "a954c4c3adfb3c9289c2e68b3f5d1532c4096b817ecc2c73b8606e6ee0a435d1",
     "FlockSoundness.Discharge.Recursion.ExecHolo.τ": "aea7fd65f4e930b53c85ac987dab1ee7e8aa877aa0b5df75c5ae36552cf04469",
-    "FlockSoundness.Discharge.Recursion.HoloClass.ofExec": "569dd3112f4d3b1556ae6c3025f597b57b1ba2f5367289056a677fc8354fa278",
+    "FlockSoundness.Discharge.Recursion.HoloClass.ofExec": "678a095861a999e7cebba1bac6ced4ce877a62f0f859c84b14e5a8f0b7ee406f",
     "FlockSoundness.Discharge.Recursion.HoloParams": "07db9ce59a5ce783ffeec493dafa259fc84f01b7fddf7c8f23141c6348170885",
     "FlockSoundness.Discharge.Recursion.HoloParams.EllOk": "9b17644fdac36c01d05fdcc843f6d6a37b94094b233e4c4235af0be82bc3b39b",
     "FlockSoundness.Discharge.Recursion.HoloParams.ell": "c9422b9a8bac489ddcc43fce4628cd90cf8347563eb1f84ea95b81e60f4e45c4",
@@ -14140,15 +14140,18 @@
     "FlockSoundness.Discharge.Recursion.HoloReg.column": "17cd86da78def62b98e8cce0f44f6387da62c16b857ca37456c8585cdf3984cc",
     "FlockSoundness.Discharge.Recursion.HoloReg.w": "09a206cbf4c7103eb92d97daa2ea4e20459c8b638dd5a9385bc9118be5b27932",
     "FlockSoundness.Discharge.Recursion.RegClash": "4e99ab47d2132174490ea837c55e8c174e77941acdb9954dbfc49daa3f03cefc",
-    "FlockSoundness.Discharge.Recursion.StackedTop": "7fdfa0da4ffc015adeb6ae26ace6517766d32704cd7a4e7de588f305bffeac93",
+    "FlockSoundness.Discharge.Recursion.StackedTop": "71aca97cd7b2bfbb0943a59d432fef9900cadb7c2296081f0ef24b7c2a0ff13d",
     "FlockSoundness.Discharge.Recursion.clashPickHL": "c05251956e622dc23cf5228b43334750135ab78ad485e0385b4cd1d87e71f9ca",
     "FlockSoundness.Discharge.Recursion.holoAt": "ea56c3301d8dcd818dfd6ec57fb66bc88d96dcef3ffb31efda35763838cb778d",
-    "FlockSoundness.Discharge.Recursion.holoError": "d575aab997d767b28b45cea8fa71254c8a8a82bfb4dde5f9a031654f08bfe767",
+    "FlockSoundness.Discharge.Recursion.holoError": "d4cf9f569e355ff36e94cddab904651a43f69cead9b02c62e795d630e5a0bfaf",
     "FlockSoundness.Discharge.Recursion.holoInnerAt": "d6fcf65efd1df6a3798a31cb471523cd0a8dbac5462dfd80dcba1684716bd25c",
     "FlockSoundness.Discharge.Recursion.holoInnerCL": "1e8d903fa96443369d068fe9106406431f90135008010e1cfebe3b3df91c8fff",
+    "FlockSoundness.Discharge.Recursion.metaRegistration": "78f728abb6ea893bf66f7c9b7fb97f7fa7c45796d1fd2271e1edc034d8c7ccda",
+    "FlockSoundness.Discharge.Recursion.metaRegistration._sparseCasesOn_1": "308e583fd7246fb898fb4cf86abe8c3cd727d51521f58032ba5b3bcdc3a1c3c1",
+    "FlockSoundness.Discharge.Recursion.metaRegistration._sparseCasesOn_2": "6d0979efa342a4c96ecb9055ccbff0ae6070a79af97269bca53e476b7d9fa27a",
     "FlockSoundness.Discharge.Recursion.outHL": "5a6bf846e3f6ffb7568477fe79dfbcaa19dc1c540f7273b0e28f2e99be38e6ce",
     "FlockSoundness.Discharge.Recursion.regOpenError": "b80f13552f874d3d465d153a5205c31eeb2b2d144352871a094072c822691432",
-    "FlockSoundness.Discharge.Recursion.sparseError": "3429b4f2b2a88685b0f24879dde74916e2e4632b9f8a944837ca6ccc765690ce",
+    "FlockSoundness.Discharge.Recursion.sparseError": "1d11a45b121f3a1b658ae20037eb33ff40e24747049ac1d6ff6f1a16c7d710f3",
     "FlockSoundness.Discharge.Recursion.udQueryError": "3356855eb1ee3d2dbe807aab786bbe980bf953c428768cc886c3d17f98c40f72",
     "FlockSoundness.Discharge.Recursion.vstarCount": "5fdf2b98261f00ce6bdb53910c61dc11e65cdd9d83573749dc8019af71c7e92b",
     "FlockSoundness.Model.OutHL.circ": "a89f806838e1b3d244042a719adfa4d2dd6e47a3c47b2ccfc443c5d18b057f29",
