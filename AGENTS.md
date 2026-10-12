@@ -16,7 +16,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
-      its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`), each a Python
+      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`) and
+      the network certifier (`certifier`), each a Python
       verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
       (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
@@ -169,6 +170,18 @@ its suite, and a layout move or a change to the runner reruns everything. The me
 queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
 something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
 
+Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
+lands on its own passing check without its file owner's review, and the owner is told. infra owns check time as an
+outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Hand
+landing is to be automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
+refuses, and the lander handles what it refuses.
+
+Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
+right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
+A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
+whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
+landing.
+
 Until reuse and the merge queue exist:
 
 - The lander lands a change by hand once every part whose declared inputs it touches passes: its test suites
@@ -214,7 +227,7 @@ Until reuse and the merge queue exist:
     (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
-    `NetworkCertifier`, `Flock`).
+    `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
     `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
@@ -266,8 +279,8 @@ results may depend on one. Pods bound themselves (`research pods create --max-ho
 
 Never print a secret's value.
 
-- List environment variable names with `compgen -e`, never `env | cut`, `env | grep` or `printenv | …`: a multi-line
-  value's later lines print as if they were names.
+- List environment variable names with `compgen -e`, never `env | cut`, `env | grep`, `printenv | …` or tmux's
+  `show-environment`: a multi-line value's later lines print as if they were names.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
   (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
   environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs

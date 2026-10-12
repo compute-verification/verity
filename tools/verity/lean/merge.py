@@ -1,7 +1,8 @@
 """`merge.py`: git's merge driver for `lean-audit.json`, so that two branches that each add guarantees merge without a rebuild.
 
     python tools/verity/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
-    python tools/verity/lean/merge.py --install [REPO]         register the driver in the repository's git config, once per clone
+    python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
+    python tools/verity/lean/merge.py --install [REPO]         register both drivers in the repository's git config, once per clone
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
@@ -16,6 +17,11 @@ written before guarantees were called that (`pins`) is read under today's names 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
 a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record.
+
+The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
+and `except` as lists, `why` as a list of its `; ` clauses (`layers`). For a `.lean` file (`--lean`, `lean-imports` in
+`.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
+that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's.
 """
 from __future__ import annotations
 
@@ -34,6 +40,8 @@ _spec.loader.exec_module(A)
 
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
+#: the `.lean` files' driver (`--lean`)
+LEAN = "lean-imports"
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
 SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
@@ -137,6 +145,41 @@ def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
+def items(o: list, a: list, b: list) -> list:
+    """Two sides' changes to a list of distinct items: ours with what theirs added, each after the item theirs has before it,
+    less what either side removed."""
+    out = [i for i in a if i in b or i not in o]
+    for n, i in enumerate(b):
+        if i not in a and i not in o:
+            before = next((p for p in reversed(b[:n]) if p in out), None)
+            out.insert(0 if before is None else out.index(before) + 1, i)
+    return out
+
+
+def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
+    """The layer rules entry by entry; a rule both sides changed merges field by field: `imports` and `except` as lists of
+    items, and `why` as a list of its `; ` clauses, so two branches that each widen a layer for a guarantee merge.  A merged
+    rule widens a layer only by what one side's own audit passed with; the merged tree's audit judges the result."""
+    out = {}
+    for k in keys("layers", a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        if y == z or x == y or x == z or not all(isinstance(r, dict) for r in (x, y, z)):
+            v = one(f"layers[{k}]", x, y, z, why)
+        else:
+            v = {}
+            for f in keys("", y, z):
+                p, q, r = x.get(f, MISSING), y.get(f, MISSING), z.get(f, MISSING)
+                if f in ("imports", "except") and all(isinstance(s, list) for s in (p, q, r)):
+                    v[f] = items(p, q, r)
+                elif f == "why" and all(isinstance(s, str) for s in (p, q, r)):
+                    v[f] = "; ".join(items(p.split("; "), q.split("; "), r.split("; ")))
+                elif (w := one(f"layers[{k}].{f}", p, q, r, why)) is not MISSING:
+                    v[f] = w
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
 def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records."""
     why: list[str] = []
@@ -147,6 +190,8 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why)
+        elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = layers({} if o is MISSING else o, a, b, why)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
         else:
@@ -162,6 +207,37 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
     return out, why
 
 
+def _imports(lines: list[str]) -> bool:
+    return all(s.startswith("import ") or not s.strip() for s in lines)
+
+
+def lean(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+    """(the merged text, the number of conflicts left) of a `.lean` file: git's own merge (`git merge-file`), then each conflict
+    whose three sides are only `import` lines merged as lists of imports (`items`), so two branches that each add a module to
+    an import list merge.  Any other conflict is left as git writes it."""
+    p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours), str(base),
+                        str(theirs)], capture_output=True, text=True)
+    if p.returncode < 0 or p.returncode > 127:
+        raise ValueError(f"git merge-file failed: {p.stderr.strip()}")
+    out, left, lines, n = [], 0, p.stdout.splitlines(keepends=True), 0
+    while n < len(lines):
+        if not lines[n].startswith("<<<<<<< ours"):
+            out.append(lines[n])
+            n += 1
+            continue
+        mid = next(i for i in range(n, len(lines)) if lines[i].startswith("||||||| base"))
+        sep = next(i for i in range(mid, len(lines)) if lines[i].rstrip("\n") == "=======")
+        end = next(i for i in range(sep, len(lines)) if lines[i].startswith(">>>>>>> theirs"))
+        a, o, b = lines[n + 1:mid], lines[mid + 1:sep], lines[sep + 1:end]
+        if _imports(a) and _imports(o) and _imports(b):
+            out += [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()], [s for s in b if s.strip()])]
+        else:
+            out += lines[n:end + 1]
+            left += 1
+        n = end + 1
+    return "".join(out), left
+
+
 def load(path: Path) -> dict:
     text = path.read_text()
     return A.as_guarantees(json.loads(text)) if text.strip() else {}
@@ -173,9 +249,11 @@ def install(repo: Path) -> None:
     top = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=repo, capture_output=True, text=True,
                               check=True).stdout.strip())
     driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
-    for k, v in (("name", "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)"), ("driver", driver)):
-        subprocess.run(["git", "config", f"merge.{NAME}.{k}", v], cwd=repo, check=True)
-    print(f"merge.py: merge.{NAME}.driver = {driver} (in {top})")
+    for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver),
+                             (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O"))):
+        for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
+            subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
+        print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
 
 
 def normalize(path: Path) -> int:
@@ -194,6 +272,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("files", nargs="*", type=Path, help="BASE OURS THEIRS [PATH], as git passes them; with --normalize, records")
     ap.add_argument("--install", nargs="?", const=Path.cwd(), type=Path, metavar="REPO", help="register the driver in REPO")
     ap.add_argument("--normalize", action="store_true", help="recompute the `reads` digests of each record named")
+    ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     a = ap.parse_args(argv)
     if a.install is not None:
         install(a.install)
@@ -206,6 +285,12 @@ def main(argv: list[str]) -> int:
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
+    if a.lean:
+        text, left = lean(base, ours, theirs)
+        ours.write_text(text)
+        if left:
+            print(f"merge.py: {path}: {left} conflict(s) beyond import lists", file=sys.stderr)
+        return 1 if left else 0
     try:
         merged, why = merge(load(base), load(ours), load(theirs))
     except ValueError as e:

@@ -125,6 +125,7 @@ OWNER = "owner"
 APPROACH_STATUS = "approach_status"
 REASON = "reason"
 CITES = "cites"
+UNCITES = "uncites"
 
 # ---- closed value sets -------------------------------------------------------------------------------------------------------------------
 
@@ -354,7 +355,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(APPROACH_STATUS, GROUP_APPROACH, ENUM, "the approach's own line of work: worked on now, open to anyone, cannot work, replaced, done and adopted",
        APPROACH_STATUSES),
     _k(REASON, GROUP_APPROACH, TEXT, "why the approach's status changed, one line (required unless live)"),
-    _k(CITES, GROUP_APPROACH, TEXT, "one evidence token the approach cites: a run id, art:, note:, <repo>#<n>, <repo>@<sha>, store:<project>/<path>, https://..."),
+    _k(CITES, GROUP_APPROACH, TEXT, "one evidence token the approach cites: a run id, art:, note:, <repo>#<n>, <repo>@<sha>, https://..."),
+    _k(UNCITES, GROUP_APPROACH, TEXT, "one evidence token the approach no longer cites: replaced, or where nobody else can read it"),
 )}
 
 KEYS = tuple(VOCAB)

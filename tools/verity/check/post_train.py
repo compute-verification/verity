@@ -7,7 +7,8 @@ rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and 
 about an hour of CPU in one process) run here instead, once per landing (Daniel, 3 Oct).  `research merge --push` starts
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
-COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in.  Its tree is checked
+COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
+`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
 VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1, at nice 19.  `research run --on` returns at launch, so this fetches the
 run's records until they show its end (each POLL_S); then that check attempt is labelled `note=regression pass` or
@@ -88,9 +89,33 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
 
 def check_attempt(commit: str, cwd: Path = ROOT) -> str | None:
     """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
-    `%(trailers)` doesn't read), None for any other commit."""
+    `%(trailers)` doesn't read), else, for a commit on origin/main, the newest check that passed on its clean tree (`passed`): a
+    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit."""
     m = CHECK_RE.search(git("log", "-1", "--format=%B", commit, cwd=cwd))
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    sha = git("rev-parse", "--verify", f"{commit}^{{commit}}", cwd=cwd, check=False)
+    if not sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, "origin/main"], cwd=cwd,
+                                 capture_output=True).returncode:
+        return None
+    return passed(sha)
+
+
+def passed(sha: str) -> str | None:
+    """The newest `check` attempt that passed on ``sha``'s clean tree, as the merge gate reads the store; None when the store
+    can't be read."""
+    try:
+        from research.store.local import LocalStore
+
+        store = LocalStore()
+        if store.remote is not None:
+            store.refresh(attempts_only=True)
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND source_commit = ? AND source_dirty = 0 "
+                               "AND state = 'done' AND rc = 0 ORDER BY start_utc DESC LIMIT 1", (sha,))
+    except Exception as e:  # noqa: BLE001  (no attempt found: the caller says the commit is no landing)
+        print(f"post-train: the store can't be read for {sha[:12]}'s check ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    return rows[0][0] if rows else None
 
 
 def _order(row: str) -> tuple[int, int, str]:
@@ -190,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
     sha = git("rev-parse", "--verify", f"{a.commit}^{{commit}}")
     attempt = check_attempt(sha)
     if not attempt and not a.dry_run:
-        print(f"post-train: {sha[:12]} has no `Check:` trailer, so it is no landing of main", file=sys.stderr)
+        print(f"post-train: {sha[:12]} has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main",
+              file=sys.stderr)
         return 2
     with open(LOCK, "a") as lock:
         try:
