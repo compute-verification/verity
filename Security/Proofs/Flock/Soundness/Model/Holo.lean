@@ -5,11 +5,16 @@ import Proofs.Flock.Soundness.Model.Session
 # The holographic table: two reps with hidden units, then the registered opening
 
 F4 candidate 3's session (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §1.3–§1.4, row M1 of its §4), on the pattern
-of `Session.lean`. A rep with hidden unit circuits (`holoRep`) runs the zerocheck, the lincheck on the public part with
-the prover's `h` (`holoLincheck`, L4′), the sparse phase on `h` (`sparsePhase`, H1–H4), and then the opening and
-Ligerito on the committed level-0 table, as `rep` does; it hands on the sparse phase's registered claim. The session
-(`holoTable`) runs two such reps in any interleaving, then opens both registered claims together, once, on the registered
-word `Creg`: level 0 of the registered schedule, committed at registration rather than in the session (§1.4).
+of `Session.lean`, in the order the live session records it (`rec_live.schedule_for`, `rec_session.Relay`). A rep with
+hidden unit circuits (`holoRep`) runs the zerocheck, the lincheck on the public part with the prover's `h`
+(`holoLincheck`, L4′), and then the opening and Ligerito on the committed level-0 table, as `rep` does; it hands on its
+zerocheck's and lincheck's outputs, which its sparse phase reads. The session (`holoTable`) runs two such reps in any
+interleaving; then each rep's sparse phase on its `h` (`sparsePhase`, H1–H4), rep 0's and then rep 1's, each a child
+stream opened at its rep's end; then it opens both registered claims together, once, on the registered word `Creg`:
+level 0 of the registered schedule, committed at registration rather than in the session (§1.4).
+
+The sparse phase reads only its rep's zerocheck and lincheck outputs and `h`, all fixed before any of its coins, so the
+order is the record's rather than a reordering of the draft's (sparse phase before the rep's opening).
 
 The registered table stacks the types' tables `R(t, p, k)` as bit `k + 2^ν·(p + 2^pLog·t)`, so the registered claim's
 point is `(r_k, ζ_p, ρ_t)` in that order (`RegClaim.toClaim`): skip weights `eq(point[0…6], ·)`, `x = point[6 …]`.
@@ -48,47 +53,58 @@ def holoPub (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Fi
       eqAt (fun i : Fin (S.kLog - sh.ell) => y (sh.ell - 6 + i.val)) u⟩
 
 /-- **One rep with hidden units** on the committed level-0 table `C₀`: the zerocheck, the lincheck on the public part
-with L4′'s `h`, the sparse phase on `h` at the slots' types `τ`, then the opening of `ab`, `c` and `extra` and Ligerito,
-as in `rep`. Returns the sparse phase's registered claim when every check passes. -/
+with L4′'s `h`, then the opening of `ab`, `c` and `extra` and Ligerito, as in `rep`. Returns the zerocheck's and the
+lincheck's outputs, which the rep's sparse phase reads, when every check passes. -/
 def holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
-    (extra : List (Claim F S.m)) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
-    (τ : Fin (2 ^ sh.sLog) → ℕ) : Game (Option (RegClaim F sh)) := do
+    (extra : List (Claim F S.m)) : Game (Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) := do
   match ← zerocheck A S.m with
   | none => pure none
   | some zc =>
     match ← holoLincheck A S zc with
     | none => pure none
     | some lc =>
-      match ← sparsePhase A sh (holoPub S sh units zc lc) τ lc.h with
+      match ← opening A (by omega) (lc.ab :: cClaim A zc :: extra) with
       | none => pure none
-      | some reg =>
-        match ← opening A (by omega) (lc.ab :: cClaim A zc :: extra) with
-        | none => pure none
-        | some op => do
-          let ok ← ligerito A sch op.T op.b C₀
-          pure (if ok then some reg else none)
+      | some op => do
+        let ok ← ligerito A sch op.T op.b C₀
+        pure (if ok then some (zc, lc) else none)
 
-/-- **One holographic table's session** (§1.4): the prover commits the level-0 table `C₀`, the verifier draws the link
-points, and the prover runs two reps with hidden units in any interleaving. If both hand on a registered claim, the two
-are opened together, once, and Ligerito at the registered schedule `rsch` checks them against the registered word
-`Creg`. A registered table of fewer than the opening's 7 variables is refused. Returns whether all of it accepted, and
-the committed table. -/
+/-- **The reps' sparse phases and the registered opening**, after both reps: rep 0's sparse phase on its `h`, then rep
+1's, at the slots' types `τ`; if both hand on a registered claim, the two are opened together, once, and `fin` runs on
+the opening's output (Ligerito on the registered word). A registered table of fewer than the opening's 7 variables is
+refused. -/
+def regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
+    (τ : Fin (2 ^ sh.sLog) → ℕ) (no : α) (fin : OpenOut F → Game α)
+    (reps : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) ×
+      Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) : Game α :=
+  match reps with
+  | (some (zc₁, lc₁), some (zc₂, lc₂)) => do
+    match ← sparsePhase A sh (holoPub S sh units zc₁ lc₁) τ lc₁.h with
+    | none => pure no
+    | some c₁ =>
+      match ← sparsePhase A sh (holoPub S sh units zc₂ lc₂) τ lc₂.h with
+      | none => pure no
+      | some c₂ =>
+        if hreg : 7 ≤ sh.mReg then
+          match ← opening A hreg [c₁.toClaim, c₂.toClaim] with
+          | none => pure no
+          | some op => fin op
+        else pure no
+  | _ => pure no
+
+/-- **One holographic table's session** (§1.4), in the recorded order: the prover commits the level-0 table `C₀`, the
+verifier draws the link points, and the prover runs two reps with hidden units in any interleaving; then the reps'
+sparse phases, rep 0's and then rep 1's, and the registered opening (`regPhase`), which Ligerito at the registered
+schedule `rsch` checks against the registered word `Creg`. Returns whether all of it accepted, and the committed
+table. -/
 def holoTable (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (Creg : Oracle F) : Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)                               -- Commit: the level-0 table (root_B)
   let pts ← draw (Fin 2 → Fin mPts → F)                  -- the link points
   let extra := extraClaims S ptLocal mPts pts
-  let regs ← interleave (holoRep A S sch hm C₀ extra sh units τ) (holoRep A S sch hm C₀ extra sh units τ)
-  match regs with
-  | (some c₁, some c₂) =>
-    if hreg : 7 ≤ sh.mReg then
-      match ← opening A hreg [c₁.toClaim, c₂.toClaim] with
-      | none => pure (false, C₀)
-      | some op => do
-        let ok ← ligerito A rsch op.T op.b Creg
-        pure (ok, C₀)
-    else pure (false, C₀)
-  | _ => pure (false, C₀)
+  let reps ← interleave (holoRep A S sch hm C₀ extra) (holoRep A S sch hm C₀ extra)
+  let ok ← regPhase A S sh units τ false (fun op => ligerito A rsch op.T op.b Creg) reps
+  pure (ok, C₀)
 
 end FlockSoundness.Model
