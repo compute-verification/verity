@@ -853,8 +853,8 @@ def run(args: argparse.Namespace, log) -> int:
                 continue
             span_s = 3 * reps * row["step_ms"] * 1e-3
             limit = int(alone[K]["fold"] * fsms / sms * span_s) + 4 * fsms
-            for store in ("fold", "all"):
-                arm = {"family": "gc", "mode": "persist", "grid": 2 * fsms, "store": store, "prio": "low",
+            for store, per_sm in (("fold", 2), ("all", 2), ("fold", 1)):
+                arm = {"family": "gc", "mode": "persist", "grid": per_sm * fsms, "store": store, "prio": "low",
                        "step_sms": gsms, "fill_sms": fsms, "limit": limit}
                 row = run_arm(lib, f, refs[K], credits[K], step, reps, base, arm, g["fill"], peer, clock, args.starve_s,
                               head, log, l2)
