@@ -69,9 +69,9 @@ theorem cast_plane (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (p₀ : ℕ) (k :
 omit [Fintype F] [DecidableEq F] in
 /-- The `ℓ` row (or column) factors of `Φ` at an entry's planes are `eq` at the entry's row (or column). -/
 theorem prod_eqAt [CharP F 2] (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (p₀ : ℕ) (k : Fin (2 ^ cls.nu))
-    (X : ℕ → F) :
-    ∏ j ∈ Finset.range cls.slotLog, (1 + X j + ((R.plane t (p₀ + j) k).val : F)) =
-      eqAt (fun j : Fin cls.slotLog => X j.val) (R.word t p₀ k) := by
+    (xv : ℕ → F) :
+    ∏ j ∈ Finset.range cls.slotLog, (1 + xv j + ((R.plane t (p₀ + j) k).val : F)) =
+      eqAt (fun j : Fin cls.slotLog => xv j.val) (R.word t p₀ k) := by
   rw [Finset.prod_range]
   unfold eqAt
   refine Finset.prod_congr rfl fun j _ => ?_
