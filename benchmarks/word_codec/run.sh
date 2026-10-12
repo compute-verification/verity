@@ -59,9 +59,18 @@ if [ "${KV:-0}" = 1 ]; then
     # SANITIZE=2: the timed run follows a clean smoke
     [ "$SANITIZE" = 2 ] || exit 0
   fi
-  # shellcheck disable=SC2086
-  gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
-    "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
+  # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI
+  if [ "${KV_REPEAT:-1}" = 1 ]; then
+    # shellcheck disable=SC2086
+    gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
+      "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
+    exit $?
+  fi
+  # shellcheck disable=SC2086,SC2016
+  gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
+    n=$1 o=$2; shift 2
+    for i in $(seq 1 "$n"); do "$@" --out "$o/rep$i" || exit $?; done' _ "$KV_REPEAT" "$O" \
+    "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
   exit $?
 fi
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX="${WC_KMAX:-8}")

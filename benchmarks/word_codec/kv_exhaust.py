@@ -65,7 +65,7 @@ SPLITS = (1, 2, 4, 8, 16)
 RTOL = {0: 1e-3, 3: 8e-3}  # the tensor-core form rounds P to bf16
 SPIN = 60_000_000
 WRITE_GRIDS = (0, 1, 2, 4)  # the encode's grid beside the GEMM: a thread a word (0), or this many CTAs an SM
-ENC_SMEM_CARVEOUTS = (-1, 100)  # the encode's preferred shared memory carveout: the driver's choice, the most
+ENC_SMEM_CARVEOUTS = (100,)  # the encode's preferred shared memory carveout (-1 the driver's choice): the most
 CARVEOUTS = (24, 47, 94)  # SMs taken from the GEMM (cuBLASLt's SM count target) for the encode beside it
 CARVE_GRIDS = (1, 2, 4, 6)  # the encode's CTAs a carved-out SM
 OCC_CTAS = (2, 3, 4)  # the read-and-decode's floor at this many CTAs an SM
@@ -377,9 +377,11 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
                 for cv in ENC_SMEM_CARVEOUTS:
                     lib.call("kv_encode_carveout", cv)
                     both(False, grid, k)
-                    t_enc = statistics.median([both(False, grid, k) for _ in range(reps)])
-                    t_both = statistics.median([both(True, grid, k) for _ in range(reps)])
-                    by[cv] = {"alone_s": t_enc, "with_gemm_s": t_both, "hidden_share": (t_gemm + t_enc - t_both) / t_enc}
+                    s_enc = [both(False, grid, k) for _ in range(reps)]
+                    s_both = [both(True, grid, k) for _ in range(reps)]
+                    t_enc, t_both = statistics.median(s_enc), statistics.median(s_both)
+                    by[cv] = {"alone_s": t_enc, "with_gemm_s": t_both, "hidden_share": (t_gemm + t_enc - t_both) / t_enc,
+                              "alone_samples_s": s_enc, "with_gemm_samples_s": s_both}
                 cv = min(by, key=lambda c_: by[c_]["with_gemm_s"])
                 t_enc, t_both = by[cv]["alone_s"], by[cv]["with_gemm_s"]
                 kr["grids"][gr] = {"grid": grid, "alone_s": t_enc, "with_gemm_s": t_both, "smem_carveout": cv,
@@ -426,7 +428,7 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
     return out
 
 
-def model_check(res: dict, lib_name: str, m: dict) -> dict:
+def model_check(res: dict, lib_name: str, m: dict, cells, tle: int) -> dict:
     """f_KV k x1 / ctx (the write side in reads of the step's bytes) against the measured encode, at each cell's
     batch and context: x1 is the compute-only encode a byte a round, in reads at R."""
     lr = res["libs"][lib_name]
@@ -436,9 +438,8 @@ def model_check(res: dict, lib_name: str, m: dict) -> dict:
     x1 = r / (enc[min(enc)]["per_s"] * min(enc) * wb)
     out = {"x1": x1, "rows": []}
     w = lr.get("write", {})
-    for cell in lr.get("exhaust", {}).values():
-        b, ctx = cell["batch"], cell["context"]
-        kv_bytes = cell["store_bytes"]
+    for b, ctx in cells:
+        kv_bytes = b * ctx * m["layers"] * tle
         step_read = (kv_bytes + w.get("weight_bytes", 0)) / r
         f_kv = kv_bytes / (kv_bytes + w.get("weight_bytes", 0))
         for k, kr in w.get(b, {}).get("k", {}).items():
@@ -492,6 +493,8 @@ def main() -> int:
     ap.add_argument("--layers", type=int, default=0,
                     help="the cells' and the write side's layers (default: the model's); at 1 a layer's call reads "
                     "contiguous token-layers with the same grid")
+    ap.add_argument("--write-only", action="store_true",
+                    help="time the write side only (the cells give the model check's step, not timed)")
     ap.add_argument("--sanitize", action="store_true", help="one tiny gate cell of 2 layers, then stop")
     a = ap.parse_args()
     out_dir = Path(a.out)
@@ -544,7 +547,7 @@ def main() -> int:
             lr = res["libs"][lib.name]
             lr["rates"] = B.rates(lib, torch, ks, sms, a.reps, log)
             lr["exhaust"] = {}
-            for b, ctx in cells_of(a.cells):
+            for b, ctx in [] if a.write_only else cells_of(a.cells):
                 need = b * ctx * m["layers"] * shape(lib)["tle"]
                 if need + (6 << 30) > props.total_memory:
                     log(f"exhaust {lib.name} B={b} ctx={ctx}: {need / 1e9:.1f} GB doesn't fit; skipped")
@@ -554,7 +557,8 @@ def main() -> int:
             wb = [int(v) for v in a.write_batches.split(",") if v] or sorted({b for b, _ in cells_of(a.cells)})
             if wb:
                 lr["write"] = write_side(lib, torch, m, wb, ks, a.reps, sms, lr["rates"]["encode"], log)
-            lr["model_check"] = model_check(res, lib.name, m)
+            cells = cells_of(a.cells) if a.write_only else [(c["batch"], c["context"]) for c in lr["exhaust"].values()]
+            lr["model_check"] = model_check(res, lib.name, m, cells, shape(lib)["tle"])
             for row in lr["model_check"]["rows"]:
                 log(f"model {lib.name} B={row['batch']} ctx={row['context']} k={row['k']}: f_KV k x1/ctx "
                     f"{row['predicted']:.4f} against the encode alone {row['measured_alone']:.4f} and exposed beside "
