@@ -71,11 +71,20 @@ open FlockVBridge.PartS (wIdx)
 
 /-- Ring switch `i`'s element `t` of the messages w holds is w's at its slot. -/
 theorem decodedO_rs {sh : Flock.Shape} (w : Array F128) (cons : ℕ → ℕ → F128) {i t e : ℕ} (hi : i < sh.claims)
-    (ht : t < 128) (hwi : RecOpening.wi sh (.rs i t) = some e) : (decodedO sh w cons).rs[i]![t]! = w[e]! := by
-  have h1 : (decodedO sh w cons).rs[i]![t]! = RecAlgebra.Lin.eval (valO sh w cons) (RecAlgebra.Lin.var (.rs i t)) := by
-    show ((RecAlgebra.symbolic sh).rs.map (·.map (RecAlgebra.Lin.eval (valO sh w cons))))[i]![t]! = _
-    simp [RecAlgebra.symbolic, getElem!_pos, hi, ht]
-  rw [h1, RecAlgebra.Lin.eval_var]
+    (ht : t < 128) (hwi : RecOpening.wi sh (.rs i t) = some e) : ((decodedO sh w cons).rs[i]!)[t]! = w[e]! := by
+  have hrs : (decodedO sh w cons).rs =
+      (Array.range sh.claims).map fun k => (Array.range 128).map fun u => valO sh w cons (.rs k u) := by
+    simp only [decodedO, RecAlgebra.Messages.map, RecAlgebra.symbolic, Array.map_map, Function.comp_def,
+      RecAlgebra.Lin.eval_var]
+  have hi' :
+      i < ((Array.range sh.claims).map fun k => (Array.range 128).map fun u => valO sh w cons (.rs k u)).size := by
+    simp only [Array.size_map, Array.size_range]
+    exact hi
+  have ht' : t < ((Array.range 128).map fun u => valO sh w cons (.rs i u)).size := by
+    simp only [Array.size_map, Array.size_range]
+    exact ht
+  rw [hrs, getElem!_pos _ i hi', Array.getElem_map, Array.getElem_range, getElem!_pos _ t ht', Array.getElem_map,
+    Array.getElem_range]
   simp only [valO, hwi]
 
 section Sessions
@@ -125,7 +134,7 @@ theorem openTie_of_layer {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fi
   obtain ⟨S0, gs, x, ρ, γ, hS, hg, hx, hop⟩ := h
   refine ⟨ρ, γ, hop.trans (congrArg (openSteps · ρ γ) (funext fun i => funext fun t => ?_))⟩
   obtain ⟨e, hwi, hxe⟩ := eq_of_rsAt hS hg (hx i) t
-  show fOf (x i t) = fOf ((decodedO sh w (consO ops)).rs[i.val]![t.val]!)
+  show fOf (x i t) = fOf (((decodedO sh w (consO ops)).rs[i.val]!)[t.val]!)
   rw [hxe, decodedO_rs w (consO ops) (by rw [shape_claims hsh]; exact i.isLt) t.isLt hwi]
 
 end Sessions
