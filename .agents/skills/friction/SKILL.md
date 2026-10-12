@@ -102,6 +102,11 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (1:53 PM PDT): the remote bandwidth audit treats the prover's resources as one undifferentiated pool.
+  Its guarantee is conservation: receipts over registered data worth at least 99% of the declared capacity were paid
+  for by resources somewhere (reads, held state, or rebuild compute). It makes no claim about where, so it takes no
+  identity assumption, and an undeclared helper only spends resources of its own.
+
 - 2026-10-12 (1:48 PM PDT), the remote bandwidth audit:
   - The first goal is a mega-secure but slow implementation, and about 4× step overhead is acceptable for now. So
     the stated codec gets the margin: three rounds, the public XOR mask between rounds (σ_K) and a 1,024-bit word.
