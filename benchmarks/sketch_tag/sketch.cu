@@ -21,8 +21,15 @@ using namespace wc;
 
 static const char* const NAME = "ro-sketch-blake3/v0";
 
+#ifndef SK_CHAINS
+#define SK_CHAINS 4
+#endif
+
 template <int KR>
 __host__ __device__ constexpr int steps() { return KR > 0 ? (8 * LANE_WORDS + 15) / 16 : TASK_TILES; }
+// Independent accumulators a sign block, so a warp has about SK_CHAINS sketch MMA chains in flight rather than k/8.
+template <int KS>
+__host__ __device__ constexpr int chains() { return SK_CHAINS / (KS / 8) > 1 ? SK_CHAINS / (KS / 8) : 1; }
 template <int KR, int KS>
 __host__ __device__ constexpr int sgroups() { return (steps<KR>() + 128 / KS - 1) / (128 / KS); }
 
@@ -106,7 +113,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
                                                                  int consumers, int per_consumer, int partials, int T,
                                                                  int RUN, const uint4* __restrict__ signs,
                                                                  int* __restrict__ sk, int decode, SkCommit cm) {
-  constexpr int SB = ws_stage_bytes<KR>(), KB = KS / 8, SG = sgroups<KR, KS>(), MS = steps<KR>();
+  constexpr int SB = ws_stage_bytes<KR>(), KB = KS / 8, SG = sgroups<KR, KS>(), MS = steps<KR>(), NA = chains<KS>();
   const int stages = consumers * per_consumer;
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
@@ -168,13 +175,15 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
   }
 
   const uint64_t t32 = KR > 0 ? mulmod(kTau, LANES) : 0;
-  int acc_s[KB][4];
+  int acc_s[NA][KB][4];
   for (int u = 0;; ++u) {
     const int nb = task_nb(warp, u);
     if (nb == -1) break;
     if (u % RUN == 0) {
 #pragma unroll
-      for (int b = 0; b < KB; ++b) acc_s[b][0] = acc_s[b][1] = acc_s[b][2] = acc_s[b][3] = 0;
+      for (int c = 0; c < NA; ++c)
+#pragma unroll
+        for (int b = 0; b < KB; ++b) acc_s[c][b][0] = acc_s[c][b][1] = acc_s[c][b][2] = acc_s[c][b][3] = 0;
     }
     if (nb >= 0) {
       const int s = warp * per_consumer + u % per_consumer, i = nb % T;
@@ -211,7 +220,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
         for (int tt = 0; tt < TASK_TILES; ++tt) {
           const uint32_t a[4] = {w[tt].x, w[tt].y, w[tt].z, w[tt].w};
           tile(tt, a);
-          if constexpr (SK) sketch_step<KS>(acc_s, a, sw, tt);
+          if constexpr (SK) sketch_step<KS>(acc_s[tt % NA], a, sw, tt);
         }
       } else {
         const unsigned long long* st = reinterpret_cast<const unsigned long long*>(smem + s * SB) + lane;
@@ -225,7 +234,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
           for (int st8 = 0; st8 < MS; ++st8) {
             const uint64_t w0 = xw[2 * st8], w1 = 2 * st8 + 1 < LANE_WORDS ? xw[2 * st8 + 1] : 0;
             const uint32_t a[4] = {(uint32_t)w0, (uint32_t)(w0 >> 32), (uint32_t)w1, (uint32_t)(w1 >> 32)};
-            sketch_step<KS>(acc_s, a, sw, st8);
+            sketch_step<KS>(acc_s[st8 % NA], a, sw, st8);
           }
         }
         if (decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
@@ -252,15 +261,21 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
       const int R = g0 + (warp + consumers * (u / RUN)) * groups;
       const size_t tl = (size_t)(R / rpt) * nchunks + kc;
 #pragma unroll
+      for (int c = 1; c < NA; ++c)
+#pragma unroll
+        for (int b = 0; b < KB; ++b)
+#pragma unroll
+          for (int e = 0; e < 4; ++e) acc_s[0][b][e] += acc_s[c][b][e];
+#pragma unroll
       for (int b = 0; b < KB; ++b) {
         int* r0 = sk + (tl * 16 + g) * KS + 8 * b + 2 * tq;
         int* r1 = r0 + 8 * KS;
         if (RUN == T) {
-          *reinterpret_cast<int2*>(r0) = make_int2(acc_s[b][0], acc_s[b][1]);
-          *reinterpret_cast<int2*>(r1) = make_int2(acc_s[b][2], acc_s[b][3]);
+          *reinterpret_cast<int2*>(r0) = make_int2(acc_s[0][b][0], acc_s[0][b][1]);
+          *reinterpret_cast<int2*>(r1) = make_int2(acc_s[0][b][2], acc_s[0][b][3]);
         } else {
-          atomicAdd(r0, acc_s[b][0]); atomicAdd(r0 + 1, acc_s[b][1]);
-          atomicAdd(r1, acc_s[b][2]); atomicAdd(r1 + 1, acc_s[b][3]);
+          atomicAdd(r0, acc_s[0][b][0]); atomicAdd(r0 + 1, acc_s[0][b][1]);
+          atomicAdd(r1, acc_s[0][b][2]); atomicAdd(r1 + 1, acc_s[0][b][3]);
         }
       }
     }

@@ -8,7 +8,7 @@
 #     -- taskset -c 48-95 bash benchmarks/sketch_tag/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
-# the profiles; LIBSET (default "dense split") names the builds.
+# the profiles; LIBSET (default "dense split") names the builds (dense1, split1: one sketch accumulator a sign block).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -20,7 +20,8 @@ SK=benchmarks/sketch_tag
 export LIBSET=${LIBSET:-dense split}
 B=$(mktemp -d /tmp/sketch-tag.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX=3 -DSK_KMAX=3)
-declare -A DEFS=([dense]="-DWC_PB=60" [split]="-DWC_PB=56")
+declare -A DEFS=([dense]="-DWC_PB=60" [split]="-DWC_PB=56" [dense1]="-DWC_PB=60 -DSK_CHAINS=1"
+                 [split1]="-DWC_PB=56 -DSK_CHAINS=1")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086
@@ -51,11 +52,12 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   q
   if [ "$NCU" = 1 ] && [ $rc = 0 ]; then
     S=(--clock-control none --cache-control all --section SpeedOfLight --section ComputeWorkloadAnalysis
-       --section InstructionStats --section Occupancy --section MemoryWorkloadAnalysis)
+       --section InstructionStats --section Occupancy --section MemoryWorkloadAnalysis --section WarpStateStats
+       --section SchedulerStats)
     lib=${LIBSET%% *}
-    "$NCU_BIN" "${S[@]}" -k "regex:sk_ws_kernel|gemm_ws_kernel|sk_hash_kernel|b3_leaves" -c 40 -f -o "$O/ncu-$lib" \
+    "$NCU_BIN" "${S[@]}" -k "regex:sk_ws_kernel|gemm_ws_kernel|sk_hash_kernel|b3_leaves" -c 80 -f -o "$O/ncu-$lib" \
       "$PY" $SK/bench.py --lib $lib="$B/sk-$lib.so" --out "$O/ncu" --mode ncu --shapes gate_up --batches 1,32 \
-      --ks 16 --ns 4096 > "$O/ncu-$lib.log" 2>&1
+      --ks 16 --ns 4096 --cfgs 4x2,8x1 > "$O/ncu-$lib.log" 2>&1
     "$NCU_BIN" --import "$O/ncu-$lib.ncu-rep" --csv --page raw > "$O/ncu-$lib.csv" 2>&1
     q
   fi
