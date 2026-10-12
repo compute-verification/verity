@@ -16,6 +16,7 @@ up for V*'s native side, read once, since the inner circuit can be tens of GB; `
 printed.
 -/
 import Flock.HmRow
+import Flock.ProvedScope
 import Flock.RecOpening
 import Flock.Registered
 import VStar.Cli
@@ -944,7 +945,9 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
 (`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
 partition object and program, which of V*'s statements the session is (`part`, `--rec-part J`) and the verifier's own
-bindings (`bindings`, `--rec-bindings F`); then `checkOwnBindings` of those bindings against the partition object and
+bindings (`bindings`, `--rec-bindings F`); its circuit must be in `ProvedScope.scopeOk`, every row a `sha512/row/v1` row
+(`v1Ports`), never `scopeOkH`'s `bitRows`, which `ProvedScope.check` admits under hidden outputs and V*'s statement
+(`VStmt.hscope`) does not cover; then `checkOwnBindings` of those bindings against the partition object and
 program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings, and
 `checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) on the verifier's own
 registered reads. -/
@@ -965,6 +968,8 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       | throw s!"{name}: one of V*'s statements; pass which of V*'s statements this session is (--rec-part J, its index in rec-statements' list)"
     let some f := bindings
       | throw s!"{name}: one of V*'s statements; pass the verifier's own bindings (--rec-bindings F, from verity_flock.rec_bindings)"
+    if !ProvedScope.scopeOk st.c then
+      throw s!"{name}: one of V*'s statements, whose circuits are in ProvedScope.scopeOk (every row sha512/row/v1, VStmt.hscope), not scopeOkH's bit rows: {ProvedScope.scopeWhy false st.c}"
     checkOwnBindings name f obj prog
     let s ← checkCircuit i j st.c (population st) circuitB f
     if let some r := registered then
