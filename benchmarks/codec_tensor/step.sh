@@ -42,7 +42,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
   q
   LIBS=(--wt-lib "$B/wt-512.so" --kv-lib "$B/step-512.so")
   if [ "$SANITIZE" = 1 ]; then
-    compute-sanitizer --tool memcheck --error-exitcode 9 --print-limit 20 \
+    env -u RESEARCH_RUN_ID compute-sanitizer --tool memcheck --error-exitcode 9 --print-limit 20 \
       "$PY" $CT/step.py "${LIBS[@]}" --out "$O/smoke" --model tiny --batch "$BATCH" --gemm-m "$GEMM_M" --ctx 256 --reps 1 \
       --gemm-reps 1 --gate-words 4096 > "$O/smoke.log" 2>&1
     rc=$?; q

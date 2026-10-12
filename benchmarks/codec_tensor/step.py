@@ -365,10 +365,18 @@ class Step:
         if rc:
             raise RuntimeError(f"kv_append k={k}: error {rc}")
 
-    def read_pass(self, grid: int) -> None:
+    def read_pass(self, grid: int, bufs: str = "WK") -> None:
         st = BW.stream(self.torch)
-        for buf in (self.W, self.KV):
+        for buf in [b for n, b in (("W", self.W), ("K", self.KV)) if n in bufs]:
             self.kv.call("kv_read", buf.data_ptr(), buf.numel(), self.xr.data_ptr(), grid, st)
+
+    def decode_alone(self, codec: str, k: int, grid: int) -> None:
+        """The weights' words decoded (to the sink, nothing stored) by wt.cu's decoder or kv.cu's, nothing else."""
+        st, n = BW.stream(self.torch), self.w_bytes // self.wb
+        if codec == "wt":
+            self.wt.call("wt_decode", self.W.data_ptr(), None, n, 0, k, self.xr.data_ptr(), grid, st)
+        else:
+            self.kv.call("kv_decode", self.W.data_ptr(), None, n, 0, k, grid, self.xr.data_ptr(), st)
 
     # arms ---------------------------------------------------------------------------------------------------------
     def step(self, k: int, append: str = "async", parts: str = "WA") -> None:
@@ -442,6 +450,27 @@ def choose_splits(S: Step, torch, reps: int, cycles: int, log) -> dict:
         log(f"splits k={k}: " + ", ".join(f"{FORMS[fm]} {out[f'form{fm}_k{k}']['best']} "
                                           f"({out[f'form{fm}_k{k}']['best_s'] * 1e3:.2f} ms)" for fm in forms)
             + f"; form {FORMS[S.form[k]]}")
+    return out
+
+
+def decode_alone(S: Step, torch, ks, sms: int, grid: int, log) -> dict:
+    """The decode's own cost, apart from the GEMM and attention it is fused into: each codec's decoder over the weights'
+    words at each k (its best grid), in reads of the same bytes."""
+    rd = statistics.median(queued(S.wt, torch, lambda: S.read_pass(grid, "W"), 20_000_000)[0] for _ in range(3))
+    out = {"read_s": rd, "bytes": S.w_bytes}
+    for k in ks:
+        S.set_keys(k)
+        for codec in ("wt", "kv"):
+            per = {}
+            for mult in (4, 8, 16):
+                def fn(codec=codec, k=k, mult=mult):
+                    S.decode_alone(codec, k, sms * mult)
+                fn()
+                per[mult] = statistics.median(queued(S.wt, torch, fn, 20_000_000)[0] for _ in range(3))
+            best = min(per, key=per.get)
+            out[f"{codec}_k{k}"] = {"per_mult_s": per, "best": best, "best_s": per[best], "over_read": per[best] / rd}
+    log(f"decode alone over the weights ({S.w_bytes / 1e9:.2f} GB, read {rd * 1e3:.2f} ms), in reads: " + ", ".join(
+        f"k={k} wt.cu {out[f'wt_k{k}']['over_read']:.2f} kv.cu {out[f'kv_k{k}']['over_read']:.2f}" for k in ks))
     return out
 
 
@@ -644,6 +673,8 @@ def main() -> int:
     BW.set_sketch_tag(wt)
     S.set_keys(ks[0])
     res["splits"] = choose_splits(S, torch, 2, 40_000_000, log)
+    save()
+    res["decode_alone"] = decode_alone(S, torch, ks, sms, grid, log)
     save()
 
     arms = {"pass": lambda: S.read_pass(grid),
