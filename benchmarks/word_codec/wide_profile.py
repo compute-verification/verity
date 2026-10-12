@@ -1,7 +1,7 @@
 """The fused GEMM under Nsight Compute: one library, one linear, one batch and k (`wide_run.sh` with PROFILE=1 runs it as
 `ncu --profile-from-start off`). The store is built and encoded as `wide_bench.py` does, and the fused kernel's
 partial sums are checked equal to the payload store's, with and without the tag, before anything is profiled; then
-each arm (ww0, t0, d<k>, t<k>, t<k>_flat) is launched once between cudaProfilerStart and cudaProfilerStop. Nothing is
+each arm (ww0, t0, d<k>, t<k>, t<k>_ahead with the L2 prefetch) is launched once between cudaProfilerStart and cudaProfilerStop. Nothing is
 timed here: ncu's replays make its durations a profile's, not a measurement of record.
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ def main() -> int:
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     nch = kd // W.TASK_COLS
 
-    def gemm(kk, src, y, partials, tag, prefetch=True):
+    def gemm(kk, src, y, partials, tag, prefetch=False):
         ah = lib.so.ww_gemm_occupancy(kk, mb, int(tag), int(partials)) * sms if prefetch else 0
         lib.call("ww_gemm", kk, WB.ptr(src), xp, WB.ptr(y), mb, n, kd, 0, int(partials), seed if tag else None,
                  tags_p if tag else None, ah, WB.stream(torch))
@@ -70,8 +70,8 @@ def main() -> int:
     if not ok:
         return 5
     y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
-    arms = {"ww0": (0, pay, False, True), "t0": (0, pay, True, True), f"d{k}": (k, store, False, True),
-            f"t{k}": (k, store, True, True), f"t{k}_flat": (k, store, True, False)}
+    arms = {"ww0": (0, pay, False, False), "t0": (0, pay, True, False), f"d{k}": (k, store, False, False),
+            f"t{k}": (k, store, True, False), f"t{k}_ahead": (k, store, True, True)}
     for kk, src, tag, pf in arms.values():
         gemm(kk, src, y, False, tag, pf)
     torch.cuda.synchronize()

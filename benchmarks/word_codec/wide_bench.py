@@ -15,10 +15,9 @@ Nothing is timed before its gate passed, in this order:
   the poison is caught); a sample of tags equals `ro-blake3/v1` over the encoded words; the commit's root equals
   `MerkleTree(tags.leaves(…))` over the device's tags. Then interleaved reps of cuBLASLt FP8 (`torch._scaled_mm`),
   `wc.cu`'s plain FP8 kernels (`--wc`), the wide kernel on the payload store (`ww0`), decode only (`d<k>`), decode and
-  tag (`t<k>`; `t<k>_flat` without the L2 prefetch of the next wave's records), tag only (`t0`) and the commit, every
-  call on cold weights (a ring of copies past the L2), each arm queued behind a spin kernel. Native is the fastest of
-  cuBLASLt and the plain kernels. The wide kernels prefetch a wave ahead (`ww_gemm_occupancy` × the SMs) unless
-  `_flat`.
+  tag (`t<k>`; `t<k>_ahead` with the L2 prefetch of the next wave's records, a wave being `ww_gemm_occupancy` × the
+  SMs), tag only (`t0`) and the commit, every call on cold weights (a ring of copies past the L2), each arm queued
+  behind a spin kernel. Native is the fastest of cuBLASLt and the plain kernels.
 
 The frontier's quantities, per field and k (`wide.json` "frontier"):
   x        k · (L / 256) · R / (encode roots/s at k = 1): the encode time of the whole store per native pass at R, from the
@@ -78,10 +77,10 @@ class WLib:
         so.ww_workspace_tags.argtypes = [v, q]
         so.ww_workspace_tags.restype = v
         so.ww_commit.argtypes = [v, q, v, v, v]
-        cs = (ctypes.c_int * 10)()
+        cs = (ctypes.c_int * 12)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,
-         self.msg_blocks) = list(cs)
+         self.msg_blocks, self.roll, self.occ) = list(cs)
         self.field = W.field(self.bits)
         f = self.field
         if (self.limbs, self.payload, self.lane_words, lanes, tiles) != (f.limbs, f.payload, f.lane_words(), W.LANES,
@@ -346,10 +345,10 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             raise RuntimeError(f"ww_gemm_occupancy k={k} M={mb}: {occ}")
         return occ * sms
 
-    def run(k, store, x, y, partials, tag):
+    def run(k, store, x, y, partials, tag, prefetch=False):
         lib.call("ww_gemm", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
-                 seed_buf if tag else None, tags_p if tag else None, wave(k, x.shape[0], tag, partials),
-                 stream(torch))
+                 seed_buf if tag else None, tags_p if tag else None,
+                 wave(k, x.shape[0], tag, partials) if prefetch else 0, stream(torch))
 
     def commit(root=None):
         lib.call("ww_commit", ptr(ws), blocks, seed_buf, root, stream(torch))
@@ -363,7 +362,8 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         pp = torch.full((nch * mb * n,), float("nan"), dtype=torch.float32, device="cuda")
         run(0, pay, x, pp, True, False)
         err = float(((pp.view(nch, mb, n).sum(0) - ref).abs() / scale).max())
-        entry = {"payload_vs_torch_rel": err, "decode_equal": {}, "decode_tag_equal": {}, "tags_written": {},
+        entry = {"payload_vs_torch_rel": err, "decode_equal": {}, "decode_tag_equal": {}, "prefetch_equal": {},
+                 "tags_written": {},
                  "control_rejected": None, "tags_vs_reference": {}, "root_vs_reference": {}, "tags_stable": {}}
         tags.fill_(POISON - (1 << 32))
         run(0, pay, x, torch.empty_like(pp), True, False)
@@ -381,6 +381,9 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             torch.cuda.synchronize()
             entry["decode_tag_equal"][k] = bool(torch.equal(pf, pp))
             entry["tags_written"][k] = not bool((tags.view(-1, 8) == POISON - (1 << 32)).all(1).any())
+            pf.fill_(float("nan"))
+            run(k, stores[k], x, pf, True, True, prefetch=True)
+            entry["prefetch_equal"][k] = bool(torch.equal(pf, pp))
             if gi == 0:
                 if keyed is None:
                     from verity.core.protocols.bandwidth import tags as T
@@ -407,6 +410,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         entry["atomic_vs_torch_rel"] = float(((ya - ref).abs() / scale).max())
         entry["ok"] = (err < 1e-5 and entry["control_rejected"] and all(entry["decode_equal"].values())
                        and all(entry["decode_tag_equal"].values()) and all(entry["tags_written"].values())
+                       and all(entry["prefetch_equal"].values())
                        and all(not v["mismatch"] for v in entry["tags_vs_reference"].values())
                        and all(entry["root_vs_reference"].values()) and all(entry["tags_stable"].values())
                        and entry["atomic_vs_torch_rel"] < 1e-5)
@@ -450,7 +454,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             for wt in wts:
                 torch._scaled_mm(xc, wt, one, one, out_dtype=torch.bfloat16)
 
-        def arm(k, tag, prefetch=True):
+        def arm(k, tag, prefetch=False):
             ps = [ptr(b) for b in ring[k]]
             sp, tp = (seed_buf, tags_p) if tag else (None, None)
             ah = wave(k, mb, tag) if prefetch else 0
@@ -494,7 +498,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         for k in ks:
             arms[f"d{k}"] = arm(k, False)
             arms[f"t{k}"] = arm(k, True)
-            arms[f"t{k}_flat"] = arm(k, True, prefetch=False)
+            arms[f"t{k}_ahead"] = arm(k, True, prefetch=True)
         lib.set_key(W.key(f, SEED, max(ks)))
         for fn in arms.values():
             fn()
@@ -513,7 +517,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             + (f", wc {med['wc_plain'] * 1e6:.1f}, wc_pipe {med['wc_pipe'] * 1e6:.1f}" if "wc_plain" in med else "")
             + f"); ww0 {med['ww0'] / native:.2f}x, t0 {med['t0'] / native:.2f}x, commit {med['commit'] / native:.2f}x, "
             + ", ".join(f"d{k} {med[f'd{k}'] / native:.2f}x t{k} {med[f't{k}'] / native:.2f}x "
-                        f"(no prefetch {med[f't{k}_flat'] / native:.2f}x, wave {wave(k, mb, True)} CTAs)" for k in ks))
+                        f"(L2 prefetch {med[f't{k}_ahead'] / native:.2f}x, wave {wave(k, mb, True)} CTAs)" for k in ks))
     del ring, wring, stores, pay, w, ws, plain_ring
     torch.cuda.empty_cache()
     return res
@@ -561,7 +565,7 @@ def breakdown(cases: dict, batches, ks, commit_s: float) -> dict:
             row[k] = {"y_total": s[f"t{k}"] / native + y_commit, "y_decode": (s[f"d{k}"] - s["ww0"]) / native,
                       "y_tag": (s[f"t{k}"] - s[f"d{k}"]) / native, "y_commit": y_commit,
                       "y_commit_linear": s["commit"] / native, "y_base": s["ww0"] / native,
-                      "y_total_no_prefetch": s[f"t{k}_flat"] / native + y_commit}
+                      "y_total_prefetch": s[f"t{k}_ahead"] / native + y_commit}
         out[mb] = row
     return out
 
@@ -604,7 +608,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
             y = row[k]
             out.append({"schema": POINT_SCHEMA, "lane": "ra-codec-wide", "b": f.bits, "k": k,
                         "arithmetic": f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}"
-                                      f"/sqr{lib.sqr}",
+                                      f"/sqr{lib.sqr}" + ("/rolled" if lib.roll else "")
+                                      + (f"/occ{lib.occ}" if lib.occ > 1 else ""),
                         "packing": f.payload, "expansion": f.expansion(), "batch": mb,
                         "y_total": y["y_total"], "y_decode": y["y_decode"], "y_tag": y["y_tag"],
                         "y_commit": y["y_commit"], "y_commit_linear": y["y_commit_linear"], "y_base": y["y_base"],

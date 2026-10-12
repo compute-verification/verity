@@ -10,7 +10,8 @@
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
-# r20261012-071155-d336; add p127s0 … for both) names the builds, KMAX_<bits> (defaults 4, 2, 2) the largest k each
+# r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3) names
+# the builds, KMAX_<bits> (defaults 4, 2, 2) the largest k each
 # holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
 # `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
 # out/profile-details.txt.
@@ -28,9 +29,10 @@ B=$(mktemp -d /tmp/wide-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -I benchmarks/bandwidth)
 declare -A PIDS=()
 for lib in $LIBSET; do
-  bits=${lib:1:3} sqr=${lib:5:1}
+  bits=${lib:1:3} sqr=${lib:5:1} suf=${lib:6} defs=""
+  [[ $suf == r* ]] && defs="-DWW_ROLL=1" && [ -n "${suf#r}" ] && defs+=" -DWW_OCC=${suf#r}"
   # shellcheck disable=SC2086
-  nvcc "${FLAGS[@]}" -DWW_BITS="$bits" -DWW_SQR="$sqr" -DWW_KMAX="${KMAX[$bits]}" ${WW_DEFS:-} -o "$B/ww-$lib.so" \
+  nvcc "${FLAGS[@]}" -DWW_BITS="$bits" -DWW_SQR="$sqr" -DWW_KMAX="${KMAX[$bits]}" $defs ${WW_DEFS:-} -o "$B/ww-$lib.so" \
     $WC/wide.cu > "$O/ww-$lib.ptxas" 2>&1 & PIDS[$lib]=$!
 done
 nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -DWC_SQR=0 -DWC_KMAX=1 \

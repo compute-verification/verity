@@ -51,6 +51,15 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #ifndef WW_KMAX
 #define WW_KMAX 4
 #endif
+// WW_ROLL = 1: the fused GEMM's code kept small enough for the instruction cache (BLAKE3's rounds a loop, and for p521
+// the words decoded in a loop), the tag's compressions before the decode rather than interleaved with it. WW_OCC: the
+// CTAs an SM the fused GEMM is compiled for (`__launch_bounds__`; 1 lets the compiler use up to 255 registers).
+#ifndef WW_ROLL
+#define WW_ROLL 0
+#endif
+#ifndef WW_OCC
+#define WW_OCC 1
+#endif
 
 namespace ww {
 
@@ -94,6 +103,7 @@ __host__ __device__ constexpr uint32_t plimb(int e) {
 __constant__ uint32_t kC[KMAX][N];   // c_j
 __constant__ uint32_t kNC[KMAX][N];  // p − c_j (Mersenne decode)
 __constant__ uint32_t kTau[N];       // τ
+__constant__ uint32_t kDTw[N];       // the tweak state's step over LANES words (`tw_init`'s dv for s = LANES)
 __constant__ uint32_t kI[N];        // p255: √−1, c1, c1·√−1
 __constant__ uint32_t kC1[N];
 __constant__ uint32_t kC1I[N];
@@ -781,6 +791,29 @@ __device__ __forceinline__ uint32_t msg_word(const uint32_t (&w)[L][N], uint64_t
   return 0;
 }
 
+// `bw::b3_compress` with its seven rounds a loop, the message permuted in registers after each: a seventh of the code.
+__device__ __forceinline__ void b3_compress_rolled(uint32_t (&cv)[8], uint32_t (&m)[16], uint32_t len, uint32_t flags) {
+  using bw::rotr32;
+  uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
+  uint32_t v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = 0, v13 = 0, v14 = len, v15 = flags;
+#pragma unroll 1
+  for (int r = 0; r < 7; ++r) {
+    B3_G(v0, v4, v8, v12, m[0], m[1]);
+    B3_G(v1, v5, v9, v13, m[2], m[3]);
+    B3_G(v2, v6, v10, v14, m[4], m[5]);
+    B3_G(v3, v7, v11, v15, m[6], m[7]);
+    B3_G(v0, v5, v10, v15, m[8], m[9]);
+    B3_G(v1, v6, v11, v12, m[10], m[11]);
+    B3_G(v2, v7, v8, v13, m[12], m[13]);
+    B3_G(v3, v4, v9, v14, m[14], m[15]);
+    const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = t[i];
+  }
+  cv[0] = v0 ^ v8, cv[1] = v1 ^ v9, cv[2] = v2 ^ v10, cv[3] = v3 ^ v11;
+  cv[4] = v4 ^ v12, cv[5] = v5 ^ v13, cv[6] = v6 ^ v14, cv[7] = v7 ^ v15;
+}
+
 // Compression b of ro-blake3/v1 over block j (one chunk: the message is under 1,024 bytes), from the lane's registers;
 // cv starts as the key, and after the last compression it is the tag.
 __device__ __forceinline__ void tag_step(uint32_t (&cv)[8], const uint32_t (&w)[L][N], uint64_t j, int b) {
@@ -791,15 +824,19 @@ __device__ __forceinline__ void tag_step(uint32_t (&cv)[8], const uint32_t (&w)[
   const uint32_t len = b + 1 < MSG_BLOCKS ? 64 : 4 * MSG - 64 * (MSG_BLOCKS - 1);
   const uint32_t flags = bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) |
                          (b + 1 == MSG_BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-  bw::b3_compress(cv, m, 0, len, flags, cv);
+  if constexpr (WW_ROLL) b3_compress_rolled(cv, m, len, flags);
+  else bw::b3_compress(cv, m, 0, len, flags, cv);
 }
+
+// The rolled decode (WW_ROLL, p521's few wide words): word 0 decoded, then the words rotated down one, L times.
+constexpr bool ROLL_DECODE = WW_ROLL && L <= 4;
 
 // One task (16 rows × 512 columns) a warp, four warps a CTA sharing x's chunk. TAG: lane l's block j = jbase + 32q + l
 // (its L encoded words) is hashed before it is decoded, and its tag written to tags[8 (32q + l) …]. ahead > 0: once its
 // own record is in registers, each warp prefetches into the L2 the record of the same warp `ahead` CTAs on (a wave
 // later when ahead is the resident CTAs), so the next wave's HBM reads overlap this wave's arithmetic.
 template <int KR, int NB8, bool PARTIALS, bool TAG>
-__global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
+__global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
                                                                uint32_t* __restrict__ tags, int ahead) {
@@ -839,20 +876,48 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* _
     for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
   }
   if constexpr (KR > 0) tw_init(t, t32, wbase + q * (32ull * L) + lane, LANES);
-#pragma unroll
-  for (int b = 0; b < MSG_BLOCKS; ++b) {
-    if constexpr (TAG) tag_step(cv, w, j, b);
-    if (b == 0 && nxt) {
-      // a record is L·N rows of 128 bytes, one L2 line each
+  // a record is L·N rows of 128 bytes, one L2 line each
+  auto prefetch = [&] {
+    if (nxt)
       for (int r = lane; r < L * N; r += 32) asm volatile("prefetch.global.L2 [%0];" ::"l"(nxt + 32 * r));
-    }
-    if constexpr (KR > 0) {
+  };
+  if constexpr (WW_ROLL) {
+    if constexpr (TAG) {
 #pragma unroll
-      for (int i = 0; i < L; ++i)
-        if ((1 + (i + 1) * N) / 16 == b) {
-          decode_tw<KR>(w[i], t);
-          tw_step(t, t32);
-        }
+      for (int b = 0; b < MSG_BLOCKS; ++b) tag_step(cv, w, j, b);
+    }
+    prefetch();
+    if constexpr (KR > 0 && ROLL_DECODE) {
+#pragma unroll 1
+      for (int i = 0; i < L; ++i) {
+        decode_tw<KR>(w[0], t);
+        tw_step(t, kDTw);
+        uint32_t w0[N];
+        copy_k<N>(w0, w[0]);
+#pragma unroll
+        for (int ii = 0; ii + 1 < L; ++ii) copy_k<N>(w[ii], w[ii + 1]);
+        copy_k<N>(w[L - 1], w0);
+      }
+    } else if constexpr (KR > 0) {
+#pragma unroll
+      for (int i = 0; i < L; ++i) {
+        decode_tw<KR>(w[i], t);
+        tw_step(t, kDTw);
+      }
+    }
+  } else {
+#pragma unroll
+    for (int b = 0; b < MSG_BLOCKS; ++b) {
+      if constexpr (TAG) tag_step(cv, w, j, b);
+      if (b == 0) prefetch();
+      if constexpr (KR > 0) {
+#pragma unroll
+        for (int i = 0; i < L; ++i)
+          if ((1 + (i + 1) * N) / 16 == b) {
+            decode_tw<KR>(w[i], t);
+            tw_step(t, t32);
+          }
+      }
     }
   }
   if constexpr (TAG) {
@@ -884,6 +949,13 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const uint32_t* _
       }
     }
   }
+}
+
+__global__ void dtw_kernel(uint32_t* out) {
+  uint32_t v[N], dv[N];
+  tw_init(v, dv, 0, LANES);
+#pragma unroll
+  for (int e = 0; e < N; ++e) out[e] = dv[e];
 }
 
 __global__ void spin_kernel(long long cycles) {
@@ -970,7 +1042,7 @@ extern "C" {
 
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
-  out[7] = KMAX; out[8] = WW_SQR; out[9] = MSG_BLOCKS;
+  out[7] = KMAX; out[8] = WW_SQR; out[9] = MSG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC;
   return 0;
 }
 
@@ -987,6 +1059,12 @@ int ww_set_key(const uint32_t* c, int k, const uint32_t* tau, const uint32_t* i_
     return 2;
   if (i_ && (cudaMemcpyToSymbol(kI, i_, 4 * N) || cudaMemcpyToSymbol(kC1, c1, 4 * N) || cudaMemcpyToSymbol(kC1I, c1i, 4 * N)))
     return 2;
+  uint32_t* dtw = nullptr;
+  if (cudaMalloc(&dtw, 4 * N)) return 2;
+  dtw_kernel<<<1, 1>>>(dtw);
+  const bool bad = cudaGetLastError() || cudaMemcpyToSymbol(kDTw, dtw, 4 * N, 0, cudaMemcpyDeviceToDevice);
+  cudaFree(dtw);
+  if (bad) return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
 
