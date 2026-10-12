@@ -9,7 +9,8 @@
 #     -- taskset -c 48-95 bash benchmarks/vllm_encoded/run.sh
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
-# "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60);
+# "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
+# any arm with +c compiled as vLLM serves by default (serve.py --compiled);
 # SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
 # instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
 # with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
@@ -73,13 +74,15 @@ fi
           --format=csv,noheader -i "$UUID" | sed "s/^/$1, /" >> "$O/gpu.txt" 2>&1; }
   i=0
   for arm in $ARMS; do
-    i=$((i + 1)); IFS=: read -r name k lib <<< "$arm"
+    i=$((i + 1)); C=(); c=
+    case $arm in *+c) C=(--compiled); c=-c; arm=${arm%+c} ;; esac
+    IFS=: read -r name k lib <<< "$arm"
     case $name in
       enc) A=(--arm enc --k "$k" --lib "$B/ve-${lib:-pb56}.so"); tag=enc$k${lib:+-$lib} ;;
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac
-    tag=$i-$tag; q "$tag start"
+    A+=("${C[@]}"); tag=$i-$tag$c; q "$tag start"
     # shellcheck disable=SC2086
     timeout "$((ARM_MIN * 60))" "$PY" $VE/serve.py "${A[@]}" --model "$MODEL" --out "$O/arm-$tag.json" $SERVE_ARGS \
       > "$O/arm-$tag.log" 2>&1

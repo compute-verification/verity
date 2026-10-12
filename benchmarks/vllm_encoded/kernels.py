@@ -1,11 +1,11 @@
 """The linears a served model runs: `ve.cu` through ctypes, one object per linear layer, holding either the plain FP8 fragments
 (`PlainLinear`, the native arm's operand in the fused kernel's own order) or only the codec words (`EncodedLinear`).
 
-A call at M <= 32 rows (a decode batch) quantizes x to FP8 with the activation quantization of vLLM's own FP8 kernel (dynamic,
-per token where CUTLASS FP8 is supported), runs one of `wc.cu`'s three GEMM forms (the `Config` the arm picked for this shape
-and M), and reduces the chunks' sums in order to BF16 (`ve_reduce`), so a plain and an encoded linear over the same weight
-return the same bits.  A call at more rows (prefill) decodes
-the layer into a scratch FP8 matrix and hands it to vLLM's own FP8 apply: prefill is compute-bound and isn't what's timed.
+vLLM calls a linear through the op ``ve_enc::linear(x8, xs, idx)`` (opaque to torch.compile), on activations its own FP8
+kernel's quantization produced (dynamic, per token where CUTLASS FP8 is supported).  At M <= 32 rows (a decode batch) it runs
+one of `wc.cu`'s three GEMM forms (the `Config` the arm picked for this shape and M) and reduces the chunks' sums in order to
+BF16 (`ve_reduce`), so a plain and an encoded linear over the same weight return the same bits.  At more rows (prefill) it
+decodes the layer into a scratch FP8 matrix for vLLM's CUTLASS GEMM: prefill is compute-bound and isn't what's timed.
 
 Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a later fused kernel (a tag stage, a wider
 codec) is another `Lib` whose `ve_gemm` takes the same arguments.
@@ -111,17 +111,6 @@ def candidates(lib: Lib, k: int, m: int, nchunks: int) -> list[Config]:
     return out
 
 
-class _Weighted:
-    """The layer vLLM's own apply sees at prefill: the scratch weight, and every other attribute the layer's."""
-
-    def __init__(self, layer, weight) -> None:
-        object.__setattr__(self, "_layer", layer)
-        object.__setattr__(self, "weight", weight)
-
-    def __getattr__(self, name):
-        return getattr(object.__getattribute__(self, "_layer"), name)
-
-
 class Linear:
     """One layer's operand on the device.  `k` is the codec's rounds (0: plain fragments)."""
 
@@ -145,11 +134,15 @@ class Linear:
                 return self.configs[mm]
         return Config(0)
 
-    def gemm(self, x8: torch.Tensor, cfg: Config | None = None, partials: bool = True) -> torch.Tensor:
+    def gemm(self, x8: torch.Tensor, cfg: Config | None = None, partials: bool = True,
+             part: torch.Tensor | None = None) -> torch.Tensor:
         m = x8.shape[0]
         cfg = cfg or self.config(m)
-        part = (torch.empty if partials else torch.zeros)((self.nchunks if partials else 1, m, self.n), dtype=torch.float32,
-                                                          device=x8.device)
+        shape = (self.nchunks if partials else 1, m, self.n)
+        if part is None:
+            part = (torch.empty if partials else torch.zeros)(shape, dtype=torch.float32, device=x8.device)
+        elif tuple(part.shape) != shape or part.dtype != torch.float32 or not part.is_contiguous() or not partials:
+            raise ValueError(f"partials buffer {tuple(part.shape)} {part.dtype} for {shape}")
         self.lib.call("ve_gemm", cfg.form, self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n, self.kd,
                       self.base, int(partials), cfg.groups, cfg.consumers, cfg.stages, stream())
         return part
@@ -168,16 +161,12 @@ class Linear:
         """W (n × k, FP8) rebuilt from the operand (prefill's scratch copy)."""
         raise NotImplementedError
 
-    def __call__(self, layer, x, bias, original, quant) -> torch.Tensor:
-        """vLLM's apply: ``quant(x2d) -> (fp8 x, scale)`` is the FP8 kernel's own activation quantization."""
-        if not isinstance(x, torch.Tensor) or x.numel() > MAX_ROWS * x.shape[-1]:
-            return original(_Weighted(layer, self.dense().t()), x, bias)
-        x2 = x.reshape(-1, x.shape[-1])
-        x8, xs = quant(x2)
-        y = self.reduce(self.gemm(x8.contiguous()), xs.reshape(-1).float().contiguous())
-        if bias is not None:
-            y = y + bias
-        return y.reshape(*x.shape[:-1], self.n)
+    def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
+        """BF16 x W^T from FP8 rows ``x8`` and their activation scale ``xs`` (one, or one a row)."""
+        if x8.shape[0] > MAX_ROWS:
+            from vllm import _custom_ops as ops
+            return ops.cutlass_scaled_mm(x8, self.dense().t(), out_dtype=torch.bfloat16, scale_a=xs, scale_b=self.ws, bias=None)
+        return self.reduce(self.gemm(x8.contiguous()), xs.reshape(-1).float().contiguous())
 
 
 class PlainLinear(Linear):
@@ -217,4 +206,19 @@ class EncodedLinear(Linear):
         self.payloads = None
 
 
-__all__ = ["FORMS", "MAX_ROWS", "Config", "EncodedLinear", "Lib", "Linear", "PlainLinear", "candidates", "stream"]
+#: the linears ``ve_enc::linear`` dispatches to, by index
+LINEARS: list[Linear] = []
+
+
+@torch.library.custom_op("ve_enc::linear", mutates_args=())
+def linear_op(x8: torch.Tensor, xs: torch.Tensor, idx: int) -> torch.Tensor:
+    return LINEARS[idx].forward(x8, xs)
+
+
+@linear_op.register_fake
+def _(x8: torch.Tensor, xs: torch.Tensor, idx: int) -> torch.Tensor:
+    return x8.new_empty((x8.shape[0], LINEARS[idx].n), dtype=torch.bfloat16)
+
+
+__all__ = ["FORMS", "LINEARS", "MAX_ROWS", "Config", "EncodedLinear", "Lib", "Linear", "PlainLinear", "candidates",
+           "linear_op", "stream"]

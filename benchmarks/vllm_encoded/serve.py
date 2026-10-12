@@ -7,8 +7,12 @@ Arms:
   enc       every linear through the fused GEMM over codec words only (k rounds of Sloth at p = 2^61 - 1); the plaintext
             weight is freed before vLLM profiles memory, so decode runs with no plaintext copy of any linear in HBM
 
-The plain and encoded arms install at the end of the model runner's `load_model` (before memory profiling and graph
-capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
+Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
+default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
+quantization before it is compiled as in the stock arm).
+
+The plain and encoded arms install at the end of the model runner's `load_model` (before memory profiling, compilation and
+graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
 gives the same partial sums bit for bit (encoded against plain at every capture size), the plain sums agree with a float
 product, the encoded store decodes to the payloads on the device and in `codec.py`, and (encoded arm) no FP8 or plain
 fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
@@ -42,7 +46,6 @@ import torch
 
 CAPTURE = [1, 4, 8, 16, 32]
 SEED = hashlib.sha512(b"ra-vllm-encoded/key/v0").digest()[:32]
-SPIN = 20_000_000
 GATE_PROMPTS = [
     "The capital of France is",
     "Write a haiku about memory bandwidth.",
@@ -163,9 +166,9 @@ class Install:
             del w
             layer._parameters["weight"] = torch.nn.Parameter(
                 torch.empty(0, dtype=torch.float8_e4m3fn, device=layer.weight_scale.device), requires_grad=False)
-            quant = layer.quant_method.fp8_linear.quant_fp8
-            self.hooks.wrap(layer.quant_method, "apply", lambda orig, lin=lin, quant=quant:
-                            (lambda lyr, x, bias=None: lin(lyr, x, bias, orig, lambda t: quant(t, None, None))))
+            K.LINEARS.append(lin)
+            fn = apply(len(K.LINEARS) - 1, layer.quant_method.fp8_linear.quant_fp8)
+            self.hooks.wrap(layer.quant_method, "apply", lambda orig, fn=fn: fn)
             gates["layers"] += 1
         gc.collect()
         torch.cuda.synchronize()
@@ -188,7 +191,7 @@ class Install:
 
     def select(self, lib: K.Lib, k: int) -> list[dict]:
         """Each shape's GEMM config at each capture size: the fastest candidate over all of the shape's layers in turn (so
-        the weights stream from HBM, not L2), queued behind a spin so host launches don't set the time."""
+        the weights stream from HBM, not L2)."""
         groups: dict[tuple[int, int], list[K.Linear]] = {}
         for _, lin in self.linears:
             groups.setdefault((lin.n, lin.kd), []).append(lin)
@@ -201,29 +204,54 @@ class Install:
                 x8 = rand_fp8(m, kd, gen)
                 times = {}
                 for cfg in K.candidates(lib, k, m, nch):
-                    times[cfg] = time_config(lib, lins, x8, cfg, self.args.select_reps)
+                    times[cfg] = time_config(lins, x8, cfg, self.args.select_trials)
                 best = min(times, key=times.get)
                 for lin in lins:
                     lin.configs[m] = best
                 out.append({"n": n, "k": kd, "m": m, "layers": len(lins), "best": best.name, "groups": best.groups,
                             "us": {c.name: round(t, 2) for c, t in times.items()}})
                 log(f"select n={n} k={kd} m={m}: {best.name} {times[best]:.1f} us", {c.name: round(t, 1) for c, t in times.items()})
+        torch.cuda.empty_cache()
         return out
 
 
-def time_config(lib: K.Lib, lins: list[K.Linear], x8: torch.Tensor, cfg: K.Config, reps: int) -> float:
+def apply(idx: int, quant):
+    """A layer's FP8 apply: vLLM's own activation quantization (traced and fused by torch.compile when the engine compiles),
+    then the linear through the op."""
+    def fn(layer, x, bias=None):
+        if x.dtype != torch.bfloat16:
+            raise TypeError(f"activations are {x.dtype}, the fused linear writes BF16")
+        x8, xs = quant(x.reshape(-1, x.shape[-1]), None, None)
+        y = torch.ops.ve_enc.linear(x8, xs, idx)
+        if bias is not None:
+            y = y + bias
+        return y.reshape(*x.shape[:-1], y.shape[-1])
+    return fn
+
+
+def time_config(lins: list[K.Linear], x8: torch.Tensor, cfg: K.Config, trials: int) -> float:
+    """Microseconds a layer: the shape's layers in turn, captured in one CUDA graph as decode runs them (one partials
+    buffer, as the graph pool reuses a freed one), the fastest of ``trials`` timings of two replays each."""
+    part = torch.empty((lins[0].nchunks, x8.shape[0], lins[0].n), dtype=torch.float32, device=x8.device)
     for lin in lins:
-        lin.gemm(x8, cfg)
-    s = K.stream()
-    e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-    lib.call("wc_spin", SPIN, s)
-    e0.record()
-    for _ in range(reps):
-        for lin in lins:
-            lin.gemm(x8, cfg)
-    e1.record()
+        lin.gemm(x8, cfg, part=part)
     torch.cuda.synchronize()
-    return e0.elapsed_time(e1) * 1e3 / (reps * len(lins))
+    g = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(g):
+        for lin in lins:
+            lin.gemm(x8, cfg, part=part)
+    g.replay()
+    best = math.inf
+    for _ in range(trials):
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        e0.record()
+        g.replay()
+        g.replay()
+        e1.record()
+        torch.cuda.synchronize()
+        best = min(best, e0.elapsed_time(e1) / 2)
+    del g
+    return best * 1e3 / len(lins)
 
 
 def plaintext_scan(min_elems: int) -> dict:
@@ -285,7 +313,9 @@ def steady(rec: list, b: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", choices=("stock", "stock-compiled", "plain", "enc"), required=True)
+    ap.add_argument("--arm", choices=("stock", "plain", "enc"), required=True)
+    ap.add_argument("--compiled", action="store_true",
+                    help="vLLM's default compilation (torch.compile, piecewise and full CUDA graphs) instead of mode 0")
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--lib", help="a build of ve.cu (plain and enc arms)")
     ap.add_argument("--model", required=True)
@@ -295,13 +325,16 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=64)
     ap.add_argument("--mem", type=float, default=0.75)
     ap.add_argument("--max-batched-tokens", type=int, default=16384)
-    ap.add_argument("--select-reps", type=int, default=3)
+    ap.add_argument("--select-trials", type=int, default=5)
     ap.add_argument("--python-words", type=int, default=16)
     ap.add_argument("--gate-tokens", type=int, default=16)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [int(x) for x in args.contexts.split(",")]
+    if args.compiled:
+        # the cache key doesn't cover the installed linears: a cached stock graph would bypass them
+        os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
 
     import vllm
     from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
@@ -317,7 +350,7 @@ def main() -> None:
         hook_runner(hooks, install)
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
-    if args.arm != "stock-compiled":
+    if not args.compiled:
         cc.update({"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY"})
     kw = {"model": args.model, "quantization": "fp8", "max_num_seqs": max(batches), "enable_prefix_caching": False, "seed": 0,
           "max_model_len": max(contexts) + max_tokens_cap + 64, "max_num_batched_tokens": args.max_batched_tokens,
@@ -340,7 +373,8 @@ def main() -> None:
 
     props = torch.cuda.get_device_properties(0)
     result = {
-        "arm": args.arm, "k": args.k if args.arm == "enc" else 0, "model": args.model, "revision": args.revision,
+        "arm": args.arm, "compiled": args.compiled, "k": args.k if args.arm == "enc" else 0, "model": args.model,
+        "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,
         "sms": props.multi_processor_count, "startup_s": startup_s, "kv_tokens": kv_tokens,
         "kv_cache_dtype": str(cache.cache_dtype), "attention": attn, "compilation": cc,
@@ -351,7 +385,7 @@ def main() -> None:
                         "vocab": hf.vocab_size, "tied": bool(getattr(hf, "tie_word_embeddings", False))},
         "gate": [], "points": [],
     }
-    if args.arm in ("stock", "stock-compiled"):
+    if args.arm == "stock":
         layers = fp8_linears(model)
         result["install"] = {"arm": args.arm, "layers": len(layers), "plain_bytes": sum(l.weight.numel() for _, l in layers),
                              "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
