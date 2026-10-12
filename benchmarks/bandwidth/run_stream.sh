@@ -11,7 +11,8 @@
 # the device absorb and the host reference against the pinned digests and group nodes, a control without the copies that
 # must not match, the tag pass's root); a failed gate times nothing (exit 3).  Then the timings, each its own JSON: link, hbm,
 # gen, pipe, absorb, window.
-# Env: BLOCKS (default 524,288), SEED (hex, default 00..1f), MODES (default "link hbm gen pipe absorb interfere window"),
+# Env: BLOCKS (default 524,288), SEED (hex, default 00..1f), MODES (default "link hbm gen pipe absorb interfere window";
+# also fold),
 # REPS (7), WINDOWS (20), SIZES_MIB (16,32,48,56,60,64), PIECE (bytes, 1 MiB), GEN_THREADS (16), WINDOWS_ALSO (more window
 # configurations, `suffix:args;...`), GPUS (0,1,2,3: NUMA node 0's), WORKERS (the reference's processes, 32), TIMED.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, host.txt, expect.json, gpu.txt, env.txt, smi.csv, <mode>.json for each mode.

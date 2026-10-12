@@ -44,14 +44,16 @@ measure what is left of each on the card.
 - `stream.py` is `stream/v1`, the challenger's stream: AES-128-CTR under a key the challenger derives from its own
   randomness under the window's nonce, permuted so that every warp load on the device is 512 contiguous bytes, and
   absorbed into `D`, a BLAKE3 tree keyed from σ, which the prover commits beside the root. The verifier opens sampled
-  chunks against `D` without hashing the stream. Its docstring is the format, and `tests/stream_vectors.json` pins it
-  (`python3 stream.py OUT` writes them).
+  chunks against `D` without hashing the stream. `fold` is the cheaper leaf `stream-fold/v1`, each 1 KiB chunk of the
+  stream to the XOR of its AES blocks, which the verifier checks whole. Its docstring is the format, and
+  `tests/stream_vectors.json` pins it (`python3 stream.py OUT` writes them).
 - `stream_host.cpp` generates the keystream on the host (AVX-512 VAES, with non-temporal stores for pinned memory;
   AES-NI; OpenSSL for comparison). `stream.cu` (`bwstream`) is the device's absorb and the streamed window, built with
   `tagger.cu`, and its modes measure the link's ceilings, HBM reads beside the link, the generators, the sustained
-  generate-and-copy pipe, the absorb, and windows with and without the stream. `run_stream.sh` is one Attempt: the
-  gates first (the generators against the vectors, the absorb against the reference, the tag pass's root), then the
-  timings. Its header lists the environment and outputs.
+  generate-and-copy pipe, the absorb, windows with and without the stream, and the fold read zero copy on a few SMs
+  beside the tag pass (`fold`), behind a frontier the host's generators advance after σ (`foldlive`). `run_stream.sh`
+  is one Attempt: the gates first (the generators against the vectors, the absorb and both fold kernels against the
+  reference, the tag pass's root), then the timings. Its header lists the environment and outputs.
 - `chip.cu` (`bwchip`) measures the on-chip stores that S_chip has to cover: the instruction caches (code-footprint
   sweeps over PTX that it writes and ptxas assembles), whether code and constants share a cache, and where the evicted
   constants come back from; the constant cache, the TLBs, L1 and L2 retention; and how many uniform registers a warp

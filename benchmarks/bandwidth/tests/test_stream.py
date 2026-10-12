@@ -141,6 +141,46 @@ def test_samples_are_the_windows_draws():
     assert all(0 <= x < 128 for x in got) and len(set(got)) > 1
 
 
+def test_fold_is_each_chunks_xor_in_the_streams_order():
+    key = bytes(range(16))
+    s = stream.stream_bytes(key, 2 * stream.GROUP_BYTES)
+    f = stream.fold(s)
+    assert len(f) == 16 * len(s) // stream.CHUNK
+    for i in (0, 1, 64, 127):
+        acc = bytes(16)
+        for k in range(stream.WORDS):
+            block = s[stream.CHUNK * i + 16 * k:stream.CHUNK * i + 16 * (k + 1)]
+            acc = bytes(a ^ b for a, b in zip(acc, block))
+        assert f[16 * i:16 * (i + 1)] == acc
+    assert stream.fold(s[:stream.CHUNK]) == f[:16]
+    with pytest.raises(ValueError):
+        stream.fold(s[:stream.CHUNK - 16])
+
+
+def test_a_wrong_byte_moves_its_folds_byte():
+    """A byte the device guessed instead of fetching reaches exactly one fold byte, at its offset in its chunk's block:
+    the bound's `⌈X/64⌉` fold bytes over `X` bytes withheld."""
+    key = bytes(range(16))
+    s = stream.stream_bytes(key, 2 * stream.GROUP_BYTES)
+    f = stream.fold(s)
+    for at in (0, 5, 1023, 70 * 1024 + 17):
+        t = bytearray(s)
+        t[at] ^= 0x5A
+        g = stream.fold(bytes(t))
+        assert [k for k in range(len(f)) if f[k] != g[k]] == [16 * (at // stream.CHUNK) + at % 16]
+        assert g[16 * (at // stream.CHUNK) + at % 16] ^ f[16 * (at // stream.CHUNK) + at % 16] == 0x5A
+
+
+def test_fold_kernels_read_a_chunk_as_the_reference():
+    """`fold_chunks` and `fold_live`: lane `l` of chunk `c`'s warp reads uint4 `64c + l` and `64c + 32 + l`, the
+    warp's XOR is the chunk's fold, written to `out[c]`."""
+    for kernel in ("fold_chunks", "fold_live"):
+        body = CU[CU.index(f"__global__ void {kernel}("):]
+        body = body[:body.index("\n}\n")]
+        assert "p + (c0 + k) * 64 + lane" in body and "p + (c0 + k) * 64 + 32 + lane" in body
+        assert "out[c0 + k] = v" in body
+
+
 def test_pinned_vectors_are_the_reference():
     assert stream.vectors() == VECTORS
 

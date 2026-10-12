@@ -138,4 +138,10 @@ int sg_ctr_openssl(const uint8_t key[16], uint64_t first, uint8_t* out, uint64_t
   return 0;
 }
 
+// Evicts p[0, n) from every cache level (clflush, a 64-byte line at a time), fenced.
+void sg_flush(const uint8_t* p, uint64_t n) {
+  for (uint64_t i = 0; i < n; i += 64) _mm_clflush(p + i);
+  _mm_mfence();
+}
+
 }  // extern "C"
