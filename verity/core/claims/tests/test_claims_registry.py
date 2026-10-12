@@ -56,6 +56,16 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
+def test_trusted_nebius_host_covers_the_devices_host_held_state() -> None:
+    """Daniel's widening of 11 Oct: the host never rolls back what the auditor's devices keep, which PoUS's one session
+    per audit and network-accounting's certifier both rely on."""
+    host = get("trusted-nebius-host")
+    assert (host.kind, host.standing) == ("assumption", "standard") and "runs its stated code" in host.name
+    assert all(s in host.name for s in ("never restores", "never restarts", "LMS leaf state", "session-id log",
+                                        "challenger state", "network certifier's state"))
+    assert "trusted-nebius-host" in get("pous-ring-device").name
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")

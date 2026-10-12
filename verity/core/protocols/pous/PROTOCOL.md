@@ -756,7 +756,8 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
 `EndToEndRing` reaches the deployed system only through four claims, each cited on its own:
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
-  its rounds, with one session per audit and the coins drawn online;
+  its rounds, with one session per audit (the memory challenger's `SessionLog`, which the host never rolls back:
+  `trusted-nebius-host`) and the coins drawn online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
   behind `ROOT_CALL_NS` (SeqRoot, under P2 in "The generic protocol"), a model cut by a measurement: the timing red
@@ -778,8 +779,10 @@ Two gaps stood between these statements and the deployed verifier, and both are 
   `SessionLog` is a file of its own, never in the signer's key directory (`live.py --session-log`, `bench.py
   --mc-session-log`). It is append-only: the id goes in, fsynced, when the session commits, before its first
   challenge, so a session that never runs has used its id too. A used id is refused, a log that is missing or
-  unreadable refuses every session, and nothing rewrites, truncates or remakes a log; a restore of the file from a
-  snapshot is past what a file can see. Under one secret a reused id would also replay the coins, which
+  unreadable refuses every session, and nothing rewrites, truncates or remakes a log. A file cannot see a restore of
+  itself from a snapshot, a backup or an older copy, nor a restart of the memory challenger onto older host-held state;
+  that the host does neither is `trusted-nebius-host` (`verity.core.claims`), which covers the device's host-held
+  state, this log and the LMS leaf state among it. Under one secret a reused id would also replay the coins, which
   `CoinTree.draw` derives from the secret and the id. The composed check accepts a session only under the id the
   auditor designated (`run.check`'s `session_id`), so an audit has at most one session it can accept. The Lean states
   the check's side (`RunCheckAccepts`: an accepted session carries the designated id); the device's refusal is its code

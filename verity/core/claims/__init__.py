@@ -115,17 +115,23 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean), which states the code half only;
+    # no attestation hardware backs it.  Its host-held state half is Daniel's widening of 11 Oct
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
+          "An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's challenger) runs "
+          "its stated code on its Nebius host, and the host keeps the device's host-held state as written: it never "
+          "restores that state from a snapshot, a backup or another older copy, and never restarts the device onto "
+          "host-held state older than what the device has run. That state is the LMS leaf state, PoUS's session-id log, "
+          "the bandwidth audit's challenger state and the network certifier's state",
           "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
-          "setup, the session and its rounds, with one session per audit and the memory challenger's coins drawn online, "
-          "after its state is fixed", "PoUS ring device"),
+          "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
+          "id from its session log, which the host never rolls back: trusted-nebius-host) and the memory challenger's "
+          "coins drawn online, after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
     # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
     # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
