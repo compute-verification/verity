@@ -90,14 +90,15 @@ def sideAddr (u j : ℕ) : ℕ := Encodable.encode (u, j)
 
 /-- **The chip program** for the remaining `n` ticks, having observed `o` and sent HBM the requests `ks`: at each tick
 it sends the rest its bits, reads HBM's reply from device memory and the rest's signal from the side sources, and asks
-the oracle; at the end it commits to the transducer's tags. -/
-def prog (C : Chip N b h S) (βs : ℕ) (st : Bits S) : ℕ → List (Obs h) → List ℕ → IChip N b h (Fin N → Bits h)
-  | 0, o, _ => IChip.done (C.tags st o)
+the oracle; at the end it outputs `fin` of what it observed (the transducer's tags, `C.tags st`, for the audit). -/
+def prog (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h) → α) :
+    ℕ → List (Obs h) → List ℕ → IChip N b h α
+  | 0, o, _ => IChip.done (fin o)
   | n + 1, o, ks =>
     sendAll (C.out st o) <|
       readMem (memAddr (C.key st o :: ks)) (C.width st o) fun m =>
         readSide (sideAddr o.length) βs fun r =>
-          askAll (C.ask st o) fun ys => prog C βs st n ((m, r, ys) :: o) (C.key st o :: ks)
+          askAll (C.ask st o) fun ys => prog C βs st fin n ((m, r, ys) :: o) (C.key st o :: ks)
 
 /-- HBM as device memory: the bit at `memAddr ks j` is bit `j` of its reply after the requests `ks`. -/
 def mem (hbm : Hbm N b) (E : Store N b) (a : ℕ) : Bool :=
@@ -205,10 +206,10 @@ theorem world_side (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Orac
     (world hbm rest E O).side v (sideAddr u j) = rest E O v u j :=
   side_sideAddr rest E O v u j
 
-/-- **The chip runs the transducer**: its tags are the chip's tags on what it observes. -/
-theorem prog_run (C : Chip N b h S) (βs : ℕ) (st : Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b)
-    (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
-    (prog C βs st n o ks).run (world hbm rest E O) v = C.tags st (observe C βs st hbm rest E O n o ks v) := by
+/-- **The chip runs the transducer**: its output is `fin` of what it observes. -/
+theorem prog_run (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h) → α) (hbm : Hbm N b)
+    (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
+    (prog C βs st fin n o ks).run (world hbm rest E O) v = fin (observe C βs st hbm rest E O n o ks v) := by
   induction n generalizing o ks v with
   | zero => rfl
   | succ n ih =>
@@ -219,9 +220,9 @@ theorem prog_run (C : Chip N b h S) (βs : ℕ) (st : Bits S) (hbm : Hbm N b) (r
 
 /-- **The chip's device-memory reads are HBM's replies**: over `n` ticks it reads from device memory exactly the bits
 HBM replies with. -/
-theorem prog_ingress (C : Chip N b h S) (βs : ℕ) (st : Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b)
-    (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
-    (prog C βs st n o ks).ingressBits (world hbm rest E O) v + hbmBits o =
+theorem prog_ingress (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h) → α) (hbm : Hbm N b)
+    (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
+    (prog C βs st fin n o ks).ingressBits (world hbm rest E O) v + hbmBits o =
       hbmBits (observe C βs st hbm rest E O n o ks v) := by
   induction n generalizing o ks v with
   | zero => simp [prog, observe, IChip.ingressBits]
@@ -236,9 +237,9 @@ theorem prog_ingress (C : Chip N b h S) (βs : ℕ) (st : Bits S) (hbm : Hbm N b
 /-- **The chip's other reads**: over `n` ticks it reads `n βs` bits of side sources, regenerates no block, and asks at
 most `n q` queries when it asks at most `q` a tick. -/
 theorem prog_counts (C : Chip N b h S) (βs q : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ q) (st : Bits S)
-    (w : IWorld N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
-    (prog C βs st n o ks).sideBits w v = n * βs ∧ (prog C βs st n o ks).regens w v = 0 ∧
-      ((prog C βs st n o ks).queries w v).length ≤ n * q := by
+    (fin : List (Obs h) → α) (w : IWorld N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
+    (prog C βs st fin n o ks).sideBits w v = n * βs ∧ (prog C βs st fin n o ks).regens w v = 0 ∧
+      ((prog C βs st fin n o ks).queries w v).length ≤ n * q := by
   induction n generalizing o ks v with
   | zero => simp [prog, IChip.sideBits, IChip.regens, IChip.queries]
   | succ n ih =>
@@ -272,7 +273,7 @@ theorem hbmBits_le (C : Chip N b h S) (βs βm : ℕ) (hw : ∀ st o, C.width st
 rest as side sources, and `prog` from the state, capped at `c` side bits and `q` queries. -/
 def device (C : Chip N b h S) (βs T : ℕ) (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
     (c q : ℕ) : InteractiveDevice N b h S c 0 q :=
-  InteractiveDevice.ofRuns state (mem hbm) (side rest) fun st => prog C βs st T [] []
+  InteractiveDevice.ofRuns state (mem hbm) (side rest) fun st => prog C βs st (C.tags st) T [] []
 
 theorem device_run (C : Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ qt)
     (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) :
@@ -280,11 +281,11 @@ theorem device_run (C : Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st
         C.tags (state E) (observe C βs (state E) hbm rest E O T [] [] []) ∧
       (device C βs T state hbm rest (T * βs) (T * qt)).ingress E O =
         hbmBits (observe C βs (state E) hbm rest E O T [] [] []) := by
-  obtain ⟨c2, c3, c4⟩ := prog_counts C βs qt hq (state E) (world hbm rest E O) T [] [] []
+  obtain ⟨c2, c3, c4⟩ := prog_counts C βs qt hq (state E) (C.tags (state E)) (world hbm rest E O) T [] [] []
   obtain ⟨ht, hi⟩ := InteractiveDevice.ofRuns_run (c := T * βs) (G := 0) (q := T * qt) state (mem hbm) (side rest)
-    (fun st => prog C βs st T [] []) E O ⟨c2.le, c3.le, c4⟩
-  exact ⟨ht.trans (prog_run C βs (state E) hbm rest E O T [] [] []),
-    hi.trans ((add_zero _).symm.trans (prog_ingress C βs (state E) hbm rest E O T [] [] []))⟩
+    (fun st => prog C βs st (C.tags st) T [] []) E O ⟨c2.le, c3.le, c4⟩
+  exact ⟨ht.trans (prog_run C βs (state E) (C.tags (state E)) hbm rest E O T [] [] []),
+    hi.trans ((add_zero _).symm.trans (prog_ingress C βs (state E) (C.tags (state E)) hbm rest E O T [] [] []))⟩
 
 end Ticked
 

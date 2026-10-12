@@ -6,6 +6,7 @@ import Proofs.Accounting.Bandwidth.Actual
 import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Bandwidth.Causal
 import Proofs.Accounting.Bandwidth.Joint
+import Proofs.Accounting.Bandwidth.TickedJoint
 
 /-! The bandwidth audit v0's proofs: the guarantee in the random-oracle model (`Bandwidth.SecurityProofs.AuditRO`), its
 completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee with relayed tags
@@ -17,4 +18,5 @@ the links' signals (B3: `Bandwidth.SecurityProofs.Ticked.audit_reads` in the rea
 crosses into it (`Bandwidth.SecurityProofs.Causal.audit_reads`, with the chip's state `M + 1` bits), and from the links'
 alphabets, passive memory and the oracle as a location (`Causal.audit_links`; `Causal.audit_capacity`, the capacity
 form); and bandwidth additivity by counting, for a device that also holds a secret its chip's view determines
-(`Bandwidth.SecurityProofs.AuditJoint`, Mbw). -/
+(`Bandwidth.SecurityProofs.AuditJoint`, Mbw), and for the chip as a tick transducer whose view determines it
+(`Bandwidth.SecurityProofs.Ticked.audit_joint`; `Ticked.audit_joint_capacity`, the capacity form). -/
