@@ -4,6 +4,7 @@ import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Transducer
 
 /-!
 # The actual circuit's guarantees
@@ -28,4 +29,8 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; at tick 0 the state is the inputs (`state_zero`), and causality's global
   form (`global_of_causal`); the content is a function of the state as seen (`content_congr`), of at most `mem` bits
   (`content_length_le`).
+* `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`
+  does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
+  `crossing_of_signals`), so it takes at most `2^{M + 1 + β_X n}` values (`acts_encard_le_links`; the `+ 1` is the
+  content's length).
 -/
