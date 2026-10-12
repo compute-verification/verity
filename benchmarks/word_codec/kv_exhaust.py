@@ -513,19 +513,21 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                         lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
 
                 for l2 in (False, True):
+                    persisting = 0
                     if l2:
                         lib.call("kv_rc_l2", nvec * 64, st, ctypes.cast(win, ctypes.c_void_p))
+                        persisting = win[1]
                     block_pass()
                     tb = [B.queued(lib, torch, block_pass, SPIN) / layers for _ in range(reps)]
                     lib.call("kv_rc_l2", 0, st, ctypes.cast(win, ctypes.c_void_p))
                     ok = blocks_equal()
                     key = "pass_l2" if l2 else "pass"
-                    row["tag16"][key] = {"s": statistics.median(tb), "times_s": tb,
+                    row["tag16"][key] = {"s": statistics.median(tb), "times_s": tb, "persisting_bytes": persisting,
                                          "over_read": statistics.median(tb) / t_read, "receipts_equal": ok}
                     log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, then a receipt a block "
                         f"of 16 vectors, a layer {row['tag16'][key]['s'] * 1e3:.3f} ms "
                         f"({row['tag16'][key]['over_read']:.3f}x the read)"
-                        + (f", the sketches held in L2 ({win[1] / 1e6:.0f} MB persisting)" if l2 else "")
+                        + (f", the sketches held in L2 ({persisting / 1e6:.0f} MB persisting)" if l2 else "")
                         + f"; the first and last 8 equal kv_receipt's: {ok}")
                     if not ok:
                         raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt after the sketch differs from kv_receipt's")
