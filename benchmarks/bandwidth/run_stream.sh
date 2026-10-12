@@ -11,9 +11,9 @@
 # the device absorb and the host reference against the pinned digests and group nodes, a control without the copies that
 # must not match, the tag pass's root); a failed gate times nothing (exit 3).  Then the timings, each its own JSON: link, hbm,
 # gen, pipe, absorb, window.
-# Env: BLOCKS (default 524,288), SEED (hex, default 00..1f), MODES (default "link hbm gen pipe absorb window"), REPS (7),
-# WINDOWS (20), SIZES_MIB (16,32,48,56,60,64), PIECE (bytes, 1 MiB), GEN_THREADS (16), GPUS (0,1,2,3: NUMA node 0's),
-# WORKERS (the reference's processes, 32), TIMED.
+# Env: BLOCKS (default 524,288), SEED (hex, default 00..1f), MODES (default "link hbm gen pipe absorb interfere window"),
+# REPS (7), WINDOWS (20), SIZES_MIB (16,32,48,56,60,64), PIECE (bytes, 1 MiB), GEN_THREADS (16), WINDOWS_ALSO (more window
+# configurations, `suffix:args;...`), GPUS (0,1,2,3: NUMA node 0's), WORKERS (the reference's processes, 32), TIMED.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, host.txt, expect.json, gpu.txt, env.txt, smi.csv, <mode>.json for each mode.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -41,8 +41,13 @@ if [ "${1:-}" = leased ]; then
   rc=0
   "$S/bwstream" --mode gates "${common[@]}" --vectors tests/stream_vectors.json --expect "$O/expect.json" || rc=$?
   [ $rc = 0 ] || { echo "gates exited $rc: nothing is timed"; exit $rc; }
-  for m in ${MODES:-link hbm gen pipe absorb window}; do
+  for m in ${MODES:-link hbm gen pipe absorb interfere window}; do
     "$S/bwstream" --mode "$m" "${common[@]}" || { rc=$?; echo "mode $m exited $rc"; exit $rc; }
+  done
+  # WINDOWS_ALSO: more window configurations, `;`-separated, each `suffix:args` (e.g. `_graph:--path graph`)
+  IFS=';' read -ra extra <<< "${WINDOWS_ALSO:-}"
+  for e in "${extra[@]}"; do
+    "$S/bwstream" --mode window "${common[@]}" --suffix "${e%%:*}" ${e#*:} || { rc=$?; echo "window ${e%%:*} exited $rc"; exit $rc; }
   done
   exit 0
 fi

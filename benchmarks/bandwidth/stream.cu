@@ -1,7 +1,8 @@
 // bwstream: the certified PCIe stream (stream.py, `stream/v1`) on one RTX PRO 6000, beside the ro-blake3/v1 tag pass.
 //
-//   absorb        a CTA per 64 KiB group of S, a thread per chunk of M: at compression g, thread c reads line 64·g + c of
-//                 the group (the CTA reads 4 KiB contiguously), 16 keyed compressions under counter 64·q + c, then six
+//   absorb        a CTA per 64 KiB group of S, a thread per chunk of M: at load j of compression g, thread c reads AES
+//                 block 64·(4g + j) + c of the group (a warp load is 512 contiguous bytes, a compression 4 KiB), 16
+//                 keyed compressions under counter 64·q + c, then six
 //                 parent levels in shared memory to the group's node.  Every chunk's chaining value stays in device memory
 //                 for openings.  `absorb_final`, one CTA, takes the groups' nodes to D, ROOT on the last parent.
 //   window        a CUDA graph per stream size: the key's copy, then the stream's pieces copied host to device on BRANCHES
@@ -39,6 +40,7 @@
 extern "C" {
 void sg_expand(const uint8_t key[16], uint8_t rk[176]);
 void sg_ctr_vaes(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks);
+void sg_ctr_vaes_nt(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks);
 void sg_ctr_aesni(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks);
 int sg_ctr_openssl(const uint8_t key[16], uint64_t first, uint8_t* out, uint64_t blocks);
 }
@@ -61,7 +63,7 @@ using bw::B3_PARENT;
 using bw::B3_ROOT;
 using bw::b3_compress;
 
-constexpr int GROUP = 64, LINE = 64;
+constexpr int GROUP = 64, AES = 16;
 constexpr uint64_t CHUNK = 1024, GROUP_BYTES = GROUP * CHUNK;
 constexpr int FINAL_THREADS = 512, FINAL_MAX = 2048;
 constexpr int BRANCHES = 4;
@@ -81,16 +83,16 @@ __global__ void __launch_bounds__(GROUP) absorb_kernel(const uint4* __restrict__
   uint32_t k[8], cv[8];
 #pragma unroll
   for (int i = 0; i < 8; ++i) cv[i] = k[i] = key[i];
-  const uint4* base = S + q * (GROUP_BYTES / 16) + c * (LINE / 16);
+  const uint4* base = S + q * (GROUP_BYTES / 16) + c;
   uint4 cur[4], nxt[4];
 #pragma unroll
-  for (int j = 0; j < 4; ++j) cur[j] = base[j];
+  for (int j = 0; j < 4; ++j) cur[j] = base[j * GROUP];
   const uint32_t counter = (uint32_t)(q * GROUP + c);
 #pragma unroll 1
   for (int g = 0; g < 16; ++g) {
     if (g < 15) {
 #pragma unroll
-      for (int j = 0; j < 4; ++j) nxt[j] = base[(g + 1) * GROUP * (LINE / 16) + j];
+      for (int j = 0; j < 4; ++j) nxt[j] = base[(4 * (g + 1) + j) * GROUP];
     }
     uint32_t m[16] = {cur[0].x, cur[0].y, cur[0].z, cur[0].w, cur[1].x, cur[1].y, cur[1].z, cur[1].w,
                       cur[2].x, cur[2].y, cur[2].z, cur[2].w, cur[3].x, cur[3].y, cur[3].z, cur[3].w};
@@ -307,12 +309,13 @@ struct Gen {
   }
 };
 
-// S[0, n) on `threads` pinned threads (n a multiple of 512 bytes per thread's share).
+// S[0, n) on `threads` pinned threads (n a multiple of 512 bytes per thread's share), with non-temporal stores: the
+// stream is bound for the copy engines, not the host's cache.
 static void generate(const Gen& g, uint8_t* out, size_t n, int threads, const std::vector<int>& cpus, uint64_t first = 0) {
   const uint64_t blocks = n / 16, per = ((blocks + threads - 1) / threads + 31) / 32 * 32;
   parallel(threads, cpus, [&](int t) {
     uint64_t b0 = t * per, b1 = std::min<uint64_t>(blocks, b0 + per);
-    if (b0 < b1) sg_ctr_vaes(g.rk, first + b0, out + 16 * b0, b1 - b0);
+    if (b0 < b1) sg_ctr_vaes_nt(g.rk, first + b0, out + 16 * b0, b1 - b0);
   });
 }
 
@@ -330,16 +333,17 @@ static void absorb_key(const uint8_t seed[32], uint32_t w[8]) {
   key_words(d, w);
 }
 
-static const uint8_t* line_of(const uint8_t* S, uint64_t chunk, int g) {
-  const uint64_t q = chunk / GROUP, c = chunk % GROUP;
-  return S + q * GROUP_BYTES + (g * GROUP + c) * LINE;
+// The AES block of S (its counter) that is the k-th 16 bytes of chunk i of M (stream.counter).
+static uint64_t counter_of(uint64_t chunk, int k) {
+  return (chunk / GROUP) * (GROUP_BYTES / AES) + (uint64_t)k * GROUP + chunk % GROUP;
 }
 
-static void chunk_cv_host(const uint32_t k[8], uint64_t chunk, const uint8_t* lines[16], uint32_t cv[8]) {
+// Chunk `chunk`'s chaining value from its 64 AES blocks, blocks[k] the k-th.
+static void chunk_cv_host(const uint32_t k[8], uint64_t chunk, const uint8_t* const blocks[64], uint32_t cv[8]) {
   for (int i = 0; i < 8; ++i) cv[i] = k[i];
   for (int g = 0; g < 16; ++g) {
     uint32_t m[16];
-    memcpy(m, lines[g], 64);
+    for (int j = 0; j < 4; ++j) memcpy(m + 4 * j, blocks[4 * g + j], 16);
     b3_compress(cv, m, (uint32_t)chunk, 64, B3_KEYED | (g == 0 ? B3_CHUNK_START : 0) | (g == 15 ? B3_CHUNK_END : 0), cv);
   }
 }
@@ -376,9 +380,9 @@ static void reference_digest(const uint32_t k[8], const uint8_t* S, size_t n, in
   std::vector<uint32_t> cvs(chunks * 8);
   parallel(threads, cpus, [&](int t) {
     for (uint64_t i = t; i < chunks; i += threads) {
-      const uint8_t* lines[16];
-      for (int g = 0; g < 16; ++g) lines[g] = line_of(S, i, g);
-      chunk_cv_host(k, i, lines, &cvs[8 * i]);
+      const uint8_t* blocks[64];
+      for (int b = 0; b < 64; ++b) blocks[b] = S + AES * counter_of(i, b);
+      chunk_cv_host(k, i, blocks, &cvs[8 * i]);
     }
   });
   auto lv = tree_levels(k, std::move(cvs));
@@ -386,21 +390,20 @@ static void reference_digest(const uint32_t k[8], const uint8_t* S, size_t n, in
   if (group_nodes) *group_nodes = lv[6];
 }
 
-// The verifier's check of s openings: chunk i regenerated from K_s alone (16 lines), its chaining value, then the
+// The verifier's check of s openings: chunk i regenerated from K_s alone (64 AES blocks), its chaining value, then the
 // prover's path to D.  Returns the samples that fail.
 static int verify_openings(const Gen& gen, const uint32_t k[8], const uint32_t D[8], uint64_t chunks,
                            const std::vector<std::vector<uint32_t>>& lv, const std::vector<uint64_t>& samples) {
   int bad = 0;
-  alignas(64) uint8_t buf[16][128];
+  alignas(64) uint8_t buf[64][16];
   for (uint64_t i : samples) {
-    const uint8_t* lines[16];
-    for (int g = 0; g < 16; ++g) {
-      const uint64_t L = (i / GROUP) * (GROUP_BYTES / LINE) + g * GROUP + i % GROUP;
-      sg_ctr_aesni(gen.rk, 4 * L, buf[g], 8);
-      lines[g] = buf[g];
+    const uint8_t* blocks[64];
+    for (int b = 0; b < 64; ++b) {
+      sg_ctr_aesni(gen.rk, counter_of(i, b), buf[b], 1);
+      blocks[b] = buf[b];
     }
     uint32_t node[8];
-    chunk_cv_host(k, i, lines, node);
+    chunk_cv_host(k, i, blocks, node);
     uint64_t j = i;
     for (size_t level = 0; level + 1 < lv.size(); ++level) {
       const uint64_t width = lv[level].size() / 8;
@@ -532,6 +535,58 @@ static void absorb_resident(Stream& s, const uint8_t* src, cudaStream_t st) {
   OK(cudaMemcpyAsync(s.D_host, s.D_dev, 32, cudaMemcpyDeviceToHost, st));
 }
 
+// The window's stream without a graph: pieces copied on COPY_STREAMS streams, each piece's absorb on `abs` after its
+// copy's event, then the final launch and D to the host, all on `abs`, whose events `t0` and `t1` bracket it.  With
+// `copies` false the absorbs read `src` (resident, or mapped host memory: zero copy); with `absorbs` false `abs` only
+// waits for the copies; `skip` > 0 leaves out the copy of every piece p with p % skip == 0 (the control).
+constexpr int COPY_STREAMS = 2;
+struct Path {
+  cudaStream_t abs = nullptr;
+  std::vector<cudaStream_t> copy;
+  std::vector<cudaEvent_t> ev;
+  cudaEvent_t t0, t1;
+};
+
+static Path make_path(int priority, size_t max_pieces) {
+  Path P;
+  OK(cudaStreamCreateWithPriority(&P.abs, cudaStreamNonBlocking, priority));
+  P.copy.resize(COPY_STREAMS);
+  for (auto& c : P.copy) OK(cudaStreamCreateWithFlags(&c, cudaStreamNonBlocking));
+  P.ev.resize(max_pieces);
+  for (auto& e : P.ev) OK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+  OK(cudaEventCreate(&P.t0));
+  OK(cudaEventCreate(&P.t1));
+  return P;
+}
+
+static void enqueue_path(Stream& s, Path& P, bool copies, bool absorbs, const uint8_t* src, int skip = 0) {
+  OK(cudaEventRecord(P.t0, P.abs));
+  if (absorbs) OK(cudaMemcpyAsync(s.key_dev, s.key_host, 32, cudaMemcpyHostToDevice, P.abs));
+  if (absorbs && !copies) {
+    absorb_kernel<<<(unsigned)s.groups, GROUP, 0, P.abs>>>((const uint4*)src, 0, s.key_dev, s.cvs, s.nodes);
+  } else {
+    for (uint64_t p = 0; p < s.pieces; ++p) {
+      const size_t off = p * s.piece, len = std::min(s.piece, s.n - off);
+      cudaStream_t c = P.copy[p % COPY_STREAMS];
+      if (!(skip > 0 && p % skip == 0)) OK(cudaMemcpyAsync(s.dev + off, s.host + off, len, cudaMemcpyHostToDevice, c));
+      OK(cudaEventRecord(P.ev[p], c));
+      if (absorbs) {
+        OK(cudaStreamWaitEvent(P.abs, P.ev[p]));
+        absorb_kernel<<<(unsigned)(len / GROUP_BYTES), GROUP, 0, P.abs>>>((const uint4*)s.dev, off / GROUP_BYTES,
+                                                                          s.key_dev, s.cvs, s.nodes);
+      }
+    }
+    if (!absorbs)
+      for (uint64_t p = s.pieces > COPY_STREAMS ? s.pieces - COPY_STREAMS : 0; p < s.pieces; ++p)
+        OK(cudaStreamWaitEvent(P.abs, P.ev[p]));
+  }
+  if (absorbs) {
+    absorb_final<<<1, FINAL_THREADS, 0, P.abs>>>(s.nodes, (uint32_t)s.groups, s.key_dev, s.D_dev);
+    OK(cudaMemcpyAsync(s.D_host, s.D_dev, 32, cudaMemcpyDeviceToHost, P.abs));
+  }
+  OK(cudaEventRecord(P.t1, P.abs));
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Copies: `total` bytes host to device (or back) in pieces round-robin over `streams`; returns GB/s by device events.
 
@@ -589,10 +644,11 @@ struct Timer {
 // The modes.
 
 struct Args {
-  std::string mode, out = ".", vectors, expect;
+  std::string mode, out = ".", vectors, expect, suffix;
+  std::string path = "streams", priority = "high";  // window: the stream's enqueue (streams or graph), its priority
   uint64_t blocks = 524288;
   int reps = 7, windows = 20, samples = 1849, gen_threads = 16;
-  size_t piece = 1 << 20;
+  size_t piece = 1 << 20, interfere_mib = 64;
   std::vector<size_t> sizes_mib = {16, 32, 48, 56, 60, 64};
 };
 
@@ -600,7 +656,7 @@ static Device dev;
 static std::vector<int> cpus;
 
 static void write(const Args& a, const std::string& name, const std::string& json) {
-  std::ofstream f(a.out + "/" + name + ".json");
+  std::ofstream f(a.out + "/" + name + a.suffix + ".json");
   f << json << "\n";
   printf("%s\n", json.c_str());
   fflush(stdout);
@@ -921,7 +977,8 @@ static int mode_gen(const Args& a) {
       while (t1 - t0 < dur) {
         if (impl == 0) sg_ctr_vaes(gen.rk, ctr, out, blocks);
         else if (impl == 1) sg_ctr_aesni(gen.rk, ctr, out, blocks);
-        else sg_ctr_openssl(gen.key, ctr, out, blocks);
+        else if (impl == 2) sg_ctr_openssl(gen.key, ctr, out, blocks);
+        else sg_ctr_vaes_nt(gen.rk, ctr, out, blocks);
         ctr += blocks;
         done += buf_bytes;
         t1 = now_s();
@@ -947,8 +1004,9 @@ static int mode_gen(const Args& a) {
     if (t > (int)cpus.size()) break;
     double cache = run(t, 0, 1 << 20, nullptr);
     double mem = run(t, 0, (big_bytes / t) / 512 * 512, big);
+    double nt = run(t, 3, (big_bytes / t) / 512 * 512, big);
     j += std::string(first ? "" : ",") + "{\"threads\":" + std::to_string(t) + ",\"vaes_cache_gbs\":" + num(cache) +
-         ",\"vaes_pinned_gbs\":" + num(mem) + "}";
+         ",\"vaes_pinned_gbs\":" + num(mem) + ",\"vaes_nt_pinned_gbs\":" + num(nt) + "}";
     first = false;
   }
   j += "]}";
@@ -957,74 +1015,73 @@ static int mode_gen(const Args& a) {
   return 0;
 }
 
-// Sustained generation and H2D: G threads fill a pinned ring of slots, the copies drain it to a device ring.
+// Sustained generation and H2D: G threads fill a pinned ring of slots (regular or non-temporal stores), one thread
+// copies them out in order on COPY_STREAMS streams to a device ring, for each slot size and G.
 static int mode_pipe(const Args& a) {
-  const size_t slot = 2u << 20;
-  const int R = 64;
-  const size_t dring = 64u << 20;
+  const size_t ring_bytes = 256u << 20, dring = 64u << 20;
   uint8_t *ring, *d;
-  OK(cudaHostAlloc(&ring, slot * R, cudaHostAllocDefault));
-  memset(ring, 0, slot * R);
+  OK(cudaHostAlloc(&ring, ring_bytes, cudaHostAllocDefault));
+  memset(ring, 0, ring_bytes);
   OK(cudaMalloc(&d, dring));
   uint8_t key[16];
   fresh(key, 16);
   Gen gen(key);
-  std::string j = "{\"slot\":" + std::to_string(slot) + ",\"slots\":" + std::to_string(R) + ",\"runs\":[";
+  std::string j = "{\"ring_bytes\":" + std::to_string(ring_bytes) + ",\"runs\":[";
   bool first = true;
-  for (int G : {1, 2, 3, 4, 6, 8, 12, 16}) {
-    if (G + 1 > (int)cpus.size()) break;
-    std::vector<std::atomic<int64_t>> ready(R), freed(R);
-    for (int i = 0; i < R; ++i) ready[i] = -1, freed[i] = i;  // slot i may take piece freed[i]
-    std::atomic<bool> stop{false};
-    std::atomic<int64_t> gen_waits{0};
-    std::vector<std::thread> th;
-    for (int t = 0; t < G; ++t)
-      th.emplace_back([&, t] {
-        pin(cpus[1 + t]);
-        for (int64_t k = t; !stop.load(std::memory_order_relaxed); k += G) {
-          const int sl = (int)(k % R);
-          while (freed[sl].load(std::memory_order_acquire) != k)
-            if (stop.load(std::memory_order_relaxed)) return;
-            else gen_waits.fetch_add(1, std::memory_order_relaxed);
-          sg_ctr_vaes(gen.rk, (uint64_t)k * (slot / 16), ring + sl * slot, slot / 16);
-          ready[sl].store(k, std::memory_order_release);
+  for (size_t slot : {2u << 20, 8u << 20})
+    for (int nt = 0; nt < 2; ++nt)
+      for (int G : {2, 3, 4, 6, 8}) {
+        if (G + 1 > (int)cpus.size()) break;
+        const int R = (int)(ring_bytes / slot);
+        std::vector<std::atomic<int64_t>> ready(R), freed(R);
+        for (int i = 0; i < R; ++i) ready[i] = -1, freed[i] = i;  // slot i may take piece freed[i]
+        std::atomic<bool> stop{false};
+        std::vector<std::thread> th;
+        for (int t = 0; t < G; ++t)
+          th.emplace_back([&, t] {
+            pin(cpus[1 + t]);
+            for (int64_t k = t; !stop.load(std::memory_order_relaxed); k += G) {
+              const int sl = (int)(k % R);
+              while (freed[sl].load(std::memory_order_acquire) != k)
+                if (stop.load(std::memory_order_relaxed)) return;
+              (nt ? sg_ctr_vaes_nt : sg_ctr_vaes)(gen.rk, (uint64_t)k * (slot / 16), ring + sl * slot, slot / 16);
+              ready[sl].store(k, std::memory_order_release);
+            }
+          });
+        pin(cpus[0]);
+        std::vector<cudaStream_t> ss(COPY_STREAMS);
+        for (auto& x : ss) OK(cudaStreamCreateWithFlags(&x, cudaStreamNonBlocking));
+        std::vector<cudaEvent_t> ev(R);
+        for (auto& e : ev) OK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+        const double dur = 0.5;
+        int64_t sent = 0, done = 0, starved = 0;
+        const double t0 = now_s();
+        while (now_s() - t0 < dur) {
+          while (done < sent && cudaEventQuery(ev[done % R]) == cudaSuccess) {
+            freed[done % R].store(done + R, std::memory_order_release);
+            ++done;
+          }
+          if (sent - done < R && ready[sent % R].load(std::memory_order_acquire) == sent) {
+            const int sl = (int)(sent % R);
+            cudaStream_t c = ss[sent % COPY_STREAMS];
+            OK(cudaMemcpyAsync(d + (sent * slot) % dring, ring + sl * slot, slot, cudaMemcpyHostToDevice, c));
+            OK(cudaEventRecord(ev[sl], c));
+            ++sent;
+          } else if (sent - done < R) {
+            ++starved;
+          }
         }
-      });
-    pin(cpus[0]);
-    std::vector<cudaStream_t> ss(BRANCHES);
-    for (auto& x : ss) OK(cudaStreamCreateWithFlags(&x, cudaStreamNonBlocking));
-    std::vector<cudaEvent_t> ev(R);
-    for (auto& e : ev) OK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
-    const double dur = 1.0;
-    int64_t sent = 0, done = 0, starved = 0;
-    const double t0 = now_s();
-    while (now_s() - t0 < dur) {
-      // retire finished copies in order
-      while (done < sent && cudaEventQuery(ev[done % R]) == cudaSuccess) {
-        freed[done % R].store(done + R, std::memory_order_release);
-        ++done;
+        for (auto& x : ss) OK(cudaStreamSynchronize(x));
+        const double t2 = now_s();
+        stop = true;
+        for (auto& x : th) x.join();
+        j += std::string(first ? "" : ",") + "{\"slot\":" + std::to_string(slot) + ",\"nt\":" + (nt ? "true" : "false") +
+             ",\"generators\":" + std::to_string(G) + ",\"gbs\":" + num(sent * (double)slot / (t2 - t0) / 1e9) +
+             ",\"pieces\":" + std::to_string(sent) + ",\"copier_starved_polls\":" + std::to_string(starved) + "}";
+        first = false;
+        for (auto& x : ss) cudaStreamDestroy(x);
+        for (auto& e : ev) cudaEventDestroy(e);
       }
-      if (sent - done < R && ready[sent % R].load(std::memory_order_acquire) == sent) {
-        const int sl = (int)(sent % R);
-        OK(cudaMemcpyAsync(d + (sent * slot) % dring, ring + sl * slot, slot, cudaMemcpyHostToDevice, ss[sent % BRANCHES]));
-        OK(cudaEventRecord(ev[sl], ss[sent % BRANCHES]));
-        ++sent;
-      } else if (sent - done < R) {
-        ++starved;
-      }
-    }
-    for (auto& x : ss) OK(cudaStreamSynchronize(x));
-    double t2 = now_s();
-    stop = true;
-    for (auto& x : th) x.join();
-    const double gbs = sent * (double)slot / (t2 - t0) / 1e9;
-    j += std::string(first ? "" : ",") + "{\"generators\":" + std::to_string(G) + ",\"gbs\":" + num(gbs) +
-         ",\"pieces\":" + std::to_string(sent) + ",\"copier_starved_polls\":" + std::to_string(starved) +
-         ",\"generator_waits\":" + std::to_string(gen_waits.load()) + "}";
-    first = false;
-    for (auto& x : ss) cudaStreamDestroy(x);
-    for (auto& e : ev) cudaEventDestroy(e);
-  }
   j += "]}";
   cudaFreeHost(ring);
   cudaFree(d);
@@ -1077,100 +1134,142 @@ static int mode_absorb(const Args& a) {
   return 0;
 }
 
-// Streamed windows.
-static int mode_window(const Args& a) {
-  uint8_t* store;
-  OK(cudaMalloc(&store, a.blocks * bw::BLOCK_BYTES));
-  if (bw_fill_test_store(store, a.blocks)) return fail("fill store");
-  void* ws;
-  OK(cudaMalloc(&ws, bw_workspace_bytes(bw::TAG_B3, a.blocks)));
+// The tag pass's store and workspace, filled once.
+struct Store {
+  uint8_t* E = nullptr;
+  void* ws = nullptr;
+};
+
+static Store make_store(const Args& a) {
+  Store s;
+  OK(cudaMalloc(&s.E, a.blocks * bw::BLOCK_BYTES));
+  if (bw_fill_test_store(s.E, a.blocks)) exit(fail("fill store"));
+  OK(cudaMalloc(&s.ws, bw_workspace_bytes(bw::TAG_B3, a.blocks)));
+  return s;
+}
+
+static int priority_of(const std::string& name) {
   int lo, hi;
   OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
-  cudaStream_t s_tag, s_abs;
+  if (name == "high") return hi;
+  if (name == "low") return lo;
+  fprintf(stderr, "--priority is high or low\n");
+  exit(2);
+}
+
+static std::vector<uint64_t> draw(uint64_t chunks, int s) {
+  std::vector<uint64_t> out(s);
+  for (auto& x : out) {
+    uint64_t r;
+    fresh((uint8_t*)&r, 8);
+    x = r % chunks;
+  }
+  return out;
+}
+
+// Streamed windows: for each stream size, windows of the tag pass beside the stream, then the stream alone, each after
+// the honest prover's preparation (an untimed pass, an untimed stream of the last window's bytes, the read scrub); the
+// stream is the challenger's fresh bytes, generated before σ and sent after it.  Every window's D is checked against
+// the host's reference over the bytes sent and its root against an untimed pass under the same seed; the first window
+// of each size times the verifier's openings; and a window whose device skips every 64th piece must fail both.
+static int mode_window(const Args& a) {
+  Store E = make_store(a);
+  int lo, hi;
+  OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  const int prio = priority_of(a.priority);
+  const bool graph = a.path == "graph";
+  cudaStream_t s_tag;
   OK(cudaStreamCreateWithPriority(&s_tag, cudaStreamNonBlocking, lo));
-  OK(cudaStreamCreateWithPriority(&s_abs, cudaStreamNonBlocking, hi));
-  Timer at;
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"piece\":" + std::to_string(a.piece) +
-                  ",\"branches\":" + std::to_string(BRANCHES) + ",\"samples\":" + std::to_string(a.samples) + ",\"sizes\":[";
+                  ",\"path\":\"" + a.path + "\",\"priority\":\"" + a.priority + "\",\"copy_streams\":" +
+                  std::to_string(graph ? BRANCHES : COPY_STREAMS) + ",\"samples\":" + std::to_string(a.samples) +
+                  ",\"sizes\":[";
   uint8_t throwaway[32] = {0}, root[64], check[64];
-  // The honest prover's preparation before σ (gpu.Prover): an untimed pass, an untimed stream, then the read scrub.
-  auto prepare = [&](Stream* s) {
-    bw_tag_pass(bw::TAG_B3, store, a.blocks, throwaway, ws, root, s_tag);
-    if (s) {
-      OK(cudaGraphLaunch(s->exec, s_abs));
-      OK(cudaStreamSynchronize(s_abs));
-    }
-    bw_read_scrub(dev.scrub, SCRUB);
-  };
   std::vector<size_t> sizes{0};
   for (size_t m : a.sizes_mib) sizes.push_back(m << 20);
   bool first = true;
   for (size_t n : sizes) {
     Stream s;
+    Path P = make_path(prio, n ? (n + a.piece - 1) / a.piece : 1);
+    Timer gt;
     if (n) {
       alloc_stream(s, n, a.piece);
-      s.exec = build_graph(s, 0, hi);
-      s.skip_exec = build_graph(s, 64, hi);
+      if (graph) {
+        s.exec = build_graph(s, 0, prio);
+        s.skip_exec = build_graph(s, 64, prio);
+      }
     }
-    std::vector<double> both, tag_only_dev, stream_only, both_dev_tag, both_dev_stream, verify_ms;
+    auto launch = [&](bool skip) {  // the stream after σ; its device span from ms()
+      if (graph) {
+        OK(cudaEventRecord(gt.a, P.abs));
+        OK(cudaGraphLaunch(skip ? s.skip_exec : s.exec, P.abs));
+        OK(cudaEventRecord(gt.b, P.abs));
+      } else {
+        enqueue_path(s, P, true, true, nullptr, skip ? 64 : 0);
+      }
+    };
+    auto stream_ms = [&]() {
+      float ms;
+      if (graph) return (double)gt.ms();
+      OK(cudaEventSynchronize(P.t1));
+      OK(cudaEventElapsedTime(&ms, P.t0, P.t1));
+      return (double)ms;
+    };
+    auto prepare = [&]() {
+      bw_tag_pass(bw::TAG_B3, E.E, a.blocks, throwaway, E.ws, root, s_tag);
+      if (n) {
+        launch(false);
+        OK(cudaStreamSynchronize(P.abs));
+      }
+      bw_read_scrub(dev.scrub, SCRUB);
+    };
+    std::vector<double> both, stream_only, dev_pass, dev_stream, verify_ms;
     int bad_d = 0, bad_root = 0, bad_open = 0;
-    // arm 0: the window (tag pass and stream); arm 1: the stream alone (n > 0); for n == 0, the tag pass alone.
     for (int arm = 0; arm < (n ? 2 : 1); ++arm)
       for (int w = 0; w < a.windows; ++w) {
         uint8_t seed[32], ks[16];
         fresh(seed, 32);
         fresh(ks, 16);
         Gen gen(ks);
-        prepare(n ? &s : nullptr);  // its warm stream is the last window's bytes
-        if (n) generate(gen, s.host, n, a.gen_threads, cpus);  // the challenger's, before σ, never on the device
+        prepare();
+        if (n) generate(gen, s.host, n, a.gen_threads, cpus);
         // σ: from here the window's clock runs.
         const double t0 = now_s();
         if (n) {
           absorb_key(seed, s.key_host);
-          OK(cudaEventRecord(at.a, s_abs));
-          OK(cudaGraphLaunch(s.exec, s_abs));
-          OK(cudaEventRecord(at.b, s_abs));
+          launch(false);
         }
-        if (arm == 0) bw_tag_pass(bw::TAG_B3, store, a.blocks, seed, ws, root, s_tag);
-        if (n) OK(cudaStreamSynchronize(s_abs));
+        if (arm == 0) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
+        if (n) OK(cudaStreamSynchronize(P.abs));
         const double t1 = now_s();
         float tags_ms = 0, pass_ms = 0;
         if (arm == 0) bw_last_pass_ms(&tags_ms, &pass_ms);
-        const double stream_dev = n ? at.ms() : 0;
-        // Gates on the window's own outputs, after its clock stopped: D against the host's reference over the bytes
-        // the challenger sent, the root against an untimed pass under the same seed, and the verifier's openings.
+        const double sd = n ? stream_ms() : 0;
         if (n) {
           uint32_t ref[8], D[8];
           memcpy(D, s.D_host, 32);
           reference_digest(s.key_host, s.host, n, a.gen_threads, cpus, ref);
           bad_d += memcmp(D, ref, 32) != 0;
-          if (w == 0) {
+          if (w == 0 && arm == 0) {
             std::vector<uint32_t> cv(s.chunks * 8);
             OK(cudaMemcpy(cv.data(), s.cvs, cv.size() * 4, cudaMemcpyDeviceToHost));
             auto lv = tree_levels(s.key_host, std::move(cv));
-            std::vector<uint64_t> smp(a.samples);
-            for (auto& x : smp) {
-              uint64_t r;
-              fresh((uint8_t*)&r, 8);
-              x = r % s.chunks;
-            }
+            auto smp = draw(s.chunks, a.samples);
             const double v0 = now_s();
             bad_open += verify_openings(gen, s.key_host, D, s.chunks, lv, smp);
             verify_ms.push_back((now_s() - v0) * 1e3);
           }
         }
         if (arm == 0) {
-          bw_tag_pass(bw::TAG_B3, store, a.blocks, seed, ws, check, s_tag);
+          bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, check, s_tag);
           bad_root += memcmp(root, check, 64) != 0;
           both.push_back((t1 - t0) * 1e3);
-          tag_only_dev.push_back(pass_ms);
-          both_dev_tag.push_back(pass_ms);
-          both_dev_stream.push_back(stream_dev);
+          dev_pass.push_back(pass_ms);
+          dev_stream.push_back(sd);
         } else {
           stream_only.push_back((t1 - t0) * 1e3);
         }
       }
-    // The control: a window whose device skipped every 64th piece of the stream.
     std::string control = "null";
     if (n) {
       uint8_t seed[32], ks[16];
@@ -1180,30 +1279,23 @@ static int mode_window(const Args& a) {
       generate(gen, s.host, n, a.gen_threads, cpus);
       OK(cudaMemset(s.dev, 0xA5, n));
       absorb_key(seed, s.key_host);
-      OK(cudaGraphLaunch(s.skip_exec, s_abs));
-      OK(cudaStreamSynchronize(s_abs));
+      launch(true);
+      OK(cudaStreamSynchronize(P.abs));
       uint32_t ref[8], D[8];
       memcpy(D, s.D_host, 32);
       reference_digest(s.key_host, s.host, n, a.gen_threads, cpus, ref);
       std::vector<uint32_t> cv(s.chunks * 8);
       OK(cudaMemcpy(cv.data(), s.cvs, cv.size() * 4, cudaMemcpyDeviceToHost));
       auto lv = tree_levels(s.key_host, std::move(cv));
-      // The prover's best: its own D, with paths in its own tree.
-      uint32_t own[8];
+      uint32_t own[8];  // the prover's best: its own D, with paths in its own tree
       memcpy(own, lv.back().data(), 32);
-      std::vector<uint64_t> smp(a.samples);
-      for (auto& x : smp) {
-        uint64_t r;
-        fresh((uint8_t*)&r, 8);
-        x = r % s.chunks;
-      }
-      int failed = verify_openings(gen, s.key_host, own, s.chunks, lv, smp);
+      int failed = verify_openings(gen, s.key_host, own, s.chunks, lv, draw(s.chunks, a.samples));
       control = "{\"skipped_pieces\":" + std::to_string((s.pieces + 63) / 64) + ",\"digest_matches\":" +
                 (memcmp(D, ref, 32) ? "false" : "true") + ",\"openings_failed\":" + std::to_string(failed) + "}";
       if (!memcmp(D, ref, 32) || failed == 0) return fail("skip control accepted");
     }
     j += std::string(first ? "" : ",") + "{\"bytes\":" + std::to_string(n) + ",\"window_ms\":" + stats(both) +
-         ",\"device_pass_ms\":" + stats(both_dev_tag) + ",\"device_stream_ms\":" + stats(both_dev_stream) +
+         ",\"device_pass_ms\":" + stats(dev_pass) + ",\"device_stream_ms\":" + stats(dev_stream) +
          ",\"stream_only_ms\":" + stats(stream_only) + ",\"verify_ms\":" + stats(verify_ms) +
          ",\"bad_digest\":" + std::to_string(bad_d) + ",\"bad_root\":" + std::to_string(bad_root) +
          ",\"bad_openings\":" + std::to_string(bad_open) + ",\"skip_control\":" + control + "}";
@@ -1217,9 +1309,105 @@ static int mode_window(const Args& a) {
   }
   j += "]}";
   write(a, "window", j);
-  cudaFree(store);
-  cudaFree(ws);
+  cudaFree(E.E);
+  cudaFree(E.ws);
   return 0;
+}
+
+// What the stream costs the tag pass, part by part: the pass alone and beside the copies alone, the copies and
+// absorbs, the absorbs over resident bytes, the absorbs straight from host memory (zero copy) and the graph, for each
+// absorb priority and piece size; then the stream alone.  The stream is one fixed key and bytes, its D checked against
+// the host's reference in every arm that absorbs.
+static int mode_interfere(const Args& a) {
+  Store E = make_store(a);
+  int lo, hi;
+  OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t s_tag;
+  OK(cudaStreamCreateWithPriority(&s_tag, cudaStreamNonBlocking, lo));
+  const size_t n = a.interfere_mib << 20;
+  uint8_t ks[16], seed[32], throwaway[32] = {0}, root[64], want[64];
+  fresh(ks, 16);
+  fresh(seed, 32);
+  Gen gen(ks);
+  uint8_t *hm, *hm_dev;
+  OK(cudaHostAlloc(&hm, n, cudaHostAllocMapped));
+  OK(cudaHostGetDevicePointer((void**)&hm_dev, hm, 0));
+  generate(gen, hm, n, a.gen_threads, cpus);
+  if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
+  std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"stream_bytes\":" + std::to_string(n) +
+                  ",\"copy_streams\":" + std::to_string(COPY_STREAMS) + ",\"configs\":[";
+  bool first = true;
+  int bad = 0;
+  for (const char* pname : {"high", "low"})
+    for (size_t piece : {1u << 20, 4u << 20, 16u << 20}) {
+      const int prio = pname[0] == 'h' ? hi : lo;
+      Stream s;
+      alloc_stream(s, n, piece);
+      memcpy(s.host, hm, n);
+      OK(cudaMemcpy(s.dev, s.host, n, cudaMemcpyHostToDevice));
+      absorb_key(seed, s.key_host);
+      uint32_t ref[8];
+      reference_digest(s.key_host, s.host, n, a.gen_threads, cpus, ref);
+      Path P = make_path(prio, s.pieces);
+      s.exec = build_graph(s, 0, prio);
+      enum Arm { TAG, COPIES, STREAM, RESIDENT, ZERO_COPY, GRAPH, STREAM_ALONE, ZERO_COPY_ALONE };
+      const char* names[] = {"tag",   "tag+copies", "tag+stream",   "tag+absorb_resident", "tag+absorb_zero_copy",
+                             "tag+graph", "stream_alone", "absorb_zero_copy_alone"};
+      j += std::string(first ? "" : ",") + "{\"priority\":\"" + pname + "\",\"piece\":" + std::to_string(piece) +
+           ",\"arms\":{";
+      first = false;
+      for (int arm = TAG; arm <= ZERO_COPY_ALONE; ++arm) {
+        std::vector<double> wall, pass, side;
+        Timer gt;
+        for (int r = 0; r < a.windows; ++r) {
+          bw_tag_pass(bw::TAG_B3, E.E, a.blocks, throwaway, E.ws, root, s_tag);
+          bw_read_scrub(dev.scrub, SCRUB);
+          memset(s.D_host, 0, 32);
+          const double t0 = now_s();
+          const bool absorbs = arm != COPIES;
+          if (arm == COPIES || arm == STREAM || arm == STREAM_ALONE) enqueue_path(s, P, true, arm != COPIES, nullptr);
+          if (arm == RESIDENT) enqueue_path(s, P, false, true, s.dev);
+          if (arm == ZERO_COPY || arm == ZERO_COPY_ALONE) enqueue_path(s, P, false, true, hm_dev);
+          if (arm == GRAPH) {
+            OK(cudaEventRecord(gt.a, P.abs));
+            OK(cudaGraphLaunch(s.exec, P.abs));
+            OK(cudaEventRecord(gt.b, P.abs));
+          }
+          const bool tag = arm < STREAM_ALONE;
+          if (tag) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
+          OK(cudaStreamSynchronize(P.abs));
+          const double t1 = now_s();
+          float tags_ms = 0, pass_ms = 0;
+          if (tag) {
+            bw_last_pass_ms(&tags_ms, &pass_ms);
+            pass.push_back(pass_ms);
+            bad += memcmp(root, want, 64) != 0;
+          }
+          wall.push_back((t1 - t0) * 1e3);
+          if (arm != TAG) {
+            float ms;
+            if (arm == GRAPH) {
+              ms = gt.ms();
+            } else {
+              OK(cudaEventSynchronize(P.t1));
+              OK(cudaEventElapsedTime(&ms, P.t0, P.t1));
+            }
+            side.push_back(ms);
+            if (absorbs) bad += memcmp(s.D_host, ref, 32) != 0;
+          }
+        }
+        j += std::string(arm ? "," : "") + "\"" + names[arm] + "\":{\"wall_ms\":" + stats(wall) +
+             ",\"device_pass_ms\":" + stats(pass) + ",\"device_stream_ms\":" + stats(side) + "}";
+      }
+      j += "}}";
+      free_stream(s);
+      for (auto& c : P.copy) cudaStreamDestroy(c);
+      cudaStreamDestroy(P.abs);
+    }
+  j += "],\"bad\":" + std::to_string(bad) + "}";
+  write(a, "interfere", j);
+  cudaFreeHost(hm);
+  return bad ? fail("an interference arm's root or digest") : 0;
 }
 
 }  // namespace st
@@ -1239,6 +1427,10 @@ int main(int argc, char** argv) {
     else if (k == "--samples") a.samples = std::stoi(v());
     else if (k == "--gen-threads") a.gen_threads = std::stoi(v());
     else if (k == "--piece") a.piece = std::stoull(v());
+    else if (k == "--path") a.path = v();
+    else if (k == "--priority") a.priority = v();
+    else if (k == "--suffix") a.suffix = v();
+    else if (k == "--interfere-mib") a.interfere_mib = std::stoull(v());
     else if (k == "--sizes-mib") {
       a.sizes_mib.clear();
       std::stringstream ss(v());
@@ -1262,6 +1454,7 @@ int main(int argc, char** argv) {
   if (a.mode == "pipe") return st::mode_pipe(a);
   if (a.mode == "absorb") return st::mode_absorb(a);
   if (a.mode == "window") return st::mode_window(a);
+  if (a.mode == "interfere") return st::mode_interfere(a);
   fprintf(stderr, "unknown mode %s\n", a.mode.c_str());
   return 2;
 }

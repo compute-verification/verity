@@ -62,19 +62,20 @@ def test_stream_key_is_the_challengers_derivation():
     assert stream.stream_key(stream.SOURCE, stream.ROOT, stream.SALT, bytes(32)) != want
 
 
-def test_permutation_moves_every_line_once_and_chunks_regenerate():
+def test_permutation_moves_every_aes_block_once_and_chunks_regenerate():
     key = bytes(range(16, 32))
     s = stream.stream_bytes(key, 3 * stream.GROUP_BYTES)
     m = stream.permuted(s)
-    lines = lambda b: sorted(b[i:i + 64] for i in range(0, len(b), 64))  # noqa: E731
-    assert len(m) == len(s) and lines(m) == lines(s)
+    blocks = lambda b: sorted(b[i:i + 16] for i in range(0, len(b), 16))  # noqa: E731
+    assert len(m) == len(s) and blocks(m) == blocks(s)
     for i in range(len(m) // stream.CHUNK):
         assert stream.chunk(key, i) == m[stream.CHUNK * i:stream.CHUNK * (i + 1)]
-    # the device's coalescing: at compression g a group's 64 chunks read 4 KiB of S, contiguously
+    # the device's coalescing: at load j of compression g, a group's 64 chunks read 64 consecutive AES blocks of S
     for q in range(3):
         for g in range(16):
-            got = sorted(stream._line(64 * q + c, g) for c in range(64))
-            assert got == list(range(q * 1024 + 64 * g, q * 1024 + 64 * g + 64))
+            for j in range(4):
+                got = [stream.counter(64 * q + c, 4 * g + j) for c in range(64)]
+                assert got == list(range(4096 * q + 64 * (4 * g + j), 4096 * q + 64 * (4 * g + j) + 64))
     with pytest.raises(ValueError):
         stream.permuted(s[:stream.GROUP_BYTES])
 
@@ -124,9 +125,9 @@ def test_a_skipped_chunk_fails_its_opening():
     n = 2 * stream.GROUP_BYTES
     s = bytearray(stream.stream_bytes(key, n))
     d, _ = stream.absorb(k_a, bytes(s))
-    lost = [stream._line(5, g) for g in range(16)]
-    for L in lost:
-        s[64 * L:64 * (L + 1)] = bytes(64)
+    for k in range(stream.WORDS):
+        b = stream.counter(5, k)
+        s[16 * b:16 * (b + 1)] = bytes(16)
     d2, lv2 = stream.absorb(k_a, bytes(s))
     assert d2 != d
     assert not stream.verify(k_a, d2, 2 * stream.GROUP, 5, stream.chunk(key, 5), stream.path(lv2, 5))
@@ -145,7 +146,7 @@ def test_pinned_vectors_are_the_reference():
 
 
 def test_stream_cu_constants_are_the_references():
-    assert re.search(r"constexpr int GROUP = (\d+), LINE = (\d+);", CU).groups() == (str(stream.GROUP), str(stream.LINE))
+    assert re.search(r"constexpr int GROUP = (\d+), AES = (\d+);", CU).groups() == (str(stream.GROUP), str(stream.AES))
     assert f"constexpr uint64_t CHUNK = {stream.CHUNK}," in CU
     domain = stream.ABSORB_DOMAIN[:-1].decode()
     assert stream.ABSORB_DOMAIN == domain.encode() + b"\x00" and domain == stream.STREAM_DOMAIN
@@ -154,17 +155,17 @@ def test_stream_cu_constants_are_the_references():
 
 
 def test_absorb_kernel_and_host_addressing_are_the_layout():
-    """`absorb_kernel` reads uint4 `q·GROUP_BYTES/16 + c·LINE/16 + g·GROUP·LINE/16 + j` for chunk 64q + c at compression
-    g; `line_of` and `verify_openings` read line `q·GROUP_BYTES/LINE + g·GROUP + c`.  Both are `stream._line`."""
-    assert "S + q * (GROUP_BYTES / 16) + c * (LINE / 16)" in CU
-    assert "base[(g + 1) * GROUP * (LINE / 16) + j]" in CU
-    assert "S + q * GROUP_BYTES + (g * GROUP + c) * LINE" in CU
-    assert "(i / GROUP) * (GROUP_BYTES / LINE) + g * GROUP + i % GROUP" in CU
+    """`absorb_kernel` reads uint4 `q·GROUP_BYTES/16 + c + (4g + j)·GROUP` for chunk 64q + c at load j of compression g;
+    `counter_of`, which the host reference and the verifier's openings read, is `stream.counter`."""
+    assert "S + q * (GROUP_BYTES / 16) + c;" in CU
+    assert "cur[j] = base[j * GROUP];" in CU and "base[(4 * (g + 1) + j) * GROUP]" in CU
+    assert "(chunk / GROUP) * (GROUP_BYTES / AES) + (uint64_t)k * GROUP + chunk % GROUP" in CU
     for q in (0, 1, 7):
         for c in (0, 1, 63):
             for g in range(16):
-                u4 = q * (stream.GROUP_BYTES // 16) + c * (stream.LINE // 16) + g * stream.GROUP * (stream.LINE // 16)
-                assert 16 * u4 == stream.LINE * stream._line(64 * q + c, g)
+                for j in range(4):
+                    u4 = q * (stream.GROUP_BYTES // 16) + c + (4 * g + j) * stream.GROUP
+                    assert u4 == stream.counter(64 * q + c, 4 * g + j)
 
 
 def _cpu_flags() -> set[str]:
@@ -197,12 +198,16 @@ def test_host_generators_are_the_keystream(host_lib, which):
     rk = ctypes.create_string_buffer(176)
     host_lib.sg_expand(key, rk)
     assert rk.raw == b"".join(stream.expand_key(key))
-    impls = ["aesni"] + (["vaes"] if {"vaes", "avx512f", "avx512bw"} <= _cpu_flags() else [])
+    impls = ["aesni"] + (["vaes", "vaes_nt"] if {"vaes", "avx512f", "avx512bw"} <= _cpu_flags() else [])
     for impl in impls:
         raw = ctypes.create_string_buffer(16 * blocks + 64)
         at = (-ctypes.addressof(raw)) % 64
         getattr(host_lib, f"sg_ctr_{impl}")(rk, ctypes.c_uint64(first), ctypes.byref(raw, at), ctypes.c_uint64(blocks))
         assert raw.raw[at:at + 16 * blocks] == want, impl
+    one = ctypes.create_string_buffer(16)  # the verifier's single blocks
+    for b in (0, 7, blocks - 1):
+        host_lib.sg_ctr_aesni(rk, ctypes.c_uint64(first + b), one, ctypes.c_uint64(1))
+        assert one.raw == want[16 * b:16 * (b + 1)]
     out = ctypes.create_string_buffer(16 * blocks)
     if host_lib.sg_ctr_openssl(key, ctypes.c_uint64(first), out, ctypes.c_uint64(blocks)) == 0:
         assert out.raw == want

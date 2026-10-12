@@ -5,18 +5,20 @@ window and absorbed into the window's commitment, so the device's side link carr
 K_s      AES-128 key, 16 bytes: derive(source, "verity/bandwidth/stream/v1", {root, salt, nonce}).stream("aes-128", 16),
          the challenger's own randomness under the window's nonce; never sent to the device
 S        AES-128(K_s, u128be 0) ‖ AES-128(K_s, u128be 1) ‖ …   (AES-128-CTR, counter block 0), n bytes, n = 65,536·G, G ≥ 2
-M        S read group by group: 64-byte line L of S is line 64·g + c of group q = ⌊L/1024⌋, and goes to block g of
-         chunk 64·q + c of M (C = 64·G chunks of 1,024 bytes)
+M        S read group by group: chunk 64·q + c of M (C = 64·G chunks of 1,024 bytes) is S's AES blocks
+         4096·q + 64·k + c for k = 0 … 63, in that order
 K_a      SHA512(prefix("verity/bandwidth/stream/v1\0", "stream-blake3/v1", σ))[0:32], the device's key, from σ
 D        BLAKE3-keyed(K_a, M), 32 bytes: chunk i under counter i, BLAKE3's left-heavy tree of chunks
 commit   the prover sends (root, D), and the verifier's clock stops on both
 open(i)  chunk i's path in BLAKE3's tree: the sibling chaining values, leaf to top; the verifier regenerates chunk i from
-         K_s (its 16 lines, 4 AES blocks each) and climbs to D, with ROOT on the last parent
+         K_s (its 64 AES blocks) and climbs to D, with ROOT on the last parent
 samples  window key.uniform(C, ("stream", t)) for t < s, drawn only for an on-time commitment
 ~~~
 
-`M` is `S` permuted within each 64 KiB group so that the device's 64 threads of a group, one chunk each, read 4 KiB of
-`S` contiguously at every compression; the digest binds every byte of `S` all the same.
+`M` is `S` permuted within each 64 KiB group so that the device's 64 threads of a group, one chunk each, read `S`
+contiguously: at the `j`-th load of compression `g` thread `c` reads AES block `4096·q + 64·(4g + j) + c`, so every warp
+load is 512 contiguous bytes and every compression 4 KiB, from device memory or straight from the host's (zero copy). The
+digest binds every byte of `S` all the same.
 
 The stream is uniform to the device: AES under a key it never sees. It exists only in the challenger's memory, and the
 challenger sends it only after σ, so every byte the device knows of it crossed the link inside the window. A chunk the
@@ -43,7 +45,6 @@ STREAM_DOMAIN = "verity/bandwidth/stream/v1"
 ABSORB_DOMAIN = b"verity/bandwidth/stream/v1\0"
 ABSORB_NAME = "stream-blake3/v1"
 CHUNK = blake3.CHUNK_LEN
-LINE = 64
 GROUP = 64
 """Chunks of a group: one CTA's share, reduced to one node in shared memory; at least two groups keep the root a
 parent computed by the final launch."""
@@ -118,10 +119,10 @@ def encrypt_block(round_keys: Sequence[bytes], block: bytes) -> bytes:
     return bytes(s)
 
 
-def ctr(key: bytes, counter: int, blocks: int) -> bytes:
-    """AES-128-CTR keystream: `blocks` blocks from the 128-bit big-endian counter block `counter`, which wraps."""
+def ctr(key: bytes, first: int, blocks: int) -> bytes:
+    """AES-128-CTR keystream: `blocks` blocks from the 128-bit big-endian counter block `first`, which wraps."""
     rk = expand_key(key)
-    return b"".join(encrypt_block(rk, ((counter + i) % (1 << 128)).to_bytes(16, "big")) for i in range(blocks))
+    return b"".join(encrypt_block(rk, ((first + i) % (1 << 128)).to_bytes(16, "big")) for i in range(blocks))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -141,23 +142,29 @@ def stream_bytes(key: bytes, n: int, offset: int = 0) -> bytes:
     return ctr(key, offset // 16, n // 16)
 
 
-def _line(i: int, g: int) -> int:
-    """The line of `S` that is block `g` of chunk `i` of `M`."""
+AES = 16
+WORDS = CHUNK // AES
+"""AES blocks a chunk: 64, its `k`-th from its group's `k`-th run of `GROUP` blocks."""
+
+
+def counter(i: int, k: int) -> int:
+    """The AES block of `S` (its counter) that is the `k`-th 16 bytes of chunk `i` of `M`."""
     q, c = divmod(i, GROUP)
-    return q * (GROUP_BYTES // LINE) + g * GROUP + c
+    return q * (GROUP_BYTES // AES) + k * GROUP + c
 
 
 def permuted(stream: bytes) -> bytes:
     """`M`, the absorbed message."""
     if len(stream) % GROUP_BYTES or len(stream) < 2 * GROUP_BYTES:
         raise ValueError(f"a stream is at least two whole {GROUP_BYTES}-byte groups")
-    return b"".join(stream[LINE * _line(i, g):LINE * (_line(i, g) + 1)]
-                    for i in range(len(stream) // CHUNK) for g in range(16))
+    return b"".join(stream[AES * counter(i, k):AES * (counter(i, k) + 1)]
+                    for i in range(len(stream) // CHUNK) for k in range(WORDS))
 
 
 def chunk(key: bytes, i: int) -> bytes:
     """Chunk `i` of `M`, regenerated from `K_s` alone: what the verifier checks an opening against."""
-    return b"".join(stream_bytes(key, LINE, LINE * _line(i, g)) for g in range(16))
+    rk = expand_key(key)
+    return b"".join(encrypt_block(rk, counter(i, k).to_bytes(16, "big")) for k in range(WORDS))
 
 
 def absorb_key(seed: bytes) -> bytes:
@@ -169,7 +176,7 @@ def _key_words(key: bytes) -> CV:
     return tuple(int.from_bytes(key[4 * i:4 * i + 4], "little") for i in range(8))
 
 
-def _block(left: CV, right: CV) -> bytes:
+def _pair(left: CV, right: CV) -> bytes:
     return b"".join(w.to_bytes(4, "little") for w in (*left, *right))
 
 
@@ -186,7 +193,7 @@ def chunk_cv(key: bytes, i: int, chunk: bytes) -> CV:
 
 def parent_cv(key: bytes, left: CV, right: CV, root: bool = False) -> CV:
     f = blake3.KEYED_HASH | blake3.PARENT | (blake3.ROOT if root else 0)
-    return tuple(blake3.compress(_key_words(key), _block(left, right), 0, 64, f)[:8])
+    return tuple(blake3.compress(_key_words(key), _pair(left, right), 0, 64, f)[:8])
 
 
 def cv_bytes(cv: CV) -> bytes:

@@ -1,7 +1,8 @@
 // The challenger's stream generator (stream.py's S): AES-128-CTR with the 128-bit big-endian counter block i at block i,
 // on the host.  Three implementations of the same keystream, so a run can say what the stream costs the host:
-//   vaes     AVX-512 VAES, four blocks a register and eight registers in flight (32 blocks, 512 bytes, a step)
-//   aesni    128-bit AES-NI, eight blocks in flight
+//   vaes     AVX-512 VAES, four blocks a register and eight registers in flight (32 blocks, 512 bytes, a step); vaes_nt
+//            the same with non-temporal stores, for a stream bound for pinned memory and the copy engines
+//   aesni    128-bit AES-NI, eight blocks in flight, and one at a time for the verifier's scattered blocks
 //   openssl  libcrypto's EVP aes-128-ctr, loaded at run time (the node has the library but not its headers)
 // Built by g++ (-O3 -mavx512f -mavx512bw -mvaes -maes), not nvcc, and linked into bwstream.
 
@@ -25,6 +26,36 @@ inline __m128i expand_step(__m128i k) {
 
 inline __m128i bswap128(__m128i x) {
   return _mm_shuffle_epi8(x, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+}
+
+template <bool NT>
+inline void ctr_vaes(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks) {
+  __m512i K[11];
+  for (int r = 0; r < 11; ++r) K[r] = _mm512_broadcast_i32x4(_mm_loadu_si128((const __m128i*)(rk + 16 * r)));
+  const __m512i swap = _mm512_broadcast_i32x4(_mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+  const __m512i four = _mm512_set_epi64(0, 4, 0, 4, 0, 4, 0, 4);
+  __m512i c = _mm512_set_epi64(0, first + 3, 0, first + 2, 0, first + 1, 0, first);
+  for (uint64_t b = 0; b < blocks; b += 32) {
+    __m512i x[8];
+#pragma GCC unroll 8
+    for (int j = 0; j < 8; ++j) {
+      x[j] = _mm512_xor_si512(_mm512_shuffle_epi8(c, swap), K[0]);
+      c = _mm512_add_epi64(c, four);
+    }
+#pragma GCC unroll 9
+    for (int r = 1; r < 10; ++r)
+#pragma GCC unroll 8
+      for (int j = 0; j < 8; ++j) x[j] = _mm512_aesenc_epi128(x[j], K[r]);
+#pragma GCC unroll 8
+    for (int j = 0; j < 8; ++j) {
+      __m512i y = _mm512_aesenclast_epi128(x[j], K[10]);
+      if (NT)
+        _mm512_stream_si512((__m512i*)(out + 64 * (b / 4 + j)), y);
+      else
+        _mm512_store_si512((__m512i*)(out + 64 * (b / 4 + j)), y);
+    }
+  }
+  if (NT) _mm_sfence();
 }
 
 }  // namespace
@@ -51,37 +82,30 @@ void sg_expand(const uint8_t key[16], uint8_t rk[176]) {
 // Blocks [first, first + blocks) of the keystream into out (64-byte aligned, blocks a multiple of 32).  The counter
 // blocks are u128be(i) for i < 2^64.
 void sg_ctr_vaes(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks) {
-  __m512i K[11];
-  for (int r = 0; r < 11; ++r) K[r] = _mm512_broadcast_i32x4(_mm_loadu_si128((const __m128i*)(rk + 16 * r)));
-  const __m512i swap = _mm512_broadcast_i32x4(_mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
-  const __m512i four = _mm512_set_epi64(0, 4, 0, 4, 0, 4, 0, 4);
-  __m512i c = _mm512_set_epi64(0, first + 3, 0, first + 2, 0, first + 1, 0, first);
-  for (uint64_t b = 0; b < blocks; b += 32) {
-    __m512i x[8];
-#pragma GCC unroll 8
-    for (int j = 0; j < 8; ++j) {
-      x[j] = _mm512_xor_si512(_mm512_shuffle_epi8(c, swap), K[0]);
-      c = _mm512_add_epi64(c, four);
-    }
-#pragma GCC unroll 9
-    for (int r = 1; r < 10; ++r)
-#pragma GCC unroll 8
-      for (int j = 0; j < 8; ++j) x[j] = _mm512_aesenc_epi128(x[j], K[r]);
-#pragma GCC unroll 8
-    for (int j = 0; j < 8; ++j) _mm512_store_si512((__m512i*)(out + 64 * (b / 4 + j)), _mm512_aesenclast_epi128(x[j], K[10]));
-  }
+  ctr_vaes<false>(rk, first, out, blocks);
 }
 
-// The same keystream with 128-bit AES-NI, eight blocks in flight (blocks a multiple of 8).
+// The same with non-temporal stores (no read for ownership; the lines go to memory, not the cache), fenced at the end.
+void sg_ctr_vaes_nt(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks) {
+  ctr_vaes<true>(rk, first, out, blocks);
+}
+
+// The same keystream with 128-bit AES-NI, eight blocks in flight, any number of blocks.
 void sg_ctr_aesni(const uint8_t rk[176], uint64_t first, uint8_t* out, uint64_t blocks) {
   __m128i K[11];
   for (int r = 0; r < 11; ++r) K[r] = _mm_loadu_si128((const __m128i*)(rk + 16 * r));
-  for (uint64_t b = 0; b < blocks; b += 8) {
+  uint64_t b = 0;
+  for (; b + 8 <= blocks; b += 8) {
     __m128i x[8];
     for (int j = 0; j < 8; ++j) x[j] = _mm_xor_si128(bswap128(_mm_set_epi64x(0, (long long)(first + b + j))), K[0]);
     for (int r = 1; r < 10; ++r)
       for (int j = 0; j < 8; ++j) x[j] = _mm_aesenc_si128(x[j], K[r]);
     for (int j = 0; j < 8; ++j) _mm_storeu_si128((__m128i*)(out + 16 * (b + j)), _mm_aesenclast_si128(x[j], K[10]));
+  }
+  for (; b < blocks; ++b) {
+    __m128i x = _mm_xor_si128(bswap128(_mm_set_epi64x(0, (long long)(first + b))), K[0]);
+    for (int r = 1; r < 10; ++r) x = _mm_aesenc_si128(x, K[r]);
+    _mm_storeu_si128((__m128i*)(out + 16 * b), _mm_aesenclast_si128(x, K[10]));
   }
 }
 
