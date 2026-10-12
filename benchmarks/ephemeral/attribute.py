@@ -54,11 +54,15 @@ def classify(name: str, read: float, lm_head_bytes: int) -> str:
 
 
 def rows(path: Path) -> list[dict]:
-    lines = [ln for ln in path.read_text().splitlines() if ln.startswith('"')]
+    return rows_from_text(path.read_text(), path.name)
+
+
+def rows_from_text(text: str, name: str = "csv") -> list[dict]:
+    lines = [ln for ln in text.splitlines() if ln.startswith('"')]
     r = list(csv.reader(lines))
     head, body = r[0], r[2:]
     if READ not in head or WRITE not in head:
-        raise SystemExit(f"{path.name}: no {READ} / {WRITE} columns")
+        raise SystemExit(f"{name}: no {READ} / {WRITE} columns")
     out = []
     for row in body:
         d = dict(zip(head, row))
