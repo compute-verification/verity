@@ -77,7 +77,7 @@ def commitPair (r y r' y' : List UInt8) : List UInt8 × List UInt8 :=
 /-- **What `Stmt.setupHidden` accepted**: the circuit `HmOut.parse` accepted, the leaf scheme it names, the public file
 `HmOut.loadPublic` loaded (at a draw, `HmOut.drawn` of it) and `HmOut.checkPublic` passed, `n`, the block counts and `m`
 as the executable computes them (`k_log ≤ 27`, `m ≤ 35`), the pin `HmRow.pin` gave, Δ from `HmOut.delta`, the regions
-`HmOut.regions` built, which passed `HmRow.checkRegionWords` and `checkInRange`, Σ over the circuit, the statement's
+`HmOut.regions` built, which passed `checkInRange`, Σ over the circuit, the statement's
 digest and the public file, and the hello `helloOf` built. -/
 structure Spec (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (draw : Option Lean.Json) (st : Stmt) : Prop where
@@ -99,7 +99,6 @@ structure Spec (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List 
   da : st.da = (HmOut.delta st.c st.pin).1
   db : st.db = (HmOut.delta st.c st.pin).2
   regions : HmOut.regions st.c st.pub = .ok st.regions
-  regionWords : HmRow.checkRegionWords st.c st.da st.db st.regions = .ok ()
   inRange : checkInRange st.c.kLog st.regions.size (PT_LOCAL + st.nbl) = .ok ()
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
   hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
