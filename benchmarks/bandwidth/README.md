@@ -15,8 +15,9 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed (`window.start()`).
   `Tagger.device()` is the GPU's id (`audit.device_id`'s 16 bytes, from the driver), for which the store's salt is
   drawn.
-- A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(path, vk)` once,
-  then one `audit.ChallengerState(path, vk)` that every tag's
+- A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(state_dir, vk)`
+  once, in the challenger's state directory under the name the store gives it (`audit.state_name`), then one
+  `audit.ChallengerState(state_dir, vk)` that every tag's
   `audit.Verifier(vk, params, secret, state, device=, commitment=, salt_source=)` takes, and `verifier.window()`
   takes no number. `gpu.py windows` runs every window through them: the timed windows, the skip controls, and one
   window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed windows are late.

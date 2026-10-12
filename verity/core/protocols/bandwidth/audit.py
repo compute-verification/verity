@@ -16,8 +16,9 @@ different stores, and the verifier refuses a store whose salt is not its device'
 A window is used once: a second start or commitment is refused, a nonce is never drawn twice, and nothing is redrawn.
 One window over a store is open at a time, from its record to its commitment or until `T + RTT` after its seed without
 one: the verifier refuses to open another before then, so no read serves two windows' ingress.  Both rules hold for every
-verifier of a store, whatever its tag, and across restarts, because all of them share the store's `ChallengerState`, a
-file that fails closed.  The verdict publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
+verifier of a store, whatever its tag, and across restarts, because all of them share the store's one
+`ChallengerState`, a file named by the store in the challenger's state directory that fails closed.  The verdict
+publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
 (SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it, for a certified tag
 only (`tags.Tag.certified`).
@@ -203,8 +204,8 @@ class Verdict:
 
 
 class StateError(RuntimeError):
-    """A refusal to open a window: the store's challenger state is missing, unreadable, another store's, held by
-    another challenger, changed under this one, or closed."""
+    """A refusal to open a window: the store's challenger state is missing, unreadable, another store's, not the
+    store's one state, held by another challenger, changed under this one, or closed."""
 
 
 _NONCE = re.compile(rb"[0-9a-f]{64}")
@@ -214,33 +215,67 @@ def _head(root: bytes, salt: bytes) -> bytes:
     return f"{STATE_FORMAT} {root.hex()} {salt.hex()}".encode()
 
 
+def state_name(vk: VerifierKey) -> str:
+    """The name of `vk`'s store's challenger state in a challenger's state directory: the store's root and salt, so a
+    directory has one place for each store's state."""
+    return f"{vk.root.hex()}-{vk.salt.hex()}.state"
+
+
+def _survey(directory: Path) -> None:
+    """Refuse a state directory that holds anything but states, each named by the store its first line names
+    (`state_name`): a copy or link of a state under another name, a link in place of one, a subdirectory or a stray
+    file.  The directory then holds at most one state per store, and its listing shows which stores have one."""
+    try:
+        entries = sorted(os.scandir(directory), key=lambda e: e.name)
+    except OSError as e:
+        raise StateError(f"{directory}: unreadable as a state directory ({type(e).__name__})") from None
+    for e in entries:
+        try:
+            if not e.is_file(follow_symlinks=False):
+                raise StateError(f"{e.path}: a state directory holds only states")
+            with open(e.path, "rb") as f:
+                head = f.readline(len(STATE_FORMAT) + 512)
+        except OSError as x:
+            raise StateError(f"{e.path}: unreadable ({type(x).__name__})") from None
+        fields = head.removesuffix(b"\n").split(b" ")
+        if (len(fields) != 3 or fields[0] != STATE_FORMAT.encode()
+                or e.name.encode() != fields[1] + b"-" + fields[2] + b".state"):
+            raise StateError(f"{e.path} is not a state named by its store: a store has one challenger state, the file "
+                             "its root and salt name")
+
+
 class ChallengerState:
     """The challenger's state for one store, shared by every verifier of the store (every tag's) and kept across
-    restarts, in a file of its own that fails closed: passed explicitly, on the challenger's host, never in a signer's key
-    directory.  The file is `STATE_FORMAT`'s line with the store's root and salt, then one record a line: `open NONCE TAG`
-    when a window takes its nonce, appended and fsynced before its `σ` leaves, and `close NONCE` when that window closes
-    (its commitment; `T + RTT` without one, recorded when the next window opens; or its challenger stopping first).
+    restarts, in a file that fails closed: in the challenger's state directory, passed explicitly, on the challenger's
+    host, never a signer's key directory.  The file is named by the store (`state_name`: its root and salt), and the
+    directory holds nothing but such files (`_survey`), so a store has one state: `create` refuses a second, and both
+    `create` and opening refuse a directory that holds a copy or link of a state under another name, or any other file.
+    The file is `STATE_FORMAT`'s line with the store's root and salt, then one record a line: `open NONCE TAG` when a
+    window takes its nonce, appended and fsynced before its `σ` leaves, and `close NONCE` when that window closes (its
+    commitment; `T + RTT` without one, recorded when the next window opens; or its challenger stopping first).
 
     Opening takes the file's lock for the object's life, so one challenger holds a store's state at a time, and refuses a
-    file that is missing, unreadable (a first line that is not the format's, a record that is neither, a nonce opened
-    twice, a close that is not the open window's, a last line cut short) or another store's.  A window the file shows
-    open was its last challenger's, which no longer runs, so opening closes it: no live verifier can accept it.  Each
-    window's nonce comes from `nonces`, the challenger's own randomness (`secrets.token_bytes`), and a nonce the file
-    holds is refused, so no two windows over the store share a key.  Before each record the file must be as this object
-    left it.  Nothing here rewrites or truncates the file, and `create` refuses one that exists.  A restore of the file
-    from a snapshot is past what a file can see; that the file is never rolled back rests on the challenger's host
-    (`trusted-nebius-host`), and a rollback alone repeats no key while the nonces are fresh."""
+    file that is missing, a link, unreadable (a first line that is not the format's, a record that is neither, a nonce
+    opened twice, a close that is not the open window's, a last line cut short) or another store's.  A window the file
+    shows open was its last challenger's, which no longer runs, so opening closes it: no live verifier can accept it.
+    Each window's nonce comes from `nonces`, the challenger's own randomness (`secrets.token_bytes`), and a nonce the
+    file holds is refused, so no two windows over the store share a key.  Before each record the file must be as this
+    object left it.  Nothing here rewrites or truncates the file.  A state restored from a snapshot, or copied to another
+    directory or host, is past what the directory can see; that the challenger keeps one state directory and never rolls
+    back or forks a state rests on its host (`trusted-nebius-host`), and neither repeats a key while the nonces are
+    fresh (PROTOCOL.md §3)."""
 
-    def __init__(self, path: str | os.PathLike, vk: VerifierKey, *,
+    def __init__(self, directory: str | os.PathLike, vk: VerifierKey, *,
                  nonces: Callable[[int], bytes] = secrets.token_bytes) -> None:
-        self.path, self.store, self._nonces = Path(path), (vk.root, vk.salt), nonces
+        self.directory, self.store, self._nonces = Path(directory), (vk.root, vk.salt), nonces
+        self.path = self.directory / state_name(vk)
         self._open: Window | None = None
         try:
-            fd = os.open(self.path, os.O_RDWR | os.O_APPEND)
+            fd = os.open(self.path, os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW)
         except FileNotFoundError:
             raise StateError(f"{self.path}: missing") from None
         except OSError as e:
-            raise StateError(f"{self.path}: unwritable ({type(e).__name__})") from None
+            raise StateError(f"{self.path}: a link or unwritable ({type(e).__name__})") from None
         self._file = os.fdopen(fd, "ab", buffering=0)
         try:
             fcntl.flock(self._file, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -249,6 +284,7 @@ class ChallengerState:
             raise StateError(f"{self.path} is held by another challenger") from None
         try:
             self._used, dangling = self._read()
+            _survey(self.directory)
             if dangling is not None:
                 self._append(f"close {dangling.hex()}\n")
         except BaseException:
@@ -256,11 +292,14 @@ class ChallengerState:
             raise
 
     @staticmethod
-    def create(path: str | os.PathLike, vk: VerifierKey) -> None:
-        """A new store's state, with no window; refused when the file exists: a store's state is never made again."""
-        p = Path(path)
+    def create(directory: str | os.PathLike, vk: VerifierKey) -> None:
+        """A new store's state in the challenger's state directory, with no window; refused when the store has one, and
+        when the directory holds anything but states named by their stores: a store's state is never made again."""
+        d = Path(directory)
+        _survey(d)
+        p = d / state_name(vk)
         try:
-            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         except FileExistsError:
             raise StateError(f"{p} exists: a store's challenger state is never made again") from None
         try:

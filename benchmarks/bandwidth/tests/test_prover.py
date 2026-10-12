@@ -107,15 +107,19 @@ def _run_windows(monkeypatch, tmp_path, log: list) -> tuple[SimpleNamespace, dic
 
         monkeypatch.setattr(audit.Window, step, logged)
     a = SimpleNamespace(lib="fake", blocks=37, workers=1, samples=4, deadline_ns=1_200_000, windows=3, skip=[0.1],
-                        tags=sorted(gpu.TAG_IDS), state=tmp_path / "state")
+                        tags=sorted(gpu.TAG_IDS), state_dir=tmp_path / "challenger")
     return a, gpu._windows(a)
 
 
 def test_one_store_has_one_challenger_state_whatever_the_tag(monkeypatch, tmp_path) -> None:
     """A run's every window, of every tag, the skip controls and the openings checks among them, is in the store's one
-    state, each under a nonce of its own and closed before the next opens; the salt is the fake device's."""
+    state, the file the store names in the challenger's state directory, each under a nonce of its own and closed
+    before the next opens; the salt is the fake device's.  A second run draws a new store, with its own state beside
+    the first."""
     a, out = _run_windows(monkeypatch, tmp_path, [])
-    head, *records = a.state.read_text().splitlines()
+    state = a.state_dir / f"{out['store_root']}-{out['salt']}.state"
+    assert list(a.state_dir.iterdir()) == [state]
+    head, *records = state.read_text().splitlines()
     assert head.split(" ") == [audit.STATE_FORMAT, out["store_root"], out["salt"]]
     assert out["device"] == gpu.uuid_text(bytes(range(16)))
     opened = [r.split(" ") for r in records[0::2]]
@@ -123,8 +127,10 @@ def test_one_store_has_one_challenger_state_whatever_the_tag(monkeypatch, tmp_pa
     per_tag = a.windows + len(a.skip) + 1
     assert [r[2] for r in opened] == [name for name in a.tags for _ in range(per_tag)]
     assert len({r[1] for r in opened}) == len(opened) == len(a.tags) * per_tag
-    with pytest.raises(audit.StateError, match="never made again"):
-        gpu._windows(a)
+    again = gpu._windows(a)
+    assert again["salt"] != out["salt"]
+    assert sorted(p.name for p in a.state_dir.iterdir()) == sorted(f"{o['store_root']}-{o['salt']}.state"
+                                                                   for o in (out, again))
 
 
 def test_every_window_of_the_harness_is_prepared(monkeypatch, tmp_path) -> None:

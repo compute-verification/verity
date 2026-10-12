@@ -123,19 +123,25 @@ one read of each block, so their ingress would not add; with one open at a time,
 its own interval (`test_one_window_over_a_store_is_open_at_a_time`).
 
 **The challenger's state.** Both rules hold across every verifier of a store, whatever its tag, and across restarts:
-every verifier of a store takes the store's one challenger state (`audit.ChallengerState`), a file of its own on the
-challenger's host, passed explicitly and never in the LMS key directory. Its first line names the format and the store
-(`vk.root`, `vk.salt`); then each window appends `open NONCE TAG`, fsynced before its `σ` leaves, and `close NONCE` when
-it closes (its root, or `T + RTT` without one). The file is append-only: nothing rewrites or truncates it, and
-`ChallengerState.create` refuses a file that exists, so a store's state is never reset. A state that is missing,
-unreadable (a record cut short, a nonce opened twice, a close that is not the open window's), another store's, or
-changed since this challenger last wrote it opens no window. The challenger holds the file's lock while it runs, so one
-challenger holds a store's state at a time. A nonce in the file is never drawn again, and one window over the store is
-open at a time, whichever verifier opens it. A window the file shows open when the state is reopened belonged to a
-challenger that stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being
-restored from a snapshot. That the challenger's state is never rolled back rests on `trusted-nebius-host`, the same
-assumption PoUS's memory challenger cites for its session-id log, and a rolled-back state still repeats no key unless
-the challenger's randomness also repeats a nonce.
+every verifier of a store takes the store's one challenger state (`audit.ChallengerState`). It is a file in the
+challenger's state directory on its host, passed explicitly and never the LMS key directory, and the store names it:
+`<vk.root>-<vk.salt>.state` in hex (`audit.state_name`). The directory holds nothing else: `ChallengerState.create` and
+opening refuse a directory holding any file that is not a state named by the store its first line names, so a copy or
+hard link of a state under another name, a symbolic link, a subdirectory or a stray file is refused for every store,
+and `create` refuses a store that has a state. A store therefore has one state in the directory, and the directory's
+listing shows which stores have one (`test_a_store_has_one_challenger_state`). The file's first line names the format
+and the store (`vk.root`, `vk.salt`); then each window appends `open NONCE TAG`, fsynced before its `σ` leaves, and
+`close NONCE` when it closes (its root, or `T + RTT` without one). The file is append-only: nothing rewrites or
+truncates it, and a store's state is never made again, so it is never reset. A state that is missing, a link, unreadable
+(a record cut short, a nonce opened twice, a close that is not the open window's), another store's, or changed since this
+challenger last wrote it opens no window. The challenger holds the file's lock while it runs, so one challenger holds a
+store's state at a time. A nonce in the file is never drawn again, and one window over the store is open at a time,
+whichever verifier opens it. A window the file shows open when the state is reopened belonged to a challenger that
+stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being restored from a
+snapshot, nor a directory a copy of a state kept in another directory or on another host. That the challenger keeps
+one state directory and never rolls back or forks a state rests on `trusted-nebius-host`, the same assumption PoUS's
+memory challenger cites for its session-id log, and neither repeats a key unless the challenger's randomness also
+repeats a nonce.
 
 The verdict publishes one bit (`Verdict.public`); which check failed,
 which sample and the elapsed time stay with the verifier. Openings reveal blocks of `C*` to the verifier, so the
@@ -393,8 +399,9 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
   (`leaves`).
 - `audit.py`: a device's id and salt (`device_id(uuid)`, `draw_salt(source, commitment, device)`), the prover's
   reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
-  `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(path, vk)` once, then
-  `ChallengerState(path, vk)`, shared by every verifier of the store), the verifier
+  `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(state_dir, vk)` once, then
+  `ChallengerState(state_dir, vk)`, the file `state_name(vk)` in the challenger's state directory, shared by every
+  verifier of the store), the verifier
   (`Verifier(vk, params, source, state, device=, commitment=, salt_source=).window()`: `open()`, `start() -> σ`,
   `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point
   (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`, `SLACK_LOG2`, `certified_blocks`, `samples_for`) and `bound`.

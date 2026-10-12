@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import os
+import shutil
 import struct
 from dataclasses import dataclass, replace
 from fractions import Fraction
@@ -50,13 +52,15 @@ def _params(tag: str, samples: int = 8, deadline_ns: int = 1_000_000) -> audit.P
 
 @pytest.fixture
 def state_of(tmp_path):
-    """`state_of(vk)`: a new store's challenger state, in a file of its own, with test nonces; closed after the test."""
+    """`state_of(vk)`: a new store's challenger state, in a state directory of its own, with test nonces; closed after
+    the test."""
     opened = []
 
     def make(vk, nonces=None):
-        path = tmp_path / f"state-{len(opened)}"
-        audit.ChallengerState.create(path, vk)
-        opened.append(audit.ChallengerState(path, vk, nonces=nonces or _nonces(path.name.encode())))
+        states = tmp_path / f"states-{len(opened)}"
+        states.mkdir()
+        audit.ChallengerState.create(states, vk)
+        opened.append(audit.ChallengerState(states, vk, nonces=nonces or _nonces(states.name.encode())))
         return opened[-1]
 
     yield make
@@ -474,15 +478,15 @@ def test_the_state_records_a_window_before_its_seed(big_store, tmp_path, monkeyp
     """`open NONCE TAG` is written and fsynced before `σ` is derived, by `start` or by `open` ahead of it, and
     `close NONCE` follows the commitment."""
     store, vk = big_store
-    path = tmp_path / "state"
-    audit.ChallengerState.create(path, vk)
+    audit.ChallengerState.create(tmp_path, vk)
+    path = tmp_path / audit.state_name(vk)
     events: list = []
     fsync, seed = audit.os.fsync, audit.seed
     monkeypatch.setattr(audit.os, "fsync", lambda fd: (events.append(path.read_text().splitlines()[-1]), fsync(fd))[1])
     monkeypatch.setattr(audit, "seed", lambda key: (events.append("seed"), seed(key))[1])
     nonces = iter((bytes(range(32)), bytes(range(1, 33))))
     a, b = bytes(range(32)).hex(), bytes(range(1, 33)).hex()
-    with audit.ChallengerState(path, vk, nonces=lambda n: next(nonces)) as state:
+    with audit.ChallengerState(tmp_path, vk, nonces=lambda n: next(nonces)) as state:
         verifier = big_store.verifier(_params("ro-blake3/v1"), state)
         w = verifier.window()
         s = w.start()
@@ -502,18 +506,23 @@ def test_the_state_fails_closed(big_store, tmp_path) -> None:
     """A state that is missing, unreadable, another store's, held by another challenger or changed under this one
     opens no window, and a store's state is never made again."""
     store, vk = big_store
-    path = tmp_path / "state"
+    states = tmp_path / "states"
+    states.mkdir()
+    path = states / audit.state_name(vk)
     with pytest.raises(audit.StateError, match="missing"):
-        audit.ChallengerState(path, vk)
-    audit.ChallengerState.create(path, vk)
+        audit.ChallengerState(states, vk)
+    audit.ChallengerState.create(states, vk)
     with pytest.raises(audit.StateError, match="never made again"):
-        audit.ChallengerState.create(path, vk)
+        audit.ChallengerState.create(states, vk)
     other = bv.store(5)
+    renamed = tmp_path / "renamed"
+    renamed.mkdir()
+    (renamed / audit.state_name(bv.vk_of(other))).write_bytes(path.read_bytes())
     with pytest.raises(audit.StateError, match="another store"):
-        audit.ChallengerState(path, bv.vk_of(other))
-    with audit.ChallengerState(path, vk) as state:
+        audit.ChallengerState(renamed, bv.vk_of(other))
+    with audit.ChallengerState(states, vk) as state:
         with pytest.raises(audit.StateError, match="held"):
-            audit.ChallengerState(path, vk)
+            audit.ChallengerState(states, vk)
         with pytest.raises(ValueError, match="challenger state"):
             replace(big_store, store=other, vk=bv.vk_of(other)).verifier(_params("ro-blake3/v1"), state)
     head = path.read_bytes()
@@ -523,10 +532,11 @@ def test_the_state_fails_closed(big_store, tmp_path) -> None:
                               head + b"close " + a + b"\n", head + b"open " + a + b" gf31-poly/v1\nopen " + b + b" gf31-poly/v1\n",
                               head + b"open " + b.upper() + b" ro-blake3/v1\n", head.replace(b"/v1 ", b"/v0 "))):
         bad = tmp_path / f"bad-{i}"
-        bad.write_bytes(body)
+        bad.mkdir()
+        (bad / audit.state_name(vk)).write_bytes(body)
         with pytest.raises(audit.StateError, match="unreadable"):
             audit.ChallengerState(bad, vk)
-    with audit.ChallengerState(path, vk) as state:
+    with audit.ChallengerState(states, vk) as state:
         v = big_store.verifier(_params("ro-blake3/v1"), state)
         with open(path, "ab") as f:
             f.write(b"open " + a + b" ro-blake3/v1\n")
@@ -534,31 +544,74 @@ def test_the_state_fails_closed(big_store, tmp_path) -> None:
             v.window().start()
 
 
+def test_a_store_has_one_challenger_state(big_store, tmp_path) -> None:
+    """A store's state is the file its root and salt name in the challenger's state directory, beside other stores'.
+    A second `create` for the store is refused, and a copy or hard link of the state under another name, a symbolic
+    link, a subdirectory or a stray file makes `create` and opening refuse the directory, for every store, so no second
+    state of a store can serve a second challenger whose windows overlap the first's; nor can a link in the state's
+    place."""
+    store, vk = big_store
+    other, third = bv.vk_of(bv.store(5)), bv.vk_of(bv.store(6))
+    states = tmp_path / "states"
+    states.mkdir()
+    audit.ChallengerState.create(states, vk)
+    audit.ChallengerState.create(states, other)
+    path = states / audit.state_name(vk)
+    names = sorted(f"{v.root.hex()}-{v.salt.hex()}.state" for v in (vk, other))
+    assert sorted(p.name for p in states.iterdir()) == names
+    with pytest.raises(audit.StateError, match="never made again"):
+        audit.ChallengerState.create(states, vk)
+    with audit.ChallengerState(states, vk), audit.ChallengerState(states, other):
+        pass
+    extra = states / "copy.state"
+    for stray in (lambda: shutil.copy(path, extra), lambda: os.link(path, extra), lambda: extra.symlink_to(path),
+                  extra.mkdir, lambda: extra.write_bytes(b"notes\n")):
+        stray()
+        for make in (lambda: audit.ChallengerState(states, vk), lambda: audit.ChallengerState(states, other),
+                     lambda: audit.ChallengerState.create(states, third)):
+            with pytest.raises(audit.StateError, match="one challenger state|only states"):
+                make()
+        if extra.is_dir() and not extra.is_symlink():
+            extra.rmdir()
+        else:
+            extra.unlink()
+    real = tmp_path / "real.state"
+    path.rename(real)
+    path.symlink_to(real)
+    with pytest.raises(audit.StateError, match="link"):
+        audit.ChallengerState(states, vk)
+    path.unlink()
+    real.rename(path)
+    with audit.ChallengerState(states, vk):
+        pass
+    assert len(path.read_text().splitlines()) == 1 and not (states / audit.state_name(third)).exists()
+
+
 def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_path) -> None:
     """A window still open when its state closes, or when its challenger dies, closes with it: its commitment is
     refused, a window opened but not started never starts, and reopening the state records the dead challenger's
     window closed."""
     store, vk = big_store
-    path = tmp_path / "state"
-    audit.ChallengerState.create(path, vk)
+    audit.ChallengerState.create(tmp_path, vk)
+    path = tmp_path / audit.state_name(vk)
     params = _params("ro-blake3/v1")
-    with audit.ChallengerState(path, vk, nonces=_nonces(b"closed")) as state:
+    with audit.ChallengerState(tmp_path, vk, nonces=_nonces(b"closed")) as state:
         w = big_store.verifier(params, state).window()
         c = audit.tag_pass(store, params.tag, w.start())
     with pytest.raises(audit.StateError, match="closed"):
         w.commit(c.root)
-    with audit.ChallengerState(path, vk, nonces=_nonces(b"opened")) as state:
+    with audit.ChallengerState(tmp_path, vk, nonces=_nonces(b"opened")) as state:
         opened = big_store.verifier(params, state).window()
         opened.open()
     with pytest.raises(audit.StateError, match="closed"):
         opened.start()
-    state = audit.ChallengerState(path, vk, nonces=_nonces(b"died"))
+    state = audit.ChallengerState(tmp_path, vk, nonces=_nonces(b"died"))
     w = big_store.verifier(params, state).window()
     c = audit.tag_pass(store, params.tag, w.start())
     state._file.close()
     nonce = w._nonce.hex()
     assert path.read_text().splitlines()[-1] == f"open {nonce} {params.tag}"
-    with audit.ChallengerState(path, vk):
+    with audit.ChallengerState(tmp_path, vk):
         assert path.read_text().splitlines()[-1] == f"close {nonce}"
     with pytest.raises(audit.StateError, match="closed"):
         w.commit(c.root)
@@ -593,7 +646,7 @@ def test_a_second_verifier_of_the_store_repeats_no_window(big_store, state_of) -
     assert drawn2 != drawn1 and not set(drawn2) <= set(drawn1)
     assert w2.verdict([forged.open(i) for i in drawn2]).failure == "tag-mismatch"
     with pytest.raises(audit.StateError, match="held"):
-        audit.ChallengerState(state.path, vk)
+        audit.ChallengerState(state.directory, vk)
 
 
 def test_another_tags_window_reveals_no_samples(big_store, state_of) -> None:
@@ -621,17 +674,17 @@ def test_a_restarted_challenger_repeats_no_window_and_refuses_a_replayed_root(bi
     old openings answer other samples."""
     store, vk = big_store
     params = _params("ro-blake3/v1")
-    path = tmp_path / "state"
-    audit.ChallengerState.create(path, vk)
-    with audit.ChallengerState(path, vk, nonces=_nonces(b"before")) as state:
+    audit.ChallengerState.create(tmp_path, vk)
+    path = tmp_path / audit.state_name(vk)
+    with audit.ChallengerState(tmp_path, vk, nonces=_nonces(b"before")) as state:
         w = big_store.verifier(params, state).window()
         old = audit.tag_pass(store, params.tag, w.start())
         old_drawn = w.commit(old.root)
         assert w.verdict([old.open(i) for i in old_drawn]).accepted
-    with audit.ChallengerState(path, vk, nonces=_nonces(b"before")) as state:
+    with audit.ChallengerState(tmp_path, vk, nonces=_nonces(b"before")) as state:
         with pytest.raises(audit.StateError, match="never drawn twice"):
             big_store.verifier(params, state).window().start()
-    with audit.ChallengerState(path, vk, nonces=_nonces(b"after")) as state:
+    with audit.ChallengerState(tmp_path, vk, nonces=_nonces(b"after")) as state:
         w = big_store.verifier(params, state).window()
         assert w.start() != old.seed
         drawn = w.commit(old.root)

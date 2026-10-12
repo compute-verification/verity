@@ -12,13 +12,14 @@
 `PATH(c)` read from the tree levels the pass left in the workspace.  `store_tree` is the store's own tree under `vk`
 (`pous.verifier.MerkleTree`), which the prover keeps from setup.  The checks are the core verifier's (`audit.Window`).
 
-    python gpu.py windows --lib libbwtag.so --blocks N --state challenger-state --out windows.json [--workers 32]
+    python gpu.py windows --lib libbwtag.so --blocks N --state-dir challenger --out windows.json [--workers 32]
 
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
 `--deadline-ns` (default the largest `audit.Params` allows).  The store is this device's: a fresh secret, never written
 out, draws its salt for the GPU the tagger runs on (`Tagger.device`, `audit.draw_salt` under `reference.COMMITMENT`) and
 every window's key; the store's leaves under that salt are computed here (`reference.store_leaves`, on `--workers`
-processes), and the store's one challenger state is made at `--state`.  Then negative controls that tag only part of the
+processes), and the store's one challenger state is made in the challenger's state directory, `--state-dir`, under the
+name the store gives it (`audit.state_name`).  Then negative controls that tag only part of the
 store, and one window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass
 is late.  One store, one challenger state, whatever the tag: every tag's verifiers take that state, and every window
 goes through the store's one `Prover`, which prepares before it asks for the seed: one untimed pass under a throwaway seed, then
@@ -266,8 +267,9 @@ def _windows(a: argparse.Namespace) -> dict:
                  "samples": a.samples, "scrub_mib": SCRUB_BYTES >> 20, "results": [], "openings_check": []}
     bind = {"device": device, "commitment": COMMITMENT, "salt_source": secret}
     prover = Prover(t, store, a.blocks, scrub)
-    audit.ChallengerState.create(a.state, vk)
-    with audit.ChallengerState(a.state, vk) as state:
+    a.state_dir.mkdir(parents=True, exist_ok=True)
+    audit.ChallengerState.create(a.state_dir, vk)
+    with audit.ChallengerState(a.state_dir, vk) as state:
         for name in a.tags:
             p = audit.Params(name, a.samples, a.deadline_ns)
             verifier = audit.Verifier(vk, p, secret, state, **bind)
@@ -312,8 +314,8 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--windows", type=int, default=20)
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))
-    w.add_argument("--state", type=Path, required=True,
-                   help="the store's challenger state, made here: refused if the file exists")
+    w.add_argument("--state-dir", type=Path, required=True,
+                   help="the challenger's state directory, where the store's one state is made (audit.state_name)")
     w.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     result = _windows(a)
