@@ -126,7 +126,7 @@ class WLib:
         self.field = W.field(self.bits)
         f = self.field
         if (self.limbs, self.payload, self.lane_words, lanes, tiles, self.sk_m) != (
-                f.limbs, f.payload, f.lane_words(), W.LANES, W.TASK_TILES, WS.steps(f)):
+                f.limbs, f.payload, f.lane_words(), W.LANES, f.tiles, WS.steps(f)):
             raise RuntimeError(f"{name}: constants {list(cs)} are not wide.py's")
         self.sketch = self.kw == 1 and self.gemm_warps == WS.T
 
@@ -194,18 +194,27 @@ def flat_words(t, f: W.Field) -> list[int]:
     return [sum(a[limb_index(i, e, f.limbs)] << (32 * e) for e in range(f.limbs)) for i in range(n)]
 
 
+def padded(torch, a, kp: int):
+    """a (rows × K) with its columns zero-padded to kp."""
+    if a.shape[1] == kp:
+        return a
+    out = torch.zeros(a.shape[0], kp, dtype=torch.uint8, device=a.device)
+    out[:, :a.shape[1]] = a.view(torch.uint8)
+    return out.view(a.dtype)
+
+
 def payload_store(torch, wb, f: W.Field):
     """The payload store of FP8 weights wb (n × kd uint8 on the device): `wide.store_bytes(wide.fragment_payloads(…))`
     as int32."""
     n, kd = wb.shape
     lw, nl, pb = f.lane_words(), f.limbs, f.payload
-    w8 = wb.view(n // 16, 2, 8, kd // W.TASK_COLS, W.TASK_TILES, 2, 4, 4)
-    s = w8.permute(0, 3, 2, 6, 4, 5, 1, 7).contiguous().view(-1, W.LANES, W.LANE_BYTES)   # task, lane, stream
+    w8 = wb.view(n // 16, 2, 8, kd // f.task_cols, f.tiles, 2, 4, 4)
+    s = w8.permute(0, 3, 2, 6, 4, 5, 1, 7).contiguous().view(-1, W.LANES, f.lane_bytes)   # task, lane, stream
     tasks = s.shape[0]
     offs = [w * pb + 32 * e for w in range(lw) for e in range(nl)]
     lens = [max(0, min(32, pb - 32 * e)) for w in range(lw) for e in range(nl)]
     pad = torch.zeros(tasks, W.LANES, max(offs) // 8 + 8, dtype=torch.uint8, device=wb.device)
-    pad[:, :, :W.LANE_BYTES] = s
+    pad[:, :, :f.lane_bytes] = s
     idx = torch.tensor([o // 8 for o in offs], device=wb.device)[:, None] + torch.arange(5, device=wb.device)
     out = torch.empty(tasks, W.LANES, lw * nl, dtype=torch.int64, device=wb.device)
     step = max(1, (1 << 27) // (W.LANES * lw * nl * 5))
@@ -243,7 +252,7 @@ def sign_tensor(torch, f: W.Field):
 
 def tile_sketch(store, f: W.Field, n: int, kd: int, t: int, s):
     """`wide_sketch`'s sketch of tile t of the device store (16 × 16 int64), from its four records alone."""
-    nch, rec = kd // W.TASK_COLS, W.LANES * f.lane_words() * f.limbs
+    nch, rec = kd // f.task_cols, W.LANES * f.lane_words() * f.limbs
     G, kc = divmod(t, nch)
     parts = []
     for i in range(WS.T):
@@ -253,7 +262,7 @@ def tile_sketch(store, f: W.Field, n: int, kd: int, t: int, s):
             parts.append(store[q * rec:(q + 1) * rec].cpu().numpy().tobytes())
         else:
             parts.append(bytes(4 * rec))
-    return WS.sketch(WS.vectors(b"".join(parts), 16 * WS.T, W.TASK_COLS, f), s)
+    return WS.sketch(WS.vectors(b"".join(parts), 16 * WS.T, f.task_cols, f), s)
 
 
 # --- gates -------------------------------------------------------------------------------------------------------------
@@ -366,11 +375,11 @@ def frontier_quantities(f: W.Field, lw: int, msg_blocks: float, read_gbps: float
                         comp_s: float, ks: list[int]) -> dict:
     """msg_blocks: the tag's compressions a lane's record (a tag over tb records: its compressions over tb)."""
     r = read_gbps * 1e9
-    tau = msg_blocks / W.LANE_BYTES * r / comp_s
+    tau = msg_blocks / f.lane_bytes * r / comp_s
     out = {}
     for k in ks:
-        x = k * lw / W.LANE_BYTES * r / roots_s
-        delta = lw / W.LANE_BYTES * r / dec[k]
+        x = k * lw / f.lane_bytes * r / roots_s
+        delta = lw / f.lane_bytes * r / dec[k]
         out[k] = {"x": x, "delta": delta, "tau": tau, "mu_rebuild": (1 - tau) / x,
                   "tau_sketch": 2 / WS.vector_bytes(f) * r / comp_s}
     return out
@@ -382,7 +391,8 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     f = lib.field
     w = B.fp8_weights(torch, n, kd, 100 + n + kd)
     wb = w.view(torch.uint8)
-    pay = payload_store(torch, wb, f)
+    kp = f.kpad(kd)  # the encoded GEMM's K: W's and x's columns zero-padded to whole tasks; native runs at kd
+    pay = payload_store(torch, padded(torch, wb, kp), f)
     nwords = pay.numel() // f.limbs
     tasks = nwords // (W.LANES * lib.lane_words)
     blocks = tasks * W.LANES // lib.tb
@@ -402,8 +412,9 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     gx = torch.Generator(device="cuda").manual_seed(5)
     for mb in batches:
         xs[mb] = torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn)
-    nch = kd // W.TASK_COLS
-    res = {"N": n, "K": kd, "weight_bytes": n * kd, "store_bytes": pay.numel() * 4, "blocks": blocks, "gate": {},
+    xks = {mb: padded(torch, x, kp) for mb, x in xs.items()}
+    nch = kp // f.task_cols
+    res = {"N": n, "K": kd, "K_encoded": kp, "weight_bytes": n * kd, "store_bytes": pay.numel() * 4, "blocks": blocks, "gate": {},
            "times": {}}
 
     sms = torch.cuda.get_device_properties(0).multi_processor_count
@@ -415,14 +426,14 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         return occ * sms
 
     def run(k, store, x, y, partials, tag, prefetch=False):
-        lib.call("ww_gemm", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
+        lib.call("ww_gemm", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kp, 0, int(partials),
                  seed_buf if tag else None, tags_p if tag else None,
                  wave(k, x.shape[0], tag, partials) if prefetch else 0, stream(torch))
 
     def commit(root=None):
         lib.call("ww_commit", ptr(ws), blocks, seed_buf, root, stream(torch))
 
-    ntiles = WS.tiles(n, kd)
+    ntiles = WS.tiles(n, kp, f)
     nvec = 16 * ntiles
     if lib.sketch:
         import numpy as np
@@ -437,7 +448,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
         res["sketch_vectors"] = nvec
 
     def run_sk(k, store, x, y, partials, hashed, with_sk=True):
-        lib.call("ww_gemm_sketch", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
+        lib.call("ww_gemm_sketch", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kp, 0,
                  int(partials), ptr(sgn), ptr(sk) if with_sk else None, 0, seed_buf if hashed else None,
                  stags_p if hashed else None, 0, stream(torch))
 
@@ -468,7 +479,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             sample = sorted({0, ntiles - 1, *rng.sample(range(ntiles), min(6, ntiles))})
             dev = sk1.view(ntiles, 16, 16).cpu().numpy()
             g["sketch_vs_reference"] = {"sampled": len(sample), "mismatch": [
-                t for t in sample if not np.array_equal(tile_sketch(stores[k], f, n, kd, t, signs_np), dev[t])]}
+                t for t in sample if not np.array_equal(tile_sketch(stores[k], f, n, kp, t, signs_np), dev[t])]}
             vs = sorted({0, nvec - 1, *rng.sample(range(nvec), min(30, nvec))})
             want = WS.tags_of(TAG_SEED, dev.reshape(-1, 16).astype(np.int64), 0, which=vs)
             devt = stags.view(-1, 8)
@@ -496,9 +507,9 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     keyed = None
     for gi, mb in enumerate(batches):
         lib.set_key(W.key(f, SEED, max(ks)))
-        x = xs[mb]
-        ref = x.float() @ w.float().t()
-        scale = (x.float().abs() @ w.float().abs().t()).clamp_min(1e-30)
+        x = xks[mb]
+        ref = xs[mb].float() @ w.float().t()
+        scale = (xs[mb].float().abs() @ w.float().abs().t()).clamp_min(1e-30)
         pp = torch.full((nch * mb * n,), float("nan"), dtype=torch.float32, device="cuda")
         run(0, pay, x, pp, True, False)
         err = float(((pp.view(nch, mb, n).sum(0) - ref).abs() / scale).max())
@@ -580,7 +591,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
     so, st = lib.so, stream(torch)
     for mb in batches:
         x = xs[mb]
-        xp = ptr(x.view(torch.uint8))
+        xp, xkp = ptr(x.view(torch.uint8)), ptr(xks[mb].view(torch.uint8))
         y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
         yp = ptr(y)
         one = torch.ones((), device="cuda")
@@ -605,7 +616,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             def go():
                 rc = 0
                 for p in ps:
-                    rc |= so.ww_gemm(k, p, xp, yp, mb, n, kd, 0, 0, sp, tp, ah, st)
+                    rc |= so.ww_gemm(k, p, xkp, yp, mb, n, kp, 0, 0, sp, tp, ah, st)
                 if rc:
                     raise RuntimeError(f"ww_gemm k={k} tag={tag} M={mb}: error {rc}")
             return go
@@ -652,7 +663,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
                 def go():
                     rc = 0
                     for p in ps:
-                        rc |= so.ww_gemm_sketch(k, p, xp, yp, mb, n, kd, 0, 0, sgp, skx, 0, sp, tp, 0, st)
+                        rc |= so.ww_gemm_sketch(k, p, xkp, yp, mb, n, kp, 0, 0, sgp, skx, 0, sp, tp, 0, st)
                         if apart:
                             rc |= so.ww_sketch_tags(skp, nvec, 0, seed_buf, stags_p, st)
                     if rc:
@@ -691,7 +702,8 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
 
 def pass_blocks(lib: WLib) -> int:
     """The tag blocks of one pass over the model's linears: LAYERS layers of the four shapes."""
-    return LAYERS * sum(n * kd // W.LANE_BYTES for n, kd in B.SHAPES.values()) // lib.tb
+    f = lib.field
+    return LAYERS * sum(n * f.kpad(kd) // f.lane_bytes for n, kd in B.SHAPES.values()) // lib.tb
 
 
 def pass_commit(lib: WLib, torch, reps: int, log) -> dict:
@@ -716,14 +728,14 @@ def pass_commit(lib: WLib, torch, reps: int, log) -> dict:
     return {"blocks": blocks, "median_s": med, "times_s": times}
 
 
-def pass_vectors() -> int:
+def pass_vectors(f: W.Field) -> int:
     """The sketch's vectors (and tags) of one pass: 16 a tile, LAYERS layers of the four shapes."""
-    return LAYERS * sum(16 * WS.tiles(n, kd) for n, kd in B.SHAPES.values())
+    return LAYERS * sum(16 * WS.tiles(n, f.kpad(kd), f) for n, kd in B.SHAPES.values())
 
 
 def pass_sketch_commit(lib: WLib, torch, reps: int, log) -> dict:
     """`pass_commit` for the sketch's tags: the leaves (a tile each) and tree over the pass's vectors."""
-    nv = pass_vectors()
+    nv = pass_vectors(lib.field)
     ws = torch.empty(lib.so.ww_workspace_bytes(nv), dtype=torch.uint8, device="cuda")
     torch.as_strided(ws.view(torch.int32), (nv * 8,), (1,), 0).random_(-(1 << 31), (1 << 31) - 1)
     seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
@@ -764,10 +776,12 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
     layers = layers or LAYERS
     lib.set_key(W.key(f, SEED, k))
     stores, wss = {}, {}
-    nv = {name: 16 * WS.tiles(*B.SHAPES[name]) for name in cases}
+    ks_ = {name: (B.SHAPES[name][0], f.kpad(B.SHAPES[name][1])) for name in cases}  # K padded to whole tasks
+    nv = {name: 16 * WS.tiles(*ks_[name], f) for name in cases}
     for name in cases:
         n, kd = B.SHAPES[name]
-        pay = payload_store(torch, B.fp8_weights(torch, n, kd, 100 + n + kd).view(torch.uint8), f)
+        pay = payload_store(torch, padded(torch, B.fp8_weights(torch, n, kd, 100 + n + kd).view(torch.uint8),
+                                          f.kpad(kd)), f)
         s = torch.empty_like(pay)
         lib.call("ww_encode", ptr(pay), ptr(s), pay.numel() // f.limbs, 0, k, 188 * 4, stream(torch))
         torch.cuda.synchronize()
@@ -790,13 +804,13 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
     so = lib.so
     out = {"k": k, "sketch": sketch, "per_batch": {}}
     for mb in batches:
-        xs = {name: torch.randn(mb, B.SHAPES[name][1], device="cuda").to(torch.float8_e4m3fn) for name in cases}
+        xs = {name: torch.randn(mb, ks_[name][1], device="cuda").to(torch.float8_e4m3fn) for name in cases}
         ys = {name: torch.zeros(mb, B.SHAPES[name][0], dtype=torch.float32, device="cuda") for name in cases}
         torch.cuda.synchronize()
         native = layers * sum(c["times"][mb]["native_s"] for c in cases.values()) if not profile else None
 
         def gemm(name: str, tags, j: int, sk=None) -> int:
-            n, kd = B.SHAPES[name]
+            n, kd = ks_[name]
             if sketch:
                 return so.ww_gemm_sketch(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n,
                                          kd, 0, 0, ptr(sgn), sk, j, None if sk else seed_buf, None if sk else tags, 0,

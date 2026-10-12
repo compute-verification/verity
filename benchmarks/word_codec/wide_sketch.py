@@ -45,8 +45,8 @@ def vector_bytes(f: W.Field) -> int:
     return 32 * steps(f) * T
 
 
-def tiles(n_rows: int, kdim: int) -> int:
-    return -(-(n_rows // ROWS) // T) * (kdim // W.TASK_COLS)
+def tiles(n_rows: int, kdim: int, f: W.Field | None = None) -> int:
+    return -(-(n_rows // ROWS) // T) * (kdim // (f.task_cols if f else W.TASK_COLS))
 
 
 def sign_bits(seed: bytes, k: int, n: int) -> np.ndarray:
@@ -65,10 +65,10 @@ def signs(seed: bytes, f: W.Field, k: int = K) -> np.ndarray:
 
 def lane_steps(store: bytes, n_rows: int, kdim: int, f: W.Field) -> np.ndarray:
     """The store's bytes as (row block, chunk, step, lane, 16)."""
-    nbs, nch, lw, m = n_rows // ROWS, kdim // W.TASK_COLS, f.lane_words(), steps(f)
+    nbs, nch, lw, m = n_rows // ROWS, kdim // f.task_cols, f.lane_words(), steps(f)
     u = np.frombuffer(store, dtype="<u4")
-    if n_rows % ROWS or kdim % W.TASK_COLS or u.size != nbs * nch * lw * f.limbs * W.LANES:
-        raise ValueError("the store is L·N·32 limbs a task of 16 rows and 512 columns")
+    if n_rows % ROWS or kdim % f.task_cols or u.size != nbs * nch * lw * f.limbs * W.LANES:
+        raise ValueError("the store is L·N·32 limbs a task of 16 rows and the field's task columns")
     u = u.reshape(nbs, nch, lw * f.limbs, W.LANES).transpose(0, 1, 3, 2)
     u = np.concatenate([u, np.zeros((nbs, nch, W.LANES, 4 * m - lw * f.limbs), "<u4")], axis=3)
     return np.ascontiguousarray(u).view(np.uint8).reshape(nbs, nch, W.LANES, m, 16).transpose(0, 1, 3, 2, 4)

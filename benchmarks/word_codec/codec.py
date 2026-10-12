@@ -181,26 +181,28 @@ def fragment_offset(lane: int, r: int, b: int) -> tuple[int, int]:
     return g + 8 * (r & 1), 4 * q + 16 * (r >> 1) + b
 
 
-def check_shape(n: int, kdim: int) -> None:
-    if n <= 0 or kdim <= 0 or n % TILE_ROWS or kdim % TASK_COLS:
-        raise ValueError(f"the fragment layout takes N a multiple of {TILE_ROWS} and K of {TASK_COLS}")
+def check_shape(n: int, kdim: int, tiles: int = TASK_TILES) -> None:
+    if n <= 0 or kdim <= 0 or n % TILE_ROWS or kdim % (TILE_COLS * tiles):
+        raise ValueError(f"the fragment layout takes N a multiple of {TILE_ROWS} and K of {TILE_COLS * tiles}")
 
 
-def fragment_stream(w: bytes, n: int, kdim: int) -> list[bytes]:
-    """W (n × kdim bytes, row-major) as each (task, lane)'s 256-byte stream, tasks in order (row block, column chunk)."""
-    check_shape(n, kdim)
+def fragment_stream(w: bytes, n: int, kdim: int, tiles: int = TASK_TILES) -> list[bytes]:
+    """W (n × kdim bytes, row-major) as each (task, lane)'s 16·tiles-byte stream (256 bytes at the default 16 tiles a
+    task), tasks in order (row block, column chunk)."""
+    check_shape(n, kdim, tiles)
+    cols = TILE_COLS * tiles
     if len(w) != n * kdim:
         raise ValueError("W is n × kdim bytes")
     out = []
     for nb in range(n // TILE_ROWS):
-        for kc in range(kdim // TASK_COLS):
+        for kc in range(kdim // cols):
             for lane in range(LANES):
-                s = bytearray(LANE_BYTES)
-                for tt in range(TASK_TILES):
+                s = bytearray(16 * tiles)
+                for tt in range(tiles):
                     for r in range(4):
                         for b in range(4):
                             row, col = fragment_offset(lane, r, b)
-                            s[16 * tt + 4 * r + b] = w[(TILE_ROWS * nb + row) * kdim + kc * TASK_COLS + TILE_COLS * tt + col]
+                            s[16 * tt + 4 * r + b] = w[(TILE_ROWS * nb + row) * kdim + kc * cols + TILE_COLS * tt + col]
                 out.append(bytes(s))
     return out
 

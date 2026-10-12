@@ -44,7 +44,7 @@ def spec_byte(store: bytes, f: W.Field, kdim: int, v: int, pos: int) -> int:
 
 
 def test_steps():
-    assert [S.steps(f) for f in W.FIELDS.values()] == [17, 18, 17, 16, 16]
+    assert [S.steps(f) for f in W.FIELDS.values()] == [17, 18, 17, 16, 16, 12]
     assert S.vector_bytes(W.FIELDS[512]) == 2048 and S.tiles(80, 1024) == 4
     src = (HERE.parent / "wide.cu").read_text()
     assert "constexpr int SK_K = 16, SK_M = (L * N + 3) / 4;" in src and "constexpr int GEMM_WARPS = 4;" in src

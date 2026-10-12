@@ -47,7 +47,8 @@ def main() -> int:
     f, k, mb = lib.field, a.k, a.batch
     n, kd = B.SHAPES[a.shape]
     w = B.fp8_weights(torch, n, kd, 100 + n + kd)
-    pay = WB.payload_store(torch, w.view(torch.uint8), f)
+    kd = f.kpad(kd)
+    pay = WB.payload_store(torch, WB.padded(torch, w.view(torch.uint8), kd), f)
     nwords = pay.numel() // f.limbs
     blocks = nwords // lib.lane_words // lib.tb
     lib.set_key(W.key(f, WB.SEED, k))
@@ -60,7 +61,7 @@ def main() -> int:
         torch.float8_e4m3fn)
     xp = WB.ptr(x.view(torch.uint8))
     sms = torch.cuda.get_device_properties(0).multi_processor_count
-    nch = kd // W.TASK_COLS
+    nch = kd // f.task_cols
 
     def gemm(kk, src, y, partials, tag, prefetch=False):
         ah = lib.so.ww_gemm_occupancy(kk, mb, int(tag), int(partials)) * sms if prefetch else 0

@@ -12,7 +12,7 @@
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
 # r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3, and
 # trailing c, u, t, w, e, m and k WW_CC=1, WW_B3U=1, WW_TB=2, WW_KW=2, WW_SKEND=1, WW_MAXREG=160 and WW_SKU=1, as in
-# p521s1rcut) names the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3) the
+# p521s1rcut) names the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3, and 1 for p1536s1) the
 # largest k each holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
 # `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
 # out/profile-details.txt. L2PROBE=LAYERS runs, after the bench, wide_profile.py --l2 LAYERS (L2_ARGS, default 70B, M=1,
@@ -26,12 +26,14 @@ export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bi
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}  # verity's bandwidth tags and PoUS's tree, for the gates
 WC=benchmarks/word_codec
 LIBSET=${LIBSET:-p127s1 p255s1 p521s1}
-declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-2} [521]=${KMAX_521:-2} [256]=${KMAX_256:-2} [512]=${KMAX_512:-3})
+declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-2} [521]=${KMAX_521:-2} [256]=${KMAX_256:-2} [512]=${KMAX_512:-3}
+  [1536]=${KMAX_1536:-1})
 B=$(mktemp -d /tmp/wide-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -I benchmarks/bandwidth)
 declare -A PIDS=()
 for lib in $LIBSET; do
-  bits=${lib:1:3} sqr=${lib:5:1} suf=${lib:6} defs=""
+  [[ $lib =~ ^p([0-9]+)s([01])(.*)$ ]] || { echo "bad LIBSET entry $lib"; exit 2; }
+  bits=${BASH_REMATCH[1]} sqr=${BASH_REMATCH[2]} suf=${BASH_REMATCH[3]} defs=""
   while [[ $suf == *[cutwemk] ]]; do
     [[ $suf == *k ]] && defs+=" -DWW_SKU=1"
     [[ $suf == *m ]] && defs+=" -DWW_MAXREG=160"

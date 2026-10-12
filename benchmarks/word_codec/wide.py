@@ -58,6 +58,19 @@ class Field:
     p: int
     limbs: int
     payload: int
+    tiles: int = TASK_TILES  # mma tiles (32 columns) a task: 12 at p1536, so a lane's 192 bytes are one word
+
+    @property
+    def task_cols(self) -> int:
+        return codec.TILE_COLS * self.tiles
+
+    @property
+    def lane_bytes(self) -> int:
+        return 16 * self.tiles
+
+    def kpad(self, kdim: int) -> int:
+        """K zero-padded to whole tasks (p1536's 384 columns; 8192 → 8448, 28672 → 28800)."""
+        return -(-kdim // self.task_cols) * self.task_cols
 
     @property
     def word_bytes(self) -> int:
@@ -68,7 +81,7 @@ class Field:
         return self.p % 4 == 3
 
     def lane_words(self, payload: int | None = None) -> int:
-        return -(-8 * LANE_BYTES // self.check_payload(payload))
+        return -(-8 * self.lane_bytes // self.check_payload(payload))
 
     def full_width(self, b: int) -> bool:
         """A payload of all the word's bits, p = 2^b − C with C < 2^(b − 8): every m whose top byte is not 0xFF is < p."""
@@ -89,7 +102,7 @@ class Field:
 
     def expansion(self, payload: int | None = None) -> float:
         """Stored bytes over FP8 weight bytes."""
-        return self.record_bytes(payload) / (LANES * LANE_BYTES)
+        return self.record_bytes(payload) / (LANES * self.lane_bytes)
 
 
 FIELDS = {
@@ -98,6 +111,7 @@ FIELDS = {
     521: Field("p521", 521, (1 << 521) - 1, 17, 520),
     256: Field("p256", 256, (1 << 256) - 189, 8, 256),
     512: Field("p512", 512, (1 << 512) - 569, 16, 512),
+    1536: Field("p1536", 1536, (1 << 1536) - 3453, 48, 1536, 12),
 }
 
 
@@ -279,7 +293,7 @@ def word_index(q: int, lane: int, w: int, lw: int) -> int:
 def fragment_payloads(w: bytes, n: int, kdim: int, f: Field, payload: int | None = None) -> list[list[int]]:
     """Each (task, lane)'s L payloads, (task, lane) in order."""
     b = f.check_payload(payload)
-    return [pack(s, b) for s in codec.fragment_stream(w, n, kdim)]
+    return [pack(s, b) for s in codec.fragment_stream(w, n, kdim, f.tiles)]
 
 
 def encode_store(lanes: list[list[int]], k: Key, payload: int | None = None, base: int = 0) -> list[list[int]]:

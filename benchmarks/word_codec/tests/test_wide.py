@@ -30,9 +30,9 @@ def test_fields():
         else:
             assert 32 * f.limbs > bits >= 32 * (f.limbs - 1) and f.payload == bits - 1
             assert f.payload_bound() == 1 << f.payload
-    assert [f.p % 8 for f in W.FIELDS.values()] == [7, 5, 7, 3, 7]
-    assert [f.lane_words() for f in W.FIELDS.values()] == [17, 9, 4, 8, 4]
-    assert [f.expansion() for f in W.FIELDS.values()] == [1.0625, 1.125, 1.0625, 1.0, 1.0]
+    assert [f.p % 8 for f in W.FIELDS.values()] == [7, 5, 7, 3, 7, 3]
+    assert [f.lane_words() for f in W.FIELDS.values()] == [17, 9, 4, 8, 4, 1]
+    assert [f.expansion() for f in W.FIELDS.values()] == [1.0625, 1.125, 1.0625, 1.0, 1.0, 1.0]
     with pytest.raises(ValueError, match="payload"):
         W.FIELDS[127].check_payload(127)
     with pytest.raises(ValueError, match="payload"):
@@ -121,14 +121,14 @@ def test_decode_rejects_a_non_payload():
 @pytest.mark.parametrize("bits", sorted(W.FIELDS))
 def test_layout(bits):
     f = W.FIELDS[bits]
-    n, kd = 16, 1024
+    n, kd = 16, 2 * f.task_cols
     w = W.random_weights(n, kd, bits)
     lanes = W.fragment_payloads(w, n, kd, f)
-    streams = C.fragment_stream(w, n, kd)
+    streams = C.fragment_stream(w, n, kd, f.tiles)
     assert len(lanes) == len(streams) == 2 * W.LANES
     for ms, s in zip(lanes, streams, strict=True):
         assert len(ms) == f.lane_words() and all(m >> f.payload == 0 for m in ms)
-        assert W.unpack(ms, W.LANE_BYTES, f.payload) == s
+        assert W.unpack(ms, f.lane_bytes, f.payload) == s
     store = W.store_bytes(lanes, f)
     assert len(store) == 2 * f.record_bytes()
     lw = f.lane_words()
@@ -182,7 +182,9 @@ def test_kernel_constants_match():
         m = re.search(rf"struct Fd<{bits}> {{\s*static constexpr int N = (\d+), M = (\d+), PB = (\d+);\s*"
                       rf"static constexpr uint32_t C = (\d+);", src)
         assert m and tuple(map(int, m.groups())) == (f.limbs, bits, f.payload, (1 << bits) - f.p)
-    assert "constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES" in src
+    assert "constexpr int LANES = 32, TASK_TILES = WW_BITS == 1536 ? 12 : 16, LANE_BYTES = 16 * TASK_TILES" in src
+    assert [f.tiles for f in W.FIELDS.values()] == [16] * 5 + [12] and W.FIELDS[1536].lane_words() == 1
+    assert W.FIELDS[1536].kpad(8192) == 8448 and W.FIELDS[1536].kpad(28672) == 28800
     assert W.root_squarings(W.FIELDS[255]) == 251 and W.root_squarings(W.FIELDS[521]) == 519
     assert W.root_chain(W.FIELDS[256]) == (257, 13) and W.root_chain(W.FIELDS[512]) == (515, 18)
 
@@ -198,7 +200,7 @@ def make_vectors() -> dict:
             for m in (0, f.payload_bound() - 1, rng.getrandbits(f.payload) % f.payload_bound()):
                 i = rng.getrandbits(40)
                 words.append({"k": k, "i": i, "m": hex(m), "y": hex(W.encode_word(m, i, key))})
-        n, kd = 16, 512
+        n, kd = 16, f.task_cols
         enc = W.encode_store(W.fragment_payloads(W.random_weights(n, kd, bits), n, kd, f), W.key(f, SEED, 1))
         ys = W.tags_of(enc, f, SEED)
         out["fields"][f.name] = {"p": hex(f.p), "c": [hex(c) for c in k2.c], "tau": hex(k2.tau), "words": words,

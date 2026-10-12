@@ -139,6 +139,11 @@ struct Fd<512> {
   static constexpr int N = 16, M = 512, PB = 512;
   static constexpr uint32_t C = 569;
 };
+template <>
+struct Fd<1536> {
+  static constexpr int N = 48, M = 1536, PB = 1536;
+  static constexpr uint32_t C = 3453;
+};
 
 using F = Fd<WW_BITS>;
 constexpr int N = F::N, M = F::M, PB = F::PB;
@@ -152,7 +157,8 @@ constexpr int RD = (int)(C - 1) / 4;
 constexpr int rs_of(int d) { return d == 0 ? 0 : 1 + rs_of(d / 2); }
 constexpr int RS = rs_of(RD), RN = M - 2 - RS, RE = (1 << RS) - RD;
 constexpr int KMAX = WW_KMAX;
-constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES, TASK_COLS = 32 * TASK_TILES;
+// p1536: 12 tiles a task, so a lane's 192 bytes are one word (`wide.Field.tiles`)
+constexpr int LANES = 32, TASK_TILES = WW_BITS == 1536 ? 12 : 16, LANE_BYTES = 16 * TASK_TILES, TASK_COLS = 32 * TASK_TILES;
 constexpr int L = (8 * LANE_BYTES + PB - 1) / PB;  // words a lane a task
 constexpr int GEMM_WARPS = 4;
 constexpr int MSG = 2 + L * N;                     // a record's part of a message in u32: u64be j, then the words
