@@ -228,8 +228,9 @@ def fill_gate(tu: Topup, torch) -> dict:
     out["fill_signs"] = sb.raw == F.signs(RUN_SEED)
     sizes = [5 * F.UNIT_BYTES + 4096 * 3 + 77, 7 * F.UNIT_BYTES, 3 * F.UNIT_BYTES]
     g = torch.Generator(device="cuda").manual_seed(4)
-    store = torch.randint(0, 256, (sum(sizes) + 256,), dtype=torch.uint8, device="cuda", generator=g)
-    offs = [0, sizes[0] + 51 * 16, sizes[0] + 51 * 16 + sizes[1]]
+    store = torch.randint(0, 256, (sum(sizes) + 1024,), dtype=torch.uint8, device="cuda", generator=g)
+    offs = [0, (sizes[0] + 15) // 16 * 16 + 51 * 16]
+    offs.append(offs[1] + sizes[1])
     regions = [(store.data_ptr() + o, n) for o, n in zip(offs, sizes)]
     host = store.cpu().numpy().tobytes()
     blobs = [host[o:o + n] for o, n in zip(offs, sizes)]

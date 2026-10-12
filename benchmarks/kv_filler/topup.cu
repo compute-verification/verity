@@ -222,6 +222,14 @@ static fl::Key fill_key(const uint8_t seed[32]) {
 }
 
 // The plan over `regions`: each region's whole units, in order.
+// The kernel's loads are 16-byte vectors from each region's base.
+static bool fill_ok(const std::vector<Region>& regions) {
+  if (regions.empty() || regions.size() > (size_t)fl::Regions::MAX) return false;
+  for (const Region& r : regions)
+    if ((uintptr_t)r.p % 16) return false;
+  return true;
+}
+
 static fl::Regions fill_regions(const std::vector<Region>& regions) {
   fl::Regions R{};
   R.n = (int)regions.size();
@@ -442,9 +450,10 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   CK(cudaStreamCreateWithPriority(&st->s, cudaStreamNonBlocking, priority));
   CK(cudaStreamCreateWithPriority(&st->s2, cudaStreamNonBlocking, priority));
   if (mode == tu::MODE_FILL) {
+    if (!tu::fill_ok(st->regions)) return -1;
     st->plan = tu::fill_regions(st->regions);
     st->plan_units = st->plan.first_unit[st->plan.n];
-    if (st->plan_units == 0 || n > fl::Regions::MAX) return -1;
+    if (st->plan_units == 0) return -1;
   }
   CK(cudaEventCreate(&st->start));
   st->e0.resize(depth);
@@ -642,6 +651,7 @@ int tu_fill_units(const uint64_t* ptrs, const uint64_t* bytes, int n, uint64_t u
   if (n <= 0 || n > fl::Regions::MAX) return -1;
   std::vector<tu::Region> regions;
   for (int k = 0; k < n; ++k) regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
+  if (!tu::fill_ok(regions)) return -1;
   const fl::Regions R = tu::fill_regions(regions);
   std::vector<uint32_t> sg(fl::SIGN_WORDS);
   tu::fill_signs(sign_seed, sg.data());
