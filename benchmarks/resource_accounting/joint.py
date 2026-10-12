@@ -7,7 +7,9 @@ the same `C`.  The challenger reads the device's id itself (`gpu.challenger_devi
 run's state directory (`audit.ChallengerState`), which every tag's verifier shares across rounds.  Every window goes
 through the store's one prover, the bandwidth harness's (`gpu.Prover`, kept by `Device`): it opens the window, prepares (an
 untimed pass under a throwaway seed, then a read of 512 MiB of another buffer, so L2 holds clean lines and no part of the
-store), takes σ, runs the tag pass on stream 0 in the tagger's own workspaces and commits the root.  The verifier is in this
+store), takes σ, runs the tag pass on stream 0 in the tagger's own workspaces and commits the root.  The context prefers L1
+in the L1/shared-memory split from the start (`prefer_l1`): the tag pass otherwise runs in the split torch's last kernel
+left, about 40% slower.  The verifier is in this
 process at the granted point (`certified.granted_params`: `s = 1,849`, `T = 1.2 ms`, no RTT, for it sees none), on a clock
 held at the root (`Held`), so the prover can resume its chain before the verifier draws the samples (7 to 9 ms of Python,
 another machine's in a deployment).  A window is on time at T when it committed within `certified.window_params`' T
@@ -60,6 +62,7 @@ SKIP = 0.01
 PASSES, WINDOWS, SLOTS, GAP_S = 20, 4, 40, 3.0
 SEED = 20261011
 THROWAWAY = bytes(tags.SEED_BYTES)
+CU_FUNC_CACHE_PREFER_L1 = 2
 
 
 def store_key(params: Any, salt: bytes, store: bytes) -> tuple[VerifierKey, MerkleTree]:
@@ -531,6 +534,15 @@ class Pause:
 
 # ---- on the device ----------------------------------------------------------------------------------------------------
 
+def prefer_l1() -> int:
+    """The current context's L1/shared-memory split preference set to L1 (`cuCtxSetCacheConfig`), CUDA's return code.  A
+    kernel with no preference of its own keeps the split the last kernel left: after torch's kernels the tag pass ran at
+    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`,
+    run r20261012-055226-416b)."""
+    import ctypes
+    return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig(CU_FUNC_CACHE_PREFER_L1)
+
+
 def load_gpu() -> Any:
     """`benchmarks/bandwidth/gpu.py`, by path (not a package: it imports `reference` beside it)."""
     if "bandwidth_gpu" not in sys.modules:
@@ -629,6 +641,7 @@ def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) 
     device = G.challenger_device(tagger, gpu_id)
     if device != fr.device:
         raise ValueError(f"the store's salt binds {G.uuid_text(fr.device)}, not {G.uuid_text(device)}, the challenger's")
+    split = prefer_l1()
     t0 = time.monotonic()
     vk, tree = store_key(fr.params, fr.salt, c.cpu().numpy().tobytes())
     key_s = time.monotonic() - t0
@@ -637,7 +650,8 @@ def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) 
     return {"store": {"blocks": fr.params.blocks, "block_bytes": fr.params.block_bytes,
                       "bytes": fr.params.blocks * fr.params.block_bytes, "root": vk.root.hex(), "salt": vk.salt.hex()},
             "device": G.uuid_text(device), "state": str(ch.state.path), "scrub_bytes": G.SCRUB_BYTES,
-            "prover": "gpu.Prover on stream 0", "verifier": "in this process", "vk_s": key_s, "t0": t0}, prover, ch
+            "prover": "gpu.Prover on stream 0", "verifier": "in this process",
+            "split": {"context": "CU_FUNC_CACHE_PREFER_L1", "rc": split}, "vk_s": key_s, "t0": t0}, prover, ch
 
 
 def setup(lib: str | Path, c: Any, fr: Any, done: Callable[[], bool], *, gpu_id: str, state_dir: Path, passes: int = PASSES,

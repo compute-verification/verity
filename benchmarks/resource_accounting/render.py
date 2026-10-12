@@ -206,7 +206,7 @@ def proof_reads(d: dict | None, error: str | None = None, chip: int | None = Non
         return {"error": error}
     E, raw = d["store"]["bytes"], statistics.median(d["raw_read"]["device_ms"])
     out = {"store_bytes": E, "blocks": d["store"]["blocks"], "raw_ms": raw, "raw_gb_per_s": E / raw / 1e6,
-           "vk_s": d.get("vk_s"), "setup_s": d.get("setup_s"), "device": d.get("device"), "tags": []}
+           "vk_s": d.get("vk_s"), "setup_s": d.get("setup_s"), "device": d.get("device"), "split": d.get("split"), "tags": []}
     for name, t in sorted(d["tags"].items()):
         dev = [p["device_ms"] for p in t["passes"]]
         host = [p["host_ns"] / 1e6 for p in t["passes"]]
@@ -306,7 +306,7 @@ def pause(r: dict, chip: int | None = None) -> dict:
             "lookahead": p.get("lookahead"), "windows_started": p.get("windows_started"), "judged": len(judged),
             "judged_accepted": sum(bool(j.get("accepted")) for j in judged),
             "elapsed_agrees": all(j.get("elapsed_agrees") for j in judged), "skip": p.get("skip"), "error": p.get("error"),
-            "alone": alone_passes(p["passes"]) if p.get("passes") else None}
+            "alone": alone_passes(p["passes"]) if p.get("passes") else None, "split": setup.get("split")}
 
 
 def probe(doc: dict) -> dict | None:
@@ -498,6 +498,13 @@ def _q(q: dict | None, store_bytes: int | None) -> str:
             f"({q['theorem']}, {q['basis']}, S_chip {q['chip_bytes']:,} bytes)")
 
 
+def _split(split: dict | None) -> str:
+    """The context's L1/shared-memory split preference the round set (`joint.prefer_l1`)."""
+    if not split:
+        return "The context's L1/shared split: none set, so each kernel without a preference kept the last one's."
+    return f"The context's L1/shared split: {split['context']} (CUDA rc {split['rc']})."
+
+
 def pause_lines(name: str, f: dict) -> list[str]:
     if not f["rows"] and f.get("error"):
         return ["", f"(f) Joint v1, round {name}: failed: {_last(f['error'])}"]
@@ -514,7 +521,7 @@ def pause_lines(name: str, f: dict) -> list[str]:
                   f"{f['elapsed_agrees']}); the skip control "
                   + ("–" if not skip else f"({skip.get('fraction', 0):.0%} untagged) "
                      + ("ACCEPTED" if skip.get("accepted") else f"rejected ({skip.get('failure')})"))
-                  + f". An accepted window: {_q(f.get('q'), f.get('store_bytes'))}."),
+                  + f". An accepted window: {_q(f.get('q'), f.get('store_bytes'))}. {_split(f.get('split'))}"),
              "", ("| point | arm | a window each | chains/s | useful TFLOP/s | lost | TFLOP/s lost | windows/s | on time at T | "
                   "within 1.2 ms | window ms p50 / max | gap ms p50 / mean | windows/s × gap | Q_cert GB per wall s |"),
              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -611,7 +618,7 @@ def proof_read_lines(name: str, d: dict) -> list[str]:
                   f"{_gb(d['store_bytes'])} GB, under the bandwidth audit's salt for {d.get('device') or '–'}), each pass from "
                   "a clean L2 (a 512 MiB read of another buffer first) on stream 0, and each window through the store's one "
                   "prover (gpu.Prover) and a verifier in this process at the granted point; E's raw read (torch.sum as "
-                  f"int64) {d['raw_ms']:.3f} ms = {d['raw_gb_per_s']:.0f} GB/s."),
+                  f"int64) {d['raw_ms']:.3f} ms = {d['raw_gb_per_s']:.0f} GB/s. {_split(d.get('split'))}"),
              "", ("| tag | certified | device ms p50 / p99 | tags ms p50 | host ms p50 / p99 | GB/s over E | of the raw read | "
                   "windows on time at T / accepted / run | window max ms | Q_cert of an accepted window | skip control |"),
              "|---|---|---|---|---|---|---|---|---|---|---|"]

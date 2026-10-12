@@ -32,8 +32,10 @@ on a store of its own in the tagger's memory, it times (d)'s pass from a scrubbe
 op on an L2-resident tensor, `DECAY_PRE` times before each burst of `DECAY` and at `DECAY_AT_MS` after its last kernel,
 with nvidia-smi sampling the clocks beside it.  ``steps`` (run.sh ``DECAY=steps``) times `STEP_PASSES` passes after each
 step of `STEPS`: before any torch work, after torch's operands, the L2 op and GEMMs, after an idle, and after setting the
-L1/shared-memory split's preference for the context and for the b3 kernel alone, each followed by GEMMs (whose time a
-launch it records), since a kernel with no preference keeps the split the last kernel left (CU_FUNC_CACHE_PREFER_NONE).
+context's L1/shared-memory split preference, each followed by GEMMs (whose time a launch it records), since a kernel with
+no preference keeps the split the last kernel left (CU_FUNC_CACHE_PREFER_NONE).  Run r20261012-055226-416b found the pass
+at 0.84 ms before any torch work, 1.1–1.4 after torch's kernels of any kind, idle or not, and 0.83 once the context
+prefers L1, the GEMMs' time a launch unchanged (`joint.prefer_l1`).
 """
 
 from __future__ import annotations
@@ -101,14 +103,11 @@ DECAY_AT_MS = (0, 1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 20000)
 DECAY_PRE = 3
 DECAY_TAG = "ro-blake3/v1"
 DECAY_SMI = "timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,pstate,clocks_event_reasons.active"
-#: the steps probe's plan: nothing yet, torch's operands, the L2 op, GEMMs, an idle, then the L1/shared split's preferences
-#: (the context's, then the b3 kernel's own) with GEMMs between
-STEPS = ("fresh", "torch", "l2", "gemm-o-bf16", "idle-30", "ctx-l1", "gemm-o-bf16", "gemm-o-fp8", "ctx-shared", "ctx-none",
-         "gemm-o-fp8", "b3-max-l1", "gemm-big", "gemm-o-fp8", "gemm-o-bf16", "b3-max-shared", "b3-default", "gemm-o-fp8")
+#: the steps probe's plan: nothing yet, torch's operands, the L2 op, GEMMs, an idle, then the context's L1/shared split
+#: preferences with GEMMs between
+STEPS = ("fresh", "torch", "l2", "gemm-o-bf16", "idle-30", "ctx-l1", "gemm-o-bf16", "gemm-o-fp8", "gemm-big", "ctx-shared",
+         "ctx-none", "gemm-o-fp8", "gemm-o-bf16")
 STEP_PASSES = 5
-#: `bw::b3_kernel`'s host stub in libbwtag.so, and cudaFuncAttributePreferredSharedMemoryCarveout
-B3_STUB = "_ZN2bw9b3_kernelEPKmmNS_4Key3EPj"
-CARVEOUT_ATTRIBUTE = 9
 
 
 def course_summary(series: list[list], marks: dict, after_s: float = COURSE_S[2]) -> dict:
@@ -386,8 +385,7 @@ class _Bench:
     """The probes' device side on the one visible GPU: a store of `blocks` rows in the tagger's memory (the bandwidth
     harness's at `lib`), its scrub buffer and `DECAY_TAG`'s workspace; torch's operands, made by `operands` (the process's
     first torch work on the device); (d)'s pass from a scrubbed L2 (`tag`), with the raw read and the L2 op (`point`);
-    and the L1/shared-memory split's preferences, the context's (`cuCtxSetCacheConfig`) and the b3 kernel's own
-    (`cudaFuncSetAttribute` through the tagger's runtime, which registered the kernel)."""
+    and the context's L1/shared-memory split preference (`cuCtxSetCacheConfig`)."""
 
     def __init__(self, lib: str | Path, blocks: int) -> None:
         import torch
@@ -466,14 +464,9 @@ class _Bench:
         return self.timed(lambda: [op() for _ in range(each)]) / each
 
     def prefer(self, which: str) -> int:
-        """`ctx-none|ctx-shared|ctx-l1`: the context's preference (CU_FUNC_CACHE_PREFER_*); `b3-default|b3-max-shared|
-        b3-max-l1`: the b3 kernel's carveout (-1, 100, 0).  The CUDA call's return code."""
+        """`ctx-none|ctx-shared|ctx-l1`: the context's preference (CU_FUNC_CACHE_PREFER_*), CUDA's return code."""
         import ctypes
-        scope, _, value = which.partition("-")
-        if scope == "ctx":
-            return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig({"none": 0, "shared": 1, "l1": 2}[value])
-        stub = ctypes.cast(getattr(self.t.lib, B3_STUB), ctypes.c_void_p)
-        return self.t.lib.cudaFuncSetAttribute(stub, CARVEOUT_ATTRIBUTE, {"default": -1, "max-shared": 100, "max-l1": 0}[value])
+        return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig({"ctx-none": 0, "ctx-shared": 1, "ctx-l1": 2}[which])
 
     def close(self) -> None:
         for p in (self.ws, self.scrub, self.store):
@@ -539,7 +532,7 @@ def steps(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, 
                     b.operands()
                 elif kind.startswith("idle-"):
                     time.sleep(float(kind[5:]))
-                elif kind.startswith(("ctx-", "b3-")):
+                elif kind.startswith("ctx-"):
                     rec["rc"] = b.prefer(kind)
                 elif kind != "fresh":
                     b.burst(kind, 0.0)
@@ -565,7 +558,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, text in (("decay", "the tag pass before and after each burst (module docstring)"),
-                       ("steps", "the tag pass after each step, the L1/shared split's preferences among them")):
+                       ("steps", "the tag pass after each step, the context's L1/shared split preferences among them")):
         d = sub.add_parser(name, help=text)
         d.add_argument("--lib", type=Path, required=True, help="the bandwidth tagger's libbwtag.so")
         d.add_argument("--blocks", type=int, default=1 << 19, help="the store's rows of 2,056 bytes (default E's, 2^19)")

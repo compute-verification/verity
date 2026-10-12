@@ -799,6 +799,9 @@ def test_the_decay_probe_summarizes_each_burst_before_and_after():
                             {"at_ms": 1000, "tags_ms": 0.9, "raw_ms": 0.72, "l2_ms": 0.1}]}]
     with pytest.raises(SystemExit):
         P.main(["decay", "--out", "x.json"])
+    assert R._split({"context": "CU_FUNC_CACHE_PREFER_L1", "rc": 0}) == (
+        "The context's L1/shared split: CU_FUNC_CACHE_PREFER_L1 (CUDA rc 0).")
+    assert "none set" in R._split(None)
 
 
 def test_the_rounds_chain_times_carry_the_device_s_and_the_launch_s():
