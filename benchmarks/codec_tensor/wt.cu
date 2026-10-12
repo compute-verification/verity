@@ -1877,10 +1877,20 @@ __host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
 }
 
 // The CTA's warps: FUSED_WARPS, and with SKW sketch warps (sketch_warp) SKW more where the registers allow (the MMA
-// warp's accumulators at NB8 = 4 don't fit 18 warps' 112 registers a thread, so there the sketch warps take decoders').
-template <int NB8, int SKW>
+// warp's accumulators at NB8 = 4 don't fit 18 warps' 96 registers a thread, so there the sketch warps take decoders').
+// At full slot the kernel fits 96 registers untagged at M <= 8 and beside the sketch warps at M <= 16, and a
+// sub-partition holds five warps at 96: there 20, so 16 decoders put four on every sub-partition and the MMA warp, the
+// producer and the sketch warps one on each (14 put four on two and three on two, and three a sub-partition leave its
+// issue idle at k >= 2).
+template <int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_warps() {
+  if (FULL_SLOT && NL <= 17 && (SKW ? NB8 <= 2 : SKK == 0 && NB8 == 1)) return 20;
   return FUSED_WARPS + (NB8 <= 2 ? SKW : 0);
+}
+
+template <int SKK, int SKW>
+int fused_cap(int nb8) {
+  return nb8 == 1 ? fused_warps<1, SKK, SKW>() : (nb8 == 2 ? fused_warps<2, SKK, SKW>() : fused_warps<4, SKK, SKW>());
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -2276,7 +2286,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
 // (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
 // the producer do all of it (sketch_warp).
 template <int K, int NB8, bool PARTIALS, int SKK, int SKW>
-__global__ void __launch_bounds__(fused_warps<NB8, SKW>() * 32, 1) fused_kernel(
+__global__ void __launch_bounds__(fused_warps<NB8, SKK, SKW>() * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
     u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
@@ -2434,7 +2444,7 @@ extern "C" {
 int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
   out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
-  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK; out[15] = WT_SK_DIAG;
+  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK; out[15] = WT_SK_DIAG; out[16] = fused_warps<1, 0, 0>();
   return 0;
 }
 
@@ -2581,13 +2591,13 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 // k_s = sketch_k over tiles of skt tasks (stages < 2 skt), the signs as sketching.sign_fragments, each vector v's tag at
 // tag_base + v into tags[8 v ..] and, if sk_out, its sketch at sk_out[k_s v ..]; tags and sk_out hold
 // sketch_vectors(...) vectors. sketch_warps = 0: the decoders sketch and the MMA warp hashes; 2 (k_s = 16, full slot):
-// two sketch warps do both (sketch_warp), beside `decoders` decoders (at most 12 at M > 16).
+// two sketch warps do both (sketch_warp), beside `decoders` decoders. The warps a launch may take are fused_warps'.
 int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
                     int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
                     cudaStream_t s) {
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
-  const int cap = FUSED_WARPS + (nb8 <= 2 ? sketch_warps : 0);
+  const int cap = sketch_warps ? fused_cap<16, 2>(nb8) : (sketch_k ? fused_cap<16, 0>(nb8) : fused_cap<0, 0>(nb8));
   if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
       decoders + 2 + taggers + sketch_warps > cap || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
     return 1;

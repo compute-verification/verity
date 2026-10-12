@@ -100,10 +100,10 @@ class Lib:
         so.wt_tag_tree.argtypes = [v, q, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 16)()
+        cs = (ctypes.c_int * 17)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag) = list(cs)
+         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag, self.fused_most) = list(cs)
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
         if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
@@ -428,10 +428,14 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its best); tagged, 0 and 2 of those
     warps tagging from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 0, 2,
     3 and 4 fewer stages (the sketch's buffers already take some), and at k_s = 16 and full slot the two sketch warps
-    beside all of them and beside 2 fewer, at 0 and 2 fewer stages. Four or more tag warps (with the decoders that
-    leave) fail some gates in some runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
+    beside all of them and beside 2 fewer, at 0 and 2 fewer stages. Where the field's kernel takes 20 warps
+    (wt.cu's fused_warps: untagged at M <= 8, and beside the sketch warps at M <= 16), also 16 decoders, four a
+    sub-partition, untagged at 2 and 4 fewer stages and beside the sketch warps at 0 and 2 fewer, and 18 untagged at 4
+    fewer; gemm_case skips each config at an M whose kernel doesn't take its warps (fused_fits). Four or more tag
+    warps (with the decoders that leave) fail some gates in some runs, on early tasks of random CTAs, unexplained, so
+    auto leaves them out."""
     smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (lib.sb + 48)  # noqa: E731
-    dmax = lib.fused_warps - 2
+    dmax, dwide = lib.fused_warps - 2, lib.fused_most - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     full_slot = lib.pb == lib.s
     if spec == "auto":
@@ -439,11 +443,15 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
         if dmax - 2 >= lib.fused_span:
             cfgs.append((dmax - 2, max(need(dmax - 2), smax(0) - 2), -1))
         cfgs += [(dmax - t, max(need(dmax - t), smax(0) - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
+        if dwide > dmax:
+            cfgs += [(dwide - 2, max(need(dwide - 2), smax(0) - f), -1) for f in (2, 4)]
+            cfgs.append((dwide, max(need(dwide), smax(0) - 4), -1))
         for ks in (int(v) for v in sketch.split(",") if v):
             cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (0, 2, 3, 4)]
             if ks == 16 and full_slot:
                 cfgs += [(d, min(2 * sketch_t - 1, max(need(d), smax(ks) - f)), -2, ks)
-                         for d in (dmax, dmax - 2) if d >= lib.fused_span for f in (0, 2)]
+                         for d in sorted({dmax, dmax - 2, dwide - 2}, reverse=True) if d >= lib.fused_span
+                         for f in (0, 2)]
     else:
         cfgs = parse(spec)
     out = []
@@ -451,10 +459,10 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
         if len(c) not in (2, 3, 4):
             raise SystemExit(f"fused {c}: DxS, DxSxT, DxSx-1xK_S or DxSx-2x16")
         d, st, t, ks = tuple(c) + (-1, 0)[len(c) - 2:]
-        if not (lib.fused_span <= d and d + max(t, 0) <= dmax and need(d) <= st <= smax(ks) and t >= -2
+        if not (lib.fused_span <= d and d + max(t, 0) <= dwide and need(d) <= st <= smax(ks) and t >= -2
                 and ks in (0, 16, 64) and (ks == 0 or (t in (-1, -2) and st < 2 * sketch_t))
                 and (t != -2 or (ks == 16 and full_slot))):
-            raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dmax}, "
+            raise SystemExit(f"{lib.name}: fused {c} is outside {lib.fused_span} <= D, D + T <= {dwide}, "
                              f"ceil(32 D / TW) <= stages <= {smax(ks)}, k_s in 16, 64 with no T (or T = -2: two "
                              f"sketch warps, k_s = 16, full slot) and stages < {2 * sketch_t}")
         if (d, st, t, ks) not in out:
