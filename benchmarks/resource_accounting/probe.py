@@ -30,7 +30,10 @@ nvidia-smi reads the clocks before and after each phase (pynvml is not in the ha
 after the chain's GEMMs and at 0.84 ms after a long idle (runs r20261012-051020-03ac, r20261012-035705-85d4): in one process,
 on a store of its own in the tagger's memory, it times (d)'s pass from a scrubbed L2, then a raw read of the store and an
 op on an L2-resident tensor, `DECAY_PRE` times before each burst of `DECAY` and at `DECAY_AT_MS` after its last kernel,
-with nvidia-smi sampling the clocks beside it.
+with nvidia-smi sampling the clocks beside it.  ``steps`` (run.sh ``DECAY=steps``) times `STEP_PASSES` passes after each
+step of `STEPS`: before any torch work, after torch's operands, the L2 op and GEMMs, after an idle, and after setting the
+L1/shared-memory split's preference for the context and for the b3 kernel alone, each followed by GEMMs (whose time a
+launch it records), since a kernel with no preference keeps the split the last kernel left (CU_FUNC_CACHE_PREFER_NONE).
 """
 
 from __future__ import annotations
@@ -98,6 +101,14 @@ DECAY_AT_MS = (0, 1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 20000)
 DECAY_PRE = 3
 DECAY_TAG = "ro-blake3/v1"
 DECAY_SMI = "timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,pstate,clocks_event_reasons.active"
+#: the steps probe's plan: nothing yet, torch's operands, the L2 op, GEMMs, an idle, then the L1/shared split's preferences
+#: (the context's, then the b3 kernel's own) with GEMMs between
+STEPS = ("fresh", "torch", "l2", "gemm-o-bf16", "idle-30", "ctx-l1", "gemm-o-bf16", "gemm-o-fp8", "ctx-shared", "ctx-none",
+         "gemm-o-fp8", "b3-max-l1", "gemm-big", "gemm-o-fp8", "gemm-o-bf16", "b3-max-shared", "b3-default", "gemm-o-fp8")
+STEP_PASSES = 5
+#: `bw::b3_kernel`'s host stub in libbwtag.so, and cudaFuncAttributePreferredSharedMemoryCarveout
+B3_STUB = "_ZN2bw9b3_kernelEPKmmNS_4Key3EPj"
+CARVEOUT_ATTRIBUTE = 9
 
 
 def course_summary(series: list[list], marks: dict, after_s: float = COURSE_S[2]) -> dict:
@@ -371,30 +382,43 @@ class _Words:
         self.__cuda_array_interface__ = {"shape": (nbytes // 8,), "typestr": "<i8", "data": (ptr, False), "version": 3}
 
 
-def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, bursts=DECAY, at_ms=DECAY_AT_MS) -> dict:
-    """The decay probe (module docstring) on the one visible GPU, through the bandwidth harness's tagger at `lib`."""
-    import torch
+class _Bench:
+    """The probes' device side on the one visible GPU: a store of `blocks` rows in the tagger's memory (the bandwidth
+    harness's at `lib`), its scrub buffer and `DECAY_TAG`'s workspace; torch's operands, made by `operands` (the process's
+    first torch work on the device); (d)'s pass from a scrubbed L2 (`tag`), with the raw read and the L2 op (`point`);
+    and the L1/shared-memory split's preferences, the context's (`cuCtxSetCacheConfig`) and the b3 kernel's own
+    (`cudaFuncSetAttribute` through the tagger's runtime, which registered the kernel)."""
 
-    import joint as J
-    G = J.load_gpu()
-    t = G.Tagger(lib)
-    nbytes = blocks * G.BLOCK_BYTES
-    store, scrub = t.alloc(nbytes), t.alloc(G.SCRUB_BYTES)
-    t.fill_test_store(store, blocks)
-    t.memset(scrub, 0, G.SCRUB_BYTES)
-    ws = t.alloc(t.workspace_bytes(DECAY_TAG, blocks))
-    words = torch.as_tensor(_Words(store, nbytes), device="cuda")
-    a = torch.randn(128, 4096, device="cuda", dtype=torch.bfloat16)
-    w = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)
-    a8, w8, one = a.to(torch.float8_e4m3fn), w.to(torch.float8_e4m3fn), torch.ones((), device="cuda")
-    big = torch.randn(8192, 8192, device="cuda", dtype=torch.bfloat16)
-    src = torch.empty(1 << 30, dtype=torch.uint8, device="cuda")
-    dst, l2 = torch.empty_like(src), torch.ones(8 << 20, device="cuda")
-    ops = {"gemm-o-bf16": (64, lambda: torch.matmul(a, w.t())),
-           "gemm-o-fp8": (64, lambda: torch._scaled_mm(a8, w8.t(), scale_a=one, scale_b=one, out_dtype=torch.bfloat16)),
-           "gemm-big": (2, lambda: torch.matmul(big, big)), "copy": (4, lambda: dst.copy_(src)), "l2": (64, lambda: l2.mul_(1.0))}
+    def __init__(self, lib: str | Path, blocks: int) -> None:
+        import torch
 
-    def timed(f) -> float:
+        import joint as J
+        self.torch, self.J, self.G = torch, J, J.load_gpu()
+        self.t = t = self.G.Tagger(lib)
+        self.blocks, self.nbytes = blocks, blocks * self.G.BLOCK_BYTES
+        self.store, self.scrub = t.alloc(self.nbytes), t.alloc(self.G.SCRUB_BYTES)
+        t.fill_test_store(self.store, blocks)
+        t.memset(self.scrub, 0, self.G.SCRUB_BYTES)
+        self.ws = t.alloc(t.workspace_bytes(DECAY_TAG, blocks))
+        self.ops: dict = {}
+
+    def operands(self) -> None:
+        torch = self.torch
+        self.words = torch.as_tensor(_Words(self.store, self.nbytes), device="cuda")
+        a = torch.randn(128, 4096, device="cuda", dtype=torch.bfloat16)
+        w = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)
+        a8, w8, one = a.to(torch.float8_e4m3fn), w.to(torch.float8_e4m3fn), torch.ones((), device="cuda")
+        big = torch.randn(8192, 8192, device="cuda", dtype=torch.bfloat16)
+        src = torch.empty(1 << 30, dtype=torch.uint8, device="cuda")
+        dst, self.l2 = torch.empty_like(src), torch.ones(8 << 20, device="cuda")
+        self.ops = {"gemm-o-bf16": (64, lambda: torch.matmul(a, w.t())),
+                    "gemm-o-fp8": (64, lambda: torch._scaled_mm(a8, w8.t(), scale_a=one, scale_b=one, out_dtype=torch.bfloat16)),
+                    "gemm-big": (2, lambda: torch.matmul(big, big)), "copy": (4, lambda: dst.copy_(src)),
+                    "l2": (64, lambda: self.l2.mul_(1.0))}
+        torch.cuda.synchronize()
+
+    def timed(self, f) -> float:
+        torch = self.torch
         e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         e0.record()
         f()
@@ -402,19 +426,23 @@ def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, 
         e1.synchronize()
         return e0.elapsed_time(e1)
 
-    def point(t0: float) -> dict:
-        t.read_scrub(scrub, G.SCRUB_BYTES)
-        s = time.monotonic()
-        t.tag_pass(DECAY_TAG, store, blocks, J.THROWAWAY, ws)
-        tags_ms, pass_ms = t.last_pass_ms()
-        t.read_scrub(scrub, G.SCRUB_BYTES)
-        raw = timed(lambda: torch.sum(words))
-        l2_ms = timed(lambda: [l2.mul_(1.0) for _ in range(10)])
-        return {"t_s": round(s - t0, 6), "unix_ns": time.time_ns(), "tags_ms": tags_ms, "pass_ms": pass_ms, "raw_ms": raw,
-                "l2_ms": l2_ms}
+    def tag(self) -> dict:
+        self.t.read_scrub(self.scrub, self.G.SCRUB_BYTES)
+        self.t.tag_pass(DECAY_TAG, self.store, self.blocks, self.J.THROWAWAY, self.ws)
+        tags_ms, pass_ms = self.t.last_pass_ms()
+        return {"tags_ms": tags_ms, "pass_ms": pass_ms}
 
-    def burst(kind: str, seconds: float) -> int:
-        n = 0
+    def point(self, t0: float) -> dict:
+        s = time.monotonic()
+        out = {"t_s": round(s - t0, 6), "unix_ns": time.time_ns(), **self.tag()}
+        self.t.read_scrub(self.scrub, self.G.SCRUB_BYTES)
+        out["raw_ms"] = self.timed(lambda: self.torch.sum(self.words))
+        out["l2_ms"] = self.timed(lambda: [self.l2.mul_(1.0) for _ in range(10)])
+        return out
+
+    def burst(self, kind: str, seconds: float) -> int:
+        """`kind` for `seconds` (at least one batch): its launches."""
+        torch, n = self.torch, 0
         if kind == "alloc":
             x = torch.empty(8 << 30, dtype=torch.uint8, device="cuda")
             del x
@@ -422,7 +450,7 @@ def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, 
         elif kind == "none":
             time.sleep(seconds)
         else:
-            each, op = ops[kind]
+            each, op = self.ops[kind]
             end = time.monotonic() + seconds
             while n == 0 or time.monotonic() < end:
                 for _ in range(each):
@@ -432,31 +460,57 @@ def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, 
         torch.cuda.synchronize()
         return n
 
-    for _, op in ops.values():
+    def batch_ms(self, kind: str) -> float:
+        """One batch of `kind` on the device, ms a launch."""
+        each, op = self.ops[kind]
+        return self.timed(lambda: [op() for _ in range(each)]) / each
+
+    def prefer(self, which: str) -> int:
+        """`ctx-none|ctx-shared|ctx-l1`: the context's preference (CU_FUNC_CACHE_PREFER_*); `b3-default|b3-max-shared|
+        b3-max-l1`: the b3 kernel's carveout (-1, 100, 0).  The CUDA call's return code."""
+        import ctypes
+        scope, _, value = which.partition("-")
+        if scope == "ctx":
+            return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig({"none": 0, "shared": 1, "l1": 2}[value])
+        stub = ctypes.cast(getattr(self.t.lib, B3_STUB), ctypes.c_void_p)
+        return self.t.lib.cudaFuncSetAttribute(stub, CARVEOUT_ATTRIBUTE, {"default": -1, "max-shared": 100, "max-l1": 0}[value])
+
+    def close(self) -> None:
+        for p in (self.ws, self.scrub, self.store):
+            self.t.free(p)
+
+
+def _smi_proc(smi_csv: Path | None, uuid: str | None):
+    if smi_csv is None or not uuid:
+        return None
+    return subprocess.Popen(["nvidia-smi", "-i", uuid, "--format=csv", "-lms", "20", f"--query-gpu={DECAY_SMI}"],
+                            stdout=smi_csv.open("w"), stderr=subprocess.STDOUT)
+
+
+def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, bursts=DECAY, at_ms=DECAY_AT_MS) -> dict:
+    """The decay probe (module docstring) through the bandwidth harness's tagger at `lib`."""
+    b = _Bench(lib, blocks)
+    b.operands()
+    for _, op in b.ops.values():
         op()
-    t.tag_pass(DECAY_TAG, store, blocks, J.THROWAWAY, ws)
-    torch.cuda.synchronize()
-    smi_proc = None
-    if smi_csv is not None and uuid:
-        smi_proc = subprocess.Popen(["nvidia-smi", "-i", uuid, "--format=csv", "-lms", "20", f"--query-gpu={DECAY_SMI}"],
-                                    stdout=smi_csv.open("w"), stderr=subprocess.STDOUT)
-    conditions = []
+    b.tag()
+    smi_proc, conditions = _smi_proc(smi_csv, uuid), []
     try:
         time.sleep(at_ms[-1] / 1e3)
         for kind, seconds in bursts:
             pre = []
             for _ in range(DECAY_PRE):
-                pre.append(point(time.monotonic()))
+                pre.append(b.point(time.monotonic()))
                 time.sleep(0.1)
             b0 = time.monotonic()
-            n = burst(kind, seconds)
+            n = b.burst(kind, seconds)
             end = time.monotonic()
             post = []
             for ms in at_ms:
                 wait = end + ms / 1e3 - time.monotonic()
                 if wait > 0:
                     time.sleep(wait)
-                post.append({"at_ms": ms, **point(end)})
+                post.append({"at_ms": ms, **b.point(end)})
             conditions.append({"kind": kind, "seconds": seconds, "launches": n, "burst_s": round(end - b0, 6), "pre": pre,
                                "post": post})
             after = " ".join(f"{p['tags_ms']:.3f}" for p in post)
@@ -466,23 +520,59 @@ def decay(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, 
         if smi_proc is not None:
             smi_proc.terminate()
             smi_proc.wait()
-        for p in (ws, scrub, store):
-            t.free(p)
-    return {"tag": DECAY_TAG, "blocks": blocks, "bytes": nbytes, "scrub_bytes": G.SCRUB_BYTES, "at_ms": list(at_ms),
-            "device": G.uuid_text(t.device()), "smi": smi(uuid), "conditions": conditions,
+        b.close()
+    return {"tag": DECAY_TAG, "blocks": blocks, "bytes": b.nbytes, "scrub_bytes": b.G.SCRUB_BYTES, "at_ms": list(at_ms),
+            "device": b.G.uuid_text(b.t.device()), "smi": smi(uuid), "conditions": conditions,
             "summary": decay_summary(conditions)}
+
+
+def steps(lib: str | Path, blocks: int, smi_csv: Path | None, uuid: str | None, plan=STEPS, passes: int = STEP_PASSES) -> dict:
+    """The steps probe (module docstring) through the bandwidth harness's tagger at `lib`: each step of `plan`, then
+    `passes` of (d)'s passes."""
+    b = _Bench(lib, blocks)
+    smi_proc, out = _smi_proc(smi_csv, uuid), []
+    try:
+        for kind in plan:
+            rec: dict = {"step": kind}
+            try:
+                if kind == "torch":
+                    b.operands()
+                elif kind.startswith("idle-"):
+                    time.sleep(float(kind[5:]))
+                elif kind.startswith(("ctx-", "b3-")):
+                    rec["rc"] = b.prefer(kind)
+                elif kind != "fresh":
+                    b.burst(kind, 0.0)
+                    rec["launch_ms"] = b.batch_ms(kind)
+            except Exception as ex:  # noqa: BLE001 - recorded; the passes still run
+                rec["error"] = f"{type(ex).__name__}: {ex}"
+            rec["passes"] = [b.tag() for _ in range(passes)]
+            rec["tags_ms"] = statistics.median(p["tags_ms"] for p in rec["passes"])
+            out.append(rec)
+            tags = " ".join(f"{p['tags_ms']:.3f}" for p in rec["passes"])
+            print(f"probe steps: {kind} rc {rec.get('rc', '-')} launch {rec.get('launch_ms', 0):.4f} ms, tags {tags}",
+                  flush=True)
+    finally:
+        if smi_proc is not None:
+            smi_proc.terminate()
+            smi_proc.wait()
+        b.close()
+    return {"tag": DECAY_TAG, "blocks": blocks, "bytes": b.nbytes, "device": b.G.uuid_text(b.t.device()), "smi": smi(uuid),
+            "steps": out}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    d = sub.add_parser("decay", help="the tag pass before and after each burst (module docstring)")
-    d.add_argument("--lib", type=Path, required=True, help="the bandwidth tagger's libbwtag.so")
-    d.add_argument("--blocks", type=int, default=1 << 19, help="the store's rows of 2,056 bytes (default E's, 2^19)")
-    d.add_argument("--smi-csv", type=Path, help="nvidia-smi's samples every 20 ms through the probe (GPU_LEASE_UUID's)")
-    d.add_argument("--out", type=Path, required=True)
+    for name, text in (("decay", "the tag pass before and after each burst (module docstring)"),
+                       ("steps", "the tag pass after each step, the L1/shared split's preferences among them")):
+        d = sub.add_parser(name, help=text)
+        d.add_argument("--lib", type=Path, required=True, help="the bandwidth tagger's libbwtag.so")
+        d.add_argument("--blocks", type=int, default=1 << 19, help="the store's rows of 2,056 bytes (default E's, 2^19)")
+        d.add_argument("--smi-csv", type=Path, help="nvidia-smi's samples every 20 ms through the probe (GPU_LEASE_UUID's)")
+        d.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
-    result = decay(a.lib, a.blocks, a.smi_csv, os.environ.get("GPU_LEASE_UUID"))
+    result = (decay if a.cmd == "decay" else steps)(a.lib, a.blocks, a.smi_csv, os.environ.get("GPU_LEASE_UUID"))
     a.out.write_text(json.dumps(result, indent=1) + "\n")
     return 0
 

@@ -32,8 +32,9 @@
 # and SIDECAR=1 chain.py --sidecar (an idle CUDA context in a second process through the run; not with PROBE).
 # SMI_MS=<ms> (JOINT) samples the leased GPU's clocks, power, temperatures and clock event reasons every <ms> through the
 # lease into $OUT/smi.csv (nvidia-smi, no CUDA context), on the wall time joint.py's anchor maps its passes to.
-# DECAY=1 runs probe.py decay instead (the tag pass before and after GEMM, copy and L2 bursts, no PoUS): the tagger into
-# scratch before the lease, the probe under it into $OUT/decay.json and $OUT/smi.csv.
+# DECAY=1 runs probe.py decay instead (the tag pass before and after GEMM, copy and L2 bursts, no PoUS), DECAY=steps probe.py
+# steps (the tag pass after each step, the L1/shared split's preferences among them): the tagger into scratch before the
+# lease, the probe under it into $OUT/decay.json or $OUT/steps.json, and $OUT/smi.csv.
 # TUNED=<build dir|art:id> (ARMS with native-bf16-tuned or native-fp8-tuned) is the PoUW harness's library for the tuned
 # arms (tuned.py), a build.sh output such as `pouw-harness-build/v1`: its jobs/env.sh gives the cuBLASLt and CUDA runtime
 # 12.9 wheels it links (sonames .so.12, which torch's .so.13 never resolve to) on LD_LIBRARY_PATH, and POUW_HARNESS_LIB, for
@@ -124,13 +125,14 @@ if [ -n "${DECAY:-}" ]; then
   on gpu || exit 0
   prepared "$S/libbwtag.so"
   stamp "the decay probe under gpu-lease $LEASE (at most $LEASE_MIN min)"
-  export OUT PY S
+  export OUT PY S DECAY
   set +e
   lease bash -c '
     set -euo pipefail
     eval "$PICK"
-    exec timeout $((LEASE_MIN * 60 - 30)) "$PY" benchmarks/resource_accounting/probe.py decay --lib "$S/libbwtag.so" \
-      --out "$OUT/decay.json" --smi-csv "$OUT/smi.csv"
+    MODE=decay; [ "$DECAY" != steps ] || MODE=steps
+    exec timeout $((LEASE_MIN * 60 - 30)) "$PY" benchmarks/resource_accounting/probe.py "$MODE" --lib "$S/libbwtag.so" \
+      --out "$OUT/$MODE.json" --smi-csv "$OUT/smi.csv"
   ' 2>&1 | tee "$OUT/chain.log"
   rc=${PIPESTATUS[0]}
   set -e
