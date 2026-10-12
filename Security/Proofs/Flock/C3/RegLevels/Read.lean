@@ -174,15 +174,14 @@ theorem hRegLevels_of_read {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
-  {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
-    (Vs j).OuterR Reg'}
-  {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}
+  {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+    (Vs j).Outer Reg'}
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
   {tr : Lean.Json} {record : String} {reg : Lean.Json}
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
 
 /-- The honest family's run is `decodeRun` of the inner transcript's steps, at any decoder `dec`. -/
 theorem hLgStages_honest {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HLgStages 𝓗 dg N k Rw := by

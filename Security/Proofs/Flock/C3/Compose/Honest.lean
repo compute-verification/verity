@@ -4,8 +4,8 @@ import Proofs.Flock.VBridge.Family.Commits
 /-!
 # n0: candidate 3's honest family
 
-`C3Family.honest` is the family the guarantee's `_hbr` is discharged at: V*'s sessions are the typed ones
-(`custodied zr _hCust h`), the commit strings, digests and messages are G's forms at the session's reads (`skOf`,
+`C3Family.honest` is the family the guarantee's `_hbr` is discharged at, at its sessions (`C3Family.checked`: V*'s
+checked sessions, `checkedC3`). Its commit strings, digests and messages are G's forms at the session's reads (`skOf`,
 `cmtOf`, `wmsgOf` and `msgOf` at a decoder `dec`), and:
 
 * `run`: the inner transcript's steps (V*'s layers' messages zipped with the rounds' coins) decoded stage by stage, in
@@ -105,16 +105,14 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n0) The honest family**: at the verifier's list `ss` of the inner shape `ish`, V*'s statements `Vs` whose files
-parse (`hob`), the typed sessions of the prover's `zr` under the records' custody, G's commit strings, digests and
-messages at the sessions' reads `own`, the stage selector `sel`, the commitments' `b ‖ c` (`bc`) and the decoder `dec`,
-the run decoded stage by stage (`decodeRun`) and the rows the verifier holds of its own inputs `tr`, `record` and `reg`
-(`heldRow`). -/
+parse (`hob`), V*'s sessions `zs`, G's commit strings, digests and messages at the sessions' reads `own`, the stage
+selector `sel`, the commitments' `b ‖ c` (`bc`) and the decoder `dec`, the run decoded stage by stage (`decodeRun`) and
+the rows the verifier holds of its own inputs `tr`, `record` and `reg` (`heldRow`). -/
 noncomputable def C3Family.honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements ish = .ok ss) (bind : Fin (vstarCount ish) → VStar.Bindings)
     {Vs : Fin (vstarCount ish) → VStmt} (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
-    (zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
-      (Vs j).OuterR Reg')
-    (hCust : Flock.Premises.RecordCustody zr) (h : Typed zr)
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).Outer Reg')
     (own : Fin (vstarCount ish) → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
@@ -125,7 +123,7 @@ noncomputable def C3Family.honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt}
   bind := bind
   Vs := Vs
   hob := hob
-  zs := Flock.Guarantees.custodied zr hCust h
+  zs := zs
   wmsg := wmsgOf Vs (skOf Vs own sel) (holoInnerAt T CT st hp).r dec
   Sk := skOf Vs own sel
   cmt := cmtOf Vs bc
@@ -133,5 +131,23 @@ noncomputable def C3Family.honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt}
   run := fun _ _ t Lb => decodeRun (holoAt st hp)
     (schedSteps T CT 0 ((wmsgOf Vs (skOf Vs own sel) (holoInnerAt T CT st hp).r dec Lb).zip (t.map Prod.snd)))
   row := fun v x _ => heldRow (innerCommitsAt tr record st reg) ish.sparse v x
+
+/-- **(n0) The checked family**: the honest family at the guarantee's sessions, V*'s checked sessions (`checkedC3`) of
+the prover's `zr` under the records' custody, at the verifier's hold of the inner transcript, check 5's source `coins`
+and the shared rows `rows`. -/
+noncomputable abbrev C3Family.checked (ish : RecVStar.Inner) {ss : Array VStar.Stmt}
+    (hss : RecVStar.statements ish = .ok ss) (bind : Fin (vstarCount ish) → VStar.Bindings)
+    {Vs : Fin (vstarCount ish) → VStmt} (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
+    (zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).OuterR Reg')
+    (hCust : Flock.Premises.RecordCustody zr) (h : Typed zr) (coins : Option Flock.RecCoins.Source)
+    (rows : Option (Array Flock.Registered.Port))
+    (own : Fin (vstarCount ish) → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
+    (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
+    (tr : Lean.Json) (record : String) (reg : Lean.Json) : C3Family T CT st hp xR L Reg Cm Reg' Reg₂ :=
+  C3Family.honest ish hss bind hob
+    (Flock.Guarantees.checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust h) own sel bc
+    dec tr record reg
 
 end FlockC3.Compose

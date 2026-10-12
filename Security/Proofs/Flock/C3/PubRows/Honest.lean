@@ -68,15 +68,14 @@ def HeldIs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (own : Fin (vstarCo
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
-  {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
-    (Vs j).OuterR Reg'}
-  {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}
+  {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+    (Vs j).Outer Reg'}
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
   {tr : Lean.Json} {record : String} {reg : Lean.Json}
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
 
 /-- **(n1) The tape at the honest family is its frame**: `decodeRun` takes each stage on a prefix of what is left
 (`decodeRun_split`), so the tape is `holoSteps` of its decode exactly where the cap, the link points and the openings

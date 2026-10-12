@@ -61,20 +61,18 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 | n7 | the source: the run V*'s layers hold, read stage by stage from each stage's sessions, with `SrcOK` (but `HLeafC3`) and each read fact on its own steps (`SparseReadAt`, `OpeningReadAt`, `RegTape` against `xR.cap`, which `_htop` and `HPubRows` give), from that stage's sessions' acceptance of its verifier row | `C3/Compose/` | to size (round 6) | n6; `RepsRead` (n2) | L |
 
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved; `hdec` is
-`vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes (round 5), each with who discharges it:
+`vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. `hbr_honest` is at the checked family (`C3Family.checked`: the
+honest family at `checkedC3`, round 6), so its conclusion is `_hbr` itself, and the verifier's public-row and statement
+checks are the kept sessions' (`checksAccepted_checked`, into `hPubRows_of_checked` at `sparseAtShapeChecked`). What it
+takes, each with who discharges it:
 
 * `hrread`, `hsread`, `horead`, `hlread` (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`), through
   `hReps_honest_of_read`, `hSparse_honest_of_read`, `hOpening_of_read`, `hRegLevels_honest_of_read`, and `hfr` (`HFrame`): at n6's fixed
   decoder, from `tape_c3DecOf` and the source's facts (n7). `SrcOK`'s `HLeafC3` is G's `HLeaf`: no decoder meets a
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
-  is empty) while V*'s sessions can accept there, so it holds only once `VBridge` is read at whole histories or the
-  family's sessions refuse a short one.
-* `hchk` (`ChecksPubRows`): n1b's `checkPubRows`, once `hbr_honest` is at the checked family (below).
+  is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
-* `hspsh` (`SparseAtShape`): false as stated (`bind` is free, so `Vs j` can be rec-sparse at another shape); at the
-  sessions `checkStmt` passes it is H's `sparseAtShapeChecked`, which `hPubRows_of_checked` takes with `ChecksStmts`
-  in place of `hspsh` once `hbr_honest` is at the checked family.
 * `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
 * `hheld` (`HeldIs`): n1c, below.
 * `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
@@ -85,9 +83,9 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
   per session (`ChecksVR`, `ChecksC3`: `checkStmt` with `checkOwn`, check 5's `RecCoins.check` at `c3Of` and
   `checkPubRows`), and VBridge, the forks and the bound are at the checked sessions (`checkedC3`: each typed session
   kept where an accepted transcript passes `ChecksC3`, `freshOwn` elsewhere; `checkedT` its prover), whose games are
-  the typed sessions'. `vbridge_checked` gives VBridge at `checkedC3` from VBridge at the typed sessions, so
-  `hbr_honest` still discharges `_hbr`. Left: `hbr_honest` at the checked family itself, where `hchk` and `hspsh`
-  are the kept sessions' checks (`checkPubRows`, and H's `SparseAtShape` from `checkStmt`) instead of hypotheses.
+  the typed sessions'. `vbridge_checked` gives VBridge at `checkedC3` from VBridge at the typed sessions; `hbr_honest`
+  is at the checked family itself (round 6), where the public-row and statement checks are the kept sessions'
+  (`ChecksAccepted`: where a session accepts, some transcript it accepts passes them, `checks_of_keepOwn`).
 * n1c, the record–history link: `row` reads the verifier's fixed record `tr`, while the history `t` ranges, so
   `hheld` (`HeldIs`: at each accepted history the held row is `t`'s commitment) needs custody of `tr` as the live
   history's record, beside `RecordCustody`: stated as `Compose.InnerRecordCustody` (`C3/Compose/Custody.lean`, at

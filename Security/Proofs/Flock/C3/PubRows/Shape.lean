@@ -14,8 +14,10 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
 
 * `SparseAtShapeChecked`: `SparseAtShape` at a statement of `Vs j`'s circuit that `checkStmt` passes;
   `sparseAtShapeChecked` proves it of every family.
-* `ChecksStmts`: each accepted session's statements pass `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct),
-  n1b's checked predicate; `hPubRows_of_checked` is `hPubRows_of_check'` with it and `SparseAtShapeChecked`.
+* `ChecksAccepted`: where a session accepts, a transcript it accepts passes `checkPubRows` (`PubRowsChecked`) and
+  `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
+  (`checksAccepted_checked`, by `checks_of_keepOwn`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it and
+  `SparseAtShapeChecked`.
 -/
 
 namespace FlockC3.PubRows
@@ -218,6 +220,23 @@ theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU 
     exact (Except.ok.inj h1).symm
   exact ⟨_, hcst, array_forM_ok hfm _ hjs⟩
 
+/-- **A kept session that accepts kept its own list** (`Flock.Guarantees.keepOwn`), so some transcript it accepts
+passes the keep's predicate `P`, and so any `Pc` that `P` implies. -/
+theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : Inputs → Array Flock.Registered.Port →
+    Exec.Transcript → Prop} (hP : ∀ J o t, P J o t → Pc J o t)
+    (h : ∃ t, AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t) :
+    ∃ t, AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t ∧
+      Pc (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t := by
+  obtain ⟨t, ht⟩ := h
+  by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+  · have ho : (Flock.Guarantees.keepOwn z P).own = z.own := ite_eq_left hp
+    obtain ⟨t', ha, hpt⟩ := hp
+    rw [ho]
+    exact ⟨t', ha, hP _ _ _ hpt⟩
+  · have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right hp
+    rw [hf] at ht
+    exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t ht).elim
+
 end Session
 
 section Family
@@ -243,33 +262,54 @@ theorem sparseAtShapeChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) :
   rw [← hc] at hsh
   exact Option.some.inj ((sparse_of_checkStmt h hsh).symm.trans h₀)
 
-/-- **(n1b) The verifier checks every accepted session as V*'s statement of its index**: `StmtsChecked` at the inner
-shape, `j` and `F.bind j`, beside `ChecksPubRows`. -/
-def ChecksStmts (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port)) :
-    Prop :=
-  ∀ R ω t R₂ j tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr' →
-    StmtsChecked F.ish j (F.bind j) rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
+/-- **(n1b) Where a session accepts, a transcript it accepts passes the verifier's checks** of its public rows against
+its hold of the inner transcript (`PubRowsChecked`) and of its statements as V*'s statement of its index
+(`StmtsChecked`), as the checked sessions keep it (`checksAccepted_checked`). -/
+def ChecksAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
+    (tr : Lean.Json) (record : String) (reg : Lean.Json) : Prop :=
+  ∀ R ω t R₂ j, (∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
+    ∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr' ∧
+      PubRowsChecked (innerCommitsAt tr record st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
+        (F.zs R ω t R₂ j).own tr' ∧
+      StmtsChecked F.ish j (F.bind j) rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
-  {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
-    (Vs j).OuterR Reg'}
-  {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}
+  {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+    (Vs j).Outer Reg'}
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
   {tr : Lean.Json} {record : String} {reg : Lean.Json}
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg
+/-- **(n1b) The checked family passes the verifier's checks where a session accepts**: a checked session that accepts
+kept its own list, so a transcript it accepts passes `ChecksC3`, whose public-row and statement checks these are. -/
+theorem checksAccepted_checked {coins : Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    ChecksAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg)
+      rows tr record reg := by
+  intro R ω t R₂ j hex
+  refine checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
+    (P := fun J o tr' => (holoInnerAt T CT st hp).r ≤ t.length ∧
+      Flock.Guarantees.ChecksC3 ish (innerCommitsAt tr record st reg).toOption coins j (bind j) rows J o tr')
+    (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt tr record st reg).toOption ish.sparse J o tr' ∧
+      StmtsChecked ish j (bind j) rows J o tr') ?_ hex
+  intro J o tr' hp
+  obtain ⟨-, spec, sts, hs, hst, -, hpr⟩ := hp
+  exact ⟨⟨spec, sts, hs, hpr⟩, spec, sts, hs, hst⟩
+
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
-rec-sparse shape read at the accepted sessions the verifier checks as V*'s statements (`ChecksStmts`, n1b's), where
-`SparseAtShapeChecked` holds (`sparseAtShapeChecked`). -/
-theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksPubRows 𝓗 tr record reg)
-    (hstmt : ChecksStmts 𝓗 rows) (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗) (hsp : SparseAtShapeChecked 𝓗) :
-    HPubRows 𝓗 := by
-  intro R ω t R₂ j ⟨tr', hacc⟩ rg hrg u q x hname hread b hrow
+rec-sparse shape read at an accepted transcript whose public rows and statements the verifier checks
+(`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). -/
+theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksAccepted 𝓗 rows tr record reg)
+    (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
+  intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
+  obtain ⟨tr', hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
   obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
     heldRow_some (show heldRow (innerCommitsAt tr record st reg) ish.sparse rg.value x = some b from hrow)
   have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
@@ -278,11 +318,10 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
   obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu, hlab⟩ := hdrawn R ω t R₂ j tr' hacc rg hrg hfix u x hread
   have hfind := port_find_of_unique (hnames j) q
   rw [hname] at hfind
-  have hchk' := hchk R ω t R₂ j tr' hacc
   rw [hcs] at hchk'
   obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) hchk' hrg hfix hfind hd hD
     hdp hidx hu (by rw [hlab]; exact hread)
-  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc (hstmt R ω t R₂ j tr' hacc) hd u
+  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
   have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
   exact hdig.trans (he.2.symm.trans hb.symm)
