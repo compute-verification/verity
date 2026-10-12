@@ -2,10 +2,10 @@
 bursty arrival trace, with the filler top-up (`topup.cu`) beside it: each window's registered reads against R·T, and
 what the top-up costs the serving. Writes `serve-<arm>.json` and `serve.log` under `--out`.
 
-Pool sizings (one per process, `--pool`):
-  large   vLLM's pool at `--mem` of the card; its free pages are the filler, so the top-up reads the pool's tensors
-  sized   the pool at `--kv-gib` (vLLM's `kv_cache_memory_bytes`), the rest of the card a static filler buffer the
-          top-up reads instead
+Pool sizings (one per process, `--pool`), each with a static filler buffer for the card's rest down to `--headroom-gib`,
+the top-up reading the pool's tensors and the buffer:
+  large   vLLM's pool at `--mem` of the card, its free pages the filler
+  sized   the pool at `--kv-gib` (vLLM's `kv_cache_memory_bytes`), the buffer most of the filler
 
 Top-up policies, each over the same trace in the same engine (`--policies`):
   none      no top-up
@@ -119,6 +119,7 @@ def main() -> int:
     ap.add_argument("--pool", choices=("large", "sized"), default="large")
     ap.add_argument("--mem", type=float, default=0.85)
     ap.add_argument("--kv-gib", type=float, default=12.0)
+    ap.add_argument("--headroom-gib", type=float, default=6.0)
     ap.add_argument("--policies", type=lambda s: s.split(","), default=["none", "idle", "throttle", "full"])
     ap.add_argument("--modes", type=lambda s: s.split(","), default=["sk16"])
     ap.add_argument("--throttle-ctas", type=int, default=32)
@@ -168,18 +169,23 @@ def main() -> int:
             seen.add(tns.data_ptr())
             regions.append((tns.data_ptr(), tns.numel() * tns.element_size()))
     pool_bytes = sum(n for _, n in regions)
-    filler = None
-    if a.pool == "sized":
-        free, _ = torch.cuda.mem_get_info()
-        filler = torch.zeros(max(1 << 30, free - (6 << 30)), dtype=torch.uint8, device="cuda")
-        regions = [(filler.data_ptr(), filler.numel())]
+    # Both sizings register the card down to `--headroom-gib`: the top-up reads the pool and a static buffer for the rest.
+    free, card = torch.cuda.mem_get_info()
+    static = max(0, free - int(a.headroom_gib * (1 << 30)))
+    filler = torch.zeros(static, dtype=torch.uint8, device="cuda") if static >= (1 << 30) else None
+    if filler is not None:
+        regions.append((filler.data_ptr(), filler.numel()))
     res = {"format": "verity-kv-filler/serve/v0", "args": {k: v for k, v in vars(a).items() if k != "out"},
            "vllm": vllm.__version__, "torch": torch.__version__, "gpu": torch.cuda.get_device_name(),
-           "weight_bytes_per_step": weight_bytes, "kv_pool_bytes": pool_bytes,
+           "card_bytes": card, "weight_bytes_per_step": weight_bytes,
+           "weight_bytes_resident": sum(p.numel() * p.element_size() for p in runner.model.parameters()),
+           "kv_pool_bytes": pool_bytes, "static_filler_bytes": static if filler is not None else 0,
            "kv_blocks": int(cache.num_gpu_blocks), "block_size": int(cache.block_size),
            "filler_bytes": sum(n for _, n in regions), "topup_regions": len(regions), "runs": []}
+    res["unregistered_bytes"] = card - res["weight_bytes_resident"] - pool_bytes - res["static_filler_bytes"]
     log(f"weights read a step {weight_bytes / 1e9:.2f} GB; pool {pool_bytes / 1e9:.1f} GB in {len(kv_tensors)} tensors;"
-        f" top-up over {res['filler_bytes'] / 1e9:.1f} GB")
+        f" static filler {res['static_filler_bytes'] / 1e9:.1f} GB; top-up over {res['filler_bytes'] / 1e9:.1f} GB;"
+        f" card {card / 1e9:.1f} GB, {res['unregistered_bytes'] / 1e9:.1f} GB unregistered")
 
     out_path = a.out / f"serve-{a.pool}.json"
 
@@ -215,7 +221,7 @@ def main() -> int:
             free = int(sched.kv_cache_manager.block_pool.get_num_free_blocks())
         except AttributeError:
             free = -1
-        cur["steps"].append({"t0": t0, "t1": now, "tokens": int(so.total_num_scheduled_tokens), "reqs": len(ns),
+        cur.setdefault("steps", []).append({"t0": t0, "t1": now, "tokens": int(so.total_num_scheduled_tokens), "reqs": len(ns),
                              "prefill_tokens": prefill, "kv_tokens": kv_tokens, "free_blocks": free,
                              "preempted": len(getattr(so, "preempted_req_ids", None) or ())})
         return orig(so, mro)
