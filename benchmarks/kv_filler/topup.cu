@@ -825,12 +825,13 @@ static int harvest(State& st, uint64_t& next, std::vector<uint32_t>& cnt, std::v
   if (e == cudaSuccess) e = cudaStreamSynchronize(st.s_h);
   if (e != cudaSuccess) return (int)e;
   const uint32_t full = 1u << st.shift;
+  const uint64_t next0 = next;
   for (;;) {
     const uint32_t slot = (uint32_t)(next & (EPOCHS - 1));
     const uint64_t first = next << st.shift;
     uint32_t n = cnt[slot];
     if (n != full) {
-      if (!last || total <= first) return 0;
+      if (!last || total <= first) break;
       if (n != total - first) return -2;  // every unit taken is done once every kernel has ended
     }
     {
@@ -840,17 +841,23 @@ static int harvest(State& st, uint64_t& next, std::vector<uint32_t>& cnt, std::v
     }
     st.units_done += n;
     st.epochs_done += 1;
-    e = cudaMemsetAsync(st.ring.cnt + slot, 0, 4, st.s_h);
-    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.xr + slot, 0, 4, st.s_h);
-    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.t0 + slot, 0xFF, 8, st.s_h);
-    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.t1 + slot, 0, 8, st.s_h);
-    if (e != cudaSuccess) return (int)e;
     ++next;
+    if (n != full || next - next0 == EPOCHS) break;
+  }
+  // the logged slots cleared as at most two runs, before the limit lets them be taken again
+  for (uint64_t k = next0; k < next && e == cudaSuccess;) {
+    const uint32_t a = (uint32_t)(k & (EPOCHS - 1)), m = (uint32_t)std::min<uint64_t>(next - k, EPOCHS - a);
+    e = cudaMemsetAsync(st.ring.cnt + a, 0, 4ull * m, st.s_h);
+    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.xr + a, 0, 4ull * m, st.s_h);
+    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.t0 + a, 0xFF, 8ull * m, st.s_h);
+    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.t1 + a, 0, 8ull * m, st.s_h);
+    k += m;
+  }
+  if (e == cudaSuccess && next != next0) {
     st.lim = limit(st.shift, next);
     e = cudaMemcpyAsync(&st.seq->limit, &st.lim, 8, cudaMemcpyHostToDevice, st.s_h);
-    if (e != cudaSuccess) return (int)e;
-    if (n != full) return 0;
   }
+  return (int)e;
 }
 
 static void loop(State* sp) {
