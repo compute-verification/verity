@@ -43,14 +43,14 @@ for s in session prover; do
   echo "rec-transcript --rec-inner $s exit $?" | tee -a $X
 done
 
-SALTS=$S/acc-salts.bin
 python3 verity/ml/flock/pod/c3_e2e.py stage level3 --inner $H/inner --fold $H/fold.json --points $H/points.json --circuit $IC \
-  --salts $SALTS --out $S/v-l3 > $E/stage-l3.json 2> $E/stage-l3.err
+  --salts $S/acc-salts-l3.bin --out $S/v-l3 > $E/stage-l3.json 2> $E/stage-l3.err
 echo "stage l3 exit $?" | tee -a $X
 python3 verity/ml/flock/pod/c3_e2e.py stage session --inner $H/inner --fold $H/fold.json --points $H/points.json --circuit $IC \
-  --salts $SALTS --out $S/v-c3 > $E/stage-c3.json 2> $E/stage-c3.err
+  --salts $S/acc-salts-c3.bin --out $S/v-c3 > $E/stage-c3.json 2> $E/stage-c3.err
 echo "stage sparse+R exit $?" | tee -a $X
 
+# (the relay's record, session/, is refused by name: check 5 reads the prover's)
 # each staged statement's verifier-own flags: its index in the list, its bindings, its rec-acc rows
 own() {  # own DIR -> the --rec-* flags of DIR's statement
   python3 - $E $1 <<'EOF'
