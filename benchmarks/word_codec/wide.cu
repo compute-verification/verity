@@ -946,11 +946,14 @@ __device__ __forceinline__ void tag_step_second(uint32_t (&cv)[8], const uint32_
 // The rolled decode (WW_ROLL, p521's few wide words): word 0 decoded, then the words rotated down one, L times.
 constexpr bool ROLL_DECODE = WW_ROLL && L <= 4;
 
-__device__ __forceinline__ void bar_arrive(int id, int threads) {
-  asm volatile("bar.arrive %0, %1;" ::"r"(id), "r"(threads) : "memory");
+// A warp pair's named barrier, its id an immediate: with a register id ptxas reserves all 16, one CTA an SM.
+template <int ID>
+__device__ __forceinline__ void pair_arrive() {
+  asm volatile("bar.arrive %0, 64;" ::"n"(ID) : "memory");
 }
-__device__ __forceinline__ void bar_sync(int id, int threads) {
-  asm volatile("bar.sync %0, %1;" ::"r"(id), "r"(threads) : "memory");
+template <int ID>
+__device__ __forceinline__ void pair_sync() {
+  asm volatile("bar.sync %0, 64;" ::"n"(ID) : "memory");
 }
 
 // One task (16 rows × 512 columns) a warp, four warps a CTA: GEMM_WARPS / TB row groups × TB adjacent K-chunks, the
@@ -967,6 +970,7 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
                                                                uint32_t* __restrict__ tags, int ahead) {
   constexpr int RG = GEMM_WARPS / TB, UNITS = TASK_COLS / 16;
+  static_assert(TB == 1 || RG == 2, "two warp pairs a CTA, named barriers 1 and 2");
   __shared__ __align__(16) uint8_t xs[TB][NB8 * 8][TASK_COLS];  // row r's 16-byte unit c at c ^ (r mod 8): no conflicts
   const int nchunks = Kd / TASK_COLS, nk = nchunks / TB;
   const int warp = threadIdx.x / 32, h = warp % TB, pair = warp / TB;
@@ -1019,14 +1023,16 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
         for (int b = 0; b < SPLIT; ++b) tag_step(cv, w, j, b);
         slot[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
         slot[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
-        bar_arrive(1 + pair, 64);
+        if (pair == 0) pair_arrive<1>();
+        else pair_arrive<2>();
       } else {
         // message word 16·SPLIT + i is the even record's limb 16·SPLIT − 2 + i
         uint32_t tail[TAIL];
         const uint32_t* prev = rec - 32ull * L * N;
 #pragma unroll
         for (int i = 0; i < TAIL; ++i) tail[i] = __ldcg(prev + 32 * (16 * SPLIT - 2 + i));
-        bar_sync(1 + pair, 64);
+        if (pair == 0) pair_sync<1>();
+        else pair_sync<2>();
         const uint4 c0 = __ldcg(slot), c1 = __ldcg(slot + 1);
         cv[0] = c0.x, cv[1] = c0.y, cv[2] = c0.z, cv[3] = c0.w, cv[4] = c1.x, cv[5] = c1.y, cv[6] = c1.z, cv[7] = c1.w;
 #pragma unroll

@@ -14,7 +14,9 @@ and this script selects them all (`research data select --kind codec-frontier-po
   d = y + idle (μ_budget = 0.5% leaves γ = 1% after μ_chip and μ_sample, the brief's budget). d is the point's y_total
   plus `--idle`, the step's time outside the linears in passes of E (0.37 at 8B, 0.10 at 70B, the red team's), and x is
   the point's over `--boost`, the adversary's clock over the locked clock the points were timed at (1.16), unless the
-  point's `x_boosted` says its x grants that already;
+  point's `x_boosted` says its x grants that already. x is the adversary's best encode at the point's width: the lowest
+  x per round any point of that width reports, whichever lane's library it came from (`--own-x`: the point's own);
+  `--tau-cap` bounds τ by the cheapest tag the adversary knows;
 - y, fused decode-step time over native at Llama-3.1-8B's linears, layer-weighted, as a stacked bar per point
   (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a horizontal line at 2×;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
@@ -108,6 +110,25 @@ def step(p: dict, d: float | None, idle: float = IDLE_8B) -> float:
 def x_eff(p: dict, boost: float = BOOST) -> float:
     """The point's x at the adversary's clock."""
     return p["x"] if p.get("x_boosted") else p["x"] / boost
+
+
+def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = None) -> list[dict]:
+    """The points with x the adversary's best encode at b: the lowest x per round at its clock that any point of that
+    width reports (whichever lane's library encodes fastest), times k (x_boosted; the point's own x kept as x_own),
+    and τ at most tau_cap (the cheapest tag the adversary knows)."""
+    per_k = {}
+    for p in points:
+        if not p.get("reference"):
+            per_k[p["b"]] = min(per_k.get(p["b"], float("inf")), x_eff(p, boost) / p["k"])
+    out = []
+    for p in points:
+        q = dict(p)
+        if not p.get("reference"):
+            q.update(x_own=p["x"], x=per_k[p["b"]] * p["k"], x_boosted=True)
+        if tau_cap is not None:
+            q["tau"] = min(p["tau"], tau_cap)
+        out.append(q)
+    return out
 
 
 def frontier(points: list[dict], budget: float, d: float | None = None, idle: float = IDLE_8B,
@@ -237,6 +258,9 @@ def main() -> int:
     ap.add_argument("--batches", default="1,32")
     ap.add_argument("--p2", help="X,Y,TAU: P2 as a modelled reference point")
     ap.add_argument("--all", action="store_true", help="draw every point, not the best of each configuration")
+    ap.add_argument("--own-x", action="store_true",
+                    help="each point's own x, not the best encode any point of its width reports (`adversary`)")
+    ap.add_argument("--tau-cap", type=float, help="τ at most this: the cheapest tag the adversary knows")
     a = ap.parse_args()
     points = []
     arts = a.art or ([] if a.file else store_arts())
@@ -252,6 +276,10 @@ def main() -> int:
                            "y_total": y, "y_decode": 0.0, "y_tag": 0.0, "y_commit": 0.0, "y_base": y, "x": x,
                            "tau": tau, "measured": False, "reference": True, "label": "P2"})
     points = check(points)
+    if not a.own_x:
+        points = adversary(points, a.boost, a.tau_cap)
+    elif a.tau_cap is not None:
+        points = [{**p, "tau": min(p["tau"], a.tau_cap)} for p in points]
     print(table(points, a.budget, batches, a.d, a.idle, a.boost))
     if a.out:
         draw(points, Path(a.out), a.budget, a.tau, batches, a.all, a.idle, a.boost)
