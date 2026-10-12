@@ -11,7 +11,8 @@
 # GPUS: the indices gpu-lease may take (default 4,5,6,7: NUMA node 1's, beside the NIC).  GID: the RoCE v2 IPv4 GID index (3).
 # PART=ibgda runs only the NVSHMEM put; PART=beside (1 GPU) only small rings beside a 16 GiB reader on the GPU, its
 # loads plain or evict-first: does a ring the NIC writes stay in L2 while the GPU streams its own HBM?  PART=discard
-# (1 GPU): the NIC's inbound rings beside a reader that also drops their lines from L2 unwritten.
+# (1 GPU): the NIC's inbound rings beside a reader that also drops their lines from L2 unwritten, and rings of 1, 2 and
+# 4 MiB beside the plain reader.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate.jsonl (rdma_gate), nic.jsonl (perftest rows),
 # nsys.jsonl, nic_*.log, ibgda_*.log, port_counters.txt.
 set -uo pipefail
@@ -77,6 +78,9 @@ if [ "${1:-}" = leased ]; then
     done
   fi
   if [ -x "$G" ] && [ "$PART" = discard ]; then
+    for m in 1 2 4; do
+      gt "host_to_gpu_write_ring_${m}_read_normal" nsys --op write --src host --dst gpu --mib $m --beside-read 16
+    done
     for m in 8 32; do
       gt "host_to_gpu_write_ring_${m}_read_discard" nsys --op write --src host --dst gpu --mib $m --beside-read 16 --discard 1
     done
