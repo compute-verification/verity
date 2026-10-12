@@ -18,8 +18,9 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Windows.lean`: `Windows`, the capacity form: the windows divide the developer's region into IUs of at most
   `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
-* `Actual/Localization.lean`: `Localization` at `e = 0`: what a challenge reaches only through `X` reaches the rest of
-  the prover only through `X`'s egress, and not at all when `X` sends it nothing of the challenge.
+* `Actual/Localization.lean`: `Localization`, over strategies: with the rest's state and outside reads fixed, what the
+  rest does is a prefix-causal table keyed by what `X` sent it, of at most `2^e` entries; `localization_wires`, the
+  per-run lemma on wires; memory over continuations bounds each run's state (`memory_of_memoryOver`).
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; causality's global form from the local one.
 -/

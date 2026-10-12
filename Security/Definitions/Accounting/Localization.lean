@@ -8,9 +8,10 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1), se
 *downstream* of a set `C` of gates (`downstream C`) when a path of wires runs to it from a gate of `C`. A challenge `C`
 *reaches the prover through `X` during `W`* (`Reaches C X Y W`, with `Y` the rest of the prover and the verifier's
 leaves the ones in neither) when, in `W`, the rest reads no gate of `C` and nothing downstream of `C` from the verifier.
-`X` *sends the rest nothing of `C`* during `W` (`SendsIndependent C X Y W`) when no gate the rest reads from `X` in `W` is
-downstream of `C`: section 6's `e = 0`, with dependence read off the wires (a gate's value is a function of the values it
-reads and of nothing else). Localization is `Accounting.Guarantees.Localization`.
+`SendsIndependent C X Y W`: no wire from `X` to `Y` during `W` carries a gate downstream of `C`. That is section 6's
+`e = 0` only when, in addition, the gates `X` sends and their ticks don't depend on `C`, which one circuit can't say: the
+per-run lemma is `Accounting.SecurityProofs.Actual.localization_wires`, and localization is
+`Accounting.Guarantees.Localization`, over strategies.
 -/
 
 namespace Accounting.Placed
@@ -35,8 +36,8 @@ of `C`, and of the verifier's (placed in neither `X` nor `Y`) none downstream of
 def Reaches (C : Finset (Fin A.N)) (X Y : Finset L) (W : Set ℕ) : Prop :=
   ∀ g ∈ A.region Y W, ∀ a ∈ A.reads g, a ∉ C ∧ (A.x a ∉ X → A.x a ∉ Y → a ∉ A.downstream C)
 
-/-- **`X` sends the rest `Y` of the prover nothing of `C` during `W`**: no gate placed in `X` that a gate of `A[Y, W]`
-reads is downstream of `C`. -/
+/-- No wire from `X` to the rest `Y` of the prover during `W` carries a gate downstream of `C`: no gate placed in `X`
+that a gate of `A[Y, W]` reads is downstream of `C`. -/
 def SendsIndependent (C : Finset (Fin A.N)) (X Y : Finset L) (W : Set ℕ) : Prop :=
   ∀ g ∈ A.region Y W, ∀ a ∈ A.reads g, A.x a ∈ X → a ∉ A.downstream C
 
