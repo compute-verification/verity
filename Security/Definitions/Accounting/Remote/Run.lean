@@ -10,7 +10,7 @@ each outcome, over the audited interval `I = [t_0, t_P)`, where `t_j` is the tic
 `H(σ_t, root_{j−1})`, so that by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, t_{j+1})`:
 
 * `read ω m`: the bits tier `m`'s port carried to the node's compute (`ingressFrom X_N m I`); `readOut ω`, the bits
-  passive memories outside the node carried to any compute.
+  memory tiers outside the node carried to any compute.
 * `state ω`: `Σ_j (content of X_N at t_j + 1)`, the node's state at each pass boundary with its length bit
   (`LengthCode`); `stateOut ω`, the same for compute outside the node.
 * `rebuilt ω`: the bits of correct receipts' words the node's compute computed rather than received, a partial
@@ -38,7 +38,7 @@ compose them by a union bound; each lane proves a route for the runs its game or
 * `Certified W_r`: PoUW's account did at least `W_r` at π_r (PoUW's per-run guarantee at π_r, lane ra-per-run's
   `ComputeSoundPerRun`; at `W_r = 0` it holds at `δ = 0`).
 * `Links`: the boundary's signals are within `β_in · T` and `β_out · T` (the Links row).
-* `Ports`: each tier's port is within `β_m · T` (the Links row at the passive memory's port).
+* `Ports`: each tier's port is within `β_m · T` (the Links row at each tier's port).
 -/
 
 namespace Accounting.Remote
@@ -53,7 +53,7 @@ structure Run {τ : Type} (N : Node τ) (a : Audit) (Ω : Type) where
   correct : Ω → ℕ
   /-- `ingressFrom X_N m I`: the bits tier `m`'s port carried to the node's compute -/
   read : Ω → τ → ℕ
-  /-- the bits passive memories outside the node carried to any compute over `I` -/
+  /-- the bits memory tiers outside the node carried to any compute over `I` -/
   readOut : Ω → ℕ
   /-- `Σ_j (content of X_N at t_j + 1)` -/
   state : Ω → ℕ
@@ -85,7 +85,7 @@ variable {τ : Type} [Fintype τ] {N : Node τ} {a : Audit} {Ω : Type} (r : Run
 /-- The bits the node's tiers carried to its compute over `I`. -/
 def reads (ω : Ω) : ℕ := ∑ m, r.read ω m
 
-/-- Every payment for correct receipts' words, at every location: reads of passive memory, state held at the pass
+/-- Every payment for correct receipts' words, at every location: reads of memory tiers, state held at the pass
 boundaries and bits rebuilt, inside the node and outside it. -/
 def paid (ω : Ω) : ℕ :=
   r.reads ω + r.readOut ω + r.state ω + r.stateOut ω + r.rebuilt ω + r.rebuiltOut ω
@@ -128,7 +128,7 @@ def Certified (Wr δ : ℝ) : Prop := r.Holds δ fun ω => Wr ≤ r.pouwWork ω
 /-- **Links** (the Links row): the signals over the node's boundary are within its links' capacity. -/
 def Links (δ : ℝ) : Prop := r.Holds δ fun ω => r.inBits ω ≤ N.linkIn * a.T ∧ r.outBits ω ≤ N.linkOut * a.T
 
-/-- **Ports** (the Links row at each passive memory's port): each tier's reads are within its calibrated ceiling. -/
+/-- **Ports** (the Links row at each tier's port): each tier's reads are within its calibrated ceiling. -/
 def Ports (δ : ℝ) : Prop := r.Holds δ fun ω => ∀ m, r.read ω m ≤ N.ceil m * a.T
 
 end Run

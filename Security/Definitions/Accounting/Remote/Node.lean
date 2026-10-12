@@ -7,8 +7,9 @@ import Mathlib.Basic.Real.Basic
 
 The remote bandwidth audit (`docs/remote-bandwidth-exhaustion.md`) certifies that a node's memory read bandwidth went
 to registered data. The node is a set of compute (every GPU die, host CPU and root complex: the console's actual-circuit
-model's location `X_N`), its memory tiers (each GPU's HBM and the host's DRAM, each a passive memory whose only link is
-to the node's compute), and its boundary links (the NIC; NVLink to any GPU outside the node). A fleet audited at once, or
+model's location `X_N`), its memory tiers (each GPU's HBM and the host's DRAM, each computing no tag and hearing only
+the node's compute: the premise of B3's capacity form, which counts a tier's port at `β_m` bits a tick in place of
+passive memory), and its boundary links (the NIC; NVLink to any GPU outside the node). A fleet audited at once, or
 an NVLink domain, is a node too (`Node.fleet`): its boundary is the fleet's, and the links between its members are
 inside it.
 
@@ -33,8 +34,8 @@ namespace Accounting.Remote
 
 /-- An audited node over memory tiers `τ`. -/
 structure Node (τ : Type) where
-  /-- β_m: each tier's calibrated read ceiling, in bits per tick, the capacity of the link from passive memory `m` to
-  the node's compute (the Links row) -/
+  /-- β_m: each tier's calibrated read ceiling, in bits per tick, the capacity of tier `m`'s port to the node's compute
+  (the Links row) -/
   ceil : τ → ℕ
   /-- R_m: each tier's declared rate, in bits per tick, which the audit's receipts exhaust: R_HBM for an HBM tier, R_host
   for host DRAM -/
