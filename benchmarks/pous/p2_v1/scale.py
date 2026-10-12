@@ -621,6 +621,8 @@ def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], 
     from band_gpu import harness as H
     from p2_v1 import reference as R
 
+    # the decode passes' cached blocks would otherwise count against vLLM: only the store and the responder stay
+    torch.cuda.empty_cache()
     free, total = torch.cuda.mem_get_info(backend.device)
     util = max(0.05, int((free - a.headroom_gib * (1 << 30)) / total * 1000) / 1000)
     rec: dict[str, Any] = {"store_blocks": st["blocks"], "store_bytes": c.numel(), "free_bytes": free, "total_bytes": total,
