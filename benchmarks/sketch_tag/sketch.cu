@@ -34,6 +34,11 @@ static const char* const NAME = "ro-sketch-blake3/v0";
 #ifndef SK_FUSE_DEC
 #define SK_FUSE_DEC 0
 #endif
+// SK_SW = 1 sketches the encoded store in a warp of its own (one more warp a CTA), which reads every consumer's stage
+// before the producer refills it; the decode loop is latency-bound with idle issue slots, the consumers then only decode.
+#ifndef SK_SW
+#define SK_SW 0
+#endif
 
 __device__ __forceinline__ void bulk_load_ef(void* dst, const void* src, uint32_t bytes, uint64_t* bar, uint64_t pol) {
   asm volatile(
@@ -180,13 +185,14 @@ struct SkCommit {
 };
 
 template <int KR, int NB8, int KS, bool SK>
-__global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __restrict__ wstore,
+__global__ void __launch_bounds__((WS_MAX_WARPS + SK_SW) * 32) sk_ws_kernel(const void* __restrict__ wstore,
                                                                  const uint8_t* __restrict__ x, float* __restrict__ y,
                                                                  int M, int N, int Kd, uint64_t base, int groups,
                                                                  int consumers, int per_consumer, int partials, int T,
                                                                  int RUN, const uint4* __restrict__ signs,
                                                                  int* __restrict__ sk, int decode, SkCommit cm) {
   constexpr int SB = ws_stage_bytes<KR>(), KB = KS / 8, SG = sgroups<KR, KS>(), MS = steps<KR>(), NA = chains<KS>();
+  constexpr bool SKW = SK && KR > 0 && SK_SW > 0, CSK = SK && !SKW;  // the sketch in its own warp, or the consumers'
   const int stages = consumers * per_consumer;
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
@@ -203,7 +209,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
     *reinterpret_cast<uint4*>(&xs[b][16 * c]) = v;
   }
   if (threadIdx.x == 0) {
-    for (int s = 0; s < stages; ++s) { mbar_init(full + s, 1); mbar_init(empty + s, 1); }
+    for (int s = 0; s < stages; ++s) { mbar_init(full + s, 1); mbar_init(empty + s, SKW ? 2 : 1); }
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
   }
   __syncthreads();
@@ -238,6 +244,69 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
       }
     }
     return;
+  }
+  if constexpr (SKW) {
+    if (warp == consumers + 1 + cm.committers) {
+      // every consumer's task in the consumers' order, a task's sketch added on its own (a run's first task of a whole
+      // tile stores, so the result is the consumers' whatever RUN)
+      for (int u = 0;; ++u) {
+        bool live = false;
+        for (int c = 0; c < consumers; ++c) {
+          const int nb = task_nb(c, u);
+          live |= nb != -1;
+          if (nb < 0) continue;
+          const int s = c * per_consumer + u % per_consumer, i = nb % T;
+          uint32_t sw[4 * SG];
+          const uint4* sp = signs + (size_t)i * SG * LANES + lane;
+#pragma unroll
+          for (int v = 0; v < SG; ++v) {
+            const uint4 t = __ldg(sp + v * LANES);
+            sw[4 * v] = t.x; sw[4 * v + 1] = t.y; sw[4 * v + 2] = t.z; sw[4 * v + 3] = t.w;
+          }
+          mbar_wait(full + s, (u / per_consumer) & 1);
+          const unsigned long long* st = reinterpret_cast<const unsigned long long*>(smem + s * SB) + lane;
+          uint64_t xw[LANE_WORDS];
+#pragma unroll
+          for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
+          __syncwarp();
+          if (lane == 0) mbar_arrive(empty + s);
+          int acc[NA][KB][4];
+#pragma unroll
+          for (int a = 0; a < NA; ++a)
+#pragma unroll
+            for (int b = 0; b < KB; ++b) acc[a][b][0] = acc[a][b][1] = acc[a][b][2] = acc[a][b][3] = 0;
+#pragma unroll
+          for (int st8 = 0; st8 < MS; ++st8) {
+            const uint64_t w0 = xw[2 * st8], w1 = 2 * st8 + 1 < LANE_WORDS ? xw[2 * st8 + 1] : 0;
+            const uint32_t a[4] = {(uint32_t)w0, (uint32_t)(w0 >> 32), (uint32_t)w1, (uint32_t)(w1 >> 32)};
+            sketch_step<KS>(acc[st8 % NA], a, sw, st8);
+          }
+#pragma unroll
+          for (int a = 1; a < NA; ++a)
+#pragma unroll
+            for (int b = 0; b < KB; ++b)
+#pragma unroll
+              for (int e = 0; e < 4; ++e) acc[0][b][e] += acc[a][b][e];
+          const int R = g0 + (c + consumers * (u / RUN)) * groups;
+          const size_t tl = (size_t)(R / rpt) * nchunks + kc;
+          const bool store = RUN == T && u % RUN == 0;
+#pragma unroll
+          for (int b = 0; b < KB; ++b) {
+            int* r0 = sk + (tl * 16 + g) * KS + 8 * b + 2 * tq;
+            int* r1 = r0 + 8 * KS;
+            if (store) {
+              *reinterpret_cast<int2*>(r0) = make_int2(acc[0][b][0], acc[0][b][1]);
+              *reinterpret_cast<int2*>(r1) = make_int2(acc[0][b][2], acc[0][b][3]);
+            } else {
+              atomicAdd(r0, acc[0][b][0]); atomicAdd(r0 + 1, acc[0][b][1]);
+              atomicAdd(r1, acc[0][b][2]); atomicAdd(r1 + 1, acc[0][b][3]);
+            }
+          }
+        }
+        if (!live) break;
+      }
+      return;
+    }
   }
   if (warp > consumers && cm.ltags) {
     // the leaves llanes tiles a warp (one a lane: a leaf is five serial SHA-512 compressions, so a lane takes one), those
@@ -288,8 +357,8 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
     if (nb >= 0) {
       const int s = warp * per_consumer + u % per_consumer, i = nb % T;
       const uint64_t q = (uint64_t)nb * nchunks + kc;
-      uint32_t sw[SK ? 4 * SG : 1];
-      if constexpr (SK) {
+      uint32_t sw[CSK ? 4 * SG : 1];
+      if constexpr (CSK) {
         const uint4* sp = signs + (size_t)i * SG * LANES + lane;
 #pragma unroll
         for (int v = 0; v < SG; ++v) {
@@ -320,7 +389,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
         for (int tt = 0; tt < TASK_TILES; ++tt) {
           const uint32_t a[4] = {w[tt].x, w[tt].y, w[tt].z, w[tt].w};
           tile(tt, a);
-          if constexpr (SK) sketch_step<KS>(acc_s[tt % NA], a, sw, tt);
+          if constexpr (CSK) sketch_step<KS>(acc_s[tt % NA], a, sw, tt);
         }
       } else {
         const unsigned long long* st = reinterpret_cast<const unsigned long long*>(smem + s * SB) + lane;
@@ -330,7 +399,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
         __syncwarp();
         if (lane == 0) mbar_arrive(empty + s);
         auto sketch_raw = [&]() {
-          if constexpr (SK) {
+          if constexpr (CSK) {
 #pragma unroll
             for (int st8 = 0; st8 < MS; ++st8) {
               const uint64_t w0 = xw[2 * st8], w1 = 2 * st8 + 1 < LANE_WORDS ? xw[2 * st8 + 1] : 0;
@@ -365,7 +434,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
         }
       }
     }
-    if (SK && (u % RUN == RUN - 1)) {
+    if (CSK && (u % RUN == RUN - 1)) {
       const int R = g0 + (warp + consumers * (u / RUN)) * groups;
       const size_t tl = (size_t)(R / rpt) * nchunks + kc;
 #pragma unroll
@@ -499,7 +568,7 @@ int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, 
   const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / wc::TASK_COLS, nbs = N / 16;
   const int nruns = (nbs + T - 1) / T * (T / RUN);
-  const int threads = (consumers + 1 + committers) * 32;
+  const int threads = (consumers + 1 + committers + (SK_SW && kr > 0 && ks ? 1 : 0)) * 32;
   int sms = 0, per_sm = 0, dev = 0;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) return 2;
   const uint4* sg = static_cast<const uint4*>(signs);
