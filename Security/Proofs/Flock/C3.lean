@@ -23,6 +23,7 @@ import Proofs.Flock.C3.Opening.Rows
 import Proofs.Flock.C3.HoloValues.Read
 import Proofs.Flock.C3.Reps.Tie
 import Proofs.Flock.C3.Reps.Vals
+import Proofs.Flock.C3.Reps.Steps
 import Proofs.Flock.C3.HoloValues.Frames
 import Proofs.Flock.C3.HoloValues.Runs
 import Proofs.Flock.C3.Reps.Frames
