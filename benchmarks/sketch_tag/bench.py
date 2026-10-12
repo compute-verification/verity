@@ -54,7 +54,7 @@ class Lib(WB.Lib):
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
         so = self.so
         so.sk_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, v, i, i, v, v, i, ctypes.c_char_p, i, v, q, q, v, i, v]
-        so.sk_gemm_deferred.argtypes = so.sk_gemm.argtypes[:-1] + [q, v, v]
+        so.sk_gemm_deferred.argtypes = so.sk_gemm.argtypes[:-1] + [q, v, i, v]
         so.sk_hash.argtypes = [i, v, q, ctypes.c_char_p, q, v, i, v]
         so.sk_leaves.argtypes = [v, q, ctypes.c_char_p, v]
         cs = (ctypes.c_int * 8)()
@@ -366,10 +366,10 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                     raise RuntimeError(f"sk_gemm {lay} {ks}: error {rc}")
             return f
 
-        def arm_fused(lay, sko, ks, cfg=cfg, split=False):
+        def arm_fused(lay, sko, ks, cfg=cfg, split=False, lanes=32):
             """Call i sketches into buffer i mod 2 while its committer warps hash buffer (i + 1) mod 2, the previous
             call's, into that buffer's commit: tags and leaves, or (split) tags and the leaves of the tags call i - 1
-            wrote."""
+            wrote (lanes leaves a leaf warp)."""
             kr = layouts[lay][0]
             ps = [WB.ptr(b) for b in ring[lay]]
             fp = WB.ptr(sko.frag)
@@ -384,13 +384,14 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                 rc = 0
                 for i, p in enumerate(ps):
                     cur, prev = bufs[i % 2], bufs[1 - i % 2]
-                    lv = (sko.nvec, cur[1]) if split else (0, None)
+                    lv = (sko.nvec, cur[1], lanes) if split else (0, None, 0)
                     rc |= so.sk_gemm_deferred(kr, ks, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], groups, None, sko.t,
                                               sko.run, fp, cur[0], 1, SKETCH_SEED, cn, prev[0], sko.nvec, 0, prev[1],
                                               clear, *lv, st)
                 if rc:
                     raise RuntimeError(f"sk_gemm fused {lay} {ks}: error {rc}")
-            if split and mb == a.batches[0] and a.mode == "bench" and (lay, ks, sko.n_target) == focus_of[lay]:
+            if (split and lanes == 32 and mb == a.batches[0] and a.mode == "bench"
+                    and (lay, ks, sko.n_target) == focus_of[lay]):
                 # two passes over the ring: every call's sketches, tags and leaves are then the gated ones
                 for b in (sko.sk, sko.sk2, sko.commit.buf, sko.commit2.buf):
                     b.zero_()
@@ -534,6 +535,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                         arms[f"sk_{lay}_{sko.name()}@{cfg_name(c)}"] = arm_sk(lay, sko, ks, cfg=c)
                         arms[f"fused_{lay}_{sko.name()}@{cfg_name(c)}"] = arm_fused(lay, sko, ks, cfg=c)
                         arms[f"split_{lay}_{sko.name()}@{cfg_name(c)}"] = arm_fused(lay, sko, ks, cfg=c, split=True)
+                    arms[f"split8_{lay}_{sko.name()}"] = arm_fused(lay, sko, ks, split=True, lanes=8)
                 if mb == a.batches[0]:
                     arms[f"hash_{lay}_{sko.name()}"] = arm_hash(lay, sko)
                     if ks == a.ks[0]:
@@ -649,7 +651,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             """The ring's calls as sk_gemm argument tuples (groups fixed by a first launch of each)."""
             xp = {kd: WB.ptr(x) for (b, kd), x in xs.items() if b == mb}
             calls = []
-            commits = mode in ("fused", "split")
+            commits, lanes = mode in ("fused", "split", "split8"), 8 if mode == "split8" else 32
             for li in range(nl):
                 prev = (li - 1) % nl
                 for name in SEQ:
@@ -662,12 +664,12 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                     cn = min(a.committers, WB.WS_MAX_WARPS - 1 - cfg[0])
                     skp = (None if not k_ else WB.ptr(gu[li]) if name == "gate_up"
                            else WB.ptr(rest[li]) + 4 * ks * off[name])
-                    commit = (0, None, 0, 0, None, 0, 0, None)
+                    commit = (0, None, 0, 0, None, 0, 0, None, 0)
                     if commits and name == "gate_up":
-                        lv = (ngu, cgu[prev].ptr) if mode == "split" else (0, None)
+                        lv = (ngu, cgu[prev].ptr, lanes) if mode != "fused" else (0, None, 0)
                         commit = (cn, WB.ptr(rest[prev]), nrest, 0, crest[prev].ptr, 1, *lv)
                     elif commits and name == "down":
-                        lv = (nrest, crest[prev].ptr) if mode == "split" else (0, None)
+                        lv = (nrest, crest[prev].ptr, lanes) if mode != "fused" else (0, None, 0)
                         commit = (cn, WB.ptr(gu[li]), ngu, 0, cgu[li].ptr, 1, *lv)
                     calls.append([kr, k_, WB.ptr(ring[li][name]), xp[kd], WB.ptr(ys[name]), mb, n, kd, 0, 0, cfg[0],
                                   cfg[1], 0, None, sko.t, sko.run, fps[name] if k_ else None, skp, 1, SKETCH_SEED,
@@ -704,7 +706,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
         want = (cr.tag_list(), cr.leaf_list(), cg.tag_list(), cg.leaf_list())
         del sep_r, sep_g, cr, cg
         lr["commit_equal"] = {}
-        for mode in ("fused", "split"):
+        for mode in ("fused", "split", "split8"):
             f0 = plan(mode, mb0)
             for b in rest + gu:
                 b.zero_()
@@ -721,7 +723,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
         if not ok or a.mode != "bench":
             continue
         for mb in a.batches:
-            arms = {m: plan(m, mb) for m in ("base", "sk", "fused", "split")}
+            arms = {m: plan(m, mb) for m in ("base", "sk", "fused", "split", "split8")}
             for f in arms.values():
                 f()
             torch.cuda.synchronize()
@@ -748,7 +750,7 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
         for mb, t in lr["times"].items():
             r, nat = t["ratio_vs_native"], t["native_s"]
             enc = lay == "enc"
-            mode = min(("fused", "split"), key=lambda m: r.get(m, float("inf")))
+            mode = min(("fused", "split", "split8"), key=lambda m: r.get(m, float("inf")))
             points.append({
                 "schema": "verity/codec-frontier-point/v0", "lane": "ra-sketch-tag", "b": 61 if enc else 8,
                 "k": a.kr if enc else 0, "batch": int(mb),
@@ -756,8 +758,9 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
                               (f"{lib.name}/pb{lib.bits}" if enc else "plain") + "/layer-sequence",
                 "y_total": r[mode] - 1,
                 "commit_mode": f"deferred, {mode} (gate_up tags the previous qkv, o, down; down its gate_up" +
-                               ("; each call the leaves of the tags before)" if mode == "split" else ")"),
+                               ("; each call the leaves of the tags before)" if mode != "fused" else ")"),
                 "y_total_fused": r["fused"] - 1, "y_total_split": r["split"] - 1 if "split" in r else None,
+                "y_total_split8": r["split8"] - 1 if "split8" in r else None,
                 "y_base": r["base"] - 1, "y_sketch": r["sk"] - r["base"], "y_commit": r[mode] - r["sk"],
                 "y_hash": None, "x": None, "delta": None, "tau": None, "measured": True,
                 "label": f"sketch-then-hash k={seq['k']} n~{seq['n_target']} layer sequence "

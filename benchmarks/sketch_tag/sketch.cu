@@ -100,9 +100,51 @@ __device__ __forceinline__ void sk_tag(int* __restrict__ src, uint64_t j, const 
   o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
 }
 
+// b3_leaf over tags an earlier kernel wrote, the next block's tag words loaded before the current block's compression.
+__device__ __forceinline__ void sk_leaf(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf, const bw::Mid& mid,
+                                        uint64_t* __restrict__ leaves) {
+  const uint64_t first = leaf * 16;
+  const int n = (int)(B - first < 16 ? B - first : 16);
+  const int data = 1 + 4 * n, nb = (8 * data + 17 + 127) / 128;
+  const uint2* T = reinterpret_cast<const uint2*>(tags + first * 8);
+  auto load = [&](int blk, uint2 (&r)[16]) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      r[i] = q >= 1 && q < data ? __ldg(T + q - 1) : make_uint2(0, 0);
+    }
+  };
+  uint64_t s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = mid.h[i];
+  uint2 nxt[16];
+  load(0, nxt);
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+    uint64_t w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      uint64_t v = 0;
+      if (q == 0)
+        v = leaf;
+      else if (q < data)
+        v = ((uint64_t)bw::bswap32(nxt[i].x) << 32) | bw::bswap32(nxt[i].y);
+      else if (q == data)
+        v = 0x80ULL << 56;
+      if (q == 16 * nb - 1) v = (uint64_t)(128 + 8 + 32 * n) * 8;
+      w[i] = v;
+    }
+    if (blk + 1 < nb) load(blk + 1, nxt);
+    bw::compress(s, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) leaves[leaf * 8 + i] = s[i];
+}
+
 // The commit inside the GEMM: `committers` warps a CTA hash a previous call's nvec sketches (sk, ks int32 each) into
 // tags (32 bytes each, block jbase + v), and either their leaves (16 tags, one tile, a leaf) or, when ltags is set, the
-// leaves of an earlier call's lnvec tags.
+// leaves of an earlier call's lnvec tags, llanes leaves a leaf warp.
 struct SkCommit {
   bw::Key3 key;
   bw::Mid leafmid;
@@ -114,6 +156,7 @@ struct SkCommit {
   uint32_t* ltags;
   uint64_t* lleaves;
   uint64_t lnvec;
+  int llanes;
   int committers;
   int clear;
 };
@@ -174,15 +217,15 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
     return;
   }
   if (warp > consumers && cm.ltags) {
-    // the leaves 32 tiles a warp (one a lane, so no lane idles through a leaf's five serial SHA-512 compressions), those
+    // the leaves llanes tiles a warp (one a lane: a leaf is five serial SHA-512 compressions, so a lane takes one), those
     // warps spread over the CTAs; the tags over the other warps, a contiguous share each
-    const uint64_t nw = (uint64_t)gridDim.x * cm.committers;
+    const uint64_t nw = (uint64_t)gridDim.x * cm.committers, L = cm.llanes;
     const uint64_t wid = (uint64_t)blockIdx.x * cm.committers + (warp - consumers - 1);
-    const uint64_t lt = cm.lnvec / 16, nlb = (lt + 31) / 32, nlw = min(nlb, nw), stride = nw / nlw;
+    const uint64_t lt = cm.lnvec / 16, nlb = (lt + L - 1) / L, nlw = min(nlb, nw), stride = nw / nlw;
     const bool leafw = wid % stride == 0 && wid / stride < nlw;
     if (leafw)
       for (uint64_t b = wid / stride; b < nlb; b += nlw)
-        if (32 * b + lane < lt) b3_leaf(cm.ltags, cm.lnvec, 32 * b + lane, cm.leafmid, cm.lleaves);
+        if (lane < L && L * b + lane < lt) sk_leaf(cm.ltags, cm.lnvec, L * b + lane, cm.leafmid, cm.lleaves);
     const uint64_t ntw = nw > nlw ? nw - nlw : nw;
     if (leafw && ntw != nw) return;
     const uint64_t tw = ntw == nw ? wid : wid - min(nlw, (wid + stride - 1) / stride);
@@ -374,28 +417,30 @@ static sk::SkCommit sk_keys(const uint8_t* seed) {
 int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base,
                      int partials, int consumers, int per_consumer, int groups, int* launched, int T, int RUN,
                      const void* signs, int* skout, int decode, const uint8_t* seed, int committers, int* csk,
-                     uint64_t cnvec, uint64_t cjbase, void* cws, int clear, uint64_t lnvec, void* lws, cudaStream_t s);
+                     uint64_t cnvec, uint64_t cjbase, void* cws, int clear, uint64_t lnvec, void* lws, int leaf_lanes,
+                     cudaStream_t s);
 
 int sk_gemm(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
             int consumers, int per_consumer, int groups, int* launched, int T, int RUN, const void* signs, int* skout,
             int decode, const uint8_t* seed, int committers, int* csk, uint64_t cnvec, uint64_t cjbase, void* cws,
             int clear, cudaStream_t s) {
   return sk_gemm_deferred(kr, ks, w, x, y, M, N, Kd, base, partials, consumers, per_consumer, groups, launched, T, RUN,
-                          signs, skout, decode, seed, committers, csk, cnvec, cjbase, cws, clear, 0, nullptr, s);
+                          signs, skout, decode, seed, committers, csk, cnvec, cjbase, cws, clear, 0, nullptr, 0, s);
 }
 
 // sk_gemm, but with lws (a commit workspace whose lnvec tags an earlier call wrote) the committer warps compute lws's
-// leaves instead of the leaves of the tags they write.
+// leaves, leaf_lanes a warp, instead of the leaves of the tags they write.
 int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base,
                      int partials, int consumers, int per_consumer, int groups, int* launched, int T, int RUN,
                      const void* signs, int* skout, int decode, const uint8_t* seed, int committers, int* csk,
-                     uint64_t cnvec, uint64_t cjbase, void* cws, int clear, uint64_t lnvec, void* lws, cudaStream_t s) {
+                     uint64_t cnvec, uint64_t cjbase, void* cws, int clear, uint64_t lnvec, void* lws, int leaf_lanes,
+                     cudaStream_t s) {
   if (M < 1 || M > 32 || N % 16 || Kd % wc::TASK_COLS || kr < 0 || kr > SK_KMAX || consumers < 1 ||
       consumers > wc::WS_MAX_CONSUMERS || per_consumer < 1 || consumers * per_consumer > 32 || T < 1 || RUN < 1 ||
       T % RUN || (ks && (!signs || !skout)) || (ks != 0 && ks != 8 && ks != 16 && ks != 32) || committers < 0 ||
       consumers + 1 + committers > wc::WS_MAX_WARPS ||
       (committers && (!ks || !seed || !csk || !cws || !cnvec || cnvec % 16)) ||
-      (lws && (!committers || !lnvec || lnvec % 16 || lws == cws)))
+      (lws && (!committers || !lnvec || lnvec % 16 || lws == cws || leaf_lanes < 1 || leaf_lanes > 32)))
     return 1;
   sk::SkCommit cm{};
   if (committers) {
@@ -413,6 +458,7 @@ int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, 
       cm.ltags = l.tags;
       cm.lleaves = l.nodes;
       cm.lnvec = lnvec;
+      cm.llanes = leaf_lanes;
     }
   }
   const int stages = consumers * per_consumer;
