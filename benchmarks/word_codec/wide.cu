@@ -929,6 +929,12 @@ int ww_chain(int what, int k, int u, uint64_t steps, unsigned long long* xr, int
   return cudaGetLastError() ? 4 : 0;
 }
 
+// R: XOR of n16 16-byte words, streamed (benchmarks/bandwidth/tagger.cu's read kernel).
+int ww_read(const void* buf, uint64_t n16, uint32_t* out, int grid, cudaStream_t s) {
+  bw::read_kernel<<<grid, 256, 0, s>>>((const uint4*)buf, n16, out);
+  return cudaGetLastError() ? 4 : 0;
+}
+
 int ww_spin(long long cycles, cudaStream_t s) {
   spin_kernel<<<1, 1, 0, s>>>(cycles);
   return cudaGetLastError() ? 4 : 0;
