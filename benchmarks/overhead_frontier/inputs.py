@@ -108,6 +108,24 @@ INPUTS: dict[str, Input] = {
                          "reads at 97.1% of the pass's rate; top-up beside it may close the gap)", "estimate"),
 }
 
+# The floor: each lever past its realistic improvement to the best any measurement or bound supports, so that the
+# frontier at the floor bounds how fast the audit can get on this node with this codec.
+FLOOR: dict[str, tuple[Any, str]] = {
+    "o_w": ({2: ((8, 0.052), (32, 0.052)), 3: ((8, 0.505), (32, 0.505))},
+            "the mma-ws decode floor with 24 warps (ra-word-codec r20261012-172911-1184) on the weights too"),
+    "o_kv": ({2: ((32, 0.052), (160, 0.052)), 3: ((32, 0.505), (160, 0.505))}, "the same floor on the KV"),
+    "tau_w": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))},
+              "the sketch's cost on a store that is only read (ra-sketch-tag plain store M=32, +1.7..1.9%)"),
+    "tau_kv": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))}, "the same on the KV"),
+    "tau_bind": (0.0, "binding folded into the sign matrix for free"),
+    "tau_host": (0.0, "the host tier's stream costs the HBM stream nothing"),
+    "rho_l2": (1.0, "no activation byte reaches HBM"),
+    "mu_partial_k2": (0.0, "partial completion costs its share of an encode"),
+    "s_adv": (1.0, "the adversary squares no faster than the best measured"),
+    "v_budget": (10.0, "a 10 Gb/s verifier link"),
+    "x_from_transcript": (True, "z from PoUW's transcript"),
+}
+
 # Values an input may take that make the frontier worse, each with why it is plausible.
 RISKS: dict[str, tuple[Any, str]] = {
     "eta_reserve": (0.0025, "the honest prover reads at 99.75% of the adversary's best stream"),
@@ -130,6 +148,13 @@ def improved(name: str, inputs: dict[str, Input] = INPUTS) -> dict[str, Input]:
 
 def all_improved(inputs: dict[str, Input] = INPUTS) -> dict[str, Input]:
     return {n: (replace(i, value=i.improved) if i.improved is not None else i) for n, i in inputs.items()}
+
+
+def at_floor(inputs: dict[str, Input] = INPUTS) -> dict[str, Input]:
+    out = all_improved(inputs)
+    for name, (value, _) in FLOOR.items():
+        out[name] = replace(inputs[name], value=value)
+    return out
 
 
 def levers(inputs: dict[str, Input] = INPUTS) -> list[str]:

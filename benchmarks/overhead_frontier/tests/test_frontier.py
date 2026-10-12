@@ -91,6 +91,13 @@ def test_frontier_points_respect_gamma():
         assert r["params"]["width_bits"] == 512 and r["params"]["k"] in (2, 3)
 
 
+def test_the_floor_is_never_slower_than_the_projection():
+    projected, floor = I.values(I.all_improved()), I.values(I.at_floor())
+    for w in (Workload(SHAPES["8B"], 16, 8192), Workload(SHAPES["70B"], 64, 2048), Workload(SHAPES["405B"], 4, 8192)):
+        a, b = F.best(w, projected, "cap", "C"), F.best(w, floor, "cap", "C")
+        assert b["feasible"] and b["overhead"] <= a["overhead"] + 1e-12
+
+
 def test_every_lever_names_its_work_and_source():
     for name in I.levers():
         i = I.INPUTS[name]

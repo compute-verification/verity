@@ -5,8 +5,9 @@ which input, improved by a realistic amount, lowers it most.
 
 Three frontiers: ``cap/C`` (γ against the node's read capacity, top-up filling idle memory, the identity statement:
 the ruling's reading, and the headline), ``pass/C`` (the design's per-pass γ, for comparison with the red team) and
-``cap/N`` (memory-only helpers over the NIC priced, not excluded). Each at today's inputs and at every lever improved
-(``projected``). The sensitivity takes one lever at a time from today, and reverts one at a time from projected.
+``cap/N`` (memory-only helpers over the NIC priced, not excluded). Each at today's inputs, at every lever improved
+(``projected``) and at every lever at its floor (``floor``, ``inputs.FLOOR``: how fast the audit can get on this node
+with this codec). The sensitivity takes one lever at a time from today, and reverts one at a time from projected.
 """
 
 from __future__ import annotations
@@ -191,13 +192,15 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     today = frontier(I.values(I.INPUTS))
     projected = frontier(I.values(I.all_improved(I.INPUTS)))
+    floor = frontier(I.values(I.at_floor(I.INPUTS)))
     sens = {key: sensitivity(I.INPUTS, key) for key in ("cap/C", "pass/C")}
     doc = {"schema": "verity/overhead-frontier/v0", "gamma_max": GAMMA_MAX, "inputs": describe(I.INPUTS),
+           "floor_inputs": {n: {"value": v, "why": why} for n, (v, why) in I.FLOOR.items()},
            "grid": {"k": KS, "block": BLOCKS, "k_s": K_S, "binding": BINDINGS, "host_share": HOST_SHARES,
                     "batch": BATCHES, "ctx": CONTEXTS, "width_bits": [512]},
-           "today": today, "projected": projected, "sensitivity": sens}
+           "today": today, "projected": projected, "floor": floor, "sensitivity": sens}
     (args.out / "frontier.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    for name, fr in (("today", today), ("projected", projected)):
+    for name, fr in (("today", today), ("projected", projected), ("floor", floor)):
         for key, points in fr.items():
             print(f"\n== {name} {key}")
             print(summary(points))
