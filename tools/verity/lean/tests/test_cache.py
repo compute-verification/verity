@@ -566,6 +566,9 @@ def test_the_audit_runs_lake_with_the_cache_off():
     spec.loader.exec_module(A)
     e = A.lake_env()
     assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off")
+    A.ARTIFACTS = Path("/node/lean-artifacts")                       # check's audit: the node's own, read and never written
+    e = A.lake_env()
+    assert "LAKE_ARTIFACT_CACHE" not in e and (e["LAKE_CACHE_DIR"], e["LEAN_CACHE"]) == ("/node/lean-artifacts", "off")
 
 
 # ---------------------------------------------------------------- through Lake
