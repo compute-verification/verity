@@ -185,7 +185,7 @@ theorem later_ofRounds {c : Array (Array F128)} {x : Array F128} (hx : x.size �
     Later (Coins.ofRounds c) (Coins.ofRounds (#[x] ++ c)) := by
   intro k n r h
   have hx' : x ≠ #[] := fun e => hx (by rw [e]; rfl)
-  have h1 : (#[x].filter (·.size ≠ 0)).size = 1 := by first | simp [hx'] | simp [hx]
+  have h1 : (#[x].filter (·.size ≠ 0)).size = 1 := by simp [hx']
   have e : ((#[x] ++ c).filter (·.size ≠ 0))[k + 1]? = (c.filter (·.size ≠ 0))[k]? := by
     rw [Array.filter_append, Array.getElem?_append_right (by omega), h1, Nat.add_sub_cancel]
     exact Array.size_append ..
