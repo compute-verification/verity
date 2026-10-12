@@ -466,6 +466,9 @@
    "assumptions": [],
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8"
   },
+  "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.ComputeOfPouw": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw"],
@@ -521,6 +524,9 @@
    "signature": ["Accounting.SecurityProofs.PearlCEndToEndPerRun : Accounting.Guarantees.PearlCEndToEndPerRun"],
    "assumptions": [],
    "type_hash": "5580f497f2834e1184ec443923d18b04dd3cc28704c6df37f330206d35d0e139"
+  },
+  "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.PouwEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -4147,6 +4153,8 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Accounting.SecurityProofs.PearlCEndToEndPerRun": "frozen (no-function,hash): It is Pearl-C's γ-gap property Gγ, a hypothesis (at W1 with fetches priced, compute-accounting's gγ_w1Priced gives it from W1's), audited by work-weighted tickets and made per run by truncation when the cost model truncates (Accounting.BudgetAbortPearlC, Security/Definitions/Accounting/PerRun.lean), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function.",
    "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": "frozen (no-function,hash): It carries PearlCEndToEndPerRun, from Pearl-C's γ-gap property Gγ over its game with a uniform oracle, to the compute audit of an abstract run of the device model whose cost the priced sum covers (Accounting.RealizesPearlCPriced, Security/Definitions/Accounting/PerRun.lean), not to a Lean function.",
+   "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": "frozen (no-function,hash): It is PearlCEndToEndPerRun on the machine that stops a run at its budget (Pouw.PearlC.CostModel.withStop, Security/Definitions/Pouw/PearlC/W1Stop.lean), from the γ-gap property per coin GγPerCoin, a hypothesis (at W1 priced, the conjecture the per-run bound rests on), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function.",
+   "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": "frozen (no-function,hash): It carries PearlCStopEndToEndPerRun, from the γ-gap property per coin GγPerCoin over Pearl-C's game with a uniform oracle, to the compute audit of an abstract run of the device model whose cost on the stopping machine the priced sum covers (Accounting.RealizesPearlCPriced, Security/Definitions/Accounting/PerRun.lean), not to a Lean function.",
    "Accounting.SecurityProofs.JointPerRunPriced": "frozen (no-function): Like JointPerRun, it composes the three audits' per-run guarantees, the compute audit's on the priced sum, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CovertResidualPerRunPriced": "frozen (no-function): Like JointPerRunPriced, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p."
