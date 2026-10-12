@@ -767,6 +767,9 @@ void tu_fill_signs(const uint8_t* seed, uint8_t* out) { tu::fill_signs(seed, (ui
 namespace sq {
 
 constexpr uint32_t EPOCHS = 4096;
+constexpr uint64_t IN_FLIGHT = 1024;  // more than the CTAs of every role at once
+
+static uint64_t limit(uint32_t shift, uint64_t next_epoch) { return ((next_epoch + EPOCHS) << shift) - IN_FLIGHT; }
 constexpr auto IDLE_BACKOFF = std::chrono::microseconds(200);
 
 struct State {
@@ -783,6 +786,7 @@ struct State {
   unsigned long long* taken_h = nullptr;  // pinned: idle's after it ends
   unsigned long long* g0 = nullptr;  // the globaltimer at the start event
   unsigned long long g0_h = 0;
+  uint64_t lim = 0;  // the host's copy of seq->limit, the source of its async copy
   cudaStream_t s_base = nullptr, s_idle = nullptr, s_step = nullptr, s_h = nullptr;
   cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr;
   std::mutex step_mu;
@@ -847,6 +851,9 @@ static int harvest(State& st, uint64_t& next, double& t_prev, std::vector<uint32
     if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.xr + slot, 0, 4, st.s_h);
     if (e != cudaSuccess) return (int)e;
     ++next;
+    st.lim = limit(st.shift, next);
+    e = cudaMemcpyAsync(&st.seq->limit, &st.lim, 8, cudaMemcpyHostToDevice, st.s_h);
+    if (e != cudaSuccess) return (int)e;
     if (n != full) return 0;
   }
 }
@@ -937,7 +944,10 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaMalloc(&st->signs, sg.size() * 4));
   CK(cudaMemcpy(st->signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
   CK(cudaMalloc(&st->seq, sizeof(fl::Seq)));
-  CK(cudaMemset(st->seq, 0, sizeof(fl::Seq)));
+  {
+    const fl::Seq q0{0, 0, sq::limit(st->shift, 0)};
+    CK(cudaMemcpy(st->seq, &q0, sizeof q0, cudaMemcpyHostToDevice));
+  }
   CK(cudaMalloc(&st->ring.xr, 4 * sq::EPOCHS));
   CK(cudaMalloc(&st->ring.cnt, 4 * sq::EPOCHS));
   CK(cudaMalloc(&st->ring.t, 8 * sq::EPOCHS));

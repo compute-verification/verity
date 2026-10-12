@@ -128,6 +128,45 @@ class Topup:
         return r.raw
 
 
+class Seq:
+    """fill-sk16/v1 through `topup.cu`'s sq_* ABI; its log is `Topup.log`'s (an epoch's number where a chunk's is, its
+    ring slot where a chunk's region is)."""
+
+    def __init__(self, tu: Topup) -> None:
+        v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
+        so = self.so = tu.so
+        self.tu = tu
+        so.sq_start.argtypes = [i, v, v, i, v, i, i, q, i, i]
+        so.sq_idle.argtypes = [i, q]
+        so.sq_step_begin.argtypes = [i, v]
+        so.sq_step_end.argtypes = [v]
+        so.sq_progress.argtypes = [v]
+        so.sq_now_ms.argtypes = [v]
+        so.sq_now_ms.restype = d
+
+    def start(self, regions, seed: bytes, base_ctas: int, warps: int = 4, base_budget: int = 0, shift: int = 8,
+              priority: int = 0, device: int = 0) -> None:
+        ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
+        sizes = (ctypes.c_uint64 * len(regions))(*[n for _, n in regions])
+        rc = self.so.sq_start(device, ptrs, sizes, len(regions), seed, base_ctas, warps, base_budget, shift, priority)
+        if rc:
+            raise RuntimeError(f"sq_start error {rc}")
+
+    def stop(self) -> None:
+        rc = self.so.sq_stop()
+        if rc:
+            raise RuntimeError(f"sq_stop error {rc}")
+
+    def progress(self) -> tuple[int, int]:
+        """Bytes and epochs logged so far."""
+        p = (ctypes.c_uint64 * 2)()
+        self.so.sq_progress(p)
+        return p[0], p[1]
+
+    def now(self, stream: int) -> float:
+        return self.so.sq_now_ms(stream)
+
+
 class Codec:
     def __init__(self, path: str) -> None:
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
@@ -221,10 +260,14 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
             bad.append(c)
     out["sk16_thread_receipts"] = not bad and out["sk16_digests_mismatch"] == 0
     out.update(fill_gate(tu, torch))
+    out.update(seq_gate(tu, torch))
     out.update(codec_gate(codec, torch, ENCODE_K))
-    out["ok"] = all(v for k, v in out.items() if k not in ("thread_chunks", "sk16_digests_mismatch", "fill_cut_chunks"))
+    out["ok"] = all(v for k, v in out.items() if k not in COUNTS)
     log(f"gate: {out}")
     return out
+
+
+COUNTS = ("thread_chunks", "sk16_digests_mismatch", "fill_cut_chunks", "seq_base_moved_bytes", "seq_roles_bytes")
 
 
 def fill_gate(tu: Topup, torch) -> dict:
@@ -238,14 +281,7 @@ def fill_gate(tu: Topup, torch) -> dict:
     sb = ctypes.create_string_buffer(8192)
     tu.so.tu_fill_signs(RUN_SEED, sb)
     out["fill_signs"] = sb.raw == F.signs(RUN_SEED)
-    sizes = [5 * F.UNIT_BYTES + 4096 * 3 + 77, 7 * F.UNIT_BYTES, 3 * F.UNIT_BYTES]
-    g = torch.Generator(device="cuda").manual_seed(4)
-    store = torch.randint(0, 256, (sum(sizes) + 1024,), dtype=torch.uint8, device="cuda", generator=g)
-    offs = [0, (sizes[0] + 15) // 16 * 16 + 51 * 16]
-    offs.append(offs[1] + sizes[1])
-    regions = [(store.data_ptr() + o, n) for o, n in zip(offs, sizes)]
-    host = store.cpu().numpy().tobytes()
-    blobs = [host[o:o + n] for o, n in zip(offs, sizes)]
+    store, regions, blobs = gate_regions(torch)
     seed = hashlib.sha256(b"verity/kv-filler/fill-gate").digest()
     want, wx = F.chunk(blobs, 2, 11, seed, RUN_SEED)
     ok = True
@@ -281,6 +317,108 @@ def fill_gate(tu: Topup, torch) -> dict:
         cursor = (cursor + planned) % 15
     out["fill_thread_receipts"] = not bad and len(recs) >= 12
     out["fill_cut_chunks"] = cut
+    del store
+    return out
+
+
+def gate_regions(torch):
+    """Three 16-byte-aligned regions of random bytes, the first ending mid-unit (a 15-unit plan): the store, the regions
+    and their bytes."""
+    import fill_ref as F
+    sizes = [5 * F.UNIT_BYTES + 4096 * 3 + 77, 7 * F.UNIT_BYTES, 3 * F.UNIT_BYTES]
+    g = torch.Generator(device="cuda").manual_seed(4)
+    store = torch.randint(0, 256, (sum(sizes) + 1024,), dtype=torch.uint8, device="cuda", generator=g)
+    offs = [0, (sizes[0] + 15) // 16 * 16 + 51 * 16]
+    offs.append(offs[1] + sizes[1])
+    regions = [(store.data_ptr() + o, n) for o, n in zip(offs, sizes)]
+    host = store.cpu().numpy().tobytes()
+    return store, regions, [host[o:o + n] for o, n in zip(offs, sizes)]
+
+
+SEQ_SHIFT_GATE = 2  # 4 units an epoch: epochs cross the 15-unit plan's passes off their boundaries
+
+
+def seq_epochs_ok(recs, blobs, shift: int, check: int = 24) -> tuple[bool, int]:
+    """A v1 log against `fill_ref.epoch`: epochs numbered 0, 1, ... in order, each full but the last, and the check
+    words of the first `check`, of the last, and of a spread between. Returns (ok, units)."""
+    import fill_ref as F
+    full = (1 << shift) * F.UNIT_BYTES
+    ok, units = True, 0
+    for k, (_, _, n, slot, _, e) in enumerate(recs):
+        ok &= e == k and slot == k % 4096 and 0 < n <= full and n % F.UNIT_BYTES == 0
+        ok &= n == full or k == len(recs) - 1
+        units += int(n) // F.UNIT_BYTES
+    if not ok:
+        return False, units
+    picks = sorted(set(range(min(check, len(recs)))) | {len(recs) - 1}
+                   | set(range(check, len(recs), max(1, len(recs) // 8))))
+    for k in picks:
+        _, _, n, _, x, e = recs[k]
+        ok &= x == F.epoch(blobs, e << shift, int(n) // F.UNIT_BYTES, RUN_SEED, RUN_SEED)
+    return ok, units
+
+
+def seq_gate(tu: Topup, torch) -> dict:
+    """fill-sk16/v1 against `fill_ref.epoch`, over `gate_regions`' 15-unit plan in epochs of 4 units, each role alone:
+    BASE (3 CTAs, 5 units a launch) through the gate's settings (open, one CTA, closed: none taken, then open);
+    then IDLE alone (no BASE): nothing taken while it is off, units while on; then STEP alone: nothing taken until a
+    step's begin on a stream, units while the step runs (a sleep kernel), none once it has ended. Every epoch logged
+    is placed and its receipt checked (`seq_epochs_ok`)."""
+    sq, out = Seq(tu), {}
+    store, regions, blobs = gate_regions(torch)
+
+    def settle(epochs: int) -> int:
+        for _ in range(2000):
+            if sq.progress()[1] >= epochs:
+                break
+            time.sleep(0.001)
+        return sq.progress()[0]
+
+    sq.start(regions, RUN_SEED, base_ctas=3, base_budget=5, shift=SEQ_SHIFT_GATE)
+    moved = []
+    for busy, idle in ((-1, -1), (1, 1), (0, 0), (-1, -1)):
+        tu.so.tu_gate(busy, idle)
+        a = sq.progress()[0]
+        time.sleep(0.03)
+        moved.append(sq.progress()[0] - a)
+    settle(sq.progress()[1] + 8)
+    sq.stop()
+    ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE)
+    out["seq_base_receipts"] = ok and units >= 60
+    # closed both ways: a unit in flight may still land after the gate moved, but no launch follows
+    out["seq_base_moves"] = moved[0] > 0 and moved[1] > 0 and moved[3] > 0
+    out["seq_base_moved_bytes"] = moved
+
+    s = torch.cuda.Stream()
+    sq.start(regions, RUN_SEED, base_ctas=0, shift=SEQ_SHIFT_GATE)
+    time.sleep(0.03)
+    still = sq.progress()[0]
+    tu.so.sq_idle(1, 64)
+    time.sleep(0.03)
+    tu.so.sq_idle(0, 0)
+    time.sleep(0.01)
+    idle_bytes = sq.progress()[0] - still
+    before_step = sq.progress()[0]
+    time.sleep(0.02)
+    quiet = sq.progress()[0] - before_step
+    rc = tu.so.sq_step_begin(2, s.cuda_stream)
+    with torch.cuda.stream(s):
+        torch.cuda._sleep(50_000_000)
+    rc |= tu.so.sq_step_end(s.cuda_stream)
+    s.synchronize()
+    time.sleep(0.01)
+    step_bytes = sq.progress()[0] - before_step - quiet
+    after = sq.progress()[0]
+    time.sleep(0.02)
+    tail = sq.progress()[0] - after
+    sq.stop()
+    ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE)
+    out["seq_roles_receipts"] = ok and units > 0
+    out["seq_roles_moves"] = (rc == 0 and still == 0 and idle_bytes > 0 and quiet == 0 and step_bytes > 0
+                              and tail == 0)
+    out["seq_roles_bytes"] = {"before_idle": still, "idle": idle_bytes, "between": quiet, "step": step_bytes,
+                              "after_step": tail}
+    del store
     return out
 
 

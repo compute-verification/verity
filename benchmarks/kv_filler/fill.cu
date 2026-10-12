@@ -251,8 +251,10 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
 //   IDLE  while no step is open and blockIdx < idle_ctas: launched by the thread, it gives way to the next step
 enum Role : int { BASE = 0, STEP = 1, IDLE = 2 };
 
+// `limit` bounds `next` so the units taken never lap the ring before the host has logged their epoch; a CTA checks it
+// before taking one unit, so `next` passes it by at most the CTAs in flight.
 struct Seq {
-  unsigned long long next, stop;
+  unsigned long long next, stop, limit;
 };
 
 struct Ring {
@@ -284,7 +286,7 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
       const volatile Seq* q = seq;
       const int busy = g->busy;
       const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
-      const bool go = !q->stop && (role == BASE   ? !(busy_ctas == 0 && idle_ctas == 0)
+      const bool go = !q->stop && q->next < q->limit && (role == BASE   ? !(busy_ctas == 0 && idle_ctas == 0)
                                    : role == STEP ? busy > 0
                                                   : busy <= 0 && blockIdx.x < idle_ctas);
       if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
