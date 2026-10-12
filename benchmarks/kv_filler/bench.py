@@ -140,6 +140,8 @@ class Seq:
         so.sq_idle.argtypes = [i, q]
         so.sq_step_begin.argtypes = [i, v]
         so.sq_step_end.argtypes = [v]
+        so.sq_step_begin_phase.argtypes = [i, i, i, v]
+        so.sq_step_end_phase.argtypes = [i, v]
         so.sq_progress.argtypes = [v]
         so.sq_now_ms.argtypes = [v]
         so.sq_now_ms.restype = d
@@ -158,11 +160,12 @@ class Seq:
         if rc:
             raise RuntimeError(f"sq_stop error {rc}")
 
-    def progress(self) -> tuple[int, int, int, int]:
-        """Bytes and epochs logged so far, steps begun, and STEP kernels launched."""
-        p = (ctypes.c_uint64 * 4)()
+    def progress(self) -> tuple[int, ...]:
+        """Bytes and epochs logged so far, steps begun, STEP kernels launched, prefill steps begun, and PREFILL kernels
+        launched."""
+        p = (ctypes.c_uint64 * 6)()
         self.so.sq_progress(p)
-        return p[0], p[1], p[2], p[3]
+        return tuple(p)
 
     def now(self, stream: int) -> float:
         return self.so.sq_now_ms(stream)
@@ -363,7 +366,8 @@ def seq_gate(tu: Topup, torch) -> dict:
     """fill-sk16/v1 against `fill_ref.epoch`, over `gate_regions`' 15-unit plan in epochs of 4 units, each role alone:
     BASE (3 CTAs, 5 units a launch) through the gate's settings (open, one CTA, closed: none taken, then open);
     then IDLE alone (no BASE): nothing taken while it is off, units while on; then STEP alone: nothing taken until a
-    step's begin on a stream, units while the step runs (a sleep kernel), none once it has ended. Every epoch logged
+    step's begin on a stream, units while the step runs (a sleep kernel), none once it has ended; then PREFILL alone
+    the same, beside a step that prefills. Every epoch logged
     is placed and its receipt checked (`seq_epochs_ok`)."""
     sq, out = Seq(tu), {}
     store, regions, blobs = gate_regions(torch)
@@ -412,13 +416,25 @@ def seq_gate(tu: Topup, torch) -> dict:
     after = sq.progress()[0]
     time.sleep(0.02)
     tail = sq.progress()[0] - after
+    rc |= tu.so.sq_step_begin_phase(0, 1, 2, s.cuda_stream)
+    with torch.cuda.stream(s):
+        torch.cuda._sleep(50_000_000)
+    rc |= tu.so.sq_step_end_phase(1, s.cuda_stream)
+    s.synchronize()
+    time.sleep(0.01)
+    pre_bytes = sq.progress()[0] - after - tail
+    after = sq.progress()[0]
+    time.sleep(0.02)
+    pre_tail = sq.progress()[0] - after
+    launches = sq.progress()[2:]
     sq.stop()
     ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE)
     out["seq_roles_receipts"] = ok and units > 0
     out["seq_roles_moves"] = (rc == 0 and still == 0 and idle_bytes > 0 and quiet == 0 and step_bytes > 0
-                              and tail == 0)
+                              and tail == 0 and pre_bytes > 0 and pre_tail == 0 and launches == (2, 1, 1, 1))
     out["seq_roles_bytes"] = {"before_idle": still, "idle": idle_bytes, "between": quiet, "step": step_bytes,
-                              "after_step": tail}
+                              "after_step": tail, "prefill": pre_bytes, "after_prefill": pre_tail,
+                              "launches": list(launches)}
     del store
     return out
 

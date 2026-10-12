@@ -19,7 +19,8 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
   seq       fill modes, fill-sk16/v1: a STEP kernel of `--throttle-ctas` CTAs beside each model step (launched on the
             filler's step stream after the step's start on the runner's, and returning at its end), and IDLE kernels
             of every SM's CTA, launched by the filler's thread, that read while no model step is on the GPU and return
-            once one is; `seq@0` is IDLE alone
+            once one is; `seq@0` is IDLE alone. `seq@N/P` adds a PREFILL kernel of P CTAs beside each step that
+            prefills, reading until no such step is on the GPU
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -175,7 +176,7 @@ def main() -> int:
     for p in a.policies:
         top, _, enc = p.partition("+")
         top, _, at = top.partition("@")
-        if ((at and not at.isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq")
+        if ((at and not at.replace("/", "", 1 if top == "seq" else 0).isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq")
                 or (enc and not enc.removeprefix("fused").isdigit())):
             ap.error(f"unknown policy {p}")
         if enc:
@@ -357,10 +358,11 @@ def main() -> int:
             cur["enc"].append((written, done, dec))
             cur["enc_base"] += dec * TOKEN_WORDS
 
-    def gate(delta: int) -> None:
+    def gate(delta: int, prefill: int = 0) -> None:
         if "seq_step" in cur:
             s = torch.cuda.current_stream().cuda_stream
-            rc = tu.so.sq_step_begin(cur["seq_step"], s) if delta > 0 else tu.so.sq_step_end(s)
+            rc = (tu.so.sq_step_begin_phase(cur["seq_step"], prefill, cur["seq_prefill"], s) if delta > 0
+                  else tu.so.sq_step_end_phase(prefill, s))
             if rc:
                 raise RuntimeError(f"sq_step error {rc}")
         elif cur.get("gate_steps"):
@@ -368,14 +370,16 @@ def main() -> int:
 
     def execute_model(*args, **kwargs):
         e0 = mark()
-        gate(1)
+        so = args[0] if args else kwargs["scheduler_output"]
+        pre = int(any(n > 1 for n in so.num_scheduled_tokens.values()))
+        gate(1, pre)
         out = ex_orig(*args, **kwargs)
-        encode_step(args[0] if args else kwargs["scheduler_output"])
+        encode_step(so)
         if out is None and st_orig is not None:
             cur["gpu_open"] = e0
-            cur["gate_open"] = cur.get("gate_open", 0) + 1
+            cur.setdefault("gate_open", []).append(pre)
         else:
-            gate(-1)
+            gate(-1, pre)
             if "gpu" in cur:
                 cur["gpu"].append((e0, mark()))
         return out
@@ -383,8 +387,7 @@ def main() -> int:
     def sample_tokens(*args, **kwargs):
         out = st_orig(*args, **kwargs)
         if cur.get("gate_open"):
-            cur["gate_open"] -= 1
-            gate(-1)
+            gate(-1, cur["gate_open"].pop(0))
         e0 = cur.pop("gpu_open", None)
         if e0 is not None and "gpu" in cur:
             cur["gpu"].append((e0, mark()))
@@ -417,6 +420,7 @@ def main() -> int:
         for policy in a.policies:
             top, _, enc = policy.partition("+")
             top, _, at = top.partition("@")
+            at, _, pat = at.partition("/")
             ctas = int(at) if at else a.throttle_ctas
             ek = int(enc.removeprefix("fused")) if enc else 0
             if top in ("none", "gemm") and mode != a.modes[0]:
@@ -445,7 +449,7 @@ def main() -> int:
                 sq.start(regions, RUN_SEED, base_ctas=0, warps=FILL_WARPS[mode], shift=a.seq_shift, priority=least,
                          step_priority=greatest if a.seq_step_priority == "greatest" else least)
                 tu.so.sq_idle(1, 0)
-                cur["seq_step"] = ctas
+                cur["seq_step"], cur["seq_prefill"] = ctas, int(pat or 0)
                 if a.token_gate:
                     gate_ids = gate_tokens()
                     if not gate_ref:
@@ -531,8 +535,9 @@ def main() -> int:
             seq_counts = None
             if top == "seq":
                 cur.pop("seq_step")
-                _, _, n_steps, n_launches = sq.progress()
-                seq_counts = {"steps_begun": n_steps, "step_launches": n_launches}
+                _, _, n_steps, n_launches, n_pre, n_pre_launches = sq.progress()
+                seq_counts = {"steps_begun": n_steps, "step_launches": n_launches, "prefill_steps_begun": n_pre,
+                              "prefill_launches": n_pre_launches}
                 sq.stop()
                 recs = tu.log()
             elif top not in ("none", "gemm"):

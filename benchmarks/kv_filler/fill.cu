@@ -39,7 +39,8 @@ struct Key {
 // waiting on the device waits on a closed gate.
 struct Gate {
   int busy;
-  uint32_t busy_ctas, idle_ctas, pad;
+  uint32_t busy_ctas, idle_ctas;
+  int prefill;  // the steps on the GPU that prefill (v1's PREFILL role reads while it is > 0)
 };
 constexpr uint32_t ALL = 0xFFFFFFFFu;
 
@@ -249,7 +250,7 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
 //   BASE  while the gate isn't closed both ways
 //   STEP  while a step is open (gate busy > 0): launched beside a step, it ends with it
 //   IDLE  while no step is open and blockIdx < idle_ctas: launched by the thread, it gives way to the next step
-enum Role : int { BASE = 0, STEP = 1, IDLE = 2 };
+enum Role : int { BASE = 0, STEP = 1, IDLE = 2, PREFILL = 3 };
 constexpr unsigned long long STEP_LINGER_NS = 50000;  // how long a STEP warp waits for the next step
 
 // `limit` bounds `next` so the units taken never lap the ring before the host has logged their epoch; a CTA checks it
@@ -288,14 +289,15 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
       const int busy = g->busy;
       const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
       const bool open = !q->stop && q->next < q->limit;
-      bool go = open && (role == BASE   ? !(busy_ctas == 0 && idle_ctas == 0)
-                         : role == STEP ? busy > 0
-                                        : busy <= 0 && blockIdx.x < idle_ctas);
-      if (open && !go && role == STEP) {
-        // between pipelined steps the count is 0 for microseconds: a STEP warp returning there would leave the
-        // kernel to dwindle, never relaunched while its last warp reads on
+      const volatile int* count = role == PREFILL ? &g->prefill : &g->busy;
+      bool go = open && (role == BASE                     ? !(busy_ctas == 0 && idle_ctas == 0)
+                         : role == STEP || role == PREFILL ? *count > 0
+                                                          : busy <= 0 && blockIdx.x < idle_ctas);
+      if (open && !go && (role == STEP || role == PREFILL)) {
+        // between pipelined steps the count is 0 for microseconds: a warp returning there would leave the kernel to
+        // dwindle, never relaunched while its last warp reads on
         const unsigned long long until = globaltimer() + STEP_LINGER_NS;
-        while (!(go = g->busy > 0) && !q->stop && globaltimer() < until) __nanosleep(1000);
+        while (!(go = *count > 0) && !q->stop && globaltimer() < until) __nanosleep(1000);
       }
       if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
     }
@@ -324,14 +326,15 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
 __global__ void stamp(unsigned long long* t) { *t = globaltimer(); }
 
 __global__ void gate_set(Gate* g, uint32_t busy_ctas, uint32_t idle_ctas, int reset) {
-  if (reset) g->busy = 0;
+  if (reset) g->busy = g->prefill = 0;
   g->busy_ctas = busy_ctas;
   g->idle_ctas = idle_ctas;
   __threadfence();
 }
 
-__global__ void gate_step(Gate* g, int delta) {
+__global__ void gate_step(Gate* g, int delta, int prefill = 0) {
   atomicAdd(&g->busy, delta);
+  if (prefill) atomicAdd(&g->prefill, delta);
   __threadfence();
 }
 #endif
