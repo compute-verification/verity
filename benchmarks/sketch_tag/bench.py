@@ -607,7 +607,8 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
     order), down its own layer's gate_up. Per batch the layer's time against the sum of the linears' native times, for
     the GEMMs alone (base: plain, or with the decode), with the sketch, and with the deferred commit: fused (each
     committing call writes its tags' leaves) or split (gate_up writes the leaves of the previous down's tags, down those
-    of its own gate_up's). Every call runs at its arm's fastest configuration in `cases`."""
+    of its own gate_up's). Every call runs at its arm's fastest configuration in `cases`. The sketches and tags rotate
+    over two slots, as a deployment's would (the commit zeroes a sketch behind it), the ring's layer count even."""
     ks, nt = 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0]
     res = {"k": ks, "n_target": nt, "cfg": "each call at its arm's fastest", "committers": a.committers,
            "layouts": {}, "ok": True}
@@ -654,15 +655,16 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             sks[name] = Sketch(lib, torch, n, kd, S.PLAIN if kr == 0 else lib.bits, ks, nt, warps_of(n, kd))
         layer_bytes = sum(v.numel() * v.element_size() for v in stores.values())
         nl = max(2, -(-a.ring_bytes // layer_bytes))
+        nl += nl % 2
         ring = [stores] + [{k: v.clone() for k, v in stores.items()} for _ in range(nl - 1)]
         wring = [{k: v.t() for k, v in fp8.items()}] + [{k: v.clone().t() for k, v in fp8.items()}
                                                         for _ in range(nl - 1)]
         off = {"qkv": 0, "o": sks["qkv"].nvec, "down": sks["qkv"].nvec + sks["o"].nvec}
         nrest, ngu = off["down"] + sks["down"].nvec, sks["gate_up"].nvec
-        rest = [torch.zeros(nrest * ks, dtype=torch.int32, device="cuda") for _ in range(nl)]
-        gu = [torch.zeros(ngu * ks, dtype=torch.int32, device="cuda") for _ in range(nl)]
-        crest = [WB.Commit(lib, torch, nrest) for _ in range(nl)]
-        cgu = [WB.Commit(lib, torch, ngu) for _ in range(nl)]
+        rest = [torch.zeros(nrest * ks, dtype=torch.int32, device="cuda") for _ in range(2)]
+        gu = [torch.zeros(ngu * ks, dtype=torch.int32, device="cuda") for _ in range(2)]
+        crest = [WB.Commit(lib, torch, nrest) for _ in range(2)]
+        cgu = [WB.Commit(lib, torch, ngu) for _ in range(2)]
         fps = {s: WB.ptr(sks[s].frag) for s in SEQ}
         lr = {"layers": nl, "layer_store_bytes": layer_bytes, "times": {}}
         res["layouts"][lay] = lr
@@ -673,7 +675,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             calls = []
             commits, lanes = mode in ("fused", "split", "split8"), 8 if mode == "split8" else 32
             for li in range(nl):
-                prev = (li - 1) % nl
+                cur, prev = li % 2, (li - 1) % 2
                 for name in SEQ:
                     sko, (n, kd) = sks[name], SHAPES[name]
                     k_ = 0 if mode == "base" else ks
@@ -682,15 +684,15 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                            else f"sk_{lay}_{ks}_{nt}")
                     cfg = best_cfg(name, arm, mb)
                     cn = min(a.committers, WB.WS_MAX_WARPS - 1 - cfg[0])
-                    skp = (None if not k_ else WB.ptr(gu[li]) if name == "gate_up"
-                           else WB.ptr(rest[li]) + 4 * ks * off[name])
+                    skp = (None if not k_ else WB.ptr(gu[cur]) if name == "gate_up"
+                           else WB.ptr(rest[cur]) + 4 * ks * off[name])
                     commit = (0, None, 0, 0, None, 0, 0, None, 0)
                     if commits and name == "gate_up":
                         lv = (ngu, cgu[prev].ptr, lanes) if mode != "fused" else (0, None, 0)
                         commit = (cn, WB.ptr(rest[prev]), nrest, 0, crest[prev].ptr, 1, *lv)
                     elif commits and name == "down":
                         lv = (nrest, crest[prev].ptr, lanes) if mode != "fused" else (0, None, 0)
-                        commit = (cn, WB.ptr(gu[li]), ngu, 0, cgu[li].ptr, 1, *lv)
+                        commit = (cn, WB.ptr(gu[cur]), ngu, 0, cgu[cur].ptr, 1, *lv)
                     calls.append([kr, k_, WB.ptr(ring[li][name]), xp[kd], WB.ptr(ys[name]), mb, n, kd, 0, 0, cfg[0],
                                   cfg[1], 0, None, sko.t, sko.run, fps[name] if k_ else None, skp, 1, SKETCH_SEED,
                                   *commit, st])
@@ -775,8 +777,8 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                                "ratio_vs_native_seq": {m: v / ns for m, v in med.items()}}
             log(f"sequence {lay} M={mb}: linears' native {native * 1e6:.1f} us a layer, in sequence {ns * 1e6:.1f} us; "
                 + ", ".join(f"{m} {v / ns:.3f}x" for m, v in med.items()))
-            # each call's time in the sequence (events between the calls, queued behind a spin), against its linear's
-            # time alone (`gemm`'s ring of one linear) under the same arm
+            # each call's time in the sequence (events between the calls, queued behind a spin; the mean, as the events'
+            # clock ticks are ~2 us), against its linear's time alone (`gemm`'s ring of one linear) under the same arm
             per = {}
             for m in ("base", "sk", "split"):
                 f, got = arms[m], {s: [] for s in SEQ}
@@ -789,7 +791,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                         got[SEQ[i % len(SEQ)]].append(ev[i].elapsed_time(ev[i + 1]) / 1e3)
                 arm = {"base": "base_plain" if lay == "plain" else "dec_enc", "sk": f"sk_{lay}_{ks}_{nt}",
                        "split": f"sk_{lay}_{ks}_{nt}"}[m]
-                per[m] = {s: {"in_sequence_s": statistics.median(v),
+                per[m] = {s: {"in_sequence_s": statistics.mean(v),
                               "alone_s": cases[s]["times"][mb]["best_s"].get(arm)} for s, v in got.items()}
             lr["times"][mb]["per_call"] = per
             log(f"sequence {lay} M={mb} per call (us, in sequence / alone): "
