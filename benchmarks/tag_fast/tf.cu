@@ -1173,13 +1173,13 @@ __global__ void __launch_bounds__(FW * 32) fused3_kernel(const uint4* __restrict
 // the launch before it that have written their y), lets the next launch start after its loop, counts itself into
 // *done_ctr once its y is written, and before exiting waits for the launch before it to complete (so each launch's
 // completion implies every earlier one's). Its chunk ends overlap the next launch's loads.
-template <int V, int L, int NB8, int MODE>
+template <int V, int L, int NB8, int MODE, int PD>
 __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
                                                           int* done_ctr, unsigned long long* trace) {
-  fused3_body<V, L, NB8, MODE, 1>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, nullptr, Tail{}, nullptr, nullptr,
-                                  wait_ctr, wait_n, done_ctr, trace);
+  fused3_body<V, L, NB8, MODE, PD>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase, nullptr, Tail{}, nullptr, nullptr,
+                                   wait_ctr, wait_n, done_ctr, trace);
   asm volatile("griddepcontrol.wait;" ::: "memory");
   if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
 }
@@ -1689,21 +1689,26 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 // programmatic dependent launches (pdl 1; 0 a plain launch). wait_ctr null for the chain's first link; done_ctr
 // counts this launch's CTAs once their y is written, (N / 16 / FW) (Kd / 2,048) of them. occ > 0: at most occ CTAs an
 // SM (dynamic shared memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd
-// some SMs. trace: null, or this launch's TR_WORDS words.
-int tf_fused3p(int lanes, int mode, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
+// some SMs. pd: quads of register prefetch, 1 or 2. trace: null, or this launch's TR_WORDS words.
+int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
                uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ,
                unsigned long long* trace, cudaStream_t st) {
-  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr)
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr ||
+      pd < 1 || pd > 2)
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
   using KernP = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, const int*, int,
                          int*, unsigned long long*);
   KernP kern = nullptr;
-#define F3P(L, MD)                                                                                                     \
-  if ((MD == MODE_GEMM || lanes == L) && mode == MD)                                                                   \
-    kern = nb8 == 1 ? fused3p_kernel<1, L, 1, MD> : nb8 == 2 ? fused3p_kernel<1, L, 2, MD> : fused3p_kernel<1, L, 4, MD>;
+#define F3PD(L, MD, P)                                                                                                 \
+  if ((MD == MODE_GEMM || lanes == L) && mode == MD && pd == P)                                                        \
+    kern = nb8 == 1   ? fused3p_kernel<1, L, 1, MD, P>                                                                 \
+           : nb8 == 2 ? fused3p_kernel<1, L, 2, MD, P>                                                                 \
+                      : fused3p_kernel<1, L, 4, MD, P>;
+#define F3P(L, MD) F3PD(L, MD, 1) F3PD(L, MD, 2)
   F3P(1, MODE_GEMM) F3P(4, MODE_TAGS) F3P(8, MODE_TAGS)
 #undef F3P
+#undef F3PD
   if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
   static int sm_smem = 0, reserved = 0;
