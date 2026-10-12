@@ -46,7 +46,9 @@ TAG_SEED = hashlib.sha256(b"verity/word-codec/bench/tag-seed").digest()
 B3_LANE_COMPRESSIONS = 5  # a lane block's message, 8 + 8 L bytes, at either packing
 SHA_LEAF_COMPRESSIONS = 5  # a leaf's 16 tags and index after the prefix's midstate, 8 + 512 bytes
 SHA_NODE_COMPRESSIONS = 2  # RFC 6962's node, 0x01 ‖ L ‖ R, 129 bytes
-DESIGNS = ("fused", "passes", "audit", "audit-commit")
+DESIGNS = ("fused", "passes", "audit", "audit-commit", "audit-tree")
+# wc_audit_tree's sweep: the group whose subtree the pass builds (warp tasks; 0 none), tasks prefetched ahead, blocks an SM
+AUDIT_TREE_CFGS = tuple((g, a, x) for g in (0, 4, 8, 32) for a in (0, 1, 2, 4) for x in (2, 8))
 WS_MAX_WARPS = 10         # wc.cu's: consumers, the producer and the committers
 TAG_MODES = ((1, ""), (2, "i"))  # wc_gemm_ws_tag's decode: the tag then the decode, or interleaved (a cfg's suffix)
 LAYERS = 32               # Llama-3.1-8B's, each with the four linears
@@ -79,6 +81,7 @@ class Lib:
         so.wc_commit_tree.argtypes = [v, q, v, v]
         so.wc_audit_tag.argtypes = [v, q, ctypes.c_char_p, q, v, i, v]
         so.wc_audit_commit.argtypes = [v, q, ctypes.c_char_p, q, v, v, i, v]
+        so.wc_audit_tree.argtypes = [v, q, ctypes.c_char_p, q, v, i, i, i, v]
         so.wc_spin.argtypes = [ctypes.c_longlong, v]
         so.wc_empty.argtypes = [i, v]
         cs = (ctypes.c_int * 8)()
@@ -796,15 +799,57 @@ def audit_window(lib: Lib, torch, reps: int, log) -> dict:
     tg = timed(torch, lambda: lib.call("wc_audit_tag", ptr(store), blocks, TAG_SEED, 0, a.tags, grid, st), reps)
     tc = timed(torch, lambda: lib.call("wc_audit_commit", ptr(store), blocks, TAG_SEED, 0, b.tags, b.leaves, grid, st),
                reps)
-    out = {"blocks": blocks, "store_bytes": store.numel() * 8, "grid": grid, "ok": ok,
+    sms = torch.cuda.get_device_properties(0).multi_processor_count
+    lib.call("wc_commit_tree", b.ptr, blocks, None, st)
+    tree_gate = audit_tree_gate(lib, torch, log)
+    trees = {}
+    c = Commit(lib, torch, blocks)
+    for group, ahead, per_sm in AUDIT_TREE_CFGS:
+        name, g = f"g{group}a{ahead}x{per_sm}", sms * per_sm
+        c.buf.zero_()
+        lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, group, ahead, g, st)
+        torch.cuda.synchronize()
+        same = bool(torch.equal(c.buf, b.buf))
+        t = timed(torch, lambda: lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 0, c.ptr, group, ahead, g, st),
+                  reps)
+        trees[name] = {"group": group, "ahead": ahead, "grid": g, "ok": same, "s": statistics.median(t), "times_s": t}
+        ok &= same
+    best = min(trees, key=lambda n: trees[n]["s"])
+    out = {"blocks": blocks, "store_bytes": store.numel() * 8, "grid": grid, "ok": ok and tree_gate["ok"],
            "audit_tag_s": statistics.median(tg), "audit_tag_times_s": tg,
-           "audit_commit_s": statistics.median(tc), "audit_commit_times_s": tc}
-    log(f"audit window {lib.name}: {'ok' if ok else 'FAIL'}, {blocks} lane blocks ({out['store_bytes'] / 1e9:.2f} GB): "
-        f"tags {out['audit_tag_s'] * 1e3:.3f} ms ({out['store_bytes'] / out['audit_tag_s'] / 1e9:.0f} GB/s), "
-        f"tags and leaves {out['audit_commit_s'] * 1e3:.3f} ms "
-        f"({out['store_bytes'] / out['audit_commit_s'] / 1e9:.0f} GB/s)")
-    del store, a, b
+           "audit_commit_s": statistics.median(tc), "audit_commit_times_s": tc,
+           "audit_tree_s": trees[best]["s"], "audit_tree_best": best, "audit_tree": trees, "audit_tree_gate": tree_gate}
+    log(f"audit window {lib.name}: {'ok' if out['ok'] else 'FAIL'}, {blocks} lane blocks "
+        f"({out['store_bytes'] / 1e9:.2f} GB): tags {out['audit_tag_s'] * 1e3:.3f} ms "
+        f"({out['store_bytes'] / out['audit_tag_s'] / 1e9:.0f} GB/s), tags and leaves {out['audit_commit_s'] * 1e3:.3f} ms "
+        f"({out['store_bytes'] / out['audit_commit_s'] / 1e9:.0f} GB/s), the whole commit {best} "
+        f"{out['audit_tree_s'] * 1e3:.3f} ms ({out['store_bytes'] / out['audit_tree_s'] / 1e9:.0f} GB/s; "
+        + ", ".join(f"{n} {v['s'] * 1e3:.3f}{'' if v['ok'] else ' FAIL'}" for n, v in trees.items()) + ")")
+    del store, a, b, c
     torch.cuda.empty_cache()
+    return out
+
+
+def audit_tree_gate(lib: Lib, torch, log) -> dict:
+    """wc_audit_tree's workspace (tags and every tree level) byte for byte wc_audit_commit's and wc_commit_tree's, at sizes
+    whose groups and levels end odd, in every configuration."""
+    st, sms = stream(torch), torch.cuda.get_device_properties(0).multi_processor_count
+    bad = []
+    for tasks in (1, 3, 37, 167, 1029):
+        blocks = 512 * tasks
+        store = torch.empty(blocks * C.lane_words(lib.bits), dtype=torch.int64, device="cuda").random_()
+        ref, c = Commit(lib, torch, blocks), Commit(lib, torch, blocks)
+        lib.call("wc_audit_commit", ptr(store), blocks, TAG_SEED, 7, ref.tags, ref.leaves, sms * 8, st)
+        lib.call("wc_commit_tree", ref.ptr, blocks, None, st)
+        for group, ahead, per_sm in AUDIT_TREE_CFGS:
+            c.buf.zero_()
+            lib.call("wc_audit_tree", ptr(store), blocks, TAG_SEED, 7, c.ptr, group, ahead, sms * per_sm, st)
+            torch.cuda.synchronize()
+            if not torch.equal(c.buf, ref.buf):
+                bad.append([tasks, group, ahead, per_sm])
+    out = {"tasks": [1, 3, 37, 167, 1029], "cfgs": [list(x) for x in AUDIT_TREE_CFGS], "bad": bad, "ok": not bad}
+    log(f"audit tree gate {lib.name}: {'ok' if not bad else 'FAIL ' + str(bad)} (the workspace = wc_audit_commit's and "
+        f"wc_commit_tree's at 1, 3, 37, 167 and 1029 warp tasks, {len(AUDIT_TREE_CFGS)} configurations)")
     return out
 
 
@@ -817,7 +862,9 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
     window's passes; audit, a step that only decodes, the tags an audit pass of their own over the store (wc_audit_tag)
     and the commit its passes, the step the fastest decode-only kernel of the shape (simple, pipelined or
     warp-specialized); audit-commit, the same step, the tags and leaves one audit pass (wc_audit_commit), the tree after
-    it. The audit passes are timed over one store of the step's lane blocks (audit_window); `window_per_call` is the
+    it; audit-tree, the same step, the tags, leaves and the tree's lower levels one audit pass and the tree's top after it
+    (wc_audit_tree at its fastest configuration). The audit passes are timed over one store of the step's lane blocks
+    (audit_window); `window_per_call` is the
     audit design's window from the per-call passes instead. Each shape takes the configuration whose step is fastest; a
     window pass is its time in proportion to the blocks.
     `window` is the timed window in native steps (the tagging step, or the audit pass and its commit); c, the commit's
@@ -855,7 +902,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                 tagged = "decode_best_s" if separate else {"fused": "decode_tag_commit_s",
                                                            "passes": "decode_tag_held_s"}[commit]
                 need = "audit_s" if commit == "audit" else tagged
-                if commit == "audit-commit" and not (aw and aw["ok"]):
+                if commit in ("audit-commit", "audit-tree") and not (aw and aw["ok"]):
                     continue
                 tot = {"native": 0.0, "base": 0.0, "d": 0.0, "t": 0.0, "dt": 0.0, "step": 0.0, "audit": 0.0}
                 shapes, blocks = {}, 0
@@ -888,6 +935,9 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                             window = (aw["audit_tag_s"] + cw["leaves_s"] + cw["tree_s"]) * share / nat
                     elif commit == "audit-commit":
                         fused, window = tot["step"], (aw["audit_commit_s"] + cw["tree_s"]) * share / nat
+                        tot["base"] = min(tot["base"], tot["d"])
+                    elif commit == "audit-tree":
+                        fused, window = tot["step"], aw["audit_tree_s"] * share / nat
                         tot["base"] = min(tot["base"], tot["d"])
                     else:
                         fused = tot["step"] + passes + ((tree or 0.0) if commit == "fused" else 0.0)
@@ -939,7 +989,9 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                "label": f"Sloth p61, {p['payload_bits']}-bit packing, warp-specialized, "
                         + {"audit": "decode-only step, the tags an audit pass of their own, the leaves and the tree "
                                     "passes after it",
-                           "audit-commit": "decode-only step, the tags and leaves one audit pass, the tree after it"}
+                           "audit-commit": "decode-only step, the tags and leaves one audit pass, the tree after it",
+                           "audit-tree": "decode-only step, the tags, leaves and the tree's lower levels one audit "
+                                         "pass, the tree's top after it"}
                           .get(p["commit"], f"{p['commit']} commit")
                         + ", " + ",".join(sorted({s['cfg'] for s in p['shapes'].values()})),
                "run": os.environ.get("RESEARCH_RUN_ID"), "art": None}

@@ -1028,6 +1028,97 @@ __global__ void __launch_bounds__(256) audit_commit_kernel(const uint64_t* __res
   }
 }
 
+// The tree's levels the audit pass builds itself: off and n of levels 0 (the leaves) to `levels` (tagger.cu's Levels).
+struct TreeLow {
+  uint64_t off[11], n[11];
+  int levels;  // at most log2(32 group) and the tree's top
+  int group;   // warp tasks (32 leaves each) whose subtree the last of them to finish builds
+};
+
+__device__ __forceinline__ void prefetch_l2(const void* p, uint32_t bytes) {
+  asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(p), "r"(bytes) : "memory");
+}
+
+// audit_commit_kernel with tl.levels of the tree above its leaves: a group's warps publish their leaves (a fence, then
+// the group's count), and the one that completes the count builds the group's levels, reading the other warps' nodes
+// from L2 (ld.cg: L1 is not coherent across SMs), then resets the count for the next pass. Every node is tagger.cu's
+// level_step, odd last node promoted. With ahead > 0, lane 0 has the task `ahead` tasks on prefetched into L2.
+__global__ void __launch_bounds__(256) audit_tree_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
+                                                         bw::Key3 key, bw::Mid mid, uint64_t jbase, uint32_t* tags,
+                                                         uint64_t* nodes, TreeLow tl, uint32_t* counts, int ahead) {
+  const int lane = threadIdx.x % 32;
+  const uint64_t warps = (uint64_t)gridDim.x * (blockDim.x / 32), tasks = blocks / 512;
+  const uint64_t first = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) / 32;
+  if (lane == 0)
+    for (int u = 0; u < ahead && first < tasks; ++u) prefetch_l2(store + (first * 16 + u) * TASK_WORDS, TASK_WORDS * 8);
+  for (uint64_t g = first; g < tasks; g += warps) {
+#pragma unroll 1
+    for (int u = 0; u < 16; ++u) {
+      if (ahead && lane == 0) {
+        const uint64_t ga = u + ahead < 16 ? g : g + warps, ua = (u + ahead) % 16;
+        if (ga < tasks) prefetch_l2(store + (ga * 16 + ua) * TASK_WORDS, TASK_WORDS * 8);
+      }
+      const uint64_t j = g * 512 + 32 * u + lane;
+      audit_lane_tag(store, key, j, jbase + j, tags);
+    }
+    __syncwarp();
+    const uint64_t c = g * 32 + lane;
+    audit_leaf(tags + c * 16 * 8, c, mid, nodes + c * 8);
+    if (tl.levels) {
+      __threadfence();
+      __syncwarp();
+      const uint64_t G = g / tl.group, members = min((uint64_t)tl.group, tasks - G * tl.group);
+      uint32_t done = 0;
+      if (lane == 0) done = atomicAdd(counts + G, 1u) + 1;
+      if (__shfl_sync(0xffffffffu, done, 0) == members) {
+        __threadfence();
+        const uint64_t span = 32ull * tl.group;
+        for (int t = 0; t < tl.levels; ++t) {
+          const uint64_t s = G * (span >> t), m = min(span >> t, tl.n[t] - s);
+          const uint64_t* in = nodes + tl.off[t] * 8;
+          uint64_t* out = nodes + tl.off[t + 1] * 8;
+          for (uint64_t r = lane; r < (m + 1) / 2; r += 32) {
+            const uint64_t i = s / 2 + r;
+            uint64_t L[8], R[8];
+#pragma unroll
+            for (int k = 0; k < 8; ++k) L[k] = __ldcg(in + 16 * i + k);
+            if (2 * i + 1 < tl.n[t]) {
+#pragma unroll
+              for (int k = 0; k < 8; ++k) R[k] = __ldcg(in + 16 * i + 8 + k);
+              bw::node_hash(L, R, out + 8 * i);
+            } else {
+#pragma unroll
+              for (int k = 0; k < 8; ++k) out[8 * i + k] = L[k];
+            }
+          }
+          __syncwarp();
+        }
+        if (lane == 0) counts[G] = 0;
+      }
+    }
+    __syncwarp();
+  }
+}
+
+// tagger.cu's launch_tree from level k on.
+static void tree_from(const bw::Pass& p, size_t k, cudaStream_t st) {
+  const size_t top = p.lv.n.size() - 1;
+  for (; k < top && p.lv.n[k] > bw::WIDE; ++k)
+    bw::node_level<<<(unsigned)((p.lv.n[k + 1] + 127) / 128), 128, 0, st>>>(p.nodes + p.lv.off[k] * 8, p.lv.n[k],
+                                                                           p.nodes + p.lv.off[k + 1] * 8);
+  while (k < top) {
+    bw::Span s;
+    s.levels = (int)std::min<size_t>(bw::SPAN, top - k);
+    for (int t = 0; t <= s.levels; ++t) {
+      s.off[t] = p.lv.off[k + t];
+      s.n[t] = p.lv.n[k + t];
+    }
+    bw::node_span<<<(unsigned)((p.lv.n[k] + (2 * bw::SPAN_THREADS) - 1) / (2 * bw::SPAN_THREADS)), bw::SPAN_THREADS, 0,
+                    st>>>(p.nodes, s);
+    k += s.levels;
+  }
+}
+
 // A host launch through ctypes costs more than a small GEMM: a timed arm is queued behind `spin` so the device runs it
 // back to back, and `empty` (the GEMM's grid, no work) prices what back to back still costs a launch.
 __global__ void spin_kernel(long long cycles) {
@@ -1327,6 +1418,39 @@ int wc_audit_commit(const void* store, uint64_t blocks, const uint8_t* seed, uin
   const WsTag& tg = ws_tag_keys(seed);
   audit_commit_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, tg.key, tg.leafmid, jbase, tags,
                                            leaves);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The whole audit in one pass and the tree's top: the workspace's tags, leaves and every level, as wc_audit_commit and
+// wc_commit_tree leave them. The pass builds the levels below each group of `group` warp tasks (32 group leaves; 0: none,
+// else a power of two up to 32), and prefetches `ahead` tasks (0 to 15) into L2. blocks % 512 == 0.
+int wc_audit_tree(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, void* workspace, int group,
+                  int ahead, int grid, cudaStream_t s) {
+  if (!store || !seed || !workspace || !blocks || grid < 1 || blocks % 512 || group < 0 || group > 32 ||
+      (group & (group - 1)) || ahead < 0 || ahead > 15)
+    return 1;
+  static uint32_t* counts = nullptr;
+  static uint64_t capacity = 0;
+  const WsTag& tg = ws_tag_keys(seed);
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  TreeLow tl{};
+  tl.group = group ? group : 1;
+  int low = 0;
+  while ((32ull * tl.group) >> (low + 1)) ++low;
+  tl.levels = group ? (int)std::min<size_t>(p.lv.n.size() - 1, (size_t)low) : 0;
+  for (int t = 0; t <= tl.levels; ++t) {
+    tl.off[t] = p.lv.off[t];
+    tl.n[t] = p.lv.n[t];
+  }
+  const uint64_t groups = (blocks / 512 + tl.group - 1) / tl.group;
+  if (capacity < groups) {
+    if (counts) cudaFree(counts);
+    if (cudaMalloc(&counts, groups * sizeof(uint32_t)) || cudaMemset(counts, 0, groups * sizeof(uint32_t))) return 4;
+    capacity = groups;
+  }
+  audit_tree_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, tg.key, tg.leafmid, jbase, p.tags,
+                                         p.nodes, tl, counts, ahead);
+  tree_from(p, (size_t)tl.levels, s);
   return cudaGetLastError() ? 4 : 0;
 }
 
