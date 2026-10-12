@@ -2,10 +2,11 @@
 
 `python -m model.frontier [OPS] [BATCH] [MODEL]` from `benchmarks/word_codec` prints, for each E codec, γ_bw with W
 registered / with no assumption on W, the step slowdown and the served one, with the KV option the 5% rule picks;
-1023 bits at 6.58x the issue bound is the measured thread-per-word kernel; 1536 and 2048 need a kernel not yet built,
+1023 bits at 7.13x the issue bound is the measured thread-per-word kernel; 1536 and 2048 need a kernel not yet built,
 fused thread-per-word (extrapolated, past the measured bracket) or with its decode apart (from measured squarings).
-OPS multiplies the issue-bound instruction count (1.0 the issue bound, 1.67 IMAD.WIDE at half rate). Costs are in
-passes at the locked clock, as measured; the adversary runs at the max clock (κ = KAPPA), the honest at either.
+The adversary squares at the measured pipes' floor (`pipe_ops`, 1.36-1.45x the issue bound), or at OPS times the issue
+bound when OPS is given (1.0 for an algorithm past Karatsuba that issues no more than it). Costs are in passes at the
+locked clock, as measured; the adversary runs at the max clock (κ = KAPPA), the honest at either.
 """
 
 from __future__ import annotations
@@ -50,8 +51,45 @@ def issue_count(bits: int) -> int:
     return _square(limbs) + 3 * limbs
 
 
-def sq(bits: int, ops: float = 1.0) -> float:
-    return g.sq_floor(bits, ops=ops * issue_count(bits))
+# Lanes an SM retires a clock on sm_120 [measured, r20261012-111055-77a2]: IMAD.WIDE on the FMA pipe at a quarter of
+# the issue rate, IMAD on the same pipe and IADD3 on the ALU pipe at a half.
+IMAD_WIDE, IMAD, IADD3 = 31.1, 63.1, 64.0
+
+
+def _counts(limbs: int, depth: int) -> tuple[int, int]:
+    """Products and instructions of a squaring without the fold, `depth` levels of Karatsuba over schoolbook."""
+    if depth == 0 or limbs < 4 or limbs % 2:
+        return limbs * (limbs + 1) // 2, limbs * limbs + 3 * limbs
+    h = limbs // 2
+    p, n = _counts(h, depth - 1)
+    return 3 * p, 3 * n + 7 * h
+
+
+def _clocks(products: int, instructions: int) -> float:
+    """SM clocks a squaring takes at the measured pipes: its products on the FMA pipe, its adds split between the
+    ALU pipe and the FMA pipe's spare rate, no faster than the issue rate."""
+    adds = instructions - products
+    f = max(0.0, min(adds, (adds / IADD3 - products / IMAD_WIDE) / (1 / IMAD + 1 / IADD3)))
+    return max(products / IMAD_WIDE + f / IMAD, (adds - f) / IADD3, instructions / g.ISSUE_LANES)
+
+
+def pipe_clocks(bits: int) -> float:
+    """The fewest SM clocks a known squaring mod a pseudo-Mersenne p takes on the measured pipes, the fold's L
+    products and 3L instructions included, at its best depth of Karatsuba [estimate]: 7.77 at 768 bits, 23.9 at
+    1,536, 37.0 at 2,048."""
+    limbs = math.ceil(bits / 32)
+    return min(_clocks(p + limbs, n + 3 * limbs) for p, n in (_counts(limbs, d) for d in range(5)))
+
+
+def pipe_ops(bits: int) -> float:
+    """The pipe floor over the issue bound: 1.43 at 768 bits, 1.40 at 1,536, 1.36 at 2,048, so no squaring of this
+    form reaches the issue bound at any width."""
+    return pipe_clocks(bits) * g.ISSUE_LANES / issue_count(bits)
+
+
+def sq(bits: int, ops: float | None = 1.0) -> float:
+    """A squaring in passes, `ops` times the issue bound, or at the pipe floor when `ops` is None."""
+    return g.sq_floor(bits, ops=(pipe_ops(bits) if ops is None else ops) * issue_count(bits))
 
 
 # The fused decode's ALU over the issue bound, ε / sq(bits), from the measured steps: 4.57 at 768 bits (the best),
@@ -107,10 +145,10 @@ def kv_codec(bits: int, batch: int, off: float = OFF_ISSUE[0]) -> g.Codec:
     return replace(c, y=c.y + 0.04) if batch >= 32 else c
 
 
-def options(shape: g.Shape, batch: int, c: g.Codec, ops: float, kv_widths=(1536, 2048), kappa: float = KAPPA,
-            off: float = OFF_ISSUE[0]) -> dict[str, dict]:
+def options(shape: g.Shape, batch: int, c: g.Codec, ops: float | None = None, kv_widths=(1536, 2048),
+            kappa: float = KAPPA, off: float = OFF_ISSUE[0]) -> dict[str, dict]:
     """Every KV option at E's codec `c` (its own prime at k_KV rounds, or a wider KV prime at one, its kernel `off`
-    times the issue bound), the adversary at the floor on both."""
+    times the issue bound), the adversary at the floor on both (`sq`'s `ops`)."""
     bits = math.ceil(c.p_bits)
     adv = g.at_floor(c, sq(bits, ops))
     c = replace(c, y=c.y + TAG)
@@ -138,10 +176,11 @@ def row(t: dict) -> str:
 
 
 def main(argv: list[str]) -> None:
-    ops = float(argv[0]) if argv else 1.0
+    ops = float(argv[0]) if argv and argv[0] != "pipe" else None
     batch = int(argv[1]) if len(argv) > 1 else 1
     shape = SHAPES[argv[2] if len(argv) > 2 else "70"]
-    print(f"{shape.name} batch {batch}, squaring at {ops}x the issue bound, the adversary at {g.CLOCK_MAX_MHZ} MHz;"
+    floor = "the pipe floor" if ops is None else f"{ops}x the issue bound"
+    print(f"{shape.name} batch {batch}, squaring at {floor}, the adversary at {g.CLOCK_MAX_MHZ} MHz;"
           " W registered / no assumption")
     for clock in (g.CLOCK_LOCKED_MHZ, g.CLOCK_MAX_MHZ):
         print(f" the honest at {clock} MHz")
@@ -158,7 +197,7 @@ def main(argv: list[str]) -> None:
                 print(f"  {bits} {design}, y {c.y:.2f} ({off:.2f}x the issue bound), KV {k}: {row(t)}")
 
 
-def today(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0,
+def today(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None,
           clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
     """What runs today: E on 2^768 − 825 fused at k = 1, the KV cache on the same prime at the 5% rule's rounds (4 at
     batch 1)."""
@@ -166,7 +205,7 @@ def today(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0,
     return pick(options(shape, batch, c, ops), allowed=("k1", "k2", "k4"))[1]
 
 
-def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float = 1.0, off: float | None = None,
+def point(shape: g.Shape = g.LLAMA_70B, batch: int = 1, ops: float | None = None, off: float | None = None,
           clock_mhz: float = g.CLOCK_LOCKED_MHZ) -> dict:
     """The operating point: E on 2^1536 − 3453 at k = 1, its decode `off` times the issue bound (by default the low
     end of `apart_off`), the KV cache at the 5% rule's pick."""

@@ -251,10 +251,10 @@ def sq_floor(bits: float, ops: float | None = None, clock_mhz: float = CLOCK_LOC
     """A squaring mod p (⌈log₂ p⌉ = bits) at the device's issue bound, in passes of the words squared [estimate].
 
     Schoolbook on L = bits/32 limbs: L(L + 1)/2 products (IMAD.WIDE with accumulate) and as many carry adds, 2L to
-    double the cross terms and 3L for a pseudo-Mersenne fold, so L(L + 1) + 5L instructions, 720 at 768 bits;
-    Karatsuba trades products for adds and issues no fewer there. A pipe slower than the issue rate only raises it,
-    so as the adversary's cost it is low unless some mix issues fewer instructions; tensor cores enter as θ. At the
-    locked clock, as the measured ε and r are."""
+    double the cross terms and 3L for a pseudo-Mersenne fold, so L(L + 1) + 5L instructions, 720 at 768 bits, or
+    `ops` instructions (`frontier.issue_count` with Karatsuba, `frontier.pipe_ops` at the measured pipes). A pipe
+    slower than the issue rate only raises it; tensor cores enter as θ. At the locked clock, as the measured ε and r
+    are."""
     limbs = bits / 32
     n = limbs * (limbs + 1) + 5 * limbs if ops is None else ops
     return R_READ * n / (bits / 8 * SMS * clock_mhz * 1e6 * ISSUE_LANES)
