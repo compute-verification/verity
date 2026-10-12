@@ -10,12 +10,9 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
 import Proofs.Flock.C3.RegLevels.Top
 import Proofs.Flock.C3.Opening.Read
-<<<<<<< HEAD
 import Proofs.Flock.C3.RegLevels.Read
 import Proofs.Flock.C3.PubRows.Shape
-=======
 import Proofs.Flock.C3.Opening.Rows
->>>>>>> 64cf21bef
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
