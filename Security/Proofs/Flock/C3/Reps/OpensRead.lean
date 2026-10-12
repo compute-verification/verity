@@ -96,23 +96,21 @@ theorem openRow_vals (b : ValsSrc) (sh : Flock.Shape) (d : RepData) (ℓ q : ℕ
     openRow (b.vals sh d).p.ligerito (b.vals sh d).sch ℓ q = openRow b.lig b.sch ℓ q :=
   rfl
 
-variable {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-  {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-  {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-  {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-  {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
-  {W : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
-  {rd : Fin 2 → ℕ → ℕ → ((j : Fin S) → (Vs j).Bits) → List 𝔽 × List Dig}
-
 /-- **`ValsSrc.vals` meets `OpensOfLayers` by definition** where `b` meets it in `ValsSrc` terms. -/
-theorem opensOfLayers_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
+theorem opensOfLayers_vals {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {W : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {rd : Fin 2 → ℕ → ℕ → ((j : Fin S) → (Vs j).Bits) → List 𝔽 × List Dig} {sh : Flock.Shape}
+    {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData} {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
     (h : SrcOpensOfLayers zs dg N k Rw W rd b) :
     OpensOfLayers zs dg N k Rw W rd fun Lb i => (b Lb i).vals sh (rep Lb i) := fun R ω t R₂ τ o hA i ℓ q =>
   (openRow_vals (b _ i) sh (rep _ i) ℓ q).trans (h R ω t R₂ τ o hA i ℓ q)
 
 /-- **`OpensReadAt` at the reps from the values' openings read off the layers**, at a source whose openings at reps
 0 and 1 are the values' proof's rows. -/
-theorem opensReadAt_of_layers
+theorem opensReadAt_of_layers {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {W : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {rd : Fin 2 → ℕ → ℕ → ((j : Fin S) → (Vs j).Bits) → List 𝔽 × List Dig}
+    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     (hv : OpensOfLayers zs dg N k Rw W rd vals)
     (hsrc : ∀ R ω t Lb (i : Fin 2) ℓ q,
@@ -124,16 +122,25 @@ theorem opensReadAt_of_layers
 
 /-- **`OpensReadAt` at reps 0 and 1 of the tied source of `nm ∘ repsOfVals`**, at any `nm` keeping the openings at
 strata 0 and 1 (H's `normOs` keeps strata 0–2): `tiedSrc` resets only the stages' outputs. -/
-theorem opensReadAt_repsOfVals {nm : C3Run (holoAt st hp) → C3Run (holoAt st hp)}
+theorem opensReadAt_repsOfVals {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {W : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {rd : Fin 2 → ℕ → ℕ → ((j : Fin S) → (Vs j).Bits) → List 𝔽 × List Dig}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals} {nm : C3Run (holoAt st hp) → C3Run (holoAt st hp)}
     (hnm : ∀ u (i : Fin 2), (nm u).os.1 i = u.os.1 i) (hv : OpensOfLayers zs dg N k Rw W rd vals) (i : Fin 2) :
     OpensReadAt zs dg N k Rw (tiedSrc fun R ω t Lb => nm (repsOfVals stp sh rep vals R ω t Lb)) i :=
   opensReadAt_of_layers hv (fun R ω t Lb i ℓ q =>
     (congrFun (congrFun (hnm (repsOfVals stp sh rep vals R ω t Lb) i) ℓ) q).trans (dite_eq_left i.isLt)) i
 
 /-- **`OpensReadAt` at reps 0 and 1 at G's values** (`ValsSrc.vals`), from `b`'s openings read off the layers. -/
-theorem opensReadAt_src {nm : C3Run (holoAt st hp) → C3Run (holoAt st hp)}
-    (hnm : ∀ u (i : Fin 2), (nm u).os.1 i = u.os.1 i) {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
-    (hb : SrcOpensOfLayers zs dg N k Rw W rd b) (i : Fin 2) :
+theorem opensReadAt_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {W : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {rd : Fin 2 → ℕ → ℕ → ((j : Fin S) → (Vs j).Bits) → List 𝔽 × List Dig}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {nm : C3Run (holoAt st hp) → C3Run (holoAt st hp)} (hnm : ∀ u (i : Fin 2), (nm u).os.1 i = u.os.1 i)
+    {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} (hb : SrcOpensOfLayers zs dg N k Rw W rd b) (i : Fin 2) :
     OpensReadAt zs dg N k Rw
       (tiedSrc fun R ω t Lb => nm (repsOfVals stp sh rep (fun Lb i => (b Lb i).vals sh (rep Lb i)) R ω t Lb)) i :=
   opensReadAt_repsOfVals hnm (opensOfLayers_vals hb) i
