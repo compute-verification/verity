@@ -288,6 +288,9 @@ class Queue:
                  auth: tuple[str, ...] = (), first: tuple[int, ...] = ()):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
+        #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
+        #: takes a running check's commit off `next`
+        self.hold = 0
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
@@ -398,9 +401,15 @@ class Queue:
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
         """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains.  The PRs
-        in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them."""
+        in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them; but
+        above the bottom `hold` members, which a running check covers."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
         kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head]
+        held: list[int] = []
+        for m in chain[:self.hold]:
+            if m.pr not in kept:
+                break
+            held.append(m.pr)
         out: list[int] = []
 
         def place(n: int) -> None:
@@ -410,7 +419,7 @@ class Queue:
                 place(a)
             out.append(n)
 
-        for n in [f for f in self.first if f in ready] + kept + sorted(ready - set(kept)):
+        for n in held + [f for f in self.first if f in ready] + kept + sorted(ready - set(kept)):
             place(n)
         return out
 

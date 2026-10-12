@@ -269,3 +269,20 @@ def test_a_move_of_main_sharing_a_file_with_the_running_train_rebuilds_next(worl
     h.tick()
     assert _tip(world) != old
     assert h.cancelled == ["r20261012-000000-abcd"]               # the old tip's check, still waiting, is cancelled
+
+
+def test_first_goes_above_the_train_a_running_check_covers_and_cancels_nothing(world, monkeypatch):
+    """12 Oct 16:08Z: restarting drive with `--first 1869` restacked `next` under the running f6ee and cancelled it, 35 minutes
+    of check thrown away.  A running check's members keep their place; `--first` starts the train after them."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    assert [c for c, _, _ in h.launched] == [running]
+    world.gh.put(9, world.change({"fix.txt": "fix\n"}))
+    h.q.first = (9,)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 9, 3] and h.q.chain()[1].commit == running
+    assert h.cancelled == []

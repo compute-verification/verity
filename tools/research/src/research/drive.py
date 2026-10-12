@@ -329,6 +329,9 @@ class Driver:
                 q.save_state(state)
             q.log(f"research queue drive: {why}")
             return why
+        live = {c for c, v in drive["launched"].items()
+                if any(st in ACTIVE and st != "unknown" for st, _, _ in self.states(self.repo, v["ids"]).values())}
+        q.hold = max((i + 1 for i, m in enumerate(q.chain()) if m.commit in live), default=0)
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         for n, c in state.get("conflicts", {}).items():
