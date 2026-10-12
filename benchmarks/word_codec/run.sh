@@ -27,6 +27,8 @@ PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
 NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu}
 WC=benchmarks/word_codec
+# the venv doesn't install verity; kv_receipt.py and the tag tests import it (stdlib only) from the source tree
+export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 export LIBSET=${LIBSET:-split wide dense}
 B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 if [ "${KV:-0}" = 1 ]; then
