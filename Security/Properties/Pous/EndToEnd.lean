@@ -39,7 +39,8 @@ separately so that each can be rejected alone:
    `DRAW_BYTES` uniform bytes, and `uniformOn` reads them exactly as the code does.
 
 The ring game takes one more named assumption, `Pous.P2.Assumptions.CoinCommitHides` (`statistical-hiding`), because
-it hands the server the session commitment, and `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model.
+it hands the server the session commitment, and `P2RingRoundSecure`, the conjecture that P2 is secure in the ring model,
+round by round.
 
 Nothing may cite either kind of statement as covering the deployed verifier until two gaps are fixed in code:
 
@@ -151,7 +152,7 @@ def RunCertifies : Prop :=
 /-! ## The ring game -/
 
 /-- P2 in the ring model at the deployed point: square–mask–square over `Z/p` with a random odd labeling, `2^19`
-blocks of 16,448 bits, each carrying 16,432 payload bits (2,054 bytes); `P2RingAuditSecure`'s scheme. -/
+blocks of 16,448 bits, each carrying 16,432 payload bits (2,054 bytes); `P2RingRoundSecure`'s scheme. -/
 noncomputable abbrev sch : Scheme (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) :=
   p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432
 
@@ -235,11 +236,14 @@ def DrawExact : Prop :=
         ∃ i : Fin (2 ^ 19), FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf s) = some i.val ∧ P i) = pr P
 
 /-- **P2's audit in the ring model, with `ω` uniform, at the deployed point.** For every `(D, Q, L)` at which P2 is
-secure in the ring model (`P2RingAuditSecure`), and given that the coin commitments hide the indices up to `2^-131`
-(`CoinCommitHides`): for every session id and binding, every payload `W` and every `S`-bit, `(D, Q, L)`-bounded server
-(`Server`), the server passes the session with probability at most `1% + 2^-128` over the primitive `ω`, the memory
-challenger's coins and its uniform streams. The budget is `2^-129` (the ideal term), `2^-130` (the instantiation's
-term in `P2RingAuditSecure`), `2^-131` (the hiding) and `ε_rs = 0` (`DrawExact`), which sum to less than `2^-128`.
+secure in the ring model round by round (`P2RingRoundSecure`), and given that the coin commitments hide the indices up
+to `2^-131` (`CoinCommitHides`): for every session id and binding, every payload `W` and every `S`-bit,
+`(D, Q, L)`-bounded server (`Server`), the server passes the session with probability at most `1% + 2^-128` over the
+primitive `ω`, the memory challenger's coins and its uniform streams. The `1%` bounds `(501,578/2^19)^105`, all 105
+rounds answered at the conjecture's per-round bound; the budget is the 105 rounds' `2^-136` each (`105 · 2^-136 ≤
+2^-129`), `2^-131` (the hiding) and `ε_rs = 0` (`DrawExact`), which sum to less than `2^-128`. The whole audit's form,
+`P2RingAuditSecure`, is the step between, proved from the per-round form
+(`Pous.SecurityProofs.P2RingAuditSecureOfRound`).
 
 It speaks of the deployed system only through the four claims of this module's header, each cited on its own:
 `pous-ring-device` (the deployed server is a `Server`: state bounded between rounds, one session, online coins),
@@ -249,13 +253,14 @@ derived streams are as good as uniform bytes). Nothing may cite it as covering t
 session per audit) and G-2 (the composed check) are fixed in code. -/
 def EndToEndRing : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingRoundSecure D Q L →
       ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 
 /-- **`EndToEndRing` at one root's depth, in the ring model, with `ω` uniform: `D = 16,446`, `Q = 2^20`, `L = 2^64`.**
-The margin first. `P2RingAuditSecure` is claimed at `D = 16,446`, about half of `RingTight`'s falsification at
-`D = 32,894` (`PousP2Ring.tight_p16448`, a responder that recomputes the block's two roots, if `p` is prime), and
+The margin first. `P2RingRoundSecure` is claimed at `D = 16,446`, about half of `RingTight`'s falsification at
+`D = 32,894` (`PousP2Ring.not_roundSecure_tight`, a responder that holds nothing and recomputes the block's two roots,
+if `p` is prime), and
 `pous-ring-speed` keeps the timing's 2× margin: 1.995× at the measured 8-core speedup, 1.64× and 1.25× under the timing
 red team's sync model.
 
@@ -273,12 +278,14 @@ team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8
 PROTOCOL's 2.0001× counts the root's 20 extra multiplications, which a round of the ring model performs beside its
 squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the margin is 1.64× and 1.25×.
 
-`L` is bounded because `P2RingAuditSecure` is not claimed for every `L` at `k = 105`: the truncation attack
-(`PousP2Ring.trunc_seq_accepted`, which refutes `k ≤ 88` from `L = 2^30`) passes `k = 105` once it drops about 167
-bits of every block, which takes about `2^168` ring operations per answer; `2^64` is far below that. -/
+`L` is bounded because `P2RingRoundSecure` is false for large `L`: the truncation attack
+(`PousP2Ring.not_roundSecure_trunc`, if `p` is prime) keeps 501,579 blocks without their low 161 bits, 8,169,217,173
+bits, within `S`, and answers each of their indices by searching the `2^161` completions, which takes `2^162` ring
+operations per answer, so it answers 501,579 of the `2^19` indices, more than the conjecture's 501,578. `2^64` is far
+below that. -/
 def EndToEndRingDeployed : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
+    Pous.P2.Assumptions.P2RingRoundSecure 16446 (2 ^ 20) (2 ^ 64) →
       ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 

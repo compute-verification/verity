@@ -38,9 +38,8 @@
    "owner": "@memory-accounting",
    "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
   },
-  "Pous.P2.Assumptions.P2RingAuditSecure": {
-   "owner": "@memory-accounting",
-   "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+  "Pous.P2.Assumptions.P2RingRoundSecure": {
+   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -1962,15 +1961,15 @@
    "PousCheck.Properties.PublishesRoot": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier not at all until G-1 (one session per audit) and G-2 (the composed setup-to-challenger check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
-   "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
+   "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so the whole audit's event (seqAcceptsOn, which P2RingAuditSecure bounds) and EndToEndRing's are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
    "Pous.EndToEnd.RunCertifies": "unstated: the composed acceptance it is about is restated by hand (`Accepted`, G-2); no theorem proves it until the composed check exists in code"
   },
   "conjectures": {
-   "Pous.P2.Assumptions.P2RingAuditSecure": {
+   "Pous.P2.Assumptions.P2RingRoundSecure": {
     "status": "open",
-    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.tight_p16448) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_meetsOn_b19_k88), built by check",
-    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k, and at L >= 2^30 for k <= 88, which its tests prove."
+    "test": "Security/Proofs/Pous/P2/RingTight.lean (PousP2Ring.not_roundSecure_tight) and Security/Proofs/Pous/P2/RingTrunc.lean (PousP2Ring.not_roundSecure_trunc), built by check",
+    "why": "Each round of P2's audit in the ring model at the deployed point is answered from a state of at most rho*|C| bits at its boundary, within (D, Q, L), with probability at most 501,578/2^19, off 2^-136 over the setup; open, the named form since Daniel's decision 5, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) and at L >= 2^162 (D, Q >= 2), which its tests prove."
    }
   }
  },

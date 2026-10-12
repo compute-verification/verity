@@ -12,7 +12,8 @@ the code block (`truncProg_run`). Every challenge below `m` is answered within `
 and `2^(t+1)` ring queries, and the sequential audit passes with probability at least `(m/B)^k`
 (`trunc_seq_accepted`). At `2^19` blocks of P2's modulus, `t = 29` keeps `497,571` blocks within the state bound and
 `(497571/2^19)^88 > 1% + 2^-128`, so `MeetsOn` fails at every `k ≤ 88`, `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^30`
-(`not_meetsOn_b19_k88`).
+(`not_meetsOn_b19_k88`). The per-round form fails at every `c < m/B` (`not_roundSecureOn_trunc`): at P2's parameters
+`t = 161` keeps `501,579` blocks, so `P2RingRoundSecure` fails from `L = 2^162` (`not_roundSecure_trunc`).
 -/
 
 namespace PousP2Ring
@@ -253,6 +254,41 @@ theorem trunc_seq_accepted (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) {
   rw [truncStep, dite_eq_left hi, truncPre, Pous.trunc_pad, Equiv.symm_apply_apply]
   exact truncProg_run hp h4 hp2 x.1 ht _ _ (p2ring_zero_dec hp h4 hp2 x.1 _)
 
+/-! ### The per-round form -/
+
+omit [NeZero B] in
+theorem pr_lt (m : ℕ) (hm : m ≤ B) : pr (fun i : Fin B => (i : ℕ) < m) = (m : ℝ≥0∞) / B := by
+  classical
+  rw [pr_def, Fin.card_filter_val_lt, min_eq_right hm, Fintype.card_fin]
+
+open Classical in
+/-- Search a kept block, from a state read as `m` blocks of `w − t` bits, and answer zeros for any other index. -/
+noncomputable def truncAns (t m : ℕ) (σ : List Bool) (i : Fin B) : Prog (ringRO B w p) (Bits w) :=
+  if hi : (i : ℕ) < m then truncProg t i ((codeEquiv m (w - t)).symm (PousP2Round.ofList σ) ⟨i, hi⟩)
+  else .ret fun _ => false
+
+/-- **Dropping low bits breaks the per-round form.** For every prime `p ≡ 3 mod 4` with `p ≤ 2^w`: a responder that
+holds `m` blocks without their low `t` bits at a round's boundary (`m·(w − t) ≤ S` bits) and searches the `2^t`
+completions (`truncProg`) answers every index below `m`, so `RoundSecureOn` fails at every `D ≥ 2`, `Q ≥ 2`,
+`L ≥ 2^(t+1)`, `c < m/B` and `ε < 1`, for every payload width `b`. -/
+theorem not_roundSecureOn_trunc (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) {t m S : ℕ} (ht : t ≤ w)
+    (hm : m ≤ B) (hS : m * (w - t) ≤ S) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q) (hL : 2 ^ (t + 1) ≤ L)
+    (c ε : ℝ≥0∞) (hc : c < (m : ℝ≥0∞) / B) (hε : ε < 1) : ¬ RoundSecureOn (p2ring B w p b) S D Q L c ε := by
+  intro h
+  have h1 := h (fun _ => false)
+    (fun a => List.ofFn (codeEquiv m (w - t) fun j =>
+      hiBits t (((p2ring B w p b).enc (fun _ => false) a.1 a.2).2 (Fin.castLE hm j))))
+    (fun _ σ i => truncAns t m σ i) fun _ σ i => by
+      unfold truncAns
+      split
+      · exact ringBounded_mono (truncProg_bounded _ _ _) hD hQ hL
+      · exact ringBounded_ret _ _ _ _
+  refine absurd ((pr_eq_one fun a => ⟨by rw [List.length_ofFn]; exact hS, ?_⟩).symm.le.trans h1) (not_le.2 hε)
+  refine hc.trans_le ((pr_lt m hm).symm.le.trans (pr_mono fun i hi => ?_))
+  show (truncAns t m _ i).run _ = _
+  rw [truncAns, dite_eq_left hi, PousP2Round.ofList_ofFn, Equiv.symm_apply_apply]
+  exact truncProg_run hp h4 hp2 a.1 ht _ _ (p2ring_zero_dec hp h4 hp2 a.1 _)
+
 end Accept
 
 /-! ### At P2's parameters -/
@@ -298,5 +334,23 @@ theorem not_meetsOn_b19_k88 (hP : PrimeP16448) (b D Q L k : ℕ) (hD : 2 ≤ D) 
     pow_le_pow_of_le_one (by positivity) (by norm_num) hk
   have hlt : (1 / 100 + (2⁻¹ : ℝ) ^ 128) < ((497571 : ℝ) / 2 ^ 19) ^ 88 := by norm_num
   linarith
+
+/-- **Dropping 161 low bits breaks `P2RingRoundSecure` from `L = 2^162`.** At `2^19` blocks of P2's modulus, if `p` is
+prime: keeping `501,579` blocks without their low 161 bits (`16,287` bits a block, within the state bound
+`8,169,621,180`) and searching the `2^161` completions answers `501,579` of the `2^19` indices, more than the
+conjecture's `501,578`, within `2` multiplication rounds, `2` key queries and `2^162` ring queries. 161 is the fewest
+dropped bits at which `501,579` blocks fit. -/
+theorem not_roundSecure_trunc (hP : PrimeP16448) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q) (hL : 2 ^ 162 ≤ L) :
+    ¬ P2RingRoundSecure D Q L := by
+  have hS : 501579 * (16448 - 161) ≤ (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ := by
+    rw [stateBound_p2ring_b19]
+    norm_num
+  refine not_roundSecureOn_trunc (b := 16432) hP p16448_mod_four hyps_16448.2.1 (by norm_num) (by norm_num) hS D Q L
+    hD hQ hL _ _ ?_ PousP2Round.eps_lt_one
+  have hm : ((501579 : ℕ) : ℝ≥0∞) / ((2 ^ 19 : ℕ) : ℝ≥0∞) = ENNReal.ofReal ((501579 : ℝ) / 2 ^ 19) := by
+    rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast (2 ^ 19), ← ENNReal.ofReal_div_of_pos (by norm_num)]
+    norm_num
+  rw [PousP2Round.c_eq, hm, ENNReal.ofReal_lt_ofReal_iff (by positivity)]
+  norm_num
 
 end PousP2Ring

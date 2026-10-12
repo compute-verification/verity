@@ -1,6 +1,7 @@
 import Properties.Pous.EndToEnd
 import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iiSeq
+import Proofs.Pous.P2.Round
 
 namespace Pous.EndToEnd.SecurityProofs
 
@@ -217,8 +218,10 @@ theorem ev_some_le {S D Q L : ℕ} (hP : Pous.P2.Assumptions.P2RingAuditSecure D
   exact hs
 
 set_option exponentiation.threshold 20000 in
-theorem endToEndRing : EndToEndRing := by
-  intro hH D Q L hP session binding W A
+/-- `EndToEndRing` from the whole audit's form, `P2RingAuditSecure`. -/
+theorem endToEndRing_of_audit (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
+    (hP : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (session binding : ByteArray) (W : Bits sch.n)
+    (A : Server S D Q L) : pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax := by
   rw [pr_passes]
   have h₁ := hH session (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω (Ev session binding W A)
   have h₂ := pr_slice_le (Ω := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (C := HmCoins)
@@ -229,6 +232,9 @@ theorem endToEndRing : EndToEndRing := by
   rw [add_assoc]
   gcongr
   exact budget
+
+theorem endToEndRing : EndToEndRing := fun hH D Q L hP =>
+  endToEndRing_of_audit hH D Q L (PousP2Round.p2RingAuditSecure_of_round D Q L hP)
 
 set_option exponentiation.threshold 20000 in
 theorem endToEndRingDeployed : EndToEndRingDeployed := fun hH hP => endToEndRing hH _ _ _ hP

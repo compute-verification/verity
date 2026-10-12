@@ -1,5 +1,6 @@
 import Models.Pous.Assumptions.P2
 import Proofs.Pous.P2.RingBasic
+import Proofs.Pous.P2.Round
 
 /-!
 # P2 in the ring model: recomputing a block breaks the requirement (tightness)
@@ -10,7 +11,8 @@ offset to the payload's label, takes the first root, applies `σ_K` locally and 
 more round squares it to fix the sign locally (`rootSel`: by Euler's criterion the square is `±y`). With `n` bits of
 exponent the responder spends `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries, and it is
 always right (`recBlock_run`). So `MeetsOn` fails at every `D ≥ 2(n + 1)` (`tight`), at P2's modulus `D ≥ 32,894`
-(`tight_p16448`).
+(`tight_p16448`), and so does the per-round form, from an empty state (`not_roundSecureOn_tight`,
+`not_roundSecure_tight`).
 -/
 
 namespace PousP2Ring
@@ -289,5 +291,30 @@ theorem tight_p16448 (hP : PrimeP16448) (B : ℕ) [NeZero B] (b : ℕ) (hb : b �
     ¬ MeetsOn (p2ring B 16448 (2 ^ 16448 - 21065) b) .sequential D Q L k ε :=
   tight B 16448 _ b hP p16448_mod_four (two_pow_le_of_le hb hyps_16448.1) hyps_16448.2.1 16446 p16448_root_bits
     D Q L k hD hQ hL ε
+
+/-! ### Tightness of the per-round form -/
+
+/-- **Recomputation breaks the per-round form.** For every prime `p ≡ 3 mod 4` with `2^b ≤ p ≤ 2^w`, and `n` with
+`(p+1)/4 < 2^n`: a responder that holds nothing at the round's boundary and recomputes the challenged block
+(`recBlock`) within `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries answers every index,
+so `RoundSecureOn` fails at every `S`, `D ≥ 2(n + 1)`, `Q ≥ 2`, `L ≥ 4n + 5`, `c < 1` and `ε < 1`. -/
+theorem not_roundSecureOn_tight (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3)
+    (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n) (S D Q L : ℕ) (hD : 2 * (n + 1) ≤ D)
+    (hQ : 2 ≤ Q) (hL : 4 * n + 5 ≤ L) (c ε : ℝ≥0∞) (hc : c < 1) (hε : ε < 1) :
+    ¬ RoundSecureOn (p2ring B w p b) S D Q L c ε := by
+  intro h
+  have h1 := h (fun _ => false) (fun _ => [])
+    (fun _ _ i => recBlock n ((p + 1) / 4) (pad B w b (fun _ => false) i) i)
+    fun _ _ _ => ringBounded_mono (recBlock_bounded _ _ _ _) hD hQ hL
+  refine absurd ((pr_eq_one fun a => ⟨Nat.zero_le S, ?_⟩).symm.le.trans h1) (not_le.2 hε)
+  exact hc.trans_le (pr_eq_one fun i => recBlock_run hp h4 hp2 n hn a.1 i (pad_lt hb hp2 _ _)).symm.le
+
+/-- **Recomputation breaks `P2RingRoundSecure` from one root's depth beyond the deployed `D`**: at P2's modulus, if
+`p` is prime, `2·16,447 = 32,894` multiplication rounds, `2` key queries and `65,789` ring queries per answer answer
+every round from an empty state. -/
+theorem not_roundSecure_tight (hP : PrimeP16448) (D Q L : ℕ) (hD : 32894 ≤ D) (hQ : 2 ≤ Q) (hL : 65789 ≤ L) :
+    ¬ P2RingRoundSecure D Q L :=
+  not_roundSecureOn_tight (2 ^ 19) 16448 _ 16432 hP p16448_mod_four (two_pow_le_of_le (by norm_num) hyps_16448.1)
+    hyps_16448.2.1 16446 p16448_root_bits _ D Q L hD hQ hL _ _ PousP2Round.c_lt_one PousP2Round.eps_lt_one
 
 end PousP2Ring

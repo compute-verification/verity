@@ -12,11 +12,12 @@ against, in namespace `Pous.Guarantees` with the rest. The proofs are in `Securi
 (`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `Security/Proofs/Pous.lean`); a docstring's
 `lean/submissions/efficient-crypto/…` path names the store draft each was graded from. A seventh,
 `P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Security/Proofs/Pous/FreeBlocks/`. The last,
-`P2RingAuditSecureOfReduces`, carries the `m1p` row to P2 in the ring model under the reduction the spec states.
+`P2RingAuditSecureOfReduces`, carries the `m1p` row to P2 in the ring model under the reduction the spec states, and
+`P2RingAuditSecureOfRound` derives the whole ring-model audit from its per-round form.
 
 The first seven are theorems about `m1p` only, not about the concrete P2: none models square–mask–square, SHAKE256,
-roots or time. The last reaches square–mask–square only in the ring model (`p2ring`) and only under its hypothesis, a
-named conjecture. So none of them says the deployed P2 is secure.
+roots or time. The last two reach square–mask–square only in the ring model (`p2ring`) and only under their hypotheses,
+named conjectures. So none of them says the deployed P2 is secure.
 -/
 
 namespace Pous.Guarantees
@@ -195,5 +196,17 @@ acceptance (`PousP2Bridge.pr_seqAccepts_le`).
 Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
 def P2RingAuditSecureOfReduces : Prop :=
   ∀ D Q L, Pous.P2.Assumptions.P2RingReducesToM1p D Q L → Pous.P2.Assumptions.P2RingAuditSecure D Q L
+
+/-- **The whole audit from the per-round form, at every `(D, Q, L)`.** If every round of P2's audit in the ring model
+is answered from a state of at most `⌊ρ·|C|⌋` bits with probability at most `501,578/2^19`, off `2^-136`
+(`P2RingRoundSecure`), then the audit at 105 challenges accepts every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder
+with probability at most `1% + 2^-129 + 2^-130` (`P2RingAuditSecure`). It rests on no assumption beyond its
+hypothesis: a responder's state after each history is one `RoundSecureOn` bounds, each round's index is drawn after
+it, so off the union of the 105 rounds' events (`105 · 2^-136 ≤ 2^-129`) all 105 answers are right with probability
+at most `(501,578/2^19)^105 ≤ 1%`.
+
+Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
+def P2RingAuditSecureOfRound : Prop :=
+  ∀ D Q L, Pous.P2.Assumptions.P2RingRoundSecure D Q L → Pous.P2.Assumptions.P2RingAuditSecure D Q L
 
 end Pous.Guarantees

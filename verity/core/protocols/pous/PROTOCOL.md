@@ -729,12 +729,19 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
   commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
   passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from two
-  named assumptions: `P2RingAuditSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
+  named assumptions: `P2RingRoundSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
   coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no
-  leftover hash lemma to prove it with). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
-  proved (`DrawExact`: `uniformOn` reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected).
-  `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half of `RingTight`'s falsification at
-  32,894, with `Q = 2^20` and `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). In the ring
+  leftover hash lemma to prove it with). `P2RingRoundSecure` is the conjecture per round: a state of at most
+  `⌊ρ·|C|⌋` bits at a round's boundary answers that round's uniform index within `(D, Q, L)` with probability at most
+  `501,578/2^19` (so it fails with probability at least `p = 22,710/2^19 ≈ 4.33%`), off `2^-136` over the setup,
+  whatever the history. The whole audit's form, `P2RingAuditSecure` (`1% + 2^-129 + 2^-130` at 105 rounds), is a
+  theorem of it (`Pous.SecurityProofs.P2RingAuditSecureOfRound`: `(501,578/2^19)^105 ≤ 1%` and `105 · 2^-136 ≤
+  2^-129`). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0` proved (`DrawExact`: `uniformOn`
+  reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected). `P2RingRoundSecure` is false, if
+  `p` is prime, at `D ≥ 32,894` (`PousP2Ring.not_roundSecure_tight`: hold nothing, recompute both roots) and at
+  `L ≥ 2^162` (`PousP2Ring.not_roundSecure_trunc`: keep 501,579 blocks without their low 161 bits and search the
+  completions), its falsification tests. `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half
+  of `RingTight`'s falsification at 32,894, with `Q = 2^20` and `L = 2^64`, far below `2^162`. In the ring
   model a root is 16,447 multiplication rounds (16,446 over the exponent's bits and one to fix the sign,
   `rootProg_cost`), and recomputing a block takes two, `2 · 16,447 = 32,894`; 16,446 is the largest `D` at which that
   program cannot finish one root. The timing keeps its 2× margin there: at SeqRoot's measured floor (103.6 ns per

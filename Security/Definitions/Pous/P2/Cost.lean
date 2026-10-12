@@ -34,7 +34,9 @@ answer's deadline; throughput adds up across devices, so the certificate prices 
 The model itself is the claim `generic-ring`. Every statement over these is parametric in `D`, `Q` and `L`.
 
 `SeqResponderOn`, `SimResponderOn`, `AuditSecureOn` and `MeetsOn` are `SeqResponder`, `SimResponder`, `AuditSecure`
-and `Meets` with `RingBounded D Q L` in place of `Bounded D Q`. `Bounded`, `AuditSecure` and `Meets` are unchanged.
+and `Meets` with `RingBounded D Q L` in place of `Bounded D Q`. `RoundSecureOn` is one round of the audit: a state of
+at most `S` bits at a round's boundary answers that round's uniform index with probability at most `c`, off an event of
+probability `ε` over the setup. `Bounded`, `AuditSecure` and `Meets` are unchanged.
 `MeetsWithSlack` is `Meets` with `lam` more bits of adversary state per block, the requirement P2's margin pins read.
 -/
 
@@ -166,6 +168,24 @@ def AuditSecureOn (sch : Scheme (ringRO B w p)) : Reveal → (S D Q L k : ℕ) �
   | .sequential, S, D, Q, L, k, δ, ε =>
       ∀ (W : Bits sch.n) (A₁ : Preprocessor sch S) (A₂ : SeqResponderOn sch S D Q L),
         pr (seqAcceptsOn sch k W A₁ A₂) ≤ δ + ε
+
+/-- **One round of the audit over the ring bound**: whatever state `st` a responder holds at a round's boundary, as a
+function of the setup, and whatever `(D, Q, L)`-bounded program `ans` it answers that round with, the state is at most
+`S` bits and answers more than a `c` fraction of the round's possible indices correctly with probability at most `ε`
+over the setup. The round's index is uniform and drawn after the state is fixed, so a state that is at most `S` bits
+answers the round's challenge with probability at most `c`, off an event of probability at most `ε`.
+
+`st` and `ans` are arbitrary functions, so they stand for a sequential responder's state and next step after any one
+history of indices: the round number and the history are fixed with them. A state longer than `S` bits is not
+bounded here. -/
+def RoundSecureOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) (c ε : ℝ≥0∞) : Prop :=
+  ∀ (W : Bits sch.n) (st : (ringRO B w p).Ω × sch.Coins → List Bool)
+    (ans : Bits sch.t → List Bool → Fin sch.B → Prog (ringRO B w p) (Bits sch.ℓ)),
+    (∀ pp σ i, (ans pp σ i).RingBounded D Q L) →
+      pr (fun a : (ringRO B w p).Ω × sch.Coins =>
+          (st a).length ≤ S ∧
+            c < pr (fun i : Fin sch.B =>
+              (ans (sch.enc W a.1 a.2).1 (st a) i).run ((ringRO B w p).answer a.1) = (sch.enc W a.1 a.2).2 i)) ≤ ε
 
 /-- **The requirement over the ring bound**: `Meets`' conjuncts, with `AuditSecureOn` in place of `AuditSecure`. -/
 def MeetsOn (sch : Scheme (ringRO B w p)) (reveal : Reveal) (D Q L k : ℕ) (ε : ℝ≥0∞) : Prop :=
