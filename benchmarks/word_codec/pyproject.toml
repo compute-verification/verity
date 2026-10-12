@@ -1,0 +1,13 @@
+# The word codec's benchmark and its tests. Not a package: `wc.cu`, `wide.cu` and their benches run on a GPU node
+# (`run.sh`, `wide_run.sh`), and the byte-exact references (`codec.py`, `wide.py`) with the kernel's arithmetic twin
+# (`twin.py`) run here as a suite (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# tests/test_wide.py tags the wide codecs' encoded words with the bandwidth audit's ro-blake3/v1 and commits them under
+# PoUS's tree (verity.core.protocols.bandwidth.tags, verity.core.protocols.pous.verifier), which import these.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/bandwidth", "verity/core/protocols/pous", "verity/ml/__init__.py",
+          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness"]
