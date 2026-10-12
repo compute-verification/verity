@@ -1550,6 +1550,8 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // least the units a task spans (no warp holds two units of one task, which would deadlock on `loaded`), and at least
 // ceil(32 D / TW) stages (a decoder's tasks advance by at most that from one unit to its next, so the stage's previous
 // task is one it held, or an earlier one, whose relay came first). One MMA warp keeps `decoded` and `empty` in order.
+// The barrier orders generic accesses only, so the MMA warp arrives on `empty` once its MMAs have consumed the stage's
+// loads: an earlier arrive lets the next bulk copy (async proxy) overwrite the stage under loads still in flight.
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
 // 128 registers, three at 168, two at 255).
@@ -1598,15 +1600,6 @@ __device__ __forceinline__ void put_payload_w(uint8_t *st, int w, int lane, cons
   }
 }
 
-// The lane waits for its word's shared-memory loads to land in x (one register of each load) before what follows: an
-// arrive on `loaded`, after which other lanes overwrite the word's stored bytes with payloads.
-__device__ __forceinline__ void consumed(const u32 (&x)[NL]) {
-  u32 d = 0;
-#pragma unroll
-  for (int k = 0; k < NL; k += S % 16 == 0 ? 4 : 1) d |= x[k];
-  asm volatile("{\n .reg .pred q;\n setp.eq.u32 q, %0, 0xFFFFFFFF;\n @q nanosleep.u32 1;\n}\n" ::"r"(d) : "memory");
-}
-
 // The decoder warps' loop (fused_kernel's comment). At k = 1 a lane keeps w = -(c_0 + t) in place of its tweak t and
 // steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
 // behind a proxy fence. At full slot a payload is its own word's bytes, so a lane writes it in place without `loaded`.
@@ -1636,17 +1629,9 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     yw[0] = 0;
     if (on) {
       load_word_smem(st + w * S, yw);
-#ifndef WT_LOADED_LATE
-      if constexpr (PAY_E > 0) {
-        consumed(yw);
-        mbar_arrive(loaded + s);
-      }
-#endif
+      if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
       if constexpr (K == 1) decode_word_w(yw, t);
       else decode_word<K>(yw, t);
-#ifdef WT_LOADED_LATE
-      if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
-#endif
     }
     if constexpr (PAY_E == 0) {
       if (on) {
@@ -1739,12 +1724,12 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       uint4 wv[TASK_TILES];
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
-      mbar_arrive(empty + s);
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
         mma_tile<NB8>(acc, a, xs, tt, g, tq);
       }
+      mbar_arrive(empty + s);
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
     }
   } else if (warp < decoders) {
