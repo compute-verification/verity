@@ -80,9 +80,32 @@ def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes
             edge = max(edge, g1)
         reads = sum(weight_bytes + s["kv_tokens"] * token_bytes for s in steps if s["tokens"] > 0)
         gidle = max(0.0, seconds - gbusy)
-        out["gpu"] = {"busy_s": gbusy, "of_R": reads / (R * 1e9 * gbusy) if gbusy else 0.0, "idle_s": gidle,
-                      "eta_idle": gidle / seconds}
+        g = {"busy_s": gbusy, "of_R": reads / (R * 1e9 * gbusy) if gbusy else 0.0, "idle_s": gidle,
+             "eta_idle": gidle / seconds, "shift": align(steps, gpu_steps)}
+        for name in ("decode", "prefill", "empty"):
+            g[name] = {"s": 0.0, "reads": 0.0}
+        for i, s in enumerate(steps):
+            j = i + g["shift"]
+            if 0 <= j < len(gpu_steps):
+                name = "prefill" if s["prefill_tokens"] > 0 else "decode" if s["tokens"] > 0 else "empty"
+                g[name]["s"] += gpu_steps[j][1] - gpu_steps[j][0]
+                g[name]["reads"] += weight_bytes + s["kv_tokens"] * token_bytes if s["tokens"] > 0 else 0
+        for name in ("decode", "prefill", "empty"):
+            t, b = g[name]["s"], g[name].pop("reads")
+            g[name].update(of_R=b / (R * 1e9 * t) if t else 0.0, eta=(R * 1e9 * t - b) / cap)
+        out["gpu"] = g
     return out
+
+
+def align(steps: list[dict], gpu_steps: list) -> int:
+    """The shift pairing step record i with GPU interval i + shift whose ends agree best (median |t1 − end|): under
+    vLLM's batch queue a record's update lands just after the GPU finishes the step before the one its call launched."""
+    best = None
+    for sh in (-2, -1, 0, 1, 2):
+        d = sorted(abs(steps[i]["t1"] - gpu_steps[i + sh][1]) for i in range(len(steps)) if 0 <= i + sh < len(gpu_steps))
+        if d and (best is None or d[len(d) // 2] < best[0]):
+            best = (d[len(d) // 2], sh)
+    return best[1] if best else 0
 
 
 def price(run: dict, a: dict, R: float) -> dict:
@@ -132,8 +155,10 @@ def main() -> int:
                   f"{eta['eta_before_filler']:.3f}: " + ", ".join(
                       f"{n} {eta[n]['s']:.1f} s at {eta[n]['of_R']:.3f} R, {eta[n]['eta']:.3f}"
                       for n in ("decode", "prefill", "empty", "gaps", "idle")) + f"; filler {eta['filler']:.3f})"
-                  + (f"; GPU busy {g['busy_s']:.1f} s at {g['of_R']:.3f} R, idle {g['idle_s']:.1f} s, "
-                     f"{g['eta_idle']:.3f}" if g else ""))
+                  + (f"; GPU (shift {g['shift']}) busy {g['busy_s']:.1f} s at {g['of_R']:.3f} R: " + ", ".join(
+                      f"{n} {g[n]['s']:.1f} s at {g[n]['of_R']:.3f} R, {g[n]['eta']:.3f}"
+                      for n in ("decode", "prefill", "empty")) + f", idle {g['idle_s']:.1f} s, {g['eta_idle']:.3f}"
+                     if g else ""))
             for k, ar in by_k.items():
                 row = {"pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k, "shortfall": eta,
                        "arms": price(run, ar, R)}

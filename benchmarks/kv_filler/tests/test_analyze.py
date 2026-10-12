@@ -38,7 +38,19 @@ def test_shortfall_on_the_gpus_clock_takes_the_union_of_its_model_steps():
     steps = [step(0, 1, 1, 1, 0, 0), step(1.5, 2, 1, 1, 0, 0)]
     e = analyze.shortfall(steps, 4.0, w, 0, 1.0, token_bytes=TB, gpu_steps=[[0, 1.2], [1.0, 2.0], [2.0, 2.5]])
     assert e["gaps"]["s"] == 0.5
-    assert e["gpu"] == {"busy_s": 2.5, "of_R": pytest.approx(2 * w / 2.5e9), "idle_s": 1.5, "eta_idle": 0.375}
+    g = e["gpu"]
+    assert (g["busy_s"], g["of_R"], g["idle_s"], g["eta_idle"]) == (2.5, pytest.approx(2 * w / 2.5e9), 1.5, 0.375)
+
+
+def test_the_gpus_split_pairs_each_record_with_the_interval_whose_end_it_follows():
+    # the batch queue: record 0 is an empty first call, record i's update lands just after interval i − 1 ends
+    w = 10**8
+    steps = [step(0, 0.05, 0, 0, 0, 0), step(0.05, 1.0004, 1, 1, 0, 0), step(1.0004, 2.0004, 50, 1, 50, 0)]
+    e = analyze.shortfall(steps, 3.0, w, 0, 1.0, token_bytes=TB, gpu_steps=[[0, 1.0], [1.0, 2.0], [2.0, 2.2]])
+    g = e["gpu"]
+    assert g["shift"] == -1
+    assert g["decode"]["s"] == g["prefill"]["s"] == 1.0 and g["empty"]["s"] == 0.0
+    assert g["decode"]["of_R"] == g["prefill"]["of_R"] == pytest.approx(0.1)
 
 
 def test_phases_counts_a_requests_tokens_past_its_first_as_prefill():
