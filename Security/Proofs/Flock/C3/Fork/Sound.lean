@@ -42,7 +42,18 @@ theorem holo_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D]
 /-- **The reps' schedule at the executable's parameters is `fast100`'s**, at a statement whose class checks pass. -/
 theorem holoAt_fast100 {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st)) :
     Accounting.fast100 (holoAt st hp).cls.m = some (holoAt st hp).sch := by
-  sorry
+  obtain ⟨-, -, _, hs⟩ := ClassOk.of_shape h
+  obtain ⟨s₀, hs₀⟩ := ZkHidden.fast100_of_schedule hs
+  have hsch : Accounting.fast100 st.m = some (schedAt st.m) := by
+    have e := Refine.fast100_schedOf st.m
+    rw [hs₀] at e
+    unfold schedAt
+    rw [hs₀]
+    exact e.symm
+  have e : execClassAt st = ExecClass.ofStmt st h := dif_pos h
+  show Accounting.fast100 (execClassAt st).cls.m = some (execClassAt st).sch
+  rw [e]
+  exact hsch
 
 /-- **Every table's statement at the executable's parameters has the link layout**, at a statement whose class checks
 pass: the regions and link points are `execClassAt st`'s (`Refine.stmtOf_linkLayout`), and no table changes them. -/
@@ -50,13 +61,54 @@ theorem holoAt_linkLayout {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shap
     ∀ R : RegTable (holoAt st hp).cls,
       (R.toStatement (holoAt st hp).τ (holoAt st hp).regs).LinkLayout (holoAt st hp).cls.ptLocal
         (holoAt st hp).cls.mPts := by
-  sorry
+  obtain ⟨hwf, hr, -⟩ := ClassOk.of_shape h
+  have hl : ∀ ec : ExecClass, ec = ExecClass.ofStmt st h →
+      (∀ R ∈ ec.regs, R.free.Nodup ∧ R.free.length ≤ ec.cls.ptLocal) ∧
+        ec.cls.ptLocal + (ec.cls.m - ec.cls.kLog) ≤ ec.cls.mPts := by
+    rintro _ rfl
+    exact Refine.stmtOf_linkLayout st hwf hr
+  have e : execClassAt st = ExecClass.ofStmt st h := dif_pos h
+  exact fun _ => hl _ e
+
+/-- **`fast100`'s schedule at `M` holds `M` bits at level 0 at rate `1/2`**: level 0 has `k₀` lanes of `2^logCols`
+packed elements of 128 bits, `k₀ + logCols + 7 = M`, for every `M` it covers. -/
+theorem fast100_uniqueDecoding (M : ℕ) (s : Accounting.Schedule) (hs : Accounting.fast100 M = some s) :
+    s.levels ≠ [] ∧ s.m = M ∧ s.level₀.lanes = s.k0 ∧ s.k0 + s.level₀.logCols + 7 = M ∧
+      1 ≤ s.level₀.logInvRate := by
+  by_cases hm : M < 40
+  · have key : ∀ M : Fin 40, ∀ s ∈ Accounting.fast100 M.val, s.levels ≠ [] ∧ s.m = M.val ∧
+        s.level₀.lanes = s.k0 ∧ s.k0 + s.level₀.logCols + 7 = M.val ∧ 1 ≤ s.level₀.logInvRate := by
+      decide +kernel
+    exact key ⟨M, hm⟩ s hs
+  · rw [Refine.model_fast100_none M (by omega)] at hs; cases hs
 
 /-- **R's registered schedule at the executable's parameters rejects or decodes uniquely**: `fast100`'s at `mReg`, whose
 level 0 has rate `1/2` and holds the stacked table exactly, or the default, whose levels are empty. -/
 theorem holoAt_rsch (st : Flock.Stmt) (hp : HoloParams) :
     (holoAt st hp).rsch.sch.levels = [] ∨ (holoAt st hp).rsch.UniqueDecoding := by
-  sorry
+  have key : ∀ (M : ℕ) (s : Accounting.Schedule), (s = default ∨ s = schedAt M) →
+      s.levels = [] ∨ (s.levels ≠ [] ∧ s.m = M ∧ s.level₀.lanes = s.k0 ∧ s.k0 + s.level₀.logCols + 7 = M ∧
+        1 ≤ s.level₀.logInvRate) := by
+    rintro M s (rfl | rfl)
+    · exact Or.inl rfl
+    · obtain h | ⟨s₀, h⟩ : Flock.fast100 M = none ∨ ∃ s₀, Flock.fast100 M = some s₀ := by
+        cases Flock.fast100 M <;> simp
+      · unfold schedAt
+        rw [h]
+        exact Or.inl rfl
+      · have e := Refine.fast100_schedOf M
+        rw [h] at e
+        unfold schedAt
+        rw [h]
+        exact Or.inr (fast100_uniqueDecoding M _ e.symm)
+  refine key (holoAt st hp).cls.shape.mReg (holoAt st hp).rsch.sch ?_
+  have e : (holoAt st hp).rsch.sch =
+      if hp.EllOk (execClassAt st).cls.kLog then schedAt (holoAt st hp).cls.shape.mReg else default := rfl
+  by_cases hl : hp.EllOk (execClassAt st).cls.kLog
+  · rw [e, if_pos hl]
+    exact Or.inr rfl
+  · rw [e, if_neg hl]
+    exact Or.inl rfl
 
 /-- **Candidate 3's table at the executable's parameters is sound in fork form**, at a statement whose class checks
 pass: `holo_inner_sound_compiled` at `execArith`, SHA-512 with plain leaves and `holoAt st hp`. -/
