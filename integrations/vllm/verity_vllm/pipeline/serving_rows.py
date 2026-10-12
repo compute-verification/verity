@@ -1,12 +1,15 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Two ways in, one window:
+:mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Two ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
+  The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
+  hold the values under the vllm-v1 roots.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
-  window written into ``O``.
+  window written into ``O`` as a ``stand-in``: serving's commitment is the vllm-v1 roots, and these rows are committed afterwards
+  from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | {...}, "scope"?:
 {"op_path_prefix"}, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's
@@ -307,11 +310,12 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str | None = None, row: Any = None,
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
-                 workers: int | None = None) -> dict[str, Any]:
+                 workers: int | None = None, stand_in: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose vllm-v1 roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the research run ``run``, the row,
-    the committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  It reads the committed values
-    and writes only ``out_dir``."""
+    the committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
+    with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  It reads the committed values and writes
+    only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     pf = json.loads(Path(partition_file).read_text())
@@ -322,11 +326,11 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
-            "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope")}
+            "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"), **(stand_in or {})}
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
-    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run))
+    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served")
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

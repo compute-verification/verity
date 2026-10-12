@@ -1,9 +1,9 @@
 """The serving rows of a deferred Commit (`pipeline.deferred_rows`, ``verity-vllm serving-rows``), end to end on CPU: a Program
 with RoPE_v1 rows (D=64) executed honestly, its members committed by the production CPU committer and sealed into a replay bundle with
 its registered weights, then the verifier's partition (every RoPE head) read back through the bundle opened against the Commit's record.
-The registration passes `registration.check` against the verifier's own copies (its population program, the run root of record, the
-public bodies), every hidden row is the served value, and a partition digest, a template or a binding map that is not the record's is
-refused."""
+The registration, a stand-in linked to the record (the in-Commit hook's over the same members is served), passes `registration.check`
+against the verifier's own copies (its population program, the run root of record, the public bodies), every hidden row is the served
+value, and a partition digest, a template or a binding map that is not the record's is refused."""
 from __future__ import annotations
 
 import json
@@ -18,6 +18,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import deferred_rows as DRW
+from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 
 from tests.pipeline import served_rope as SR
@@ -36,8 +37,11 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     win = DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), wdir)
     rec = json.loads((wdir / "registration.json").read_text())
     heads = HEADS
-    assert (win["population"], rec["format"], rec["window"]["kind"], rec["window"]["run"]) == (heads, R.FORMAT, "served", c["run_root"])
-    assert rec["window"]["committer"]["from"] == "replay bundle" and rec["window"]["row"] == "rope-d64-cpu"
+    w = rec["window"]
+    assert (win["population"], rec["format"], w["kind"], w["run"]) == (heads, R.FORMAT, "stand-in", c["run_root"])
+    man = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"]
+    assert w["of"] == {"commitment": "vllm-v1", "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
+    assert w["link"] == DRW.LINK and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
 
     # the verifier's own copies: its population program, the run root of record, the public body it holds
     defn = bind(REGISTRY["RoPEHead_v1"], D=D)
@@ -66,6 +70,26 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
         assert np.array_equal(rows[lo:hi, 0], world.values[(rid, a)][xlo:xhi].reshape(hi - lo, D))
         assert np.array_equal(rows[lo:hi, 1], np.broadcast_to(world.weights[clo:chi], (hi - lo, D)))
         assert np.array_equal(rows[lo:hi, 2], world.values[(rid, i)].reshape(hi - lo, D))
+
+
+def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
+    """The in-Commit hook (`serving_rows.readers`, its request as the row stage writes it) over the same Commit's members: the same
+    program, partition and domains, and the window ``served`` (serving's own commitment, before any draw) with no stand-in link."""
+    c = _commit(tmp_path)
+    r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    req = tmp_path / "request.json"
+    req.write_text(json.dumps({"dir": str(tmp_path / "hook"), "partition": str(c["partition"]), "run": "r-hook", "committer": {"source": "test"}}))
+    SRW.readers(str(req), r.store, r.run, DRW.opened_weights(r), r.programs, bmap, r.arrivals, r.loaded, r.manifest, "rope-d64-cpu", r.digests)
+    assert not (tmp_path / "hook" / "error.txt").exists()
+    hook = json.loads((tmp_path / "hook" / "registration.json").read_text())
+    DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "deferred", workers=1)
+    deferred = json.loads((tmp_path / "deferred" / "registration.json").read_text())
+    assert (hook["window"]["kind"], hook["window"]["run"], hook["window"]["research_run"]) == ("served", c["run_root"], "r-hook")
+    assert "of" not in hook["window"] and "link" not in hook["window"] and deferred["window"]["kind"] == "stand-in"
+    same = ("format", "program", "query", "law", "partition", "population", "scheme")
+    assert {k: hook[k] for k in same} == {k: deferred[k] for k in same}
+    assert [(x["port"], x["domain"]) for x in hook["roots"]] == [(x["port"], x["domain"]) for x in deferred["roots"]]
 
 
 def test_a_partition_or_binding_map_that_is_not_the_records_is_refused(tmp_path):

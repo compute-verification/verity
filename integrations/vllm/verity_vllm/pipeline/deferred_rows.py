@@ -1,7 +1,12 @@
 """The serving rows of a deferred Commit (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``): the sealed replay
 bundle opened against the Commit's record as the CPU replay opens it (manifest sha256, run root, binding map, the Build's Programs of
 record), the weights opened against the committed weights root, and the window `pipeline.serving_rows.after_commit` writes, the same
-window the in-Commit hook writes, into ``O``.  A slim bundle holds the replay's picks only, not the population: refused."""
+window the in-Commit hook writes, into ``O``.  A slim bundle holds the replay's picks only, not the population: refused.
+
+The window is a ``stand-in`` (core's ``registration.KINDS``), not ``served``: serving's commitment is the vllm-v1 roots, and these rows
+are committed afterwards from the bundle, so their roots are a fresh commitment whose link to serving's is provenance (`stand_in`:
+``of`` the record's vllm-v1 run root, the bundle's manifest digest and this command, and ``link``).  It becomes ``served`` once
+serving's record is itself ``frame-v3-sha512`` / ``hm96-sha512``, or once the circuit opens the vllm-v1 SHA-256 leaves."""
 from __future__ import annotations
 
 import dataclasses
@@ -18,6 +23,17 @@ from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
+
+ROWS = "verity-vllm serving-rows: replay bundle -> rows"
+LINK = ("provenance, not proof: verity-vllm serving-rows opened the sealed replay bundle against the record's vllm-v1 roots and "
+        "committed these rows from it; no circuit opens the vllm-v1 leaves")
+
+
+def stand_in(run_root: str, bundle_manifest_sha256: str) -> dict[str, Any]:
+    """The window's link to serving's commitment: ``of`` the vllm-v1 run root, the bundle's manifest digest and the command that
+    turned the bundle into rows, and ``link``."""
+    return {"of": {"commitment": "vllm-v1", "run_root": run_root, "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS},
+            "link": LINK}
 
 
 def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | None = None) -> SimpleNamespace:
@@ -49,6 +65,18 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
     return window
 
 
+def opened_weights(r: SimpleNamespace, checkpoint: Any = None, threads: int = 8) -> Callable:
+    """The replay's weights provider over the bundle's tensors (and ``checkpoint``'s), opened against the committed weights root."""
+    k0 = next(iter(r.programs))
+    prefix = ProgramIndex(r.programs[k0], program_dir=r.program_dirs[k0]).prefix
+    tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
+    root = (r.row["commit"].get("weight_registration") or {}).get("root")
+    words, wc = CPU.open_weights(r.bdir, tree, root, checkpoint, threads=threads)
+    if not wc["equal"]:
+        raise CPU.Refused(f"the bundle's weights: {wc['why']}")
+    return CPU.provider(words, prefix, set())
+
+
 def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, out_dir: str | os.PathLike, *, checkpoint: Any = None,
                 weights: Callable | None = None, required_manifest: str | None = None, threads: int = 8,
                 workers: int | None = None) -> dict[str, Any]:
@@ -59,21 +87,15 @@ def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, ou
 
     r = of_record(bundle, row_dir, required_manifest)
     if weights is None:
-        k0 = next(iter(r.programs))
-        prefix = ProgramIndex(r.programs[k0], program_dir=r.program_dirs[k0]).prefix
-        tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
-        root = (r.row["commit"].get("weight_registration") or {}).get("root")
-        words, wc = CPU.open_weights(r.bdir, tree, root, checkpoint, threads=threads)
-        if not wc["equal"]:
-            raise CPU.Refused(f"the bundle's weights: {wc['why']}")
-        weights = CPU.provider(words, prefix, set())
+        weights = opened_weights(r, checkpoint, threads)
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
-    committer = {"from": "replay bundle", "bundle_manifest_sha256": r.bundle["manifest_sha256"], "pair": r.pair, "source": r.ctx.get("code")}
+    committer = {"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}
     return SRW.after_commit(str(out_dir), partition_file=partition_file, programs=r.programs, bmap=bmap,
                             committed=OpenedReader(r.store, r.run), weights=weights,
                             manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                             row=(r.ctx.get("args") or {}).get("label"), arrivals=r.arrivals, program_dirs=r.program_dirs,
-                            digests=r.digests, committer=committer, workers=workers)
+                            digests=r.digests, committer=committer, workers=workers,
+                            stand_in=stand_in(bytes(r.run.run_root).hex(), r.bundle["manifest_sha256"]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

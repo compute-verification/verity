@@ -153,6 +153,11 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     fewer = window(9, 3)
     assert "R2-population" in R.check(rec, fewer.program, fewer.query, LAW, SR.SCHEME, SR.expected_ports(fewer),
                                       leaf_layer=SR.leaf_layer(publics)).codes
+    # a stand-in is the same record but for its kind, which provenance cannot override; a kind core does not know is refused
+    stand = SR.registration(c, {"kind": "served", "run": "other", "of": {"run_root": RUN}}, kind="stand-in")
+    assert (stand["window"]["kind"], stand["window"]["run"], stand["roots"]) == ("stand-in", RUN, rec["roots"])
+    with pytest.raises(ValueError, match="window kind 'replayed'"):
+        SR.registration(c, {}, kind="replayed")
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):

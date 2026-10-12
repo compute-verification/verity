@@ -6,9 +6,9 @@ touching any root of record, until the re-baseline switches the record.
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``population_program``, core's ``partition.population_program`` / ``mixed_population_program``), its query the template
 query over them, so the partition (``verity/partition/v1``) and its digest are core's over that program, and the registration is
-core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served", "run": <vllm-v1 run root>,
-...provenance}``.  The served Programs' digests are provenance in the window: no query of core's selects template instances inside a
-served Program (the template queries need every root node to be an instance).
+core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <vllm-v1
+run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
+template instances inside a served Program (the template queries need every root node to be an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, each with its row ports and
 output ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
@@ -415,13 +415,17 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
     return hashlib.sha512(canonical_json({t: hashlib.sha512(b).hexdigest() for t, b in publics.items()})).hexdigest()
 
 
-def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None) -> dict[str, Any]:
+def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served") -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window: its program, query and law, the scheme, every port's root, leaves and
-    served domain, the leaf layer, and ``window = {"kind": "served", "run": <vllm-v1 run root>, **provenance}``."""
+    served domain, the leaf layer, and ``window = {"kind": kind, "run": <vllm-v1 run root>, **provenance}``.  ``served``: these
+    roots are serving's own commitment, made before any draw (the in-Commit hook); ``stand-in``: a fresh commitment to values
+    opened from serving's record afterwards, whose link to the vllm-v1 roots is provenance (``pipeline.deferred_rows``)."""
+    if kind not in R.KINDS:
+        raise ValueError(f"window kind {kind!r} is not one of {R.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.template: c.public_body(k) for k, m in enumerate(w.members)}
-    return R.record(w.program, w.query, w.law, SCHEME, roots, {"kind": "served", "run": w.run, **provenance},
+    return R.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                     leaf_layer=leaf_layer(publics), previous=previous)
 
 
@@ -437,13 +441,15 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
 
 
-def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The window's files; the window's provenance gets the index's SHA-512 (so the registration binds the unit -> identity map)."""
+def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
+          kind: str = "served") -> dict[str, Any]:
+    """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
+    (so the registration binds the unit -> identity map)."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
     (d / "index.json").write_bytes(ib)
-    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER})
+    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     members = []
     for k, m in enumerate(c.window.members):
