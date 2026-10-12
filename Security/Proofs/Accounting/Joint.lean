@@ -6,10 +6,11 @@ import Mathlib.Tactic.Linarith
 /-!
 # Proof of the joint guarantee and its covert residual
 
-Each audit's guarantee bounds, over all three audits' coins, the probability that it accepts and its certificate fails
-(`Run.pr_computeShort_le` and the two beside it: `pr_short_le`, read through the equivalence that puts the audit's own
-coins last). A union bound sums the three (`Run.joint`). An exceeded residual is a failed certificate at every coin,
-because each account's charge and every other account's are, together, within the device's limit
+Each audit's guarantee bounds, over all three audits' coins, the probability that it accepts and its account is below
+the certificate on every one of the audit's own coins (`Run.pr_computeShort_le` and the two beside it: `pr_short_le`,
+read through the equivalence that puts the audit's own coins last). A union bound sums the three (`Run.joint`). Other
+accounts beyond the residual on every one of an audit's own coins leave its account below the certificate on every one
+of them, because each account's charge and every other account's are, together, within the device's limit
 (`Run.computeShort_of_covert` and the two beside it), so the residual follows from the joint guarantee.
 -/
 
