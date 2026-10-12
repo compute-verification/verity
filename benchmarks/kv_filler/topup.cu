@@ -30,7 +30,7 @@
 namespace tu {
 
 constexpr int MODE_READ = -1, MODE_SK = 3;
-constexpr int SK_ROWS = 16, SK_WORDS = (int)(bw::BLOCK_BYTES / 4), SK_G = 4, SK_WARPS = 8, SK_KS = 17;
+constexpr int SK_ROWS = 16, SK_WORDS = (int)(bw::BLOCK_BYTES / 4), SK_G = 2, SK_WARPS = 8, SK_KS = 17;
 constexpr size_t SK_SMEM = sizeof(uint32_t) * (SK_WORDS * SK_ROWS + SK_WARPS * 32 * SK_KS);
 static const char SK_NAME[] = "verity/kv-filler/sk16-proxy/v0";
 
