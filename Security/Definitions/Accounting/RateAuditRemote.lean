@@ -30,6 +30,12 @@ every boundary), and device memory as laid out. So pass `j`'s device (its state,
 program) and the root it is seeded at are any function of the store and of the earlier passes' coins (their streams,
 their oracle families at every root and their samples), and of nothing of its own pass or later. `Chain.oracle` is pass
 `j`'s oracle at that root. Each pass draws its own sample of `s` words after its output.
+
+**Live coins.** A challenger that streams a fresh coin for each pass on a fixed schedule, in place of the hash-chained
+seed, gives pass `j` an oracle that is fresh whatever the prover committed: that is `Chain` at `r = 0`, whose one root
+makes each pass's family a single uniform oracle. Its pass boundary is coin `j`'s release, and the challenger must
+refuse a `root_{j−1}` that arrives later than that release plus the least round trip, so that pass `j − 1`'s receipts
+were fixed before coin `j` could be seen, as `Chain` has them.
 -/
 
 namespace Accounting.Rate
