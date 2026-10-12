@@ -325,7 +325,7 @@ class LeafState:
     before it returns the leaf, so a crash never reuses one: at worst the journal misses the one leaf the state already
     skipped. `start` records a session id as started the same way, and refuses one already recorded, so no two signers of
     the key run one session. A restore of both files from one snapshot is past what a file can see; ``floor`` is its guard
-    for leaves, and for session ids there is none: both rest on the state never being rolled back.
+    for leaves, and for session ids there is none: both rest on its host never restoring an earlier copy of the state.
     """
 
     def __init__(self, path: str | os.PathLike, public: bytes, H: int, *, floor: int = 0) -> None:

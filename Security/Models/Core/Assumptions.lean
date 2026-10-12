@@ -37,15 +37,15 @@ and the special-value campaign in `total.py`. -/
 def GemmAmpereStep (step : Nat → List Nat → List Nat → Nat) : Prop :=
   ∀ acc a b, StepInputs AMPERE_BF16_M16N8K16 acc a b → step acc a b = Spec.tcDotTotal AMPERE_BF16_M16N8K16 acc a b
 
-/-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger) runs its stated
-`code` on the Nebius host it is deployed to, and the host keeps the device's persistent state (its next LMS leaf and the
-session ids it has started) from being rolled back. `run device x` is everything the device does on input `x`: what it
-emits, and how it uses its clock and its keys. The host changes none of it. Nothing attests this, since no attestation
+/-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger, the bandwidth
+audit's challenger) runs its stated `code` on its Nebius host, and its host never restores an earlier copy of the state
+the device keeps there. `run device x` is everything the device does on input `x`: what it emits, and how it uses its
+clock and its keys. The host changes none of it. Nothing attests this, since no attestation
 hardware stands behind the device: it is trust in Nebius. It doesn't say the keys stay secret: a protocol that relies on
 the device's signatures proves its claim or finds, from the run, a forgery under the device's key.
 
-This definition states the part about one run. The persistent state is the device's across runs, which a statement of
-one run can't name; a property that relies on it names it in its docstring and takes no premise for it. -/
+This definition states only the part about one run. The state the device keeps on its host outlasts a run, which a
+statement of one run can't name; a property that relies on it names it in its docstring and takes no premise for it. -/
 def TrustedNebiusHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
   ∀ x, run device x = code x
 

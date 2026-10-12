@@ -122,8 +122,8 @@ The `Issuer` starts its session on the signer (`Signer.start`) before its first 
 id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
 journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
 certifier then publishes nothing for the link-window (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it
-never signs with a reused leaf, nor in a session it has run before. Both rest on the signer's state (next leaf, used
-session ids) not being rolled back, which `trusted-nebius-host` covers: the host keeps the device's persistent state.
+never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-nebius-host`, where the state
+the device keeps on its host is its next LMS leaf and the session ids it has started.
 
 **The check.** On egress the audit recomputes the record digest from the Program's grid, with a complete status, the
 deadline bit set and the parameters digest of `params` and Σ_sync, and compares it with the certificate's. Under

@@ -66,4 +66,6 @@ def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> Non
 def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     e = get("trusted-nebius-host")
     assert (e.kind, e.standing) == ("assumption", "standard")
-    assert "next LMS leaf and the session ids it has started" in e.name and "rolled back" in e.name
+    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's "
+                      "challenger) runs its stated code on its Nebius host, and its host never restores an earlier copy "
+                      "of the state the device keeps there")
