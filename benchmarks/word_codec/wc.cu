@@ -29,8 +29,71 @@
 #ifndef WC_PB
 #define WC_PB 56
 #endif
+#ifndef WC_B3V
+#define WC_B3V 1
+#endif
 
 namespace wc {
+
+// ro-blake3/v1's compression with every add on IMAD (ra-tag-fast's V1, benchmarks/tag_fast/tf.cu): x * 1 + y with the 1
+// read from constant memory, so ptxas cannot fold it back into an IADD3, issues on the FMA pipe beside the integer ALU
+// that the XORs and rotations take. The same function as bw::b3_compress (V0), which WC_B3V=0 selects.
+__constant__ uint32_t kOne = 1;
+
+__device__ __forceinline__ uint32_t mad1(uint32_t a, uint32_t one, uint32_t c) {
+  uint32_t d;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(a), "r"(one), "r"(c));
+  return d;
+}
+
+__device__ __forceinline__ void b3_g1(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d, uint32_t x, uint32_t y,
+                                      uint32_t one) {
+  a = mad1(b, one, mad1(x, one, a));
+  d = __byte_perm(d ^ a, 0, 0x1032);
+  c = mad1(d, one, c);
+  b = __funnelshift_r(b ^ c, b ^ c, 12);
+  a = mad1(b, one, mad1(y, one, a));
+  d = __byte_perm(d ^ a, 0, 0x0321);
+  c = mad1(d, one, c);
+  b = __funnelshift_r(b ^ c, b ^ c, 7);
+}
+
+template <int V>
+__device__ __forceinline__ void b3c(const uint32_t cv[8], uint32_t m[16], uint32_t counter, uint32_t len,
+                                    uint32_t flags, uint32_t out[8]) {
+  if constexpr (V == 0) {
+    bw::b3_compress(cv, m, counter, len, flags, out);
+  } else {
+    const uint32_t one = kOne;
+    uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
+    uint32_t v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
+#pragma unroll
+    for (int r = 0; r < 7; ++r) {
+      b3_g1(v0, v4, v8, v12, m[0], m[1], one);
+      b3_g1(v1, v5, v9, v13, m[2], m[3], one);
+      b3_g1(v2, v6, v10, v14, m[4], m[5], one);
+      b3_g1(v3, v7, v11, v15, m[6], m[7], one);
+      b3_g1(v0, v5, v10, v15, m[8], m[9], one);
+      b3_g1(v1, v6, v11, v12, m[10], m[11], one);
+      b3_g1(v2, v7, v8, v13, m[12], m[13], one);
+      b3_g1(v3, v4, v9, v14, m[14], m[15], one);
+      if (r < 6) {
+        const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13],
+                                m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+#pragma unroll
+        for (int i = 0; i < 16; ++i) m[i] = t[i];
+      }
+    }
+    out[0] = v0 ^ v8;
+    out[1] = v1 ^ v9;
+    out[2] = v2 ^ v10;
+    out[3] = v3 ^ v11;
+    out[4] = v4 ^ v12;
+    out[5] = v5 ^ v13;
+    out[6] = v6 ^ v14;
+    out[7] = v7 ^ v15;
+  }
+}
 
 constexpr uint64_t P = (1ull << 61) - 1;
 constexpr int PB = WC_PB;
@@ -265,9 +328,9 @@ __global__ void __launch_bounds__(256) chain_tag(uint64_t steps, uint32_t g, uns
   atomicXor(xr, (unsigned long long)acc);
 }
 
-// ro-blake3/v1's compression: UU chains a thread, one keyed compression of a full 64-byte block a step, the output the
-// next message's first half.
-template <int UU>
+// ro-blake3/v1's compression in form V (b3c): UU chains a thread, one keyed compression of a full 64-byte block a step,
+// the output the next message's first half.
+template <int UU, int V>
 __global__ void __launch_bounds__(256) chain_b3(uint64_t steps, bw::Key3 key, unsigned long long* xr) {
   const uint32_t id = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t h[UU][8];
@@ -281,7 +344,7 @@ __global__ void __launch_bounds__(256) chain_b3(uint64_t steps, bw::Key3 key, un
       uint32_t m[16];
 #pragma unroll
       for (int i = 0; i < 16; ++i) m[i] = i < 8 ? h[u][i] : (uint32_t)s + i;
-      bw::b3_compress(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
+      b3c<V>(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
     }
   }
   uint64_t acc = 0;
@@ -632,7 +695,7 @@ __device__ __forceinline__ void b3_lane_tag(const bw::Key3& key, uint64_t j, con
     const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
     const uint32_t flags =
         bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-    bw::b3_compress(cv, m, 0, len, flags, cv);
+    b3c<WC_B3V>(cv, m, 0, len, flags, cv);
   }
 }
 
@@ -660,7 +723,7 @@ __device__ __forceinline__ void tag_decode_lane(const bw::Key3& key, uint64_t j,
       const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
       const uint32_t flags =
           bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-      bw::b3_compress(cv, m, 0, len, flags, cv);
+      b3c<WC_B3V>(cv, m, 0, len, flags, cv);
     }
     if (b > 0) {
       const int lo = b == 1 ? 0 : 8 * (b - 1) - 1, hi = 8 * (b - 1) + 6 < LANE_WORDS ? 8 * (b - 1) + 6 : LANE_WORDS - 1;
@@ -862,7 +925,7 @@ __device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ stor
     const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
     const uint32_t flags =
         bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-    bw::b3_compress(cv, m, 0, len, flags, cv);
+    b3c<WC_B3V>(cv, m, 0, len, flags, cv);
   }
   uint4* o = reinterpret_cast<uint4*>(tags + 8 * j);
   o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
@@ -978,8 +1041,9 @@ int wc_set_key(const uint64_t* c, int k, uint64_t tau) {
   if (k < 1 || k > MAXK) return 1;
   uint64_t a[MAXK] = {}, b[MAXK] = {}, cc[MAXK] = {};
   for (int j = 0; j < k; ++j) { cc[j] = c[j]; a[j] = 2 * P - c[j] + 1; b[j] = 6 * P - c[j] + 1; }
+  const uint32_t one = 1;
   if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kA, a, sizeof a) || cudaMemcpyToSymbol(kB, b, sizeof b) ||
-      cudaMemcpyToSymbol(kTau, &tau, sizeof tau))
+      cudaMemcpyToSymbol(kTau, &tau, sizeof tau) || cudaMemcpyToSymbol(kOne, &one, sizeof one))
     return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
@@ -1011,7 +1075,8 @@ int wc_tag(const uint64_t* store, uint64_t n, uint32_t g, unsigned long long* xr
 }
 
 // what: 0 decode, 1 encode (k rounds a step), 2 the bare squaring (59 a step, `ilp` chains a thread), 3 the tag (two
-// Horner steps a word, 2U words a thread). Steps: chain steps a thread.
+// Horner steps a word, 2U words a thread), 4 and 6 ro-blake3/v1's compression (V0, V1), 5 SHA-512's. Steps: chain
+// steps a thread.
 int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned long long* xr, int grid, cudaStream_t s) {
   if (what == 0) {
 #define F(K) chain_decode<K><<<grid, 256, 0, s>>>(steps, tstep, xr)
@@ -1031,15 +1096,18 @@ int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned 
     }
   } else if (what == 3) {
     chain_tag<<<grid, 256, 0, s>>>(steps, 0x2545F491u & M31, xr);
-  } else if (what == 4) {
+  } else if (what == 4 || what == 6) {
     bw::Key3 key;
     for (int i = 0; i < 8; ++i) key.k[i] = 0x01000193u * (i + 1);
+#define F(U) (what == 4 ? chain_b3<U, 0><<<grid, 256, 0, s>>>(steps, key, xr) \
+                        : chain_b3<U, 1><<<grid, 256, 0, s>>>(steps, key, xr))
     switch (ilp) {
-      case 1: chain_b3<1><<<grid, 256, 0, s>>>(steps, key, xr); break;
-      case 2: chain_b3<2><<<grid, 256, 0, s>>>(steps, key, xr); break;
-      case 4: chain_b3<4><<<grid, 256, 0, s>>>(steps, key, xr); break;
+      case 1: F(1); break;
+      case 2: F(2); break;
+      case 4: F(4); break;
       default: return 1;
     }
+#undef F
   } else if (what == 5) {
     switch (ilp) {
       case 1: chain_sha512<1><<<grid, 256, 0, s>>>(steps, xr); break;

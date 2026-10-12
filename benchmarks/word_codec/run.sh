@@ -10,7 +10,8 @@
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
 # the profiles (NCU_KS, default 2,3, the GEMM's k there; NCU_WS and NCU_TAG_WS its configurations); LIBSET (default
-# "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4)
+# "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4; densev0: the tags in BLAKE3's
+# plain form, V0, not V1's IMAD adds)
 # and WC_KMAX (default 8) the largest k they hold.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -24,7 +25,8 @@ export LIBSET=${LIBSET:-split wide dense}
 B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX="${WC_KMAX:-8}")
 declare -A DEFS=([split]="-DWC_SQR=0" [wide]="-DWC_SQR=1" [dense]="-DWC_SQR=0 -DWC_PB=60"
-                [split8]="-DWC_SQR=0 -DWC_G=8" [dense8]="-DWC_SQR=0 -DWC_PB=60 -DWC_G=8")
+                [split8]="-DWC_SQR=0 -DWC_G=8" [dense8]="-DWC_SQR=0 -DWC_PB=60 -DWC_G=8"
+                [densev0]="-DWC_SQR=0 -DWC_PB=60 -DWC_B3V=0")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086

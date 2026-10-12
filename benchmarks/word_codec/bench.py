@@ -271,7 +271,7 @@ def standalone_decode(lib: Lib, torch, store_words: int, sms: int, reps: int, lo
 def chain_rate(lib: Lib, torch, what: int, k: int, ilp: int, steps: int, sms: int, reps: int) -> dict:
     blocks = sms * 6
     threads = blocks * 256
-    per_step = {0: 4, 1: 4, 2: ilp, 3: 8, 4: ilp, 5: ilp}[what] * threads
+    per_step = {0: 4, 1: 4, 2: ilp, 3: 8, 4: ilp, 5: ilp, 6: ilp}[what] * threads
     key = C.key(SEED, max(k, 1))
     tstep = key.tau * (per_step % C.P) % C.P
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -301,12 +301,14 @@ def rates(lib: Lib, torch, sms: int, reps: int, log) -> dict:
     t["per_s_bytes"] = t["per_s"] * 8
     out["tag"] = t
     log(f"rates {lib.name}: tag {t['per_s_bytes'] / 1e9:.0f} GB/s compute-only")
-    b3 = {ilp: chain_rate(lib, torch, 4, 1, ilp, 1024, sms, reps) for ilp in (1, 2, 4)}
+    b3 = {f"v{v}_ilp{ilp}": chain_rate(lib, torch, what, 1, ilp, 1024, sms, reps)
+          for v, what in ((0, 4), (1, 6)) for ilp in (1, 2, 4)}
     best = max(b3.values(), key=lambda r: r["per_s"])
     lw = C.lane_words(lib.bits)
-    out["b3"] = {"by_ilp": b3, "compressions_s": best["per_s"],
+    out["b3"] = {"by_form": b3, "compressions_s": best["per_s"], "best": max(b3, key=lambda f: b3[f]["per_s"]),
                  "stored_bytes_s": best["per_s"] * 8 * lw / B3_LANE_COMPRESSIONS}
-    log(f"rates {lib.name}: ro-blake3/v1 {best['per_s']:.3e} compressions/s compute-only, "
+    log(f"rates {lib.name}: ro-blake3/v1 {best['per_s']:.3e} compressions/s compute-only ({out['b3']['best']}; "
+        + ", ".join(f"{f} {r['per_s']:.3e}" for f, r in b3.items()) + "), "
         f"{out['b3']['stored_bytes_s'] / 1e9:.0f} GB/s of lane blocks ({B3_LANE_COMPRESSIONS} a {8 * lw}-byte block)")
     sha = {ilp: chain_rate(lib, torch, 5, 1, ilp, 256, sms, reps) for ilp in (1, 2)}
     out["sha512"] = {"by_ilp": sha, "compressions_s": max(r["per_s"] for r in sha.values())}
