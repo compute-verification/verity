@@ -292,11 +292,13 @@ def point(g: Geometry, s: int, *, windows: int = 1, slack: Slack = Slack.NAMED, 
           queries_log2: float = 64, slack_error_log2: float = SLACK_ERROR_LOG2) -> Point:
     """`μ_sample + λ` as fractions of the window's reads at `s` openings a window over `windows` windows: `μ_sample`
     from `horizon_deficit` at `2^error_log2`, `λ` per pass over the window's stores at the pass's certified blocks,
-    as a share of a pass's bits."""
+    as a share of a pass's bits.  The prover picks each pass's certified count, so the slack's error is shared over
+    every pass and count, `log₂(P·(N + 1))` more bits."""
     mu = horizon_deficit(s, windows, error_log2)
     blocks = g.stores * g.blocks
     k = math.ceil((1 - mu) * blocks)
-    lam = slack_bits(slack, queries_log2=queries_log2, blocks=blocks, certified=k, error_log2=slack_error_log2)
+    union = math.log2(g.passes * (blocks + 1))
+    lam = slack_bits(slack, queries_log2=queries_log2, blocks=blocks, certified=k, error_log2=slack_error_log2 - union)
     return Point(s, windows, slack, mu, lam / (8 * g.store_bytes), opening_cost(g, s))
 
 
@@ -322,7 +324,8 @@ def cheapest(g: Geometry, target: float, *, windows: int = 1, slack: Slack = Sla
         return point(g, s, windows=windows, slack=slack, error_log2=error_log2, queries_log2=queries_log2)
 
     blocks = g.stores * g.blocks
-    floor = slack_bits(slack, queries_log2=queries_log2, blocks=blocks, certified=blocks, error_log2=SLACK_ERROR_LOG2)
+    floor = slack_bits(slack, queries_log2=queries_log2, blocks=blocks, certified=blocks,
+                       error_log2=SLACK_ERROR_LOG2 - math.log2(g.passes * (blocks + 1)))
     if floor / (8 * g.store_bytes) >= target:
         return None
     return at(_first(lambda s: at(s).total <= target))

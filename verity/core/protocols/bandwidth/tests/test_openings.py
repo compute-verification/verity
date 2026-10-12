@@ -156,6 +156,13 @@ def test_multiproofs_share_paths():
 NODE = o.Geometry(stores=8, blocks=94 * 10**9 // 4096, passes=10, block_bytes=4096)
 
 
+def test_point_shares_the_slack_error_over_passes_and_counts():
+    g = o.Geometry(stores=2, blocks=1000, passes=5, block_bytes=4096)
+    p = o.point(g, 500, slack=o.Slack.CRUDE)
+    k = math.ceil((1 - p.mu_sample) * 2000)
+    assert p.lam == pytest.approx((64 * k + 41 + math.log2(5 * 2001)) / (8 * g.store_bytes))
+
+
 def test_cheapest_is_the_least_sufficient_point():
     p = o.cheapest(NODE, 0.0015)
     assert p is not None and p.total <= 0.0015
