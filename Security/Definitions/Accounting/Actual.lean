@@ -19,7 +19,7 @@ For a location `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, 
 * `work π R`: `π(R)`, the work of a set of gates at a pricing `π`;
 * `ingress X I`: `in_X(I)`, the bits read into `X` during `I`: the width of the gates placed outside `X` that `A[X, I]`
   reads;
-* `egress X I`: `out_X(I)`, the width of the gates of `A[X, I]` that a gate placed outside `X` reads;
+* `egress X I`: `out_X(I)`, the width of the gates placed in `X` that a gate placed outside `X` during `I` reads;
 * `state X t`: `mem_X(t)`, the bits `X` carries across `t`: the width of the gates placed in `X` that `A[X, [t, ∞))`
   reads from outside itself, the gates `X` computed before `t` and the input gates it stores.
 
@@ -67,9 +67,10 @@ noncomputable def ingress (X : Finset L) (I : Set ℕ) : ℕ :=
   A.width ((A.into (A.region X I)).filter fun a => A.x a ∉ X)
 
 open Classical in
-/-- **Egress** `out_X(I)`: the width of the gates of `A[X, I]` that some gate placed outside `X` reads. -/
+/-- **Egress** `out_X(I)` (v2.7, at the reader's tick): the width of the gates placed in `X` that some gate placed
+outside `X` during `I` reads, `in(A[X̄, I]) ∩ A[X]` (an input gate reads nothing). -/
 noncomputable def egress (X : Finset L) (I : Set ℕ) : ℕ :=
-  A.width ((A.region X I).filter fun g => ∃ h, A.x h ∉ X ∧ g ∈ A.reads h)
+  A.width (univ.filter fun g => A.x g ∈ X ∧ ∃ h, A.x h ∉ X ∧ A.t h ∈ I ∧ g ∈ A.reads h)
 
 open Classical in
 /-- **State** `mem_X(t)`: the width of the gates placed in `X` that `A[X, [t, ∞))` reads from outside itself. -/

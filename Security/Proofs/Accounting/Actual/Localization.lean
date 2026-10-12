@@ -303,13 +303,10 @@ theorem zero_links (b : Bool) : (zeroPlaced b).Links (fun _ : Unit => (true, fal
   have w0 : ∀ T : Finset (Fin 3), (∀ a ∈ T, a = 1) → ∀ n, (zeroPlaced b).width T ≤ 0 * n := fun T hT n => by
     simp only [zero_mul, nonpos_iff_eq_zero, Verity.Circuit.width]
     exact sum_eq_zero fun a ha => by rw [hT a ha]; rfl
-  refine ⟨fun g a ha hne => ?_, fun e y a c => ⟨w0 _ (fun z hz => ?_) _, w0 _ (fun z hz => ?_) _⟩⟩
+  refine ⟨fun g a ha hne => ?_, fun e y a c => w0 _ (fun z hz => ?_) _⟩
   · fin_cases g <;> fin_cases a <;> simp_all
   · simp only [Placed.readOn, mem_filter, mem_univ, true_and] at hz
     obtain ⟨g, hzg, hne, -⟩ := hz
-    fin_cases g <;> fin_cases z <;> simp_all
-  · simp only [Placed.sentOn, mem_filter, mem_univ, true_and] at hz
-    obtain ⟨-, g, hzg, hne, -⟩ := hz
     fin_cases g <;> fin_cases z <;> simp_all
 
 /-- **`zero_link` fails `Alphabet` at `β = 0`** (memory accounting's counterexample to v2.1's links, "a link of

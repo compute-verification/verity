@@ -55,10 +55,10 @@ theorem fits {ι α E : Type} [Fintype α] (R : Actual.Run L) (d : Device ι) (c
     simpa [Placed.work, Placed.classPrice, one] using hΦ o (chip ∪ mem) rfl t (t + 1)
   · simp only [Actual.Run.schedule]
     rw [sum_width_filter]
-    exact ((hL.2 hbm.1 hbm.2 t (t + 1)).1.trans (by rw [one, mul_one])).trans hbw
+    exact ((hL.2 hbm.1 hbm.2 t (t + 1)).trans (by rw [one, mul_one])).trans hbw
   · simp only [Actual.Run.schedule]
     rw [sum_width_filter]
-    exact ((hL.2 (side i).1 (side i).2 t (t + 1)).1.trans (by rw [one, mul_one])).trans (hcap i)
+    exact ((hL.2 (side i).1 (side i).2 t (t + 1)).trans (by rw [one, mul_one])).trans (hcap i)
   · simp only [Actual.Run.schedule]
     rw [sum_width_filter]
     exact (hM chip hchip (t + 1)).trans hMc

@@ -16,7 +16,7 @@ resource:
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
 | `SequentialSpeed root t_root` | a path that computes a P2 root spans at least `t_root` ticks | rebuilding a block in time |
 | `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
-| `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` carries at most `β_e (b − a)` bits read during `[a, b)`, and as many sent | side channels, hidden bandwidth |
+| `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
 | `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱` are the protocol's; what the certifiers send outside during `[a, b)` is a function of their record before `b` and of a jitter word, one of `χ` classes a bucket | forged records, timing channels |
 
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
@@ -70,21 +70,13 @@ noncomputable def readOn {E : Type*} (link : Fin A.N → Fin A.N → E) (e : E) 
     Finset (Fin A.N) :=
   univ.filter fun a => ∃ g, a ∈ A.reads g ∧ A.x a ≠ A.x g ∧ link g a = e ∧ A.x g = y ∧ A.t g ∈ I
 
-open Classical in
-/-- The bits link `e` carries to the leaf `y`, sent during `I`: the gates placed during `I` whose wire to a reader placed
-at `y`, another leaf, runs on `e`. -/
-noncomputable def sentOn {E : Type*} (link : Fin A.N → Fin A.N → E) (e : E) (y : L) (I : Set ℕ) :
-    Finset (Fin A.N) :=
-  univ.filter fun a => A.t a ∈ I ∧ ∃ g, a ∈ A.reads g ∧ A.x a ≠ A.x g ∧ link g a = e ∧ A.x g = y
-
 /-- **Links**: every wire between two leaves has a computed source and runs on a declared link joining them (`link g a`,
-for `g` reading `a`, with ends `ends`), and each way (to each of its ends `y`) each link `e` carries at most `β e` bits a
-tick, counted at the readers' ticks and at the senders'. -/
+for `g` reading `a`, with ends `ends`), and each way (to each of its ends `y`) each link `e` delivers at most `β e` bits
+a tick, counted at the readers' ticks. -/
 def Links {E : Type*} (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) : Prop :=
   (∀ g, ∀ a ∈ A.reads g, A.x a ≠ A.x g →
     A.isInput a = false ∧ (ends (link g a) = (A.x a, A.x g) ∨ ends (link g a) = (A.x g, A.x a))) ∧
-  ∀ e y a b, A.width (A.readOn link e y (Set.Ico a b)) ≤ β e * (b - a) ∧
-    A.width (A.sentOn link e y (Set.Ico a b)) ≤ β e * (b - a)
+  ∀ e y a b, A.width (A.readOn link e y (Set.Ico a b)) ≤ β e * (b - a)
 
 /-- What a protocol says the gates of its trusted devices do: the gates each reads and how it computes its value. -/
 structure Spec where
