@@ -552,6 +552,21 @@ static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
   cudaStream_t sa, sb;
   OK(cudaStreamCreateWithFlags(&sa, cudaStreamNonBlocking));
   OK(cudaStreamCreateWithFlags(&sb, cudaStreamNonBlocking));
+  // A module's first launch loads it (lazy loading), which waits for running kernels: launch each once alone first,
+  // or the modules run only after clevel's wait gives up (run r20261012-083549-7727).
+  {
+    const uint32_t one = 1;
+    int n1 = 1;
+    uint32_t m0 = 0;
+    OK(cudaMemset(flags, 0, 4096));
+    OK(cudaMemcpy(flags, &one, 4, cudaMemcpyHostToDevice));
+    for (int k = 0; k < KMAX; ++k) {
+      void* pargs[] = {&flags, &n1, &m0};
+      OK(cudaLaunchKernel((const void*)pfn[k], dim3(1), dim3(32), pargs, 0, 0));
+    }
+    OK(cudaGetLastError());
+    OK(cudaDeviceSynchronize());
+  }
   const uint32_t y = 0x2545F491u;
   j += "\"cpollute\":{\"code_bytes\":" + std::to_string(128 * CLEVEL_STEPS) +
        ",\"bank_bytes\":65536,\"stride\":64,\"blocks_per_module\":" + std::to_string(blocks) + ",\"runs\":[";
