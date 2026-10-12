@@ -1,4 +1,4 @@
-"""The SASS opcode mix of each `chain` kernel in a cuobjdump -sass listing, whole function and the timed loop's body.
+"""The SASS opcode mix of each `chain` and `probe` kernel in a cuobjdump -sass listing, whole function and the timed loop's body.
 
 The loop body is the instructions between the loop's head (the back edge's target) and its back edge (`BRA.U UP0, head`
 or `@P BRA head`, the last backward branch), so a squaring's static count is body / ILP. The rare second fold's carry
@@ -51,7 +51,7 @@ def loop_body(ins):
 def main():
     out = {}
     for fn, ins in parse(sys.argv[1]).items():
-        if "chain" not in fn:
+        if "chain" not in fn and "probe" not in fn:
             continue
         body = loop_body(ins)
         out[fn] = {"function": mix(ins), "loop_body": mix(body)}

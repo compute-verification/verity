@@ -7,10 +7,14 @@
 //   FOLD 2  FOLD 1 with each multiply by 569 = 2^9 + 2^5 + 2^4 + 2^3 + 1 as shifts and adds on the integer ALU, so the
 //           FMA-heavy pipe (the binding one, 84% busy at 512 bits) runs only the square's 136 IMAD.WIDE.
 // ILP interleaves that many independent words a thread, to fill the pipe past the carry chains' latency.
+//   FOLD 3  the fold inside the column square: the high columns first, then each low column takes 569 h_m as one more
+//           product, so the fold is 16 IMAD.WIDE and the columns' carries.
+//   FOLD 4  one level of Karatsuba over the column square (the red team's `sqr_kara`), then FOLD 1's fold.
 // All keep x lazily below 2^512; the host reduces below p.
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
 //   sq time FOLD ILP K TPB WAVES REPS   timed launches at the occupancy's blocks a SM times WAVES
+//   sq probe P W A ITERS WAVES     the pipe probe (below), its digests checked against the host's, then timed
 //   sq clock                       the SM clock off a timed clock64 spin
 #include <cuda_runtime.h>
 
@@ -167,12 +171,129 @@ __device__ __forceinline__ void fold_shift(const u32 (&t)[2 * NL], u32 (&x)[NL])
   if (add_small(x, hl)) add_small(x, CF);
 }
 
+// FOLD 3: the fold inside the column square. The high columns first, alone (no carry in from column NL - 1), give
+// h = (their sum) < 2^512 since h 2^512 <= a^2; then each low column m takes h_m c as one more product after its
+// doubling, so x = lo + c h comes out of the columns' own carries. Column NL - 1 carries out e < c + 1 at 2^512, folded
+// as e c like FOLD 1's h.
+__device__ __forceinline__ void sqr_fused(const u32 (&a)[NL], u32 (&x)[NL]) {
+  u32 h[NL];
+  u32 c0 = 0, c1 = 0;
+#pragma unroll
+  for (int m = NL; m < 2 * NL - 1; ++m) {
+    u32 r[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = m - NL + 1; 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    r[2] = (r[2] << 1) | (r[1] >> 31);
+    r[1] = (r[1] << 1) | (r[0] >> 31);
+    r[0] <<= 1;
+    if ((m & 1) == 0) mac(r, a[m / 2], a[m / 2]);
+    add3(r, c0, c1);
+    h[m - NL] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  h[NL - 1] = c0;
+  c0 = 0;
+  c1 = 0;
+#pragma unroll
+  for (int m = 0; m < NL; ++m) {
+    u32 r[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = 0; 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    r[2] = (r[2] << 1) | (r[1] >> 31);
+    r[1] = (r[1] << 1) | (r[0] >> 31);
+    r[0] <<= 1;
+    if ((m & 1) == 0) mac(r, a[m / 2], a[m / 2]);
+    mac(r, h[m], CF);
+    add3(r, c0, c1);
+    x[m] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  if (add_small(x, c0 * CF)) add_small(x, CF);
+}
+
+template <int N>
+__device__ __forceinline__ void sqr_cols_n(const u32 (&a)[N], u32 (&t)[2 * N]) {
+  u32 c0 = 0, c1 = 0;
+#pragma unroll
+  for (int m = 0; m < 2 * N - 1; ++m) {
+    u32 r[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    r[2] = (r[2] << 1) | (r[1] >> 31);
+    r[1] = (r[1] << 1) | (r[0] >> 31);
+    r[0] <<= 1;
+    if ((m & 1) == 0) mac(r, a[m / 2], a[m / 2]);
+    add3(r, c0, c1);
+    t[m] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  t[2 * N - 1] = c0;
+}
+
+__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+
+// FOLD 4: one level of Karatsuba (the red team's `sqr_kara` at 512 bits): a = a1 2^256 + a0, a^2 = C 2^512 +
+// (A + C - D) 2^256 + A with A = a0^2, C = a1^2, D = (a0 - a1)^2, three 8-limb column squares (108 products in place of
+// 136), then FOLD 1's fold. M = A + C - D = 2 a0 a1 < 2^513: 16 limbs and a top bit m.
+__device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+  constexpr int H = NL / 2;
+  u32 x0[H], x1[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) {
+    x0[k] = a[k];
+    x1[k] = a[H + k];
+  }
+  d[0] = sub_cc(x0[0], x1[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(x0[k], x1[k]);
+  const u32 mask = subc(0u, 0u);
+  e[0] = sub_cc(x1[0], x0[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(x1[k], x0[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H];
+  sqr_cols_n<H>(x0, A);
+  sqr_cols_n<H>(x1, C);
+  sqr_cols_n<H>(d, D);
+  M[0] = add_cc(A[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) M[k] = addc_cc(A[k], C[k]);
+  u32 m = addc(0u, 0u);
+  M[0] = sub_cc(M[0], D[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) M[k] = subc_cc(M[k], D[k]);
+  m = subc(m, 0u);
+#pragma unroll
+  for (int k = 0; k < 2 * H; ++k) {
+    t[k] = A[k];
+    t[2 * H + k] = C[k];
+  }
+  t[H] = add_cc(t[H], M[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(t[H + k], M[k]);
+  t[3 * H] = addc_cc(t[3 * H], m);
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H - 1; ++k) t[k] = addc_cc(t[k], 0u);
+  t[4 * H - 1] = addc(t[4 * H - 1], 0u);
+}
+
 template <int FOLD>
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
+  if (FOLD == 3) {
+    sqr_fused(a, x);
+    return;
+  }
   u32 t[2 * NL];
-  sqr_cols(a, t);
+  if (FOLD == 4) sqr_kara(a, t);
+  else sqr_cols(a, t);
   if (FOLD == 0) fold_cols(t, x);
-  else if (FOLD == 1) fold_ptx(t, x);
+  else if (FOLD == 1 || FOLD == 4) fold_ptx(t, x);
   else fold_shift(t, x);
 }
 
@@ -199,6 +320,62 @@ __global__ void __launch_bounds__(128) chain(u32 *xs, int n, int K) {
   for (int j = 0; j < ILP; ++j)
 #pragma unroll
     for (int k = 0; k < NL; ++k) xs[(size_t)k * n + w0 + j] = x[j][k];
+}
+
+// The pipe probe: what fraction of the FMA-heavy pipe a warp keeps busy with the column square's instructions when no
+// carry chain orders them. PROBE 0: W 64-bit multiply-adds (`mad.wide.u32`) and A 32-bit adds an iteration over CH
+// independent accumulators each. PROBE 1: W of the square's `mac` (IMAD.WIDE.U32 with its carry into a third word).
+constexpr int CH = 8;
+
+template <int PROBE, int W, int A>
+__host__ __device__ inline u64 probe_run(u32 tid, int iters) {
+  u64 acc[CH];
+  u32 m[CH], s[CH], r2[CH];
+  for (int c = 0; c < CH; ++c) {
+    const u32 v = tid * 0x9E3779B9u + 0x85EBCA6Bu * (c + 1);
+    acc[c] = v | (u64)(v * 0xC2B2AE35u) << 32;
+    m[c] = v * 0x27D4EB2Fu;
+    s[c] = v ^ 0x165667B1u;
+    r2[c] = 0;
+  }
+  for (int it = 0; it < iters; ++it) {
+#pragma unroll
+    for (int i = 0; i < W; ++i) {
+      const int c = i % CH;
+      const u32 b = (u32)acc[(i + 3) % CH], k = m[(i + 5) % CH];
+#ifdef __CUDA_ARCH__
+      if (PROBE == 0) {
+        asm volatile("mad.wide.u32 %0, %1, %2, %0;" : "+l"(acc[c]) : "r"(b), "r"(k));
+      } else {
+        u32 lo = (u32)acc[c], hi = (u32)(acc[c] >> 32);
+        asm volatile("mad.lo.cc.u32 %0, %3, %4, %0;\n\tmadc.hi.cc.u32 %1, %3, %4, %1;\n\taddc.u32 %2, %2, 0;"
+                     : "+r"(lo), "+r"(hi), "+r"(r2[c]) : "r"(b), "r"(k));
+        acc[c] = lo | (u64)hi << 32;
+      }
+#else
+      const u64 p = (u64)b * k, v = acc[c] + p;
+      if (PROBE == 1) r2[c] += v < p;
+      acc[c] = v;
+#endif
+    }
+#pragma unroll
+    for (int i = 0; i < A; ++i) {
+#ifdef __CUDA_ARCH__
+      asm volatile("add.u32 %0, %0, %1;" : "+r"(s[i % CH]) : "r"(m[(i + 1) % CH]));
+#else
+      s[i % CH] += m[(i + 1) % CH];
+#endif
+    }
+  }
+  u64 h = 0;
+  for (int c = 0; c < CH; ++c) h = h * 0x100000001B3ull ^ acc[c] ^ (u64)s[c] << 17 ^ (u64)r2[c] << 41;
+  return h;
+}
+
+template <int PROBE, int W, int A>
+__global__ void __launch_bounds__(128) probe(u64 *out, int iters) {
+  const u32 tid = blockIdx.x * blockDim.x + threadIdx.x;
+  out[tid] = probe_run<PROBE, W, A>(tid, iters);
 }
 
 __global__ void spin(long long cycles, long long *out) {
@@ -236,9 +413,19 @@ static void fill(std::vector<uint32_t> &h, int n) {
 using Kernel = void (*)(uint32_t *, int, int);
 static Kernel kernel(int fold, int ilp) {
 #define K_(F, I) if (fold == F && ilp == I) return sq::chain<F, I>;
-  K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4)
+  K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2)
 #undef K_
   fprintf(stderr, "no kernel for fold %d ilp %d\n", fold, ilp);
+  exit(2);
+}
+
+using Probe = void (*)(uint64_t *, int);
+using ProbeHost = uint64_t (*)(uint32_t, int);
+static void probe_kernel(int p, int w, int a, Probe &k, ProbeHost &h) {
+#define P_(P, W, A) if (p == P && w == W && a == A) { k = sq::probe<P, W, A>; h = sq::probe_run<P, W, A>; return; }
+  P_(0, 16, 0) P_(0, 16, 16) P_(0, 16, 32) P_(1, 16, 0) P_(1, 16, 16)
+#undef P_
+  fprintf(stderr, "no probe %d %d %d\n", p, w, a);
   exit(2);
 }
 
@@ -303,6 +490,44 @@ int main(int argc, char **argv) {
       printf("\n");
     }
     return 0;
+  }
+  if (!strcmp(argv[1], "probe") && argc == 7) {
+    const int p = atoi(argv[2]), w = atoi(argv[3]), a = atoi(argv[4]), iters = atoi(argv[5]), waves = atoi(argv[6]);
+    Probe k;
+    ProbeHost host;
+    probe_kernel(p, w, a, k, host);
+    cudaDeviceProp prop;
+    CK(cudaGetDeviceProperties(&prop, 0));
+    int per_sm = 0;
+    CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k, 128, 0));
+    const int n = prop.multiProcessorCount * per_sm * 128 * waves;
+    uint64_t *d;
+    CK(cudaMalloc(&d, (size_t)n * 8));
+    k<<<n / 128, 128>>>(d, 3);
+    CK(cudaDeviceSynchronize());
+    std::vector<uint64_t> got(n);
+    CK(cudaMemcpy(got.data(), d, (size_t)n * 8, cudaMemcpyDeviceToHost));
+    int bad = 0;
+    for (int t = 0; t < n; t += 997) bad += got[t] != host((uint32_t)t, 3);
+    if (bad) {
+      printf("{\"probe\": %d, \"w\": %d, \"a\": %d, \"gate_bad\": %d}\n", p, w, a, bad);
+      return 1;
+    }
+    cudaEvent_t e0, e1;
+    CK(cudaEventCreate(&e0));
+    CK(cudaEventCreate(&e1));
+    k<<<n / 128, 128>>>(d, iters / 10 + 1);
+    CK(cudaEventRecord(e0));
+    k<<<n / 128, 128>>>(d, iters);
+    CK(cudaEventRecord(e1));
+    CK(cudaEventSynchronize(e1));
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    const double warp_iters_per_s_sm = (double)n / 32 * iters / (ms * 1e-3) / prop.multiProcessorCount;
+    printf("{\"probe\": %d, \"w\": %d, \"a\": %d, \"iters\": %d, \"blocks_per_sm\": %d, \"threads\": %d, \"gate_bad\": %d, "
+           "\"wide_warp_inst_per_s_sm\": %.4e, \"add_warp_inst_per_s_sm\": %.4e}\n",
+           p, w, a, iters, per_sm, n, bad, warp_iters_per_s_sm * w, warp_iters_per_s_sm * a);
+    return bad ? 1 : 0;
   }
   if (!strcmp(argv[1], "time") && argc == 8) {
     const int fold = atoi(argv[2]), ilp = atoi(argv[3]), K = atoi(argv[4]), tpb = atoi(argv[5]),
