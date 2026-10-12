@@ -252,12 +252,14 @@ theorem BoundReceiptShare : Accounting.Guarantees.BoundReceiptShare := by
   have hd : 0 < a * w := Nat.mul_pos ha hw
   set X := (Lz + lam) * w + Fz * a with hX
   have hm : covered a w Lz Fz lam * (a * w) ≤ X := Nat.div_mul_le_self X (a * w)
-  refine ⟨?_, ?_⟩
+  refine ⟨?_, ?_, ?_⟩
   · have := Nat.lt_mul_div_succ X hd
     unfold covered
     rw [← hX]
     calc X < a * w * (X / (a * w) + 1) := this
       _ = (X / (a * w) + 1) * a * w := by ring
+  · calc (L + covered a w Lz Fz lam * b) * a * w = L * a * w + b * (covered a w Lz Fz lam * (a * w)) := by ring
+      _ ≤ L * a * w + b * X := by gcongr
   · calc (L + covered a w Lz Fz lam * b) * min a b * w
         = L * min a b * w + covered a w Lz Fz lam * b * min a b * w := by ring
       _ ≤ L * b * w + covered a w Lz Fz lam * b * a * w :=

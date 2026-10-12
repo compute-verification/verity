@@ -82,7 +82,18 @@ compression (`C(q, k − m)/2^λ`) leaves it short of those blocks' `b = |E|` bi
 that came in from the rest and its rebuilds: a block whose contents came over the link cost `b` bits of `L`. So each
 relayed block costs `min(|z|, |E|)` bits on a link, and the GPU's HBM held the rest (`BoundReceiptShare`). Against
 `RateAudit`, binding the receipts to `z` takes the rest's mix out of the floor: without it, the rest makes every
-receipt from the store it holds, and nothing crosses a link.
+receipt from the store it holds, and nothing crosses a link. In bits the event's complement is the remote statement's
+`CoLocated` route (lane ra-remote-theorem) in this game: `k·b ≤ footprint + S + rebuilt·b + L + (L_z + λ + z_out)·b/a
++ λ`, the GPU's reads, its state and rebuilds, the bits in at `1:1` and the bits out and the tile outputs the rest
+made by tile work (`z_out = F_z·a/w`) at `|E|/|z|`.
+
+**What the game takes.** Each block's receipt binds a tile output of its own (the game's `z` is one independent value
+per block), so one shipped tile output unlocks one block; a binding shared by `n` receipts unlocks `n`. The mix is a
+random oracle on the whole of `E_j` and `z_j`, so a location makes a receipt only holding both; the deployed receipt
+hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which lane ra-bound-receipt proves
+`½·min(|z|, |E|)` bits per relayed block, by Lindsey's lemma: the deployed bound is up to `2×` weaker than this game's.
+The rest's tile work stands for every way it gets a tile output without the link, the activations' route among them:
+its information is free here and only its work counts.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptLink`, from `RateAudit`'s compression on each location (the GPU's view at
 each tile output and mix, the rest's at each store and mix), with the GPU's mix at the tile outputs and the rest's at
@@ -99,19 +110,26 @@ def BoundReceiptLink : Prop :=
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + 2 * (s : ℝ≥0∞) / 2 ^ h + (q.choose (k - m) : ℝ≥0∞) / 2 ^ lam +
         (qz.choose (m + 1) : ℝ≥0∞) / 2 ^ lam
 
-/-- **The link's share of a bound-receipt audit: `μ_link ≤ (link capacity/ΣR)·|E|/min(|z|, |E|)`.** For tile outputs
-of `a > 0` bits, blocks of `b` bits and tile work `w > 0` per tile, and every `L`, `L_z`, `F_z` and `λ`: the blocks
-`covered a w L_z F_z λ` satisfy `BoundReceiptLink`'s hypothesis, and the store's bits the links stand in for at that
-`m`, the `L` bits in and `m` blocks of `b` bits, are at most `|E|/min(|z|, |E|)` times the links' bits each way with
-the slack, plus the tile work's,
+/-- **The link's share of a bound-receipt audit: inbound `1:1`, outbound at `|E|/|z|`, so
+`μ_link ≤ (link capacity/ΣR)·|E|/min(|z|, |E|)`.** For tile outputs of `a > 0` bits, blocks of `b` bits and tile work
+`w > 0` per tile, and every `L`, `L_z`, `F_z` and `λ`: the blocks `m = covered a w L_z F_z λ` satisfy
+`BoundReceiptLink`'s hypothesis, and the store's bits the links stand in for at that `m`, the `L` bits in and `m`
+blocks of `b` bits, are at most the bits in plus `|E|/|z|` times the bits out, the slack and the tile outputs the
+rest's tile work made,
+
+  `(L + m·b)·a·w ≤ L·a·w + b·((L_z + λ)·w + F_z·a)`,
+
+so at most `|E|/min(|z|, |E|)` times the links' bits each way with the slack, plus the tile work's,
 
   `(L + m·b)·min(a, b)·w ≤ b·((L + L_z + λ)·w + F_z·a)`.
 
-**The reading.** Divide by `min(a, b)·w` and by the store's bits the window reads, `k·b`, which at a window `T` is
-`ΣR·T`: the share of the floor the links take is `μ_link ≤ ((L + L_z)/T)/ΣR · |E|/min(|z|, |E|)` plus `λ`'s and the
-rest's tile work's `F_z/(w·k)`, with `(L + L_z)/T` the link's capacity, both directions. At `|z| ≥ |E|` a relayed
-block costs its contents and the link's share is `RateAudit`'s `c_free/|E|`; at `|z| = 4m/k·|E|` (the design's
-binding) it is `k/(4m)` times that.
+**The reading.** Divide the first by `a·w`: `L + m·b ≤ L + (L_z + λ + z_out)·b/a` with `z_out = F_z·a/w`, the
+remote statement's `inBits + (outBits + zOut)·b/z_b` (`CoLocated`'s link part, lane ra-remote-theorem) at `z_b = a`.
+Divide the second by `min(a, b)·w` and by the store's bits the window reads, `k·b`, which at a window `T` is `ΣR·T`:
+the share of the floor the links take is `μ_link ≤ ((L + L_z)/T)/ΣR · |E|/min(|z|, |E|)` plus `λ`'s and the rest's
+tile work's `F_z/(w·k)`, with `(L + L_z)/T` the link's capacity, both directions. At `|z| ≥ |E|` a relayed block costs
+its contents, and the link's share is `RateAudit`'s `c_free/|E|`; at tile binding, `|z|/|E| = 4m/k` for a batch of `m`
+rows and a reduction of `k`, it is `k/(4m)` times that on the outbound side.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptShare`, by division.
 
@@ -119,6 +137,7 @@ Frozen (no-function): an arithmetic fact about the covered blocks, about no func
 def BoundReceiptShare : Prop :=
   ∀ a b w L Lz Fz lam : ℕ, 0 < a → 0 < w →
     (Lz + lam) * w + Fz * a < (covered a w Lz Fz lam + 1) * a * w ∧
+      (L + covered a w Lz Fz lam * b) * a * w ≤ L * a * w + b * ((Lz + lam) * w + Fz * a) ∧
       (L + covered a w Lz Fz lam * b) * min a b * w ≤ b * ((L + Lz + lam) * w + Fz * a)
 
 /-- **A tile's output is unpredictable below its work**, in PoUW's game (`Pouw.Assumptions.TT`'s), for a cost model
