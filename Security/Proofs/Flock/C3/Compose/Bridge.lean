@@ -43,9 +43,9 @@ theorem vbridge_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteA
   obtain ⟨hl, hvR, hkR⟩ := hlv R ω t R₂ τ o ⟨h₀, hc⟩
   obtain ⟨out, hpl, hacc⟩ := holoTableCL_plays (capReg := xR.cap) (hreg := hR) (h₀ := hr₀) (h₁ := hr₁)
     (hs₀ := hs₀) (hs₁ := hs₁) (ho := ho) (hl := hl) (hv := ⟨hv₀, hv₁, hvR⟩) (hok := ⟨hk₀, hk₁, hkR⟩)
-  try dsimp only at ht
   first
-  | (rw [← ht] at hpl; exact ⟨out, hpl, hacc⟩)
   | exact ⟨out, (congrArg (fun l => PlaysT _ l out) ht).mpr hpl, hacc⟩
+  | (rw [← ht] at hpl; exact ⟨out, hpl, hacc⟩)
+  | (dsimp only at ht; rw [← ht] at hpl; exact ⟨out, hpl, hacc⟩)
 
 end FlockC3.Compose

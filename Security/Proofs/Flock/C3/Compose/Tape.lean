@@ -39,7 +39,7 @@ theorem playsT_draw_bind {β C : Type} {iF : Fintype C} {iN : Nonempty C} {f : C
 
 theorem playsT_dite_pos {α : Type} {c : Prop} {d : Decidable c} {t : c → Game α} {e : ¬ c → Game α} (hc : c)
     {ts : List Step} {a : α} (h : PlaysT (t hc) ts a) : PlaysT (@dite _ c d t e) ts a := by
-  rw [dif_pos hc]
+  rw [dite_eq_left hc]
   exact h
 
 /-- **Candidate 3's table accepts from its stages**: both reps play `holoRepC` to the outputs their sparse phases read,
@@ -81,17 +81,14 @@ theorem holoTableCL_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
       (firstSteps ts₀ ++ ts₁ ++ (sp₀ ++ (sp₁ ++ (op ++ lg)) ++ [.inl ⟨Opens F D × Salts Sl, os⟩])) := by
     simp only [holoSteps, List.append_assoc]
   rw [e]
-  exact ⟨_, by
-      unfold holoTableCL
-      refine playsT_recv_bind ?_
-      refine playsT_draw_bind ?_
-      refine playsT_bind' hint ?_
-      refine playsT_bind' hrp ?_
-      refine playsT_recv_bind ?_
-      exact .ret _, by
-    first
-    | (simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩)
-    | (simp only [hv.1, hv.2.1, hv.2.2, Bool.true_and, decide_eq_true_eq]; exact hok)
-    | simpa [hv.1, hv.2.1, hv.2.2] using hok⟩
+  unfold holoTableCL
+  first
+  | exact ⟨_, playsT_recv_bind (playsT_draw_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
+      by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩⟩
+  | exact ⟨_, playsT_recv_bind (playsT_draw_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
+      by simp only [hv.1, hv.2.1, hv.2.2, Bool.true_and, decide_eq_true_eq]; exact hok⟩
+  | exact ⟨_, .send cap₀ (.coin pts (FlockVBridge.InnerAccepts.playsT_bind hint
+        (FlockVBridge.InnerAccepts.playsT_bind hrp (.send os (.ret _))))),
+      by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩⟩
 
 end FlockC3.Compose
