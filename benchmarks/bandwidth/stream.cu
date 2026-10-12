@@ -1854,7 +1854,7 @@ static Carry make_carry(const Args& a, size_t nmax, int priority) {
 }
 
 static void carry(const Args& a, Carry& c, const uint8_t* hm, size_t slots, const std::atomic<uint32_t>* done,
-                  uint32_t epoch) {
+                  uint32_t epoch, bool front = true) {
   const size_t per = a.dma_piece / a.live_slot;
   for (size_t f = 0, q = 0; f < slots; ++q) {
     const size_t to = std::min(slots, f + per);
@@ -1863,6 +1863,10 @@ static void carry(const Args& a, Carry& c, const uint8_t* hm, size_t slots, cons
       }
     cudaStream_t s = c.s[q % c.s.size()];
     OK(cudaMemcpyAsync(c.d + f * a.live_slot, hm + f * a.live_slot, (to - f) * a.live_slot, cudaMemcpyHostToDevice, s));
+    if (!front) {
+      f = to;
+      continue;
+    }
     if (q && c.s.size() > 1) OK(cudaStreamWaitEvent(s, c.ev[q - 1], 0));
     if (c.write(s, (CUdeviceptr)c.front, (cuuint64_t)epoch << 32 | to, CU_STREAM_WRITE_VALUE_DEFAULT) != CUDA_SUCCESS)
       exit(fail("cuStreamWriteValue64"));
@@ -1878,6 +1882,54 @@ static void carry_sync(Carry& c) {
 static std::string transport(const Args& a) {
   return std::string(",\"temporal\":") + (a.temporal ? "true" : "false") + ",\"dma_piece\":" +
          std::to_string(a.dma_piece) + ",\"dma_streams\":" + std::to_string(a.dma_piece ? a.dma_streams : 0);
+}
+
+// carry: the copy engines' rate on foldlive's DMA path with S written before the clock starts, to tell the per-piece
+// frontier writes, the pieces themselves and the fold beside them apart.  Arms: 0 carry as in a window, 1 the same
+// pieces without the frontier writes, 2 one copy of the whole size, 3 carry beside fold_live reading what it lands.
+static int mode_carry(const Args& a) {
+  if (!a.dma_piece || !slots_ok(a) || !carry_ok(a)) return fail("carry takes --dma-piece-kib, a multiple of the slot");
+  int lo, hi;
+  OK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t s_fold;
+  OK(cudaStreamCreateWithPriority(&s_fold, cudaStreamNonBlocking, hi));
+  const size_t n = (size_t)*std::max_element(a.sizes_mib.begin(), a.sizes_mib.end()) << 20, slots = n / a.live_slot;
+  uint8_t* hm;
+  OK(cudaHostAlloc(&hm, n, cudaHostAllocMapped));
+  uint8_t ks[16];
+  fresh(ks, 16);
+  Gen gen(ks);
+  generate(gen, hm, n, a.gen_threads, cpus, 0, !a.temporal);
+  std::unique_ptr<std::atomic<uint32_t>[]> done(new std::atomic<uint32_t>[slots]);
+  Carry cy = make_carry(a, n, hi);
+  uint4* dout;
+  OK(cudaMalloc(&dout, n / 1024 * 16));
+  uint32_t* dsteps;
+  OK(cudaMalloc(&dsteps, 64 * 4));
+  std::vector<double> gbs[4];
+  uint32_t epoch = 0;
+  for (int r = 0; r < a.reps; ++r)
+    for (int arm = 0; arm < 4; ++arm) {
+      ++epoch;
+      for (size_t k = 0; k < slots; ++k) done[k].store(epoch, std::memory_order_release);
+      OK(cudaDeviceSynchronize());
+      const double t0 = now_s();
+      if (arm == 3)
+        fold_live<<<*std::max_element(a.fold_ctas.begin(), a.fold_ctas.end()), 1024, 0, s_fold>>>(
+            (const uint4*)cy.d, n / 1024, dout, cy.front, a.live_slot / 1024, epoch, 0, dsteps);
+      if (arm == 2)
+        OK(cudaMemcpyAsync(cy.d, hm, n, cudaMemcpyHostToDevice, cy.s[0]));
+      else
+        carry(a, cy, hm, slots, done.get(), epoch, arm != 1);
+      carry_sync(cy);
+      gbs[arm].push_back(n / (now_s() - t0) / 1e9);
+      OK(cudaStreamSynchronize(s_fold));
+    }
+  write(a, "carry",
+        "{\"bytes\":" + std::to_string(n) + ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) +
+            ",\"carry_gbs\":" + stats(gbs[0]) + ",\"pieces_gbs\":" + stats(gbs[1]) + ",\"one_copy_gbs\":" +
+            stats(gbs[2]) + ",\"beside_fold_gbs\":" + stats(gbs[3]) + "}");
+  return 0;
 }
 
 static int mode_fold_live(const Args& a) {
@@ -2601,6 +2653,7 @@ int main(int argc, char** argv) {
   if (a.mode == "foldtwo") return child == 0 ? st::fold_two_challenger(a, *two) : st::fold_two_prover(a, *two, child);
   if (a.mode == "attack") return child == 0 ? st::attack_challenger(*attack) : st::attack_prover(a, *attack, child);
   if (a.mode == "egress") return st::mode_egress(a);
+  if (a.mode == "carry") return st::mode_carry(a);
   fprintf(stderr, "unknown mode %s\n", a.mode.c_str());
   return 2;
 }
