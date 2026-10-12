@@ -562,7 +562,7 @@ static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
       uint32_t yy = y, mask = 0, th = K ? 2u : 0u, expect = (uint32_t)(K * blocks), pm = 0;
       uint64_t words = 0;
       void *scrub = nullptr, *g = nullptr;
-      OK(cudaMemset(flags, 0, 4096));
+      OK(cudaMemsetAsync(flags, 0, 4096, sa));  // on clevel's stream: the default stream doesn't order non-blocking ones
       *(volatile uint32_t*)hstart = 0;
       void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th, &g, &expect, &dstart};
       OK(cudaLaunchKernel((const void*)fn, dim3(blocks), dim3(256), args, 0, sa));
@@ -585,7 +585,8 @@ static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
       icache_host(31, CLEVEL_STEPS, 4, 1, y, x31);
       if (memcmp(x0, got, 16) || memcmp(x31, got + 124, 16) || got[128] != (uint32_t)(((warm + loads) % count) * sw) ||
           fl[1] != expect || fl[2] != expect * (uint32_t)((pn % count) * sw) || fl[3])
-        return fail("cpollute result, K=" + std::to_string(K));
+        return fail("cpollute result, K=" + std::to_string(K) + ": arrived " + std::to_string(fl[1]) + ", sum " +
+                    std::to_string(fl[2]) + ", timed out " + std::to_string(fl[3]));
       const double c = (double)*std::max_element(cy, cy + 32);
       j += std::string(first ? "" : ",") + "{\"modules\":" + std::to_string(K) + ",\"other_bytes\":" +
            std::to_string(65536 * K) + ",\"cycles_per_load\":" + num(c / (loads - 1)) + "}";
