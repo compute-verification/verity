@@ -78,6 +78,7 @@ struct State {
 };
 
 static State* S = nullptr;
+static std::vector<Rec> last_log;  // the stopped run's log, until the next start
 
 static int finish(State& st, int i) {
   cudaError_t e = cudaEventSynchronize(st.e1[i]);
@@ -184,6 +185,7 @@ extern "C" {
 int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int mode, uint64_t chunk_bytes,
              uint64_t tile_bytes, int depth, int priority, const uint8_t* seed) {
   if (tu::S || n <= 0 || depth <= 0 || (mode != tu::MODE_READ && mode != bw::TAG_GF31 && mode != bw::TAG_B3)) return -1;
+  tu::last_log.clear();
   auto* st = new tu::State();
   st->device = device;
   st->mode = mode;
@@ -248,13 +250,15 @@ void tu_progress(uint64_t* out) {
   out[1] = tu::S ? tu::S->chunks_done.load() : 0;
 }
 
-// Copies up to `max` log records from `first` into `out` (6 doubles each: t0_ms, t1_ms, bytes, region, root4, chunk).
+// Copies up to `max` log records from `first` into `out` (6 doubles each: t0_ms, t1_ms, bytes, region, root4, chunk),
+// the running top-up's or, once stopped, its last run's.
 int tu_log(uint64_t first, double* out, int max) {
-  if (!tu::S) return 0;
-  std::lock_guard<std::mutex> g(tu::S->m);
+  std::unique_lock<std::mutex> g;
+  if (tu::S) g = std::unique_lock<std::mutex>(tu::S->m);
+  const std::vector<tu::Rec>& log = tu::S ? tu::S->log : tu::last_log;
   int n = 0;
-  for (uint64_t k = first; k < tu::S->log.size() && n < max; ++k, ++n) {
-    const tu::Rec& r = tu::S->log[k];
+  for (uint64_t k = first; k < log.size() && n < max; ++k, ++n) {
+    const tu::Rec& r = log[k];
     double* o = out + 6 * n;
     o[0] = r.t0_ms;
     o[1] = r.t1_ms;
@@ -282,6 +286,7 @@ int tu_stop() {
   cudaFreeHost(st->roots_h);
   cudaFree(st->xr);
   cudaStreamDestroy(st->s);
+  tu::last_log = std::move(st->log);
   delete st;
   tu::S = nullptr;
   return rc;
