@@ -19,7 +19,7 @@ open FlockSoundness.Refine (lStep RsRounds zcOf lcOf rsT rsSws encs wOf HoloLcAn
   holoProg_of_checks RoundsWF)
 open Flock.RecAlgebra
 open FlockVBridge.Compiled (RepData AlgebraHolds AccHolds)
-open FlockVBridge.Runs (rhoOf tsOf zclc_of_residuals_dec)
+open FlockVBridge.Runs (rhoOf tsOf zclc_of_residuals_dec rows_coins)
 
 theorem list_filter_getElem!_of {α : Type} [Inhabited α] (p : α → Bool) :
     ∀ (l : List α) (K : ℕ), (∀ j < K, j < l.length ∧ p l[j]! = true) → ∀ j < K, (l.filter p)[j]! = l[j]!
@@ -66,6 +66,50 @@ theorem coins_ne_of_n {R : Array Flock.Round} (hwf : RoundsWF R) {j : ℕ} (h : 
     rw [getElem!_neg R j hge] at h
     exact h rfl
   exact ⟨hj, decide_eq_true (by rw [FlockSoundness.Refine.RoundsWF.get hwf j]; exact h)⟩
+
+/-- `rhoOf` reads only the zerocheck's residual rounds. -/
+theorem rhoOf_congr {R : Array Flock.Round} {t : Transcript} {m : ℕ} {P : ByteArray}
+    (h : ∀ i < m - 6, R[t.k + 3 + i]! = t.rounds[t.k + 3 + i]!) : rhoOf ⟨R, t.k, P⟩ m = rhoOf t m := by
+  unfold rhoOf
+  refine map_range_congr _ fun i hi => ?_
+  try dsimp only
+  rw [h i hi]
+
+/-- `tsOf` reads only the lincheck's rounds. -/
+theorem tsOf_congr {R : Array Flock.Round} {k₀ : ℕ} {P : ByteArray} {t : Transcript} {k₁ kLog : ℕ}
+    (h : ∀ j < kLog - 6, R[k₁ + 2 + j]! = t.rounds[k₁ + 2 + j]!) : tsOf ⟨R, k₀, P⟩ k₁ kLog = tsOf t k₁ kLog := by
+  unfold tsOf
+  refine map_range_congr _ fun j hj => ?_
+  try dsimp only
+  rw [h j hj]
+
+/-- **The points `verifierRows` reads at a holo record** (`rows_coins`): every round below `z_partial`'s issued coins,
+so they are the record's coins there, as at plain. -/
+theorem holoRows_coins {sh : Shape} {d : RepData} {v : Array F128} {info : Info Lin}
+    {kappa : Array (Array (Array F128))} (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa))
+    (hm : 14 ≤ sh.m) {t : Transcript} (ht : t.k = 0) (hd : d.rounds = t.rounds.map (·.coins))
+    (hpos : ∀ j < t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6),
+      j < t.rounds.size ∧ decide ((t.rounds[j]!).coins.size ≠ 0) = true) :
+    info.zc.r = pinned ++ (t.rounds[t.k + 1]!).coins ∧ info.zc.z = (t.rounds[t.k + 2]!).coins.getD 0 0 ∧
+      info.zc.rho = rhoOf t sh.m ∧ info.lc.fold.ts = tsOf t (t.k + 3 + (sh.m - 6)) sh.kLog := by
+  obtain ⟨R', hR'⟩ : ∃ R', R' = t.rounds.filter (fun x => decide (x.coins.size ≠ 0)) := ⟨_, rfl⟩
+  have hget : ∀ j < t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6), R'[j]! = t.rounds[j]! := by
+    rw [hR']
+    exact filter_getElem!_of _ t.rounds _ hpos
+  have hd' : d.rounds.filter (·.size ≠ 0) = R'.map (·.coins) := by
+    rw [hd, Array.filter_map, hR']
+    rfl
+  have hrows' : verifierRows sh (d.rounds.filter (·.size ≠ 0)) d.extras d.comb =
+      verifierRows sh d.rounds d.extras d.comb := by
+    unfold verifierRows
+    rw [ofRounds_filter]
+  obtain ⟨hr, hz, hrho, -, -, -, -, hts, -⟩ :=
+    rows_coins (hrows'.trans hrows) hm (t := ⟨R', t.k, t.pending⟩) ht hd' (noEmpty_filter d.rounds)
+  dsimp only at hr hz hrho hts
+  rw [hget (t.k + 1) (by omega)] at hr
+  rw [hget (t.k + 2) (by omega)] at hz
+  exact ⟨hr, hz, hrho.trans (rhoOf_congr fun i hi => hget (t.k + 3 + i) (by omega)),
+    hts.trans (tsOf_congr fun j hj => hget (t.k + 3 + (sh.m - 6) + 2 + j) (by omega))⟩
 
 /-- **The holo rep's program from E's zerocheck and lincheck.** `holoProg_of_checks` with its zerocheck and lincheck
 checks from `zclc_of_residuals_dec`, at the transcript's coins, where the lincheck's rounds end at `comb + h`
@@ -155,17 +199,11 @@ theorem holoProg_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (
     (noEmpty_filter d.rounds) hm hm14 hkL (fun v info kappa h => hzp v info kappa ((hrows _ _).symm.trans h)) hlp
     (fun v info kappa h => hfoldPts v info kappa ((hrows _ _).symm.trans h))
   dsimp only at hpc hfold hlfold hcomb hsize
-  have hrho : rhoOf ⟨R', t.k, t.pending⟩ st.m = rhoOf t st.m := by
-    unfold rhoOf
-    refine map_range_congr _ fun i hi => ?_
-    try dsimp only
-    rw [hget (t.k + 3 + i) (by omega)]
+  have hrho : rhoOf ⟨R', t.k, t.pending⟩ st.m = rhoOf t st.m :=
+    rhoOf_congr fun i hi => hget (t.k + 3 + i) (by omega)
   have hts : tsOf ⟨R', t.k, t.pending⟩ (t.k + 3 + (st.m - 6)) st.fold.kLog =
-      tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog := by
-    unfold tsOf
-    refine map_range_congr _ fun j hj => ?_
-    try dsimp only
-    rw [hget (t.k + 3 + (st.m - 6) + 2 + j) (by omega)]
+      tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog :=
+    tsOf_congr fun j hj => hget (t.k + 3 + (st.m - 6) + 2 + j) (by omega)
   rw [hget (t.k + 2) (by omega)] at hpc
   rw [hget (t.k + 1) (by omega), hget (t.k + 2) (by omega), hrho] at hfold
   rw [hget (t.k + 3 + (st.m - 6)) (by omega), hget (t.k + 3 + (st.m - 6) + 1) (by omega), hts,
