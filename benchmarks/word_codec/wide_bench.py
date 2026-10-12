@@ -108,7 +108,7 @@ class WLib:
         so.ww_sketch_tags.argtypes = [v, q, q, v, v, v]
         so.ww_sketch_commit.argtypes = [v, q, v, v, v]
         so.ww_sketch_leaves.argtypes = [v, q, v, q, q, v, v]
-        so.ww_sketch_subtrees.argtypes = [v, q, v, q, q, v, v]
+        so.ww_sketch_fold.argtypes = [v, q, q, q, v]
         so.ww_sketch_tree.argtypes = [v, q, i, v, v]
         cs = (ctypes.c_int * 20)()
         so.ww_constants(cs)
@@ -745,10 +745,11 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
     sketch's (`pass_sketch_commit`), and a third arm commits the pass itself as it goes: each linear's tags go to one
     slot of a two-slot ring, which L2 keeps under the weights' evict-first loads, and its leaves are hashed from there
     on the second stream (`ww_sketch_leaves`), the tree after the last (`ww_sketch_tree`); y_leaves is its excess over
-    the pass alone, and `root_equal` its gate: its root is the pass commit's over the same tags written out. A fourth
-    ("subtrees", gate `root_equal_sub`) hashes each linear's leaves and their tree up SUB levels in shared memory
-    (`ww_sketch_subtrees`, when every linear's leaves are a multiple of 2^SUB), so only one node in 2^SUB leaves is
-    written, and the tree goes on from there; a fifth ("apart") hashes the GEMMs' sketches from a ring first.
+    the pass alone, and `root_equal` its gate: its root is the pass commit's over the same tags written out.
+    "leaves_hi" is the same on a high-priority second stream, whose blocks go ahead of the GEMM's queued CTAs, and
+    "fold_hi" also folds each linear's leaves SUB levels while L2 holds them (`ww_sketch_fold`, when every linear's
+    leaves are a multiple of 2^SUB; gate `root_equal_fold`), so the tree after the last reads back only level SUB;
+    "apart" hashes the GEMMs' sketches from a ring first.
     profile: the gate, then one such pass of `layers` layers between cudaProfilerStart and Stop, untimed."""
     f = lib.field
     layers = layers or LAYERS
@@ -773,7 +774,7 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
     ring = [torch.empty(32 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
     ring_sk = [torch.empty(64 * max(nv.values()), dtype=torch.uint8, device="cuda") for _ in range(2)] if sketch else []
     commit_fn = "ww_sketch_commit" if sketch else "ww_commit"
-    sa, sb = torch.cuda.Stream(), torch.cuda.Stream()
+    sa, sb, sh = torch.cuda.Stream(), torch.cuda.Stream(), torch.cuda.Stream(priority=-1)
     ev_g, ev_l = [torch.cuda.Event() for _ in range(2)], [torch.cuda.Event() for _ in range(2)]
     so = lib.so
     out = {"k": k, "sketch": sketch, "per_batch": {}}
@@ -792,10 +793,12 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
             return so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n, kd, 0, 0,
                               seed_buf, tags, 0, sa.cuda_stream)
 
-        def committing(root, apart: bool = False, hash_: bool = True, sub: bool = False) -> int:
+        def committing(root, apart: bool = False, hash_: bool = True, fold: bool = False, hi: bool = False) -> int:
             """The pass committing as it goes; apart: the GEMMs write sketches to a ring (`ww_gemm_sketch` without
             tags) and the second stream hashes them (`ww_sketch_tags`) before the leaves; hash_ False: only the GEMMs
-            (apart's own base); sub: `ww_sketch_subtrees` for the leaves, the tree from level SUB."""
+            (apart's own base); fold: each linear's leaves folded by `ww_sketch_fold`, the tree from level SUB; hi:
+            the second stream at high priority."""
+            sc = sh if hi else sb
             rc, j, i = 0, 0, 0
             for _ in range(layers):
                 for name in cases:
@@ -805,19 +808,20 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
                     rc |= gemm(name, ptr(ring[r]), j, ptr(ring_sk[r]) if apart else None)
                     if hash_:
                         ev_g[r].record(sa)
-                        sb.wait_event(ev_g[r])
+                        sc.wait_event(ev_g[r])
                         if apart:
-                            rc |= so.ww_sketch_tags(ptr(ring_sk[r]), nv[name], j, seed_buf, ptr(ring[r]), sb.cuda_stream)
-                        rc |= getattr(so, "ww_sketch_subtrees" if sub else "ww_sketch_leaves")(
-                            ptr(pws), pblocks, ptr(ring[r]), j, nv[name], seed_buf, sb.cuda_stream)
-                        ev_l[r].record(sb)
+                            rc |= so.ww_sketch_tags(ptr(ring_sk[r]), nv[name], j, seed_buf, ptr(ring[r]), sc.cuda_stream)
+                        rc |= so.ww_sketch_leaves(ptr(pws), pblocks, ptr(ring[r]), j, nv[name], seed_buf, sc.cuda_stream)
+                        if fold:
+                            rc |= so.ww_sketch_fold(ptr(pws), pblocks, j, nv[name], sc.cuda_stream)
+                        ev_l[r].record(sc)
                     j, i = j + nv[name], i + 1
-            tree = so.ww_sketch_tree(ptr(pws), pblocks, lib.sub if sub else 0, root, sb.cuda_stream) if hash_ else 0
+            tree = so.ww_sketch_tree(ptr(pws), pblocks, lib.sub if fold else 0, root, sc.cuda_stream) if hash_ else 0
             return rc | tree
 
         arms = {"root_equal": {}, "root_equal_apart": {"apart": True}}
         if sketch and all(v % (16 << lib.sub) == 0 for v in nv.values()):
-            arms["root_equal_sub"] = {"sub": True}
+            arms["root_equal_fold"] = {"fold": True, "hi": True}
 
         if sketch and "root_equal" not in out:
             tags0, rc, j = so.ww_workspace_tags(ptr(pws), pblocks), 0, 0
@@ -858,10 +862,11 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
                     raise RuntimeError(f"{commit_fn}: error")
                 c_end.record(sb)
             rc, j = 0, 0
-            if mode in ("leaves", "subtrees", "apart", "alone_s"):
-                rc = committing(None, mode in ("apart", "alone_s"), mode != "alone_s", mode == "subtrees")
+            if mode in ("leaves", "leaves_hi", "fold_hi", "apart", "alone_s"):
+                rc = committing(None, mode in ("apart", "alone_s"), mode != "alone_s", mode == "fold_hi",
+                                mode.endswith("_hi"))
                 if mode != "alone_s":
-                    c_end.record(sb)
+                    c_end.record(sh if mode.endswith("_hi") else sb)
             else:
                 for _ in range(layers):
                     for name in cases:
@@ -877,9 +882,9 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
 
         modes = ["alone", "commit"]
         if sketch and out["root_equal"]:
-            modes.append("leaves")
-        if sketch and out.get("root_equal_sub"):
-            modes.append("subtrees")
+            modes += ["leaves", "leaves_hi"]
+        if sketch and out.get("root_equal_fold"):
+            modes.append("fold_hi")
         if sketch and out["root_equal_apart"]:
             modes += ["alone_s", "apart"]
         for m in modes:
@@ -899,9 +904,10 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log,
         if "leaves" in med:
             out["per_batch"][mb].update(y_leaves=(med["leaves"] - ta) / native)
             line += f"; committing as it goes {med['leaves'] / native:.3f}x (+{(med['leaves'] - ta) / native:.3f})"
-        if "subtrees" in med:
-            out["per_batch"][mb].update(y_subtrees=(med["subtrees"] - ta) / native)
-            line += f"; through subtrees {med['subtrees'] / native:.3f}x (+{(med['subtrees'] - ta) / native:.3f})"
+        for m, what in (("leaves_hi", "at high priority"), ("fold_hi", "folded at high priority")):
+            if m in med:
+                out["per_batch"][mb][f"y_{m}"] = (med[m] - ta) / native
+                line += f"; {what} {med[m] / native:.3f}x (+{(med[m] - ta) / native:.3f})"
         if "apart" in med:
             out["per_batch"][mb].update(y_apart=(med["apart"] - med["alone_s"]) / native)
             line += (f"; hashed apart from the sketch ring {med['apart'] / native:.3f}x (sketch GEMMs alone "
@@ -977,8 +983,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
     with the commit beside the next pass (arithmetic ".../commit-overlapped"). The sketch's rows give the same under
     ".../sketch" (hashed in the kernel, τ the sketch's), and ".../sketch-apart" (hashed by a kernel after each
     call); and the passes that commit as they go, at their whole pass's time over native (".../leaves-per-linear",
-    ".../subtrees-per-linear", the commit their excess over the same GEMMs alone, which for ".../sketch-apart/..."
-    includes the hash)."""
+    its ".../hi" on a high-priority stream, ".../folded-per-linear/hi", the commit their excess over the same GEMMs
+    alone, which for ".../sketch-apart/..." includes the hash)."""
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
@@ -1020,7 +1026,8 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
                 out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped"))
                 ym = o.get("y_mode", {})
                 for mode, base, suffix in (("leaves", "alone", "/sketch/leaves-per-linear"),
-                                           ("subtrees", "alone", "/sketch/subtrees-per-linear"),
+                                           ("leaves_hi", "alone", "/sketch/leaves-per-linear/hi"),
+                                           ("fold_hi", "alone", "/sketch/folded-per-linear/hi"),
                                            ("apart", "alone_s", "/sketch-apart/leaves-per-linear")):
                     if mode in ym:
                         yc = max(0.0, ym[mode] - ym[base])

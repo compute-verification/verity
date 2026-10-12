@@ -95,7 +95,7 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #define WW_SKEND 0
 #endif
 // WW_MAXREG: the fused GEMM's registers a thread (`__maxnreg__`, in place of WW_OCC's bounds), such as 160, at which
-// three CTAs an SM leave a warp of `sketch_subtrees` room beside them.
+// three CTAs an SM leave 4096 registers to the commit's kernels beside them.
 #ifndef WW_MAXREG
 #define WW_MAXREG 0
 #endif
@@ -1340,29 +1340,8 @@ __global__ void __launch_bounds__(128) sketch_leaves(const uint32_t* __restrict_
   for (int e = 0; e < 8; ++e) leaves[leaf * 8 + e] = s[e];
 }
 
-// `sketch_leaves` and the tree over them up SUB levels in shared memory, a block of 2^SUB threads 2^SUB leaves (leaf0
-// a multiple of 2^SUB): only the level-SUB nodes are written, node leaf0 / 2^SUB + b at `nodes` (the level's). They are
-// the pass's level-SUB nodes when every level-SUB node's leaves are all there, as RFC 6962 carries only a level's last.
-// One warp a block: its 32 · 96 registers fit in the 4096 that three 156-register GEMM CTAs leave an SM, so it runs
-// beside the GEMM rather than in its wave tails.
-constexpr int SUB = 5;
-__global__ void __launch_bounds__(1 << SUB) sketch_subtrees(const uint32_t* __restrict__ tags, uint64_t B, uint64_t leaf0,
-                                                            bw::Mid leafmid, uint64_t* __restrict__ nodes) {
-  __shared__ uint64_t nd[2][1 << SUB][8];
-  const int t = threadIdx.x;
-  const uint64_t i = ((uint64_t)blockIdx.x << SUB) + t;
-  uint64_t s[8];
-  sketch_leaf(tags + 16 * i * 8, B, leaf0 + i, leafmid, s);
-#pragma unroll
-  for (int e = 0; e < 8; ++e) nd[0][t][e] = s[e];
-  __syncthreads();
-#pragma unroll 1
-  for (int lv = 0; lv < SUB; ++lv) {
-    if (t < ((1 << SUB) >> (lv + 1))) bw::node_hash(nd[lv & 1][2 * t], nd[lv & 1][2 * t + 1], nd[(lv + 1) & 1][t]);
-    __syncthreads();
-  }
-  if (t < 8) nodes[((leaf0 >> SUB) + blockIdx.x) * 8 + t] = nd[SUB & 1][0][t];
-}
+// The tree levels a linear's leaves fold into (`ww_sketch_fold`) before the pass's tree goes on from level SUB.
+constexpr int SUB = 6;
 
 __global__ void dtw_kernel(uint32_t* out) {
   uint32_t v[N], dv[N];
@@ -1716,21 +1695,23 @@ int ww_sketch_leaves(void* workspace, uint64_t blocks, const uint32_t* tags, uin
   return cudaGetLastError() ? 4 : 0;
 }
 
-// `ww_sketch_leaves` through `sketch_subtrees`: the pass's level-SUB nodes over its leaves [jbase / 16, (jbase + n) / 16),
-// the leaves themselves never written; jbase and n multiples of 16 · 2^SUB.
-int ww_sketch_subtrees(void* workspace, uint64_t blocks, const uint32_t* tags, uint64_t jbase, uint64_t n,
-                       const uint8_t* seed, cudaStream_t s) {
+// The tree's levels 1 … SUB over the leaves [jbase / 16, (jbase + n) / 16) that `ww_sketch_leaves` wrote, while L2
+// still holds them (jbase and n multiples of 16 · 2^SUB, so no level of the range carries a node): `ww_sketch_tree`
+// from level SUB then reads back 64 B a 2^SUB leaves rather than every leaf.
+int ww_sketch_fold(void* workspace, uint64_t blocks, uint64_t jbase, uint64_t n, cudaStream_t s) {
   const uint64_t span = 16ull << SUB;
   if (jbase % span || n % span || jbase + n > blocks) return 2;
   if (!n) return 0;
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
   if (p.lv.n.size() <= (size_t)SUB) return 2;
-  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, SKETCH_NAME, seed);
-  sketch_subtrees<<<(unsigned)(n / span), 1 << SUB, 0, s>>>(tags, blocks, jbase / 16, lm, p.nodes + p.lv.off[SUB] * 8);
+  uint64_t l0 = jbase / 16, c = n / 16;
+  for (int k = 0; k < SUB; ++k, l0 >>= 1, c >>= 1)
+    bw::node_level<<<(unsigned)((c / 2 + 127) / 128), 128, 0, s>>>(p.nodes + (p.lv.off[k] + l0) * 8, c,
+                                                                    p.nodes + (p.lv.off[k + 1] + l0 / 2) * 8);
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The tree from level `from` (0: the leaves `ww_sketch_leaves` wrote; SUB: the nodes `ww_sketch_subtrees` wrote); with
+// The tree from level `from` (0: the leaves `ww_sketch_leaves` wrote; SUB: the nodes `ww_sketch_fold` wrote); with
 // root non-null, the root's 64 bytes (and a sync).
 int ww_sketch_tree(void* workspace, uint64_t blocks, int from, uint8_t* root, cudaStream_t s) {
   bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
