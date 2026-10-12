@@ -12,7 +12,9 @@
 # adversary's CPU read alone and beside the GPUs' copy engines (loop.cu), the full loop (copy engine: KS 4 by groups,
 # KS 1 and 4 by chunks; zero copy: KS 1 by chunks), and the adversary's CPU read timed with each GPU's copy engines
 # (dram.c and pcie.cu, as run_pcie.sh); then hostproc.py alone and beside the loop, the adversary, and the GPUs'
-# receipts alone. CPU receipts hash their leaves on the SHA extensions (SHA=ni) unless SHA=c.
+# receipts alone. CPU receipts hash their leaves on the SHA extensions (SHA=ni) unless SHA=c. SWEEP=scale instead runs,
+# REPS (3) times on the last 10, 16 and all 22 worker cores, the adversary's CPU read alone, beside the GPUs' copy-engine
+# receipts and timed with their copy engines, and the loop (copy engine; CPU receipts as HONEST, default KS 1 by chunks).
 # All host-tier memory is on NUMA node GPU_NODE (0), the node of the worker CPUs: one socket's DRAM.
 # Env: NGPU (1), REPS (4), SECONDS_EACH (3), LOOP_GRID (32), WORKERS (52-95), HOST_CPUS (GPU driver threads, 48,49),
 #      PROBE_CPU (50), PROBE_SECONDS (5), PROBE_REPS (2), GPU_NODE (0), GPU_ON, SHA (ni).
@@ -42,8 +44,30 @@ if [ "${1:-}" = leased ]; then
     [ "${PIPESTATUS[0]}" = 0 ] || { echo "gate $1 failed"; exit 3; }
   }
   for k in 16 4 1; do gate "gate$k" --ks "$k" --sha "$SHA"; done
+  # the adversary's CPU read (dram.c) on CPUs $1, alone or timed together with each GPU's copy engines (pcie.cu)
+  D() { "$B/dram" --cpus "$1" --node "${GPU_NODE:-0}" --kernel multi --thp 1 --mib 256 --seconds "$S" "${@:2}"; }
+  with_h2d() {
+    t=$(python3 -c 'import time; print(time.time() + 8)')
+    D "$1" --label cpu-with-h2d --start-at "$t" > "$B/d.json" &
+    taskset -c "$H" "$B/pcie" --seconds "$S" --mib 1024 --host-node "${GPU_NODE:-0}" --modes h2d --start-at "$t" \
+      | sed "s/^{/{\"label\": \"with-cpu-h2d\", \"cpus\": \"$1\", \"cuda_visible\": \"$CUDA_VISIBLE_DEVICES\", /" | tee -a "$O/pcie.jsonl"
+    wait; tee -a "$O/dram.jsonl" < "$B/d.json"
+  }
   gate gate4-dma --ks 4 --sha "$SHA" --gpu-mode dma
   for k in 4 1; do gate "gate$k-chunk" --ks "$k" --sha "$SHA" --chunk 1; done
+  if [ "${SWEEP:-}" = scale ]; then
+    # the gap against the number of cores: the adversary's best and the loop on the last 10, 16 and 22 worker cores
+    for r in $(seq "${REPS:-3}"); do
+      for w in "$(( ${W##*-} - 19 ))-${W##*-}" "$(( ${W##*-} - 31 ))-${W##*-}" "$W"; do
+        one --label adv --gpus 0 --adv-cpus "$w"
+        one --label gpu+adv --gpus "$N" --grid 4 --gpu-mode dma --adv-cpus "$w"
+        # shellcheck disable=SC2086
+        one --label honest --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$w" --sha "$SHA" ${HONEST:---ks 1 --chunk 1}
+        with_h2d "$w"
+      done
+    done
+    exit 0
+  fi
   for r in $(seq "${REPS:-4}"); do
     one --label cpu --gpus 0 --cpus "$W" --ks 1 --sha "$SHA"
     for k in 1 4; do one --label cpu --gpus 0 --cpus "$W" --ks "$k" --sha "$SHA" --chunk 1; done
@@ -53,16 +77,8 @@ if [ "${1:-}" = leased ]; then
     one --label honest --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$W" --ks 4 --sha "$SHA"
     for k in 1 4; do one --label honest --gpus "$N" --grid "$G" --gpu-mode dma --cpus "$W" --ks "$k" --sha "$SHA" --chunk 1; done
     one --label honest --gpus "$N" --grid "$G" --cpus "$W" --ks 1 --sha "$SHA" --chunk 1
-    # the adversary's CPU read beside the GPUs' copy engines, timed together
-    D() { "$B/dram" --cpus "$W" --node "${GPU_NODE:-0}" --kernel multi --thp 1 --mib 256 --seconds "$S" "$@"; }
-    D --label cpu-alone | tee -a "$O/dram.jsonl"
-    for m in h2d; do
-      t=$(python3 -c 'import time; print(time.time() + 8)')
-      D --label "cpu-with-$m" --start-at "$t" > "$B/d.json" &
-      taskset -c "$H" "$B/pcie" --seconds "$S" --mib 1024 --host-node "${GPU_NODE:-0}" --modes "$m" --start-at "$t" \
-        | sed "s/^{/{\"label\": \"with-cpu-$m\", \"cuda_visible\": \"$CUDA_VISIBLE_DEVICES\", /" | tee -a "$O/pcie.jsonl"
-      wait; tee -a "$O/dram.jsonl" < "$B/d.json"
-    done
+    D "$W" --label cpu-alone | tee -a "$O/dram.jsonl"
+    with_h2d "$W"
   done
   probe() { taskset -c "$PR" python3 hostproc.py --seconds "${PROBE_SECONDS:-5}" "$@" | tee -a "$O/hostproc.jsonl"; }
   for r in $(seq "${PROBE_REPS:-2}"); do
