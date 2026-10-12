@@ -34,6 +34,7 @@ import Proofs.Flock.Recursive.FirewallFollows
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
+import Proofs.Flock.Recursive.ForkLast
 import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Recursive.AuditC3Proof
 import Proofs.Flock.Recursive.Witness
