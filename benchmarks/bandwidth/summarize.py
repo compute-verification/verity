@@ -52,11 +52,12 @@ def summarize(out: Path) -> dict:
              "cold_tags_ms_p50": cold["tags_ms"]["p50"], "cold_tree_ms_p50": cold["tree_ms"]["p50"],
              "cold_host_e2e_ms_p50": cold["host_e2e_ms"]["p50"], "cold_host_e2e_ms_p99": cold["host_e2e_ms"]["p99"],
              "warm_device_ms_p50": warm["device_ms"]["p50"]}
-        clean = timing.get(f"{key}_clean")
-        if clean:
-            t.update({"clean_device_ms_p50": clean["device_ms"]["p50"], "clean_device_ms_p99": clean["device_ms"]["p99"],
-                      "clean_tags_ms_p50": clean["tags_ms"]["p50"], "clean_host_e2e_ms_p50": clean["host_e2e_ms"]["p50"],
-                      "clean_host_e2e_ms_p99": clean["host_e2e_ms"]["p99"]})
+        for cond in ("clean", "idle", "busy"):
+            c = timing.get(f"{key}_{cond}")
+            if c:
+                t.update({f"{cond}_device_ms_p50": c["device_ms"]["p50"], f"{cond}_device_ms_p99": c["device_ms"]["p99"],
+                          f"{cond}_tags_ms_p50": c["tags_ms"]["p50"], f"{cond}_host_e2e_ms_p50": c["host_e2e_ms"]["p50"],
+                          f"{cond}_host_e2e_ms_p99": c["host_e2e_ms"]["p99"]})
         t["pass_gbs"] = store / (t["cold_device_ms_p50"] * 1e-3) / 1e9
         t["pass_over_raw_read"] = t["cold_device_ms_p50"] / raw
         t["skip_device_ms_p50"] = {f"{r['f']:.2f}": r["device_ms"]["p50"] for r in timing[f"{key}_skip"]}
@@ -84,23 +85,28 @@ def summarize(out: Path) -> dict:
         tags[name] = t
     s["tags"] = tags
     s["side_channel_bytes_per_s"] = side
-    if windows:
-        w = {}
-        for name in tags:
-            rows = [r for r in windows["results"] if r["tag"] == name]
-            honest = [r for r in rows if not r["skipped_fraction"]]
-            el = sorted(r["elapsed_ns"] for r in honest)
-            w[name] = {"honest": len(honest), "accepted": sum(r["accepted"] for r in honest),
-                       "elapsed_ns_p50": el[len(el) // 2] if el else None, "elapsed_ns_max": el[-1] if el else None,
-                       "samples": windows.get("samples"),
-                       "deadline_ns": honest[0]["deadline_ns"] if honest else None,
-                       "failures": sorted({r["failure"] for r in honest if r["failure"]}),
-                       "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}
-                                 for r in rows if r["skipped_fraction"]],
-                       "openings_check": [{"accepted": r["accepted"], "failure": r["failure"]}
-                                          for r in windows.get("openings_check", []) if r["tag"] == name]}
-        s["windows"] = w
+    for label, file in (("windows", "windows.json"), ("windows_busy", "windows_busy.json")):
+        w = _load(out, file)
+        if w:
+            s[label] = {name: _windows(w, name) for name in tags if any(r["tag"] == name for r in w["results"])}
     return s
+
+
+def _windows(windows: dict, name: str) -> dict:
+    rows = [r for r in windows["results"] if r["tag"] == name]
+    honest = [r for r in rows if not r["skipped_fraction"]]
+    el = sorted(r["elapsed_ns"] for r in honest)
+    dev = sorted(r["device_pass_ms"] for r in honest if "device_pass_ms" in r)
+    return {"honest": len(honest), "accepted": sum(r["accepted"] for r in honest),
+            "elapsed_ns_p50": el[len(el) // 2] if el else None, "elapsed_ns_max": el[-1] if el else None,
+            "device_pass_ms_p50": dev[len(dev) // 2] if dev else None, "device_pass_ms_max": dev[-1] if dev else None,
+            "samples": windows.get("samples"), "busy_reads": windows.get("busy_reads", 0),
+            "deadline_ns": honest[0]["deadline_ns"] if honest else None,
+            "failures": sorted({r["failure"] for r in honest if r["failure"]}),
+            "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}
+                      for r in rows if r["skipped_fraction"]],
+            "openings_check": [{"accepted": r["accepted"], "failure": r["failure"]}
+                               for r in windows.get("openings_check", []) if r["tag"] == name]}
 
 
 def main(argv: list[str]) -> int:
