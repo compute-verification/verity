@@ -273,8 +273,8 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
             best.append(a.elapsed_time(b))
         ms[name] = min(best)
     full = reader.levels(reader.commit(ys, 0, n // rb.PER_LEAF), 0, pad=True)
-    segment_roots = all([digest(roots[S, s][0]) for s in range(S)] == [digest(x) for x in full[merkle_depth(n // S // rb.PER_LEAF)]]
-                        for S in SEGMENTS)
+    segment_roots = all([digest(roots[S, s][0]) for s in range(S)]
+                        == [digest(x) for x in full[merkle_depth(n // S // rb.PER_LEAF)]] for S in SEGMENTS)
     nbytes = n * BLOCK
     by_load = {load: {"gb_s": nbytes / ms[f"receipts/{load}"] / 1e6,
                       "z_gb_s": nbytes / (ms[f"receipts_z_half/{load}"] * n / half) / 1e6,
