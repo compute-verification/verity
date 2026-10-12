@@ -13,7 +13,8 @@ a named shape over its parameters; an assumption is an instance a guarantee take
   enters.
 * **Completeness** (`Complete`): a part's boundary crossings are every way it affects the rest. What the rest sees is a
   function of the rest's own inputs and the content that crossed, and that content is carried by the bits the ledger
-  counts as crossing.
+  counts as crossing. With a capacity it bounds the content of a crossing with no protocol at all
+  (`Accounting.Ledger.contentAtMost_of_capacity`).
 * **Identity** (`Identity`): the verifier's transcript was produced by the declared part: it is a function of what the
   part held when the window opened and what crossed into it.
 * **Latency** (`Latency`): a chain of `k` dependent operations completed within a window of `n` ticks has `k·τ ≤ n`.
