@@ -1,8 +1,8 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
 `flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the coin server's
-record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-014245-8bec`
+record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-023435-3f97`
 (#1759's `pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
-Hello and R's top registered at staging): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
+Hello, R's top registered at staging and R's shape in META): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (33 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
 the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
@@ -12,7 +12,9 @@ statement's `verity/registration/v2` circuit registration, `circuit-registration
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
 `--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
 with R's stream and no registered top, and R's binding round committing a top other than the registered one; a
-registration naming R needs R's stream. The plain session (`rec-coins`' inner session) is read as before, its two reps'
+registration naming R needs R's stream. R's `m` and claims are META's `stacked`, the shape staging committed R at (the
+registered cap fixes neither: m 22 to 24 share it), and R's stream is held to that shape's rounds: a META naming no shape or
+another, and R's stream opened at another `m` over the registered cap, are refused by name. The plain session (`rec-coins`' inner session) is read as before, its two reps'
 `c_k` and nothing else."""
 from __future__ import annotations
 
@@ -48,7 +50,7 @@ def _fixture(d: Path) -> Path:
 
 
 def _inner(circuit: Path | None = None, registration: Path | None = None) -> list[str]:
-    """The inner circuit's header and its circuit registration, 8bec's when not given."""
+    """The inner circuit's header and its circuit registration, 3f97's when not given."""
     return ["--rec-inner-circuit", str(circuit or _fixture(C3) / "circuit-meta.txt"),
             "--rec-inner-registration", str(registration or C3 / "circuit-registration.json")]
 
@@ -58,8 +60,8 @@ def _meta_registration() -> str:
 
 
 def _registered(tmp_path: Path, change, bind: bool = True) -> list[str]:
-    """8bec's circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
-    record's digest when ``bind`` (as a statement staged with that record would be), 8bec's own otherwise."""
+    """3f97's circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
+    record's digest when ``bind`` (as a statement staged with that record would be), 3f97's own otherwise."""
     from verity.core.protocols.sampled_proofs.one_stage.registration import digest
 
     rec = json.loads((_fixture(C3) / "circuit-registration.json").read_text())
