@@ -27,6 +27,7 @@ SSH_USER=research                                  # Nebius reserves root and ad
 RATE_USD_PER_HOUR=${NEBIUS_RATE_USD_PER_HOUR:-14.40}   # the RTX PRO 6000 preset's; any other shape states its own
 FS_ID=${NEBIUS_FILESYSTEM_ID:-}                    # a shared filesystem to attach read-write, mounted at /workspace/fs
 PREEMPTIBLE=${NEBIUS_PREEMPTIBLE:-}                # 1: a preemptible VM, stopped on preemption (its disks are kept)
+SPOT_POLICY_ID=${NEBIUS_SPOT_POLICY_ID:-}          # a preemptible VM's price cap (`nebius billing pricing-policy`), else the spot price
 MACHINE=${VM_NAME}
 PROJECT=verity
 

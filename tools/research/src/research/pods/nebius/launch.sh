@@ -21,8 +21,8 @@
 #                      launching one; `none` for no lease) is attached so the VM's lease can stop the VM itself
 # Other shapes and regions come from the environment: NEBIUS_VM_NAME, NEBIUS_REGION, NEBIUS_PROJECT_ID, NEBIUS_PLATFORM_PREFIX (cpu-d3,
 # gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_FILESYSTEM_ID attaches an
-# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible.  GPU clocks are locked only on
-# gpu-rtx6000.
+# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour cap of
+# the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -87,7 +87,7 @@ PY
 # vm_body ... : the instance create request
 vm_body() {
   VB_NAME=$VM_NAME VB_PARENT=$1 VB_PLATFORM=$2 VB_PRESET=$PRESET VB_BOOT=$3 VB_DATA=$4 VB_DEV=$DATA_DEVICE_ID VB_SUBNET=$5 VB_SG=$6 \
-    VB_SA=$7 VB_UD=$8 VB_FS=$FS_ID VB_PRE=$PREEMPTIBLE python3 -c '
+    VB_SA=$7 VB_UD=$8 VB_FS=$FS_ID VB_PRE=$PREEMPTIBLE VB_SPOT=$SPOT_POLICY_ID python3 -c '
 import json, os
 e = os.environ
 spec = {"resources": {"platform": e["VB_PLATFORM"], "preset": e["VB_PRESET"]},
@@ -100,6 +100,11 @@ if e["VB_FS"]:
     spec["filesystems"] = [{"attach_mode": "READ_WRITE", "mount_tag": "vy-fs", "existing_filesystem": {"id": e["VB_FS"]}}]
 if e["VB_PRE"] == "1":
     spec["preemptible"] = {"on_preemption": "STOP", "priority": 3}
+    spec["recovery_policy"] = "FAIL"
+    if e["VB_SPOT"]:
+        spec["spot_pricing_policy"] = {"id": e["VB_SPOT"]}
+    else:
+        spec["follows_spot_price"] = {}
 if e["VB_SA"] not in ("", "none"):
     spec["service_account_id"] = e["VB_SA"]
 print(json.dumps({"metadata": {"name": e["VB_NAME"], "parent_id": e["VB_PARENT"], "labels": {"machine": e["VB_NAME"], "project": "verity"}},
