@@ -1,7 +1,7 @@
 """The rate audit's γ bound as arithmetic: every term, for a model shape on one RTX PRO 6000.
 
-γ_bw = 1 − cert_in / Q_honest, where Q_honest is every byte a decode step reads from device memory (E, the KV cache
-and activations) and cert_in the cores' ingress from HBM the audit certifies (the actual-circuit model, v2.2). The
+γ_bw = 1 − cert_bw / Q_honest, where Q_honest is every byte a decode step reads from device memory (E, the KV cache
+and activations) and cert_bw the chip's reads from HBM the audit certifies (the actual-circuit model, v2.4). The
 terms, each a fraction of the certified store E (or of E plus the KV cache when the KV cache is encoded and certified
 too):
 
@@ -11,7 +11,9 @@ too):
   so the term is s_word · f_cap, s_word the share of its slot a rebuilt word saves (`s_word`). s_c, the payload's
   compressibility, is an assumption about data the operator chooses: a compressor bounds it from one side only. W can
   be registered with its s_c; the prompts can't, so the KV cache's payloads count as free (`rebuild`), and the KV
-  words may take a codec and rounds of their own (`Point.kv_codec`, `Point.kv_rounds`).
+  words may take a codec and rounds of their own (`Point.kv_codec`, `Point.kv_rounds`). The adversary's costs
+  default to the honest's measured kernels; `Point.adversary` puts them elsewhere, such as at the squaring floor
+  WorkHardness is stated at (`at_floor`, `sq_floor`).
 - `mu_slot`: slot bits that carry no information (the top 3 bits of a word mod 2^61 − 1), which an adversary drops.
 - `mu_sample`: wrong sketches the verifier's spot checks miss, for a time-averaged claim with total rejection.
 - `mu_lambda`: the random oracle's guessing allowance per tile (AuditRO's λ).
@@ -240,6 +242,29 @@ def extrapolated(bits: int) -> Codec:
     return Codec(eps, p767.r * bits / 768, p767.y + eps - p767.eps, p767.tau, bits, bits, bits)
 
 
+SMS = 188
+ISSUE_LANES = 128  # an SM's four schedulers, one 32-lane instruction each a clock
+
+
+def sq_floor(bits: float, ops: float | None = None, clock_mhz: float = CLOCK_LOCKED_MHZ) -> float:
+    """A squaring mod p (⌈log₂ p⌉ = bits) at the device's issue bound, in passes of the words squared [estimate].
+
+    Schoolbook on L = bits/32 limbs: L(L + 1)/2 products (IMAD.WIDE with accumulate) and as many carry adds, 2L to
+    double the cross terms and 3L for a pseudo-Mersenne fold, so L(L + 1) + 5L instructions, 720 at 768 bits;
+    Karatsuba trades products for adds and issues no fewer there. A pipe slower than the issue rate only raises it,
+    so as the adversary's cost it is low unless some mix issues fewer instructions; tensor cores enter as θ. At the
+    locked clock, as the measured ε and r are."""
+    limbs = bits / 32
+    n = limbs * (limbs + 1) + 5 * limbs if ops is None else ops
+    return R_READ * n / (bits / 8 * SMS * clock_mhz * 1e6 * ISSUE_LANES)
+
+
+def at_floor(c: Codec, sq: float, rounds: int = 1, eta: float = 0.1) -> Codec:
+    """The adversary's codec under WorkHardness(p, k, η) with a squaring every `sq` passes: its decode is `rounds`
+    squarings and its encode (1 − η)·rounds·(⌈log₂ p⌉ − 2) of them."""
+    return replace(c, eps=rounds * sq, r=(1 - eta) * (math.ceil(c.p_bits) - 2))
+
+
 @dataclass(frozen=True)
 class Point:
     shape: Shape
@@ -251,6 +276,8 @@ class Point:
     kv_rounds: int = 1  # Sloth rounds on the KV cache's words, k for E: its payloads are free, so it may want more
     kv_codec: Codec | None = None  # the KV words' codec, at one round (E's when None); its ε, r and slot are used
     out_tokens: int = 0  # tokens a sequence generates, over which its prompt's KV encode is spread (0: not counted)
+    adversary: Codec | None = None  # the adversary's ε and r on E's words (`at_floor`); the honest's when None
+    kv_adversary: Codec | None = None  # the same on the KV words, at one round; E's adversary's when no kv_codec
     kappa: float = 1.0
     theta: float = 0.0
     other: float = 0.0  # μ_sample + μ_λ (+ μ_side, zero under isolation)
@@ -277,12 +304,15 @@ class Point:
         budget = d * self.kappa * (1 + self.theta) - c.tau
         chip = mu_chip(cert)
         slot = a * mu_slot(c.p_bits, c.slot_bits) + b * mu_slot(kc.p_bits, kc.slot_bits)
+        ca = self.adversary or c
+        ka = self.kv_adversary or (kc if self.kv_codec else ca)
+        enc_kv_a = self.kv_rounds * ka.r * ka.eps
         # W is registered with its s_c, so the E words kept are decoded; the prompts aren't, so no KV word is.
-        rebuilt = min(1.0 - chip, rebuild(budget, c.eps * a, [(a, (c.r - 1) * c.eps, s_word(c, self.s_c)),
-                                                              (b, enc_kv, s_word(kc, 1.0))]))
+        rebuilt = min(1.0 - chip, rebuild(budget, ca.eps * a, [(a, (ca.r - 1) * ca.eps, s_word(c, self.s_c)),
+                                                               (b, enc_kv_a, s_word(kc, 1.0))]))
         # Without the assumption on s_c (an unvetted model): every payload free, nothing decoded.
-        rebuilt_free = min(1.0 - chip, rebuild(budget, 0.0, [(a, c.r * c.eps, s_word(c, 1.0)),
-                                                              (b, enc_kv, s_word(kc, 1.0))]))
+        rebuilt_free = min(1.0 - chip, rebuild(budget, 0.0, [(a, ca.r * ca.eps, s_word(c, 1.0)),
+                                                              (b, enc_kv_a, s_word(kc, 1.0))]))
         q_honest = e + kv + act
         stock = (e + kv) / e + self.idle
         served = d + (prefill / self.out_tokens if self.out_tokens else 0.0)

@@ -180,6 +180,35 @@ def test_kv_codec_and_its_encode():
     assert rounds["slowdown_served"] > rounds["slowdown"] + 0.2
 
 
+def test_squaring_floor():
+    """The issue bound of a 768-bit squaring is 720 instructions, 0.22 of a pass; a squaring's cost per byte grows
+    with the width, so the conjectured encode per byte grows as its square."""
+    assert G.sq_floor(768) == pytest.approx(0.2217, abs=1e-4)
+    assert G.sq_floor(768, ops=720) == G.sq_floor(768)
+    assert G.sq_floor(1536) / G.sq_floor(768) == pytest.approx(1.8, abs=0.01)
+    c = replace(G.WIDE["p767"], p_bits=768)
+    a = G.at_floor(c, 0.25, rounds=2)
+    assert a.eps == 0.5 and a.r * a.eps == pytest.approx(0.9 * 2 * 766 * 0.25)
+    wide = G.at_floor(replace(G.extrapolated(2048), p_bits=2048), G.sq_floor(2048))
+    narrow = G.at_floor(c, G.sq_floor(768))
+    assert (wide.r * wide.eps) / (narrow.r * narrow.eps) > 6 > G.sq_floor(2048) / G.sq_floor(768)
+
+
+def test_adversary_at_the_floor():
+    """The adversary's costs apart from the honest's: unset is the honest's; at the floor the adversary decodes its
+    kept words and encodes faster, so both γ's rise while the step stays."""
+    c = replace(G.WIDE["p767"], tau=0.011, p_bits=768, payload_bits=768)
+    base = G.Point(G.LLAMA_70B, 1, 4096, True, c, idle=0.10, theta=G.WIDE_THETA["p767"], kv_rounds=4, out_tokens=512)
+    assert replace(base, adversary=c).terms() == base.terms()
+    t0, t1 = base.terms(), replace(base, adversary=G.at_floor(c, G.sq_floor(768))).terms()
+    assert t1["slowdown"] == t0["slowdown"] and t1["prefill_passes"] == t0["prefill_passes"]
+    assert t1["gamma_bw"] > t0["gamma_bw"] + 1e-3 and t1["gamma_decode_free"] > 2 * t0["gamma_decode_free"]
+    kc = replace(G.extrapolated(2048), tau=0.011)
+    kv = replace(base, kv_rounds=1, kv_codec=kc)
+    assert kv.terms() == replace(kv, kv_adversary=kc).terms()
+    assert replace(kv, kv_adversary=G.at_floor(kc, G.sq_floor(2048))).terms()["gamma_bw"] > kv.terms()["gamma_bw"]
+
+
 def test_at_batch():
     c = G.WIDE["p511"]
     assert G.at_batch(c, G.WIDE_Y32["p511"], 8) is c and G.at_batch(c, G.WIDE_Y32["p511"], 32).y == 1.74
