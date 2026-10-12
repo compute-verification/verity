@@ -155,7 +155,6 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   local D=$1 O=$2 role=$3 each par cap c tag args s case pub own
   each=$(( $(stat -L -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
-  cap=$(( STAGE_GB / par ))
   local base="verify --zk --circuit $D/circuit.txt"
   [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
   local cmds=()
@@ -189,6 +188,10 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
     for g in "${globs[@]}"; do [[ $tag == $g || $cfg/$tag == $g ]] && { keep+=("$c"); break; }; done
   done
   cmds=("${keep[@]}")
+  # the checks that run at once split the whole budget: `ulimit -v` bounds address space, which runs well past the resident
+  # peak (a 2.6 GB circuit's check, 10.8 GB resident, ran out under an 18 GB cap)
+  [ ${#cmds[@]} -gt 0 ] && [ $par -gt ${#cmds[@]} ] && par=${#cmds[@]}
+  cap=$(( STAGE_GB / par ))
   log "  lean: ${#cmds[@]} checks ($LEAN_ONLY), $par at a time, cap $cap GB each"
   for c in "${cmds[@]}"; do
     tag=${c%%|*} args=${c#*|}
