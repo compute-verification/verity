@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -297,6 +298,70 @@ def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_
     assert sorted(f.name for f in (store / "outputs" / "p").iterdir()) == ["2.json", "3.json"]
 
 
+def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
+    arts = LA.LakeArtifacts(tmp / "node-a")
+    arts.put({pkg})
+    dest = tmp / "lean-artifacts.tar.gz"
+    assert arts.bundle(dest) == len(arts.added) > 0
+    return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
+
+
+def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_nothing_else(tmp_path):
+    """Kept builds and the artifact cache are per node, and the trains spread over three machines (infra, 12 Oct: share the
+    cache, don't pin). A node takes a recorded check's bundle once, checked against its sha256, and never replaces a file."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    _built(pkg, "P/A", {"olean": "a" * 16, "ilean": "b" * 16, "c": "c" * 16})
+    _built(pkg, "P/B", {"olean": "d" * 16, "ilean": "b" * 16, "c": "f" * 16})
+    dest, h = _bundle_of(tmp_path, pkg)
+    b = LA.LakeArtifacts(tmp_path / "node-b")
+    (tmp_path / "node-b" / "artifacts").mkdir(parents=True)
+    (tmp_path / "node-b" / "artifacts" / ("a" * 16 + ".olean")).write_text("node b's own")
+    logged = []
+    assert b.take({LA.SHARED + h: dest.as_uri(), LA.SHARED + "0" * 64: dest.as_uri(), "k": "https://deps"}, logged.append) == 2
+    assert any("is not the one named" in ln for ln in logged)
+    got = tmp_path / "node-b"
+    assert sorted(f.relative_to(got).as_posix() for f in got.rglob("*") if f.is_file() and f.parent.name != "taken"
+                  and f.name != "lock") == sorted(f"artifacts/{n}" for n in
+                  ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c", "d" * 16 + ".olean", "f" * 16 + ".c"]) + sorted(
+                  f"outputs/p/{hashlib.sha256(m.encode()).hexdigest()[:16]}.json" for m in ("P/A", "P/B"))
+    assert (got / "artifacts" / ("a" * 16 + ".olean")).read_text() == "node b's own"
+    assert not os.stat(got / "artifacts" / ("d" * 16 + ".olean")).st_mode & 0o222
+    assert b.take({LA.SHARED + h: dest.as_uri()}, logged.append) == 0 and logged[-1].startswith("lean-audit: 2 module")
+
+
+def test_a_bundle_member_outside_lake_s_layout_or_an_entry_without_its_outputs_is_left_out(tmp_path):
+    bad = tmp_path / "bad.tar.gz"
+    with tarfile.open(bad, "w:gz") as t:
+        for name, data in [("../escape", b"x"), ("artifacts/../../x.olean", b"x"), ("artifacts/" + "e" * 16 + ".olean", b"ok"),
+                           ("outputs/p/" + "1" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
+                           ("outputs/p/" + "2" * 16 + ".json", json.dumps({"o": ["9" * 16 + ".olean"]}).encode()),
+                           ("outputs/p/" + "3" * 16 + ".json", b"not json")]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+    h = hashlib.sha256(bad.read_bytes()).hexdigest()
+    store = tmp_path / "node"
+    assert LA.LakeArtifacts(store).take({LA.SHARED + h: bad.as_uri()}, lambda s: None) == 1
+    assert sorted(f.relative_to(store).as_posix() for f in store.rglob("*") if f.is_file() and f.name != "lock"
+                  and f.parent.name != "taken") == ["artifacts/" + "e" * 16 + ".olean", "outputs/p/" + "1" * 16 + ".json"]
+    assert not (tmp_path / "escape").exists() and not (tmp_path / "x.olean").exists()
+
+
+def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path):
+    runs = {"r3": [("lean-audit/lean-artifacts.tar.gz", "c" * 64, True), ("verdicts.tar.gz", "v" * 64, True)],
+            "r2": [("lean-audit/lean-artifacts.tar.gz", "b" * 64, False)],          # not on the remote: no node could fetch it
+            "r1": [("lean-audit/lean-artifacts.tar.gz", "a" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "d" * 64, True),
+                   ("lean-audit/x/lean-artifacts.tar.gz", "e" * 64, True)]}
+    store = types.SimpleNamespace(
+        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [(r,) for r in runs]),
+        get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+        listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+    assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
+    assert LA.shared_bundles(store, limit=1) == ["c" * 64]
+
+
 LEAN_CHECK = ROOT / "tools" / "verity" / "lean" / "check.py"
 
 
@@ -332,6 +397,17 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         assert f.read_bytes() == b
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
     assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
+    other = tmp_path / "node-b"                                       # another node, which built none of it
+    dest = tmp_path / "lean-artifacts.tar.gz"
+    assert arts.bundle(dest) == len(arts.added) > 0
+    h = hashlib.sha256(dest.read_bytes()).hexdigest()
+    assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
+    shutil.rmtree(pkg / ".lake")
+    monkeypatch.setattr(LC, "ARTIFACTS", other)
+    build()
+    for f, b in was.items():
+        assert f.read_bytes() == b
+    assert all(json.loads(t.read_text())["synthetic"] for t in lib.rglob("*.trace"))
     assert not any(f.name.endswith(".tmp") for f in store.rglob("*"))
 
 
