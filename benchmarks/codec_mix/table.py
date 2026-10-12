@@ -4,23 +4,23 @@ Computed from recorded runs, nothing measured here:
 - `--attack`: `mask_attack.jsonl` (`run.sh`): the margins of the masked word and of the k = 1 wrap at the floor.
 - `--rates`: word_codec's `kv-codec.json` (`run.sh` with KV=1, kv_bench.py): decode, encode and root rates a library
   and k, plain and masked (`-m`), at 512, 768 and 1024 bits.
-- `--exhaust`: word_codec's `kv-exhaust.json` (kv_exhaust.py at 8B's shape): attention's overhead a KV byte over the
-  read at mma-ws, plain and masked p512 (`-h32`, `-h32m`), k = 2 and 3.
+- `--exhaust` (repeated): word_codec's `kv-exhaust.json` (kv_exhaust.py at 8B's shape): attention's overhead a KV
+  byte over the read at mma-ws, B160 × 4k, plain and masked (`-h32`, `-h32m`), k = 2 and 3; p512's is required.
 
 The step model. ra-codec-tensor's step at p512 (`STEP`, its runs) splits d into the plain step, the linears' decode and
 receipt (W), attention (A) and the append (E) at k = 1, 2, 3. A codec is placed on that k axis by its decode time a
 byte: κ is the p512 round count whose decode (thread-per-word, `rates`) takes as long a byte, piecewise linear in k,
 and W and A are read off p512's curves at κ (the slope from 2 to 3 past 3). E scales with the honest encode a byte,
-k·x₁. The check at the one point both exist: masked p512 at k = 2 projects attention to `check["projected"]` a KV byte
-against the measured `check["measured"]` (`--exhaust`). ra-word-codec's fit inside attention (p768 1.0k − 0.32 against
-p512 0.54k − 0.30 at 70B's shape) puts p768 at k = 2 at 2.15× p512's, under this model's ratio, so the wide rows lean
-pessimistic.
+k·x₁. The check (`check`), wherever a codec's attention at k = 2 was measured besides plain p512's: its κ projects
+attention from plain p512's k = 2 and 3, against the measured overhead (`--exhaust`). ra-word-codec's fit inside
+attention (p768 1.0k − 0.32 against p512 0.54k − 0.30 at 70B's shape) puts p768 at k = 2 at 2.15× p512's, under this
+model's ratio, so the wide rows lean pessimistic.
 
 γ_codec = μ_chip 0.28 + μ_sample 0.10 + μ_rebuild + risk, before μ_host, μ_link and λ (`room` is what 1% leaves them):
 μ_rebuild = 100·d/(k·x₁,adv), x₁,adv = 175 at p512 (the red team's) scaled by root bytes a second, at the measured
 squaring and at the red team's 1.2× and 1.45× ceilings; risk = μ_rebuild·(1/m − 1) at the margin's low end m < 1.
 
-`python table.py --attack A.jsonl --rates kv-codec.json --exhaust kv-exhaust.json [--json OUT]`
+`python table.py --attack A.jsonl --rates kv-codec.json --exhaust kv-exhaust.json [--exhaust ...] [--json OUT]`
 """
 
 from __future__ import annotations
@@ -114,18 +114,19 @@ def row(name, b, k, *, fr, lib=None, kappa=None, x1=None, margin, note, measured
     return out
 
 
-def build(attack: list[dict], rates: dict, exhaust: dict) -> dict:
+def build(attack: list[dict], rates: dict, exhausts: list[dict]) -> dict:
     fr = frontier(rates)
     am = attack_margins(attack)
-    ex = {n: L["exhaust"]["b160_ctx4096"] for n, L in exhaust["libs"].items()}
-
-    def mma_ws(lib, k):
-        return ex[lib]["forms"]["mma-ws"][str(k)]["overhead_vs_read"]
-
-    attn = {key: mma_ws(lib, k) for key, lib, k in
-            (("p512-2", "p512-h32", 2), ("p512-3", "p512-h32", 3), ("p512m-2", "p512-h32m", 2), ("p512m-3", "p512-h32m", 3))}
-    km = kappa_of(fr, "p512-m", 2)
-    check = {"projected": attn["p512-2"] + (attn["p512-3"] - attn["p512-2"]) * (km - 2), "measured": attn["p512m-2"]}
+    attn = {}
+    for e in exhausts:
+        for n, L in e["libs"].items():
+            for k, v in L["exhaust"]["b160_ctx4096"]["forms"].get("mma-ws", {}).items():
+                if k.isdigit():
+                    attn[(n.removesuffix("-h32").removesuffix("-h32m") + ("-m" if n.endswith("m") else ""), int(k))] = \
+                        v["overhead_vs_read"]
+    a2, a3 = attn[("p512", 2)], attn[("p512", 3)]
+    check = [{"lib": lib, "k": 2, "projected": a2 + (a3 - a2) * (kappa_of(fr, lib, 2) - 2), "measured": attn[(lib, 2)]}
+             for lib in ("p512-m", "p1024", "p1024-m") if (lib, 2) in attn]
 
     def masked(b):
         f = am[f"p{b}"]
@@ -142,23 +143,29 @@ def build(attack: list[dict], rates: dict, exhaust: dict) -> dict:
                     kappa=1.0, x1=X1_P512, margin=(w, w, w), note="F27; the wrap is absorbed (floor margin "
                     f"{w:.3f} at 512, {am['p2048']['wrap_floor']:.3f} at 2048)"))
     rows.append(row("p512 k=2 plain", 512, 2, fr=fr, lib="p512", kappa=2.0, margin=PLAIN_K2[512],
-                    note="red team's 4D floor, assumption 7", measured_attn=attn["p512-2"]))
+                    note="red team's 4D floor, assumption 7", measured_attn=attn.get(("p512", 2))))
     m, n = masked(512)
     rows.append(row("p512 k=2 masked (σ_K)", 512, 2, fr=fr, lib="p512-m", margin=m, note=n,
-                    measured_attn=attn["p512m-2"]))
+                    measured_attn=attn.get(("p512-m", 2))))
     rows.append(row("p512 k=3 plain", 512, 3, fr=fr, lib="p512", kappa=3.0, margin=None,
-                    note="direct degree-8 relation not priced", measured_attn=attn["p512-3"]))
+                    note="direct degree-8 relation not priced", measured_attn=attn.get(("p512", 3))))
     rows.append(row("p512 k=3 masked", 512, 3, fr=fr, lib="p512-m", margin=(2.0, 1.33, 2.0),
-                    note="peel two roots: 2.02/(3·x/b) at b/3, 2/(1.5) at free b/2", measured_attn=attn["p512m-3"]))
+                    note="peel two roots: 2.02/(3·x/b) at b/3, 2/(1.5) at free b/2",
+                    measured_attn=attn.get(("p512-m", 3))))
     m, n = masked(640)
     k640 = (kappa_of(fr, "p512-m", 2) + kappa_of(fr, "p768-m", 2)) / 2
     x640 = (x1_of(fr, 512) * x1_of(fr, 768)) ** 0.5
+    no_mma = "; kv.cu's tensor-core attention needs a 256-byte head to hold whole words (512, 1024 bits), so this d " \
+             "assumes a layout not yet built"
     rows.append(row("p640 k=2 masked (σ_K), interpolated", 640, 2, fr=fr, kappa=k640, x1=x640, margin=m,
-                    note=n + "; not built: κ and x₁ midway (x₁ geometric) between masked 512 and 768"))
+                    note=n + "; not built: κ and x₁ midway (x₁ geometric) between masked 512 and 768" + no_mma))
     for b in (768, 1024):
-        rows.append(row(f"p{b} k=2 plain", b, 2, fr=fr, lib=f"p{b}", margin=PLAIN_K2[b], note="red team's 4D floor"))
+        rows.append(row(f"p{b} k=2 plain", b, 2, fr=fr, lib=f"p{b}", margin=PLAIN_K2[b], note="red team's 4D floor",
+                        measured_attn=attn.get((f"p{b}", 2))))
         m, n = masked(b)
-        rows.append(row(f"p{b} k=2 masked (σ_K)", b, 2, fr=fr, lib=f"p{b}-m", margin=m, note=n + "; projected step"))
+        rows.append(row(f"p{b} k=2 masked (σ_K)", b, 2, fr=fr, lib=f"p{b}-m", margin=m,
+                        note=n + "; projected step" + (no_mma if b % 1024 else ""),
+                        measured_attn=attn.get((f"p{b}-m", 2))))
     kb = kappa_of(fr, "p512", 2)
     rows.append(row("p512 k=2, bit permutation between rounds", 512, 2, fr=fr, kappa=kb + 1.0, x1=X1_P512,
                     margin=rows[2]["margin"], note="σ_K's margin; a Beneš network ≈ a squaring a boundary (κ + 1)"))
@@ -193,10 +200,10 @@ def render(t: dict) -> str:
                 best = min(ok, key=lambda r: r["points"][p]["d"], default=None)
                 cells.append("none" if best is None else f"{best['codec']} (d {best['points'][p]['d']:.3f})")
             lines.append(f"| {p} | {allow:.2f} | " + " | ".join(cells) + " |")
-    c = t["check"]
     lines.append("")
-    lines.append(f"Check: masked p512 k=2 attention at mma-ws, B160 ctx 4k: projected {c['projected']:+.3f}, measured "
-                 f"{c['measured']:+.3f} a KV byte.")
+    for c in t["check"]:
+        lines.append(f"Check: {c['lib']} k={c['k']} attention at mma-ws, B160 ctx 4k: projected {c['projected']:+.3f}, "
+                     f"measured {c['measured']:+.3f} a KV byte.")
     for r in t["rows"]:
         lines.append(f"- {r['codec']}: {r['note']}")
     return "\n".join(lines)
@@ -206,11 +213,11 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--attack", required=True)
     ap.add_argument("--rates", required=True)
-    ap.add_argument("--exhaust", required=True)
+    ap.add_argument("--exhaust", action="append", required=True)
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     attack = [json.loads(s) for s in open(a.attack) if s.strip()]
-    t = build(attack, json.load(open(a.rates)), json.load(open(a.exhaust)))
+    t = build(attack, json.load(open(a.rates)), [json.load(open(p)) for p in a.exhaust])
     print(render(t))
     if a.json:
         with open(a.json, "w") as f:
