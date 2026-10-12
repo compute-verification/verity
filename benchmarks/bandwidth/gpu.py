@@ -18,8 +18,10 @@ runs honest windows through `audit.Verifier` on the generated test store (`refer
 `--deadline-ns` (default the largest `audit.Params` allows), negative controls that tag only part of the store, and one
 window per tag at a deadline no certificate allows, which checks the openings of a tag whose honest pass is late.  Before
 each timed window the prover reads `--scrub-mib` of another buffer (untimed, before the seed), so the window starts with
-L2 clean and holding no part of the store; `--busy-reads` more reads of it first keep the GPU busy until the seed instead
-of idle while the host checked the last window.  Each window records the pass's device time beside the verifier's.
+L2 clean and holding no part of the store.  Before that it runs one untimed pass under a throwaway seed (`--warm-pass`,
+the default); without it, the last window's openings and verdict (seconds of Python for `ro-blake3/v1`) leave up to
+0.2 ms of host time inside the next window, outside the device's pass.  Each window records the pass's device time and
+the host call's beside the verifier's.
 """
 
 from __future__ import annotations
@@ -201,7 +203,7 @@ def _windows(a: argparse.Namespace) -> dict:
         t.memset(scrub, 0, scrub_bytes)
     source = bytes.fromhex(a.source)
     out: dict = {"blocks": a.blocks, "store_root": vk.root.hex(), "samples": a.samples, "scrub_mib": a.scrub_mib,
-                 "busy_reads": a.busy_reads, "results": [], "openings_check": []}
+                 "warm_pass": a.warm_pass, "results": [], "openings_check": []}
     for name in a.tags:
         ws = t.alloc(t.workspace_bytes(name, a.blocks))
         t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)  # loads the kernels, untimed
@@ -210,13 +212,17 @@ def _windows(a: argparse.Namespace) -> dict:
         for n, f in enumerate([0.0] * a.windows + a.skip):
             w = verifier.window(n)
             tagged = a.blocks - round(f * a.blocks)
+            if a.warm_pass:
+                t.tag_pass(name, store, a.blocks, bytes(tags.SEED_BYTES), ws)
             if f:
                 t.memset(ws, 0xA5, t.workspace_bytes(name, a.blocks))
-            for _ in range(a.busy_reads + 1 if scrub else 0):
+            if scrub:
                 t.read_scrub(scrub, scrub_bytes)
             seed = w.start()
+            c0 = time.perf_counter_ns()
             commitment = (t.tag_pass(name, store, a.blocks, seed, ws) if not f
                           else t.tag_pass_prefix(name, store, a.blocks, tagged, seed, ws))
+            c1 = time.perf_counter_ns()
             drawn = w.commit(commitment.root)
             tags_ms, pass_ms = t.last_pass_ms()
             o0 = time.perf_counter_ns()
@@ -227,7 +233,7 @@ def _windows(a: argparse.Namespace) -> dict:
             out["results"].append({"tag": name, "window": n, "skipped_fraction": f, "tagged": tagged,
                                    "deadline_ns": p.deadline_ns, "elapsed_ns": v.elapsed_ns, "accepted": v.accepted,
                                    "failure": v.failure, "index": v.index, "device_tags_ms": tags_ms,
-                                   "device_pass_ms": pass_ms, "open_ms": (o1 - o0) / 1e6,
+                                   "device_pass_ms": pass_ms, "call_ms": (c1 - c0) / 1e6, "open_ms": (o1 - o0) / 1e6,
                                    "verdict_ms": (o2 - o1) / 1e6})
         # The openings alone, at a deadline no certificate allows (the rebuild floor lifted past it): a tag whose
         # honest pass is late still has its openings checked by the verifier.
@@ -254,8 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--samples", type=int, default=audit.SAMPLES)
     w.add_argument("--deadline-ns", type=int, default=audit.REGEN_FLOOR_NS - 1)
     w.add_argument("--scrub-mib", type=int, default=512, help="read this much of another buffer before each window")
-    w.add_argument("--busy-reads", type=int, default=0,
-                   help="read that buffer this many more times first (a GPU busy until the seed, not idle)")
+    w.add_argument("--warm-pass", action=argparse.BooleanOptionalAction, default=True,
+                   help="run one untimed pass under a throwaway seed before each window's scrub")
     w.add_argument("--windows", type=int, default=20)
     w.add_argument("--skip", type=float, nargs="*", default=[0.01, 0.05])
     w.add_argument("--tags", nargs="*", default=sorted(TAG_IDS))

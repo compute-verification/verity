@@ -10,11 +10,11 @@
 # `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's and keyed BLAKE3's known answers; every tag's roots
 # against the reference with the output buffers poisoned; a control without the tag kernel that must not match), then its
 # timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: honest windows through `audit.Verifier` at
-# DEADLINE_NS (default the largest it allows), and windows that tag only part of the store.  After the lease:
+# DEADLINE_NS (default the largest it allows), each after an untimed warm pass and a read scrub, and windows that tag
+# only part of the store.  After the lease:
 # `summarize.py`.
 # Env: BLOCKS (default 524,288, the certificate's store), SEED (hex, default 00..1f), REPS (default 100), WINDOWS (20),
-# DEADLINE_NS, BUSY_READS (the windows' `--busy-reads`, default 0), BUSY_COMPARE (if set, ro-blake3/v1's honest windows
-# again at that `--busy-reads`, into windows_busy.json), WORKERS (the reference's processes, default 32), TIMED.
+# DEADLINE_NS, WORKERS (the reference's processes, default 32), TIMED.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, expect.json, gpu.txt, env.txt, smi.csv, device.json, validation.json,
 # timing.json, windows.json, summary.json.
 set -euo pipefail
@@ -48,12 +48,8 @@ EOF
   "$S/bwtag" --out "$O" --blocks "${A[0]}" --reps "${REPS:-100}" --seed "${A[1]}" --small-seed "${A[2]}" \
     "${A[@]:3}" || rc=$?
   [ $rc = 0 ] || { echo "bwtag exited $rc: nothing more runs"; exit $rc; }
-  W=(gpu.py windows --lib "$S/libbwtag.so" --leaves "$S/store_leaves.bin" --blocks "${A[0]}" --windows "${WINDOWS:-20}"
-     ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"})
-  "$PY" "${W[@]}" --busy-reads "${BUSY_READS:-0}" --out "$O/windows.json" > "$O/windows.jsonl"
-  if [ -n "${BUSY_COMPARE:-}" ]; then
-    "$PY" "${W[@]}" --tags ro-blake3/v1 --skip --busy-reads "$BUSY_COMPARE" --out "$O/windows_busy.json" > /dev/null
-  fi
+  "$PY" gpu.py windows --lib "$S/libbwtag.so" --leaves "$S/store_leaves.bin" --blocks "${A[0]}" \
+    --windows "${WINDOWS:-20}" ${DEADLINE_NS:+--deadline-ns "$DEADLINE_NS"} --out "$O/windows.json" > "$O/windows.jsonl"
   exit 0
 fi
 

@@ -889,7 +889,6 @@ namespace {
 using bw::Pass;
 
 constexpr int IDLE_MS = 250;
-constexpr int BUSY_READS = 16;  // about 6 ms at the raw read's rate
 
 std::string hex(const uint8_t* b, size_t n) {
   static const char* d = "0123456789abcdef";
@@ -1132,21 +1131,19 @@ int main(int argc, char** argv) {
     Pass p = bw::make_pass(tag, blocks, ws);
     // cold: L2 full of dirty lines (a 512 MiB write); warm: whatever the last pass left; clean: L2 holding clean lines
     // of another buffer (a 512 MiB read), which an honest prover can arrange before every window.  idle: clean after
-    // the GPU sat idle for IDLE_MS (as between the harness's windows, while the host opens and checks); busy: idle, then
-    // BUSY_READS reads of that buffer before the pass (a GPU kept busy until the seed, the last read the clean one).
-    // idle and busy run at most 20 reps.
-    const char* const conds[5] = {"cold", "warm", "clean", "idle", "busy"};
-    for (int cond = 0; cond < 5; ++cond) {
+    // the GPU sat idle for IDLE_MS (as between the harness's windows, while the host opens and checks), at most 20 reps.
+    const char* const conds[4] = {"cold", "warm", "clean", "idle"};
+    for (int cond = 0; cond < 4; ++cond) {
       std::vector<double> dev, tags_ms, tree_ms, host;
-      for (int r = 0; r < (cond >= 3 ? std::min(reps, 20) : reps); ++r) {
+      for (int r = 0; r < (cond == 3 ? std::min(reps, 20) : reps); ++r) {
         uint8_t s[32], root[64];
         memcpy(s, seed, 32);
         s[0] ^= (uint8_t)r;
         s[1] ^= (uint8_t)(r >> 8);
         s[2] ^= (uint8_t)(cond + 1);
         if (cond == 0) CK(cudaMemsetAsync(scrub, r & 0xff, scrub_bytes));
-        if (cond >= 3) std::this_thread::sleep_for(std::chrono::milliseconds(IDLE_MS));
-        for (int k = 0; k < (cond == 4 ? BUSY_READS : cond >= 2 ? 1 : 0); ++k)
+        if (cond == 3) std::this_thread::sleep_for(std::chrono::milliseconds(IDLE_MS));
+        if (cond >= 2)
           bw::read_kernel<<<prop.multiProcessorCount * 8, 512>>>((const uint4*)scrub, scrub_bytes / 16, sink);
         CK(cudaDeviceSynchronize());
         auto h0 = std::chrono::steady_clock::now();

@@ -52,7 +52,7 @@ def summarize(out: Path) -> dict:
              "cold_tags_ms_p50": cold["tags_ms"]["p50"], "cold_tree_ms_p50": cold["tree_ms"]["p50"],
              "cold_host_e2e_ms_p50": cold["host_e2e_ms"]["p50"], "cold_host_e2e_ms_p99": cold["host_e2e_ms"]["p99"],
              "warm_device_ms_p50": warm["device_ms"]["p50"]}
-        for cond in ("clean", "idle", "busy"):
+        for cond in ("clean", "idle"):
             c = timing.get(f"{key}_{cond}")
             if c:
                 t.update({f"{cond}_device_ms_p50": c["device_ms"]["p50"], f"{cond}_device_ms_p99": c["device_ms"]["p99"],
@@ -85,22 +85,25 @@ def summarize(out: Path) -> dict:
         tags[name] = t
     s["tags"] = tags
     s["side_channel_bytes_per_s"] = side
-    for label, file in (("windows", "windows.json"), ("windows_busy", "windows_busy.json")):
-        w = _load(out, file)
-        if w:
-            s[label] = {name: _windows(w, name) for name in tags if any(r["tag"] == name for r in w["results"])}
+    if windows:
+        s["windows"] = {name: _windows(windows, name) for name in tags
+                        if any(r["tag"] == name for r in windows["results"])}
     return s
 
 
 def _windows(windows: dict, name: str) -> dict:
     rows = [r for r in windows["results"] if r["tag"] == name]
     honest = [r for r in rows if not r["skipped_fraction"]]
-    el = sorted(r["elapsed_ns"] for r in honest)
-    dev = sorted(r["device_pass_ms"] for r in honest if "device_pass_ms" in r)
+
+    def p50_max(key: str) -> tuple:
+        v = sorted(r[key] for r in honest if key in r)
+        return (v[len(v) // 2], v[-1]) if v else (None, None)
+
+    el, dev, call = p50_max("elapsed_ns"), p50_max("device_pass_ms"), p50_max("call_ms")
     return {"honest": len(honest), "accepted": sum(r["accepted"] for r in honest),
-            "elapsed_ns_p50": el[len(el) // 2] if el else None, "elapsed_ns_max": el[-1] if el else None,
-            "device_pass_ms_p50": dev[len(dev) // 2] if dev else None, "device_pass_ms_max": dev[-1] if dev else None,
-            "samples": windows.get("samples"), "busy_reads": windows.get("busy_reads", 0),
+            "elapsed_ns_p50": el[0], "elapsed_ns_max": el[1], "device_pass_ms_p50": dev[0],
+            "device_pass_ms_max": dev[1], "call_ms_p50": call[0], "call_ms_max": call[1],
+            "samples": windows.get("samples"), "warm_pass": windows.get("warm_pass", False),
             "deadline_ns": honest[0]["deadline_ns"] if honest else None,
             "failures": sorted({r["failure"] for r in honest if r["failure"]}),
             "skips": [{"f": r["skipped_fraction"], "accepted": r["accepted"], "failure": r["failure"]}
